@@ -282,6 +282,17 @@ def outputRegisterInfo(gfx9_header_directory, pm4_info_file, registers_et_root):
 # ---------------------------------------------------------------------------------------
 def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
   enums = registers_et_root.findall('{http://nouveau.freedesktop.org/}enum')
+
+  # Find all enums within domain blocks
+  # Those are reserved for use within the domain, but we need to keep track of all
+  # enums in our list, irrespective of scope
+  domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
+  for domain in domains:
+    domain_enums = domain.findall('{http://nouveau.freedesktop.org/}enum')
+    if domain_enums:
+      for enum in domain_enums:
+        enums.append(enum)
+
   for enum in enums:
     fields = enum.findall('{http://nouveau.freedesktop.org/}value')
     enum_name = enum.attrib['name']
@@ -309,182 +320,104 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
         index = enum_index_dict[enum_name]
         enum_list[index][1][enum_value] = enum_value_name
 
-def outputUnionLine(pm4_info_file, field_name, dword_count, enum_handle, shift, mask):
+# ---------------------------------------------------------------------------------------
+def outputField(pm4_info_file, field_name, dword_count, enum_handle, shift, mask):
   pm4_info_file.write("{ \"%s\", %d, %s, %d, 0x%x }," %
                        (field_name, dword_count, enum_handle, shift, mask))
 
 # ---------------------------------------------------------------------------------------
-def outputStructInfo(lines, prefix, pm4_info_file, enum_index_dict, op_code_set):
+def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_root):
+  domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
 
+  # Find all CP packet types so we can find out which domains are relevant
+  pm4_type_packets = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="adreno_pm4_type3_packets"]')
 
+  for domain in domains:
+    domain_name = domain.attrib['name']
 
-
-
-
-
-
-  is_in_new_struct = False
-  is_in_struct_union = False
-  bits_so_far = 0
-  op_code = ""
-  field_name = ""
-  dword_count = 0
-  ds_stack = []
-  for line in lines:
-    if not ds_stack:
-      # Match "typedef struct PM4_{prefix}_###__GFX09" (__GFX09 optional)
-      match_obj = re.search(r'^typedef struct PM4_%s_(\w+?)(__GFX09)?$' % prefix.upper(), line)
-      if match_obj:
-        op_code = "IT_" + match_obj.group(1)
-
-        # Ignore all packets that end in __GFX*
-        match_obj = re.search(r'(\w+?)__GFX(\w+)$', op_code)
-        if match_obj:
-            continue
-
-        # For some reason, some op-code names end suffixes
-        if re.search(r'DISPATCH_DRAW', op_code):
-          op_code += "__GFX101"
-        if re.search(r'GET_LOD_STATS', op_code):
-          op_code += "__GFX09"
-        if re.search(r'DISPATCH_MESH_INDIRECT_MULTI', op_code):
-          op_code += "__NV10"
-        if re.search(r'DISPATCH_TASKMESH_GFX', op_code):
-          op_code += "__NV10"
-        if re.search(r'LOAD_UCONFIG_REG_INDEX', op_code):
-          op_code += "__NV10"
-        if re.search(r'DISPATCH_TASK_STATE_INIT', op_code):
-          op_code += "__NV10"
-        if re.search(r'DISPATCH_TASKMESH_DIRECT_ACE', op_code):
-          op_code += "__NV10"
-        if re.search(r'DISPATCH_TASKMESH_INDIRECT_MULTI_ACE', op_code):
-          op_code += "__NV10"
-
-        # Accounting for inconsistent spelling in files
-        op_code = re.sub(r'_CONST$', '_CNST', op_code)
-
-        if not op_code in valid_opcodes:
-          continue
-
-        if op_code not in op_code_set:
-          is_in_new_struct = True
-          pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
-          pm4_info_file.write("%s, { \"%s\", {" % (op_code, op_code))
-          op_code_set.add(op_code)
-          dword_count = 0
-          ds_stack = ["struct"]
+    # Check if it is a domain describing a PM4 packet
+    pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
+    if pm4_type_packet is None:
       continue
 
-    if "union" in line:
-      ds_stack.append("union")
-      bits_so_far = 0
-      enum_handle = "UINT32_MAX"
-      mask = int('0xffffffff', 16)
-      shift = 0
-      continue
-    elif "struct" in line:
-      ds_stack.append("struct")
-      continue
+    opcode = int(pm4_type_packet.attrib['value'],0)
+    pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
+    pm4_info_file.write("0x%x, { \"%s\", {" % (opcode, domain_name))
 
-    # parse dword_count
-    match_obj = re.search(r'ordinal(\d+);', line)
-    if match_obj:
-      dword_count = int(match_obj.group(1))
+    dword_count = 0
+    for element in domain:
+      is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
+      is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
+      if is_reg_32 or is_reg_64:
+        offset = int(element.attrib['offset'],0)
 
-    # Parse union
-    if ds_stack and ds_stack[-1] == "union":
-      if "}" in line:
-        if field_name:    # If it is concatanating non-bitfields, then need to output at end
-          outputUnionLine(pm4_info_file, field_name, dword_count - 1 , enum_handle, shift, mask)
-          field_name = ""
-        is_in_struct_union = False
-        ds_stack.pop()
-        shift = 0
-        mask = int('0xffffffff', 16)
-        continue
+        # Sanity check
+        if dword_count != offset:
+          # Sometimes an aliasing reg64 appears *after* 2 reg32s
+          if not is_reg_64 or (offset == dword_count-1):
+            raise Exception("Unexpected non-consecutive offset found in packet " + domain_name)
 
-      # Match non-bitfields
-      match_obj = re.search(r'^\s*(\w+)\s*(\w+);', line)
-      if match_obj:
-        type_string = match_obj.group(1)
+        dword_count = dword_count + 1
+        if is_reg_64:
+          dword_count = dword_count + 1
 
-        # Sometimes a union is used to alias different non-bitfield fields with different
-        # names. In those cases, concatanate the field names together, and output the line
-        # when the end curly bracket of the union is parsed
-        # (eg: PM4_PFP_LOAD_SH_REG_INDEX's mem_addr_hi vs addr_offset)
+        bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
 
-        # Ignore ordinal & header & u32All fields
-        cur_field_name = match_obj.group(2)
-        if not re.search(r'ordinal\d+', cur_field_name) and (cur_field_name != "header") and (cur_field_name != "u32All") and not re.search(r'reserved\d+', cur_field_name):
-          if not field_name:
-            field_name = cur_field_name
+        # No bitfields, so use the register specification directly
+        if len(bitfields) == 0:
+          field_name = element.attrib['name']
+          shift = 0
+          mask = int('0xffffffff', 16)
+          enum_handle = "UINT32_MAX"
+          if is_reg_32:
+            outputField(pm4_info_file, field_name, dword_count-1, enum_handle, shift, mask)
+          elif is_reg_64:
+            outputField(pm4_info_file, field_name+"_LO", dword_count-2, enum_handle, shift, mask)
+            outputField(pm4_info_file, field_name+"_HI", dword_count-1, enum_handle, shift, mask)
+
+        if is_reg_64 and len(bitfields) > 0:
+          raise Exception("Found a reg64 with bitfields: " + field_name)
+
+        for bitfield in bitfields:
+          field_name = bitfield.attrib['name']
+          type = None
+          if 'type' in bitfield.attrib:
+            type = bitfield.attrib['type']
+
+          enum_handle = "UINT32_MAX"
+          if type and type != "boolean" and type != "uint" and type != "int" and type != "float" \
+            and type != "fixed" and type != "address" and type != "hex":
+            if type not in enum_index_dict:
+              raise Exception("Enumeration %s not found!" % type)
+            enum_handle = str(enum_index_dict[type])
+
+
+          # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
+
+          # Convert to mask & shift
+          if 'low' in bitfield.attrib and 'high' in bitfield.attrib:
+            shift = low = int(bitfield.attrib['low'])
+            high = int(bitfield.attrib['high'])
+            mask = (0xffffffff >> (31 - (high - low))) << low
+          elif 'pos' in bitfield.attrib:
+            shift = pos = int(bitfield.attrib['pos'])
+            mask = (0x1 << pos)
           else:
-            field_name += " | " + cur_field_name
+            raise Exception("Encountered a bitfield with no pos/low/high!")
+          outputField(pm4_info_file, field_name, dword_count-1, enum_handle, shift, mask)
+    pm4_info_file.write(" } }));\n")
 
-    # Parse struct
-    if ds_stack and ds_stack[-1] == "struct":
-      if "}" in line:
-        ds_stack.pop()
-        shift = 0
-        mask = int('0xffffffff', 16)
-        if not ds_stack:
-          pm4_info_file.write(" } }));\n")
-          is_in_new_struct = False
-        continue
-
-      # Match a non-union struct field
-      match_obj = re.search(r'uint32_t\s*(\w+);', line)
-      if match_obj:
-        if len(ds_stack) == 1:
-          dword_count += 1
-        # Ignore reserved fields
-        if not re.search(r'reserved\d', match_obj.group(1)):
-          pm4_info_file.write("{ \"%s\", %d, UINT32_MAX, 0, 0xFFFFFFFF }," %
-                              (match_obj.group(1), dword_count))
-          continue
-
-      # Match non-bitfields
-      match_obj = re.search(r'^\s*(\w+)\s*(\w+);', line)
-      if match_obj:
-        type_string = match_obj.group(1)
-
-        # Ignore ordinal & header fields
-        cur_field_name = match_obj.group(2)
-        if not re.search(r'ordinal\d+', cur_field_name) and (cur_field_name != "header"):
-          if not field_name:
-            field_name = cur_field_name
-          else:
-            field_name += " | " + cur_field_name
-
-      # Match bitfields
-      match_obj = re.search(r'^\s*(\w+)\s+(\w+)\s*:\s*(\w+);', line)
-      if match_obj:
-        type_string = match_obj.group(1)
-        field_name = match_obj.group(2)
-        bits = int(match_obj.group(3))
-        shift = bits_so_far
-        mask = int('0xffffffff', 16)
-        mask = mask >> (32 - bits)
-        mask = mask << shift
-        enum_handle = "UINT32_MAX"
-
-        # If not uint32_t type, then must be a enum type. Look up index in enum dictionary.
-        if type_string != "uint32_t":
-          match_obj = re.search(r'%s_(\w+)' % prefix, type_string)  # Remove prefix
-          type_string_minus_prefix = match_obj.group(1)
-          if type_string_minus_prefix not in enum_index_dict:
-            print("Error: Enumeration %s not found!" % type_string_minus_prefix)
-            sys.exit()
-          enum_handle = str(enum_index_dict[type_string_minus_prefix])
-
-        # Ignore reserved# bit-fields
-        if not re.search(r'reserved\d+', field_name):
-          outputUnionLine(pm4_info_file, field_name, dword_count, enum_handle, shift, mask)
-        field_name = ""
-
-        bits_so_far += bits
-        if bits_so_far == 32:
-          bits_so_far = 0
+  # NEXT STEPS:
+  # Need to add support for 'stripe' and 'array'
+  # CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG for array example (the only ones)
+  #   Array encompasses the whole packet, so just add an array_size to the packet
+  # CP_DRAW_INDIRECT_MULTI for the ONLY stripe example using enum
+  #   Add a stripe_variant field to the packet, which indicates the variant value (an index). Set to UIN32T_MAX by default
+  #   Add a stripe_reg field to the packet. Set to UINT32_MAX by default
+  #   Add a GetPacketInfo(stripe_reg)
+  #   Idea is you use a generic GetPacketInfo() first, get ONE of the packets. Check if there is a stripe_reg. If there is, parse the stripe reg
+  #   call the GetPacketInfo() with the reg value
+  # CP_DRAW_INDX_INDIRECT for strip example using hardware (just default to the more advanced hardware), A4XX vs A5XX-
 
 # ---------------------------------------------------------------------------------------
 def outputPacketInfo(gfx9_header_directory, pm4_info_file, registers_et_root):
@@ -506,7 +439,7 @@ def outputPacketInfo(gfx9_header_directory, pm4_info_file, registers_et_root):
 
   # Parse packet values from each of the 4 different files, being careful not to have duplicates
   op_code_set = set()
-  outputStructInfo(lines_pfp, "PFP", pm4_info_file, enum_index_dict, op_code_set)
+  outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_root)
   pm4_info_file.write("\n")
 
 # ---------------------------------------------------------------------------------------

@@ -77,6 +77,7 @@ struct PacketField {
 
 struct PacketInfo {
     const char* m_name;
+    uint32_t m_max_array_size;
     std::vector<PacketField> m_fields;
 };
 
@@ -340,12 +341,25 @@ def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_r
     if pm4_type_packet is None:
       continue
 
+    # There are only 2 PM4 packets with array tags: CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG
+    # Both of these have arrays that encapsulate the whole packet
+    array = domain.find('./{http://nouveau.freedesktop.org/}array')
+    array_size = 1
+    pm4_packet = domain
+    if array:
+      # Double check that there are no registers in this domain (i.e. they're all within the array block)
+      if domain.find('./{http://nouveau.freedesktop.org/}reg32') or \
+         domain.find('./{http://nouveau.freedesktop.org/}reg64'):
+        raise Exception("Unexpected top-level registers found in a PM4 packet with arrays: " + domain_name)
+      pm4_packet = array
+      array_size = int(array.attrib['length'])
+
     opcode = int(pm4_type_packet.attrib['value'],0)
     pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
-    pm4_info_file.write("0x%x, { \"%s\", {" % (opcode, domain_name))
+    pm4_info_file.write("0x%x, { \"%s\", %d, {" % (opcode, domain_name, array_size))
 
     dword_count = 0
-    for element in domain:
+    for element in pm4_packet:
       is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
       is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
       if is_reg_32 or is_reg_64:
@@ -407,7 +421,6 @@ def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_r
           outputField(pm4_info_file, field_name, dword_count-1, enum_handle, shift, mask)
     pm4_info_file.write(" } }));\n")
 
-  # NEXT STEPS:
   # Need to add support for 'stripe' and 'array'
   # CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG for array example (the only ones)
   #   Array encompasses the whole packet, so just add an array_size to the packet

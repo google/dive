@@ -69,7 +69,8 @@ struct RegInfo {
 
 struct PacketField {
     const char* m_name;
-    uint32_t m_dword;
+    uint32_t m_is_variant_opcode : 1; // If 1, then is used to indicate variant
+    uint32_t m_dword             : 31;
     uint32_t m_enum_handle;
     uint32_t m_shift;
     uint32_t m_mask;
@@ -78,6 +79,7 @@ struct PacketField {
 struct PacketInfo {
     const char* m_name;
     uint32_t m_max_array_size;
+    uint32_t m_stripe_variant;  // Which variant of the packet this is
     std::vector<PacketField> m_fields;
 };
 
@@ -322,9 +324,81 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
         enum_list[index][1][enum_value] = enum_value_name
 
 # ---------------------------------------------------------------------------------------
-def outputField(pm4_info_file, field_name, dword_count, enum_handle, shift, mask):
-  pm4_info_file.write("{ \"%s\", %d, %s, %d, 0x%x }," %
-                       (field_name, dword_count, enum_handle, shift, mask))
+def outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, enum_handle, shift, mask):
+  pm4_info_file.write("{ \"%s\", %d, %d, %s, %d, 0x%x }," %
+                       (field_name, is_variant_opcode, dword_count, enum_handle, shift, mask))
+
+# ---------------------------------------------------------------------------------------
+def outputStructRegs(pm4_info_file, enum_index_dict, reg_list):
+  dword_count = 0
+  for element in reg_list:
+    is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
+    is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
+    offset = int(element.attrib['offset'],0)
+
+    # Sanity check
+    # Note: Allowed to skip an offset (see CP_EVENT_WRITE7)
+    if dword_count > offset:
+        raise Exception("Unexpected reverse offset found in packet")
+
+    dword_count = dword_count + 1
+    if is_reg_64:
+      dword_count = dword_count + 1
+
+    bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
+
+    # No bitfields, so use the register specification directly
+    if len(bitfields) == 0:
+      field_name = element.attrib['name']
+      shift = 0
+      mask = int('0xffffffff', 16)
+      enum_handle = "UINT32_MAX"
+
+      # if 'addvariant' is an attribute, then this field is used to determine the packet variant
+      is_variant_opcode = 0
+      if 'addvariant' in element.attrib:
+        is_variant_opcode = 1
+      if is_reg_32:
+        outputField(pm4_info_file, field_name, is_variant_opcode, dword_count-1, enum_handle, shift, mask)
+      elif is_reg_64:
+        outputField(pm4_info_file, field_name+"_LO", is_variant_opcode, dword_count-2, enum_handle, shift, mask)
+        outputField(pm4_info_file, field_name+"_HI", is_variant_opcode, dword_count-1, enum_handle, shift, mask)
+
+    if is_reg_64 and len(bitfields) > 0:
+      raise Exception("Found a reg64 with bitfields: " + field_name)
+
+    for bitfield in bitfields:
+      field_name = bitfield.attrib['name']
+      type = None
+      if 'type' in bitfield.attrib:
+        type = bitfield.attrib['type']
+
+      enum_handle = "UINT32_MAX"
+      if type and type != "boolean" and type != "uint" and type != "int" and type != "float" \
+        and type != "fixed" and type != "address" and type != "hex":
+        if type not in enum_index_dict:
+          raise Exception("Enumeration %s not found!" % type)
+        enum_handle = str(enum_index_dict[type])
+
+
+      # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
+
+      # Convert to mask & shift
+      if 'low' in bitfield.attrib and 'high' in bitfield.attrib:
+        shift = low = int(bitfield.attrib['low'])
+        high = int(bitfield.attrib['high'])
+        mask = (0xffffffff >> (31 - (high - low))) << low
+      elif 'pos' in bitfield.attrib:
+        shift = pos = int(bitfield.attrib['pos'])
+        mask = (0x1 << pos)
+      else:
+        raise Exception("Encountered a bitfield with no pos/low/high!")
+
+      # if 'addvariant'  is an attribute, then this field is used to determine the packet variant
+      is_variant_opcode = 0
+      if 'addvariant' in bitfield.attrib:
+        is_variant_opcode = 1
+      outputField(pm4_info_file, field_name, is_variant_opcode, dword_count-1, enum_handle, shift, mask)
 
 # ---------------------------------------------------------------------------------------
 def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_root):
@@ -354,83 +428,72 @@ def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_r
       pm4_packet = array
       array_size = int(array.attrib['length'])
 
-    opcode = int(pm4_type_packet.attrib['value'],0)
-    pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
-    pm4_info_file.write("0x%x, { \"%s\", %d, {" % (opcode, domain_name, array_size))
+    # There are 3 PM4 packets with stripe tags: CP_DRAW_INDIRECT_MULTI, CP_DRAW_INDX_INDIRECT, and CP_EVENT_WRITE7
+    # For CP_DRAW_INDX_INDIRECT, the stripe is based on HW version, so just use the latest stripe only
+    # For CP_DRAW_INDIRECT_MULTI/CP_EVENT_WRITE7, we will have to first determine what field determines the variant
+    variant_list = []
+    stripes = domain.findall('./{http://nouveau.freedesktop.org/}stripe')
+    for idx, stripe in enumerate(stripes):
+      varset = stripe.attrib['varset']
+      variants = stripe.attrib['variants']
+      if varset == "chip":  # For chip-based variants, add only the last one
+        if idx == len(stripes) - 1:
+          variant_list.append((variants, stripe))
+      else:
+        variant_list.append((variants, stripe))
 
-    dword_count = 0
-    for element in pm4_packet:
-      is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
-      is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
-      if is_reg_32 or is_reg_64:
-        offset = int(element.attrib['offset'],0)
+    # If there are no variants, add a "default" variant
+    if len(variant_list) == 0:
+      variant_list.append(("default", None))
 
-        # Sanity check
-        if dword_count != offset:
-          # Sometimes an aliasing reg64 appears *after* 2 reg32s
-          if not is_reg_64 or (offset == dword_count-1):
-            raise Exception("Unexpected non-consecutive offset found in packet " + domain_name)
+    for variant in variant_list:
+      # Filter out everything but the reg32 and reg64 elements from the packet definition
+      # First let's add it to a dict so we can ignore duplicates (some stripes redefine root registers)
+      reg_dict = {}
+      for element in pm4_packet:
+        is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
+        is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
+        if is_reg_32 or is_reg_64:
+          offset = int(element.attrib['offset'])
+          if not (offset in reg_dict):
+            reg_dict[offset] = element
 
-        dword_count = dword_count + 1
-        if is_reg_64:
-          dword_count = dword_count + 1
+      # Add the registers from the variant-specific section (i.e. stripe)
+      stripe = variant[1]
+      packet_name = domain_name
+      if stripe:
+        for element in variant[1]:
+          is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
+          is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
+          if is_reg_32 or is_reg_64:
+            offset = int(element.attrib['offset'])
+            if not (offset in reg_dict):
+              reg_dict[offset] = element
+        # Add the prefix to the packet_name
+        if 'prefix' in stripe.attrib:
+          prefix = stripe.attrib['prefix']
+          packet_name = domain_name + "_" + prefix
 
-        bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
+      # Determine stripe opcode for this variant/stripe
+      stripe_variant = "UINT32_MAX"
+      if stripe:
+        varset = stripe.attrib['varset']
+        if varset != "chip":
+          enum = domain.find('./{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
+          enum_value = enum.find('./{http://nouveau.freedesktop.org/}value[@name="'+variant[0]+'"]')
+          stripe_variant = enum_value.attrib['value']
 
-        # No bitfields, so use the register specification directly
-        if len(bitfields) == 0:
-          field_name = element.attrib['name']
-          shift = 0
-          mask = int('0xffffffff', 16)
-          enum_handle = "UINT32_MAX"
-          if is_reg_32:
-            outputField(pm4_info_file, field_name, dword_count-1, enum_handle, shift, mask)
-          elif is_reg_64:
-            outputField(pm4_info_file, field_name+"_LO", dword_count-2, enum_handle, shift, mask)
-            outputField(pm4_info_file, field_name+"_HI", dword_count-1, enum_handle, shift, mask)
+      # Convert dict to list
+      reg_list = list(reg_dict.values())
 
-        if is_reg_64 and len(bitfields) > 0:
-          raise Exception("Found a reg64 with bitfields: " + field_name)
+      # Sort based on offset
+      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset']))
 
-        for bitfield in bitfields:
-          field_name = bitfield.attrib['name']
-          type = None
-          if 'type' in bitfield.attrib:
-            type = bitfield.attrib['type']
-
-          enum_handle = "UINT32_MAX"
-          if type and type != "boolean" and type != "uint" and type != "int" and type != "float" \
-            and type != "fixed" and type != "address" and type != "hex":
-            if type not in enum_index_dict:
-              raise Exception("Enumeration %s not found!" % type)
-            enum_handle = str(enum_index_dict[type])
-
-
-          # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
-
-          # Convert to mask & shift
-          if 'low' in bitfield.attrib and 'high' in bitfield.attrib:
-            shift = low = int(bitfield.attrib['low'])
-            high = int(bitfield.attrib['high'])
-            mask = (0xffffffff >> (31 - (high - low))) << low
-          elif 'pos' in bitfield.attrib:
-            shift = pos = int(bitfield.attrib['pos'])
-            mask = (0x1 << pos)
-          else:
-            raise Exception("Encountered a bitfield with no pos/low/high!")
-          outputField(pm4_info_file, field_name, dword_count-1, enum_handle, shift, mask)
-    pm4_info_file.write(" } }));\n")
-
-  # Need to add support for 'stripe' and 'array'
-  # CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG for array example (the only ones)
-  #   Array encompasses the whole packet, so just add an array_size to the packet
-  # CP_DRAW_INDIRECT_MULTI for the ONLY stripe example using enum
-  #   Add a stripe_variant field to the packet, which indicates the variant value (an index). Set to UIN32T_MAX by default
-  #   Add a stripe_reg field to the packet. Set to UINT32_MAX by default
-  #   Add a GetPacketInfo(stripe_reg)
-  #   Idea is you use a generic GetPacketInfo() first, get ONE of the packets. Check if there is a stripe_reg. If there is, parse the stripe reg
-  #   call the GetPacketInfo() with the reg value
-  # CP_DRAW_INDX_INDIRECT for strip example using hardware (just default to the more advanced hardware), A4XX vs A5XX-
+      opcode = int(pm4_type_packet.attrib['value'],0)
+      pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
+      pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
+      outputStructRegs(pm4_info_file, enum_index_dict, reg_list)
+      pm4_info_file.write(" } }));\n")
 
 # ---------------------------------------------------------------------------------------
 def outputPacketInfo(gfx9_header_directory, pm4_info_file, registers_et_root):

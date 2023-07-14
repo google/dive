@@ -162,13 +162,14 @@ void ShaderView::OnEventSelected(uint64_t node_index)
                 treeItem->setText(0, tr(kShaderStageStrings[shader_stage]));
 
                 // Column 1
-                char buffer[256];
-                sprintf(buffer, "%p", (void *)shader_info.m_addr);
+                const uint32_t buffer_size = 256;
+                char buffer[buffer_size];
+                snprintf(buffer, buffer_size, "%p", (void *)shader_info.m_addr);
                 treeItem->setText(1, tr(buffer));
 
                 // Column 2
                 static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
-                sprintf(buffer, "%llu", (unsigned long long)shader_info.m_size);
+                snprintf(buffer, 256, "%llu", (unsigned long long)shader_info.m_size);
                 treeItem->setText(2, tr(buffer));
 
                 // Column 3&4: VGPRs, SGPRs: TODO(rwang): removed from cleanup
@@ -184,16 +185,16 @@ void ShaderView::OnEventSelected(uint64_t node_index)
                 switch ((Dive::MemoryAllocationData::GpuHeap)mem_alloc_ptr->m_preferred_heap)
                 {
                 case Dive::MemoryAllocationData::GpuHeap::GpuHeapLocal:
-                    sprintf(buffer, "Local");
+                    snprintf(buffer, buffer_size, "Local");
                     break;
                 case Dive::MemoryAllocationData::GpuHeap::GpuHeapInvisible:
-                    sprintf(buffer, "Invisible");
+                    snprintf(buffer, buffer_size, "Invisible");
                     break;
                 case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartUswc:
-                    sprintf(buffer, "GartUswc");
+                    snprintf(buffer, buffer_size, "GartUswc");
                     break;
                 case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
-                    sprintf(buffer, "GartCacheable");
+                    snprintf(buffer, buffer_size, "GartCacheable");
                     break;
                 default: DIVE_ASSERT(false);
                 }

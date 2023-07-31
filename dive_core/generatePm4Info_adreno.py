@@ -34,19 +34,6 @@ def outputHeader(pm4_info_file):
   )
 
 # ---------------------------------------------------------------------------------------
-def readFileLines(gfx9_header_directory, header_file_name):
-  file_path = gfx9_header_directory + header_file_name
-  if not os.path.exists(file_path):
-    print(file_path + " does not exist!")
-    sys.exit()
-
-  cur_file = open(file_path, "r")
-
-  lines = cur_file.readlines()
-  cur_file.close()
-  return lines
-
-# ---------------------------------------------------------------------------------------
 def outputH(pm4_info_file):
   outputHeader(pm4_info_file)
   pm4_info_file.writelines("""
@@ -90,8 +77,7 @@ const RegInfo *GetRegByName(const char *);
 const char *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name);
-"""
-  )
+""")
 
 # ---------------------------------------------------------------------------------------
 def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
@@ -119,7 +105,7 @@ static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
   )
 
 # ---------------------------------------------------------------------------------------
-def outputPm4InfoInitFunc(gfx9_header_directory, pm4_info_file, registers_et_root):
+def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   pm4_info_file.writelines(
     "void Pm4InfoInit()\n"
     "{\n"
@@ -129,35 +115,17 @@ def outputPm4InfoInitFunc(gfx9_header_directory, pm4_info_file, registers_et_roo
     "    assert(g_sPacketInfo.empty());\n"
     "\n"
   )
-  outputOpcodes(gfx9_header_directory, pm4_info_file, registers_et_root)
+  outputOpcodes(pm4_info_file, opcode_dict)
   pm4_info_file.write("\n")
-  outputRegisterInfo(gfx9_header_directory, pm4_info_file, registers_et_root)
+  outputRegisterInfo(pm4_info_file, registers_et_root)
   pm4_info_file.write("\n")
-  outputPacketInfo(gfx9_header_directory, pm4_info_file, registers_et_root)
+  outputPacketInfo(pm4_info_file, registers_et_root)
   pm4_info_file.write("}\n")
   return
 
 valid_opcodes = {}
 # ---------------------------------------------------------------------------------------
-def outputOpcodes(gfx9_header_directory, pm4_info_file, registers_et_root):
-
-  # Find the "adreno_pm4_type3_packets" enum (defined in the andreno_pm4.xml file)
-  pm4_type_packets = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="adreno_pm4_type3_packets"]')
-
-  # Iterate through each enum
-
-  opcode_dict = {}
-
-  # There can be multiple opcodes with the same value, to support different adreno versions
-  # The opcodes are listed in hw revision order, with later entries of the same opcode used for later revisions
-  # We only want the opcode names for the latest revision, so overwrite the dictionary if the same value encountered
-  for pm4_type_packet in pm4_type_packets:
-    if 'name' in pm4_type_packet.attrib and 'value' in pm4_type_packet.attrib:
-      pm4_name = pm4_type_packet.attrib['name']
-      pm4_value = pm4_type_packet.attrib['value']
-      opcode_dict[pm4_value] = pm4_name
-      valid_opcodes[pm4_value]=True
-
+def outputOpcodes(pm4_info_file, opcode_dict):
   for opcode in opcode_dict:
     pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (opcode, opcode_dict[opcode]))
   return
@@ -214,7 +182,7 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
     pm4_info_file.write("} };\n")
 
 # ---------------------------------------------------------------------------------------
-def outputRegisterInfo(gfx9_header_directory, pm4_info_file, registers_et_root):
+def outputRegisterInfo(pm4_info_file, registers_et_root):
   a6xx_domain = registers_et_root.find('./{http://nouveau.freedesktop.org/}domain[@name="A6XX"]')
 
   # TODO: Store the register type information somewhere
@@ -324,9 +292,9 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
         enum_list[index][1][enum_value] = enum_value_name
 
 # ---------------------------------------------------------------------------------------
-def outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, enum_handle, shift, mask):
+def outputField(pm4_info_file, field_name, is_variant_opcode, dword, enum_handle, shift, mask):
   pm4_info_file.write("{ \"%s\", %d, %d, %s, %d, 0x%x }," %
-                       (field_name, is_variant_opcode, dword_count, enum_handle, shift, mask))
+                       (field_name, is_variant_opcode, dword, enum_handle, shift, mask))
 
 # ---------------------------------------------------------------------------------------
 def outputStructRegs(pm4_info_file, enum_index_dict, reg_list):
@@ -359,10 +327,10 @@ def outputStructRegs(pm4_info_file, enum_index_dict, reg_list):
       if 'addvariant' in element.attrib:
         is_variant_opcode = 1
       if is_reg_32:
-        outputField(pm4_info_file, field_name, is_variant_opcode, dword_count-1, enum_handle, shift, mask)
+        outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, enum_handle, shift, mask)
       elif is_reg_64:
-        outputField(pm4_info_file, field_name+"_LO", is_variant_opcode, dword_count-2, enum_handle, shift, mask)
-        outputField(pm4_info_file, field_name+"_HI", is_variant_opcode, dword_count-1, enum_handle, shift, mask)
+        outputField(pm4_info_file, field_name+"_LO", is_variant_opcode, dword_count-1, enum_handle, shift, mask)
+        outputField(pm4_info_file, field_name+"_HI", is_variant_opcode, dword_count, enum_handle, shift, mask)
 
     if is_reg_64 and len(bitfields) > 0:
       raise Exception("Found a reg64 with bitfields: " + field_name)
@@ -398,7 +366,7 @@ def outputStructRegs(pm4_info_file, enum_index_dict, reg_list):
       is_variant_opcode = 0
       if 'addvariant' in bitfield.attrib:
         is_variant_opcode = 1
-      outputField(pm4_info_file, field_name, is_variant_opcode, dword_count-1, enum_handle, shift, mask)
+      outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, enum_handle, shift, mask)
 
 # ---------------------------------------------------------------------------------------
 def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_root):
@@ -495,8 +463,23 @@ def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_r
       outputStructRegs(pm4_info_file, enum_index_dict, reg_list)
       pm4_info_file.write(" } }));\n")
 
+  # Not all pm4 packets are described via a "domain". These are usually packets (such as CP_WAIT_FOR_IDLE) which
+  # have no fields. In that case, add a corresponding g_sPacketInfo entry with no fields
+  pm4_type_packets_values = pm4_type_packets.findall('./{http://nouveau.freedesktop.org/}value')
+  for pm4_type_packet_value in pm4_type_packets_values:
+    # See if it shows up in the domains list
+    packet_name = pm4_type_packet_value.attrib['name']
+
+    domain = registers_et_root.find('{http://nouveau.freedesktop.org/}domain[@name="'+packet_name+'"]')
+    if domain is None:
+      opcode = int(pm4_type_packet_value.attrib['value'],0)
+      pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
+      pm4_info_file.write("0x%x, { \"%s\", 0, UINT32_MAX, {" % (opcode, packet_name))
+      pm4_info_file.write(" } }));\n")
+
+
 # ---------------------------------------------------------------------------------------
-def outputPacketInfo(gfx9_header_directory, pm4_info_file, registers_et_root):
+def outputPacketInfo(pm4_info_file, registers_et_root):
   enum_index_dict = {}
 
   # Get enum values from the XML element tree, being careful not to have duplicates
@@ -608,12 +591,6 @@ try:
   # Find child with enum = "vgt_event_type"
 
   elements = registers_et_root.findall('{http://nouveau.freedesktop.org/}enum')
-  for element in elements: print(element.tag,element.attrib)
-
-  for child in registers_et_root:
-    print(child.tag, child.attrib)
-
-  #ET.tostring(registers_et_root)
 
   pm4_info_file_h = open(sys.argv[3] + ".h", "w")
   pm4_info_file_cpp = open(sys.argv[3] + ".cpp", "w")
@@ -621,12 +598,36 @@ try:
   head, tail = os.path.split(sys.argv[3] + ".h")
   pm4_info_filename_h = tail
 
+
+  # Parse type3 opcodes
+  # There can be multiple opcodes with the same value, to support different adreno versions
+  # The opcodes are listed in hw revision order, with later entries of the same opcode used for later revisions
+  # We only want the opcode names for the latest revision, so overwrite the dictionary if the same value encountered
+
+  # Find the "adreno_pm4_type3_packets" enum (defined in the andreno_pm4.xml file)
+  opcode_dict = {}
+  pm4_type_packets = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="adreno_pm4_type3_packets"]')
+  for pm4_type_packet in pm4_type_packets:
+    if 'name' in pm4_type_packet.attrib and 'value' in pm4_type_packet.attrib:
+      pm4_name = pm4_type_packet.attrib['name']
+      pm4_value = pm4_type_packet.attrib['value']
+      # Only add ones that start with "CP_*"
+      if pm4_name.startswith("CP_"):
+        opcode_dict[pm4_value] = pm4_name
+
+
+  #pm4_info_file_h.write("enum Type7Opcodes\n")
+  #pm4_info_file_h.write("{\n")
+  #for opcode in opcode_dict:
+  #  pm4_info_file_h.write("    %s = %s,\n" % (opcode_dict[opcode], opcode))
+  #pm4_info_file_h.write("};\n")
+
   # .H file
   outputH(pm4_info_file_h)
 
   # .CPP file
   outputHeaderCpp(pm4_info_filename_h, pm4_info_file_cpp)
-  outputPm4InfoInitFunc(sys.argv[1], pm4_info_file_cpp, registers_et_root)
+  outputPm4InfoInitFunc(pm4_info_file_cpp, registers_et_root, opcode_dict)
   outputFunctionsCpp(pm4_info_file_cpp)
 
   # close to flush

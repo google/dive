@@ -371,17 +371,12 @@ public:
                          uint32_t                  ib_index,
                          const IndirectBufferInfo &ib_info) override;
 
-    virtual bool OnDcbPacket(const IMemoryManager        &mem_manager,
-                             uint32_t                     submit_index,
-                             uint32_t                     ib_index,
-                             uint64_t                     va_addr,
-                             const PM4_PFP_TYPE_3_HEADER &header) override;
-
-    virtual bool OnCcbPacket(const IMemoryManager        &mem_manager,
-                             uint32_t                     submit_index,
-                             uint32_t                     ib_index,
-                             uint64_t                     va_addr,
-                             const PM4_PFP_TYPE_3_HEADER &header) override;
+    virtual bool OnPacket(const IMemoryManager &       mem_manager,
+                          uint32_t                     submit_index,
+                          uint32_t                     ib_index,
+                          uint64_t                     va_addr,
+                          Pm4Type                      type,
+                          uint32_t                     header) override;
 
 private:
     union Type3Ordinal2
@@ -401,28 +396,19 @@ private:
                            uint32_t                     submit_index,
                            uint64_t                     va_addr,
                            bool                         is_ce_packet,
-                           const PM4_PFP_TYPE_3_HEADER &header);
+                           Pm4Type                      type,
+                           uint32_t                     header);
     uint64_t AddRegisterNode(uint32_t reg, uint32_t reg_value, bool is_ce_packet);
     uint64_t AddSyncEventNode(const IMemoryManager        &mem_manager,
                               uint32_t                     submit_index,
                               uint64_t                     va_addr,
-                              SyncType                     sync_event,
-                              const PM4_PFP_TYPE_3_HEADER &header);
-    bool     CachePotentialMarkerDword(const IMemoryManager        &mem_manager,
-                                       uint32_t                     submit_index,
-                                       uint64_t                     va_addr,
-                                       uint64_t                     packet_node_index,
-                                       const PM4_PFP_TYPE_3_HEADER &header);
+                              SyncType                     sync_event);
+
     bool     TryParseMarker(uint64_t submit_node_index);
 
-    uint32_t ParseUserMarker(const uint8_t *marker_ptr,
-                             uint64_t       submit_node_index,
-                             uint64_t       dword_index);
     void     OnVulkanMarkerEnd();
-    uint32_t ParseInternalRgpMarker(const uint8_t *marker_ptr,
-                                    uint64_t       submit_node_index,
-                                    uint64_t       dword_index);
-    void     ParseVulkanCallMarker(char    *marker_ptr,
+    void     OnGFRCommandMarkerEnd();
+    void     ParseVulkanCallMarker(char *   marker_ptr,
                                    uint32_t marker_size,
                                    uint64_t submit_node_index,
                                    uint64_t packet_node_index);
@@ -438,13 +424,13 @@ private:
     std::string GetEventString(const IMemoryManager        &mem_manager,
                                uint32_t                     submit_index,
                                uint64_t                     va_addr,
-                               const PM4_PFP_TYPE_3_HEADER &header);
-    void        AppendRegNodes(const IMemoryManager        &mem_manager,
+                               uint32_t                     opcode);
+    void        AppendRegNodes(const IMemoryManager &       mem_manager,
                                uint32_t                     submit_index,
                                uint64_t                     va_addr,
                                uint32_t                     reg_space_start,
                                uint32_t                     reg_space_end,
-                               const PM4_PFP_TYPE_3_HEADER &header,
+                               const Pm4Type4Header        &header,
                                uint64_t                     packet_node_index);
     void        AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
                                          uint32_t                     submit_index,
@@ -480,8 +466,8 @@ private:
                                        uint32_t                     submit_index,
                                        uint64_t                     va_addr,
                                        bool                         is_ce_packet,
-                                       const PM4_PFP_TYPE_3_HEADER &header,
-                                       const PacketInfo            *packet_info_ptr,
+                                       uint32_t                     opcode,
+                                       const PacketInfo *           packet_info_ptr,
                                        uint64_t                     packet_node_index,
                                        size_t                       field_start = 0,
                                        size_t                       field_last = SIZE_MAX - 1);
@@ -543,13 +529,7 @@ private:
         }
     };
 
-    struct MarkerInfo
-    {
-        std::vector<uint64_t> m_packet_node_indices;  // UCONFIG packets that make up the marker
-        std::vector<uint32_t> m_dwords;               // The DWORD content of the UCONFIG packets
-    };
-
-    CommandHierarchy  *m_command_hierarchy_ptr;  // Pointer to class being created
+    CommandHierarchy * m_command_hierarchy_ptr;  // Pointer to class being created
     const CaptureData *m_capture_data_ptr;
 
     // Parsing State
@@ -575,10 +555,7 @@ private:
     std::vector<uint64_t> m_ccb_ib_stack;           // Tracks current CCB IB stack
     std::vector<uint64_t> m_renderpass_stack;       // render pass marker begin/end stack
 
-    std::vector<uint64_t> m_sdma_ib_stack;  // Tracks current DMA IB stack
-
     uint32_t   m_num_events;             // Number of events so far
-    MarkerInfo m_cur_rgp_marker;         // Accumulated packets/dwords for rgp sqtt marker(s)
     Packets    m_packets;                // Packets added since last event
     uint64_t   m_cur_submit_node_index;  // Current submit node being processed
 

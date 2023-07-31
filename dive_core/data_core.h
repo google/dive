@@ -21,7 +21,6 @@
 #include "capture_data.h"
 #include "capture_event_info.h"
 #include "command_hierarchy.h"
-#include "dive_core/common/shader_reflector.h"
 #include "event_state.h"
 #include "progress_tracker.h"
 
@@ -136,17 +135,12 @@ public:
                          uint32_t                  ib_index,
                          const IndirectBufferInfo &ib_info) override;
 
-    virtual bool OnDcbPacket(const IMemoryManager        &mem_manager,
-                             uint32_t                     submit_index,
-                             uint32_t                     ib_index,
-                             uint64_t                     va_addr,
-                             const PM4_PFP_TYPE_3_HEADER &header) override;
-
-    virtual bool OnCcbPacket(const IMemoryManager        &mem_manager,
-                             uint32_t                     submit_index,
-                             uint32_t                     ib_index,
-                             uint64_t                     va_addr,
-                             const PM4_PFP_TYPE_3_HEADER &header) override;
+    virtual bool OnPacket(const IMemoryManager &       mem_manager,
+                          uint32_t                     submit_index,
+                          uint32_t                     ib_index,
+                          uint64_t                     va_addr,
+                          Pm4Type                      type,
+                          uint32_t                     header) override;
 
 private:
     bool HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t opcode);
@@ -171,8 +165,6 @@ private:
     std::vector<uint64_t> m_addrs;
 
     EmulateStateTracker   m_state_tracker;
-    EmulateConstantEngine m_constant_engine_emu;
-    uint8_t              *m_ce_buffer_ptr = nullptr;
 
     CaptureMetadata &m_capture_metadata;
 #if defined(ENABLE_CAPTURE_BUFFERS)

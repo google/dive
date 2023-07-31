@@ -20,6 +20,7 @@
 #include <QStyleFactory>
 #include <QTimer>
 #include <iostream>
+#include "dive_core/pm4_info.h"
 #include "main_window.h"
 #include "version.h"
 #ifdef __linux__
@@ -130,6 +131,9 @@ int main(int argc, char *argv[])
     QSplashScreen *splash_screen = new QSplashScreen();
     splash_screen->setPixmap(QPixmap(":/images/dive.png"));
     splash_screen->show();
+
+    // Initialize packet info query data structures needed for parsing
+    Pm4InfoInit();
 
     MainWindow *main_window = new MainWindow();
 

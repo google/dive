@@ -126,29 +126,6 @@ void MemoryManager::AddMemoryAllocations(uint32_t                            sub
 }
 
 //--------------------------------------------------------------------------------------------------
-void MemoryManager::AddRingBuffer(uint64_t va_addr, uint32_t size)
-{
-    m_ring_memory.push_back({ va_addr, size });
-}
-
-//--------------------------------------------------------------------------------------------------
-bool MemoryManager::IsRingMemory(uint64_t va_addr) const
-{
-    // This assumes that the va_addr given is not expected to wrap INTO the
-    // ring buffer memory, only that the memory address is inside.
-    for (const auto &rm : m_ring_memory)
-    {
-        auto rm_va_end = rm.m_va_addr + rm.m_size;
-        if (rm.m_va_addr <= va_addr && va_addr < rm_va_end)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-//--------------------------------------------------------------------------------------------------
 void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_capture)
 {
     m_same_submit_only = same_submit_copy_only;
@@ -225,30 +202,6 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
                                uint64_t va_addr,
                                uint64_t size) const
 {
-    // Check if this memory is in a ring buffer AND needs to be wrapped.
-    // Only crash dumps capture ring memory currently, so this check should be by-passed
-    // for most captures.
-    for (const auto &rm : m_ring_memory)
-    {
-        auto rm_va_end = rm.m_va_addr + rm.m_size;
-        if (rm.m_va_addr <= va_addr && va_addr < rm_va_end)
-        {
-            // We read past the end, so wrapping is needed.
-            // Change this into 2 copies.
-            if (va_addr + size > rm_va_end)
-            {
-                auto size1 = rm_va_end - rm.m_va_addr;
-                auto size2 = size - size1;
-
-                if (!CopyMemory(buffer_ptr, submit_index, va_addr, size1))
-                    return false;
-
-                auto buffer_ptr2 = (uint8_t *)buffer_ptr + size1;
-                return CopyMemory(buffer_ptr2, submit_index, rm.m_va_addr, size2);
-            }
-        }
-    }
-
     // Check the last-used block first, because this is the desired block most of the time
     if (m_last_used_block_ptr != nullptr)
     {
@@ -749,6 +702,10 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
     {
         return LoadCaptureFile(file_name);
     }
+    else if (file_extension.compare("rd") == 0)
+    {
+        return LoadAdrenoRdFile(file_name);
+    }
     else
     {
         std::cerr << "Unknown capture type: " << file_name << std::endl;
@@ -782,6 +739,30 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(const char *file_name)
     }
 
     auto result = LoadCaptureFile(capture_file);
+    if (result != LoadResult::kSuccess)
+    {
+        std::cerr << "Error reading: " << file_name << " (" << result << ")" << std::endl;
+    }
+    else
+    {
+        m_cur_capture_file = std::string(file_name);
+    }
+
+    return result;
+}
+
+//--------------------------------------------------------------------------------------------------
+CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
+{
+    // Open the file stream
+    std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
+    if (!capture_file.is_open())
+    {
+        std::cerr << "Not able to open: " << file_name << std::endl;
+        return LoadResult::kFileIoError;
+    }
+
+    auto result = LoadAdrenoRdFile(capture_file);
     if (result != LoadResult::kSuccess)
     {
         std::cerr << "Error reading: " << file_name << " (" << result << ")" << std::endl;
@@ -849,6 +830,86 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)
         default:
             DIVE_ASSERT(false);  // No other type of parent block supported right now
             return LoadResult::kCorruptData;
+        }
+    }
+    return LoadResult::kSuccess;
+}
+
+//--------------------------------------------------------------------------------------------------
+CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file)
+{
+    enum rd_sect_type
+    {
+        RD_NONE,
+        RD_TEST,           /* ascii text */
+        RD_CMD,            /* ascii text */
+        RD_GPUADDR,        /* u32 gpuaddr, u32 size */
+        RD_CONTEXT,        /* raw dump */
+        RD_CMDSTREAM,      /* raw dump */
+        RD_CMDSTREAM_ADDR, /* gpu addr of cmdstream */
+        RD_PARAM,          /* u32 param_type, u32 param_val, u32 bitlen */
+        RD_FLUSH,          /* empty, clear previous params */
+        RD_PROGRAM,        /* shader program, raw dump */
+        RD_VERT_SHADER,
+        RD_FRAG_SHADER,
+        RD_BUFFER_CONTENTS,
+        RD_GPU_ID,
+        RD_CHIP_ID,
+    };
+
+    struct BlockInfo
+    {
+        // The first 2 dwords are set to 0xffffffff
+        uint32_t m_max_uint32_1;
+        uint32_t m_max_uint32_2;
+
+        uint32_t m_block_type;
+
+        // The number of bytes that follow this header.
+        uint32_t m_data_size;
+    };
+
+    BlockInfo block_info;
+    uint64_t cur_gpu_addr = UINT64_MAX;
+    uint32_t cur_size = UINT32_MAX;
+    while (capture_file.read((char *)&block_info, sizeof(block_info)))
+    {
+        if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
+            return LoadResult::kCorruptData;
+
+        switch (block_info.m_block_type)
+        {
+        case RD_GPUADDR:
+            if (!LoadGpuAddressAndSize(capture_file, block_info.m_data_size, &cur_gpu_addr, &cur_size))
+                return LoadResult::kFileIoError;
+            break;
+        case RD_CMDSTREAM_ADDR:
+            if (!LoadSubmitBlockAdreno(capture_file, block_info.m_data_size))
+                return LoadResult::kFileIoError;
+            break;
+        case RD_BUFFER_CONTENTS:
+            // The size read from RD_GPUADDR should match block size exactly
+            if (block_info.m_data_size != cur_size)
+                return LoadResult::kCorruptData;
+            if (!LoadMemoryBlockAdreno(capture_file, cur_gpu_addr, cur_size))
+                return LoadResult::kFileIoError;
+            break;
+        case RD_NONE:
+        case RD_TEST:
+        case RD_CMD:
+        //case RD_GPUADDR:
+        case RD_CONTEXT:
+        case RD_CMDSTREAM:
+        //case RD_CMDSTREAM_ADDR:
+        case RD_PARAM:
+        case RD_FLUSH:
+        case RD_PROGRAM:
+        case RD_VERT_SHADER:
+        case RD_FRAG_SHADER:
+        //case RD_BUFFER_CONTENTS:
+        case RD_GPU_ID:
+        case RD_CHIP_ID:
+            capture_file.seekg(block_info.m_data_size, std::ios::cur);
         }
     }
     return LoadResult::kSuccess;
@@ -949,10 +1010,6 @@ bool CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHeade
             if (!LoadPresentBlock(capture_file))
                 return false;
             break;
-        case BlockType::kRing:
-            if (!LoadRingBlock(capture_file))
-                return false;
-            break;
         case BlockType::kWaveState:
             if (!LoadWaveStateBlock(capture_file, data_header))
                 return false;
@@ -1035,7 +1092,6 @@ bool CaptureData::LoadSubmitBlock(std::istream &capture_file)
         IndirectBufferInfo ib_info;
         ib_info.m_va_addr = ib_data.m_va_addr;
         ib_info.m_size_in_dwords = ib_data.m_size_in_dwords;
-        ib_info.m_is_constant_engine = ib_data.m_is_constant_engine;
         ib_info.m_skip = false;
         ibs.push_back(ib_info);
     }
@@ -1097,41 +1153,6 @@ bool CaptureData::LoadPresentBlock(std::istream &capture_file)
     {
         m_presents.push_back(PresentInfo());
     }
-    return true;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadRingBlock(std::istream &capture_file)
-{
-    RingData ring_data;
-    if (!capture_file.read((char *)&ring_data, sizeof(ring_data)))
-        return false;
-
-    m_memory.AddRingBuffer(ring_data.m_va_addr, ring_data.m_size_in_bytes);
-
-    uint64_t hang_ib_addr = ring_data.m_rb_va;
-    uint64_t hang_ib_size = ring_data.m_rb_bytes_remaining;
-    if (ring_data.m_ib2_bytes_remaining != 0 || ring_data.m_ib2_va != 0)
-    {
-        hang_ib_addr = ring_data.m_ib2_va;
-        hang_ib_size = ring_data.m_ib2_bytes_remaining;
-    }
-    else if (ring_data.m_ib1_bytes_remaining != 0 || ring_data.m_ib1_va != 0)
-    {
-        hang_ib_addr = ring_data.m_ib1_va;
-        hang_ib_size = ring_data.m_ib1_bytes_remaining;
-    }
-
-    m_rings.push_back(RingInfo(ring_data.m_queue_type,
-                               ring_data.m_queue_index,
-                               ring_data.m_va_addr,
-                               ring_data.m_size_in_bytes,
-                               ring_data.m_signaled_fence_va,
-                               ring_data.m_ring_captured_size,
-                               hang_ib_addr,
-                               hang_ib_size,
-                               ring_data.m_signaled_fence_va,
-                               ring_data.m_emitted_fence_va));
     return true;
 }
 
@@ -1264,6 +1285,72 @@ bool CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
+bool CaptureData::LoadGpuAddressAndSize(std::istream &capture_file, uint32_t block_size, uint64_t *gpu_addr, uint32_t *size)
+{
+    assert(block_size >= 2 * sizeof(uint32_t));
+
+    uint32_t dword;
+    if (!capture_file.read((char *)&dword, sizeof(uint32_t)))
+        return false;
+    *gpu_addr = dword;
+    if (!capture_file.read((char *)&dword, sizeof(uint32_t)))
+        return false;
+    *size = dword;
+
+    // It's possible that only the lower 32-bits are written to the file?
+    if (block_size > 2 * sizeof(uint32_t))
+    {
+        if (!capture_file.read((char *)&dword, sizeof(uint32_t)))
+            return false;
+        *gpu_addr |= ((uint64_t)(dword)) << 32;
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu_addr, uint32_t size)
+{
+    MemoryData raw_memory;
+    raw_memory.m_data_size = size;
+    raw_memory.m_data_ptr = new uint8_t[raw_memory.m_data_size];
+    if (!capture_file.read((char *)raw_memory.m_data_ptr, size))
+    {
+        delete[] raw_memory.m_data_ptr;
+        return false;
+    }
+
+    // Unlike with Dive, all memory blocks for a submit come *before* the submit
+    uint32_t submit_index = (uint32_t)(m_submits.size());
+    m_memory.AddMemoryBlock(submit_index, gpu_addr, std::move(raw_memory));
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool CaptureData::LoadSubmitBlockAdreno(std::istream &capture_file, uint32_t block_size)
+{
+    uint64_t gpu_addr;
+    uint32_t size_in_dwords;
+    if (!LoadGpuAddressAndSize(capture_file, block_size, &gpu_addr, &size_in_dwords))
+        return false;
+
+    // Only 1 IB per submit for Adreno, apparently
+    std::vector<IndirectBufferInfo> ibs;
+    IndirectBufferInfo ib_info;
+    ib_info.m_va_addr = gpu_addr;
+    ib_info.m_size_in_dwords = size_in_dwords;
+    ib_info.m_skip = false;
+    ibs.push_back(ib_info);
+
+    SubmitInfo submit_info(EngineType::kUniversal,
+                        QueueType::kUniversal,
+                        0,
+                        false,
+                        std::move(ibs));
+    m_submits.push_back(std::move(submit_info));
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
 void CaptureData::Finalize(const CaptureDataHeader &data_header)
 {
     // 0.3.2 implemented memory tracking for IBs - ie. no more duplicate capturing
@@ -1286,6 +1373,7 @@ void CaptureData::Finalize(const CaptureDataHeader &data_header)
     m_memory.Finalize(same_submit_copy_only, duplicate_ib_capture);
 }
 
+//--------------------------------------------------------------------------------------------------
 std::string CaptureData::GetFileFormatVersion() const
 {
     std::stringstream os;

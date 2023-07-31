@@ -16,7 +16,6 @@
 */
 #include "data_core.h"
 #include <assert.h>
-#include "dive_core/common/shader_reflector.h"
 
 namespace Dive
 {
@@ -130,21 +129,11 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
 {
-    static const uint8_t kNumUserDataRegisters = 32;
-    static const uint8_t kNumUserDataRegistersCompute = 16;
-    const uint32_t       ce_ram_size = 48 * 1024;  // Estimate. Driver actually uses less than this.
-    uint32_t buffer_size = EmulateConstantEngine::CalculateInternalBufferSize(ce_ram_size);
-    m_ce_buffer_ptr = new uint8_t[buffer_size];
-
-    m_state_tracker.Init(kNumUserDataRegisters, kNumUserDataRegistersCompute);
-    m_constant_engine_emu.Init(m_ce_buffer_ptr, ce_ram_size);
 }
 
 //--------------------------------------------------------------------------------------------------
 CaptureMetadataCreator::~CaptureMetadataCreator()
 {
-    if (m_ce_buffer_ptr != nullptr)
-        delete[] m_ce_buffer_ptr;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -178,16 +167,22 @@ bool CaptureMetadataCreator::OnIbEnd(uint32_t                  submit_index,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureMetadataCreator::OnDcbPacket(const IMemoryManager        &mem_manager,
-                                         uint32_t                     submit_index,
-                                         uint32_t                     ib_index,
-                                         uint64_t                     va_addr,
-                                         const PM4_PFP_TYPE_3_HEADER &header)
+bool CaptureMetadataCreator::OnPacket(const IMemoryManager &       mem_manager,
+                                      uint32_t                     submit_index,
+                                      uint32_t                     ib_index,
+                                      uint64_t                     va_addr,
+                                      Pm4Type                      type,
+                                      uint32_t                     header)
 {
-    if (!m_state_tracker.OnDcbPacket(mem_manager, submit_index, ib_index, va_addr, header))
+    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, type, header))
         return false;
 
-    m_opcodes.push_back(header.opcode);
+    if (type != Pm4Type::kType7)
+        return true;
+
+    Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;   
+
+    m_opcodes.push_back(type7_header->opcode);
     m_addrs.push_back(va_addr);
 
     if (IsDrawDispatchDmaSyncEvent(mem_manager, submit_index, m_opcodes, m_addrs))
@@ -195,11 +190,9 @@ bool CaptureMetadataCreator::OnDcbPacket(const IMemoryManager        &mem_manage
         // Add a new event to the EventInfo metadata array
         EventInfo event_info;
         event_info.m_submit_index = submit_index;
-        if (IsDrawEventOpcode(header.opcode))
+        if (IsDrawEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDraw;
-        else if (IsDmaEventOpcode(header.opcode))
-            event_info.m_type = EventInfo::EventType::kDma;
-        else if (IsDispatchEventOpcode(header.opcode))
+        else if (IsDispatchEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDispatch;
         else
         {
@@ -218,7 +211,7 @@ bool CaptureMetadataCreator::OnDcbPacket(const IMemoryManager        &mem_manage
         {
             FillEventStateInfo(it);
 
-            if (!HandleShaders(mem_manager, submit_index, header.opcode))
+            if (!HandleShaders(mem_manager, submit_index, type7_header->opcode))
                 return false;
         }
 
@@ -241,20 +234,6 @@ bool CaptureMetadataCreator::OnDcbPacket(const IMemoryManager        &mem_manage
         m_opcodes.clear();
         m_addrs.clear();
     }
-    return true;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CaptureMetadataCreator::OnCcbPacket(const IMemoryManager        &mem_manager,
-                                         uint32_t                     submit_index,
-                                         uint32_t                     ib_index,
-                                         uint64_t                     va_addr,
-                                         const PM4_PFP_TYPE_3_HEADER &header)
-{
-    if (!m_state_tracker.OnCcbPacket(mem_manager, submit_index, ib_index, va_addr, header))
-        return false;
-    if (!m_constant_engine_emu.OnCcbPacket(mem_manager, submit_index, ib_index, va_addr, header))
-        return false;
     return true;
 }
 

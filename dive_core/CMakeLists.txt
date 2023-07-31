@@ -34,6 +34,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(DIVE_CORE_GENERATED_FILE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 set(PM4_INFO_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info")
+set(PM4_GENERATED_SRC_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info.cpp")
+set(PM4_GENERATED_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info.h")
 
 if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
   find_program (Python3_EXECUTABLE python3)
@@ -44,6 +46,19 @@ endif()
 if (NOT Python3_EXECUTABLE)
   message(FATAL_ERROR "python3 not found")
 endif()
+
+#add_custom_target(pm4_info ALL DEPENDS "${PM4_INFO_FILE}.h" "${PM4_INFO_FILE}.cpp")
+add_custom_command(
+    OUTPUT ${PM4_GENERATED_HDR_FILE} ${PM4_GENERATED_SRC_FILE}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generatePm4Info_adreno.py
+                   "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/registers"
+                   "adreno/a6xx.xml"
+                   ${PM4_INFO_FILE}
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generatePm4Info_adreno.py"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    VERBATIM
+)
+add_custom_target(pm4_info ALL DEPENDS ${PM4_GENERATED_HDR_FILE} ${PM4_GENERATED_SRC_FILE})
 
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
@@ -67,9 +82,10 @@ include_directories(${CMAKE_SOURCE_DIR}/capture_layer/generated)
 add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
 
 add_library(${PROJECT_NAME} STATIC ${HDR_FILES} ${SRC_FILES}
-  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${NATVIS_FILES}
+  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES}
   "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_printer.cpp" "${CMAKE_SOURCE_DIR}/capture_layer/command_printer_brief.cpp"
   "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_decoder.cpp" )
+add_dependencies(${PROJECT_NAME} pm4_info)
 
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")

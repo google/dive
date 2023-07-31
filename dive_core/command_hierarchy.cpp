@@ -29,6 +29,7 @@
 #include "dive_core/common/common.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 
+#include "pm4_info.h"
 #include "dive_strings.h"
 #include "log.h"
 
@@ -578,68 +579,13 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_p
             continue;
         }
 
-        // Assumption: A switch_buffer packet is added in between submits, which means the ce/de
-        // counters will be reset in between submits. Therefore no need to track
-        // markers/draws/counters across submit boundaries.
-
-        auto &ib = submit_info.GetIndirectBufferInfo(0);
-        bool  is_ring_submit = capture_data.GetMemoryManager().IsRingMemory(ib.m_va_addr);
-
-        // If the IB is in ring memory we treat it as a KMD ring submit rather than as
-        // a UMD IB.
-        if (is_ring_submit)
-        {
-            uint32_t ring_index = capture_data.GetNumRings();
-            for (uint32_t i = 0; i < capture_data.GetNumRings(); i++)
-            {
-                auto ring_info = capture_data.GetRingInfo(i);
-                auto base = ring_info.GetRingBaseAddress();
-                auto size = ring_info.GetRingSize();
-                if (base <= ib.m_va_addr && ib.m_va_addr < base + size)
-                {
-                    ring_index = i;
-                    break;
-                }
-            }
-            if (ring_index >= capture_data.GetNumRings())
-            {
-                std::cerr << "Can't find ring for this submit" << std::endl;
-                return false;
-            }
-
-            auto     ring_info = capture_data.GetRingInfo(ring_index);
-            uint32_t size_in_bytes = ib.m_size_in_dwords * sizeof(uint32_t);
-
-            OnIbStart(submit_index, 0, ib, Dive::IbType::kNormal);
-
-            // The ring has both draw and constant packets so we treat it as both a CE and DE
-            m_ccb_ib_stack.push_back(m_dcb_ib_stack.back());
-
-            EmulatePM4 emu;
-            if (!emu.ExecuteKMDRing(*this,
-                                    capture_data.GetMemoryManager(),
-                                    ring_info.GetQueueType() == QueueType::kUniversal,
-                                    ib.m_va_addr,
-                                    size_in_bytes,
-                                    ring_info.GetRingBaseAddress(),
-                                    ring_info.GetRingSize()))
-            {
-                // TODO(b/172595350) improve error reporting
-                std::cerr << "Error executing ring" << std::endl;
-            }
-
-            OnIbEnd(submit_index, 0, ib);
-        }
-        else
-        {
-            EmulatePM4 emu;
-            if (!emu.ExecuteSubmit(*this,
-                                   capture_data.GetMemoryManager(),
-                                   submit_index,
-                                   submit_info.GetNumIndirectBuffers(),
-                                   submit_info.GetIndirectBufferInfoPtr()))
-                return false;
-        }
+        EmulatePM4 emu;
+        if (!emu.ExecuteSubmit(*this,
+                                capture_data.GetMemoryManager(),
+                                submit_index,
+                                submit_info.GetNumIndirectBuffers(),
+                                submit_info.GetIndirectBufferInfoPtr()))
+            return false;
 
         OnSubmitEnd(submit_index, submit_info);
     }
@@ -739,8 +685,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
         Dive::IndirectBufferInfo ib_info;
         ib_info.m_va_addr = 0x0;
         ib_info.m_size_in_dwords = size_in_dwords;
-        ib_info.m_vmid = 0;
-        ib_info.m_is_constant_engine = false;
         ib_info.m_skip = false;
 
         std::vector<IndirectBufferInfo> ib_array;
@@ -764,17 +708,13 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
             return false;
         }
 
-        // Assumption: A switch_buffer packet is added in between submits, which means the ce/de
-        // counters will be reset in between submits. Therefore no need to track
-        // markers/draws/counters across submit boundaries.
-
         EmulatePM4        emu;
         TempMemoryManager mem_manager(command_dwords, size_in_dwords);
         if (!emu.ExecuteSubmit(*this,
-                               mem_manager,
-                               submit_index,
-                               submit_info.GetNumIndirectBuffers(),
-                               submit_info.GetIndirectBufferInfoPtr()))
+                                mem_manager,
+                                submit_index,
+                                submit_info.GetNumIndirectBuffers(),
+                                submit_info.GetIndirectBufferInfoPtr()))
             return false;
 
         OnSubmitEnd(submit_index, submit_info);
@@ -796,8 +736,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     if (type == IbType::kNormal)
     {
         ib_string_stream << "IB: " << ib_index << ", Address: 0x" << std::hex << ib_info.m_va_addr
-                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords
-                         << ", Is Constant Engine: " << ib_info.m_is_constant_engine;
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
         if (ib_info.m_skip)
             ib_string_stream << ", NOT CAPTURED";
     }
@@ -805,8 +744,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     {
         ib_string_stream << "Call IB"
                          << ", Address: 0x" << std::hex << ib_info.m_va_addr
-                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords
-                         << ", Is Constant Engine: " << ib_info.m_is_constant_engine;
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
         if (ib_info.m_skip)
             ib_string_stream << ", NOT CAPTURED";
     }
@@ -814,8 +752,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     {
         ib_string_stream << "Chain IB"
                          << ", Address: 0x" << std::hex << ib_info.m_va_addr
-                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords
-                         << ", Is Constant Engine: " << ib_info.m_is_constant_engine;
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
         if (ib_info.m_skip)
             ib_string_stream << ", NOT CAPTURED";
     }
@@ -829,44 +766,23 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
 
     // Determine parent node and update m_cur_non_chain_#cb_ib_node_index
     uint64_t parent_node_index = m_cur_submit_node_index;
-    if (!ib_info.m_is_constant_engine && !m_dcb_ib_stack.empty())
+    if (!m_dcb_ib_stack.empty())
     {
         parent_node_index = m_dcb_ib_stack.back();
-    }
-    else if (ib_info.m_is_constant_engine && !m_ccb_ib_stack.empty())
-    {
-        parent_node_index = m_ccb_ib_stack.back();
     }
 
     if (m_flatten_chain_nodes && type == IbType::kChain)
     {
         // If flatten enabled, then add to the nearest non-chain node parent
-        if (!ib_info.m_is_constant_engine)
+        // Find first previous non-CHAIN parent
+        for (size_t i = m_dcb_ib_stack.size() - 1; i != SIZE_MAX; i--)
         {
-            // Find first previous non-CHAIN parent
-            for (size_t i = m_dcb_ib_stack.size() - 1; i != SIZE_MAX; i--)
+            uint64_t index = m_dcb_ib_stack[i];
+            IbType   cur_type = m_command_hierarchy_ptr->GetIbNodeType(index);
+            if (cur_type != IbType::kChain)
             {
-                uint64_t index = m_dcb_ib_stack[i];
-                IbType   cur_type = m_command_hierarchy_ptr->GetIbNodeType(index);
-                if (cur_type != IbType::kChain)
-                {
-                    parent_node_index = index;
-                    break;
-                }
-            }
-        }
-        else
-        {
-            // Find first previous non-CHAIN parent
-            for (size_t i = m_ccb_ib_stack.size() - 1; i != SIZE_MAX; i--)
-            {
-                uint64_t index = m_ccb_ib_stack[i];
-                IbType   cur_type = m_command_hierarchy_ptr->GetIbNodeType(index);
-                if (cur_type != IbType::kChain)
-                {
-                    parent_node_index = index;
-                    break;
-                }
+                parent_node_index = index;
+                break;
             }
         }
     }
@@ -874,14 +790,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     AddChild(CommandHierarchy::kEngineTopology, parent_node_index, ib_node_index);
     AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, ib_node_index);
 
-    if (!ib_info.m_is_constant_engine)
-    {
-        m_dcb_ib_stack.push_back(ib_node_index);
-    }
-    else
-    {
-        m_ccb_ib_stack.push_back(ib_node_index);
-    }
+    m_dcb_ib_stack.push_back(ib_node_index);
 
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
@@ -893,40 +802,20 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
                                       uint32_t                  ib_index,
                                       const IndirectBufferInfo &ib_info)
 {
-    if (!ib_info.m_is_constant_engine)
+    DIVE_ASSERT(!m_dcb_ib_stack.empty());
+
+    // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
+    // because the emulator does not keep track of IBs in an internal stack. So start by
+    // popping all consecutive CHAIN IBs
+    IbType type;
+    type = m_command_hierarchy_ptr->GetIbNodeType(m_dcb_ib_stack.back());
+    while (!m_dcb_ib_stack.empty() && type == IbType::kChain)
     {
-        DIVE_ASSERT(!m_dcb_ib_stack.empty());
-
-        // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
-        // because the emulator does not keep track of IBs in an internal stack. So start by
-        // popping all consecutive CHAIN IBs
-        IbType type;
-        type = m_command_hierarchy_ptr->GetIbNodeType(m_dcb_ib_stack.back());
-        while (!m_dcb_ib_stack.empty() && type == IbType::kChain)
-        {
-            m_dcb_ib_stack.pop_back();
-            type = m_command_hierarchy_ptr->GetIbNodeType(m_dcb_ib_stack.back());
-        }
-
         m_dcb_ib_stack.pop_back();
+        type = m_command_hierarchy_ptr->GetIbNodeType(m_dcb_ib_stack.back());
     }
-    else if (ib_info.m_is_constant_engine)
-    {
-        DIVE_ASSERT(!m_ccb_ib_stack.empty());
 
-        // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
-        // because the emulator does not keep track of IBs in an internal stack. So start by
-        // popping all consecutive CHAIN IBs
-        IbType type;
-        type = m_command_hierarchy_ptr->GetIbNodeType(m_ccb_ib_stack.back());
-        while (!m_ccb_ib_stack.empty() && type == IbType::kChain)
-        {
-            m_ccb_ib_stack.pop_back();
-            type = m_command_hierarchy_ptr->GetIbNodeType(m_ccb_ib_stack.back());
-        }
-
-        m_ccb_ib_stack.pop_back();
-    }
+    m_dcb_ib_stack.pop_back();
     OnVulkanMarkerEnd();
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
@@ -934,23 +823,182 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::OnDcbPacket(const IMemoryManager        &mem_manager,
-                                          uint32_t                     submit_index,
-                                          uint32_t                     ib_index,
-                                          uint64_t                     va_addr,
-                                          const PM4_PFP_TYPE_3_HEADER &header)
+bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
+                                       uint32_t                     submit_index,
+                                       uint32_t                     ib_index,
+                                       uint64_t                     va_addr,
+                                       Pm4Type                      type,
+                                       uint32_t                     header)
 {
-    return false;
-}
+    // THIS IS TEMPORARY! Only deal with type7 packets for now
+    if (type != Pm4Type::kType7)
+        return true;
 
-//--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::OnCcbPacket(const IMemoryManager        &mem_manager,
-                                          uint32_t                     submit_index,
-                                          uint32_t                     ib_index,
-                                          uint64_t                     va_addr,
-                                          const PM4_PFP_TYPE_3_HEADER &header)
-{
-    return false;
+    // Create the packet node and add it as child to the current submit_node and ib_node
+    uint64_t packet_node_index = AddPacketNode(mem_manager, submit_index, va_addr, false, type, header);
+    AddSharedChild(CommandHierarchy::kEngineTopology, m_cur_submit_node_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kSubmitTopology, m_cur_submit_node_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kAllEventTopology, m_cur_submit_node_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kRgpTopology, m_cur_submit_node_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kEngineTopology, m_dcb_ib_stack.back(), packet_node_index);
+    AddSharedChild(CommandHierarchy::kSubmitTopology, m_dcb_ib_stack.back(), packet_node_index);
+
+	uint32_t opcode = UINT32_MAX;
+    if (type == Pm4Type::kType7)
+    {
+        Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
+		opcode = type7_header->opcode;
+	}
+
+    // Cache all packets added (will cache until encounter next event/IB)
+    m_packets.Add(opcode, va_addr, packet_node_index);
+
+    // Cache packets that may be part of the vkBeginCommandBuffer.
+    m_cmd_begin_packet_node_indices.push_back(packet_node_index);
+    bool is_marker = false;
+
+    SyncType sync_type = GetSyncType(mem_manager,
+                                     submit_index,
+                                     m_packets.m_packet_opcodes,
+                                     m_packets.m_packet_addrs);
+    bool     is_draw_dispatch_dma_event = IsDrawDispatchDmaEvent(opcode);
+    if ((sync_type != SyncType::kNone) || is_draw_dispatch_dma_event)
+    {
+        uint64_t event_node_index = UINT64_MAX;
+        uint64_t parent_node_index = m_cur_submit_node_index;
+        if (!m_marker_stack.empty())
+        {
+            parent_node_index = m_marker_stack.back();
+        }
+        if (sync_type != SyncType::kNone)
+        {
+            // m_num_events++;
+            // auto     barrier_it = m_marker_creator.CurrentBarrier();
+            // uint64_t sync_event_node_index = AddSyncEventNode(mem_manager,
+            //                                                   submit_index,
+            //                                                   va_addr,
+            //                                                   sync_type,
+            //                                                   barrier_it->id());
+            // event_node_index = sync_event_node_index;
+            // if (barrier_it->IsValid() && barrier_it->BarrierNode() != UINT64_MAX)
+            //     parent_node_index = barrier_it->BarrierNode();
+            // this->AppendEventNodeIndex(sync_event_node_index);
+        }
+        else if (is_draw_dispatch_dma_event)
+        {
+            std::string draw_dispatch_node_string = GetEventString(mem_manager,
+                                                                   submit_index,
+                                                                   va_addr,
+                                                                   opcode);
+            uint32_t    event_id = m_num_events++;
+            // auto        marker_it = m_marker_creator.CurrentEvent();
+            // if (!(marker_it->IsValid() && marker_it->EventNode() == UINT64_MAX))
+            // {
+            //     marker_it = nullptr;
+            // }
+            CommandHierarchy::AuxInfo
+                     aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
+            uint64_t draw_dispatch_node_index = AddNode(NodeType::kDrawDispatchDmaNode,
+                                                        draw_dispatch_node_string,
+                                                        aux_info);
+            AppendEventNodeIndex(draw_dispatch_node_index);
+            // if (marker_it->IsValid())
+            //     m_markers_ptr->SetEventNode(marker_it->id(), draw_dispatch_node_index);
+
+            // auto barrier_it = m_marker_creator.CurrentBarrier();
+            // if (barrier_it->IsValid() && barrier_it->BarrierNode() != UINT64_MAX)
+            //     parent_node_index = barrier_it->BarrierNode();
+
+            event_node_index = draw_dispatch_node_index;
+        }
+
+        // Cache nodes that may be part of the vkBeginCommandBuffer.
+        m_cmd_begin_event_node_indices.push_back(event_node_index);
+
+        // Add as children all packets that have been processed since the last event
+        // Note: Events only show up in the event topology and internal RGP topology.
+        for (uint32_t packet = 0; packet < m_packets.m_packet_node_indices.size(); ++packet)
+        {
+            uint64_t cur_node_index = m_packets.m_packet_node_indices[packet];
+            AddSharedChild(CommandHierarchy::kAllEventTopology, event_node_index, cur_node_index);
+            AddSharedChild(CommandHierarchy::kRgpTopology, event_node_index, cur_node_index);
+        }
+        m_packets.Clear();
+
+        // Add the draw_dispatch_node to the submit_node if currently not inside a marker range.
+        // Otherwise append it to the marker at the top of the marker stack.
+        // Note: Events only show up in the event topology and internal RGP topology.
+        AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, event_node_index);
+
+        m_node_parent_info[CommandHierarchy::kAllEventTopology]
+                          [event_node_index] = parent_node_index;
+
+        if (!m_internal_marker_stack.empty())
+        {
+            parent_node_index = m_internal_marker_stack.back();
+        }
+        AddChild(CommandHierarchy::kRgpTopology, parent_node_index, event_node_index);
+        m_node_parent_info[CommandHierarchy::kRgpTopology][event_node_index] = parent_node_index;
+    }
+    // vulkan call NOP packages. Currently contains call parameters(except parameters in array),
+    // each call is in one NOP packet.
+    else if (opcode == Type7Opcodes::CP_NOP)
+    {
+        /*
+        NopVulkanCallHeader nop_header;
+        bool                ret = mem_manager.CopyMemory(&nop_header.u32All,
+                                          submit_index,
+                                          va_addr + sizeof(PM4_PFP_TYPE_3_HEADER),
+                                          sizeof(nop_header));
+        DIVE_VERIFY(ret);
+
+        if (nop_header.signature == kNopPayloadSignature)
+        {
+            is_marker = true;
+            uint32_t          vulkan_call_data_len = (header.count + 1) * sizeof(uint32_t);
+            std::vector<char> vulkan_call_data(vulkan_call_data_len);
+            ret = mem_manager.CopyMemory(vulkan_call_data.data(),
+                                         submit_index,
+                                         va_addr + sizeof(PM4_PFP_TYPE_3_HEADER),
+                                         vulkan_call_data_len);
+            DIVE_ASSERT(ret);
+
+            ParseVulkanCallMarker(vulkan_call_data.data(),
+                                  vulkan_call_data_len,
+                                  m_cur_submit_node_index,
+                                  packet_node_index);
+            is_marker_parsed = true;
+            m_command_hierarchy_ptr->m_has_vulkan_marker = true;
+        }
+		*/
+    }
+
+    // This packet is potentially implicit NOP packet for vkBeginCommandBuffer
+    // if (is_marker_parsed && !m_is_parsing_cb_start_marker)
+    // {
+    //     m_cmd_begin_packet_node_indices.clear();
+    //     m_cmd_begin_event_node_indices.clear();
+    // }
+
+    if (!is_marker)
+    {
+        // Add it to all markers on stack, if applicable.
+        for (auto it = m_marker_stack.begin(); it != m_marker_stack.end(); ++it)
+            AddSharedChild(CommandHierarchy::kAllEventTopology, *it, packet_node_index);
+
+        for (auto it = m_internal_marker_stack.begin(); it != m_internal_marker_stack.end(); ++it)
+            AddSharedChild(CommandHierarchy::kRgpTopology, *it, packet_node_index);
+    }
+
+    // auto cb_id = m_marker_creator.CurrentCommandBuffer()->id();
+    // if (cb_id != m_cur_cb)
+    // {
+    //     const auto &cbs = m_markers_ptr->CommandBuffers();
+    //     if (cbs.IsValidId(cb_id))
+    //         m_markers_ptr->SetCommandBufferSubmit(cb_id, m_cur_engine_index);
+    //     m_cur_cb = cb_id;
+    // }
+    return true;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1008,8 +1056,6 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
     // the corresponding vkCmdDebugMarkerEndEXT. Clear the market stack for the next submit.
     m_marker_stack.clear();
     m_internal_marker_stack.clear();
-    m_cur_rgp_marker.m_dwords.clear();
-    m_cur_rgp_marker.m_packet_node_indices.clear();
 
     if (!m_packets.m_packet_node_indices.empty())
     {
@@ -1086,13 +1132,143 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager        &mem_manager,
+uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &       mem_manager,
                                                 uint32_t                     submit_index,
                                                 uint64_t                     va_addr,
                                                 bool                         is_ce_packet,
-                                                const PM4_PFP_TYPE_3_HEADER &header)
+                                                Pm4Type                      type,
+                                                uint32_t                     header)
 {
-    return UINT64_MAX;
+    if (type == Pm4Type::kType7)
+    {
+        Pm4Type7Header type7_header;
+        type7_header.u32All = header;
+
+        std::ostringstream packet_string_stream;
+        packet_string_stream << GetOpCodeString(type7_header.opcode);
+        packet_string_stream << " 0x" << std::hex << type7_header.u32All << std::dec;
+
+        CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
+                                                                                type7_header.opcode,
+                                                                                is_ce_packet);
+        uint64_t                  packet_node_index = AddNode(NodeType::kPacketNode,
+                                            packet_string_stream.str(),
+                                            aux_info);
+        /*
+        if (type7_header.opcode == Pal::Gfx9::IT_SET_CONTEXT_REG)
+        {
+            // Note: IT_SET_CONTEXT_REG_INDEX does not appear to be used in the driver
+            uint32_t start = Pal::Gfx9::CONTEXT_SPACE_START;
+            uint32_t end = Pal::Gfx9::Gfx09_10::CONTEXT_SPACE_END;
+            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header, packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_CONTEXT_REG_RMW)
+        {
+            AppendContextRegRmwNodes(mem_manager, submit_index, va_addr, header, packet_node_index);
+        }
+        else if ((type7_header.opcode == Pal::Gfx9::IT_SET_UCONFIG_REG) ||
+                (type7_header.opcode == Pal::Gfx9::IT_SET_UCONFIG_REG_INDEX))
+        {
+            uint32_t start = Pal::Gfx9::UCONFIG_SPACE_START;
+            uint32_t end = Pal::Gfx9::UCONFIG_SPACE_END;
+            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header, packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_SET_CONFIG_REG)
+        {
+            uint32_t start = Pal::Gfx9::CONFIG_SPACE_START;
+            uint32_t end = Pal::Gfx9::CONFIG_SPACE_END;
+            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header, packet_node_index);
+        }
+        else if ((type7_header.opcode == Pal::Gfx9::IT_SET_SH_REG) ||
+                (type7_header.opcode == Pal::Gfx9::IT_SET_SH_REG_INDEX))
+        {
+            uint32_t start = Pal::Gfx9::PERSISTENT_SPACE_START;
+            uint32_t end = Pal::Gfx9::PERSISTENT_SPACE_END;
+            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header, packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_INDIRECT_BUFFER_CNST)
+        {
+            // IT_INDIRECT_BUFFER_CNST aliases IT_COND_INDIRECT_BUFFER_CNST, but have different
+            // packet formats. So need to handle them manually.
+            AppendIBFieldNodes("INDIRECT_BUFFER_CNST",
+                            mem_manager,
+                            submit_index,
+                            va_addr,
+                            is_ce_packet,
+                            header,
+                            packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_INDIRECT_BUFFER)
+        {
+            // IT_INDIRECT_BUFFER aliases IT_COND_INDIRECT_BUFFER, but have different packet
+            // formats. So need to handle them manually.
+            AppendIBFieldNodes("INDIRECT_BUFFER",
+                            mem_manager,
+                            submit_index,
+                            va_addr,
+                            is_ce_packet,
+                            header,
+                            packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_LOAD_UCONFIG_REG ||
+                type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG ||
+                type7_header.opcode == Pal::Gfx9::IT_LOAD_SH_REG)
+        {
+            uint32_t reg_space_start = Pal::Gfx9::UCONFIG_SPACE_START;
+            if (type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG)
+                reg_space_start = Pal::Gfx9::CONTEXT_SPACE_START;
+            if (type7_header.opcode == Pal::Gfx9::IT_LOAD_SH_REG)
+                reg_space_start = Pal::Gfx9::PERSISTENT_SPACE_START;
+            AppendLoadRegNodes(mem_manager,
+                            submit_index,
+                            va_addr,
+                            reg_space_start,
+                            header,
+                            packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG_INDEX ||
+                type7_header.opcode == Pal::Gfx9::IT_LOAD_SH_REG_INDEX)
+        {
+            uint32_t reg_space_start = (type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG_INDEX) ?
+                                    Pal::Gfx9::CONTEXT_SPACE_START :
+                                    Pal::Gfx9::PERSISTENT_SPACE_START;
+            AppendLoadRegIndexNodes(mem_manager,
+                                    submit_index,
+                                    va_addr,
+                                    reg_space_start,
+                                    header,
+                                    packet_node_index);
+        }
+        else if (type7_header.opcode == Pal::Gfx9::IT_EVENT_WRITE)
+        {
+            // Event field is special case because there are 2 or 4 DWORD variants of this packet
+            // Also, the event_type field is not enumerated in the header, so have to enumerate
+            // manually
+            const PacketInfo *packet_info_ptr = GetPacketInfo(type7_header.opcode);
+            DIVE_ASSERT(packet_info_ptr != nullptr);
+            AppendEventWriteFieldNodes(mem_manager,
+                                    submit_index,
+                                    va_addr,
+                                    header,
+                                    packet_info_ptr,
+                                    packet_node_index);
+        }
+        else
+        */
+        {
+            const PacketInfo *packet_info_ptr = GetPacketInfo(type7_header.opcode);
+            DIVE_ASSERT(packet_info_ptr != nullptr);
+            AppendPacketFieldNodes(mem_manager,
+                                submit_index,
+                                va_addr,
+                                is_ce_packet,
+                                type7_header.opcode,
+                                packet_info_ptr,
+                                packet_node_index);
+        }
+        return packet_node_index;
+    }
+    return UINT32_MAX;  // This is temporary. Shouldn't happen once we properly add the packet node!
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1107,20 +1283,9 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
 uint64_t CommandHierarchyCreator::AddSyncEventNode(const IMemoryManager        &mem_manager,
                                                    uint32_t                     submit_index,
                                                    uint64_t                     va_addr,
-                                                   SyncType                     sync_type,
-                                                   const PM4_PFP_TYPE_3_HEADER &header)
+                                                   SyncType                     sync_type)
 {
     return UINT64_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::CachePotentialMarkerDword(const IMemoryManager &mem_manager,
-                                                        uint32_t              submit_index,
-                                                        uint64_t              va_addr,
-                                                        uint64_t              packet_node_index,
-                                                        const PM4_PFP_TYPE_3_HEADER &header)
-{
-    return false;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1130,51 +1295,7 @@ uint32_t CommandHierarchyCreator::GetMarkerSize(const uint8_t *marker_ptr, size_
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::TryParseMarker(uint64_t submit_node_index)
-{
-    size_t dword_index = 0;
-
-    bool is_marker_parsed = false;
-    DIVE_ASSERT(m_cur_rgp_marker.m_packet_node_indices.size() == m_cur_rgp_marker.m_dwords.size());
-    size_t dword_left = m_cur_rgp_marker.m_dwords.size();
-
-    while (dword_index < m_cur_rgp_marker.m_dwords.size())
-    {
-        const uint8_t *cur_ptr = (const uint8_t *)&m_cur_rgp_marker.m_dwords[dword_index];
-
-        dword_left = m_cur_rgp_marker.m_dwords.size() - dword_index;
-        uint32_t marker_size = GetMarkerSize(cur_ptr, dword_left);
-        uint32_t marker_dwords = 0;
-        // No enough data to parse.
-        if (marker_size > dword_left)
-        {
-            break;
-        }
-
-        DIVE_ASSERT(marker_dwords == marker_size);
-
-        dword_index += marker_dwords;
-        is_marker_parsed = true;
-    }
-
-    if (dword_index != m_cur_rgp_marker.m_dwords.size())
-    {
-        m_cur_rgp_marker.m_dwords.erase(m_cur_rgp_marker.m_dwords.begin(),
-                                        m_cur_rgp_marker.m_dwords.begin() + dword_index);
-        m_cur_rgp_marker.m_packet_node_indices
-        .erase(m_cur_rgp_marker.m_packet_node_indices.begin(),
-               m_cur_rgp_marker.m_packet_node_indices.begin() + dword_index);
-    }
-    else
-    {
-        m_cur_rgp_marker.m_dwords.clear();
-        m_cur_rgp_marker.m_packet_node_indices.clear();
-    }
-    return is_marker_parsed;
-}
-
-//--------------------------------------------------------------------------------------------------
-void CommandHierarchyCreator::ParseVulkanCmdBeginMarker(char    *marker_ptr,
+void CommandHierarchyCreator::ParseVulkanCmdBeginMarker(char *   marker_ptr,
                                                         uint32_t marker_size,
                                                         uint64_t submit_node_index,
                                                         uint64_t packet_node_index)
@@ -1321,26 +1442,10 @@ void CommandHierarchyCreator::ParseVulkanCallMarker(char    *marker_ptr,
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CommandHierarchyCreator::ParseUserMarker(const uint8_t *marker_ptr,
-                                                  uint64_t       submit_node_index,
-                                                  uint64_t       dword_index)
-{
-    return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t CommandHierarchyCreator::ParseInternalRgpMarker(const uint8_t *marker_ptr,
-                                                         uint64_t       submit_node_index,
-                                                         uint64_t       dword_index)
-{
-    return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-std::string CommandHierarchyCreator::GetEventString(const IMemoryManager        &mem_manager,
+std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &       mem_manager,
                                                     uint32_t                     submit_index,
                                                     uint64_t                     va_addr,
-                                                    const PM4_PFP_TYPE_3_HEADER &header)
+                                                    uint32_t                     opcode)
 {
     std::ostringstream string_stream;
     return string_stream.str();
@@ -1352,7 +1457,7 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager        &mem_ma
                                              uint64_t                     va_addr,
                                              uint32_t                     reg_space_start,
                                              uint32_t                     reg_space_end,
-                                             const PM4_PFP_TYPE_3_HEADER &header,
+                                             const Pm4Type4Header        &header,
                                              uint64_t                     packet_node_index)
 {
     return;
@@ -1418,8 +1523,8 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager       
                                                      uint32_t                     submit_index,
                                                      uint64_t                     va_addr,
                                                      bool                         is_ce_packet,
-                                                     const PM4_PFP_TYPE_3_HEADER &header,
-                                                     const PacketInfo            *packet_info_ptr,
+                                                     uint32_t					  opcode,
+                                                     const PacketInfo *           packet_info_ptr,
                                                      uint64_t                     packet_node_index,
                                                      size_t                       field_start,
                                                      size_t                       field_last)

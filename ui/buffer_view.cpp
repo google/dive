@@ -114,7 +114,7 @@ void BufferView::OnEventSelected(uint32_t event_index)
             static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
             snprintf(str_buffer, str_buffer_size, "%llu", (unsigned long long)buffer_info.m_size);
             treeItem->setText(2, tr(str_buffer));
-
+            /*
             // Column 3
             snprintf(str_buffer,
                     str_buffer_size,
@@ -138,7 +138,7 @@ void BufferView::OnEventSelected(uint32_t event_index)
             // Column 7
             snprintf(str_buffer, str_buffer_size, "%s", kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_w]);
             treeItem->setText(7, tr(str_buffer));
-
+            */
             // Column 8
             // Find preferred heap
             const Dive::CaptureData          &capture_data = m_data_core.GetCaptureData();

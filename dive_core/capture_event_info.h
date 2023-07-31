@@ -65,7 +65,6 @@ struct EventInfo
     enum class EventType
     {
         kDraw,
-        kDma,
         kDispatch,
         kSync
     };

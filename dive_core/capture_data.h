@@ -98,12 +98,6 @@ public:
                               MemoryAllocationsDataHeader::Type   type,
                               std::vector<MemoryAllocationData> &&allocations);
 
-    // Add ring buffer memory span, used to wrap memory access.
-    void AddRingBuffer(uint64_t va_addr, uint32_t size);
-
-    // Given an address, is it in a KMD Ring?
-    bool IsRingMemory(uint64_t va_addr) const;
-
     // Finalize load. After this, no memory block should be added!
     // same_submit_copy_only - If set, then CopyMemory() will only copy from memory blocks used in
     // the same submit. If not set, then allowed to use any allocations from any submit, with the
@@ -147,15 +141,6 @@ private:
 
     // All the captured memory allocation info
     MemoryAllocationInfo m_memory_allocations;
-
-    struct RingMemory
-    {
-        uint64_t m_va_addr;
-        uint32_t m_size;
-    };
-
-    // Ring buffer memory ranges
-    std::vector<RingMemory> m_ring_memory;
 
     // If set, then only memory blocks from same submit are considered
     // Otherwise, all previous submits are considered as well
@@ -368,23 +353,30 @@ public:
     CaptureData &operator=(CaptureData &&) = default;
 
     LoadResult LoadCaptureFile(std::istream &capture_file);
+    LoadResult LoadAdrenoRdFile(std::istream &capture_file);
 
     bool        HasPm4Data() const { return m_submits.size() > 0; }
     std::string GetFileFormatVersion() const;
 
 private:
     LoadResult LoadCaptureFile(const char *file_name);
+    LoadResult LoadAdrenoRdFile(const char *file_name);
     bool       LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header);
     bool       LoadMemoryAllocBlock(std::istream &capture_file);
     bool       LoadSubmitBlock(std::istream &capture_file);
     bool       LoadMemoryBlock(std::istream &capture_file);
     bool       LoadPresentBlock(std::istream &capture_file);
-    bool       LoadRingBlock(std::istream &capture_file);
     bool       LoadTextBlock(std::istream &capture_file);
     bool       LoadWaveStateBlock(std::istream &capture_file, const CaptureDataHeader &data_header);
     bool       LoadRegisterBlock(std::istream &capture_file);
     bool       LoadVulkanMetaDataBlock(std::istream &capture_file);
-    void       Finalize(const CaptureDataHeader &data_header);
+
+    // Adreno-specific load functions
+    bool LoadGpuAddressAndSize(std::istream &capture_file, uint32_t block_size, uint64_t *gpu_addr, uint32_t *size);
+    bool LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu_addr, uint32_t size);
+    bool LoadSubmitBlockAdreno(std::istream &capture_file, uint32_t block_size);
+
+    void Finalize(const CaptureDataHeader &data_header);
 
     CaptureDataHeader::CaptureType      m_capture_type;
     std::vector<SubmitInfo>             m_submits;

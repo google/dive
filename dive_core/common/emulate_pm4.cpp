@@ -765,59 +765,49 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &       mem_manager,
     {
         ib_info = m_ib_ptr[emu_state_ptr->m_dcb.m_ib_index];
     }
-    /*
+
     Pm4Type7Header type7_header;
     type7_header.u32All = header;
 
     // Deal with calls and chains
-    if (type == Pm4Type::kType7 && type7_header.opcode == Pal::Gfx9::IT_INDIRECT_BUFFER)
+    if (type == Pm4Type::kType7 &&
+        (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
+        type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
+        type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
+        type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE))
     {
-        union
+        struct IBPacket
         {
-            PM4_PFP_COND_INDIRECT_BUFFER cond_indirect_buffer_packet;
-            PM4_PFP_INDIRECT_BUFFER      indirect_buffer_packet;
+            Pm4Type7Header m_type7_header;
+            uint32_t m_lo;
+            uint32_t m_hi;
+            uint32_t m_size;
         };
-
-        // Make sure there is enough space in IB to hold the conditional packet
-        // If not, then this cannot be a conditional packet and must be a normal INDIRECT_BUFFER
-        // packet
-        uint32_t size = sizeof(PM4_PFP_COND_INDIRECT_BUFFER);
-        uint64_t ib_end_addr = ib_info.m_va_addr + ib_info.m_size_in_dwords * sizeof(uint32_t);
-        if (emu_state_ptr->m_dcb.m_va + size > ib_end_addr)
-            size = sizeof(PM4_PFP_INDIRECT_BUFFER);
-        if (!mem_manager.CopyMemory(&cond_indirect_buffer_packet,
+        IBPacket ib_packet;
+        if (!mem_manager.CopyMemory(&ib_packet,
                                     m_submit_index,
                                     emu_state_ptr->m_dcb.m_va,
-                                    size))
+                                    sizeof(IBPacket)))
         {
             DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
                            (unsigned long long)emu_state_ptr->m_dcb.m_va);
             return false;
         }
-        // Check if it is COND_INDIRECT_BUFFER, which is not supported yet
-        if (cond_indirect_buffer_packet.bitfields2.mode != 0)
-        {
-            DIVE_ERROR_MSG("Conditional IT_COND_INDIRECT_BUFFER not supported!\n");
-            return false;
-        }
-        uint64_t ib_addr = (((uint64_t)indirect_buffer_packet.ib_base_hi << 32) |
-                            ((uint64_t)indirect_buffer_packet.bitfields2.ib_base_lo << 2));
-
+        uint64_t ib_addr = ((uint64_t)ib_packet.m_hi << 32) | (uint64_t)ib_packet.m_lo;
         if (!AdvanceToIB(mem_manager,
-                         indirect_buffer_packet.bitfields4.chain == 1,
+                         type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN,
                          ib_addr,
-                         indirect_buffer_packet.bitfields4.ib_size,
+                         ib_packet.m_size,
                          ib_info,
                          &emu_state_ptr->m_dcb,
-                         false,
                          callbacks,
+                         type,
                          header))
         {
             return false;
         }
     }
     else
-    */
     {
         if (!AdvancePacket(mem_manager, ib_info, &emu_state_ptr->m_dcb, callbacks, type, header))
             return false;
@@ -968,7 +958,7 @@ uint32_t EmulatePM4::CalcParity(uint32_t val)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsDrawDispatchDmaEvent(uint32_t opcode)
+bool IsDrawDispatchEvent(uint32_t opcode)
 {
     switch (opcode)
     {
@@ -989,6 +979,14 @@ bool IsDispatchEventOpcode(uint32_t opcode)
 //--------------------------------------------------------------------------------------------------
 bool IsDrawEventOpcode(uint32_t opcode)
 {
+    switch (opcode)
+    {
+    case CP_DRAW_INDX_OFFSET:
+    case CP_DRAW_INDIRECT:
+    case CP_DRAW_INDX_INDIRECT:
+    case CP_DRAW_INDIRECT_MULTI:
+    case CP_DRAW_AUTO: return true;
+    };
     return false;
 }
 

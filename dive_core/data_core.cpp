@@ -185,7 +185,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &       mem_manager,
     m_opcodes.push_back(type7_header->opcode);
     m_addrs.push_back(va_addr);
 
-    if (IsDrawDispatchDmaSyncEvent(mem_manager, submit_index, m_opcodes, m_addrs))
+    if (IsDrawDispatchSyncEvent(mem_manager, submit_index, m_opcodes, m_addrs))
     {
         // Add a new event to the EventInfo metadata array
         EventInfo event_info;

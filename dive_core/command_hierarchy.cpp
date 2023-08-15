@@ -861,7 +861,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
                                      submit_index,
                                      m_packets.m_packet_opcodes,
                                      m_packets.m_packet_addrs);
-    bool     is_draw_dispatch_dma_event = IsDrawDispatchDmaEvent(opcode);
+    bool     is_draw_dispatch_dma_event = IsDrawDispatchEvent(opcode);
     if ((sync_type != SyncType::kNone) || is_draw_dispatch_dma_event)
     {
         uint64_t event_node_index = UINT64_MAX;
@@ -1448,6 +1448,28 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
                                                     uint32_t                     opcode)
 {
     std::ostringstream string_stream;
+    DIVE_ASSERT(IsDrawDispatchEvent(opcode));
+
+    if (opcode == CP_DRAW_INDX_OFFSET)
+    {
+        string_stream << "DrawIndexOffset";
+    }
+    else if (opcode == CP_DRAW_INDIRECT)
+    {
+        string_stream << "DrawIndirect";
+    }
+    else if (opcode == CP_DRAW_INDX_INDIRECT)
+    {
+        string_stream << "DrawIndexIndirect";
+    }
+    else if (opcode == CP_DRAW_INDIRECT_MULTI)
+    {
+        string_stream << "DrawIndirectMulti";
+    }
+    else if (opcode == CP_DRAW_AUTO)
+    {
+        string_stream << "DrawAuto";
+    }
     return string_stream.str();
 }
 

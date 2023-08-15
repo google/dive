@@ -33,13 +33,13 @@ SyncType GetSyncType(const IMemoryManager        &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsDrawDispatchDmaSyncEvent(const IMemoryManager        &mem_manager,
+bool IsDrawDispatchSyncEvent(const IMemoryManager &       mem_manager,
                                 uint32_t                     submit_index,
                                 const std::vector<uint32_t> &opcodes,
                                 const std::vector<uint64_t> &addrs)
 {
     uint32_t last_index = (uint32_t)(opcodes.size() - 1);
-    if (IsDrawDispatchDmaEvent(opcodes[last_index]))
+    if (IsDrawDispatchEvent(opcodes[last_index]))
         return true;
 
     SyncType sync_type = GetSyncType(mem_manager, submit_index, opcodes, addrs);

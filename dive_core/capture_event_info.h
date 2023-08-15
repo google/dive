@@ -100,9 +100,9 @@ SyncType GetSyncType(const IMemoryManager        &mem_manager,
                      uint32_t                     submit_index,
                      const std::vector<uint32_t> &opcodes,
                      const std::vector<uint64_t> &addrs);
-bool     IsDrawDispatchDmaSyncEvent(const IMemoryManager        &mem_manager,
-                                    uint32_t                     submit_index,
-                                    const std::vector<uint32_t> &opcodes,
-                                    const std::vector<uint64_t> &addrs);
+bool     IsDrawDispatchSyncEvent(const IMemoryManager &       mem_manager,
+                                 uint32_t                     submit_index,
+                                 const std::vector<uint32_t> &opcodes,
+                                 const std::vector<uint64_t> &addrs);
 
 }  // namespace Dive

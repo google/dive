@@ -466,7 +466,7 @@ private:
                                        uint32_t                     submit_index,
                                        uint64_t                     va_addr,
                                        bool                         is_ce_packet,
-                                       uint32_t                     opcode,
+                                       Pm4Type7Header               type7_header,
                                        const PacketInfo *           packet_info_ptr,
                                        uint64_t                     packet_node_index,
                                        size_t                       field_start = 0,

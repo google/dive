@@ -1262,7 +1262,7 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &       mem
                                 submit_index,
                                 va_addr,
                                 is_ce_packet,
-                                type7_header.opcode,
+                                type7_header,
                                 packet_info_ptr,
                                 packet_node_index);
         }
@@ -1545,12 +1545,92 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager       
                                                      uint32_t                     submit_index,
                                                      uint64_t                     va_addr,
                                                      bool                         is_ce_packet,
-                                                     uint32_t					  opcode,
+                                                     Pm4Type7Header               type7_header,
                                                      const PacketInfo *           packet_info_ptr,
                                                      uint64_t                     packet_node_index,
                                                      size_t                       field_start,
                                                      size_t                       field_last)
 {
+    // Do a min(), since field_last defaults to UINT64_MAX
+    size_t end_field = (packet_info_ptr->m_fields.size() < field_last + 1) ?
+                       (uint32_t)packet_info_ptr->m_fields.size() :
+                       field_last + 1;
+
+    // Loop through each field and append it to packet
+    uint32_t end_dword = UINT32_MAX;
+    for (size_t field = field_start; field < end_field; ++field)
+    {
+        const PacketField &packet_field = packet_info_ptr->m_fields[field];
+        end_dword = packet_field.m_dword;
+
+        // Some packets end early sometimes and do not use all fields (e.g. CP_EVENT_WRITE with CACHE_CLEAN)
+        if (packet_field.m_dword > type7_header.count)
+            break;
+
+        uint32_t dword_value = 0;
+        uint64_t dword_va_addr = va_addr + packet_field.m_dword * sizeof(uint32_t);
+        bool     ret = mem_manager.CopyMemory(&dword_value,
+                                          submit_index,
+                                          dword_va_addr,
+                                          sizeof(uint32_t));
+        DIVE_VERIFY(ret);  // This should never fail!
+
+        uint32_t field_value = (dword_value & packet_field.m_mask) >> packet_field.m_shift;
+
+        // Field item
+        std::ostringstream field_string_stream;
+        if (packet_field.m_enum_handle != UINT32_MAX)
+        {
+            const char *enum_str = GetEnumString(packet_field.m_enum_handle, field_value);
+            DIVE_ASSERT(enum_str != nullptr);
+            field_string_stream << packet_field.m_name << ": " << enum_str;
+        }
+        else
+            field_string_stream << packet_field.m_name << ": 0x" << std::hex << field_value
+                                << std::dec;
+
+        CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
+        is_ce_packet);
+        uint64_t field_node_index = AddNode(NodeType::kFieldNode,
+                                            field_string_stream.str(),
+                                            aux_info);
+
+        // Add it as child to packet_node
+        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, field_node_index);
+        AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, field_node_index);
+        AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, field_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
+    }
+
+    // If there are missing packet fields, then output the raw DWORDS directly
+    if (end_dword < type7_header.count)
+    {
+        for (size_t i = end_dword+1; i <= type7_header.count; i++)
+        {
+            uint32_t dword_value = 0;
+            uint64_t dword_va_addr = va_addr + i * sizeof(uint32_t);
+            bool     ret = mem_manager.CopyMemory(&dword_value,
+                                            submit_index,
+                                            dword_va_addr,
+                                            sizeof(uint32_t));
+            DIVE_VERIFY(ret);  // This should never fail!
+
+            std::ostringstream field_string_stream;
+            field_string_stream << "(DWORD " << i << "): 0x" << std::hex << dword_value;
+
+            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
+            is_ce_packet);
+            uint64_t field_node_index = AddNode(NodeType::kFieldNode,
+                                                field_string_stream.str(),
+                                                aux_info);
+
+            // Add it as child to packet_node
+            AddChild(CommandHierarchy::kEngineTopology, packet_node_index, field_node_index);
+            AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, field_node_index);
+            AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, field_node_index);
+            AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
+        }
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -398,8 +398,8 @@ private:
                            bool                         is_ce_packet,
                            Pm4Type                      type,
                            uint32_t                     header);
-    uint64_t AddRegisterNode(uint32_t reg, uint32_t reg_value, bool is_ce_packet);
-    uint64_t AddSyncEventNode(const IMemoryManager        &mem_manager,
+    uint64_t AddRegisterNode(uint32_t reg, uint32_t reg_value);
+    uint64_t AddSyncEventNode(const IMemoryManager &       mem_manager,
                               uint32_t                     submit_index,
                               uint64_t                     va_addr,
                               SyncType                     sync_event);
@@ -428,9 +428,7 @@ private:
     void        AppendRegNodes(const IMemoryManager &       mem_manager,
                                uint32_t                     submit_index,
                                uint64_t                     va_addr,
-                               uint32_t                     reg_space_start,
-                               uint32_t                     reg_space_end,
-                               const Pm4Type4Header        &header,
+                               Pm4Type4Header               header,
                                uint64_t                     packet_node_index);
     void        AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
                                          uint32_t                     submit_index,

@@ -830,8 +830,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
                                        Pm4Type                      type,
                                        uint32_t                     header)
 {
-    // THIS IS TEMPORARY! Only deal with type7 packets for now
-    if (type != Pm4Type::kType7)
+    // THIS IS TEMPORARY! Only deal with typ4 & type7 packets for now
+    if ((type != Pm4Type::kType4) && (type != Pm4Type::kType7))
         return true;
 
     // Create the packet node and add it as child to the current submit_node and ib_node
@@ -1151,7 +1151,8 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &       mem
         CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
                                                                                 type7_header.opcode,
                                                                                 is_ce_packet);
-        uint64_t                  packet_node_index = AddNode(NodeType::kPacketNode,
+
+        uint64_t packet_node_index = AddNode(NodeType::kPacketNode,
                                             packet_string_stream.str(),
                                             aux_info);
         /*
@@ -1268,15 +1269,73 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &       mem
         }
         return packet_node_index;
     }
+    else if (type == Pm4Type::kType4)
+    {
+        Pm4Type4Header type4_header;
+        type4_header.u32All = header;
+
+        std::ostringstream packet_string_stream;
+        packet_string_stream << "TYPE4 REGWRITE";
+        packet_string_stream << " 0x" << std::hex << type4_header.u32All << std::dec;
+
+        CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
+                                                                                UINT8_MAX,
+                                                                                is_ce_packet);
+
+        uint64_t packet_node_index = AddNode(NodeType::kPacketNode,
+                                            packet_string_stream.str(),
+                                            aux_info);
+
+        AppendRegNodes(mem_manager, submit_index, va_addr, type4_header, packet_node_index);
+        return packet_node_index;
+
+    }
     return UINT32_MAX;  // This is temporary. Shouldn't happen once we properly add the packet node!
 }
 
 //--------------------------------------------------------------------------------------------------
 uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
-                                                  uint32_t reg_value,
-                                                  bool     is_ce_packet)
+                                                  uint32_t reg_value)
 {
-    return UINT64_MAX;
+    const RegInfo *reg_info_ptr = GetRegInfo(reg);
+
+    RegInfo temp;
+    temp.m_name = "Unknown";
+    if (reg_info_ptr == nullptr)
+    {
+        reg_info_ptr = &temp;
+    }
+
+    // Should never have an "unknown register" unless something is seriously wrong!
+    DIVE_ASSERT(reg_info_ptr != nullptr);
+
+    // Reg item
+    std::ostringstream reg_string_stream;
+    reg_string_stream << reg_info_ptr->m_name << ": 0x" << std::hex << reg_value << std::dec;
+    CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+    uint64_t reg_node_index = AddNode(NodeType::kRegNode, reg_string_stream.str(), aux_info);
+
+    // Go through each field of this register, create a FieldNode out of it and append as child
+    // to reg_node_ptr
+    for (uint32_t field = 0; field < reg_info_ptr->m_fields.size(); ++field)
+    {
+        const RegField &reg_field = reg_info_ptr->m_fields[field];
+        uint32_t        field_value = (reg_value & reg_field.m_mask) >> reg_field.m_shift;
+
+        // Field item
+        std::ostringstream field_string_stream;
+        field_string_stream << reg_field.m_name << ": 0x" << std::hex << field_value << std::dec;
+        uint64_t field_node_index = AddNode(NodeType::kFieldNode,
+                                            field_string_stream.str(),
+                                            aux_info);
+
+        // Add it as child to reg_node
+        AddChild(CommandHierarchy::kEngineTopology, reg_node_index, field_node_index);
+        AddChild(CommandHierarchy::kSubmitTopology, reg_node_index, field_node_index);
+        AddChild(CommandHierarchy::kAllEventTopology, reg_node_index, field_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, reg_node_index, field_node_index);
+    }
+    return reg_node_index;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1477,12 +1536,31 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
 void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager        &mem_manager,
                                              uint32_t                     submit_index,
                                              uint64_t                     va_addr,
-                                             uint32_t                     reg_space_start,
-                                             uint32_t                     reg_space_end,
-                                             const Pm4Type4Header        &header,
+                                             Pm4Type4Header               header,
                                              uint64_t                     packet_node_index)
 {
-    return;
+    uint32_t reg_addr = header.offset;
+
+    // Go through each register set by this packet
+    for (uint32_t i = 0; i < header.count; ++i)
+    {
+        uint64_t reg_va_addr = va_addr + sizeof(header) + i * sizeof(uint32_t);
+        uint32_t reg_value;
+        bool ret = mem_manager.CopyMemory(&reg_value, submit_index, reg_va_addr, sizeof(uint32_t));
+        DIVE_ASSERT(ret);  // This should never fail!
+
+        // Create the register node, as well as all its children nodes that describe the various
+        // fields set in the single 32-bit register
+        uint64_t reg_node_index = AddRegisterNode(reg_addr, reg_value);
+
+        // Add it as child to packet node
+        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
+        AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, reg_node_index);
+        AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
+
+        reg_addr++;
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

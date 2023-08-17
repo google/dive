@@ -1635,49 +1635,86 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager       
                        field_last + 1;
 
     // Loop through each field and append it to packet
+    uint32_t base_dword = 0;    // For tracking non-0 array fields
     uint32_t end_dword = UINT32_MAX;
-    for (size_t field = field_start; field < end_field; ++field)
+
+    // Assumption here is that the array (i.e. the part that repeats) covers the whole packet
+    bool packet_end_early = false;
+    for (uint32_t array = 0; array < packet_info_ptr->m_max_array_size; array++)
     {
-        const PacketField &packet_field = packet_info_ptr->m_fields[field];
-        end_dword = packet_field.m_dword;
+        base_dword = (array != 0) ? end_dword : 0;
 
-        // Some packets end early sometimes and do not use all fields (e.g. CP_EVENT_WRITE with CACHE_CLEAN)
-        if (packet_field.m_dword > type7_header.count)
-            break;
-
-        uint32_t dword_value = 0;
-        uint64_t dword_va_addr = va_addr + packet_field.m_dword * sizeof(uint32_t);
-        bool     ret = mem_manager.CopyMemory(&dword_value,
-                                          submit_index,
-                                          dword_va_addr,
-                                          sizeof(uint32_t));
-        DIVE_VERIFY(ret);  // This should never fail!
-
-        uint32_t field_value = (dword_value & packet_field.m_mask) >> packet_field.m_shift;
-
-        // Field item
-        std::ostringstream field_string_stream;
-        if (packet_field.m_enum_handle != UINT32_MAX)
+        // If this is a packet with arrays, and there are more dwords left,
+        // then add a parent node for each index
+        uint64_t parent_node_index = packet_node_index;
+        if ((packet_info_ptr->m_max_array_size > 1) && (base_dword < type7_header.count))
         {
-            const char *enum_str = GetEnumString(packet_field.m_enum_handle, field_value);
-            DIVE_ASSERT(enum_str != nullptr);
-            field_string_stream << packet_field.m_name << ": " << enum_str;
+            std::ostringstream field_string_stream;
+            field_string_stream << array;
+            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+            uint64_t array_node_index = AddNode(NodeType::kFieldNode,
+                                                field_string_stream.str(),
+                                                aux_info);
+
+            // Add it as child to packet_node
+            AddChild(CommandHierarchy::kEngineTopology, packet_node_index, array_node_index);
+            AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, array_node_index);
+            AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, array_node_index);
+            AddChild(CommandHierarchy::kRgpTopology, packet_node_index, array_node_index);
+            parent_node_index = array_node_index;
         }
-        else
-            field_string_stream << packet_field.m_name << ": 0x" << std::hex << field_value
-                                << std::dec;
 
-        CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
-        is_ce_packet);
-        uint64_t field_node_index = AddNode(NodeType::kFieldNode,
-                                            field_string_stream.str(),
-                                            aux_info);
+        for (size_t field = field_start; field < end_field; ++field)
+        {
+            const PacketField &packet_field = packet_info_ptr->m_fields[field];
 
-        // Add it as child to packet_node
-        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, field_node_index);
-        AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, field_node_index);
-        AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, field_node_index);
-        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
+            uint32_t field_dword = base_dword + packet_field.m_dword;
+            end_dword = field_dword;
+
+            // Some packets end early sometimes and do not use all fields (e.g. CP_EVENT_WRITE with CACHE_CLEAN)
+            if (field_dword > type7_header.count)
+			{
+				packet_end_early = true;
+				break;
+			}
+
+            uint32_t dword_value = 0;
+            uint64_t dword_va_addr = va_addr + field_dword * sizeof(uint32_t);
+            bool     ret = mem_manager.CopyMemory(&dword_value,
+                                            submit_index,
+                                            dword_va_addr,
+                                            sizeof(uint32_t));
+            DIVE_VERIFY(ret);  // This should never fail!
+
+            uint32_t field_value = (dword_value & packet_field.m_mask) >> packet_field.m_shift;
+
+            // Field item
+            std::ostringstream field_string_stream;
+            if (packet_field.m_enum_handle != UINT32_MAX)
+            {
+                const char *enum_str = GetEnumString(packet_field.m_enum_handle, field_value);
+                DIVE_ASSERT(enum_str != nullptr);
+                field_string_stream << packet_field.m_name << ": " << enum_str;
+            }
+            else
+                field_string_stream << packet_field.m_name << ": 0x" << std::hex << field_value
+                                    << std::dec;
+
+            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
+            is_ce_packet);
+            uint64_t field_node_index = AddNode(NodeType::kFieldNode,
+                                                field_string_stream.str(),
+                                                aux_info);
+
+            // Add it as child to packet_node
+            AddChild(CommandHierarchy::kEngineTopology, parent_node_index, field_node_index);
+            AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, field_node_index);
+            AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, field_node_index);
+            AddChild(CommandHierarchy::kRgpTopology, parent_node_index, field_node_index);
+        }
+
+		if (packet_end_early)
+            break;
     }
 
     // If there are missing packet fields, then output the raw DWORDS directly

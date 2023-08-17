@@ -912,6 +912,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
             capture_file.seekg(block_info.m_data_size, std::ios::cur);
         }
     }
+    m_memory.Finalize(false, true);
     return LoadResult::kSuccess;
 }
 

@@ -383,8 +383,9 @@ def outputStructInfo(pm4_info_file, enum_index_dict, op_code_set, registers_et_r
     if pm4_type_packet is None:
       continue
 
-    # There are only 2 PM4 packets with array tags: CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG
-    # Both of these have arrays that encapsulate the whole packet
+    # There are 2 PM4 packet types with stripe tags, see CP_DRAW_INDIRECT_MULTI and CP_DRAW_INDX_INDIRECT for example
+    # For CP_DRAW_INDX_INDIRECT type, the stripe is based on HW version, so just use the latest stripe only
+    # For CP_DRAW_INDIRECT_MULTI type, we will have to first determine what field determines the variant
     array = domain.find('./{http://nouveau.freedesktop.org/}array')
     array_size = 1
     pm4_packet = domain

@@ -1509,25 +1509,122 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
     std::ostringstream string_stream;
     DIVE_ASSERT(IsDrawDispatchEvent(opcode));
 
-    if (opcode == CP_DRAW_INDX_OFFSET)
+    // Not supported. Not sure what the formats for these are...
+    DIVE_ASSERT(opcode != CP_DRAW_INDX_BIN && opcode != CP_DRAW_INDX_2_BIN);
+
+    if (opcode == CP_DRAW_INDX)
     {
-        string_stream << "DrawIndexOffset";
+        PM4_CP_DRAW_INDX packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
+        string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ","
+                      << "IndexBase:" << packet.bitfields3.INDX_BASE << ","
+                      << "IndexSize:" << packet.bitfields4.INDX_SIZE << ","
+                      << "VizQuery:" << packet.bitfields0.VIZ_QUERY << ")";
+    }
+    else if (opcode == CP_DRAW_INDX_2)
+    {
+        PM4_CP_DRAW_INDX packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
+        string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ","
+                      << "VizQuery:" << packet.bitfields0.VIZ_QUERY << ")";
+    }
+    else if (opcode == CP_DRAW_INDX_OFFSET)
+    {
+        PM4_CP_DRAW_INDX_OFFSET packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
+        string_stream << "DrawIndexOffset(NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
+                      << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
+                      << "FirstIndex:" << packet.bitfields3.FIRST_INDX << ","
+                      << "IndexBase:" << packet.bitfields4.INDX_BASE << ","
+                      << "IndexSize:" << packet.bitfields5.INDX_SIZE << ","
+                      << "MaxIndices:" << packet.bitfields6.MAX_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDIRECT)
     {
-        string_stream << "DrawIndirect";
+        PM4_CP_DRAW_INDIRECT packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
+        string_stream << "DrawIndirect(VgtDrawInitiator:" << packet._0 << ","
+                      << "IndirectLo:" << std::hex << "0x" << packet.bitfields1.INDIRECT_LO << ","
+                      << "IndirectHi:" << "0x" << packet.bitfields2.INDIRECT_HI << std::dec << ")";
     }
     else if (opcode == CP_DRAW_INDX_INDIRECT)
     {
-        string_stream << "DrawIndexIndirect";
+        PM4_CP_DRAW_INDX_INDIRECT packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
+        string_stream << "DrawIndexIndirect(VgtDrawInitiator:" << packet._0 << ","
+                      << "IndexBaseLo:" << std::hex << "0x" << packet.bitfields1.INDX_BASE_LO << ","
+                      << "IndexBaseHi:" << "0x" << packet.bitfields2.INDX_BASE_HI << std::dec << ","
+                      << "MaxIndices:" << packet.bitfields3.MAX_INDICES << ","
+                      << "IndirectLo:" << std::hex << "0x" << packet.bitfields4.INDIRECT_LO << ","
+                      << "IndirectHi:" << "0x" << packet.bitfields5.INDIRECT_HI << std::dec << ")";
     }
     else if (opcode == CP_DRAW_INDIRECT_MULTI)
     {
-        string_stream << "DrawIndirectMulti";
+        PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        if (packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
+        {
+            string_stream << "DrawIndirectMulti(DrawCount:" << packet.DRAW_COUNT << ","
+                        << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
+                        << "Stride:" << packet.STRIDE << ","
+                        << "DstOff:" << packet.bitfields1.DST_OFF << ")";
+        }
+        else if (packet.bitfields1.OPCODE == INDIRECT_OP_INDEXED)
+        {
+            PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
+            DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+            string_stream << "DrawIndirectMultiIndexed(DrawCount:" << packet.DRAW_COUNT << ","
+                        << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
+                        << "MaxIndices:" << packet.MAX_INDICES << ","
+                        << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
+                        << "Stride:" << packet.STRIDE << ","
+                        << "DstOff:" << packet.bitfields1.DST_OFF << ")";
+        }
+        else if (packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT)
+        {
+            PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
+            DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+            string_stream << "DrawIndirectMultiIndirect(DrawCount:" << packet.DRAW_COUNT << ","
+                        << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
+                        << "IndirectCount:" << packet.INDIRECT_COUNT << ","
+                        << "Stride:" << packet.STRIDE << ","
+                        << "DstOff:" << packet.bitfields1.DST_OFF << ")";
+        }
+        else if (packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT_INDEXED)
+        {
+            PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
+            DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+            string_stream << "DrawIndirectMultiIndirectIndexed(DrawCount:" << packet.DRAW_COUNT << ","
+                        << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
+                        << "MaxIndices:" << packet.MAX_INDICES << ","
+                        << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
+                        << "IndirectCount:" << packet.INDIRECT_COUNT << ","
+                        << "Stride:" << packet.STRIDE << ","
+                        << "DstOff:" << packet.bitfields1.DST_OFF << ")";
+        }
     }
     else if (opcode == CP_DRAW_AUTO)
     {
+        // Where is this defined?!?
         string_stream << "DrawAuto";
+    }
+    else if (opcode == CP_EXEC_CS_INDIRECT)
+    {
+        PM4_CP_EXEC_CS_INDIRECT packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        string_stream << "ExecCsIndirect(x:" << packet.bitfields3.LOCALSIZEX << ","
+                    << "y:" << packet.bitfields3.LOCALSIZEY << ","
+                    << "z:" << packet.bitfields3.LOCALSIZEZ << ","
+                    << "AddrLo:" << std::hex << "0x" << packet.bitfields1.ADDR_LO << ","
+                    << "AddrHi:" << "0x" << packet.bitfields2.ADDR_HI << std::dec << ")";
+    }
+    else if (opcode == CP_EXEC_CS)
+    {
+        PM4_CP_EXEC_CS packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        string_stream << "ExecCsIndirect(x:" << packet.bitfields1.NGROUPS_X << ","
+                    << "y:" << packet.bitfields2.NGROUPS_Y << ","
+                    << "z:" << packet.bitfields3.NGROUPS_Z << ")";
     }
     return string_stream.str();
 }

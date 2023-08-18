@@ -955,20 +955,17 @@ uint32_t EmulatePM4::CalcParity(uint32_t val)
 //--------------------------------------------------------------------------------------------------
 bool IsDrawDispatchEvent(uint32_t opcode)
 {
-    switch (opcode)
-    {
-    case CP_DRAW_INDX_OFFSET:
-	case CP_DRAW_INDIRECT:
-	case CP_DRAW_INDX_INDIRECT:
-	case CP_DRAW_INDIRECT_MULTI:
-	case CP_DRAW_AUTO: return true;
-    };
-    return false;
+    return IsDrawEventOpcode(opcode) || IsDispatchEventOpcode(opcode);
 }
 
 //--------------------------------------------------------------------------------------------------
 bool IsDispatchEventOpcode(uint32_t opcode)
 {
+    switch (opcode)
+    {
+    case CP_EXEC_CS_INDIRECT:
+    case CP_EXEC_CS: return true;
+    };
     return false;
 }
 //--------------------------------------------------------------------------------------------------
@@ -976,6 +973,8 @@ bool IsDrawEventOpcode(uint32_t opcode)
 {
     switch (opcode)
     {
+    case CP_DRAW_INDX:
+    case CP_DRAW_INDX_2:
     case CP_DRAW_INDX_OFFSET:
     case CP_DRAW_INDIRECT:
     case CP_DRAW_INDX_INDIRECT:

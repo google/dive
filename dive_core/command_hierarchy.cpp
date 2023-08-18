@@ -942,7 +942,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
     }
     // vulkan call NOP packages. Currently contains call parameters(except parameters in array),
     // each call is in one NOP packet.
-    else if (opcode == Type7Opcodes::CP_NOP)
+    else if (opcode == CP_NOP)
     {
         /*
         NopVulkanCallHeader nop_header;

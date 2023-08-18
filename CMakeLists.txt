@@ -48,6 +48,8 @@ endif()
 add_subdirectory(layer)
 add_subdirectory(dive_core)
 
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
+
 if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")
     add_subdirectory(cli)
 endif()

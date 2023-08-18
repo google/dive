@@ -771,33 +771,28 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &       mem_manager,
 
     // Deal with calls and chains
     if (type == Pm4Type::kType7 &&
-        (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
-        type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
+        (type7_header.opcode == CP_INDIRECT_BUFFER ||
+        type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
         type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
-        type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE))
+        type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
+        type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE ||
+        type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFD))
     {
-        struct IBPacket
-        {
-            Pm4Type7Header m_type7_header;
-            uint32_t m_lo;
-            uint32_t m_hi;
-            uint32_t m_size;
-        };
-        IBPacket ib_packet;
+        PM4_CP_INDIRECT_BUFFER ib_packet;
         if (!mem_manager.CopyMemory(&ib_packet,
                                     m_submit_index,
                                     emu_state_ptr->m_dcb.m_va,
-                                    sizeof(IBPacket)))
+                                    sizeof(PM4_CP_INDIRECT_BUFFER)))
         {
             DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
                            (unsigned long long)emu_state_ptr->m_dcb.m_va);
             return false;
         }
-        uint64_t ib_addr = ((uint64_t)ib_packet.m_hi << 32) | (uint64_t)ib_packet.m_lo;
+        uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
         if (!AdvanceToIB(mem_manager,
                          type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN,
                          ib_addr,
-                         ib_packet.m_size,
+                         ib_packet.SIZE,
                          ib_info,
                          &emu_state_ptr->m_dcb,
                          callbacks,

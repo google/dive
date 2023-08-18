@@ -17,7 +17,6 @@
 #include <string>
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
-#include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/gpudefs.h"
 #include "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
 

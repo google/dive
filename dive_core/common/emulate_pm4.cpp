@@ -953,7 +953,7 @@ uint32_t EmulatePM4::CalcParity(uint32_t val)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsDrawDispatchEvent(uint32_t opcode)
+bool IsDrawDispatchEventOpcode(uint32_t opcode)
 {
     return IsDrawEventOpcode(opcode) || IsDispatchEventOpcode(opcode);
 }

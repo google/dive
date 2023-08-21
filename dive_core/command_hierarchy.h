@@ -51,7 +51,7 @@ enum class NodeType
     kSubmitNode,
     kIbNode,
     kMarkerNode,
-    kDrawDispatchDmaNode,
+    kDrawDispatchBlitNode,
     kSyncNode,
     kPostambleStateNode,
     kPacketNode,
@@ -502,28 +502,19 @@ private:
     struct Packets
     {
         std::vector<uint64_t> m_packet_node_indices;  // Packets added since last event
-        std::vector<uint32_t> m_packet_opcodes;       // Opcodes of packets added since last event
-        std::vector<uint64_t> m_packet_addrs;         // Addresses of packets added since last event
 
         void Add(uint32_t opcode, uint64_t addr, uint64_t packet_node_index)
         {
             m_packet_node_indices.push_back(packet_node_index);
-            m_packet_opcodes.push_back(opcode);
-            m_packet_addrs.push_back(addr);
         }
         void Clear()
         {
             m_packet_node_indices.clear();
-            m_packet_opcodes.clear();
-            m_packet_addrs.clear();
         }
         void Pop()
         {
-            DIVE_ASSERT(!m_packet_node_indices.empty() && !m_packet_opcodes.empty() &&
-                        !m_packet_addrs.empty());
+            DIVE_ASSERT(!m_packet_node_indices.empty());
             m_packet_node_indices.pop_back();
-            m_packet_opcodes.pop_back();
-            m_packet_addrs.pop_back();
         }
     };
 

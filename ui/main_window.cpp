@@ -468,7 +468,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
     uint64_t                      selected_item_node_index = (uint64_t)(index.internalPointer());
     Dive::NodeType node_type = command_hierarchy.GetNodeType(selected_item_node_index);
-    if (node_type == Dive::NodeType::kDrawDispatchDmaNode ||
+    if (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
         node_type == Dive::NodeType::kMarkerNode)
     {
         emit EventSelected(selected_item_node_index);

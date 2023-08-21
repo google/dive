@@ -66,6 +66,7 @@ struct EventInfo
     {
         kDraw,
         kDispatch,
+        kBlit,
         kSync
     };
     EventType m_type;
@@ -96,13 +97,17 @@ enum class SyncType
     kEventWriteEnd = kVgtFlush + 1,
 };
 
-SyncType GetSyncType(const IMemoryManager        &mem_manager,
-                     uint32_t                     submit_index,
-                     const std::vector<uint32_t> &opcodes,
-                     const std::vector<uint64_t> &addrs);
-bool     IsDrawDispatchSyncEvent(const IMemoryManager &       mem_manager,
-                                 uint32_t                     submit_index,
-                                 const std::vector<uint32_t> &opcodes,
-                                 const std::vector<uint64_t> &addrs);
+SyncType GetSyncType(const IMemoryManager &mem_manager,
+                     uint32_t              submit_index,
+                     uint64_t              addr,
+                     uint32_t              opcode);
+bool     IsDrawDispatchBlitSyncEvent(const IMemoryManager &mem_manager,
+                                     uint32_t              submit_index,
+                                     uint64_t              addr,
+                                     uint32_t              opcode);
+bool     IsBlitEvent(const IMemoryManager &mem_manager,
+                     uint32_t              submit_index,
+                     uint64_t              addr,
+                     uint32_t              opcode);
 
 }  // namespace Dive

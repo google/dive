@@ -24,28 +24,49 @@ namespace Dive
 // =================================================================================================
 // Helper Functions
 // =================================================================================================
-SyncType GetSyncType(const IMemoryManager        &mem_manager,
-                     uint32_t                     submit_index,
-                     const std::vector<uint32_t> &opcodes,
-                     const std::vector<uint64_t> &addrs)
+SyncType GetSyncType(const IMemoryManager &mem_manager,
+                     uint32_t              submit_index,
+                     uint64_t              addr,
+                     uint32_t              opcode)
 {
     return SyncType::kNone;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsDrawDispatchSyncEvent(const IMemoryManager &       mem_manager,
-                                uint32_t                     submit_index,
-                                const std::vector<uint32_t> &opcodes,
-                                const std::vector<uint64_t> &addrs)
+bool IsDrawDispatchBlitSyncEvent(const IMemoryManager &mem_manager,
+                                 uint32_t              submit_index,
+                                 uint64_t              addr,
+                                 uint32_t              opcode)
 {
-    uint32_t last_index = (uint32_t)(opcodes.size() - 1);
-    if (IsDrawDispatchEvent(opcodes[last_index]))
+    if (IsDrawDispatchEventOpcode(opcode))
         return true;
 
-    SyncType sync_type = GetSyncType(mem_manager, submit_index, opcodes, addrs);
+    if (IsBlitEvent(mem_manager, submit_index, addr, opcode))
+        return true;
+
+    SyncType sync_type = GetSyncType(mem_manager, submit_index, addr, opcode);
     if (sync_type != SyncType::kNone)
         return true;
 
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool IsBlitEvent(const IMemoryManager &mem_manager,
+                 uint32_t              submit_index,
+                 uint64_t              addr,
+                 uint32_t              opcode)
+{
+    if (opcode == CP_BLIT)
+        return true;
+
+    if (opcode == CP_EVENT_WRITE)
+    {
+        PM4_CP_EVENT_WRITE packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, addr, sizeof(packet)));
+        if (packet.bitfields0.EVENT == BLIT)  // aka CCU_RESOLVE
+            return true;
+    }
     return false;
 }
 

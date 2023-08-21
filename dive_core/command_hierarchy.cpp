@@ -337,7 +337,7 @@ uint32_t CommandHierarchy::GetMarkerNodeId(uint64_t node_index) const
 uint32_t CommandHierarchy::GetEventNodeId(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
-    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kDrawDispatchDmaNode);
+    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kDrawDispatchBlitNode);
     const AuxInfo &info = m_nodes.m_aux_info[node_index];
     return info.event_node.m_event_id;
 }
@@ -857,12 +857,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
     m_cmd_begin_packet_node_indices.push_back(packet_node_index);
     bool is_marker = false;
 
-    SyncType sync_type = GetSyncType(mem_manager,
-                                     submit_index,
-                                     m_packets.m_packet_opcodes,
-                                     m_packets.m_packet_addrs);
-    bool     is_draw_dispatch_dma_event = IsDrawDispatchEvent(opcode);
-    if ((sync_type != SyncType::kNone) || is_draw_dispatch_dma_event)
+    if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, opcode))
     {
         uint64_t event_node_index = UINT64_MAX;
         uint64_t parent_node_index = m_cur_submit_node_index;
@@ -870,6 +865,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
         {
             parent_node_index = m_marker_stack.back();
         }
+
+        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode);
         if (sync_type != SyncType::kNone)
         {
             // m_num_events++;
@@ -884,7 +881,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
             //     parent_node_index = barrier_it->BarrierNode();
             // this->AppendEventNodeIndex(sync_event_node_index);
         }
-        else if (is_draw_dispatch_dma_event)
+        else    // Draw/Dispatch/Blit
         {
             std::string draw_dispatch_node_string = GetEventString(mem_manager,
                                                                    submit_index,
@@ -898,7 +895,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
             // }
             CommandHierarchy::AuxInfo
                      aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
-            uint64_t draw_dispatch_node_index = AddNode(NodeType::kDrawDispatchDmaNode,
+            uint64_t draw_dispatch_node_index = AddNode(NodeType::kDrawDispatchBlitNode,
                                                         draw_dispatch_node_string,
                                                         aux_info);
             AppendEventNodeIndex(draw_dispatch_node_index);
@@ -911,6 +908,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &       mem_manager,
 
             event_node_index = draw_dispatch_node_index;
         }
+
 
         // Cache nodes that may be part of the vkBeginCommandBuffer.
         m_cmd_begin_event_node_indices.push_back(event_node_index);
@@ -1507,7 +1505,8 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
                                                     uint32_t                     opcode)
 {
     std::ostringstream string_stream;
-    DIVE_ASSERT(IsDrawDispatchEvent(opcode));
+    DIVE_ASSERT(IsDrawDispatchEventOpcode(opcode) ||
+                IsBlitEvent(mem_manager, submit_index, va_addr, opcode));
 
     // Not supported. Not sure what the formats for these are...
     DIVE_ASSERT(opcode != CP_DRAW_INDX_BIN && opcode != CP_DRAW_INDX_2_BIN);
@@ -1560,16 +1559,16 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
     }
     else if (opcode == CP_DRAW_INDIRECT_MULTI)
     {
-        PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
-        if (packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
+        PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL base_packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&base_packet, submit_index, va_addr, sizeof(base_packet)));
+        if (base_packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
         {
-            string_stream << "DrawIndirectMulti(DrawCount:" << packet.DRAW_COUNT << ","
-                        << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
-                        << "Stride:" << packet.STRIDE << ","
-                        << "DstOff:" << packet.bitfields1.DST_OFF << ")";
+            string_stream << "DrawIndirectMulti(DrawCount:" << base_packet.DRAW_COUNT << ","
+                        << "Indirect:" << std::hex << "0x" << base_packet.INDIRECT << std::dec << ","
+                        << "Stride:" << base_packet.STRIDE << ","
+                        << "DstOff:" << base_packet.bitfields1.DST_OFF << ")";
         }
-        else if (packet.bitfields1.OPCODE == INDIRECT_OP_INDEXED)
+        else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDEXED)
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
@@ -1580,7 +1579,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
                         << "Stride:" << packet.STRIDE << ","
                         << "DstOff:" << packet.bitfields1.DST_OFF << ")";
         }
-        else if (packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT)
+        else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT)
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
@@ -1590,7 +1589,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
                         << "Stride:" << packet.STRIDE << ","
                         << "DstOff:" << packet.bitfields1.DST_OFF << ")";
         }
-        else if (packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT_INDEXED)
+        else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT_INDEXED)
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
@@ -1625,6 +1624,32 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &      
         string_stream << "ExecCsIndirect(x:" << packet.bitfields1.NGROUPS_X << ","
                     << "y:" << packet.bitfields2.NGROUPS_Y << ","
                     << "z:" << packet.bitfields3.NGROUPS_Z << ")";
+    }
+    else if (opcode == CP_BLIT)
+    {
+        PM4_CP_BLIT packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        std::string op;
+        switch (packet.bitfields0.OP)
+        {
+        case BLIT_OP_FILL: op = "BLIT_OP_FILL"; break;
+        case BLIT_OP_COPY: op = "BLIT_OP_COPY"; break;
+        case BLIT_OP_SCALE: op = "BLIT_OP_SCALE"; break;
+        }
+        string_stream << "CpBlit(op:" << op << ","
+                    << "srcX1:" << packet.bitfields1.SRC_X1 << ","
+                    << "srcY1:" << packet.bitfields1.SRC_Y1 << ","
+                    << "srcX2:" << packet.bitfields2.SRC_X2 << ","
+                    << "srcY2:" << packet.bitfields2.SRC_Y2 << ","
+                    << "dstX1:" << packet.bitfields3.DST_X1 << ","
+                    << "dstX1:" << packet.bitfields3.DST_Y1 << ","
+                    << "dstX2:" << packet.bitfields4.DST_X2 << ","
+                    << "dstX2:" << packet.bitfields4.DST_Y2 << ")";
+    }
+    else if (opcode == CP_EVENT_WRITE)
+    {
+        // Assumed it is a BLIT event (note: renamed to CCU_RESOLVE for a7xx)
+        string_stream << "CpEventWrite(type:CCU_RESOLVE)";
     }
     return string_stream.str();
 }
@@ -1953,7 +1978,7 @@ void CommandHierarchyCreator::CreateTopologies()
     auto FilterOut = [&](size_t node_index) {
         NodeType type = m_command_hierarchy_ptr->GetNodeType(node_index);
         // Filter out all these node types
-        if (type == NodeType::kDrawDispatchDmaNode || type == NodeType::kSyncNode ||
+        if (type == NodeType::kDrawDispatchBlitNode || type == NodeType::kSyncNode ||
             type == NodeType::kPostambleStateNode)
             return true;
         // Also filter out kMarkerNode-kBarrier nodes

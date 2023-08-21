@@ -128,13 +128,10 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 // =================================================================================================
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
-{
-}
+{}
 
 //--------------------------------------------------------------------------------------------------
-CaptureMetadataCreator::~CaptureMetadataCreator()
-{
-}
+CaptureMetadataCreator::~CaptureMetadataCreator() {}
 
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) {}
@@ -142,11 +139,6 @@ void CaptureMetadataCreator::OnSubmitStart(uint32_t submit_index, const SubmitIn
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info)
 {
-    // Have to reset at the end of submits because IsDrawDispatchDmaSyncEvent() uses size of the
-    // arrays to determine the Event type, and packets should not carry across submit boundaries for
-    // parsing purposes
-    m_opcodes.clear();
-    m_addrs.clear();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -167,12 +159,12 @@ bool CaptureMetadataCreator::OnIbEnd(uint32_t                  submit_index,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureMetadataCreator::OnPacket(const IMemoryManager &       mem_manager,
-                                      uint32_t                     submit_index,
-                                      uint32_t                     ib_index,
-                                      uint64_t                     va_addr,
-                                      Pm4Type                      type,
-                                      uint32_t                     header)
+bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
+                                      uint32_t              submit_index,
+                                      uint32_t              ib_index,
+                                      uint64_t              va_addr,
+                                      Pm4Type               type,
+                                      uint32_t              header)
 {
     if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, type, header))
         return false;
@@ -180,23 +172,22 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &       mem_manager,
     if (type != Pm4Type::kType7)
         return true;
 
-    Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;   
+    Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
 
-    m_opcodes.push_back(type7_header->opcode);
-    m_addrs.push_back(va_addr);
-
-    if (IsDrawDispatchSyncEvent(mem_manager, submit_index, m_opcodes, m_addrs))
+    if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
     {
         // Add a new event to the EventInfo metadata array
         EventInfo event_info;
         event_info.m_submit_index = submit_index;
         if (IsDrawEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDraw;
+        else if (IsBlitEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
+            event_info.m_type = EventInfo::EventType::kBlit;
         else if (IsDispatchEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDispatch;
         else
         {
-            DIVE_ASSERT(GetSyncType(mem_manager, submit_index, m_opcodes, m_addrs) !=
+            DIVE_ASSERT(GetSyncType(mem_manager, submit_index, va_addr, type7_header->opcode) !=
                         SyncType::kNone);  // Sanity check
             event_info.m_type = EventInfo::EventType::kSync;
         }
@@ -229,10 +220,6 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &       mem_manager,
                         this))
             return false;
 #endif
-        // Have to reset between Events because IsDrawDispatchDmaSyncEvent() uses size of the
-        // arrays to determine the Event type
-        m_opcodes.clear();
-        m_addrs.clear();
     }
     return true;
 }

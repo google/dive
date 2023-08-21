@@ -315,7 +315,7 @@ private:
 };
 
 //--------------------------------------------------------------------------------------------------
-bool IsDrawDispatchEvent(uint32_t opcode);
+bool IsDrawDispatchEventOpcode(uint32_t opcode);
 bool IsDispatchEventOpcode(uint32_t opcode);
 bool IsDrawEventOpcode(uint32_t opcode);
 

@@ -213,7 +213,7 @@ void DiveTreeView::gotoEvent(bool is_above)
         uint64_t node_idx = (uint64_t)(next_node_idx.internalPointer());
         auto     node_type = m_command_hierarchy.GetNodeType(node_idx);
 
-        if (event_id != QVariant() && (node_type == Dive::NodeType::kDrawDispatchDmaNode ||
+        if (event_id != QVariant() && (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
                                        (node_type == Dive::NodeType::kMarkerNode &&
                                         m_command_hierarchy.GetMarkerNodeType(node_idx) !=
                                         Dive::CommandHierarchy::MarkerType::kBeginEnd)))

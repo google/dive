@@ -160,10 +160,6 @@ private:
     // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
     std::map<uint64_t, uint32_t> m_buffer_addrs;
 
-    // Keep track of last few opcodes
-    std::vector<uint32_t> m_opcodes;
-    std::vector<uint64_t> m_addrs;
-
     EmulateStateTracker   m_state_tracker;
 
     CaptureMetadata &m_capture_metadata;

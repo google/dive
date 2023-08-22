@@ -1292,24 +1292,62 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &       mem
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
-                                                  uint32_t reg_value)
+void OutputValue(std::ostringstream &string_stream, ValueType type, uint64_t value)
 {
-    const RegInfo *reg_info_ptr = GetRegInfo(reg);
-
-    RegInfo temp;
-    temp.m_name = "Unknown";
-    if (reg_info_ptr == nullptr)
+    if (type == ValueType::kBoolean)
     {
-        reg_info_ptr = &temp;
+        if (value != 0)
+            string_stream << "True";
+        else
+            string_stream << "False";
     }
+    else if (type == ValueType::kUint)
+    {
+        string_stream << value;
+    }
+    else if (type == ValueType::kInt)
+    {
+        union
+        {
+            int32_t s;
+            uint32_t u;
+        } union_val;
+        // Non-address types are always 32-bit
+        DIVE_ASSERT(value <= UINT32_MAX);
+        union_val.u = (uint32_t)value;
+        string_stream << union_val.s;
+    }
+    else if (type == ValueType::kFloat)
+    {
+        union
+        {
+            float f;
+            uint32_t i;
+        } union_val;
+        // If it's a float, it's not 64-bit wide. So typecast should be ok
+        DIVE_ASSERT(value <= UINT32_MAX);
+        union_val.i = (uint32_t)value;
+        string_stream << union_val.f;
+    }
+    else
+    {
+        string_stream << "0x" << std::hex << value << std::dec;
+    }
+}
 
+//--------------------------------------------------------------------------------------------------
+uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
+                                                  uint64_t reg_value,
+                                                  const RegInfo *reg_info_ptr)
+{
     // Should never have an "unknown register" unless something is seriously wrong!
     DIVE_ASSERT(reg_info_ptr != nullptr);
 
     // Reg item
     std::ostringstream reg_string_stream;
-    reg_string_stream << reg_info_ptr->m_name << ": 0x" << std::hex << reg_value << std::dec;
+    reg_string_stream << reg_info_ptr->m_name << ": ";
+    OutputValue(reg_string_stream, (ValueType)reg_info_ptr->m_type, reg_value);
+
     CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
     uint64_t reg_node_index = AddNode(NodeType::kRegNode, reg_string_stream.str(), aux_info);
 
@@ -1318,11 +1356,12 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
     for (uint32_t field = 0; field < reg_info_ptr->m_fields.size(); ++field)
     {
         const RegField &reg_field = reg_info_ptr->m_fields[field];
-        uint32_t        field_value = (reg_value & reg_field.m_mask) >> reg_field.m_shift;
+        uint64_t        field_value = (reg_value & reg_field.m_mask) >> reg_field.m_shift;
 
         // Field item
         std::ostringstream field_string_stream;
-        field_string_stream << reg_field.m_name << ": 0x" << std::hex << field_value << std::dec;
+        field_string_stream << reg_field.m_name << ": ";
+        OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
         uint64_t field_node_index = AddNode(NodeType::kFieldNode,
                                             field_string_stream.str(),
                                             aux_info);
@@ -1661,19 +1700,34 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager        &mem_ma
                                              Pm4Type4Header               header,
                                              uint64_t                     packet_node_index)
 {
-    uint32_t reg_addr = header.offset;
+    //uint32_t reg_offset = header.offset;
 
     // Go through each register set by this packet
-    for (uint32_t i = 0; i < header.count; ++i)
+    uint32_t offset_in_bytes = 0;
+    uint32_t dword = 0;
+    while (dword < header.count)
     {
-        uint64_t reg_va_addr = va_addr + sizeof(header) + i * sizeof(uint32_t);
-        uint32_t reg_value;
-        bool ret = mem_manager.CopyMemory(&reg_value, submit_index, reg_va_addr, sizeof(uint32_t));
+        uint64_t       reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
+        uint32_t       reg_offset = header.offset + dword;
+        const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
+
+        RegInfo temp = {};
+        temp.m_name = "Unknown";
+        if (reg_info_ptr == nullptr)
+            reg_info_ptr = &temp;
+
+        uint32_t size_to_read = sizeof(uint32_t);
+        if (reg_info_ptr->m_is_64_bit)
+            size_to_read = sizeof(uint64_t);
+		offset_in_bytes += size_to_read;
+
+        uint64_t reg_value = 0;
+        bool ret = mem_manager.CopyMemory(&reg_value, submit_index, reg_va_addr, size_to_read);
         DIVE_ASSERT(ret);  // This should never fail!
 
         // Create the register node, as well as all its children nodes that describe the various
         // fields set in the single 32-bit register
-        uint64_t reg_node_index = AddRegisterNode(reg_addr, reg_value);
+        uint64_t reg_node_index = AddRegisterNode(reg_offset, reg_value, reg_info_ptr);
 
         // Add it as child to packet node
         AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
@@ -1681,7 +1735,9 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager        &mem_ma
         AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
         AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
 
-        reg_addr++;
+        dword++;
+        if (reg_info_ptr->m_is_64_bit)
+            dword++;
     }
 }
 
@@ -1819,8 +1875,10 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager       
                 field_string_stream << packet_field.m_name << ": " << enum_str;
             }
             else
-                field_string_stream << packet_field.m_name << ": 0x" << std::hex << field_value
-                                    << std::dec;
+            {
+                field_string_stream << packet_field.m_name << ": ";
+                OutputValue(field_string_stream, (ValueType)packet_field.m_type, field_value);
+            }
 
             CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
             is_ce_packet);

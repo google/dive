@@ -1345,8 +1345,17 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
 
     // Reg item
     std::ostringstream reg_string_stream;
-    reg_string_stream << reg_info_ptr->m_name << ": ";
-    OutputValue(reg_string_stream, (ValueType)reg_info_ptr->m_type, reg_value);
+    if (reg_info_ptr->m_enum_handle != UINT8_MAX)
+    {
+        const char *enum_str = GetEnumString(reg_info_ptr->m_enum_handle, (uint32_t)reg_value);
+        DIVE_ASSERT(enum_str != nullptr);
+        reg_string_stream << reg_info_ptr->m_name << ": " << enum_str;
+    }
+    else
+    {
+        reg_string_stream << reg_info_ptr->m_name << ": ";
+        OutputValue(reg_string_stream, (ValueType)reg_info_ptr->m_type, reg_value);
+    }
 
     CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
     uint64_t reg_node_index = AddNode(NodeType::kRegNode, reg_string_stream.str(), aux_info);
@@ -1360,8 +1369,18 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
 
         // Field item
         std::ostringstream field_string_stream;
-        field_string_stream << reg_field.m_name << ": ";
-        OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
+        if (reg_field.m_enum_handle != UINT8_MAX)
+        {
+            const char *enum_str = GetEnumString(reg_field.m_enum_handle, (uint32_t)field_value);
+            DIVE_ASSERT(enum_str != nullptr);
+            field_string_stream << reg_field.m_name << ": " << enum_str;
+        }
+        else
+        {
+            field_string_stream << reg_field.m_name << ": ";
+            OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
+        }
+
         uint64_t field_node_index = AddNode(NodeType::kFieldNode,
                                             field_string_stream.str(),
                                             aux_info);
@@ -1868,7 +1887,7 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager       
 
             // Field item
             std::ostringstream field_string_stream;
-            if (packet_field.m_enum_handle != UINT32_MAX)
+            if (packet_field.m_enum_handle != UINT8_MAX)
             {
                 const char *enum_str = GetEnumString(packet_field.m_enum_handle, field_value);
                 DIVE_ASSERT(enum_str != nullptr);

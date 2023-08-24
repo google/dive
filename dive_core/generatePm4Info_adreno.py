@@ -46,18 +46,20 @@ def outputH(pm4_info_file):
 enum ValueType { kBoolean, kUint, kInt, kFloat, kFixed, kAddress, kWaddress, kHex, kOther };
 
 struct RegField {
-    uint32_t m_type     : 8;  // ValueType enum
-    uint32_t m_shift    : 6;
-    uint32_t            : 18;
+    uint32_t m_type         : 8;  // ValueType enum
+    uint32_t m_enum_handle  : 8;
+    uint32_t m_shift        : 6;
+    uint32_t                : 10;
     uint64_t m_mask;
     const char* m_name;
 };
 
 struct RegInfo {
     const char* m_name;
-    uint32_t m_is_64_bit : 1;   // Either 32 or 64 bit
-    uint32_t m_type      : 8;   // ValueType enum
-    uint32_t             : 13;
+    uint32_t m_is_64_bit    : 1;   // Either 32 or 64 bit
+    uint32_t m_type         : 8;   // ValueType enum
+    uint32_t m_enum_handle  : 8;
+    uint32_t                : 5;
     std::vector<RegField> m_fields;
 };
 
@@ -66,9 +68,9 @@ struct PacketField {
     uint32_t m_is_variant_opcode : 1;   // If 1, then is used to indicate variant
     uint32_t m_dword             : 8;
     uint32_t m_type              : 8;   // ValueType enum
-    uint32_t                     : 15;
-    uint32_t m_enum_handle;
-    uint32_t m_shift;
+    uint32_t m_enum_handle       : 8;
+    uint32_t m_shift             : 6;
+    uint32_t                     : 1;
     uint32_t m_mask;
 };
 
@@ -116,6 +118,12 @@ static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
 
 # ---------------------------------------------------------------------------------------
 def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
+
+  # Get enum values from the XML element tree, being careful not to have duplicates
+  enum_index_dict = {}
+  enum_list = []
+  parseEnumInfo(enum_index_dict, enum_list, registers_et_root)
+
   pm4_info_file.writelines(
     "void Pm4InfoInit()\n"
     "{\n"
@@ -127,9 +135,11 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   )
   outputOpcodes(pm4_info_file, opcode_dict)
   pm4_info_file.write("\n")
-  outputRegisterInfo(pm4_info_file, registers_et_root)
+  outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict)
   pm4_info_file.write("\n")
-  outputPacketInfo(pm4_info_file, registers_et_root)
+  outputEnums(pm4_info_file, enum_list)
+  pm4_info_file.write("\n")
+  outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict)
   pm4_info_file.write("}\n")
   return
 
@@ -139,6 +149,13 @@ def outputOpcodes(pm4_info_file, opcode_dict):
   for opcode in opcode_dict:
     pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (opcode, opcode_dict[opcode]))
   return
+
+# ---------------------------------------------------------------------------------------
+def isBuiltInType(type):
+  builtin_types = [ None, "a3xx_regid", "boolean", "uint", "hex", "int", "fixed", "ufixed", "float", "address", "waddress" ]
+  if not type in builtin_types:
+    return False
+  return True
 
 # ---------------------------------------------------------------------------------------
 def getTypeEnumString(type):
@@ -162,18 +179,16 @@ def getTypeEnumString(type):
   return type_string
 
 # ---------------------------------------------------------------------------------------
-def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, is_64):
+def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64):
     is_64_string = "0"
     if is_64 is True:
       is_64_string = "1"
 
-    pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, {" % (offset, name, is_64_string, getTypeEnumString(type)))
-
     # if a 'type' attrib is available, then check for a custom bitset
+    enum_handle = "UINT8_MAX"
     if type:
       # if it isn't one of the standard types, then it must be a custom bitset or an enum
-      if type != "boolean" and type != "uint" and type != "int" and type != "float" \
-        and type != "fixed" and type != "address" and type != "waddress" and type != "hex":
+      if not isBuiltInType(type):
         bitfields = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
 
         # Not found in the A6XX domain. Some of the bitsets are defined in the root.
@@ -186,6 +201,14 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
           enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+type+'"]')
           if not enum:
             raise Exception("Not able to find bitset/enum " + type + " for register " + name)
+          # Now that we know it's an enum, let's get the enum_handle for it!
+          if type not in enum_index_dict:
+            raise Exception("Enumeration %s not found!" % type)
+          if enum_index_dict[type] > 256:
+            raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[type])
+          enum_handle = str(enum_index_dict[type])
+
+    pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, {" % (offset, name, is_64_string, getTypeEnumString(type), enum_handle))
 
     # Iterate through optional bitfields
     for bitfield in bitfields:
@@ -194,9 +217,16 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
 
       name = bitfield.attrib['name']
 
+      enum_handle = "UINT8_MAX"
       bitfield_type = "other"
       if 'type' in bitfield.attrib:
         bitfield_type = bitfield.attrib['type']
+        if not isBuiltInType(bitfield_type):
+          if bitfield_type not in enum_index_dict:
+            raise Exception("Enumeration %s not found!" % bitfield_type)
+          if enum_index_dict[bitfield_type] > 256:
+            raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[bitfield_type])
+          enum_handle = str(enum_index_dict[bitfield_type])
 
       # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
       # TODO: Store the align, and variants bits. The 'type' field in particular should reference
@@ -215,8 +245,9 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
       else:
         raise Exception("Encountered a bitfield with no pos/low/high!")
 
-      pm4_info_file.write("    { %s, %d, 0x%x, \"%s\" }, "  % (
+      pm4_info_file.write("    { %s, %s, %d, 0x%x, \"%s\" }, "  % (
           getTypeEnumString(bitfield_type),
+          enum_handle,
           shift,
           mask,
           name
@@ -224,7 +255,7 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
     pm4_info_file.write("} };\n")
 
 # ---------------------------------------------------------------------------------------
-def outputRegisterInfo(pm4_info_file, registers_et_root):
+def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
   a6xx_domain = registers_et_root.find('./{http://nouveau.freedesktop.org/}domain[@name="A6XX"]')
 
   # Create a list of 32-bit and 64-bit registers
@@ -246,7 +277,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root):
     is_64 = False
     if reg.tag == '{http://nouveau.freedesktop.org/}reg64':
       is_64 = True
-    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, is_64)
+    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64)
 
   # Iterate and output the arrays as a sequence of reg32s with an index as a suffix
   arrays = a6xx_domain.findall('{http://nouveau.freedesktop.org/}array')
@@ -272,10 +303,10 @@ def outputRegisterInfo(pm4_info_file, registers_et_root):
     for i in range(0,length):
       if stride == 1:
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
-                             offset+i, array_name+str(i), [], None, False)
+                             offset+i, array_name+str(i), [], None, enum_index_dict, False)
       elif stride == 2 and not array_regs:
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
-                             offset+i*stride, array_name+"_LO", [], None, True)
+                             offset+i*stride, array_name+"_LO", [], None, enum_index_dict, True)
       else:
         for reg_idx, reg in enumerate(array_regs):
           reg_name = reg.attrib['name']
@@ -289,7 +320,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root):
             is_64 = True
           outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
                                offset+i*stride+reg_offset, array_name+str(i)+"_"+reg_name, \
-                               bitfields, type, is_64)
+                               bitfields, type, enum_index_dict, is_64)
   return
 
 # ---------------------------------------------------------------------------------------
@@ -362,7 +393,7 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       field_name = element.attrib['name']
       shift = 0
       mask = int('0xffffffff', 16)
-      enum_handle = "UINT32_MAX"
+      enum_handle = "UINT8_MAX"
 
       type = None
       if 'type' in element.attrib:
@@ -387,11 +418,12 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       if 'type' in bitfield.attrib:
         type = bitfield.attrib['type']
 
-      enum_handle = "UINT32_MAX"
-      if type and type != "boolean" and type != "uint" and type != "int" and type != "float" \
-        and type != "fixed" and type != "address" and type != "hex":
+      enum_handle = "UINT8_MAX"
+      if not isBuiltInType(type):
         if type not in enum_index_dict:
           raise Exception("Enumeration %s not found!" % type)
+        if enum_index_dict[type] > 256:
+          raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[type])
         enum_handle = str(enum_index_dict[type])
 
       # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
@@ -414,13 +446,7 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, type, enum_handle, shift, mask)
 
 # ---------------------------------------------------------------------------------------
-def outputPacketInfo(pm4_info_file, registers_et_root):
-  enum_index_dict = {}
-
-  # Get enum values from the XML element tree, being careful not to have duplicates
-  enum_list = []
-  parseEnumInfo(enum_index_dict, enum_list, registers_et_root)
-
+def outputEnums(pm4_info_file, enum_list):
   # Output enum_list to file
   for idx, enum_info in enumerate(enum_list):
     # enum_list is an array of {string, dict()}, where the key of the dict() is
@@ -429,8 +455,9 @@ def outputPacketInfo(pm4_info_file, registers_et_root):
     for enum_value, enum_value_string in sorted(enum_info[1].items()):
       pm4_info_file.write(" { %d, \"%s\" }," % (enum_value, enum_value_string))
     pm4_info_file.write(" }); // %s (%d)\n" % (enum_info[0], idx))
-  pm4_info_file.write("\n")
 
+# ---------------------------------------------------------------------------------------
+def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
 
   # Find all CP packet types so we can find out which domains are relevant

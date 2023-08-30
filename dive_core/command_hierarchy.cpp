@@ -1369,17 +1369,17 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t reg,
 
         // Field item
         std::ostringstream field_string_stream;
+        field_string_stream << reg_field.m_name << ": ";
         if (reg_field.m_enum_handle != UINT8_MAX)
         {
             const char *enum_str = GetEnumString(reg_field.m_enum_handle, (uint32_t)field_value);
-            DIVE_ASSERT(enum_str != nullptr);
-            field_string_stream << reg_field.m_name << ": " << enum_str;
+            if (enum_str != nullptr)
+                field_string_stream << enum_str;
+            else
+                OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
         }
         else
-        {
-            field_string_stream << reg_field.m_name << ": ";
             OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
-        }
 
         uint64_t field_node_index = AddNode(NodeType::kFieldNode,
                                             field_string_stream.str(),
@@ -1887,17 +1887,17 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager       
 
             // Field item
             std::ostringstream field_string_stream;
+            field_string_stream << packet_field.m_name << ": ";
             if (packet_field.m_enum_handle != UINT8_MAX)
             {
                 const char *enum_str = GetEnumString(packet_field.m_enum_handle, field_value);
-                DIVE_ASSERT(enum_str != nullptr);
-                field_string_stream << packet_field.m_name << ": " << enum_str;
+                if (enum_str != nullptr)
+                    field_string_stream << enum_str;
+                else
+                    OutputValue(field_string_stream, (ValueType)packet_field.m_type, field_value);
             }
             else
-            {
-                field_string_stream << packet_field.m_name << ": ";
                 OutputValue(field_string_stream, (ValueType)packet_field.m_type, field_value);
-            }
 
             CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
             is_ce_packet);

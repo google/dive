@@ -147,6 +147,37 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
                   return (lhs.m_va_addr < rhs.m_va_addr);
               });
 
+    // For some reason, freedreno's ioctl calls sometimes have allocation of same buffer twice
+    // It's possible system ioctl just ignores the second allocation. We should ignore them too
+    // This pass eliminates any duplicates
+    if (m_same_submit_only)
+    {
+        std::vector<MemoryBlock> temp_memory_blocks;
+
+        uint64_t prev_addr = 0;
+        uint64_t prev_submit = 0;
+        uint32_t prev_size = 0;
+        for (uint32_t i = 0; i < m_memory_blocks.size(); ++i)
+        {
+            const MemoryBlock &memory_block = m_memory_blocks[i];
+
+            if (memory_block.m_submit_index != prev_submit)
+            {
+                prev_submit = memory_block.m_submit_index;
+            }
+            else
+            {
+                if (memory_block.m_va_addr != prev_addr || memory_block.m_data_size != prev_size)
+                    temp_memory_blocks.push_back(memory_block);
+                else
+                    delete[] m_memory_blocks[i].m_data_ptr;
+            }
+            prev_addr = memory_block.m_va_addr;
+            prev_size = memory_block.m_data_size;
+        }
+        m_memory_blocks = std::move(temp_memory_blocks);
+    }
+
 #ifndef NDEBUG
     // Sanity check
     //      same_submit_only == true -> Make sure there are no overlaps within same submit
@@ -403,6 +434,12 @@ const IndirectBufferInfo &SubmitInfo::GetIndirectBufferInfo(uint32_t ib_index) c
 const IndirectBufferInfo *SubmitInfo::GetIndirectBufferInfoPtr() const
 {
     return &m_ibs[0];
+}
+
+//--------------------------------------------------------------------------------------------------
+void SubmitInfo::AppendIb(const IndirectBufferInfo &ib)
+{
+    m_ibs.push_back(ib);
 }
 
 // =================================================================================================
@@ -872,6 +909,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
     BlockInfo block_info;
     uint64_t cur_gpu_addr = UINT64_MAX;
     uint32_t cur_size = UINT32_MAX;
+    bool is_new_submit = false;
     while (capture_file.read((char *)&block_info, sizeof(block_info)))
     {
         if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
@@ -882,10 +920,12 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
         case RD_GPUADDR:
             if (!LoadGpuAddressAndSize(capture_file, block_info.m_data_size, &cur_gpu_addr, &cur_size))
                 return LoadResult::kFileIoError;
+            is_new_submit = true;
             break;
         case RD_CMDSTREAM_ADDR:
-            if (!LoadSubmitBlockAdreno(capture_file, block_info.m_data_size))
+            if (!LoadCmdStreamBlockAdreno(capture_file, block_info.m_data_size, is_new_submit))
                 return LoadResult::kFileIoError;
+            is_new_submit = false;
             break;
         case RD_BUFFER_CONTENTS:
             // The size read from RD_GPUADDR should match block size exactly
@@ -912,7 +952,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
             capture_file.seekg(block_info.m_data_size, std::ios::cur);
         }
     }
-    m_memory.Finalize(false, true);
+    m_memory.Finalize(true, true);
     return LoadResult::kSuccess;
 }
 
@@ -1327,27 +1367,35 @@ bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadSubmitBlockAdreno(std::istream &capture_file, uint32_t block_size)
+bool CaptureData::LoadCmdStreamBlockAdreno(std::istream &capture_file, uint32_t block_size, bool create_new_submit)
 {
     uint64_t gpu_addr;
     uint32_t size_in_dwords;
     if (!LoadGpuAddressAndSize(capture_file, block_size, &gpu_addr, &size_in_dwords))
         return false;
 
-    // Only 1 IB per submit for Adreno, apparently
-    std::vector<IndirectBufferInfo> ibs;
     IndirectBufferInfo ib_info;
     ib_info.m_va_addr = gpu_addr;
     ib_info.m_size_in_dwords = size_in_dwords;
     ib_info.m_skip = false;
-    ibs.push_back(ib_info);
+    if (create_new_submit)
+    {
+        std::vector<IndirectBufferInfo> ibs;
+        ibs.push_back(ib_info);
 
-    SubmitInfo submit_info(EngineType::kUniversal,
-                        QueueType::kUniversal,
-                        0,
-                        false,
-                        std::move(ibs));
-    m_submits.push_back(std::move(submit_info));
+        SubmitInfo submit_info(EngineType::kUniversal,
+                            QueueType::kUniversal,
+                            0,
+                            false,
+                            std::move(ibs));
+        m_submits.push_back(std::move(submit_info));
+    }
+    else
+    {
+        // Append it to the previous submit
+        DIVE_ASSERT(!m_submits.empty());
+        m_submits.back().AppendIb(ib_info);
+    }
     return true;
 }
 

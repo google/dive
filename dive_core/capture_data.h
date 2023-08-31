@@ -163,6 +163,7 @@ public:
     uint32_t                  GetNumIndirectBuffers() const;
     const IndirectBufferInfo &GetIndirectBufferInfo(uint32_t ib_index) const;
     const IndirectBufferInfo *GetIndirectBufferInfoPtr() const;
+    void                      AppendIb(const IndirectBufferInfo &ib);
 
 private:
     EngineType                      m_engine_type;
@@ -374,7 +375,7 @@ private:
     // Adreno-specific load functions
     bool LoadGpuAddressAndSize(std::istream &capture_file, uint32_t block_size, uint64_t *gpu_addr, uint32_t *size);
     bool LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu_addr, uint32_t size);
-    bool LoadSubmitBlockAdreno(std::istream &capture_file, uint32_t block_size);
+    bool LoadCmdStreamBlockAdreno(std::istream &capture_file, uint32_t block_size, bool create_new_submit);
 
     void Finalize(const CaptureDataHeader &data_header);
 

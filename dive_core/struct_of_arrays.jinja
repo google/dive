@@ -1,0 +1,1553 @@
+{#
+ Copyright 2020 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+#}
+{#############################################################################
+# header
+#############################################################################}
+{% macro header(gen_name) -%}
+/*
+ Copyright 2020 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the \"License\";
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an \"AS IS\" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
+//
+// This code has been generated automatically by {{ gen_name }}. Do not hand-modify this code.
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+{% endmacro %}
+{#############################################################################
+# xml_header
+#############################################################################}
+{% macro xml_header(gen_name) -%}
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright 2020 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the \"License\";
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an \"AS IS\" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!--
+
+ WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
+
+ This code has been generated automatically by {{ gen_name }}. Do not hand-modify this code.
+
+-->
+{% endmacro %}
+
+
+{#############################################################################
+# soa_h
+#############################################################################}
+{% macro soa_h(soas, includes, namespace, gen_name) %}
+{{header(gen_name)}}
+#pragma once
+
+{% for h in includes %}
+#include "{{h}}"
+{% endfor %}
+
+{% if namespace %}
+namespace {{namespace}} {
+{% endif %}
+{{soa_decls(soas)}}
+{{soa_defs(soas)}}
+{% if namespace %}
+} // namespace {{namespace}}
+{% endif %}
+{% endmacro %}
+
+
+{#############################################################################
+# soa_cpp
+#############################################################################}
+{% macro soa_cpp(soas, sys_includes, includes, namespace, gen_name) %}
+{{header(gen_name)}}
+
+{% for h in sys_includes %}
+#include <{{h}}>
+{% endfor %}
+
+{% for h in includes %}
+#include "{{h}}"
+{% endfor %}
+
+{% for soa in soas %}
+    {% if soa.custom_header %}
+        #include "{{soa.custom_header}}"
+    {% endif %}
+{% endfor %}
+
+{% if namespace %}
+namespace {{namespace}} {
+{% endif %}
+{{method_defs(soas)}}
+{% if namespace %}
+} // namespace {{namespace}}
+{% endif %}
+{% endmacro %}
+
+
+{#############################################################################
+# soa_py_cpp
+#############################################################################}
+{% macro soa_py_cpp(soas, bind_func_name, includes, namespace, gen_name) %}
+{{header(gen_name)}}
+
+{% for h in includes %}
+#include "{{h}}"
+{% endfor %}
+
+{% for soa in soas %}
+    {% if soa.custom_header_py %}
+        #include "{{soa.custom_header_py}}"
+    {% elif soa.custom_header %}
+        #include "{{soa.custom_header}}"
+    {% endif %}
+{% endfor %}
+
+#include "py_common.h"
+
+using namespace pybind11::literals;
+
+{% if namespace %}
+namespace {{namespace}} {
+{% endif %}
+void {{bind_func_name}}(py::module &m) {
+    {{py_binds(soas) | indent}}
+}
+{% if namespace %}
+} // namespace {{namespace}}
+{% endif %}
+{% endmacro %}
+
+
+{#############################################################################
+# field_index_name
+#############################################################################}
+{% macro field_index_name(field) %}k{{field.name}}Index{% endmacro %}
+
+{#############################################################################
+# field_offset_name
+#############################################################################}
+{% macro field_offset_name(field) %}k{{field.name}}Offset{% endmacro %}
+
+
+{#############################################################################
+# field_size_name
+#############################################################################}
+{% macro field_size_name(field) %}k{{field.name}}Size{% endmacro %}
+
+
+{#############################################################################
+# field_array_count_name
+#############################################################################}
+{% macro field_array_count_name(field) %}k{{field.name}}ArrayCount{% endmacro %}
+
+
+{#############################################################################
+# field_array_count
+#############################################################################}
+{% macro field_array_count(field) -%}
+{%- for dim in field.array_dims -%}
+    {{dim.count}}
+    {%- if not loop.last %}* {% endif -%}
+{%- endfor -%}
+{%- endmacro %}
+
+
+{#############################################################################
+# field_storage_ty
+#############################################################################}
+{% macro field_storage_ty(field) -%}
+{% if field.storage_ty %}{{field.storage_ty}}
+{%- else %}{{field.ty}}
+{%- endif %}
+{% endmacro %}
+
+
+{#############################################################################
+# field_access_ty
+#############################################################################}
+{% macro field_access_ty(field) -%}{{field.ty}}{% endmacro %}
+
+
+{#############################################################################
+# field_array_ty
+#############################################################################}
+{% macro field_array_ty(field, const) %}
+    {%- if const -%}
+        {{field.name}}ConstArray
+    {%- else -%}
+        {{field.name}}Array
+    {%- endif -%}
+{%- endmacro %}
+
+{#############################################################################
+# bit_field_offset
+#############################################################################}
+{% macro bit_field_offset(field, field_index) -%}
+    {%- set offset -%}
+        {{field_index}}
+        {%- if field.array_dims | count > 0 -%}
+            +
+            {%- for i in range(field.array_dims | count - 1) -%}
+                (
+            {%- endfor -%}
+            {%- for dim in field.array_dims -%}
+                {%- if loop.index0 > 0 -%}
+                    * {{dim.count}} +
+                {%- endif -%}
+                {{array_dim_to_uint32(dim, dim.name)}}
+                {%- if loop.index0 > 0 -%}
+                    )
+                {%- endif -%}
+            {%- endfor -%}
+        {%- endif -%}
+    {%- endset -%}
+    {{offset}}
+{% endmacro %}
+
+{#############################################################################
+# field_ptr
+#############################################################################}
+{% macro field_ptr(field) -%}
+    {%- set byte_ptr -%}
+        reinterpret_cast<uint8_t*>(m_buffer.get()) + {{field_offset_name(field)}} * m_cap
+    {%- endset -%}
+    {%- set base_ptr -%}
+        {%- if field_storage_ty(field) != "uint8_t" -%}
+            reinterpret_cast<{{field_storage_ty(field)}}*>({{byte_ptr}})
+        {%- else -%}
+            {{byte_ptr}}
+        {%- endif -%}
+    {%- endset -%}
+    {%- set offset -%}
+        {%- if varargs | count > 0 -%}
+            +
+            {%- for i in range((varargs|length) - 2) -%}
+                (
+            {%- endfor -%}
+            {{varargs[0]}}
+            {%- for dim in field.array_dims -%}
+                {%- if loop.index0 > 0 and loop.index0 < (varargs | length) -%}
+                    )
+                {%- endif -%}
+                * {{dim.count}}
+                {%- if loop.index0+1 < (varargs|length) -%}
+                    + {{array_dim_to_uint32(dim, varargs[loop.index0+1])}}
+                {%- endif -%}
+            {%- endfor -%}
+        {%- endif -%}
+    {%- endset -%}
+    {{base_ptr}}{{offset}}
+{% endmacro %}
+
+{#############################################################################
+# accessors
+#############################################################################}
+{% macro accessors(soa, field) %}
+//-----------------------------------------------
+// FIELD {{field.name}}
+{%- if field.desc %}: {{field.desc}}
+{% endif %}
+
+{% set index_params_default %}
+    Id id
+    {%- for dim in field.array_dims -%}
+        , {{array_dim_ty(dim)}} {{dim.name}} = {{array_dim_from_uint32(dim, "0")}}
+    {%- endfor -%}
+{% endset %}
+
+{% set index_params -%}
+    Id id
+    {%- for dim in field.array_dims -%}
+        , {{array_dim_ty(dim)}} {{dim.name}}
+    {%- endfor -%}
+{%- endset %}
+
+{% set index_args -%}
+    id
+    {%- for dim in field.array_dims -%}
+        , {{dim.name}}
+    {%- endfor -%}
+{%- endset %}
+
+{% set index -%}
+    {%- for dim in field.array_dims %}({% endfor -%}
+    uint32_t{static_cast<typename Id::basic_type>(id)}
+    {%- for dim in field.array_dims -%}
+        ) * {{dim.count}} + {{array_dim_to_uint32(dim, dim.name)}}
+    {%- endfor -%}
+{%- endset %}
+
+// `{{field.name}}Ptr()` returns a shared pointer to an array of `size()` elements
+inline const {{field_storage_ty(field)}}* {{field.name}}Ptr() const
+{
+    return {{field_ptr(field)}};
+}
+inline {{field_storage_ty(field)}}* {{field.name}}Ptr()
+{
+    return {{field_ptr(field)}};
+}
+{% set ptr_body %}
+    {% if field.array_dims %}
+        {{field_ptr(field, "static_cast<typename Id::basic_type>(id)", *(field.array_dims | map(attribute="name") | list))}}
+    {% else %}
+        {{field_ptr(field, "static_cast<typename Id::basic_type>(id)")}}
+    {% endif %}
+{% endset %}
+// `{{field.name}}Ptr()` returns a shared pointer to an array of `size()` elements
+inline const {{field_storage_ty(field)}}* {{field.name}}Ptr({{index_params_default}}) const
+{
+    return {{ptr_body}};
+}
+inline {{field_storage_ty(field)}}* {{field.name}}Ptr({{index_params_default}})
+{
+    return {{ptr_body}};
+}
+// `{{field.name}}(id)` retuns the `{{field.name}}` element of the object identified by `id`
+inline {{field_access_ty(field)}} {{field.name}}({{index_params}}) const
+{
+    DIVE_ASSERT(IsValidId(id));
+    {% set val -%}
+    *{{field.name}}Ptr({{index_args}})
+    {%- endset %}
+    {% if field_storage_ty(field) != field_access_ty(field) %}
+    return static_cast<{{field_access_ty(field)}}>({{val}});
+    {% else %}
+    return {{val}};
+    {% endif %}
+}
+
+{% if (field.array_dims|length) > 0 %}
+// `{{field.name}}(id)` returns the array of values of the {{field.name}} field of the object identified by `id`
+inline {{field.name}}Array {{field.name}}(Id id)
+{
+    return {{field.name}}Array(static_cast<SOA*>(this), id);
+}
+inline {{field.name}}ConstArray {{field.name}}(Id id) const
+{
+    return {{field.name}}ConstArray(static_cast<const SOA*>(this), id);
+}
+{% endif %}
+
+// `Set{{field.name}}(id,value)` sets the `{{field.name}}` element of the object identified by `id`
+inline SOA& Set{{field.name}}({{index_params}}, {{field_access_ty(field)}} value)
+{
+    DIVE_ASSERT(IsValidId(id));
+    {% set dst -%}
+    *{{field.name}}Ptr({{index_args}})
+    {%- endset %}
+    {% if field_storage_ty(field) != field_access_ty(field) %}
+    {{dst}} = static_cast<{{field_storage_ty(field)}}>(value);
+    {% else %}
+    {{dst}} = value;
+    {% endif %}
+    {% if 'isSet' in options %}
+    MarkFieldSet(id, {{bit_field_offset(field, field_index_name(field))}});
+    {% endif %}
+    return static_cast<SOA&>(*this);
+}
+
+{% if 'isSet' in options %}
+inline bool Is{{field.name}}Set({{index_params}}) const
+{
+    DIVE_ASSERT(IsValidId(id));
+    return IsFieldSet(id, {{bit_field_offset(field, field_index_name(field))}});
+}
+{% endif %}
+
+{% if 'descriptions' in options %}
+inline const char *Get{{field.name}}Name() const
+{
+    return "{{field.name}}";
+}
+
+inline const char *Get{{field.name}}Description() const
+{
+    {% if field.desc %}
+    return "{{field.desc}}";
+    {% else %}
+    return "";
+    {% endif %}
+}
+{% endif %}
+
+{% endmacro %}
+
+{#############################################################################
+# ref_accessor
+#############################################################################}
+{% macro ref_accessor(soa, field, const, is_array_accessor) %}
+{% set is_array_accessor = is_array_accessor|default(False) %}
+
+{% set getter %}
+    {% if is_array_accessor %}Get
+    {%- else %}{{field.name}}
+    {%- endif %}
+{% endset %}
+
+{% set setter %}
+    {% if is_array_accessor %}Set
+    {%- else %}Set{{field.name}}
+    {%- endif %}
+{% endset %}
+
+{% set ref -%}
+    {% if is_array_accessor %}{{field_array_ty(field, const)}}
+    {%- else %}{% if const %}Const{% endif %}Ref
+    {%- endif %}
+{%- endset %}
+
+//-----------------------------------------------
+// REF FIELD {{field.name}}
+{%- if field.desc %}: {{field.desc}}
+{% endif %}
+
+{% set index_params -%}
+    {%- for dim in field.array_dims -%}
+        {{array_dim_ty(dim)}} {{dim.name}}
+        {%- if not loop.last %}, {% endif %}
+    {%- endfor %}
+{%- endset %}
+
+{% set set_index_params -%}
+    {%- for dim in field.array_dims -%}
+        {{array_dim_ty(dim)}} {{dim.name}},
+    {%- endfor %}
+{%- endset %}
+
+{% set index_args -%}
+    m_id
+    {%- for dim in field.array_dims -%}
+        , {{dim.name}}
+    {%- endfor %}
+{%- endset %}
+
+// `{{getter}}({{index_params}})` returns the value of the {{field.name}} field of the referenced object
+inline {{field_access_ty(field)}} {{getter}}({{index_params}}) const
+{
+    DIVE_ASSERT(m_obj_ptr != nullptr);
+    return m_obj_ptr->{{field.name}}({{index_args}});
+}
+
+{% if (field.array_dims|length) > 0 and not is_array_accessor %}
+// `{{field.name}}()` returns the array of values of the {{field.name}} field of the referenced object
+inline {{field_array_ty(field, const)}} {{field.name}}() const
+{
+    return {{field_array_ty(field, const)}}(m_obj_ptr, m_id);
+}
+{% endif %}
+
+{% if not const %}
+// `{{setter}}(value)` sets the {{field.name}} field of the referenced object
+inline const {{ref}}& {{setter}}({{set_index_params}}{{field_access_ty(field)}} value) const
+{
+    DIVE_ASSERT(m_obj_ptr != nullptr);
+    m_obj_ptr->Set{{field.name}}({{index_args}}, value);
+    return static_cast<const Ref&>(*this);
+}
+{% endif %}
+
+{% if 'isSet' in options %}
+inline bool Is{{field.name}}Set({{index_params}}) const
+{
+    DIVE_ASSERT(m_obj_ptr != nullptr);
+    return m_obj_ptr->Is{{field.name}}Set({{index_args}});
+}
+{% endif %}
+
+{% if 'descriptions' in options %}
+inline const char *Get{{field.name}}Name() const
+{
+    DIVE_ASSERT(m_obj_ptr != nullptr);
+    return m_obj_ptr->Get{{field.name}}Name();
+}
+
+inline const char *Get{{field.name}}Description() const
+{
+    DIVE_ASSERT(m_obj_ptr != nullptr);
+    return m_obj_ptr->Get{{field.name}}Description();
+}
+{% endif %}
+{% endmacro %}
+
+{#############################################################################
+# ref_def
+#############################################################################}
+{% macro ref_def(soa, const) %}
+{% set ref_name %}
+    {% if const -%}
+        {{soa.name}}ConstRefT
+    {%- else -%}
+        {{soa.name}}RefT
+    {%- endif %}
+{% endset %}
+{% set obj_ty %}
+    {% if const -%}
+        const SOA
+    {%- else -%}
+        SOA
+    {%- endif %}
+{% endset %}
+template<typename CONFIG>
+class {{ref_name}}
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using ConstRef = typename CONFIG::ConstRef;
+    {% for field in soa.fields %}
+        {% if (field.array_dims | length) > 0 %}
+            {{ begin_field_guard(field) -}}
+                using {{field.name}}Array = typename CONFIG::{{field.name}}Array;
+                using {{field.name}}ConstArray = typename CONFIG::{{field.name}}ConstArray;
+            {{ end_field_guard(field) -}}
+        {% endif %}
+    {% endfor %}
+    {{ref_name}}() = default;
+    {% if const %}
+    {{ref_name}}(const Ref &other) : m_obj_ptr(&other.obj()), m_id(other.id()) {}
+    {% endif %}
+    {{ref_name}}(const {{ref_name}} &other) : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id) {}
+    {{ref_name}}({{obj_ty}}* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
+    {{obj_ty}}& obj() const { return *m_obj_ptr; }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    {% for field in soa.fields %}
+    {{ begin_field_guard(field) -}}
+    {{ref_accessor(soa, field, const=const) | indent}}
+    {{ end_field_guard(field) -}}
+    {% endfor %}
+
+    {{ref_name}}& operator=(const {{ref_name}} &other) = delete;
+    {% if not const %}
+    void assign(const SOA &other_obj, Id other_id) const;
+    void swap(const Ref &other) const;
+    friend void swap(const Ref& x, const Ref& y) { x.swap(y); }
+    {% endif %}
+
+protected:
+    template<typename CONFIG_>
+    friend class {{soa.name}}T;
+    template<typename Class, typename Id, typename RefT> friend class StructOfArraysIterator;
+    {{obj_ty}}* m_obj_ptr = nullptr;
+    Id m_id;
+};
+{% endmacro %}
+
+{% macro array_defs(soa) %}
+    {% for field in soa.fields %}
+        {% if (field.array_dims | length) > 0 %}
+            {{array_def(soa, field, False) | indent}}
+            {{array_def(soa, field, True) | indent}}
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+
+{#############################################################################
+# array_def
+#############################################################################}
+{% macro array_def(soa, field, const) %}
+{% set array_name -%}
+    {{soa.name}}{{field.name}}{% if const %}Const{% endif %}Array
+{%- endset %}
+{% set obj_ty %}
+    {% if const -%}
+        const SOA
+    {%- else -%}
+        SOA
+    {%- endif %}
+{% endset %}
+{% set field_ty = field_access_ty(field) %}
+{{ begin_field_guard(field) -}}
+template <typename CONFIG>
+class {{array_name}}
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    {% if (field.array_dims | length) > 0 %}
+        {{ begin_field_guard(field) -}}
+            using {{field.name}}Array = typename CONFIG::{{field.name}}Array;
+            using {{field.name}}ConstArray = typename CONFIG::{{field.name}}ConstArray;
+        {{ end_field_guard(field) -}}
+    {% endif %}
+    {{array_name}}() = default;
+    {% if const %}
+    {{array_name}}(const {{soa.name}}{{field.name}}Array<CONFIG> &other) : m_obj_ptr(&other.obj()), m_id(other.id()) {}
+    {% endif %}
+    {{array_name}}(const {{array_name}} &other) : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id) {}
+    {{array_name}}({{obj_ty}}* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
+    {{obj_ty}}& obj() const { return *m_obj_ptr; }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    {{ref_accessor(soa, field, const=const, is_array_accessor=True) | indent}}
+
+    {% if field_ty is numeric %}
+        inline {{field_ty}} Min() const {
+            {{field_ty}} res = std::numeric_limits<{{field_ty}}>::max();
+            {% if field.na %}
+            bool found = false;
+            {% endif %}
+            {{_array_accumulate(field, (), func="std::min<"+field_ty+">", found=field.na)}}
+            {% if field.na %}
+                if (!found) return {{field.na}};
+            {% endif %}
+            return res;
+        }
+        inline {{field_ty}} Max() const {
+            {{field_ty}} res = std::numeric_limits<{{field_ty}}>::min();
+            {% if field.na %}
+            bool found = false;
+            {% endif %}
+            {{_array_accumulate(field, (), func="std::max<"+field_ty+">", found=field.na)}}
+            {% if field.na %}
+                if (!found) return {{field.na}};
+            {% endif %}
+            return res;
+        }
+        inline {{field_ty}} Sum() const {
+            {{field_ty}} res = 0;
+            {{_array_accumulate(field, (), op="+")}}
+            return res;
+        }
+        inline {{field_ty}} Avg() const {
+            {{field_ty}} res = 0;
+            uint32_t count = 0;
+            {{_array_accumulate(field, (), op="+", count=True)}}
+            {% if field.na %}
+                if (count == 0) return {{field.na}};
+            {% endif %}
+            return res / count;
+        }
+    {% endif %}
+
+protected:
+    {{obj_ty}}* m_obj_ptr = nullptr;
+    Id m_id;
+};
+{{ end_field_guard(field) -}}
+{% endmacro %}
+
+{% macro _array_accumulate(field, indices, func, op, count, found) %}
+    {% for d in field.array_dims %}
+        for(uint32_t {{d.name}}=0; {{d.name}} < {{d.count}}; ++{{d.name}}) {
+    {% endfor %}
+    auto value = m_obj_ptr->{{field.name}}(m_id
+        {%- for d in field.array_dims -%}
+            , {{array_dim_from_uint32(d, d.name)}}
+        {%- endfor -%}
+        );
+    {% if field.na %}
+        if (value != {{field.na}}) {
+    {% endif %}
+    {% if func %}
+        res = {{func}}(res, value);
+    {% elif op %}
+        res = res {{op}} value;
+    {% endif %}
+    {% if count %}
+        ++count;
+    {% endif %}
+    {% if found %}
+        found = true;
+    {% endif %}
+    {% if field.na %}
+        }
+    {% endif %}
+    {% for d in field.array_dims %}
+        }
+    {% endfor %}
+{% endmacro %}
+
+{#############################################################################
+# soa_decls
+#############################################################################}
+{% macro soa_decls(soas) %}
+{% for soa in soas %}
+{% if soa.desc %}
+// {{soa.desc}}
+{% endif %}
+class {{soa.name}};
+using {{soa.id_name}} = InfoIdT<{{soa.name}}>;
+{% endfor %}
+{% endmacro %}
+
+
+{#############################################################################
+# soa_defs
+#############################################################################}
+{% macro soa_defs(soas) %}
+{% for soa in soas %}
+
+{{array_defs(soa) | indent}}
+
+//--------------------------------------------------------------------------------------------------
+// Ref represents a reference to a single element.
+// Fields can be accessed using e.g. `ref.MyField()` or `ref.SetMyField(42)`.
+{{ref_def(soa, const=False) | indent}}
+
+//--------------------------------------------------------------------------------------------------
+// ConstRef represents a const reference to a single element.
+// Fields can be accessed using e.g. `ref.MyField()`.
+{{ref_def(soa, const=True) | indent}}
+
+//--------------------------------------------------------------------------------------------------
+{% if soa.desc %}
+// {{soa.desc}}
+{% endif %}
+template <typename CONFIG>
+class {{soa.name}}T
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using ConstRef = typename CONFIG::ConstRef;
+    using Iterator = typename CONFIG::Iterator;
+    using ConstIterator = typename CONFIG::ConstIterator;
+    {% for field in soa.fields %}
+        {% if (field.array_dims | length) > 0 %}
+            {{ begin_field_guard(field) -}}
+                using {{field.name}}Array = typename CONFIG::{{field.name}}Array;
+                using {{field.name}}ConstArray = typename CONFIG::{{field.name}}ConstArray;
+            {{ end_field_guard(field) -}}
+        {% endif %}
+    {% endfor %}
+
+    // `size()` returns the number of elements
+    inline typename Id::basic_type size() const { return m_size; }
+
+    inline bool empty() const { return m_size == 0; }
+
+    // `capacity()` returns the maximum number of elements before re-allocating
+    inline typename Id::basic_type capacity() const { return m_cap; }
+
+    // `IsValidId` reports whether `id` identifies a valid element
+    inline bool IsValidId(Id id) const { return static_cast<typename Id::basic_type>(id) < size(); }
+
+    {% if 'isSet' in options %}
+    // 'MarkFieldSet()' marks whether a particular field was set with a value
+    inline void MarkFieldSet(Id id, uint32_t field_index)
+    {
+        uint32_t bit = static_cast<typename Id::basic_type>(id) * kNumFields + field_index;
+        m_is_set_buffer[bit / 8] |= (1 << (bit % 8));
+    }
+
+    // 'IsFieldSet()' indicates whether a given field was set
+    inline bool IsFieldSet(Id id, uint32_t field_index) const
+    {
+        uint32_t bit = static_cast<typename Id::basic_type>(id) * kNumFields + field_index;
+        return (m_is_set_buffer[bit / 8] & (1 << (bit % 8))) != 0;
+    }
+    {% endif %}
+
+    {% for field in soa.fields %}
+    {{ begin_field_guard(field) -}}
+    {{accessors(soa, field) | indent}}
+    {{ end_field_guard(field) -}}
+    {% endfor %}
+
+    // `operator[]` returns a reference to an element identified by `id`. E.g.:
+    //   `my_soa[some_id].MyField()`
+    inline Ref operator[](Id id) { return Ref(static_cast<SOA*>(this), id); }
+    inline ConstRef operator[](Id id) const { return ConstRef(static_cast<const SOA*>(this), id); }
+
+    inline Iterator      begin() { return Iterator(static_cast<SOA*>(this), Id(0)); }
+    inline Iterator      end() { return Iterator(static_cast<SOA*>(this), Id(m_size)); }
+    inline ConstIterator begin() const { return ConstIterator(static_cast<const SOA*>(this), Id(0)); }
+    inline ConstIterator end() const { return ConstIterator(static_cast<const SOA*>(this), Id(m_size)); }
+    inline Ref front() { return Ref(static_cast<SOA*>(this), Id(0)); }
+    inline ConstRef front() const { return ConstRef(static_cast<const SOA*>(this), Id(0)); }
+    inline Ref back() { return Ref(static_cast<SOA*>(this), Id(m_size-1)); }
+    inline ConstRef back() const { return ConstRef(static_cast<const SOA*>(this), Id(m_size-1)); }
+
+    // `find(id)` returns an iterator referring to the element identified by `id`.
+    // If `id` does not identify a valid element, then `find(id) == end()` and
+    // `find(id)->IsValid() == false`.
+    inline Iterator      find(Id id) { return Iterator(static_cast<SOA*>(this), id); }
+    inline ConstIterator find(Id id) const { return ConstIterator(static_cast<const SOA*>(this), id); }
+
+    // `Reserve` ensures enough room for *at least* `new_cap` elements
+    // (inluding existing elements). This will re-allocate memory if necessary.
+    void Reserve(typename Id::basic_type new_cap);
+
+    // `Add` adds a single element and returns an iterator referring to the new
+    // element. This will re-allocate memory if necessary
+    Iterator Add();
+
+    // `Clear` resets size to 0, but keeps the allocated memory.
+    inline void Clear() { m_size = 0; }
+
+    {{decl_offset_cycles(soa)}}
+
+protected:
+    template<typename CONFIG_>
+    friend class {{soa.name}}RefT;
+    template<typename CONFIG_>
+    friend class {{soa.name}}ConstRefT;
+
+    // The start of the array for each field will be aligned to `kAlignment`
+    static constexpr size_t kAlignment = alignof(std::max_align_t);
+
+    #define PARTIAL_SIZE_{{soa.name}} 0u
+    {% if 'isSet' in options %}
+    #define PARTIAL_INDEX_{{soa.name}} 0u
+    {% endif %}
+    {% for field in soa.fields %}
+    {{ begin_field_guard(field) -}}
+    static_assert(alignof({{field_storage_ty(field)}}) <= kAlignment,
+                    "Field type aligment requirement cannot exceed kAlignment");
+    {% if 'isSet' in options %}
+    static constexpr uint32_t {{field_index_name(field)}} = PARTIAL_INDEX_{{soa.name}};
+    {% endif %}
+    static constexpr size_t {{field_offset_name(field)}} = PARTIAL_SIZE_{{soa.name}};
+    {% if field.array_dims %}
+        static constexpr size_t {{field_array_count_name(field)}} = {{field_array_count(field)}};
+    {% endif %}
+    static constexpr size_t {{field_size_name(field)}} = sizeof({{field_storage_ty(field)}})
+        {%- if field.array_dims %} * {{field_array_count_name(field)}}{% endif -%}
+        ;
+    #undef PARTIAL_SIZE_{{soa.name}}
+    #define PARTIAL_SIZE_{{soa.name}} {{field_offset_name(field)}} + {{field_size_name(field)}}
+    {% if 'isSet' in options %}
+    #undef PARTIAL_INDEX_{{soa.name}}
+    {% if field.array_dims %}
+        #define PARTIAL_INDEX_{{soa.name}} {{field_index_name(field)}} + {{field_array_count_name(field)}}
+    {% else %}
+        #define PARTIAL_INDEX_{{soa.name}} {{field_index_name(field)}} + 1
+    {% endif %}
+    {% endif %}
+    {{ end_field_guard(field) -}}
+    {% endfor %}
+
+    // Number of bytes required to store each element
+    static constexpr size_t kElemSize = PARTIAL_SIZE_{{soa.name}};
+    #undef PARTIAL_SIZE_{{soa.name}}
+
+    {% if 'isSet' in options %}
+    // Number of fields
+    static constexpr size_t kNumFields = PARTIAL_INDEX_{{soa.name}};
+    #undef PARTIAL_INDEX_{{soa.name}}
+    {% endif %}
+
+    // Current number of elements
+    typename Id::basic_type m_size = 0;
+
+    // Maximum number of elements before needing to re-allocate
+    typename Id::basic_type m_cap = 0;
+
+    // Pointer to the memory storing all of the fields.
+    // Stored as a `unique_ptr<max_align_t[]>` because:
+    //   - Allocating a `max_align_t` array ensures the buffer is sufficiently
+    //     aligned for any field type.
+    //   - Using `max_align_t[]` instead of `max_align_t` tells `unique_ptr`
+    //     to deallocate using `operator delete []` instead of
+    //     `operator delete`, which is required because the memory is allocated
+    //     with `operator new []`.
+    std::unique_ptr<std::max_align_t[]> m_buffer;
+
+    {% if 'isSet' in options %}
+    // Pointer to a bit-array, where each field is marked with a 1 if set, and 0
+    // if not set. Unlike m_buffer, this bit-array is in a AOS rather than SOA
+    // memory layout. This makes the management of this small buffer simpler.
+    std::vector<uint8_t> m_is_set_buffer;
+    {% endif %}
+
+    // The following fields point to each of the arrays. These are not used,
+    // but are helpful for debugging, saving you from needing to manually
+    // calculate array offsets in `m_buffer`.
+    //
+    // NOTE: If you are debugging in Visual Studio, you can add the generated
+    // ".natvis" file into the Visual Studio project to get an even nicer
+    // debug view.
+#ifndef NDEBUG
+    {% for field in soa.fields %}
+    {{ begin_field_guard(field) -}}
+    {{field_storage_ty(field)}}* DBG_{{snake_field_name(field)}};
+    {{ end_field_guard(field) -}}
+    {% endfor %}
+#endif
+};
+{% set concrete_soa %}
+    {%- if soa.custom %}{{soa.custom}}
+    {%- else %}{{soa.name}}
+    {%- endif -%}
+{% endset %}
+{% set concrete_ref %}
+    {%- if soa.custom_ref %}{{soa.custom_ref}}
+    {%- else %}{{soa.name}}Ref
+    {%- endif -%}
+{% endset %}
+{% set concrete_const_ref %}
+    {%- if soa.custom_const_ref %}{{soa.custom_const_ref}}
+    {%- else %}{{soa.name}}ConstRef
+    {%- endif -%}
+{% endset %}
+{% set template_args -%}
+    {{soa.name}}_CONFIG
+{%- endset %}
+class {{concrete_ref}};
+class {{concrete_const_ref}};
+class {{concrete_soa}};
+struct {{soa.name}}_CONFIG {
+    using Id = {{soa.id_name}};
+    using SOA = {{concrete_soa}};
+    using Ref = {{concrete_ref}};
+    using ConstRef = {{concrete_const_ref}};
+    using Iterator = StructOfArraysIterator<SOA, Id, Ref>;
+    using ConstIterator = StructOfArraysConstIterator<SOA, Id, ConstRef, Ref>;
+    {% for field in soa.fields %}
+        {% if (field.array_dims | length) > 0 %}
+            {{ begin_field_guard(field) -}}
+                using {{field.name}}Array = {{soa.name}}{{field.name}}Array<{{soa.name}}_CONFIG>;
+                using {{field.name}}ConstArray = {{soa.name}}{{field.name}}ConstArray<{{soa.name}}_CONFIG>;
+            {{- end_field_guard(field) }}
+        {% endif %}
+    {% endfor %}
+};
+template<>
+void {{soa.name}}RefT<{{template_args}}>::assign(const {{concrete_soa}}& other_obj, {{soa.name}}RefT<{{template_args}}>::Id other_id) const;
+{% if not soa.custom_const_ref %}
+    class {{soa.name}}ConstRef : public {{soa.name}}ConstRefT<{{template_args}}> {
+    public:
+        {{soa.name}}ConstRef() = default;
+        {{soa.name}}ConstRef(const {{soa.name}}ConstRef &other) = default;
+        {{soa.name}}ConstRef(const {{concrete_ref}} &other) : {{soa.name}}ConstRefT<{{template_args}}>(other) {}
+        {{soa.name}}ConstRef(const {{concrete_soa}}* obj_ptr, Id id) : {{soa.name}}ConstRefT<{{template_args}}>(obj_ptr, id) {}
+    };
+{% endif %}
+{% if not soa.custom_ref %}
+    class {{soa.name}}Ref : public {{soa.name}}RefT<{{template_args}}> {
+    public:
+        {{soa.name}}Ref() = default;
+        {{soa.name}}Ref(const {{soa.name}}Ref &other) = default;
+        {{soa.name}}Ref({{concrete_soa}}* obj_ptr, Id id) : {{soa.name}}RefT<{{template_args}}>(obj_ptr, id) {}
+        const {{soa.name}}Ref &operator=(const {{soa.name}}Ref& other) const {
+            assign(other.obj(), other.id());
+            return *this;
+        }
+        const {{soa.name}}Ref &operator=(const {{soa.name}}ConstRef& other) const {
+            assign(other.obj(), other.id());
+            return *this;
+        }
+    };
+{% endif %}
+{% if not soa.custom %}
+    class {{soa.name}} : public {{soa.name}}T<{{template_args}}> {};
+{% endif %}
+{% endfor %}
+{% endmacro %}
+
+{#############################################################################
+# method_defs
+#############################################################################}
+{% macro method_defs(soas) %}
+{% for soa in soas %}
+{% set concrete_soa %}
+    {%- if soa.custom %}{{soa.custom}}
+    {%- else %}{{soa.name}}
+    {%- endif -%}
+{% endset %}
+{% set concrete_ref %}
+    {%- if soa.custom_ref %}{{soa.custom_ref}}
+    {%- else %}{{soa.name}}Ref
+    {%- endif -%}
+{% endset %}
+{% set concrete_const_ref %}
+    {%- if soa.custom_const_ref %}{{soa.custom_const_ref}}
+    {%- else %}{{soa.name}}ConstRef
+    {%- endif -%}
+{% endset %}
+{% set template_args -%}
+    {{soa.name}}_CONFIG
+{%- endset %}
+
+template<>
+void {{soa.name}}T<{{template_args}}>::Reserve(typename {{concrete_soa}}::Id::basic_type new_cap)
+{
+    if (new_cap <= m_cap)
+        return;
+
+    // Round up to next aligned capacity. The address of each field array is:
+    //     `m_buffer + field_offset * cap`
+    // - `m_buffer` satisfies the alignment of any basic type (from operator new)
+    // - `field_offset` has no alignment constraints at all (fields are tightly packed).
+    // - `cap`  must be aligned to ensure that `field_offset * cap` is aligned
+    new_cap = (new_cap + kAlignment - 1) & ~(kAlignment - 1);
+
+    // Allocate enough memory to store `new_cap` number of elements
+    size_t num_bytes = new_cap * kElemSize;
+    {% if 'isSet' in options %}
+    size_t is_set_num_bytes = (new_cap * kNumFields) / 8 + 1;
+    m_is_set_buffer.resize(is_set_num_bytes, 0);
+    {% endif %}
+
+    // Allocate new buffer as an array of `max_align_t`, to make sure the buffer
+    // is sufficiently aligned for the type of any possible field.
+    auto new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[
+        (num_bytes + sizeof(std::max_align_t)-1) / sizeof(std::max_align_t)]);
+
+    {% for field in soa.fields %}
+        {{ begin_field_guard(field) -}}
+        auto old_{{snake_field_name(field)}}_ptr = {{field.name}}Ptr();
+        {{ end_field_guard(field) -}}
+    {% endfor %}
+
+    // `old_buffer` keeps the old buffer from being deallocated before we have
+    // copied the data into the new buffer. The old buffer will be deallocated
+    // once `old_buffer` goes out of scope.
+    auto old_buffer(std::move(m_buffer));
+
+    m_buffer = std::move(new_buffer);
+    m_cap = new_cap;
+
+    // Copy all of the data from the old buffer to the new buffer
+    {% for field in soa.fields %}
+        {{ begin_field_guard(field) -}}
+        static_assert(std::is_trivially_copyable<{{field_storage_ty(field)}}>::value, "Field type must be trivially copyable");
+        memcpy({{field.name}}Ptr(), old_{{snake_field_name(field)}}_ptr, {{field_size_name(field)}} * m_size);
+        {{ end_field_guard(field) -}}
+    {% endfor %}
+
+    // Update the debug-only ponters to the arrays
+#ifndef NDEBUG
+    {% for field in soa.fields %}
+        {{ begin_field_guard(field) -}}
+        DBG_{{snake_field_name(field)}} = {{field.name}}Ptr();
+        {{ end_field_guard(field) -}}
+    {% endfor %}
+#endif
+}
+
+template<>
+{{concrete_soa}}::Iterator {{soa.name}}T<{{template_args}}>::Add() {
+    if (m_size >= m_cap) {
+        auto new_cap = m_cap > 0 ? m_cap * 2 : static_cast<typename Id::basic_type>(kAlignment);
+        if(new_cap <= m_cap) {
+            // capacity has overflowed the `Id` type.
+            DIVE_ASSERT(false);
+            return end();
+        } else {
+            Reserve(new_cap);
+        }
+    }
+
+    {% for field in soa.fields %}
+        {{ begin_field_guard(field) -}}
+        {% for d in field.array_dims %}
+            for(uint32_t {{d.name}}=0; {{d.name}} < {{d.count}}; ++{{d.name}}) {
+        {% endfor %}
+        {% set index_args -%}
+            Id(m_size)
+            {%- for d in field.array_dims -%}
+                , {{array_dim_from_uint32(d, d.name)}}
+            {%- endfor -%}
+        {%- endset %}
+        {% set ptr -%}
+            {{field.name}}Ptr({{index_args}})
+        {%- endset %}
+        {% if field.default %}
+            *({{ptr}}) = {{field.default}};
+        {% else %}
+            new ({{ptr}}) {{field_storage_ty(field)}}();
+        {% endif %}
+        {% for d in field.array_dims %}
+            }
+        {% endfor %}
+        {{ end_field_guard(field) -}}
+    {% endfor %}
+
+    Id id(m_size);
+    m_size += 1;
+    return find(id);
+}
+
+template<>
+void {{soa.name}}RefT<{{template_args}}>::assign(const {{concrete_soa}}& other_obj, {{soa.name}}RefT<{{template_args}}>::Id other_id) const
+{
+    DIVE_ASSERT(IsValid());
+    DIVE_ASSERT(other_obj.IsValidId(other_id));
+    {% for field in soa.fields %}
+        {{ begin_field_guard(field) -}}
+        {% if field.array_dims %}
+            memcpy(m_obj_ptr->{{field.name}}Ptr(m_id),
+                other_obj.{{field.name}}Ptr(other_id),
+                {{concrete_soa}}::{{field_size_name(field)}});
+        {% else %}
+            Set{{field.name}}(other_obj.{{field.name}}(other_id));
+        {% endif %}
+        {{ end_field_guard(field) -}}
+    {% endfor %}
+}
+
+template<>
+void {{soa.name}}RefT<{{template_args}}>::swap(const {{concrete_ref}} &other) const
+{
+    DIVE_ASSERT(m_obj_ptr != nullptr);
+    DIVE_ASSERT(m_obj_ptr->IsValidId(m_id));
+    DIVE_ASSERT(other.m_obj_ptr != nullptr);
+    DIVE_ASSERT(other.m_obj_ptr->IsValidId(other.m_id));
+    {% for field in soa.fields %}
+    {{ begin_field_guard(field) -}}
+    {
+        {% if field.array_dims %}
+            {{field_storage_ty(field)}} val[{{concrete_soa}}::{{field_array_count_name(field)}}];
+            auto *ptr = m_obj_ptr->{{field.name}}Ptr(m_id);
+            auto *other_ptr = other.m_obj_ptr->{{field.name}}Ptr(other.m_id);
+            memcpy(val, ptr,  {{concrete_soa}}::{{field_size_name(field)}});
+            memcpy(ptr, other_ptr, {{concrete_soa}}::{{field_size_name(field)}});
+            memcpy(other_ptr, val, {{concrete_soa}}::{{field_size_name(field)}});
+        {% else %}
+            auto val = {{field.name}}();
+            Set{{field.name}}(other.{{field.name}}());
+            other.Set{{field.name}}(val);
+        {% endif %}
+    }
+    {{ end_field_guard(field) -}}
+    {% endfor %}
+}
+{{def_offset_cycles(soa)}}
+{% endfor %}
+{% endmacro %}
+
+
+{#############################################################################
+# begin_field_guard
+#############################################################################}
+{% macro begin_field_guard(field) %}
+    {%- if field.guard %}
+        {%- if field.guard.def %}
+            {{-'\n#'}}ifdef {{field.guard.def}}{{'\n'}}
+        {%- endif %}
+    {%- endif -%}
+{% endmacro %}
+
+
+{#############################################################################
+# end_field_guard
+#############################################################################}
+{% macro end_field_guard(field) %}
+    {%- if field.guard %}
+        {%- if field.guard.def %}
+            {{-'\n#'}}endif // {{field.guard.def}}{{'\n'}}
+        {%- endif %}
+    {%- endif -%}
+{% endmacro %}
+
+
+{#############################################################################
+# array_dim_ty
+#############################################################################}
+{% macro array_dim_ty(dim) %}
+    {%- if dim.ty -%}{{dim.ty}}
+    {%- else -%}uint32_t
+    {%- endif -%}
+{% endmacro %}
+
+
+{#############################################################################
+# array_dim_from_uint32
+#############################################################################}
+{% macro array_dim_from_uint32(dim, val) %}
+    {%- if dim.ty and dim.ty != "uint32_t" -%}static_cast<{{dim.ty}}>({{val}})
+    {%- else -%}{{val}}
+    {%- endif -%}
+{% endmacro %}
+
+
+{#############################################################################
+# array_dim_to_uint32
+#############################################################################}
+{% macro array_dim_to_uint32(dim, val) %}
+    {%- if dim.ty and dim.ty != "uint32_t" -%}static_cast<uint32_t>({{val}})
+    {%- else -%}{{val}}
+    {%- endif -%}
+{% endmacro %}
+
+
+{#############################################################################
+# snake_field_name
+#############################################################################}
+{% macro snake_field_name(field) %}
+    {%- if field.snake_name -%}{{field.snake_name}}
+    {%- else -%}{{field.name | snake_case}}
+    {%- endif -%}
+{% endmacro %}
+
+{#############################################################################
+# decl_offset_cycles
+#############################################################################}
+{% macro decl_offset_cycles(soa) %}
+    {% set has_cycle_field -%}
+        {%- for field in soa.fields -%}
+            {%- if field.is_cycle == "true" %}true{%- endif -%}
+        {%- endfor -%}
+    {%- endset %}
+    {% if has_cycle_field %}
+        void OffsetCycles(uint32_t se, int64_t cycle_offset);
+    {% endif %}
+{% endmacro %}
+
+{#############################################################################
+# def_offset_cycles
+#############################################################################}
+{% macro def_offset_cycles(soa) %}
+    {% set has_cycle_field -%}
+        {%- for field in soa.fields -%}
+            {%- if field.is_cycle == "true" %}true{%- endif -%}
+        {%- endfor -%}
+    {%- endset %}
+    {% if has_cycle_field %}
+        template<>
+        void {{soa.name}}T<{{soa.name}}_CONFIG>::OffsetCycles(uint32_t se, int64_t cycle_offset) {
+            for(auto it=begin(); it != end(); ++it) {
+                {% for field in soa.fields %}
+                    {% if field.is_cycle %}
+                        {% for d in field.array_dims %}
+                            {% if d.name != "se" %}
+                                for(uint32_t {{d.name}}=0; {{d.name}}<{{d.count}}; ++{{d.name}}) {
+                            {% endif %}
+                        {% endfor %}
+                        {% set index_args -%}
+                            {% for d in field.array_dims -%}
+                                {% if loop.index0 > 0 %}, {% endif -%}
+                                {{array_dim_from_uint32(d, d.name)}}
+                            {%- endfor %}
+                        {%- endset %}
+                        if(it->{{field.name}}({{index_args}}) != UINT64_MAX) {
+                            it->Set{{field.name}}({{index_args}}, it->{{field.name}}({{index_args}}) + cycle_offset);
+                        }
+                        {% for d in field.array_dims %}
+                            {% if d.name != "se" %}
+                                }
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            }
+        }
+    {% endif %}
+{% endmacro %}
+
+
+{#############################################################################
+# py_binds
+#############################################################################}
+{% macro py_binds(soas) %}
+{% for soa in soas %}
+{% set concrete_soa %}
+    {%- if soa.custom %}{{soa.custom}}
+    {%- else %}{{soa.name}}
+    {%- endif -%}
+{% endset %}
+py::class_<{{concrete_soa}}>(m, "{{concrete_soa}}")
+{% for field in soa.fields %}
+    {{ begin_field_guard(field) -}}
+    .def("{{snake_field_name(field)}}", [](const {{concrete_soa}} &self) {
+        return {{py_array(soa, field)}};
+    })
+    {{ end_field_guard(field) -}}
+{% endfor %}
+.def("to_dataframe", [](const {{concrete_soa}} &self) {
+    py::object DataFrame = py::module::import("pandas").attr("DataFrame");
+    py::dict dict;
+    {% for field in soa.fields %}
+        {{ begin_field_guard(field) -}}
+        {% if field.array_dims %}
+            {% for d in field.array_dims %}
+                for(uint32_t {{d.name}}=0; {{d.name}}<{{d.count}}; ++{{d.name}})
+            {% endfor %}
+            {
+                std::ostringstream key;
+                key << "{{snake_field_name(field)}}"
+                {%- for d in field.array_dims -%}
+                     << "_" <<  {{d.name}}
+                {%- endfor -%}
+                ;
+                dict[py::cast(key.str())] = {{py_array(soa, field, dim_vars=field.array_dims | map(attribute="name") | list)}};
+            }
+        {% else %}
+            dict["{{snake_field_name(field)}}"] = {{py_array(soa, field)}};
+        {% endif %}
+        {{ end_field_guard(field) -}}
+    {% endfor %}
+    return DataFrame(dict);
+});
+{% endfor %}
+{% endmacro %}
+
+
+{#############################################################################
+# py_array
+#############################################################################}
+{% macro py_array(soa, field, dim_vars=[]) -%}
+    {%- set ty -%}
+        numpy_type<{{field_storage_ty(field)}}>::type
+    {%- endset -%}
+    {%- set shape -%}
+        { self.size()
+            {%- for d in field.array_dims -%}
+                {% if loop.index0 >= dim_vars | length %}, {{d.count}}{% endif %}
+            {%- endfor -%}
+        }
+    {%- endset -%}
+    {% set strides %}
+        {
+            sizeof({{ty}})
+            {%- for d in field.array_dims -%}
+                * {{d.count}}
+            {%- endfor -%}
+            {%- for i in range(field.array_dims | length) %}
+                {%- if i >= dim_vars | length -%}
+                    , sizeof({{ty}})
+                        {%- for d in field.array_dims -%}
+                            {%- if loop.index0 >= i -%}
+                                * {{d.count}}
+                            {%- endif -%}
+                        {%- endfor -%}
+                {%- endif -%}
+            {%- endfor -%}
+        }
+    {% endset %}
+    {%- set ptr -%}
+        {%- if dim_vars | length > 0 -%}
+            self.{{field.name}}Ptr({{soa.id_name}}(0)
+                {%- for v in dim_vars -%}
+                    , {{array_dim_from_uint32(field.array_dims[loop.index0], v)}}
+                {%- endfor -%}
+            )
+        {%- else -%}
+            self.{{field.name}}Ptr()
+        {%- endif -%}
+    {%- endset -%}
+    py::array_t<{{ty}}>({{shape}}, {{strides}}, reinterpret_cast<const {{ty}}*>({{ptr}}))
+{%- endmacro %}
+
+
+{#############################################################################
+# natvis
+#############################################################################}
+{% macro natvis(soas, gen_name) %}
+{{xml_header(gen_name)}}
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    {% for soa in soas %}
+    {% set concrete_soa %}
+        {%- if soa.custom %}{{soa.custom}}
+        {%- else %}{{soa.name}}
+        {%- endif -%}
+    {% endset %}
+    {% set concrete_ref %}
+        {%- if soa.custom_ref %}{{soa.custom_ref}}
+        {%- else %}{{soa.name}}Ref
+        {%- endif -%}
+    {% endset %}
+    {% set concrete_const_ref %}
+        {%- if soa.custom_const_ref %}{{soa.custom_const_ref}}
+        {%- else %}{{soa.name}}ConstRef
+        {%- endif -%}
+    {% endset %}
+    <!-- {{concrete_soa}} -->
+    <Type Name="Dive::{{concrete_soa}}">
+        <DisplayString>{{"{{"}} size={m_size} {{"}}"}}</DisplayString>
+        <Expand>
+            <Item Name="[size]">m_size</Item>
+            <Item Name="[capacity]">m_cap</Item>
+            {% for field in soa.fields %}
+            {% if field.guard %}
+                <!--
+                If the {{field.name}} field is excluded from the build, we want
+                natvis to gracefully ommit this field from the debug view. The
+                `Optional="true"` attribute tells natvis that this node should be
+                ommitted if there is an error parsing the value. However, the `Optional`
+                mechanism only triggers if the error comes from the element itself,
+                rather than a sub-element. The 
+                `|| {{concrete_soa}}::{{field_offset_name(field)}} != {{concrete_soa}}::{{field_offset_name(field)}}`
+                expression in the `Conditional` attribute ensures that we immediately
+                try to access a variable that is only defined if {{field.name}} is not
+                excluded.
+                -->
+            {% endif %}
+            {% set optional_attrs -%}
+                {% if field.guard -%}
+                    Condition="{{concrete_soa}}::{{field_offset_name(field)}} == {{concrete_soa}}::{{field_offset_name(field)}}" Optional="true"
+                {%- endif %}
+            {%- endset %}
+            <Synthetic Name="{{field.name}}" {{optional_attrs}}>
+                <Expand>
+                    <ArrayItems>
+                        {% if field.array_dims %}
+                            <Direction>Forward</Direction>
+                            <Rank>{{(field.array_dims|length) + 1}}</Rank>
+                            <Size>$i == 0 ? m_size : {{natvis_field_array_size(field, 1)}}</Size>
+                        {% else %}
+                            <Size>m_size</Size>
+                        {% endif %}
+                        <ValuePointer>{{natvis_field_ptr(soa, field)}}</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            {% endfor %}
+        </Expand>
+    </Type>
+    <Type Name="Dive::{{concrete_ref}}">
+        {{natvis_ref(soa)}}
+    </Type>
+    <Type Name="Dive::{{concrete_const_ref}}">
+        {{natvis_ref(soa)}}
+    </Type>
+    <Type Name="Dive::{{concrete_soa}}::Iterator">
+        {{natvis_ref(soa)}}
+    </Type>
+    <Type Name="Dive::{{concrete_soa}}::ConstIterator">
+        {{natvis_ref(soa)}}
+    </Type>
+    {% endfor %}
+</AutoVisualizer>
+{% endmacro %}
+
+
+{#############################################################################
+# natvis_ref
+#############################################################################}
+{% macro natvis_ref(soa) %}
+{% set concrete_soa %}
+    {%- if soa.custom %}{{soa.custom}}
+    {%- else %}{{soa.name}}
+    {%- endif -%}
+{% endset %}
+<DisplayString>{{"{{"}} id={m_id.m_id} {{"}}"}}</DisplayString>
+<Expand>
+    <Item Name="[id]">m_id.m_id</Item>
+    <Item Name="[obj]">*m_obj_ptr</Item>
+    {% for field in soa.fields %}
+        {% if field.guard %}
+            <!--
+            If the {{field.name}} field is excluded from the build, we want
+            natvis to gracefully ommit this field from the debug view. The
+            `Optional="true"` attribute tells natvis that this node should be
+            ommitted if there is an error parsing the value. However, the `Optional`
+            mechanism only triggers if the error comes from the element itself,
+            rather than a sub-element. The 
+            `|| {{concrete_soa}}::{{field_offset_name(field)}} != {{concrete_soa}}::{{field_offset_name(field)}}`
+            expression in the `Conditional` attribute ensures that we immediately
+            try to access a variable that is only defined if {{field.name}} is not
+            excluded.
+            -->
+        {% endif %}
+        {% set base_condition -%}
+            !(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)
+        {%- endset %}
+        {% set condition -%}
+            {% if field.guard -%}
+                {{base_condition}} || {{concrete_soa}}::{{field_offset_name(field)}} != {{concrete_soa}}::{{field_offset_name(field)}}
+            {%- else -%}
+                {{base_condition}}
+            {%- endif %}
+        {%- endset %}
+        {% set optional_attr -%}
+            {% if field.guard -%}
+                Optional="true"
+            {% endif -%}
+        {%- endset %}
+        {% if field.array_dims %}
+            <Synthetic Name="{{field.name}}" Condition="{{condition}}" {{optional_attr}}>
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>{{field.array_dims|length}}</Rank>
+                        <Size>{{natvis_field_array_size(field)}}</Size>
+                        <ValuePointer>{{natvis_field_ptr(soa, field, "m_obj_ptr")}} + m_id.m_id * {{concrete_soa}}::{{field_array_count_name(field)}}</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+        {% else %}
+            <Item Name="{{field.name}}" Condition="{{condition}}" {{optional_attr}}>
+                {% set storage_val -%}
+                    {{natvis_field_ptr(soa, field, "m_obj_ptr")}}[m_id.m_id]
+                {%- endset %}
+                {% if field_storage_ty(field) == field_access_ty(field) %}
+                    {{storage_val}}
+                {% else %}
+                    ({{field_access_ty(field)}})({{storage_val}})
+                {% endif %}
+            </Item>
+        {% endif %}
+    {% endfor %}
+</Expand>
+{% endmacro %}
+
+
+{#############################################################################
+# natvis_field_array_size
+#############################################################################}
+{% macro natvis_field_array_size(field, offset=0) -%}
+    {%- for d in field.array_dims -%}
+        {%- if not loop.last -%}
+            $i == {{loop.index0 + offset}} ? {{d.count}} :
+        {%- else -%}
+            {{d.count}}
+        {%- endif -%}
+    {%- endfor %}
+{%- endmacro %}
+
+
+{#############################################################################
+# natvis_field_ptr
+#############################################################################}
+{% macro natvis_field_ptr(soa, field, obj_ptr=None) -%}
+    {% set concrete_soa %}
+        {%- if soa.custom %}{{soa.custom}}
+        {%- else %}{{soa.name}}
+        {%- endif -%}
+    {% endset %}
+    {% set obj_prefix -%}
+        {% if obj_ptr -%}
+            {{obj_ptr}}->
+        {%- else -%}
+        {%- endif %}
+    {%- endset -%}
+    (({{field_storage_ty(field)}}*)(((uint8_t*){{obj_prefix}}m_buffer._Mypair._Myval2) + {{concrete_soa}}::{{field_offset_name(field)}} * {{obj_prefix}}m_cap))
+{%- endmacro %}

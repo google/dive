@@ -1,0 +1,1347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright 2020 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the \"License\";
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an \"AS IS\" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!--
+
+ WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
+
+ This code has been generated automatically by generateSOAs.py. Do not hand-modify this code.
+
+-->
+
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <!-- EventStateInfo -->
+    <Type Name="Dive::EventStateInfo">
+        <DisplayString>{{ size={m_size} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]">m_size</Item>
+            <Item Name="[capacity]">m_cap</Item>
+            <Synthetic Name="Topology" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kTopologyOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="PrimRestartEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kPrimRestartEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="PatchControlPoints" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kPatchControlPointsOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Viewport" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 16</Size>
+                        <ValuePointer>((VkViewport*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kViewportOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Scissor" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 16</Size>
+                        <ValuePointer>((VkRect2D*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kScissorOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthClampEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthClampEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="RasterizerDiscardEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizerDiscardEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="PolygonMode" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkPolygonMode*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kPolygonModeOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="CullMode" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkCullModeFlags*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kCullModeOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="FrontFace" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkFrontFace*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kFrontFaceOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthBiasEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthBiasConstantFactor" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasConstantFactorOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthBiasClamp" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasClampOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthBiasSlopeFactor" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasSlopeFactorOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LineWidth" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLineWidthOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="RasterizationSamples" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkSampleCountFlagBits*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizationSamplesOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="SampleShadingEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kSampleShadingEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="MinSampleShading" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMinSampleShadingOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="SampleMask" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkSampleMask*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kSampleMaskOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="AlphaToCoverageEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kAlphaToCoverageEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthTestEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthTestEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthWriteEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthWriteEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthCompareOp" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkCompareOp*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthCompareOpOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DepthBoundsTestEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="StencilTestEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="StencilOpStateFront" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkStencilOpState*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateFrontOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="StencilOpStateBack" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkStencilOpState*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="MinDepthBounds" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="MaxDepthBounds" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LogicOpEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LogicOp" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkLogicOp*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Attachment" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((VkPipelineColorBlendAttachmentState*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kAttachmentOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="BlendConstant" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 4</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kBlendConstantOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ZAddr" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint64_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="HTileAddr" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint64_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="HiZEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="HiSEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ZCompressEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="StencilCompressEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="CompressedZFetchEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ZFormat" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ZOrder" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="VSLateAlloc" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="DccEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ColorFormat" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Height" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Width" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Vgpr" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Sgpr" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+        </Expand>
+    </Type>
+    <Type Name="Dive::EventStateInfoRef">
+        <DisplayString>{{ id={m_id.m_id} }}</DisplayString>
+<Expand>
+    <Item Name="[id]">m_id.m_id</Item>
+    <Item Name="[obj]">*m_obj_ptr</Item>
+            <Item Name="Topology" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    (VkPrimitiveTopology)(((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kTopologyOffset * m_obj_ptr->m_cap))[m_id.m_id])
+            </Item>
+            <Item Name="PrimRestartEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPrimRestartEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PatchControlPoints" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPatchControlPointsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Viewport" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkViewport*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kViewportOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kViewportArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Scissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kScissorOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kScissorArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="DepthClampEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthClampEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizerDiscardEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizerDiscardEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PolygonMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkPolygonMode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPolygonModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CullMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCullModeFlags*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCullModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="FrontFace" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkFrontFace*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kFrontFaceOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasConstantFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasConstantFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasClamp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasClampOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasSlopeFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasSlopeFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LineWidth" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLineWidthOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizationSamples" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleCountFlagBits*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizationSamplesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleShadingEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleShadingEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinSampleShading" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinSampleShadingOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleMask" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleMask*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleMaskOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="AlphaToCoverageEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAlphaToCoverageEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthWriteEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthWriteEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthCompareOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCompareOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthCompareOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateFront" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateFrontOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkPipelineColorBlendAttachmentState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAttachmentOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kAttachmentArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="BlendConstant" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>4</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBlendConstantOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kBlendConstantArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+</Expand>
+
+    </Type>
+    <Type Name="Dive::EventStateInfoConstRef">
+        <DisplayString>{{ id={m_id.m_id} }}</DisplayString>
+<Expand>
+    <Item Name="[id]">m_id.m_id</Item>
+    <Item Name="[obj]">*m_obj_ptr</Item>
+            <Item Name="Topology" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    (VkPrimitiveTopology)(((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kTopologyOffset * m_obj_ptr->m_cap))[m_id.m_id])
+            </Item>
+            <Item Name="PrimRestartEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPrimRestartEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PatchControlPoints" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPatchControlPointsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Viewport" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkViewport*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kViewportOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kViewportArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Scissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kScissorOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kScissorArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="DepthClampEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthClampEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizerDiscardEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizerDiscardEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PolygonMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkPolygonMode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPolygonModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CullMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCullModeFlags*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCullModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="FrontFace" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkFrontFace*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kFrontFaceOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasConstantFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasConstantFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasClamp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasClampOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasSlopeFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasSlopeFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LineWidth" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLineWidthOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizationSamples" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleCountFlagBits*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizationSamplesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleShadingEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleShadingEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinSampleShading" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinSampleShadingOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleMask" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleMask*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleMaskOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="AlphaToCoverageEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAlphaToCoverageEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthWriteEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthWriteEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthCompareOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCompareOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthCompareOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateFront" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateFrontOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkPipelineColorBlendAttachmentState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAttachmentOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kAttachmentArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="BlendConstant" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>4</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBlendConstantOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kBlendConstantArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+</Expand>
+
+    </Type>
+    <Type Name="Dive::EventStateInfo::Iterator">
+        <DisplayString>{{ id={m_id.m_id} }}</DisplayString>
+<Expand>
+    <Item Name="[id]">m_id.m_id</Item>
+    <Item Name="[obj]">*m_obj_ptr</Item>
+            <Item Name="Topology" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    (VkPrimitiveTopology)(((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kTopologyOffset * m_obj_ptr->m_cap))[m_id.m_id])
+            </Item>
+            <Item Name="PrimRestartEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPrimRestartEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PatchControlPoints" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPatchControlPointsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Viewport" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkViewport*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kViewportOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kViewportArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Scissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kScissorOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kScissorArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="DepthClampEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthClampEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizerDiscardEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizerDiscardEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PolygonMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkPolygonMode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPolygonModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CullMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCullModeFlags*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCullModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="FrontFace" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkFrontFace*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kFrontFaceOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasConstantFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasConstantFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasClamp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasClampOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasSlopeFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasSlopeFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LineWidth" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLineWidthOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizationSamples" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleCountFlagBits*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizationSamplesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleShadingEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleShadingEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinSampleShading" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinSampleShadingOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleMask" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleMask*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleMaskOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="AlphaToCoverageEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAlphaToCoverageEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthWriteEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthWriteEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthCompareOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCompareOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthCompareOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateFront" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateFrontOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkPipelineColorBlendAttachmentState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAttachmentOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kAttachmentArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="BlendConstant" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>4</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBlendConstantOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kBlendConstantArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+</Expand>
+
+    </Type>
+    <Type Name="Dive::EventStateInfo::ConstIterator">
+        <DisplayString>{{ id={m_id.m_id} }}</DisplayString>
+<Expand>
+    <Item Name="[id]">m_id.m_id</Item>
+    <Item Name="[obj]">*m_obj_ptr</Item>
+            <Item Name="Topology" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    (VkPrimitiveTopology)(((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kTopologyOffset * m_obj_ptr->m_cap))[m_id.m_id])
+            </Item>
+            <Item Name="PrimRestartEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPrimRestartEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PatchControlPoints" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPatchControlPointsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Viewport" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkViewport*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kViewportOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kViewportArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Scissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>16</Size>
+                        <ValuePointer>((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kScissorOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kScissorArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="DepthClampEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthClampEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizerDiscardEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizerDiscardEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="PolygonMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkPolygonMode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kPolygonModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CullMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCullModeFlags*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCullModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="FrontFace" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkFrontFace*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kFrontFaceOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasConstantFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasConstantFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasClamp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasClampOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBiasSlopeFactor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBiasSlopeFactorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LineWidth" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLineWidthOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="RasterizationSamples" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleCountFlagBits*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRasterizationSamplesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleShadingEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleShadingEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinSampleShading" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinSampleShadingOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="SampleMask" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkSampleMask*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSampleMaskOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="AlphaToCoverageEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAlphaToCoverageEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthWriteEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthWriteEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthCompareOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkCompareOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthCompareOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateFront" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateFrontOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkPipelineColorBlendAttachmentState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kAttachmentOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kAttachmentArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="BlendConstant" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>4</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBlendConstantOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kBlendConstantArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>Dive::kShaderStageCount</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+</Expand>
+
+    </Type>
+</AutoVisualizer>

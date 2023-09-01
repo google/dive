@@ -1,0 +1,124 @@
+name: Dive CI
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# Cancel previous runs if a more recent commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - name: Install dependency
+      run: |
+        git fetch --no-tags --prune --depth=1 origin +refs/heads/*:refs/remotes/origin/*
+        git branch -a
+        sudo apt-get update --yes
+        sudo apt-get install --yes git clang-format-14
+
+    - name: Run lint script
+      run: ./scripts/clangformat.sh
+
+  # Build the code
+  build_Windows_Debug:
+    runs-on: windows-2019
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+            version: 5.15.2
+            target: desktop
+            arch: win64_msvc2019_64
+      - name: Build the UI
+        run: |
+          mkdir build && cd build && cmake -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=Release ..
+          cmake --build ./ --target ALL_BUILD --config Debug
+
+  # Build the code
+  build_Windows_Release:
+    runs-on: windows-2019
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+            version: 5.15.2
+            target: desktop
+            arch: win64_msvc2019_64
+      - name: Build the UI
+        run: |
+          mkdir build && cd build && cmake -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=Release ..
+          cmake --build ./ --target ALL_BUILD --config Release
+
+
+  build_Linux_Debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake gcc-10  clang-14 libsystemd-dev libbsd-dev
+          which gcc-10
+          which clang-14
+      - name: Prepare Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.0
+        with:
+          vulkan-query-version: 1.3.204.0
+          vulkan-components: Vulkan-Headers
+      - name: Build the UI with gcc-10
+        run: |
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. && make -j && cd ..
+      - name: Build the UI with Clang-14
+        run: |
+          rm -rf build/* && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. && make -j
+
+  build_Linux_Release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake gcc-10 clang-14 libsystemd-dev libbsd-dev
+          which gcc-10
+          which clang-14
+      - name: Prepare Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.0
+        with:
+          vulkan-query-version: 1.3.204.0
+          vulkan-components: Vulkan-Headers
+      - name: Build the UI with gcc-10
+        run: |
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. && make -j && cd ..
+      - name: Build the UI with Clang-14
+        run: |
+          rm -rf build/* && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. && make -j

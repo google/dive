@@ -1,0 +1,94 @@
+#
+# Copyright 2019 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+
+project(dive_core)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(CMAKE_CXX_STANDARD 17)
+
+if(MSVC)
+  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+  file(GLOB_RECURSE NATVIS_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.natvis")
+else()
+  set(NATVIS_FILES "")
+endif()
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+set(DIVE_CORE_GENERATED_FILE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+set(PM4_INFO_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info")
+
+if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
+  find_program (Python3_EXECUTABLE python3)
+else()
+  find_package (Python3 COMPONENTS Interpreter)
+endif()
+
+if (NOT Python3_EXECUTABLE)
+  message(FATAL_ERROR "python3 not found")
+endif()
+
+file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
+
+if(DIVE_NO_DISASSEMBLY)
+list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly\\.cpp")
+else()
+list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
+endif()
+
+file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
+file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
+
+include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR} ${DIVE_CORE_GENERATED_FILE_DIR})
+
+include_directories(${CMAKE_SOURCE_DIR}/capture_layer)
+include_directories(${CMAKE_SOURCE_DIR}/capture_layer/generated)
+
+
+add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
+
+add_library(${PROJECT_NAME} STATIC ${HDR_FILES} ${SRC_FILES}
+  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${NATVIS_FILES}
+  "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_printer.cpp" "${CMAKE_SOURCE_DIR}/capture_layer/command_printer_brief.cpp"
+  "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_decoder.cpp" )
+
+
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+  target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+  target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
+  target_link_libraries(${PROJECT_NAME} PRIVATE z)
+  if (NOT GGP)
+    target_link_libraries(${PROJECT_NAME} PRIVATE tinfo)
+  endif()
+endif()
+if(WIN32)
+  # Supress warning about deprecation of std::iterator when compile with c++17
+  add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
+endif()
+
+if (MSVC)
+  # 4100: unreferenced formal parameter
+  # 4201: prevent nameless struct/union
+  target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
+else()
+  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -fPIC)
+endif()

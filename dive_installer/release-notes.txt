@@ -1,0 +1,111 @@
+Release Notes for Dive GPU Profiler
+Copyright 2020 Google Inc. All rights reserved.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instructions
+------------
+
+* Ensure that you are using version 1.56 of the SDK or higher.
+* Update your pool with the Dive-enabled ICD, by running the following command:
+  > ggp pool update --software-version="1.56.0.19480;gfx=0000.A0_RC07" 
+* Run the game with the "--dive" option to enable capturing.
+* Run Dive.
+* Select the Capture->Capture menu option or press F5 in Dive while the game is running to capture a frame of performance data.
+* The capture should be automatically streamed to your workstation and should open in the Dive UI.
+* Hover over parts of the UI to update the help panel on the right side of the UI with helpful tips.
+
+
+Version 0.9.3.0
+---------------
+
+Features 
+
+* Better formatting for property panel and hover help.
+* Hovering over a wavefront highlights the corresponding event in the navigation bar.
+
+Bug Fixes
+
+* Fixed crash when loading older captures.
+
+Known Issues
+
+* Enabling the capture layer (using the "--dive" option) can have a CPU performance impact on the game.
+
+Version 0.9.2.0
+---------------
+
+Note: There is a new driver available (0000.A0_RC07), which is required for some features and bug fixes.
+      See the Instructions section above for pool updating details.
+
+Features 
+
+* Barrier information is now displayed in the UI.
+
+Bug Fixes
+
+* Fixed a bug with associating layout transitions and events.
+* Fixed a bug where some events were "not fully captured".
+* Allow for multiple s_endpgm instructions in shaders.
+
+Version 0.9.1.0
+---------------
+
+Features
+
+* Added VGPR & SGPR counts to the shader view.
+
+Version 0.9.0.0
+---------------
+
+Features
+
+* Added the ability to delay the capture by a configurable amount of time.
+
+Bug Fixes
+
+* Fixed hover/select for overlapping events.
+* Fixed a crash when loading caputures with debug markers that spanned frame boundaries.
+
+Version 0.8.3.0
+---------------
+
+Features
+
+* Added occupancy % view, which allows you to easily see occupancy of graphics and compute units.
+* Added "Zoom to fit" and "Zoom full" buttons to make it easier to zoom to a selected range.
+* Colored debug markers.
+* Added pipeline hash to the shader view panel.
+* Added Help->About box to easily view version information.
+
+Version 0.8.2.0
+---------------
+
+Features
+
+* Hover over a shader instruction to see what assembly instruction it represents.
+
+Bug Fixes
+
+* Summary view is now the default.
+* All events are in view by default when opening a trace.
+* Miscellaneous fixes to zooming using the mouse wheel.
+* Removed extra final instruction from shader dumps.
+* Fixed an issue where capturing would not work if the ggp folder did not exist.
+* The capture layer will no longer crash if certain validation layers are enabled.
+
+Version 0.8.1.0
+---------------
+
+Bug Fixes
+
+* Packaged the correct binaries in the installer/zip this time.
+* Fixed a capture layer crash on some titles.
+
+Version 0.8.0.0
+---------------
+
+New Features
+
+* First version of Dive
+* Dive correlates SQTT data, PM4 information, and Vulkan calls to give you a detailed picture of what is
+  happening on the GPU during the captured frame.

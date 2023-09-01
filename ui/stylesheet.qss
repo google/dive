@@ -1,0 +1,56 @@
+/* QTreeView style */
+
+QTreeView {
+    show-decoration-selected: 1;
+}
+
+QTreeView::item:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #e7effd, stop: 1 #cbdaf1);
+    color: #000;
+}
+
+QTreeView::branch:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #e7effd, stop: 1 #cbdaf1);
+}
+
+QTreeView::branch:has-siblings:!adjoins-item {
+    border-image: url(\":/images/vline.png\") 0;
+}
+
+QTreeView::branch:has-siblings:adjoins-item {
+    border-image: url(\":/images/branch_more.png\") 0;
+}
+
+QTreeView::branch:!has-children:!has-siblings:adjoins-item {
+    border-image: url(\":/images/branch_end.png\") 0;
+}
+
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+    border-image: none;
+    image: url(\":/images/branch_closed.png\");
+}
+
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings  {
+    border-image: none;
+    image: url(\":/images/branch_open.png\");
+}
+
+QToolTip {
+    color: #ffffff;
+    background-color: #2a82da;
+    border: 1px solid white;
+}
+
+/* Style for the hover help label */
+QLabel#hoverHelpLabel {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #e7effd, stop: 1 #cbdaf1);
+    border-radius: 5px;
+    color: #000;
+    padding: 3px;
+}
+
+QLabel#propertyPanelLabel {
+    font - family : Arial, Helvetica, sans - serif;
+}

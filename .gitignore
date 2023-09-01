@@ -1,0 +1,26 @@
+# Vim swap files
+*.swp
+
+# Other swap files
+*.swo
+
+# Visual Studio Code configuration files
+.vscode/
+
+# clangd index files
+/compile_commands.json
+/.cache/
+
+# Build-related directories
+build/
+driver/xgl/builds
+
+# Amdvlk auto-generated files
+*.pyc
+g_*.h
+g_*.cpp
+
+.ipynb_checkpoints/
+local_notebooks/*.ipynb
+
+.env

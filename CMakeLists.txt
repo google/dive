@@ -54,6 +54,9 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")
     add_subdirectory(cli)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/capture_layer/CMakeLists.txt" AND "${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+    add_subdirectory(capture_layer)
+endif()
 
 if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT ANDROID AND NOT DIVE_NO_DISASSEMBLY)
     add_subdirectory(ui)

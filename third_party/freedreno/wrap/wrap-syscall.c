@@ -542,7 +542,11 @@ static void log_cmdaddr(uint64_t gpuaddr, uint32_t sizedwords)
 
 static void dump_bos(int fd)
 {
-	PROLOG(mmap);
+	if (!IsCapturing()) {
+		return;
+	}
+
+    PROLOG(mmap);
 	PROLOG(munmap);
 
 	struct buffer *buf;
@@ -588,6 +592,9 @@ static void dump_ib_prep(void)
 
 static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 {
+	if (!IsCapturing()) {
+		return;
+	}
 	struct buffer *buf = find_buffer(NULL, ibdesc->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
 		struct buffer *other_buf;
@@ -609,6 +616,9 @@ static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 
 static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 {
+	if (!IsCapturing()) {
+		return;
+	}
 	/* note: kgsl seems to ignore cmd->offset.. which may be a bug.. */
 	struct buffer *buf = find_buffer(NULL, cmd->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {

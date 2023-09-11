@@ -33,7 +33,7 @@ limitations under the License.
 #include "layer_impl.h"
 #include "log.h"
 
-namespace DiveXrLayer {
+namespace DiveLayer {
 
 bool is_libwrap_loaded() {
     bool  loaded = false;
@@ -83,7 +83,7 @@ std::mutex g_device_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<DeviceData>> g_device_data;
 
 constexpr VkLayerProperties layer_properties = {
-    "VK_LAYER_DiveXr", VK_MAKE_VERSION(1, 0, VK_HEADER_VERSION), 1,
+    "VK_LAYER_Dive", VK_MAKE_VERSION(1, 0, VK_HEADER_VERSION), 1,
     "Dive capture layer for xr."};
 
 static constexpr std::array<VkExtensionProperties, 2> instance_extensions{{
@@ -446,11 +446,11 @@ VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateDeviceExtensionProperties(
 }
 
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-VK_LAYER_DiveXrGetDeviceProcAddr(VkDevice dev, const char *func) {
+VK_LAYER_DiveGetDeviceProcAddr(VkDevice dev, const char *func) {
   LOGI("GetDeviceProcAddr %s\n", func);
 
   if (!strcmp(func, "vkGetDeviceProcAddr"))
-    return (PFN_vkVoidFunction)&VK_LAYER_DiveXrGetDeviceProcAddr;
+    return (PFN_vkVoidFunction)&VK_LAYER_DiveGetDeviceProcAddr;
   if (!strcmp(func, "vkCreateDevice"))
     return (PFN_vkVoidFunction)&InterceptCreateDevice;
   if (0 == strcmp(func, "vkQueuePresentKHR"))
@@ -460,11 +460,11 @@ VK_LAYER_DiveXrGetDeviceProcAddr(VkDevice dev, const char *func) {
 }
 
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-VK_LAYER_DiveXrGetInstanceProcAddr(VkInstance inst, const char *func) {
+VK_LAYER_DiveGetInstanceProcAddr(VkInstance inst, const char *func) {
   LOGI("GetInstanceProcAddr %s\n", func);
 
   if (0 == strcmp(func, "vkGetInstanceProcAddr"))
-    return (PFN_vkVoidFunction)&VK_LAYER_DiveXrGetInstanceProcAddr;
+    return (PFN_vkVoidFunction)&VK_LAYER_DiveGetInstanceProcAddr;
   if (0 == strcmp(func, "vkEnumerateInstanceExtensionProperties"))
     return (PFN_vkVoidFunction)&InterceptEnumerateInstanceExtensionProperties;
   if (0 == strcmp(func, "vkCreateInstance"))
@@ -477,7 +477,7 @@ VK_LAYER_DiveXrGetInstanceProcAddr(VkInstance inst, const char *func) {
   if (0 == strcmp(func, "vkEnumerateDeviceExtensionProperties"))
     return (PFN_vkVoidFunction)InterceptEnumerateDeviceExtensionProperties;
   if (!strcmp(func, "vkGetDeviceProcAddr"))
-    return (PFN_vkVoidFunction)&VK_LAYER_DiveXrGetDeviceProcAddr;
+    return (PFN_vkVoidFunction)&VK_LAYER_DiveGetDeviceProcAddr;
 
   if (0 == strcmp(func, "vkEnumerateInstanceLayerProperties"))
     return (PFN_vkVoidFunction)&InterceptEnumerateInstanceLayerProperties;
@@ -491,7 +491,7 @@ VK_LAYER_DiveXrGetInstanceProcAddr(VkInstance inst, const char *func) {
 __declspec(dllexport)
 #endif
     VKAPI_ATTR VkResult VKAPI_CALL
-    VK_LAYER_DiveXrNegotiateLoaderLayerInterfaceVersion(
+    VK_LAYER_DiveNegotiateLoaderLayerInterfaceVersion(
         VkNegotiateLayerInterface *pVersionStruct) {
   LOGI("VkNegotiateLayerInterface\n");
 
@@ -499,8 +499,8 @@ __declspec(dllexport)
   assert(pVersionStruct->sType == LAYER_NEGOTIATE_INTERFACE_STRUCT);
 
   if (pVersionStruct->loaderLayerInterfaceVersion >= 2) {
-    pVersionStruct->pfnGetInstanceProcAddr = VK_LAYER_DiveXrGetInstanceProcAddr;
-    pVersionStruct->pfnGetDeviceProcAddr = VK_LAYER_DiveXrGetDeviceProcAddr;
+    pVersionStruct->pfnGetInstanceProcAddr = VK_LAYER_DiveGetInstanceProcAddr;
+    pVersionStruct->pfnGetDeviceProcAddr = VK_LAYER_DiveGetDeviceProcAddr;
     pVersionStruct->pfnGetPhysicalDeviceProcAddr = nullptr;
   }
   if (pVersionStruct->loaderLayerInterfaceVersion > 2) {
@@ -510,4 +510,4 @@ __declspec(dllexport)
 }
 }
 
-} // namespace DiveXrLayer
+} // namespace DiveLayer

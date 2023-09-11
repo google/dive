@@ -19,11 +19,11 @@ limitations under the License.
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
 
-namespace DiveXrLayer
+namespace DiveLayer
 {
 
 VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
                          VkQueue                 queue,
                          const VkPresentInfoKHR *pPresentInfo);
 
-}  // namespace DiveXrLayer
+}  // namespace DiveLayer

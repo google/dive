@@ -1,3 +1,19 @@
+#
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 cmake_minimum_required(VERSION 3.0)
 
 project(diveCaptureLayer)
@@ -9,7 +25,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 
-set(target_name VkLayer_dive_capture)
+set(target_name VkLayer_dive)
 
 set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/dispatch.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.h"
@@ -20,7 +36,6 @@ set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_android.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
 )
 
 include_directories(${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include)
@@ -29,7 +44,7 @@ add_library(${target_name} SHARED ${HDR_FILES}
                                 ${SRC_FILES})
             
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-add_definitions(-DLAYERNAME=VK_LAYER_DiveXr)                         
+add_definitions(-DLAYERNAME=VK_LAYER_Dive)                         
 
 if(ANDROID)
 target_link_libraries(${target_name}

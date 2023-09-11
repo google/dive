@@ -53,7 +53,7 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")
 endif()
 
 
-if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT GGP AND NOT DIVE_NO_DISASSEMBLY)
+if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT ANDROID AND NOT DIVE_NO_DISASSEMBLY)
     add_subdirectory(ui)
 endif()
 

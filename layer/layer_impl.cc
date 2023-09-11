@@ -30,12 +30,13 @@ limitations under the License.
 #include "log.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
-namespace DiveXrLayer {
+namespace DiveLayer {
 
 VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                          const VkPresentInfoKHR *pPresentInfo) {
   VkResult ret = pfn(queue, pPresentInfo);
+  LOGD("QueuePresentKHR");
   return ret;
 }
 
-} // namespace DiveXrLayer
+} // namespace DiveLayer

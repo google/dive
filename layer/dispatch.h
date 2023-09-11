@@ -19,7 +19,7 @@ limitations under the License.
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
 
-namespace DiveXrLayer
+namespace DiveLayer
 {
 
 struct InstanceDispatchTable
@@ -43,4 +43,4 @@ void InitInstanceDispatchTable(VkInstance                instance,
                                InstanceDispatchTable    *dt);
 void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt);
 
-}  // namespace DiveXrLayer
+}  // namespace DiveLayer

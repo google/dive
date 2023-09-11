@@ -17,7 +17,7 @@ limitations under the License.
 #include "dispatch.h"
 #include "log.h"
 
-namespace DiveXrLayer {
+namespace DiveLayer {
 
 void InitInstanceDispatchTable(VkInstance instance,
                                PFN_vkGetInstanceProcAddr pa,
@@ -41,4 +41,4 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa,
   dt->QueuePresentKHR = (PFN_vkQueuePresentKHR)pa(device, "vkQueuePresentKHR");
 }
 
-} // namespace DiveXrLayer
+} // namespace DiveLayer

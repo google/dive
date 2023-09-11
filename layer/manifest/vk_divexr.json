@@ -1,0 +1,23 @@
+{
+    "file_format_version": "1.1.0",
+    "layer": {
+      "name": "VK_LAYER_DiveXr",
+      "type": "GLOBAL",
+      "library_path": "libVkLayer_dive_capture.so",
+      "api_version": "1.3.211",
+      "implementation_version": "1",
+      "description": "Dive xr layer",
+      "functions": {
+        "vkNegotiateLoaderLayerInterfaceVersion": "VK_LAYER_DiveXrNegotiateLoaderLayerInterfaceVersion"
+      },
+      "disable_environment": {
+        "DISABLE_DIVE_CAPTURE_LAYER": "1"
+      },
+      "instance_extensions": [
+        {
+          "name": "VK_EXT_debug_utils",
+          "spec_version": "1"
+        }
+      ]
+    }
+  }

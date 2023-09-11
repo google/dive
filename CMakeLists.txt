@@ -21,6 +21,10 @@ project(dive)
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_CXX_STANDARD 17)
 
+if(ANDROID)
+    add_subdirectory(third_party/freedreno)
+endif()
+
 # `dive_core/common.h` is used in more places other than dive_core now
 add_definitions(-DDIVE_GUI_TOOL)
 
@@ -41,7 +45,7 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
-
+add_subdirectory(layer)
 add_subdirectory(dive_core)
 
 if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")

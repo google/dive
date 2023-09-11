@@ -112,12 +112,4 @@ int pthread_mutex_timedlock(pthread_mutex_t *mutex, struct timespec*  ts);
 #include <pthread.h>
 #endif
 
-#if defined __ANDROID__
-#    include <android/log.h>
-#    define TAG "libwrap"
-#    define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#    define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
-
-#endif
-
 #endif /* WRAP_H_ */

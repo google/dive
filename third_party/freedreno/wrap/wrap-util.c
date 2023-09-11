@@ -23,10 +23,12 @@
 
 #include "wrap.h"
 
+// GOOGLE: Include Dive related header
+#include "dive-wrap.h"
+
 static int fd = -1;
 static unsigned int gpu_id;
 
-int IsCapturing();
 #ifdef USE_PTHREADS
 static pthread_mutex_t l = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 #endif
@@ -81,14 +83,12 @@ void rd_start(const char *name, const char *fmt, ...)
 	testnum = getenv("TESTNUM");
 	if (testnum) {
 		n = strtol(testnum, NULL, 0);
-		sprintf(buf, "%s-%u.rd", name, n);
+		sprintf(buf, "%s-%04u.rd", name, n);
 	} else {
-		sprintf(buf, "/sdcard/Download/trace-%d.rd", gettid());
+		sprintf(buf, "/sdcard/trace.rd");
 	}
 
 	fd = open(buf, O_WRONLY| O_TRUNC | O_CREAT, 0644);
-
-	LOGD("rd_start name %s, fd %d, path %s",name, fd, buf);
 
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
@@ -107,7 +107,6 @@ void rd_start(const char *name, const char *fmt, ...)
 
 void rd_end(void)
 {
-	LOGD("close fd %d", fd);
 	close(fd);
 	fd = -1;
 }
@@ -136,6 +135,8 @@ static void rd_write(const void *buf, int sz)
 void rd_write_section(enum rd_sect_type type, const void *buf, int sz)
 {
 	uint32_t val = ~0;
+
+	// GOOGLE: Write out rd file only when capturing flag is enabled.
 	if(!IsCapturing()) {
 		return;
 	}
@@ -303,38 +304,3 @@ void * __rd_dlsym_helper(const char *name)
 
 	return func;
 }
-
-static pthread_mutex_t capture_state_lock = PTHREAD_MUTEX_INITIALIZER;
-static int capture_state = 0;
-
-int IsCapturing() 
-{
-	pthread_mutex_lock(&capture_state_lock);
-	int is_capturing = (capture_state == 1);
-	pthread_mutex_unlock(&capture_state_lock);
-	return is_capturing;
-}
-
-extern void SetCaptureState(int state) 
-{
-	LOGD("SetCaptureState %d", state);
-	pthread_mutex_lock(&capture_state_lock);
-	capture_state = state;
-	rd_end();
-	pthread_mutex_unlock(&capture_state_lock);
-}
-
-void StartCapture() { SetCaptureState(1); }
-
-void StopCapture() { SetCaptureState(0); }
-
-extern void SetCaptureName(const char* name, const char* frame_num) 
-{
-	if(name) {
-		setenv("TESTNAME", name, 1);
-	}
-	if(frame_num) {
-		setenv("TESTNUM", frame_num, 1);
-	}
-}
-

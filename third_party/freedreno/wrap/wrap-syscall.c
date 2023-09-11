@@ -546,7 +546,7 @@ static void dump_bos(int fd)
 		return;
 	}
 
-    PROLOG(mmap);
+	PROLOG(mmap);
 	PROLOG(munmap);
 
 	struct buffer *buf;

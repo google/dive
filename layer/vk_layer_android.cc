@@ -20,17 +20,17 @@ limitations under the License.
 extern "C"
 {
 #if defined(__ANDROID__)
-    VkResult VKAPI_CALL InterceptEnumerateDeviceLayerProperties(VkPhysicalDevice   physicalDevice,
+    VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(VkPhysicalDevice   physicalDevice,
                                                                 uint32_t          *pPropertyCount,
                                                                 VkLayerProperties *pProperties);
 
     VkResult VKAPI_CALL
-    InterceptEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
+    DiveInterceptEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
                                                 const char            *pLayerName,
                                                 uint32_t              *pPropertyCount,
                                                 VkExtensionProperties *pProperties);
 
-    VkResult VKAPI_CALL InterceptEnumerateInstanceExtensionProperties(
+    VkResult VKAPI_CALL DiveInterceptEnumerateInstanceExtensionProperties(
     const VkEnumerateInstanceExtensionPropertiesChain *pChain,
     const char                                        *pLayerName,
     uint32_t                                          *pPropertyCount,
@@ -40,7 +40,7 @@ extern "C"
                                                          uint32_t          *pPropertyCount,
                                                          VkLayerProperties *pProperties)
     {
-        return InterceptEnumerateDeviceLayerProperties(physicalDevice, pPropertyCount, pProperties);
+        return DiveInterceptEnumerateDeviceLayerProperties(physicalDevice, pPropertyCount, pProperties);
     }
 
     VkResult VKAPI_CALL vkEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
@@ -48,7 +48,7 @@ extern "C"
                                                              uint32_t              *pPropertyCount,
                                                              VkExtensionProperties *pProperties)
     {
-        return InterceptEnumerateDeviceExtensionProperties(physicalDevice,
+        return DiveInterceptEnumerateDeviceExtensionProperties(physicalDevice,
                                                            pLayerName,
                                                            pPropertyCount,
                                                            pProperties);
@@ -57,14 +57,14 @@ extern "C"
     VkResult VKAPI_CALL vkEnumerateInstanceLayerProperties(uint32_t          *pPropertyCount,
                                                            VkLayerProperties *pProperties)
     {
-        return InterceptEnumerateDeviceLayerProperties(VK_NULL_HANDLE, pPropertyCount, pProperties);
+        return DiveInterceptEnumerateDeviceLayerProperties(VK_NULL_HANDLE, pPropertyCount, pProperties);
     }
 
     VkResult VKAPI_CALL vkEnumerateInstanceExtensionProperties(const char *pLayerName,
                                                                uint32_t   *pPropertyCount,
                                                                VkExtensionProperties *pProperties)
     {
-        return InterceptEnumerateInstanceExtensionProperties(NULL,
+        return DiveInterceptEnumerateInstanceExtensionProperties(NULL,
                                                              pLayerName,
                                                              pPropertyCount,
                                                              pProperties);

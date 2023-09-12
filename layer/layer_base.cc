@@ -160,7 +160,7 @@ GetLoaderDeviceInfo(const VkDeviceCreateInfo *create_info,
 }
 
 // Intercept functions.
-VkResult InterceptQueuePresentKHR(VkQueue queue,
+VkResult DiveInterceptQueuePresentKHR(VkQueue queue,
                                   const VkPresentInfoKHR *pPresentInfo) {
   PFN_vkQueuePresentKHR pfn = nullptr;
 
@@ -170,10 +170,10 @@ VkResult InterceptQueuePresentKHR(VkQueue queue,
 }
 
 // Create instance needs a special implementaiton for layer
-VkResult InterceptCreateInstance(const VkInstanceCreateInfo *pCreateInfo,
+VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo *pCreateInfo,
                                  const VkAllocationCallbacks *pAllocator,
                                  VkInstance *pInstance) {
-  LOGI("InterceptCreateInstance");
+  LOGI("DiveInterceptCreateInstance");
   // Find the create info
   VkLayerInstanceCreateInfo *layer_create_info =
       GetLoaderInstanceInfo(pCreateInfo, VK_LAYER_LINK_INFO);
@@ -212,7 +212,7 @@ VkResult InterceptCreateInstance(const VkInstanceCreateInfo *pCreateInfo,
   return result;
 }
 
-VkResult InterceptCreateDevice(VkPhysicalDevice gpu,
+VkResult DiveInterceptCreateDevice(VkPhysicalDevice gpu,
                                const VkDeviceCreateInfo *pCreateInfo,
                                const VkAllocationCallbacks *pAllocator,
                                VkDevice *pDevice) {
@@ -256,9 +256,9 @@ VkResult InterceptCreateDevice(VkPhysicalDevice gpu,
 
 extern "C" {
 
-VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateInstanceLayerProperties(
+VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceLayerProperties(
     uint32_t *pPropertyCount, VkLayerProperties *pProperties) {
-  LOGI("InterceptEnumerateInstanceLayerProperties");
+  LOGI("DiveInterceptEnumerateInstanceLayerProperties");
 
   VkResult result = VK_SUCCESS;
 
@@ -278,11 +278,11 @@ VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateInstanceLayerProperties(
   return result;
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateInstanceExtensionProperties(
+VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceExtensionProperties(
     const VkEnumerateInstanceExtensionPropertiesChain *pChain, char *pLayerName,
     uint32_t *pPropertyCount, VkExtensionProperties *pProperties) {
 
-  LOGI("InterceptEnumerateInstanceExtensionProperties");
+  LOGI("DiveInterceptEnumerateInstanceExtensionProperties");
   VkResult result = VK_SUCCESS;
   if (pLayerName && !strcmp(pLayerName, layer_properties.layerName)) {
     if (pPropertyCount != nullptr) {
@@ -335,14 +335,14 @@ VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateInstanceExtensionProperties(
   return result;
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateDeviceLayerProperties(
+VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(
     VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount,
     VkLayerProperties *pProperties) {
-  LOGI("InterceptEnumerateDeviceLayerProperties");
-  return InterceptEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
+  LOGI("DiveInterceptEnumerateDeviceLayerProperties");
+  return DiveInterceptEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL InterceptEnumerateDeviceExtensionProperties(
+VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceExtensionProperties(
     VkPhysicalDevice physicalDevice, char *pLayerName, uint32_t *pPropertyCount,
     VkExtensionProperties *pProperties) {
 
@@ -452,9 +452,9 @@ VK_LAYER_DiveGetDeviceProcAddr(VkDevice dev, const char *func) {
   if (!strcmp(func, "vkGetDeviceProcAddr"))
     return (PFN_vkVoidFunction)&VK_LAYER_DiveGetDeviceProcAddr;
   if (!strcmp(func, "vkCreateDevice"))
-    return (PFN_vkVoidFunction)&InterceptCreateDevice;
+    return (PFN_vkVoidFunction)&DiveInterceptCreateDevice;
   if (0 == strcmp(func, "vkQueuePresentKHR"))
-    return (PFN_vkVoidFunction)InterceptQueuePresentKHR;
+    return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
   auto layer_data = GetDeviceLayerData(DataKey(dev));
   return layer_data->dispatch_table.pfn_get_device_proc_addr(dev, func);
 }
@@ -466,23 +466,23 @@ VK_LAYER_DiveGetInstanceProcAddr(VkInstance inst, const char *func) {
   if (0 == strcmp(func, "vkGetInstanceProcAddr"))
     return (PFN_vkVoidFunction)&VK_LAYER_DiveGetInstanceProcAddr;
   if (0 == strcmp(func, "vkEnumerateInstanceExtensionProperties"))
-    return (PFN_vkVoidFunction)&InterceptEnumerateInstanceExtensionProperties;
+    return (PFN_vkVoidFunction)&DiveInterceptEnumerateInstanceExtensionProperties;
   if (0 == strcmp(func, "vkCreateInstance"))
-    return (PFN_vkVoidFunction)&InterceptCreateInstance;
+    return (PFN_vkVoidFunction)&DiveInterceptCreateInstance;
   if (inst == VK_NULL_HANDLE)
     return NULL;
 
   if (0 == strcmp(func, "vkEnumerateDeviceLayerProperties"))
-    return (PFN_vkVoidFunction)InterceptEnumerateDeviceLayerProperties;
+    return (PFN_vkVoidFunction)DiveInterceptEnumerateDeviceLayerProperties;
   if (0 == strcmp(func, "vkEnumerateDeviceExtensionProperties"))
-    return (PFN_vkVoidFunction)InterceptEnumerateDeviceExtensionProperties;
+    return (PFN_vkVoidFunction)DiveInterceptEnumerateDeviceExtensionProperties;
   if (!strcmp(func, "vkGetDeviceProcAddr"))
     return (PFN_vkVoidFunction)&VK_LAYER_DiveGetDeviceProcAddr;
 
   if (0 == strcmp(func, "vkEnumerateInstanceLayerProperties"))
-    return (PFN_vkVoidFunction)&InterceptEnumerateInstanceLayerProperties;
+    return (PFN_vkVoidFunction)&DiveInterceptEnumerateInstanceLayerProperties;
   if (0 == strcmp(func, "vkCreateDevice"))
-    return (PFN_vkVoidFunction)&InterceptCreateDevice;
+    return (PFN_vkVoidFunction)&DiveInterceptCreateDevice;
   auto instance_data = GetInstanceLayerData(DataKey(inst));
   return instance_data->dispatch_table.pfn_get_instance_proc_addr(inst, func);
 }

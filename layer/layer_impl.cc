@@ -27,7 +27,8 @@ limitations under the License.
 
 #include <vulkan/vulkan_core.h>
 
-#include "log.h"
+#include "capture_service/log.h"
+#include "capture_service/trace_mgr.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 namespace DiveLayer {
@@ -35,7 +36,7 @@ namespace DiveLayer {
 VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                          const VkPresentInfoKHR *pPresentInfo) {
   VkResult ret = pfn(queue, pPresentInfo);
-  LOGD("QueuePresentKHR");
+  Dive::GetTraceMgr()->OnNewFrame();
   return ret;
 }
 

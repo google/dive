@@ -18,9 +18,8 @@ PROJECT_ROOT="$(readlink -f $0)"
 PROJECT_ROOT="${PROJECT_ROOT%/*}/.."
 readonly PROJECT_ROOT="$(readlink -f ${PROJECT_ROOT})"
 readonly BUILD_DIR_ROOT=${PROJECT_ROOT}/build_android
-readonly SRC_DIR=${PROJECT_ROOT}/layer
-# readonly BUILD_TYPE=(Debug Release)
-readonly BUILD_TYPE=(Debug)
+readonly SRC_DIR=${PROJECT_ROOT}
+readonly BUILD_TYPE=(Debug Release)
 
 for build in "${BUILD_TYPE[@]}"
 do
@@ -31,8 +30,8 @@ do
     echo "current dir " `pwd`
 
     cmake  -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-        -G "Unix Makefiles" \
-        -DCMAKE_MAKE_PROGRAM="make" \
+        -G "Ninja" \
+        -DCMAKE_MAKE_PROGRAM="ninja" \
         -DCMAKE_BUILD_TYPE=${build} \
         -DCMAKE_SYSTEM_NAME=Android \
         -DANDROID_ABI=arm64-v8a \
@@ -43,7 +42,7 @@ do
         -DCARES_INSTALL=OFF \
         -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
-        ${SRC_DIR}/..
+        ${SRC_DIR}
 
     cmake --build . --config=${build} -j 
     popd

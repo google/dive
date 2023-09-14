@@ -1,5 +1,5 @@
 #
-# Copyright 2019 Google LLC
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,37 @@ cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 
 project(dive)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_CXX_STANDARD 17)
 
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
+    find_program(_PROTOBUF_PROTOC protoc PATHS ${CMAKE_SOURCE_DIR}/bin)
+    find_program(_GRPC_CPP_PLUGIN grpc_cpp_plugin PATHS ${CMAKE_SOURCE_DIR}/bin)
 endif()
+
+option(BUILD_GRPC "Build gRPC from source" "ON")
+if(BUILD_GRPC)
+    include(grpc.cmake)
+else()
+    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/grpc_bin")
+    find_package(Threads REQUIRED)
+    set(ABSL_PROPAGATE_CXX_STD ON)
+    find_package(absl CONFIG REQUIRED)
+
+    option(protobuf_MODULE_COMPATIBLE TRUE)
+    find_package(Protobuf CONFIG REQUIRED)
+    message(STATUS "Using protobuf ${Protobuf_VERSION}")
+
+    find_package(gRPC CONFIG REQUIRED)
+    message(STATUS "Using gRPC ${gRPC_VERSION}")
+
+    set(_GRPC_GRPCPP grpc++)
+    set(_PROTOBUF_LIBPROTOBUF protobuf)
+endif()
+
+message(STATUS "Using gRPC ${gRPC_VERSION}")
 
 # `dive_core/common.h` is used in more places other than dive_core now
 add_definitions(-DDIVE_GUI_TOOL)
@@ -45,21 +70,19 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
+add_subdirectory(capture_service)
 add_subdirectory(layer)
-add_subdirectory(dive_core)
-
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
-if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")
-    add_subdirectory(cli)
-endif()
+if(NOT ANDROID)
+    add_subdirectory(dive_core)
+    if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")
+        add_subdirectory(cli)
+    endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/capture_layer/CMakeLists.txt" AND "${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
-    add_subdirectory(capture_layer)
-endif()
-
-if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT ANDROID AND NOT DIVE_NO_DISASSEMBLY)
-    add_subdirectory(ui)
+    if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT DIVE_NO_DISASSEMBLY)
+        add_subdirectory(ui)
+    endif()
 endif()
 
 option(DIVE_UNIT_TESTS, "Build unit tests for dive")
@@ -78,4 +101,3 @@ if(DIVE_PYTHON_BINDINGS)
     add_subdirectory(third_party/pybind11)
     add_subdirectory(pydive)
 endif()
-

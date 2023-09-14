@@ -19,12 +19,10 @@ cmake_minimum_required(VERSION 3.0)
 project(diveCaptureLayer)
 
 set(CMAKE_CXX_STANDARD 17)
+set(target_name VkLayer_dive)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-
-set(target_name VkLayer_dive)
 
 set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/dispatch.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.h"
@@ -38,21 +36,35 @@ set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
 )
 
-include_directories(${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include)
+include_directories(${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
+    ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/abseil-cpp/
+    ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/protobuf/src/)
 
 add_library(${target_name} SHARED ${HDR_FILES}
                                 ${SRC_FILES})
-            
-add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-add_definitions(-DLAYERNAME=Dive)                         
+
+add_definitions(-DLAYERNAME=Dive)
+
+set(TARGET_LINK_LIBS PRIVATE    
+        dive_grpc_proto
+        service
+        ${_GRPC_GRPCPP}
+        ${_PROTOBUF_LIBPROTOBUF})
 
 if(ANDROID)
-    target_link_libraries(${target_name}
-                            PRIVATE -lm
-                            PRIVATE -ldl
-                            PRIVATE -llog
-                            PRIVATE -landroid)
+    add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
+    list(APPEND TARGET_LINK_LIBS 
+        PRIVATE -lm
+        PRIVATE -ldl
+        PRIVATE -llog
+        PRIVATE -landroid
+        PRIVATE wrap)    
 endif()
+
+target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
+target_link_directories(${target_name}
+PRIVATE ${CMAKE_SOURCE_DIR}/capture_service)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)

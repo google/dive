@@ -907,9 +907,9 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
     };
 
     BlockInfo block_info;
-    uint64_t cur_gpu_addr = UINT64_MAX;
-    uint32_t cur_size = UINT32_MAX;
-    bool is_new_submit = false;
+    uint64_t  cur_gpu_addr = UINT64_MAX;
+    uint32_t  cur_size = UINT32_MAX;
+    bool      is_new_submit = false;
     while (capture_file.read((char *)&block_info, sizeof(block_info)))
     {
         if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
@@ -918,7 +918,10 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
         switch (block_info.m_block_type)
         {
         case RD_GPUADDR:
-            if (!LoadGpuAddressAndSize(capture_file, block_info.m_data_size, &cur_gpu_addr, &cur_size))
+            if (!LoadGpuAddressAndSize(capture_file,
+                                       block_info.m_data_size,
+                                       &cur_gpu_addr,
+                                       &cur_size))
                 return LoadResult::kFileIoError;
             is_new_submit = true;
             break;
@@ -937,19 +940,18 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
         case RD_NONE:
         case RD_TEST:
         case RD_CMD:
-        //case RD_GPUADDR:
+        // case RD_GPUADDR:
         case RD_CONTEXT:
         case RD_CMDSTREAM:
-        //case RD_CMDSTREAM_ADDR:
+        // case RD_CMDSTREAM_ADDR:
         case RD_PARAM:
         case RD_FLUSH:
         case RD_PROGRAM:
         case RD_VERT_SHADER:
         case RD_FRAG_SHADER:
-        //case RD_BUFFER_CONTENTS:
+        // case RD_BUFFER_CONTENTS:
         case RD_GPU_ID:
-        case RD_CHIP_ID:
-            capture_file.seekg(block_info.m_data_size, std::ios::cur);
+        case RD_CHIP_ID: capture_file.seekg(block_info.m_data_size, std::ios::cur);
         }
     }
     m_memory.Finalize(true, true);
@@ -1326,7 +1328,10 @@ bool CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadGpuAddressAndSize(std::istream &capture_file, uint32_t block_size, uint64_t *gpu_addr, uint32_t *size)
+bool CaptureData::LoadGpuAddressAndSize(std::istream &capture_file,
+                                        uint32_t      block_size,
+                                        uint64_t     *gpu_addr,
+                                        uint32_t     *size)
 {
     assert(block_size >= 2 * sizeof(uint32_t));
 
@@ -1349,7 +1354,9 @@ bool CaptureData::LoadGpuAddressAndSize(std::istream &capture_file, uint32_t blo
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu_addr, uint32_t size)
+bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file,
+                                        uint64_t      gpu_addr,
+                                        uint32_t      size)
 {
     MemoryData raw_memory;
     raw_memory.m_data_size = size;
@@ -1367,7 +1374,9 @@ bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadCmdStreamBlockAdreno(std::istream &capture_file, uint32_t block_size, bool create_new_submit)
+bool CaptureData::LoadCmdStreamBlockAdreno(std::istream &capture_file,
+                                           uint32_t      block_size,
+                                           bool          create_new_submit)
 {
     uint64_t gpu_addr;
     uint32_t size_in_dwords;
@@ -1384,10 +1393,10 @@ bool CaptureData::LoadCmdStreamBlockAdreno(std::istream &capture_file, uint32_t 
         ibs.push_back(ib_info);
 
         SubmitInfo submit_info(EngineType::kUniversal,
-                            QueueType::kUniversal,
-                            0,
-                            false,
-                            std::move(ibs));
+                               QueueType::kUniversal,
+                               0,
+                               false,
+                               std::move(ibs));
         m_submits.push_back(std::move(submit_info));
     }
     else

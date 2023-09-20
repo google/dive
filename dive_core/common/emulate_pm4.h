@@ -20,16 +20,16 @@
 // =================================================================================================
 // Provides emulation of the submits present in the capture. In particular, the Emulate class
 // handles all the messy details of dealing with calls/chains and other hardware specific details.
-// A set of callbacks are provided for clients for certain important events that occur in the command
-// buffer. Note that the "order" that the callbacks are in is the order the commands are executed in
-// the emulation.
+// A set of callbacks are provided for clients for certain important events that occur in the
+// command buffer. Note that the "order" that the callbacks are in is the order the commands are
+// executed in the emulation.
 // =================================================================================================
 
 #pragma once
 #include <stdint.h>
+#include "adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "gpudefs.h"
-#include "adreno.h"
 
 namespace Dive
 {
@@ -81,7 +81,6 @@ enum class Pm4Type { kType2, kType4, kType7, kUnknown };
 class IEmulateCallbacks
 {
 public:
-
     // Callback on an IB start. Also called for all call/chain IBs
     // A return value of false indicates to the emulator to skip parsing this IB
     virtual bool OnIbStart(uint32_t                  submit_index,
@@ -101,12 +100,12 @@ public:
     }
 
     // Callback for each Pm4 packet. Called in order of emulation
-    virtual bool OnPacket(const IMemoryManager &       mem_manager,
-                          uint32_t                     submit_index,
-                          uint32_t                     ib_index,
-                          uint64_t                     va_addr,
-                          Pm4Type                      type,
-                          uint32_t                     header)
+    virtual bool OnPacket(const IMemoryManager &mem_manager,
+                          uint32_t              submit_index,
+                          uint32_t              ib_index,
+                          uint64_t              va_addr,
+                          Pm4Type               type,
+                          uint32_t              header)
     {
         return true;
     }
@@ -120,12 +119,12 @@ public:
     EmulateStateTracker();
 
     // Call these functions to update the state tracker
-    bool OnPacket(const IMemoryManager &       mem_manager,
-                  uint32_t                     submit_index,
-                  uint32_t                     ib_index,
-                  uint64_t                     va_addr,
-                  Pm4Type                      type,
-                  uint32_t                     header);
+    bool OnPacket(const IMemoryManager &mem_manager,
+                  uint32_t              submit_index,
+                  uint32_t              ib_index,
+                  uint64_t              va_addr,
+                  Pm4Type               type,
+                  uint32_t              header);
 
     // Accessing state tracking info
     bool     IsUConfigStateSet(uint16_t reg) const;
@@ -191,15 +190,15 @@ private:
     void UpdateUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t user_data_reg);
 
     // Register tracking data
-    static const uint32_t kNumPersistentRegs = 1; // Pal::Gfx9::PERSISTENT_SPACE_END - Pal::Gfx9::PERSISTENT_SPACE_START
-    uint8_t               m_sh_is_set[(kNumPersistentRegs / 8) + 1];
-    static const uint32_t kNumContextRegs = 1; // Pal::Gfx9::Gfx09_10::CONTEXT_SPACE_END - Pal::Gfx9::CONTEXT_SPACE_START
-    uint32_t m_context_data[kNumContextRegs];
-    uint8_t  m_context_is_set[(kNumContextRegs / 8) + 1];
+    static const uint32_t kNumPersistentRegs = 1; // Pal::Gfx9::PERSISTENT_SPACE_END -
+    Pal::Gfx9::PERSISTENT_SPACE_START uint8_t               m_sh_is_set[(kNumPersistentRegs / 8) +
+    1]; static const uint32_t kNumContextRegs = 1; // Pal::Gfx9::Gfx09_10::CONTEXT_SPACE_END -
+    Pal::Gfx9::CONTEXT_SPACE_START uint32_t m_context_data[kNumContextRegs]; uint8_t
+    m_context_is_set[(kNumContextRegs / 8) + 1];
 
-    static const uint32_t kNumUConfigRegs = 1; //Pal::Gfx9::UCONFIG_SPACE_END - Pal::Gfx9::UCONFIG_SPACE_START + 1;
-    uint32_t m_uconfig_data[kNumUConfigRegs];
-    uint8_t  m_uconfig_is_set[(kNumUConfigRegs / 8) + 1];
+    static const uint32_t kNumUConfigRegs = 1; //Pal::Gfx9::UCONFIG_SPACE_END -
+    Pal::Gfx9::UCONFIG_SPACE_START + 1; uint32_t m_uconfig_data[kNumUConfigRegs]; uint8_t
+    m_uconfig_is_set[(kNumUConfigRegs / 8) + 1];
 
     static const uint32_t kNumShaderStages = (uint32_t)ShaderStage::kShaderStageCount;
     uint8_t               m_num_user_data_regs_set_last_event[kNumShaderStages];
@@ -230,8 +229,8 @@ public:
     // Emulate a submit
     static const uint32_t kMaxNumIbsPerSubmit = 16;
 
-    bool ExecuteSubmit(IEmulateCallbacks &       callbacks,
-                       const IMemoryManager &    mem_manager,
+    bool ExecuteSubmit(IEmulateCallbacks        &callbacks,
+                       const IMemoryManager     &mem_manager,
                        uint32_t                  submit_index,
                        uint32_t                  num_ibs,
                        const IndirectBufferInfo *ib_ptr);
@@ -275,36 +274,36 @@ private:
     uint32_t GetNextIb(uint32_t submit_index, uint32_t start_ib_index) const;
 
     // Advance dcb pointer after advancing past the packet header. Returns "true" if dcb is blocked.
-    bool AdvanceCb(const IMemoryManager &       mem_manager,
-                   EmulateState *               emu_state_ptr,
-                   IEmulateCallbacks &          callbacks,
-                   Pm4Type                      type,
-                   uint32_t                     header) const;
+    bool AdvanceCb(const IMemoryManager &mem_manager,
+                   EmulateState         *emu_state_ptr,
+                   IEmulateCallbacks    &callbacks,
+                   Pm4Type               type,
+                   uint32_t              header) const;
 
     // Helper function to help with advancing emulation to IB
-    bool AdvanceToIB(const IMemoryManager        &mem_manager,
-                     bool                         is_chain,
-                     uint64_t                     ib_addr,
-                     uint32_t                     ib_size_in_dwords,
-                     const IndirectBufferInfo &   ib_info,
-                     EmulateState::CbState *      cb_state,
-                     IEmulateCallbacks &          callbacks,
-                     Pm4Type                      type,
-                     uint32_t                     header) const;
+    bool AdvanceToIB(const IMemoryManager     &mem_manager,
+                     bool                      is_chain,
+                     uint64_t                  ib_addr,
+                     uint32_t                  ib_size_in_dwords,
+                     const IndirectBufferInfo &ib_info,
+                     EmulateState::CbState    *cb_state,
+                     IEmulateCallbacks        &callbacks,
+                     Pm4Type                   type,
+                     uint32_t                  header) const;
 
     // Helper function to help with advancing emulation to next packet
-    bool AdvancePacket(const IMemoryManager &       mem_manager,
-                       const IndirectBufferInfo &   ib_info,
-                       EmulateState::CbState *      cb_state,
-                       IEmulateCallbacks &          callbacks,
-                       Pm4Type                      type,
-                       uint32_t                     header) const;
+    bool AdvancePacket(const IMemoryManager     &mem_manager,
+                       const IndirectBufferInfo &ib_info,
+                       EmulateState::CbState    *cb_state,
+                       IEmulateCallbacks        &callbacks,
+                       Pm4Type                   type,
+                       uint32_t                  header) const;
 
     // Helper function to help with advancing emulation out of IB
     bool AdvanceOutOfIB(const IMemoryManager     &mem_manager,
                         const IndirectBufferInfo &ib_info,
-                        EmulateState::CbState *   cb_state,
-                        IEmulateCallbacks &       callbacks) const;
+                        EmulateState::CbState    *cb_state,
+                        IEmulateCallbacks        &callbacks) const;
 
     uint32_t CalcParity(uint32_t val);
 

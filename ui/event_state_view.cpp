@@ -76,7 +76,8 @@
 // =================================================================================================
 // EventStateView
 // =================================================================================================
-EventStateView::EventStateView(const Dive::DataCore &data_core) : m_data_core(data_core)
+EventStateView::EventStateView(const Dive::DataCore &data_core) :
+    m_data_core(data_core)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_event_state_tree = new QTreeWidget();

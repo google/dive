@@ -373,9 +373,14 @@ private:
     bool       LoadVulkanMetaDataBlock(std::istream &capture_file);
 
     // Adreno-specific load functions
-    bool LoadGpuAddressAndSize(std::istream &capture_file, uint32_t block_size, uint64_t *gpu_addr, uint32_t *size);
+    bool LoadGpuAddressAndSize(std::istream &capture_file,
+                               uint32_t      block_size,
+                               uint64_t     *gpu_addr,
+                               uint32_t     *size);
     bool LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu_addr, uint32_t size);
-    bool LoadCmdStreamBlockAdreno(std::istream &capture_file, uint32_t block_size, bool create_new_submit);
+    bool LoadCmdStreamBlockAdreno(std::istream &capture_file,
+                                  uint32_t      block_size,
+                                  bool          create_new_submit);
 
     void Finalize(const CaptureDataHeader &data_header);
 

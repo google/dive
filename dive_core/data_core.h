@@ -135,12 +135,12 @@ public:
                          uint32_t                  ib_index,
                          const IndirectBufferInfo &ib_info) override;
 
-    virtual bool OnPacket(const IMemoryManager &       mem_manager,
-                          uint32_t                     submit_index,
-                          uint32_t                     ib_index,
-                          uint64_t                     va_addr,
-                          Pm4Type                      type,
-                          uint32_t                     header) override;
+    virtual bool OnPacket(const IMemoryManager &mem_manager,
+                          uint32_t              submit_index,
+                          uint32_t              ib_index,
+                          uint64_t              va_addr,
+                          Pm4Type               type,
+                          uint32_t              header) override;
 
 private:
     bool HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t opcode);
@@ -160,7 +160,7 @@ private:
     // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
     std::map<uint64_t, uint32_t> m_buffer_addrs;
 
-    EmulateStateTracker   m_state_tracker;
+    EmulateStateTracker m_state_tracker;
 
     CaptureMetadata &m_capture_metadata;
 #if defined(ENABLE_CAPTURE_BUFFERS)

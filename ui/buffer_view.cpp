@@ -106,7 +106,7 @@ void BufferView::OnEventSelected(uint32_t event_index)
 
             // Column 1
             const uint32_t str_buffer_size = 256;
-            char str_buffer[str_buffer_size];
+            char           str_buffer[str_buffer_size];
             snprintf(str_buffer, str_buffer_size, "%p", (void *)buffer_info.m_addr);
             treeItem->setText(1, tr(str_buffer));
 
@@ -124,20 +124,20 @@ void BufferView::OnEventSelected(uint32_t event_index)
             treeItem->setText(3, tr(str_buffer));
 
             // Column 4
-            snprintf(str_buffer, str_buffer_size, "%s", kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_x]);
-            treeItem->setText(4, tr(str_buffer));
+            snprintf(str_buffer, str_buffer_size, "%s",
+            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_x]); treeItem->setText(4, tr(str_buffer));
 
             // Column 5
-            snprintf(str_buffer, str_buffer_size, "%s", kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_y]);
-            treeItem->setText(5, tr(str_buffer));
+            snprintf(str_buffer, str_buffer_size, "%s",
+            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_y]); treeItem->setText(5, tr(str_buffer));
 
             // Column 6
-            snprintf(str_buffer, str_buffer_size, "%s", kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_z]);
-            treeItem->setText(6, tr(str_buffer));
+            snprintf(str_buffer, str_buffer_size, "%s",
+            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_z]); treeItem->setText(6, tr(str_buffer));
 
             // Column 7
-            snprintf(str_buffer, str_buffer_size, "%s", kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_w]);
-            treeItem->setText(7, tr(str_buffer));
+            snprintf(str_buffer, str_buffer_size, "%s",
+            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_w]); treeItem->setText(7, tr(str_buffer));
             */
             // Column 8
             // Find preferred heap
@@ -222,7 +222,7 @@ void BufferView::OnBufferSelectionChanged()
         uint64_t dword_addr = buffer_info.m_addr + dword * sizeof(uint32_t);
 
         const uint32_t buffer_size = 256;
-        char buffer[buffer_size];
+        char           buffer[buffer_size];
         if (cur_col == 0)
         {
             snprintf(buffer, buffer_size, "%p", (void *)dword_addr);

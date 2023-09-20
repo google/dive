@@ -372,12 +372,12 @@ public:
                          uint32_t                  ib_index,
                          const IndirectBufferInfo &ib_info) override;
 
-    virtual bool OnPacket(const IMemoryManager &       mem_manager,
-                          uint32_t                     submit_index,
-                          uint32_t                     ib_index,
-                          uint64_t                     va_addr,
-                          Pm4Type                      type,
-                          uint32_t                     header) override;
+    virtual bool OnPacket(const IMemoryManager &mem_manager,
+                          uint32_t              submit_index,
+                          uint32_t              ib_index,
+                          uint64_t              va_addr,
+                          Pm4Type               type,
+                          uint32_t              header) override;
 
 private:
     union Type3Ordinal2
@@ -393,26 +393,26 @@ private:
 
     void     OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info);
     void     OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info);
-    uint64_t AddPacketNode(const IMemoryManager        &mem_manager,
-                           uint32_t                     submit_index,
-                           uint64_t                     va_addr,
-                           bool                         is_ce_packet,
-                           Pm4Type                      type,
-                           uint32_t                     header);
+    uint64_t AddPacketNode(const IMemoryManager &mem_manager,
+                           uint32_t              submit_index,
+                           uint64_t              va_addr,
+                           bool                  is_ce_packet,
+                           Pm4Type               type,
+                           uint32_t              header);
     uint64_t AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
-    uint64_t AddSyncEventNode(const IMemoryManager &       mem_manager,
-                              uint32_t                     submit_index,
-                              uint64_t                     va_addr,
-                              SyncType                     sync_event);
+    uint64_t AddSyncEventNode(const IMemoryManager &mem_manager,
+                              uint32_t              submit_index,
+                              uint64_t              va_addr,
+                              SyncType              sync_event);
 
-    bool     TryParseMarker(uint64_t submit_node_index);
+    bool TryParseMarker(uint64_t submit_node_index);
 
-    void     OnVulkanMarkerEnd();
-    void     OnGFRCommandMarkerEnd();
-    void     ParseVulkanCallMarker(char *   marker_ptr,
-                                   uint32_t marker_size,
-                                   uint64_t submit_node_index,
-                                   uint64_t packet_node_index);
+    void OnVulkanMarkerEnd();
+    void OnGFRCommandMarkerEnd();
+    void ParseVulkanCallMarker(char    *marker_ptr,
+                               uint32_t marker_size,
+                               uint64_t submit_node_index,
+                               uint64_t packet_node_index);
 
     bool IsBeginDebugMarkerNode(uint64_t node_index);
     void ParseVulkanCmdBeginMarker(char    *marker_ptr,
@@ -422,15 +422,15 @@ private:
 
     uint32_t GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords);
 
-    std::string GetEventString(const IMemoryManager        &mem_manager,
-                               uint32_t                     submit_index,
-                               uint64_t                     va_addr,
-                               uint32_t                     opcode);
-    void        AppendRegNodes(const IMemoryManager &       mem_manager,
-                               uint32_t                     submit_index,
-                               uint64_t                     va_addr,
-                               Pm4Type4Header               header,
-                               uint64_t                     packet_node_index);
+    std::string GetEventString(const IMemoryManager &mem_manager,
+                               uint32_t              submit_index,
+                               uint64_t              va_addr,
+                               uint32_t              opcode);
+    void        AppendRegNodes(const IMemoryManager &mem_manager,
+                               uint32_t              submit_index,
+                               uint64_t              va_addr,
+                               Pm4Type4Header        header,
+                               uint64_t              packet_node_index);
     void        AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
                                          uint32_t                     submit_index,
                                          uint64_t                     va_addr,
@@ -461,15 +461,15 @@ private:
                                            const PM4_PFP_TYPE_3_HEADER &header,
                                            const PacketInfo            *packet_info_ptr,
                                            uint64_t                     packet_node_index);
-    void        AppendPacketFieldNodes(const IMemoryManager        &mem_manager,
-                                       uint32_t                     submit_index,
-                                       uint64_t                     va_addr,
-                                       bool                         is_ce_packet,
-                                       Pm4Type7Header               type7_header,
-                                       const PacketInfo *           packet_info_ptr,
-                                       uint64_t                     packet_node_index,
-                                       size_t                       field_start = 0,
-                                       size_t                       field_last = SIZE_MAX - 1);
+    void        AppendPacketFieldNodes(const IMemoryManager &mem_manager,
+                                       uint32_t              submit_index,
+                                       uint64_t              va_addr,
+                                       bool                  is_ce_packet,
+                                       Pm4Type7Header        type7_header,
+                                       const PacketInfo     *packet_info_ptr,
+                                       uint64_t              packet_node_index,
+                                       size_t                field_start = 0,
+                                       size_t                field_last = SIZE_MAX - 1);
 
     uint64_t AddNode(NodeType                  type,
                      const std::string        &desc,
@@ -508,10 +508,7 @@ private:
         {
             m_packet_node_indices.push_back(packet_node_index);
         }
-        void Clear()
-        {
-            m_packet_node_indices.clear();
-        }
+        void Clear() { m_packet_node_indices.clear(); }
         void Pop()
         {
             DIVE_ASSERT(!m_packet_node_indices.empty());
@@ -519,7 +516,7 @@ private:
         }
     };
 
-    CommandHierarchy * m_command_hierarchy_ptr;  // Pointer to class being created
+    CommandHierarchy  *m_command_hierarchy_ptr;  // Pointer to class being created
     const CaptureData *m_capture_data_ptr;
 
     // Parsing State
@@ -545,9 +542,9 @@ private:
     std::vector<uint64_t> m_ccb_ib_stack;           // Tracks current CCB IB stack
     std::vector<uint64_t> m_renderpass_stack;       // render pass marker begin/end stack
 
-    uint32_t   m_num_events;             // Number of events so far
-    Packets    m_packets;                // Packets added since last event
-    uint64_t   m_cur_submit_node_index;  // Current submit node being processed
+    uint32_t m_num_events;             // Number of events so far
+    Packets  m_packets;                // Packets added since last event
+    uint64_t m_cur_submit_node_index;  // Current submit node being processed
 
     // Flattening is the process of forcing chain ib nodes to only ever be child to non-chain ib
     // nodes, even when daisy chaining across multiple chain ib nodes. This makes the topology

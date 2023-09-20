@@ -73,11 +73,11 @@ void HoverHelp::SetCurItem(Item        item,
 #define END_SWITCH() \
     }                \
     ;
-#define CASE(index, ...)                                  \
-    case Item::index:                                     \
-        cur_string_size = snprintf(NULL, 0, __VA_ARGS__); \
-        cur_string.resize(cur_string_size);               \
-        snprintf(&cur_string[0], cur_string_size, __VA_ARGS__);             \
+#define CASE(index, ...)                                        \
+    case Item::index:                                           \
+        cur_string_size = snprintf(NULL, 0, __VA_ARGS__);       \
+        cur_string.resize(cur_string_size);                     \
+        snprintf(&cur_string[0], cur_string_size, __VA_ARGS__); \
         break;
 #define CASE_CUSTOM(index, func)                   \
     case Item::index:                              \

@@ -40,8 +40,8 @@ union Pm4Header
 {
     struct
     {
-        uint32_t offset_parity  : 28;
-        uint32_t type           : 4;
+        uint32_t offset_parity : 28;
+        uint32_t type : 4;
     };
     uint32_t u32All;
 };
@@ -52,12 +52,12 @@ union Pm4Header
 EmulateStateTracker::EmulateStateTracker() {}
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::OnPacket(const IMemoryManager &       mem_manager,
-                                   uint32_t                     submit_index,
-                                   uint32_t                     ib_index,
-                                   uint64_t                     va_addr,
-                                   Pm4Type                      type,
-                                   uint32_t                     header)
+bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
+                                   uint32_t              submit_index,
+                                   uint32_t              ib_index,
+                                   uint64_t              va_addr,
+                                   Pm4Type               type,
+                                   uint32_t              header)
 {
     return true;
 }
@@ -557,14 +557,14 @@ uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage stage) const
 //--------------------------------------------------------------------------------------------------
 uint64_t EmulateStateTracker::GetBufferAddr() const
 {
-    //return m_buffer_va;
+    // return m_buffer_va;
     return 0;
 }
 
 //--------------------------------------------------------------------------------------------------
 uint32_t EmulateStateTracker::GetBufferSize() const
 {
-    //return m_buffer_size;
+    // return m_buffer_size;
     return 0;
 }
 /*
@@ -589,8 +589,8 @@ void EmulateStateTracker::UpdateUserDataRegsSetSinceLastEvent(ShaderStage stage,
 EmulatePM4::EmulatePM4() {}
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks &       callbacks,
-                               const IMemoryManager &    mem_manager,
+bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
+                               const IMemoryManager     &mem_manager,
                                uint32_t                  submit_index,
                                uint32_t                  num_ibs,
                                const IndirectBufferInfo *ib_ptr)
@@ -655,11 +655,11 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks &       callbacks,
 
             // We only care about Type 2, 4 and 7 packets
             Pm4Type type = Pm4Type::kUnknown;
-            if (header.type == 2)       // NOP
+            if (header.type == 2)  // NOP
                 type = Pm4Type::kType2;
             else if (header.type == 4)  // Register write
                 type = Pm4Type::kType4;
-            if (header.type == 7)       // PM4 opcode
+            if (header.type == 7)  // PM4 opcode
                 type = Pm4Type::kType7;
 
             // Check validity of packet
@@ -681,7 +681,6 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks &       callbacks,
                 if (type7_header->zeroes != 0)
                     return false;
             }
-
 
             if (!emu_state.m_is_dcb_blocked)
                 if (!callbacks.OnPacket(mem_manager,
@@ -734,8 +733,7 @@ bool EmulatePM4::GetNextValidIb(const IMemoryManager     &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t EmulatePM4::GetNextIb(uint32_t submit_index,
-                               uint32_t start_ib_index) const
+uint32_t EmulatePM4::GetNextIb(uint32_t submit_index, uint32_t start_ib_index) const
 {
     if (start_ib_index < m_num_ibs)
         return start_ib_index;
@@ -743,11 +741,11 @@ uint32_t EmulatePM4::GetNextIb(uint32_t submit_index,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceCb(const IMemoryManager &       mem_manager,
-                           EmulateState *               emu_state_ptr,
-                           IEmulateCallbacks &          callbacks,
-                           Pm4Type                      type,
-                           uint32_t                     header) const
+bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
+                           EmulateState         *emu_state_ptr,
+                           IEmulateCallbacks    &callbacks,
+                           Pm4Type               type,
+                           uint32_t              header) const
 {
     IndirectBufferInfo ib_info;
     ib_info.m_skip = false;
@@ -770,13 +768,12 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &       mem_manager,
     type7_header.u32All = header;
 
     // Deal with calls and chains
-    if (type == Pm4Type::kType7 &&
-        (type7_header.opcode == CP_INDIRECT_BUFFER ||
-        type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
-        type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
-        type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
-        type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE ||
-        type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFD))
+    if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER ||
+                                    type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
+                                    type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
+                                    type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
+                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE ||
+                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFD))
     {
         PM4_CP_INDIRECT_BUFFER ib_packet;
         if (!mem_manager.CopyMemory(&ib_packet,
@@ -811,15 +808,15 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &       mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceToIB(const IMemoryManager        &mem_manager,
-                             bool                         is_chain,
-                             uint64_t                     ib_addr,
-                             uint32_t                     ib_size_in_dwords,
-                             const IndirectBufferInfo &   ib_info,
-                             EmulateState::CbState *      cb_state,
-                             IEmulateCallbacks &          callbacks,
-                             Pm4Type                      type,
-                             uint32_t                     header) const
+bool EmulatePM4::AdvanceToIB(const IMemoryManager     &mem_manager,
+                             bool                      is_chain,
+                             uint64_t                  ib_addr,
+                             uint32_t                  ib_size_in_dwords,
+                             const IndirectBufferInfo &ib_info,
+                             EmulateState::CbState    *cb_state,
+                             IEmulateCallbacks        &callbacks,
+                             Pm4Type                   type,
+                             uint32_t                  header) const
 {
     if (!is_chain)
     {
@@ -877,12 +874,12 @@ bool EmulatePM4::AdvanceToIB(const IMemoryManager        &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvancePacket(const IMemoryManager &       mem_manager,
-                               const IndirectBufferInfo &   ib_info,
-                               EmulateState::CbState *      cb_state,
-                               IEmulateCallbacks &          callbacks,
-                               Pm4Type                      type,
-                               uint32_t                     header) const
+bool EmulatePM4::AdvancePacket(const IMemoryManager     &mem_manager,
+                               const IndirectBufferInfo &ib_info,
+                               EmulateState::CbState    *cb_state,
+                               IEmulateCallbacks        &callbacks,
+                               Pm4Type                   type,
+                               uint32_t                  header) const
 {
     uint32_t packet_size = GetPacketSize(header);
     cb_state->m_va += packet_size * sizeof(uint32_t);
@@ -899,8 +896,8 @@ bool EmulatePM4::AdvancePacket(const IMemoryManager &       mem_manager,
 //--------------------------------------------------------------------------------------------------
 bool EmulatePM4::AdvanceOutOfIB(const IMemoryManager     &mem_manager,
                                 const IndirectBufferInfo &ib_info,
-                                EmulateState::CbState *   cb_state,
-                                IEmulateCallbacks &       callbacks) const
+                                EmulateState::CbState    *cb_state,
+                                IEmulateCallbacks        &callbacks) const
 {
     // End-Ib Callback
     if (!callbacks.OnIbEnd(m_submit_index, cb_state->m_ib_index, ib_info))
@@ -993,8 +990,7 @@ uint32_t GetPacketSize(uint32_t header)
     // Assumes the packet is valid, so doesn't check the parity bits at all
     switch (pm4_header.type)
     {
-    case 2:
-        return 1;
+    case 2: return 1;
     case 4:
     {
         Pm4Type4Header *type4_header = (Pm4Type4Header *)&pm4_header;

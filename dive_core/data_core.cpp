@@ -128,7 +128,8 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 // =================================================================================================
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
-{}
+{
+}
 
 //--------------------------------------------------------------------------------------------------
 CaptureMetadataCreator::~CaptureMetadataCreator() {}
@@ -137,9 +138,7 @@ CaptureMetadataCreator::~CaptureMetadataCreator() {}
 void CaptureMetadataCreator::OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) {}
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info)
-{
-}
+void CaptureMetadataCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) {}
 
 //--------------------------------------------------------------------------------------------------
 bool CaptureMetadataCreator::OnIbStart(uint32_t                  submit_index,

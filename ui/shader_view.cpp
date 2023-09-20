@@ -163,7 +163,7 @@ void ShaderView::OnEventSelected(uint64_t node_index)
 
                 // Column 1
                 const uint32_t buffer_size = 256;
-                char buffer[buffer_size];
+                char           buffer[buffer_size];
                 snprintf(buffer, buffer_size, "%p", (void *)shader_info.m_addr);
                 treeItem->setText(1, tr(buffer));
 

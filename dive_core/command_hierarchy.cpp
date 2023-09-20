@@ -1755,8 +1755,11 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
 
         uint64_t reg_value = 0;
         bool     ret = mem_manager.CopyMemory(&reg_value, submit_index, reg_va_addr, size_to_read);
-        DIVE_ASSERT(ret);  // This should never fail!
-
+        if (!ret)
+        {
+            DIVE_ERROR_MSG("CopyMemory failed");
+            DIVE_ASSERT(ret);  // This should never fail!
+        }
         // Create the register node, as well as all its children nodes that describe the various
         // fields set in the single 32-bit register
         uint64_t reg_node_index = AddRegisterNode(reg_offset, reg_value, reg_info_ptr);

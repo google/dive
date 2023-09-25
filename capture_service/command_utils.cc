@@ -56,7 +56,7 @@ std::string RunCommand(const std::string &command)
 }
 #endif
 
-std::string AdbSession::Run(const std::string &command)
+std::string AdbSession::Run(const std::string &command) const
 {
     return RunCommand("adb -s " + m_serial + " " + command);
 }

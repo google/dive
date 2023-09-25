@@ -31,7 +31,7 @@ public:
     {
     }
 
-    std::string Run(const std::string &command);
+    std::string Run(const std::string &command) const;
 
 private:
     std::string m_serial;

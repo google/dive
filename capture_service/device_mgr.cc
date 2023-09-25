@@ -71,12 +71,12 @@ AndroidDevice::~AndroidDevice()
     }
 }
 
-std::string AndroidDevice::GetDeviceDisplayName()
+std::string AndroidDevice::GetDeviceDisplayName() const
 {
     return absl::StrCat(m_dev_info.m_manufacturer, " ", m_dev_info.m_model, " (", m_serial, ")");
 }
 
-std::vector<std::string> AndroidDevice::ListPackage()
+std::vector<std::string> AndroidDevice::ListPackage() const
 {
     std::vector<std::string> package_list;
 
@@ -128,12 +128,6 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
     std::string activity;
     std::string target_str = package + "/";
 
-    // Skip non debuggable apps.
-    if (!absl::StrContains(input, "DEBUGGABLE"))
-    {
-        return activity;
-    }
-
     std::vector<std::string> lines = absl::StrSplit(input, '\n');
     int                      idention = 0;
     for (const auto &line : lines)
@@ -181,7 +175,7 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
     return activity;
 }
 
-std::string AndroidDevice::GetMainActivity(const std::string &package)
+std::string AndroidDevice::GetMainActivity(const std::string &package) const
 {
 
     std::string output = Adb().Run("shell dumpsys package " + package);
@@ -261,7 +255,7 @@ void AndroidDevice::StopApp(const std::string &package)
     Adb().Run(absl::StrFormat("shell am force-stop %s", package));
 }
 
-std::vector<std::string> DeviceManager::ListDevice()
+std::vector<std::string> DeviceManager::ListDevice() const
 {
     std::vector<std::string> dev_list;
     std::string              output = RunCommand("adb devices");

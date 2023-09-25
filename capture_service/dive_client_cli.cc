@@ -98,7 +98,7 @@ void print_usage(const char* app)
     std::cout << "\t" << app << "device_serial package_name [activity]" << std::endl;
 }
 
-bool list_device(Dive::DeviceManager& mgr)
+bool list_device(const Dive::DeviceManager& mgr)
 {
     auto list = mgr.ListDevice();
     if (list.empty())
@@ -116,7 +116,7 @@ bool list_device(Dive::DeviceManager& mgr)
     return true;
 }
 
-bool list_package(Dive::DeviceManager& mgr, const std::string device_serial)
+bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
 {
     auto device = mgr.SelectDevice(device_serial);
     auto packages = device->ListPackage();
@@ -199,7 +199,13 @@ int main(int argc, char** argv)
     std::string activity = absl::GetFlag(FLAGS_activity);
 
     Dive::DeviceManager mgr;
-
+    auto list = mgr.ListDevice();
+    if (list.empty())
+    {
+        std::cout << "No device connected" << std::endl;
+        return 0;
+    }
+    
     switch (cmd)
     {
     case Command::kListDevice:
@@ -231,12 +237,6 @@ int main(int argc, char** argv)
     }
     }
 
-    auto list = mgr.ListDevice();
-    if (list.empty())
-    {
-        std::cout << "No device connected" << std::endl;
-        return 0;
-    }
     std::cout << "Press Enter to exit" << std::endl;
     std::string input;
     if (std::getline(std::cin, input))

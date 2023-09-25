@@ -1,0 +1,29 @@
+#version 310 es
+#extension GL_OES_tessellation_shader : enable
+
+layout(vertices = 3) out;
+in vec3 vPosition[];
+out vec3 tcPosition[];
+uniform float TessLevelInner;
+uniform float TessLevelOuter;
+uniform sampler2D uTexture;
+uniform sampler2D uTex2D0;
+uniform vec4 uVec4;
+
+#define ID gl_InvocationID
+
+layout(binding = 1) buffer buffer_In {
+    vec4 In[];
+};
+
+void main()
+{
+    tcPosition[ID] = vPosition[ID] + texture(uTexture, vPosition[ID].xy).xyz + uVec4.xyz + texture(uTex2D0, vPosition[ID].xy).xyz;
+    if (ID == 0) {
+        gl_TessLevelInner[0] = TessLevelInner + In[0].x;
+        gl_TessLevelOuter[0] = TessLevelOuter + In[0].y;
+        gl_TessLevelOuter[1] = TessLevelOuter + In[0].z;
+        gl_TessLevelOuter[2] = TessLevelOuter + In[0].w;
+    }
+}
+

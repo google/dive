@@ -23,14 +23,14 @@ namespace
 constexpr uint32_t kNumFrameToTrace = 1;
 }
 
-TraceManager* GetTraceMgr()
+TraceManager& GetTraceMgr()
 {
 #if defined(__ANDROID__)
     static AndroidTraceManager trace_mgr;
 #else
     static TraceManager trace_mgr;
 #endif
-    return &trace_mgr;
+    return trace_mgr;
 }
 
 TraceManager::TraceManager() :

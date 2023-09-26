@@ -38,9 +38,9 @@ grpc::Status DiveServiceImpl::StartTrace(grpc::ServerContext  *context,
                                            const TraceRequest *request,
                                            TraceReply         *reply)
 {
-    GetTraceMgr()->TriggerTrace();
-    GetTraceMgr()->WaitForTraceDone();
-    reply->set_trace_file_path(GetTraceMgr()->GetTraceFilePath());
+    GetTraceMgr().TriggerTrace();
+    GetTraceMgr().WaitForTraceDone();
+    reply->set_trace_file_path(GetTraceMgr().GetTraceFilePath());
     return grpc::Status::OK;
 }
 

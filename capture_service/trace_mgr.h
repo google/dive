@@ -41,13 +41,13 @@ public:
     virtual void OnNewFrame() {}
     virtual void WaitForTraceDone() {}
 
-    inline const std::string &GetTraceFilePath() { return m_trace_file_path; }
+    inline const std::string &GetTraceFilePath() const { return m_trace_file_path; }
     inline void               SetTraceFilePath(std::string trace_file_path)
     {
         m_trace_file_path = std::move(trace_file_path);
     }
 
-    inline uint32_t GetNumFrameToTrace() { return m_num_frame_to_trace; }
+    inline uint32_t GetNumFrameToTrace() const { return m_num_frame_to_trace; }
     inline void     SetNumFrameToTrace(uint32_t num_frame_to_trace)
     {
         m_num_frame_to_trace = num_frame_to_trace;
@@ -76,6 +76,6 @@ private:
     uint32_t           m_trace_start_frame = 0;
 };
 
-TraceManager *GetTraceMgr();
+TraceManager &GetTraceMgr();
 
 }  // namespace Dive

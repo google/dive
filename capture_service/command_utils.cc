@@ -30,9 +30,10 @@ namespace Dive
 
 #if defined(WIN32)
 // TODO(renfeng): figure out how to run exe on Windows
-std::string RunCommand(const std::string &command)
+CommandResult RunCommand(const std::string &command, bool quiet)
 {
-    return "";
+    CommandResult result;
+    return result;
 }
 #else
 CommandResult RunCommand(const std::string &command, bool quiet)

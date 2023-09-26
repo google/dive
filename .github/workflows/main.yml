@@ -84,7 +84,7 @@ jobs:
 
 
   build_Linux_Debug:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8core
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -107,8 +107,32 @@ jobs:
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
 
-  build_Linux_Release:
-    runs-on: ubuntu-latest
+  build_Linux_Release_16:
+    runs-on: ubuntu-22.04-16core
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake gcc-10 clang-14 libsystemd-dev libbsd-dev ninja-build
+          which gcc-10
+          which clang-14
+      - name: Prepare Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.0
+        with:
+          vulkan-query-version: 1.3.204.0
+          vulkan-components: Vulkan-Headers
+      - name: Build the UI with gcc-10
+        run: |
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
+
+  build_Linux_Release_8:
+    runs-on: ubuntu-22.04-8core
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -132,7 +156,7 @@ jobs:
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
 
   build_Android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-16core
     steps:
       - name: Check out code
         uses: actions/checkout@v3

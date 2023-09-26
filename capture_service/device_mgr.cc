@@ -45,10 +45,9 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
 {
     Adb().Run("root");
     Adb().Run("wait-for-device");
-
-    m_original_state.m_enforce = Adb().Run("shell getenforce");
-    m_dev_info.m_model = Adb().Run("shell getprop ro.product.model");
-    m_dev_info.m_manufacturer = Adb().Run("shell getprop ro.product.manufacturer");
+    m_original_state.m_enforce = Adb().Run("shell getenforce").Out();
+    m_dev_info.m_model = Adb().Run("shell getprop ro.product.model").Out();
+    m_dev_info.m_manufacturer = Adb().Run("shell getprop ro.product.manufacturer").Out();
 
     LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
     LOGD("select: %s\n", GetDeviceDisplayName().c_str());
@@ -80,7 +79,7 @@ std::vector<std::string> AndroidDevice::ListPackage() const
 {
     std::vector<std::string> package_list;
 
-    std::string              output = Adb().Run("shell pm list packages");
+    std::string              output = Adb().Run("shell pm list packages").Out();
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
     for (const auto &line : lines)
     {
@@ -178,7 +177,7 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
 std::string AndroidDevice::GetMainActivity(const std::string &package) const
 {
 
-    std::string output = Adb().Run("shell dumpsys package " + package);
+    std::string output = Adb().Run("shell dumpsys package " + package).Out();
     return ParsePackageForActivity(output, package);
 }
 
@@ -206,9 +205,9 @@ void AndroidDevice::CleanupDevice()
         Adb().Run("shell setenforce 0");
     }
 
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName));
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kLayerLibName));
-    Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort));
+    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true);
+    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kLayerLibName), true);
+    Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true);
 }
 
 void AndroidDevice::SetupApp(const std::string &package)
@@ -232,7 +231,7 @@ void AndroidDevice::CleanupAPP(const std::string &package)
     Adb().Run("root");
     Adb().Run("wait-for-device");
 
-    Adb().Run(absl::StrFormat("shell run-as %s rm %s", package, kLayerLibName));
+    Adb().Run(absl::StrFormat("shell run-as %s rm %s", package, kLayerLibName), true);
 
     Adb().Run("shell settings delete global enable_gpu_debug_layers");
     Adb().Run("shell settings delete global gpu_debug_app");
@@ -252,13 +251,13 @@ void AndroidDevice::StartApp(const std::string &package, const std::string &acti
 
 void AndroidDevice::StopApp(const std::string &package)
 {
-    Adb().Run(absl::StrFormat("shell am force-stop %s", package));
+    Adb().Run(absl::StrFormat("shell am force-stop %s", package), true);
 }
 
 std::vector<std::string> DeviceManager::ListDevice() const
 {
     std::vector<std::string> dev_list;
-    std::string              output = RunCommand("adb devices");
+    std::string              output = RunCommand("adb devices").Out();
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
 
     for (const auto &line : lines)

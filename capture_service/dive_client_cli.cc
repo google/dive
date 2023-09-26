@@ -95,7 +95,7 @@ ABSL_FLAG(std::string, activity, "", "Activity to run for the package");
 void print_usage(const char* app)
 {
     std::cout << "Usage: \n";
-    std::cout << "\t" << app << "device_serial package_name [activity]" << std::endl;
+    std::cout << "\t" << app << " device_serial package_name [activity]" << std::endl;
 }
 
 bool list_device(const Dive::DeviceManager& mgr)
@@ -189,11 +189,6 @@ int main(int argc, char** argv)
     absl::ParseCommandLine(argc, argv);
     std::string target_str = absl::GetFlag(FLAGS_target);
     Command     cmd = absl::GetFlag(FLAGS_command);
-    if (cmd == Command::kNone)
-    {
-        std::cout << "Run " << argv[0] << " with --command " << std::endl;
-        std::cout << absl::ProgramUsageMessage() << std::endl;
-    }
     std::string serial = absl::GetFlag(FLAGS_device);
     std::string package = absl::GetFlag(FLAGS_package);
     std::string activity = absl::GetFlag(FLAGS_activity);
@@ -241,6 +236,6 @@ int main(int argc, char** argv)
     std::string input;
     if (std::getline(std::cin, input))
     {
-        std::cout << "exiting..." << std::endl;
+        std::cout << "Exiting..." << std::endl;
     }
 }

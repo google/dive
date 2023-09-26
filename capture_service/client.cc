@@ -52,7 +52,7 @@ std::string DiveClient::TestConnection()
     TestRequest request;
     TestReply   reply;
     ClientContext     context;
-    request.set_message("test request");
+    request.set_message("Test connection request");
     Status status = m_stub->TestConnection(&context, request, &reply);
 
     if (status.ok())

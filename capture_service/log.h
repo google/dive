@@ -19,15 +19,26 @@ limitations under the License.
 #if defined __ANDROID__
 #    include <android/log.h>
 #    define TAG "Dive"
-#    define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
-#    define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
-#    define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#    define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
+#    define __LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
+#    define __LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
+#    define __LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
+#    define __LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #else
 #    include <cstdio>
-#    define LOGE(...) printf(__VA_ARGS__)
-#    define LOGW(...) printf(__VA_ARGS__)
-#    define LOGI(...) printf(__VA_ARGS__)
-#    define LOGD(...) printf(__VA_ARGS__)
+#    define __LOGE(...) printf(__VA_ARGS__)
+#    define __LOGW(...) printf(__VA_ARGS__)
+#    define __LOGI(...) printf(__VA_ARGS__)
+#    define __LOGD(...) printf(__VA_ARGS__)
+#endif
 
+#ifndef NDEBUG
+#    define LOGE(...) __LOGE(__VA_ARGS__)
+#    define LOGW(...) __LOGW(__VA_ARGS__)
+#    define LOGI(...) __LOGI(__VA_ARGS__)
+#    define LOGD(...) __LOGD(__VA_ARGS__)
+#else
+#    define LOGE(...) __LOGE(__VA_ARGS__)
+#    define LOGW(...) __LOGW(__VA_ARGS__)
+#    define LOGI(...) __LOGI(__VA_ARGS__)
+#    define LOGD(...) ((void)0)
 #endif

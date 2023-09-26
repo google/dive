@@ -30,8 +30,9 @@ limitations under the License.
 #include <vulkan/vulkan_core.h>
 
 #include "dispatch.h"
+#include "capture_service/server.h"
 #include "layer_impl.h"
-#include "log.h"
+#include "capture_service/log.h"
 
 namespace DiveLayer {
 
@@ -63,6 +64,22 @@ bool is_libwrap_loaded() {
 struct InstanceData {
   VkInstance instance;
   InstanceDispatchTable dispatch_table;
+  std::thread server_thread;
+
+  InstanceData() :
+      server_thread(std::thread(Dive::server_main))
+  {
+    LOGI("libwarp loaded: %d", is_libwrap_loaded());
+  }
+
+  ~InstanceData()
+  {
+    if (server_thread.joinable())
+    {
+        LOGI("Wait for server thread to join");
+        server_thread.join();
+    }
+  }
 };
 
 struct DeviceData {

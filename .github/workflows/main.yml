@@ -44,10 +44,17 @@ jobs:
             version: 5.15.2
             target: desktop
             arch: win64_msvc2019_64
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          # ninja version to download. Default: 1.10.0
+          version: 1.10.0
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/setup-nasm@v1
       - name: Build the UI
         run: |
-          mkdir build && cd build && cmake -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build ./ --target ALL_BUILD --config Debug
+          mkdir build && cd build && cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ..
+          cmake --build ./ --config Debug
 
   # Build the code
   build_Windows_Release:
@@ -63,10 +70,17 @@ jobs:
             version: 5.15.2
             target: desktop
             arch: win64_msvc2019_64
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          # ninja version to download. Default: 1.10.0
+          version: 1.10.0
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/setup-nasm@v1
       - name: Build the UI
         run: |
-          mkdir build && cd build && cmake -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build ./ --target ALL_BUILD --config Release
+          mkdir build && cd build && cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..
+          cmake --build ./ --config Release
 
 
   build_Linux_Debug:
@@ -81,7 +95,7 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake gcc-10  clang-14 libsystemd-dev libbsd-dev
+          sudo apt-get install --yes cmake gcc-10  clang-14 libsystemd-dev libbsd-dev ninja-build
           which gcc-10
           which clang-14
       - name: Prepare Vulkan SDK
@@ -91,10 +105,7 @@ jobs:
           vulkan-components: Vulkan-Headers
       - name: Build the UI with gcc-10
         run: |
-          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. && make -j && cd ..
-      - name: Build the UI with Clang-14
-        run: |
-          rm -rf build/* && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. && make -j
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
 
   build_Linux_Release:
     runs-on: ubuntu-latest
@@ -108,7 +119,7 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake gcc-10 clang-14 libsystemd-dev libbsd-dev
+          sudo apt-get install --yes cmake gcc-10 clang-14 libsystemd-dev libbsd-dev ninja-build
           which gcc-10
           which clang-14
       - name: Prepare Vulkan SDK
@@ -118,10 +129,7 @@ jobs:
           vulkan-components: Vulkan-Headers
       - name: Build the UI with gcc-10
         run: |
-          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. && make -j && cd ..
-      - name: Build the UI with Clang-14
-        run: |
-          rm -rf build/* && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. && make -j
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
 
   build_Android:
     runs-on: ubuntu-latest
@@ -133,7 +141,7 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake
+          sudo apt-get install --yes cmake ninja-build
       - uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
@@ -143,11 +151,19 @@ jobs:
       - name: Build lib with NDK
         run: |
           mkdir build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-          -G "Unix Makefiles" \
-          -DCMAKE_MAKE_PROGRAM="make" \
+          -G "Ninja" \
+          -DCMAKE_MAKE_PROGRAM="ninja" \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Android \
           -DANDROID_ABI=arm64-v8a \
-          -DANDROID_PLATFORM=android-26 .. && make -j && cd ..
+          -DANDROID_PLATFORM=android-26 \
+          -DgRPC_BUILD_CODEGEN=OFF \
+          -Dprotobuf_BUILD_PROTOC_BINARIES=OFF \
+          -DCARES_BUILD_TOOLS=OFF \
+          -DCARES_INSTALL=OFF \
+          -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
+          -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
+          ..
+          ninja
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}

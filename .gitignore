@@ -13,8 +13,12 @@
 
 # Build-related directories
 build/
+build_android/
 driver/xgl/builds
-
+third_party/freedreno/libs/
+third_party/freedreno/obj
+build_android/
+grpc_bin/
 # Amdvlk auto-generated files
 *.pyc
 g_*.h

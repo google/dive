@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include "dispatch.h"
-#include "log.h"
+#include "capture_service/log.h"
 
 namespace DiveLayer {
 

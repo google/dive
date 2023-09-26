@@ -131,8 +131,6 @@ public:
     uint32_t GetUConfigRegData(uint16_t reg) const;
     bool     IsShStateSet(uint16_t reg) const;
     uint32_t GetShRegData(uint16_t reg) const;
-    bool     IsContextStateSet(uint16_t reg) const;
-    uint32_t GetContextRegData(uint16_t reg) const;
 
     // Check if any user data registers were set since last draw/dispatch
     // The driver only sets them on a per-event basis, and checking IsShStateSet() tracks since the
@@ -148,76 +146,30 @@ public:
     uint64_t GetBufferAddr() const;
     uint32_t GetBufferSize() const;
 
+    // Reset the state tracker
+    void Reset()
+    {
+        memset(m_reg, 0, sizeof(m_reg));
+        memset(m_reg_is_set, 0, sizeof(m_reg_is_set));
+    }
+
+    uint32_t GetRegValue(uint32_t offset) const { return m_reg[offset]; }
+
+    void SetReg(uint32_t offset, uint32_t value)
+    {
+        m_reg[offset] = value;
+        m_reg_is_set[offset / 8] |= (1 << (offset % 8));
+    }
+
+    bool IsRegSet(uint32_t offset) const
+    {
+        return !!(m_reg_is_set[offset / 8] & (1 << (offset % 8)));
+    }
+
 private:
-    /*
-    bool HandleLoadUConfigRegPacket(const IMemoryManager &mem_manager,
-                                    uint32_t              submit_index,
-                                    uint64_t              va_addr);
-    bool HandleSetUConfigRegister(const IMemoryManager &mem_manager,
-                                  uint32_t              submit_index,
-                                  uint16_t              reg_offset,
-                                  uint64_t              reg_data_va,
-                                  uint16_t              reg_count,
-                                  bool                  update_tracking = true);
-    bool HandleLoadShRegPacket(const IMemoryManager &mem_manager,
-                               uint32_t              submit_index,
-                               uint64_t              va_addr);
-    bool HandleLoadShRegIndexPacket(const IMemoryManager &mem_manager,
-                                    uint32_t              submit_index,
-                                    uint64_t              va_addr);
-    bool HandleSetShRegister(const IMemoryManager &mem_manager,
-                             uint32_t              submit_index,
-                             uint16_t              reg_offset,
-                             uint64_t              reg_data_va,
-                             uint16_t              reg_count,
-                             bool                  update_tracking = true);
-    bool HandleLoadContextRegPacket(const IMemoryManager &mem_manager,
-                                    uint32_t              submit_index,
-                                    uint64_t              va_addr);
-    bool HandleLoadContextRegIndexPacket(const IMemoryManager &mem_manager,
-                                         uint32_t              submit_index,
-                                         uint64_t              va_addr);
-    bool HandleSetContextRegister(const IMemoryManager &mem_manager,
-                                  uint32_t              submit_index,
-                                  uint16_t              reg_offset,
-                                  uint64_t              reg_data_va,
-                                  uint16_t              reg_count,
-                                  bool                  update_tracking = true);
-    void HandleUserDataRegister(ShaderStage stage,
-                                uint16_t    reg_offset,
-                                uint16_t    start_reg,
-                                uint16_t    num_regs);
-    void UpdateUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t user_data_reg);
-
-    // Register tracking data
-    static const uint32_t kNumPersistentRegs = 1; // Pal::Gfx9::PERSISTENT_SPACE_END -
-    Pal::Gfx9::PERSISTENT_SPACE_START uint8_t               m_sh_is_set[(kNumPersistentRegs / 8) +
-    1]; static const uint32_t kNumContextRegs = 1; // Pal::Gfx9::Gfx09_10::CONTEXT_SPACE_END -
-    Pal::Gfx9::CONTEXT_SPACE_START uint32_t m_context_data[kNumContextRegs]; uint8_t
-    m_context_is_set[(kNumContextRegs / 8) + 1];
-
-    static const uint32_t kNumUConfigRegs = 1; //Pal::Gfx9::UCONFIG_SPACE_END -
-    Pal::Gfx9::UCONFIG_SPACE_START + 1; uint32_t m_uconfig_data[kNumUConfigRegs]; uint8_t
-    m_uconfig_is_set[(kNumUConfigRegs / 8) + 1];
-
-    static const uint32_t kNumShaderStages = (uint32_t)ShaderStage::kShaderStageCount;
-    uint8_t               m_num_user_data_regs_set_last_event[kNumShaderStages];
-    uint32_t              m_user_data_regs_set_last_event[kNumShaderStages];
-
-    // Flags to determine if shadow-related load functions are executed or not
-    bool m_load_global_uconfig = false;
-    bool m_load_gfx_sh_regs = false;
-    bool m_load_cs_sh_regs = false;
-    bool m_load_per_context_state = false;
-
-    // Any recently accessed PM4 buffers (such as extended user data, load buffers, etc)
-    uint64_t m_buffer_va;
-    uint32_t m_buffer_size;
-
-    // Emulation configuration
-    uint8_t m_num_user_data_regs_gfx;
-    uint8_t m_num_user_data_regs_compute;
-    */
+    static const size_t kNumRegs = 0xffff + 1;
+    uint32_t            m_reg[kNumRegs];
+    uint8_t             m_reg_is_set[(kNumRegs / 8) + 1];
 };
 
 //--------------------------------------------------------------------------------------------------

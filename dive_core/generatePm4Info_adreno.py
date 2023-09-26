@@ -4,6 +4,9 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+from common import isBuiltInType
+from common import gatherAllEnums
+
 
 # ---------------------------------------------------------------------------------------
 def outputHeader(pm4_info_file):
@@ -44,6 +47,8 @@ def outputH(pm4_info_file):
 #include <string.h>
 
 enum ValueType { kBoolean, kUint, kInt, kFloat, kFixed, kAddress, kWaddress, kHex, kOther };
+
+static const uint32_t kInvalidRegOffset = UINT32_MAX;
 
 struct RegField {
     uint32_t m_type         : 8;  // ValueType enum
@@ -86,6 +91,7 @@ void Pm4InfoInit();
 const char *GetOpCodeString(uint32_t op_code);
 const RegInfo *GetRegInfo(uint32_t reg);
 const RegInfo *GetRegByName(const char *);
+uint32_t GetRegOffsetByName(const char *name);
 const char *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name);
@@ -149,13 +155,6 @@ def outputOpcodes(pm4_info_file, opcode_dict):
   for opcode in opcode_dict:
     pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (opcode, opcode_dict[opcode]))
   return
-
-# ---------------------------------------------------------------------------------------
-def isBuiltInType(type):
-  builtin_types = [ None, "a3xx_regid", "boolean", "uint", "hex", "int", "fixed", "ufixed", "float", "address", "waddress" ]
-  if not type in builtin_types:
-    return False
-  return True
 
 # ---------------------------------------------------------------------------------------
 def getTypeEnumString(type):
@@ -325,17 +324,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
 
 # ---------------------------------------------------------------------------------------
 def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
-  enums = registers_et_root.findall('{http://nouveau.freedesktop.org/}enum')
-
-  # Find all enums within domain blocks
-  # Those are reserved for use within the domain, but we need to keep track of all
-  # enums in our list, irrespective of scope
-  domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
-  for domain in domains:
-    domain_enums = domain.findall('{http://nouveau.freedesktop.org/}enum')
-    if domain_enums:
-      for enum in domain_enums:
-        enums.append(enum)
+  enums = gatherAllEnums(registers_et_root)
 
   for enum in enums:
     fields = enum.findall('{http://nouveau.freedesktop.org/}value')
@@ -567,6 +556,11 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       pm4_info_file.write(" } }));\n")
   pm4_info_file.write("\n")
 
+  pm4_info_file.write("    for (auto &reg : g_sRegInfo)\n")
+  pm4_info_file.write("    {\n")
+  pm4_info_file.write("         g_sRegNameToIndex[reg.second.m_name] = reg.first;\n")
+  pm4_info_file.write("    }\n")
+
 # ---------------------------------------------------------------------------------------
 
 def outputFunctionsCpp(pm4_info_file):
@@ -591,6 +585,14 @@ const RegInfo *GetRegByName(const char *name)
     if (i == g_sRegNameToIndex.end())
         return nullptr;
     return GetRegInfo(i->second);
+}
+
+uint32_t GetRegOffsetByName(const char *name)
+{
+    auto i = g_sRegNameToIndex.find(name);
+    if (i == g_sRegNameToIndex.end())
+        return kInvalidRegOffset;
+    return i->second;
 }
 
 const char *GetEnumString(uint32_t enum_handle, uint32_t val)

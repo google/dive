@@ -4,6 +4,8 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+from common import isBuiltInType
+from common import gatherAllEnums
 
 # ---------------------------------------------------------------------------------------
 def outputHeader(pm4_info_file):
@@ -28,7 +30,7 @@ def outputHeader(pm4_info_file):
     "//\n"
     "// WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!\n"
     "//\n"
-    "// This code has been generated automatically by generatePm4Packets_adreno.py. Do not hand-modify this code.\n"
+    "// This code has been generated automatically by generateAdrenoHeader.py. Do not hand-modify this code.\n"
     "//\n"
     "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n"
   )
@@ -206,6 +208,90 @@ def outputPacketRegs(pm4_info_file, reg_list):
       pm4_packet_file_h.write("\t};\n")
 
 # ---------------------------------------------------------------------------------------
+def outputBitfields(pm4_info_file, bitfields):
+  for bitfield in bitfields:
+    if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
+      continue
+    bitfield_name = bitfield.attrib['name']
+    bitfield_type = "uint32_t"
+    if 'type' in bitfield.attrib:
+      bitfield_type = bitfield.attrib['type']    
+      if isBuiltInType(bitfield_type):
+        bitfield_type = "uint32_t"
+    if 'low' in bitfield.attrib and 'high' in bitfield.attrib:
+      low = int(bitfield.attrib['low'])
+      high = int(bitfield.attrib['high'])
+      pm4_info_file.write("       %s %s : %d;\n" % (bitfield_type, bitfield_name, high - low + 1)) 
+    elif 'pos' in bitfield.attrib:
+      pm4_info_file.write("       %s %s : 1;\n" % (bitfield_type, bitfield_name)) 
+    else:
+      raise Exception("Encountered a bitfield with no pos/low/high!") 
+
+# ---------------------------------------------------------------------------------------
+def outputRegUnions(pm4_info_file, a6xx_domain, name, reg):
+  pm4_info_file.write("union %s \n" % (name) ) 
+  pm4_info_file.write("{\n")    
+
+  type = None
+  use_bitset_as_type = False
+  if 'type' in reg.attrib:
+    type = reg.attrib['type']
+    if type:
+      # if it isn't one of the standard types, then it must be a custom bitset or an enum
+      if not isBuiltInType(type):
+        enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+type+'"]')
+        
+        if enum:
+          enum_name = enum.attrib['name']
+          pm4_info_file.write("    %s bitfields;\n" % (enum_name)) 
+        else:
+          use_bitset_as_type = True
+          bitset = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
+          # Not found in the A6XX domain. Some of the bitsets are defined in the root.
+          if not bitset:
+            bitset = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
+            if not bitset:
+              raise Exception("Not able to find bitset/enum " + type + " for register " + name)
+          
+          pm4_info_file.write("    struct\n") 
+          pm4_info_file.write("    {\n") 
+          outputBitfields(pm4_info_file, bitset)
+                  
+  bitfields = reg.findall('{http://nouveau.freedesktop.org/}bitfield')
+  if bitfields:
+    if not use_bitset_as_type:
+      pm4_info_file.write("    struct\n") 
+      pm4_info_file.write("    {\n")
+    outputBitfields(pm4_info_file, bitfields)
+
+  if use_bitset_as_type or bitfields:
+    pm4_info_file.write("    }bitfields;\n\n")
+
+  pm4_info_file.write("    uint32_t u32All;\n")      
+  pm4_info_file.write("    int i32All;\n")  
+  pm4_info_file.write("    float f32All;\n")
+  pm4_info_file.write("};\n\n")
+
+# ---------------------------------------------------------------------------------------
+def addToRegHash(name, reg, regs):
+  if name in regs:
+    bitfield_count_new = 0
+    bitfield_count_exist = 0;
+    bitfields_new = reg.findall('{http://nouveau.freedesktop.org/}bitfield')
+    if (bitfields_new):
+      bitfield_count_new = len(bitfields_new)
+    bitfields_exist = regs[name].findall('{http://nouveau.freedesktop.org/}bitfield')
+    if (bitfields_exist):
+      bitfield_count_exist = len(bitfields_exist)
+    # Always keep the one with more bitfield defined
+    # TODO(wangra): verify if it make sense for different variants
+    if (bitfield_count_new > bitfield_count_exist):
+      regs[name] = reg
+  else:
+    regs[name] = reg
+  
+
+# ---------------------------------------------------------------------------------------
 def outputPackets(pm4_packet_file_h, registers_et_root, domains):
 
   # Find all CP packet types so we can find out which domains are relevant
@@ -295,12 +381,6 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
 
       pm4_packet_file_h.write("//------------------------------------------------\n")
 
-      # Print out any domain-specific enums
-      # Only print out the enums for the 1st variant to avoid duplicates
-      if index == 0:
-        enums = domain.findall('./{http://nouveau.freedesktop.org/}enum')
-        outputEnums(pm4_packet_file_h, enums)
-
       pm4_packet_file_h.write("struct %s\n" % packet_name)
       pm4_packet_file_h.write("{\n")
       pm4_packet_file_h.write("\tPm4Type7Header HEADER;\n")
@@ -350,11 +430,33 @@ try:
 
   outputPrefix(pm4_packet_file_h)
 
-  pm4_packet_file_h.write("//------------------------------------------------\n")
-  enums = registers_et_root.findall('./{http://nouveau.freedesktop.org/}enum')
+  enums  = gatherAllEnums(registers_et_root)
   outputEnums(pm4_packet_file_h, enums)
 
   outputPackets(pm4_packet_file_h, registers_et_root, domains)
+
+  # Define all unions
+  # Use hashmap to avoid duplications
+  regs = dict()
+  a6xx_domain = registers_et_root.find('./{http://nouveau.freedesktop.org/}domain[@name="A6XX"]')
+  for element in a6xx_domain:
+    is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
+    if is_reg_32:
+      name = element.attrib['name']
+      addToRegHash(name, element, regs)
+           
+  arrays = a6xx_domain.findall('{http://nouveau.freedesktop.org/}array')
+  for array in arrays:
+    array_name = array.attrib['name'] 
+    for element in array:
+      is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
+      if is_reg_32:
+        name = element.attrib['name']  
+        addToRegHash(array_name + "_" + name, element, regs)
+
+  for name, reg in regs.items():
+    outputRegUnions(pm4_packet_file_h, a6xx_domain, name, reg)                      
+  pm4_packet_file_h.write("\n\n")
 
   # close to flush
   pm4_packet_file_h.close();

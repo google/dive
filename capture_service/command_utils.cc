@@ -35,29 +35,52 @@ std::string RunCommand(const std::string &command)
     return "";
 }
 #else
-std::string RunCommand(const std::string &command)
+CommandResult RunCommand(const std::string &command, bool quiet)
 {
-    std::string                              out;
-    std::unique_ptr<FILE, decltype(*pclose)> pipe(popen(command.c_str(), "r"), pclose);
+    CommandResult result;
+    std::string   cmd_str = command + " 2>&1";  // Get both stdout and stderr;
+    FILE         *pipe = popen(cmd_str.c_str(), "r");
     if (!pipe)
     {
-        LOGE("pipe call failed\n");
-        return out;
+        LOGE("Popen call failed\n");
+        return result;
     }
 
-    char output[128];
-    while (fgets(output, 128, pipe.get()) != nullptr)
+    char        buf[128];
+    std::string output;
+    while (fgets(buf, 128, pipe) != nullptr)
     {
-        out += std::string(output);
+        output += std::string(buf);
     }
-    LOGD("Command: %s\n Output: %s\n", command.c_str(), out.c_str());
-    out = absl::StripAsciiWhitespace(out);
-    return out;
+    if (!quiet)
+    {
+        LOGD("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
+    }
+    output = absl::StripAsciiWhitespace(output);
+    result.m_ret = pclose(pipe);
+    if (result.Ok())
+    {
+        result.m_output = std::move(output);
+    }
+    else
+    {
+        if (!quiet)
+        {
+            LOGE("Command `%s` failed with return code %d, stderr: %s \n",
+                 command.c_str(),
+                 result.m_ret,
+                 output.c_str());
+        }
+
+        result.m_err = std::move(output);
+    }
+
+    return result;
 }
 #endif
 
-std::string AdbSession::Run(const std::string &command) const
+CommandResult AdbSession::Run(const std::string &command, bool quiet) const
 {
-    return RunCommand("adb -s " + m_serial + " " + command);
+    return RunCommand("adb -s " + m_serial + " " + command, quiet);
 }
 }  // namespace Dive

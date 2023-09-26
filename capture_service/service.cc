@@ -48,7 +48,7 @@ grpc::Status DiveServiceImpl::TestConnection(grpc::ServerContext *context,
                                              const TestRequest   *request,
                                              TestReply           *reply)
 {
-    reply->set_message("Hello" + request->message());
+    reply->set_message(request->message() + " received.");
     LOGD("TestConnection request received \n");
     return grpc::Status::OK;
 }
@@ -58,7 +58,7 @@ grpc::Status DiveServiceImpl::RunCommand(grpc::ServerContext     *context,
                                          RunCommandReply         *reply)
 {
     LOGD("Request command %s", request->command().c_str());
-    auto out = ::Dive::RunCommand(request->command());
+    auto out = ::Dive::RunCommand(request->command()).Out();
     reply->set_output(out);
 
     return grpc::Status::OK;

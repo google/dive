@@ -20,7 +20,18 @@ limitations under the License.
 
 namespace Dive
 {
-std::string RunCommand(const std::string &command);
+
+struct CommandResult
+{
+    std::string        m_output;
+    std::string        m_err;
+    int                m_ret = -1;
+    bool               Ok() const { return m_ret == 0; }
+    const std::string &Out() const { return m_output; }
+    const std::string &Err() const { return m_err; }
+};
+
+CommandResult RunCommand(const std::string &command, bool quiet = false);
 
 class AdbSession
 {
@@ -31,7 +42,7 @@ public:
     {
     }
 
-    std::string Run(const std::string &command) const;
+    CommandResult Run(const std::string &command, bool quiet = false) const;
 
 private:
     std::string m_serial;

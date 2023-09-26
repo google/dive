@@ -22,7 +22,7 @@ limitations under the License.
 #include <iostream>
 #include <memory>
 #include <thread>
-
+#include "absl/strings/ascii.h"
 #include "log.h"
 
 namespace Dive
@@ -50,12 +50,13 @@ std::string RunCommand(const std::string &command)
     {
         out += std::string(output);
     }
-    LOGD("Command: %s\n Output: %s", command.c_str(), out.c_str());
+    LOGD("Command: %s\n Output: %s\n", command.c_str(), out.c_str());
+    out = absl::StripAsciiWhitespace(out);
     return out;
 }
 #endif
 
-std::string AdbSession::Run(const std::string &command)
+std::string AdbSession::Run(const std::string &command) const
 {
     return RunCommand("adb -s " + m_serial + " " + command);
 }

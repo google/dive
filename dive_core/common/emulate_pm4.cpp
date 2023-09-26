@@ -23,10 +23,7 @@
 #include "dive_capture_format.h"
 #include "emulate_pm4.h"
 #include "memory_manager_base.h"
-
-#include "pm4_packets/ce_pm4_packets.h"
-#include "pm4_packets/me_pm4_packets.h"
-#include "pm4_packets/pfp_pm4_packets.h"
+#include "pm4_info.h"
 
 #include <stdarg.h>
 #include <cerrno>
@@ -59,6 +56,39 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
                                    Pm4Type               type,
                                    uint32_t              header)
 {
+    // type 4 is setting register
+    if (type != Pm4Type::kType4)
+        return true;
+
+    Pm4Type4Header *type4_header = (Pm4Type4Header *)&header;
+
+    uint32_t offset_in_bytes = 0;
+    uint32_t dword = 0;
+    while (dword < type4_header->count)
+    {
+        uint64_t reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
+        uint32_t reg_offset = type4_header->offset + dword;
+        DIVE_ASSERT(reg_offset < kNumRegs);
+        const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
+        DIVE_ASSERT(reg_info_ptr != nullptr);
+        constexpr size_t dword_in_bytes = sizeof(uint32_t);
+        uint32_t         size_in_dwords = 1;
+        if (reg_info_ptr->m_is_64_bit)
+            size_in_dwords = 2;
+        offset_in_bytes += size_in_dwords * dword_in_bytes;
+        for (uint32_t i = 0; i < size_in_dwords; ++i)
+        {
+            uint32_t reg_value = 0;
+            DIVE_VERIFY(mem_manager.CopyMemory(&reg_value,
+                                               submit_index,
+                                               reg_va_addr + i * dword_in_bytes,
+                                               dword_in_bytes));
+            SetReg(reg_offset + i, reg_value);
+        }
+
+        dword += size_in_dwords;
+    }
+
     return true;
 }
 /*
@@ -514,18 +544,6 @@ bool EmulateStateTracker::IsShStateSet(uint16_t reg) const
 
 //--------------------------------------------------------------------------------------------------
 uint32_t EmulateStateTracker::GetShRegData(uint16_t reg) const
-{
-    return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsContextStateSet(uint16_t reg) const
-{
-    return false;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetContextRegData(uint16_t reg) const
 {
     return UINT32_MAX;
 }

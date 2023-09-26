@@ -16,6 +16,7 @@
 */
 #include "data_core.h"
 #include <assert.h>
+#include "pm4_info.h"
 
 namespace Dive
 {
@@ -129,6 +130,7 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
 {
+    m_state_tracker.Reset();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -301,7 +303,73 @@ void CaptureMetadataCreator::FillInputAssemblyState(EventStateInfo::Iterator eve
 void CaptureMetadataCreator::FillTessellationState(EventStateInfo::Iterator event_state_it) {}
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_state_it) {}
+void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_state_it)
+{
+    // Check if viewport is set. Up to 16 of them can be set.
+    uint32_t viewport_id = 0;
+    uint32_t viewport_reg_start = GetRegOffsetByName("GRAS_CL_VPORT0_XOFFSET");
+    DIVE_ASSERT(viewport_reg_start != kInvalidRegOffset);
+    while (viewport_id < 16 && m_state_tracker.IsRegSet(viewport_reg_start + 6 * viewport_id))
+    {
+        GRAS_CL_VPORT_XOFFSET xOffset;
+        GRAS_CL_VPORT_XSCALE  xScale;
+        GRAS_CL_VPORT_YOFFSET yOffset;
+        GRAS_CL_VPORT_YSCALE  yScale;
+        GRAS_CL_VPORT_ZOFFSET zOffset;
+        GRAS_CL_VPORT_ZSCALE  zScale;
+
+        // Assumption: These are all set together. All-or-nothing.
+        uint32_t viewport_reg = viewport_reg_start + 6 * viewport_id;
+        xOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 1);
+        xScale.u32All = m_state_tracker.GetRegValue(viewport_reg);
+        yOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 3);
+        yScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 2);
+        zOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 5);
+        zScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 4);
+
+        VkViewport viewport;
+        viewport.x = xOffset.f32All - xScale.f32All;
+        viewport.width = xScale.f32All * 2.0f;
+        viewport.y = yOffset.f32All - yScale.f32All;
+        viewport.height = yScale.f32All * 2.0f;
+
+        // AFAIK, z is always set to ZeroToOne, so the minDepth can be set to zOffset
+        // See UniversalCmdBuffer::ValidateViewports() and DepthRange::NegativeOneToOne
+        viewport.minDepth = zOffset.f32All;
+        viewport.maxDepth = zScale.f32All + viewport.minDepth;
+        event_state_it->SetViewport(viewport_id, viewport);
+
+        ++viewport_id;
+    }
+
+    // Scissor
+    // Check if scissor is set. Up to 16 of them can be set.
+    uint16_t scissor_id = 0;
+    // TODO(wangra): there is also GRAS_SC_SCREEN_SCISSOR0_TL
+    uint32_t scissor_reg_start = GetRegOffsetByName("GRAS_SC_VIEWPORT_SCISSOR0_TL");
+    DIVE_ASSERT(scissor_reg_start != kInvalidRegOffset);
+    while (scissor_id < 16 && m_state_tracker.IsRegSet(scissor_reg_start + 2 * scissor_id))
+    {
+        // Assumption: These are all set together. All-or-nothing.
+        GRAS_SC_VIEWPORT_SCISSOR_TL tl;
+        GRAS_SC_VIEWPORT_SCISSOR_BR br;
+        uint32_t                    scissor_reg = scissor_reg_start + 2 * scissor_id;
+        tl.u32All = m_state_tracker.GetRegValue(scissor_reg);
+        br.u32All = m_state_tracker.GetRegValue(scissor_reg + 1);
+
+        // Note: The scissor rects set in these registers are modified by the ICD so that they do
+        // not exceed viewport regions. So the exact scissor as set in Vulkan may be lost.
+        // See UniversalCmdBuffer::BuildScissorRectImage
+        VkRect2D rect;
+        rect.offset.x = tl.bitfields.X;
+        rect.offset.y = tl.bitfields.Y;
+        rect.extent.width = br.bitfields.X - tl.bitfields.X;
+        rect.extent.height = br.bitfields.Y - tl.bitfields.Y;
+        event_state_it->SetScissor(scissor_id, rect);
+
+        ++scissor_id;
+    }
+}
 
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::FillRasterizerState(EventStateInfo::Iterator event_state_it) {}

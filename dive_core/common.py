@@ -3,10 +3,7 @@
 # ---------------------------------------------------------------------------------------
 def isBuiltInType(type):
   builtin_types = [ None, "a3xx_regid", "boolean", "uint", "hex", "int", "fixed", "ufixed", "float", "address", "waddress" ]
-  if not type in builtin_types:
-    return False
-  return True
-
+  return type in builtin_types
 
 # ---------------------------------------------------------------------------------------
 def gatherAllEnums(registers_et_root):

@@ -1,0 +1,14 @@
+{
+    "file_format_version": "1.0.0",
+    "api_layer": {
+        "name": "XR_APILAYER_dive",
+        "library_path": "/data/local/tmp/libXrApiLayer_dive.so",
+        "api_version": "1.0",
+        "implementation_version": "1",
+        "description": "API Layer to record api calls as they occur",
+        "functions": {
+            "xrNegotiateLoaderApiLayerInterface": "xrNegotiateLoaderApiLayerInterface"
+        },
+        "disable_environment": "DISABLE_1"
+    }
+}

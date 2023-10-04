@@ -9,6 +9,6 @@
         "functions": {
             "xrNegotiateLoaderApiLayerInterface": "xrNegotiateLoaderApiLayerInterface"
         },
-        "disable_environment": "DISABLE_1"
+        "disable_environment": "DISABLE_XR_APILAYER_DIVE"
     }
 }

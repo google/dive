@@ -22,7 +22,7 @@ limitations under the License.
 #include <iostream>
 #include <thread>
 #if defined(__ANDROID__)
-#include <dlfcn.h>
+#    include <dlfcn.h>
 #endif
 
 #include <vulkan/vulkan_core.h>
@@ -31,13 +31,16 @@ limitations under the License.
 #include "capture_service/trace_mgr.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
-namespace DiveLayer {
+namespace DiveLayer
+{
 
-VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
-                         const VkPresentInfoKHR *pPresentInfo) {
-  VkResult ret = pfn(queue, pPresentInfo);
-  Dive::GetTraceMgr().OnNewFrame();
-  return ret;
+VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
+                         VkQueue                 queue,
+                         const VkPresentInfoKHR *pPresentInfo)
+{
+    VkResult ret = pfn(queue, pPresentInfo);
+    Dive::GetTraceMgr().OnNewFrame();
+    return ret;
 }
 
-} // namespace DiveLayer
+}  // namespace DiveLayer

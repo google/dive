@@ -17,28 +17,29 @@ limitations under the License.
 #include "vk_dispatch.h"
 #include "capture_service/log.h"
 
-namespace DiveLayer {
+namespace DiveLayer
+{
 
-void InitInstanceDispatchTable(VkInstance instance,
+void InitInstanceDispatchTable(VkInstance                instance,
                                PFN_vkGetInstanceProcAddr pa,
-                               InstanceDispatchTable *dt) {
-  LOGI("InitInstanceDispatchTable");
+                               InstanceDispatchTable    *dt)
+{
+    LOGI("InitInstanceDispatchTable");
 
-  dt->pfn_get_instance_proc_addr = pa;
-  dt->CreateDevice = (PFN_vkCreateDevice)pa(instance, "vkCreateDevice");
-  dt->EnumerateDeviceLayerProperties = (PFN_vkEnumerateDeviceLayerProperties)pa(
-      instance, "vkEnumerateDeviceLayerProperties");
+    dt->pfn_get_instance_proc_addr = pa;
+    dt->CreateDevice = (PFN_vkCreateDevice)pa(instance, "vkCreateDevice");
+    dt->EnumerateDeviceLayerProperties = (PFN_vkEnumerateDeviceLayerProperties)
+    pa(instance, "vkEnumerateDeviceLayerProperties");
 
-  dt->EnumerateDeviceExtensionProperties =
-      (PFN_vkEnumerateDeviceExtensionProperties)pa(
-          instance, "vkEnumerateDeviceExtensionProperties");
+    dt->EnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)
+    pa(instance, "vkEnumerateDeviceExtensionProperties");
 }
 
-void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa,
-                             DeviceDispatchTable *dt) {
-  LOGI("InitDeviceDispatchTable");
-  dt->pfn_get_device_proc_addr = pa;
-  dt->QueuePresentKHR = (PFN_vkQueuePresentKHR)pa(device, "vkQueuePresentKHR");
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt)
+{
+    LOGI("InitDeviceDispatchTable");
+    dt->pfn_get_device_proc_addr = pa;
+    dt->QueuePresentKHR = (PFN_vkQueuePresentKHR)pa(device, "vkQueuePresentKHR");
 }
 
-} // namespace DiveLayer
+}  // namespace DiveLayer

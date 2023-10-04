@@ -70,11 +70,14 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
         uint32_t reg_offset = type4_header->offset + dword;
         DIVE_ASSERT(reg_offset < kNumRegs);
         const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
-        DIVE_ASSERT(reg_info_ptr != nullptr);
+
         constexpr size_t dword_in_bytes = sizeof(uint32_t);
         uint32_t         size_in_dwords = 1;
-        if (reg_info_ptr->m_is_64_bit)
-            size_in_dwords = 2;
+        if (reg_info_ptr != nullptr)
+        {
+            if (reg_info_ptr->m_is_64_bit)
+                size_in_dwords = 2;
+        }
         offset_in_bytes += size_in_dwords * dword_in_bytes;
         for (uint32_t i = 0; i < size_in_dwords; ++i)
         {

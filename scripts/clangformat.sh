@@ -47,7 +47,7 @@ function run_copyright_headers() {
     # Filter out anything in driver/ folder
     # Filter out anything in dive_core/llvm_libs/ folder
     # Grep seems to match "(standard input)", filter this out in the for loop output
-    git diff origin/master HEAD --name-only --| grep "\.${suffix}$" | grep -v "^driver/" | grep -v "^dive_core/llvm_libs/" | grep -v "^capture_layer/gpu_performance_api" | grep -v "^third_party/" | grep -P -v '^grpc_bin/*' | xargs grep -L "Copyright .* Google"
+    git diff origin/main HEAD --name-only --| grep "\.${suffix}$" | grep -v "^third_party/" | grep -P -v '^prebuild/*' | xargs grep -L "Copyright .* Google"
   done | grep -v "(standard input)" > ${tmpfile}
   if test -s ${tmpfile}; then
     # tempfile is NOT empty
@@ -64,7 +64,7 @@ function run_copyright_headers() {
 
 function run_clang_format() {
   # Use grep negative lookahead to filter out all files that being with 'driver' but does not contain 'dive'
-  git diff origin/master HEAD --name-only --diff-filter=ACMR --| grep -E "\.(c|cpp|h|hpp)$" | grep -P -v '^driver*((?!dive).)*$' | grep -P -v '^capture_layer/gpu_performance_api'| grep -P -v '^third_party/*' | grep -P -v '^grpc_bin/*' | xargs $CLANG_FORMAT -i -style=file
+  git diff origin/main HEAD --name-only --diff-filter=ACMR --| grep -E "\.(c|cpp|h|hpp|cc)$" | grep -P -v '^third_party/*' | grep -P -v '^prebuild/*' | xargs $CLANG_FORMAT -i -style=file
 }
 
 # Check copyright headers

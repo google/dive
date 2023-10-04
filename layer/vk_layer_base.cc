@@ -29,9 +29,9 @@ limitations under the License.
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
-#include "dispatch.h"
+#include "vk_dispatch.h"
 #include "capture_service/server.h"
-#include "layer_impl.h"
+#include "vk_layer_impl.h"
 #include "capture_service/log.h"
 
 namespace DiveLayer {

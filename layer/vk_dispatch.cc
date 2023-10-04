@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "dispatch.h"
+#include "vk_dispatch.h"
 #include "capture_service/log.h"
 
 namespace DiveLayer {

@@ -17,7 +17,7 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE	:= libVkLayer_dive
-LOCAL_SRC_FILES	:= dispatch.cc  layer_base.cc layer_impl.cc  vk_layer_android.cc gles_layer.cc
+LOCAL_SRC_FILES	:= vk_dispatch.cc  vk_layer_base.cc vk_layer_impl.cc  vk_layer_android.cc gles_layer.cc
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../third_party/Vulkan-Headers/include
 LOCAL_LDLIBS := -llog -lc -ldl
 

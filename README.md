@@ -20,7 +20,7 @@ REM Assumes QTDIR is set to gcc_64 directory (eg. ~/Qt/5.11.2/gcc_64)
 export CMAKE_PREFIX_PATH=$QTDIR
 export PATH=$QTDIR:$PATH
 cd <dive_path>
-git submodule update --init
+git submodule update --init --recursive
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Debug ..

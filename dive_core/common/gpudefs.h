@@ -26,6 +26,7 @@ enum class IbType : uint8_t
     kNormal,
     kCall,
     kChain,
+    kDrawState
 };
 
 enum class ShaderStage : uint8_t

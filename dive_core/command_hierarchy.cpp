@@ -756,6 +756,14 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
         if (ib_info.m_skip)
             ib_string_stream << ", NOT CAPTURED";
     }
+    else if (type == IbType::kDrawState)
+    {
+        ib_string_stream << "DrawState IB"
+                         << ", Address: 0x" << std::hex << ib_info.m_va_addr
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
+        if (ib_info.m_skip)
+            ib_string_stream << ", NOT CAPTURED";
+    }
 
     // Create the ib node
     CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::IbNode(ib_index,

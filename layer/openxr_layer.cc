@@ -26,6 +26,7 @@ limitations under the License.
 #include <vector>
 
 #include "capture_service/log.h"
+#include "layer_common.h"
 #include "loader_interfaces.h"
 #include "xr_generated_dispatch_table.h"
 
@@ -67,11 +68,6 @@ std::unordered_map<uintptr_t, std::unique_ptr<XrInstanceData>> g_xr_instance_dat
 
 std::mutex                                                    g_xr_session_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<XrSessionData>> g_xr_session_data;
-
-uintptr_t DataKey(const void *object)
-{
-    return (uintptr_t)(*(void **)object);
-}
 
 XrInstanceData *GetXrInstanceLayerData(uintptr_t key)
 {
@@ -175,7 +171,7 @@ ApiDiveLayerXrCreateApiLayerInstance(const XrInstanceCreateInfo        *info,
 
     {
         std::lock_guard<std::mutex> lock(g_xr_instance_mutex);
-        auto                        key = (uintptr_t)(*(void **)(returned_instance));
+        auto                        key = DataKey(returned_instance);
         LOGD("key is %lu , instance is %p \n", key, returned_instance);
         g_xr_instance_data[key] = std::move(id);
     }
@@ -232,7 +228,7 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateSession(XrInstance           
     {
 
         std::lock_guard<std::mutex> lock(g_xr_session_mutex);
-        auto                        key = (uintptr_t)(*(void **)(*session));
+        auto                        key = DataKey(*session);
         LOGD("ApiDiveLayerXrCreateSession key %lu, sess %p\n", key, *session);
 
         g_xr_session_data[key] = std::move(id);

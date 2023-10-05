@@ -31,6 +31,7 @@ limitations under the License.
 
 #include "capture_service/log.h"
 #include "capture_service/server.h"
+#include "layer_common.h"
 #include "vk_dispatch.h"
 #include "vk_layer_impl.h"
 
@@ -74,7 +75,7 @@ struct InstanceData
     InstanceData() :
         server_thread(std::thread(Dive::server_main))
     {
-        LOGI("libwarp loaded: %d", is_libwrap_loaded());
+        LOGI("libwrap loaded: %d", is_libwrap_loaded());
     }
 
     ~InstanceData()
@@ -121,11 +122,6 @@ static constexpr std::array<VkExtensionProperties, 1> device_extensions{ {
 } };
 
 }  // namespace
-
-uintptr_t DataKey(const void *object)
-{
-    return (uintptr_t)(*(void **)object);
-}
 
 InstanceData *GetInstanceLayerData(uintptr_t key)
 {
@@ -207,7 +203,7 @@ VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPr
     return QueuePresentKHR(pfn, queue, pPresentInfo);
 }
 
-// Create instance needs a special implementaiton for layer
+// Create instance needs a special implementation for layer
 VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
                                      const VkAllocationCallbacks *pAllocator,
                                      VkInstance                  *pInstance)
@@ -367,7 +363,7 @@ extern "C"
             return result;
         }
 
-        // When not called with this layer's name, call down to retrive the
+        // When not called with this layer's name, call down to retrieve the
         // properties.
         uint32_t downstream_ext_count = 0;
         ;

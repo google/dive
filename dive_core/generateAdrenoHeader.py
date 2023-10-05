@@ -114,7 +114,7 @@ def outputEnums(pm4_packet_file_h, enums):
     pm4_packet_file_h.write("};\n\n")
 
 # ---------------------------------------------------------------------------------------
-def outputPacketRegs(pm4_info_file, reg_list):
+def outputPacketRegs(pm4_info_file, reg_list, prefix):
   dword_count = 0
   for index, element in enumerate(reg_list):
     is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
@@ -146,16 +146,16 @@ def outputPacketRegs(pm4_info_file, reg_list):
             print_type = True
 
         if print_type:
-          pm4_packet_file_h.write("\tuint32_t %s; // %s\n" % (field_name, element.attrib['type']))
+          pm4_packet_file_h.write("%s\tuint32_t %s; // %s\n" % (prefix, field_name, element.attrib['type']))
         else:
-          pm4_packet_file_h.write("\tuint32_t %s;\n" % field_name)
+          pm4_packet_file_h.write("%s\tuint32_t %s;\n" % (prefix, field_name))
       elif is_reg_64:
-        pm4_packet_file_h.write("\tuint64_t %s;\n" % field_name)
+        pm4_packet_file_h.write("%s\tuint64_t %s;\n" % (prefix, field_name))
     else:
-      pm4_packet_file_h.write("\tunion\n")
-      pm4_packet_file_h.write("\t{\n")
-      pm4_packet_file_h.write("\t\tstruct\n")
-      pm4_packet_file_h.write("\t\t{\n")
+      pm4_packet_file_h.write("%s\tunion\n" % prefix)
+      pm4_packet_file_h.write("%s\t{\n" % prefix)
+      pm4_packet_file_h.write("%s\t\tstruct\n" % prefix)
+      pm4_packet_file_h.write("%s\t\t{\n" % prefix)
 
     if is_reg_64 and len(bitfields) > 0:
       raise Exception("Found a reg64 with bitfields: " + field_name)
@@ -186,7 +186,7 @@ def outputPacketRegs(pm4_info_file, reg_list):
         break;
 
       if cur_offset != bitfield_start:
-        pm4_packet_file_h.write("\t\t\tuint32_t : %d;\n" % (bitfield_start - cur_offset))
+        pm4_packet_file_h.write("%s\t\t\tuint32_t : %d;\n" % (prefix, bitfield_start - cur_offset))
 
       print_type = False
       if 'type' in bitfield.attrib:
@@ -195,17 +195,17 @@ def outputPacketRegs(pm4_info_file, reg_list):
           print_type = True
 
       if print_type:
-        pm4_packet_file_h.write("\t\t\tuint32_t %s : %d; // %s\n" % (field_name, bitfield_width, bitfield.attrib['type']))
+        pm4_packet_file_h.write("%s\t\t\tuint32_t %s : %d; // %s\n" % (prefix, field_name, bitfield_width, bitfield.attrib['type']))
       else:
-        pm4_packet_file_h.write("\t\t\tuint32_t %s : %d;\n" % (field_name, bitfield_width))
+        pm4_packet_file_h.write("%s\t\t\tuint32_t %s : %d;\n" % (prefix, field_name, bitfield_width))
 
       cur_offset = bitfield_start + bitfield_width
 
     # End of struct and union
     if len(bitfields) != 0:
-      pm4_packet_file_h.write("\t\t} bitfields%d;\n" % index)
-      pm4_packet_file_h.write("\t\tuint32_t ordinal%d;\n" % index)
-      pm4_packet_file_h.write("\t};\n")
+      pm4_packet_file_h.write("%s\t\t} bitfields%d;\n" % (prefix, index))
+      pm4_packet_file_h.write("%s\t\tuint32_t ordinal%d;\n" % (prefix, index))
+      pm4_packet_file_h.write("%s\t};\n" % prefix)
 
 # ---------------------------------------------------------------------------------------
 def outputBitfields(pm4_info_file, bitfields):
@@ -215,22 +215,22 @@ def outputBitfields(pm4_info_file, bitfields):
     bitfield_name = bitfield.attrib['name']
     bitfield_type = "uint32_t"
     if 'type' in bitfield.attrib:
-      bitfield_type = bitfield.attrib['type']    
+      bitfield_type = bitfield.attrib['type']
       if isBuiltInType(bitfield_type):
         bitfield_type = "uint32_t"
     if 'low' in bitfield.attrib and 'high' in bitfield.attrib:
       low = int(bitfield.attrib['low'])
       high = int(bitfield.attrib['high'])
-      pm4_info_file.write("       %s %s : %d;\n" % (bitfield_type, bitfield_name, high - low + 1)) 
+      pm4_info_file.write("       %s %s : %d;\n" % (bitfield_type, bitfield_name, high - low + 1))
     elif 'pos' in bitfield.attrib:
-      pm4_info_file.write("       %s %s : 1;\n" % (bitfield_type, bitfield_name)) 
+      pm4_info_file.write("       %s %s : 1;\n" % (bitfield_type, bitfield_name))
     else:
-      raise Exception("Encountered a bitfield with no pos/low/high!") 
+      raise Exception("Encountered a bitfield with no pos/low/high!")
 
 # ---------------------------------------------------------------------------------------
 def outputRegUnions(pm4_info_file, a6xx_domain, name, reg):
-  pm4_info_file.write("union %s \n" % (name) ) 
-  pm4_info_file.write("{\n")    
+  pm4_info_file.write("union %s \n" % (name) )
+  pm4_info_file.write("{\n")
 
   type = None
   use_bitset_as_type = False
@@ -240,10 +240,10 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg):
       # if it isn't one of the standard types, then it must be a custom bitset or an enum
       if not isBuiltInType(type):
         enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+type+'"]')
-        
+
         if enum:
           enum_name = enum.attrib['name']
-          pm4_info_file.write("    %s bitfields;\n" % (enum_name)) 
+          pm4_info_file.write("    %s bitfields;\n" % (enum_name))
         else:
           use_bitset_as_type = True
           bitset = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
@@ -252,23 +252,23 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg):
             bitset = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
             if not bitset:
               raise Exception("Not able to find bitset/enum " + type + " for register " + name)
-          
-          pm4_info_file.write("    struct\n") 
-          pm4_info_file.write("    {\n") 
+
+          pm4_info_file.write("    struct\n")
+          pm4_info_file.write("    {\n")
           outputBitfields(pm4_info_file, bitset)
-                  
+
   bitfields = reg.findall('{http://nouveau.freedesktop.org/}bitfield')
   if bitfields:
     if not use_bitset_as_type:
-      pm4_info_file.write("    struct\n") 
+      pm4_info_file.write("    struct\n")
       pm4_info_file.write("    {\n")
     outputBitfields(pm4_info_file, bitfields)
 
   if use_bitset_as_type or bitfields:
     pm4_info_file.write("    }bitfields;\n\n")
 
-  pm4_info_file.write("    uint32_t u32All;\n")      
-  pm4_info_file.write("    int i32All;\n")  
+  pm4_info_file.write("    uint32_t u32All;\n")
+  pm4_info_file.write("    int i32All;\n")
   pm4_info_file.write("    float f32All;\n")
   pm4_info_file.write("};\n\n")
 
@@ -289,7 +289,7 @@ def addToRegHash(name, reg, regs):
       regs[name] = reg
   else:
     regs[name] = reg
-  
+
 
 # ---------------------------------------------------------------------------------------
 def outputPackets(pm4_packet_file_h, registers_et_root, domains):
@@ -306,11 +306,12 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       continue
 
     # There are only 2 PM4 packets with array tags: CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG
-    # Ignore the array and make pm4_packet point to the contents of the array
     array = domain.find('./{http://nouveau.freedesktop.org/}array')
+    array_size = 1
     pm4_packet = domain
     if array:
       pm4_packet = array
+      array_size = int(array.attrib['length'])
 
     # There are 2 PM4 packet types with stripe tags, see CP_DRAW_INDIRECT_MULTI and CP_DRAW_INDX_INDIRECT for example
     # For CP_DRAW_INDX_INDIRECT type, the stripe is based on HW version, so just use the latest stripe only
@@ -384,7 +385,15 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       pm4_packet_file_h.write("struct %s\n" % packet_name)
       pm4_packet_file_h.write("{\n")
       pm4_packet_file_h.write("\tPm4Type7Header HEADER;\n")
-      outputPacketRegs(pm4_packet_file_h, reg_list)
+
+      # For arrays packets such as CP_SET_DRAW_STATE, make an actual fixed-sized array containing the registers
+      prefix = ""
+      if array_size > 1:
+        pm4_packet_file_h.write("\tstruct ARRAY_ELEMENT {\n")
+        prefix = "\t"
+      outputPacketRegs(pm4_packet_file_h, reg_list, prefix)
+      if array_size > 1:
+        pm4_packet_file_h.write("\t} ARRAY[%d];\n" % array_size)
       pm4_packet_file_h.write("};\n\n")
 
 # ---------------------------------------------------------------------------------------
@@ -444,18 +453,18 @@ try:
     if is_reg_32:
       name = element.attrib['name']
       addToRegHash(name, element, regs)
-           
+
   arrays = a6xx_domain.findall('{http://nouveau.freedesktop.org/}array')
   for array in arrays:
-    array_name = array.attrib['name'] 
+    array_name = array.attrib['name']
     for element in array:
       is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
       if is_reg_32:
-        name = element.attrib['name']  
+        name = element.attrib['name']
         addToRegHash(array_name + "_" + name, element, regs)
 
   for name, reg in regs.items():
-    outputRegUnions(pm4_packet_file_h, a6xx_domain, name, reg)                      
+    outputRegUnions(pm4_packet_file_h, a6xx_domain, name, reg)
   pm4_packet_file_h.write("\n\n")
 
   # close to flush

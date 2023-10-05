@@ -27,7 +27,7 @@ set startTime=%time%
     echo "build type is " !build_type!
 
     set BUILD_DIR= %PROJECT_ROOT%\\build\\grpc\\!build_type!
-    set INSTALL_DIR= %INSTALL_ROOT%\\grpc\\!build_type!
+    set INSTALL_DIR= %INSTALL_ROOT%\\grpc\\
     md !BUILD_DIR!
     echo "BUILD_DIR: " !BUILD_DIR!
     echo "INSTALL_DIR: " !INSTALL_DIR!
@@ -54,9 +54,10 @@ set startTime=%time%
         -DCMAKE_BUILD_TYPE=!build_type! ^
         %SRC_DIR% ^
         -D_WIN32_WINNT=0x600 ^
-        -G "Visual Studio 16 2019" -A x64
+        -DCMAKE_DEBUG_POSTFIX=d ^
+        -GNinja
 
-    cmake --build . --config=!build_type!  --parallel %NUMBER_OF_PROCESSORS% -- /p:CL_MPcount=%NUMBER_OF_PROCESSORS%
+    cmake --build . --config=!build_type!  
     cmake --install . --config=!build_type! --prefix="!INSTALL_DIR!"  
 
     @REM copy %BUILD_DIR%\\Release\\grpc_cpp_plugin.exe %PROJECT_ROOT%\\bin\\
@@ -65,17 +66,23 @@ set startTime=%time%
 
 popd
 
-pushd %INSTALL_ROOT%\\grpc\\Debug\\lib
+pushd %INSTALL_ROOT%\\grpc\\lib
+tar -zcvf grpcd.tar.gz grpcd.lib
 tar -zcvf grpc.tar.gz grpc.lib
+tar -zcvf grpc_unsecured.tar.gz grpc_unsecured.lib
 tar -zcvf grpc_unsecure.tar.gz grpc_unsecure.lib
-tar -zcvf grpc_authorization_provider.tar.gz grpc_authorization_provider.lib
+tar -zcvf grpc_authorization_providerd.tar.gz grpc_authorization_providerd.lib
 tar -zcvf libprotocd.tar.gz libprotocd.lib
+tar -zcvf libprotoc.tar.gz libprotoc.lib
 tar -zcvf libprotobufd.tar.gz libprotobufd.lib
 
+del grpcd.lib
 del grpc.lib
+del grpc_unsecured.lib
 del grpc_unsecure.lib
-del grpc_authorization_provider.lib
+del grpc_authorization_providerd.lib
 del libprotocd.lib
+del libprotoc.lib
 del libprotobufd.lib
 popd
 

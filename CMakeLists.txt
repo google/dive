@@ -40,26 +40,24 @@ if(BUILD_GRPC)
     set(GRPC_AS_SUBMODULE "ON")
     
 else()
-    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        message("Debug build")
-        if(MSVC AND EXISTS "${CMAKE_SOURCE_DIR}/prebuild/grpc/Debug/lib/grpc.tar.gz")
-            # Unzip certain large debug gRPC libraries
-            execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/Debug/lib/grpc.tar.gz
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/Debug/lib/grpc_unsecure.tar.gz
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/Debug/lib/grpc_authorization_provider.tar.gz
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/Debug/lib/libprotocd.tar.gz
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/Debug/lib/libprotobufd.tar.gz
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/Debug/lib
-            )
-        endif()
-        set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/grpc/Debug")
-        link_directories(${CMAKE_SOURCE_DIR}/prebuild/grpc/Debug/lib)
-    else()
-        message("Release build")
-        set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/grpc/Release")
-        link_directories(${CMAKE_SOURCE_DIR}/prebuild/grpc/Release/lib)
+
+    if(MSVC AND EXISTS "${CMAKE_SOURCE_DIR}/prebuild/grpc/lib/grpc.tar.gz")
+        # Unzip certain large debug gRPC libraries
+        execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpcd.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc_unsecured.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc_unsecure.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc_authorization_providerd.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/libprotocd.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/libprotoc.tar.gz
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/libprotobufd.tar.gz
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib
+        )
     endif()
+    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/grpc/")
+    link_directories(${CMAKE_SOURCE_DIR}/prebuild/grpc/lib)
+
 endif()
 include(grpc.cmake)
 

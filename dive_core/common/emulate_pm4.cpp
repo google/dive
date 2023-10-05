@@ -19,6 +19,7 @@
 
 #include <string.h>  // memcpy
 
+#include "adreno.h"
 #include "common.h"
 #include "dive_capture_format.h"
 #include "emulate_pm4.h"
@@ -616,149 +617,119 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
                                uint32_t                  num_ibs,
                                const IndirectBufferInfo *ib_ptr)
 {
+    // TODO: Get rid of these variables!!!
+    // ############################################################
     m_submit_index = submit_index;
     m_num_ibs = num_ibs;
     m_ib_ptr = ib_ptr;
+    // ############################################################
 
     // Used to keep track of progress of emulation so far
     EmulateState emu_state;
-    if (!GetNextValidIb(mem_manager,
-                        &emu_state.m_dcb.m_ib_index,
-                        callbacks,
-                        ib_ptr,
-                        m_submit_index,
-                        0))
-        return false;
-    emu_state.m_dcb.m_va = UINT64_MAX;
-    emu_state.m_ccb.m_va = UINT64_MAX;
+    emu_state.m_dcb.m_top_of_stack = EmulateState::CbState::kPrimaryRing;
+    // if (!GetNextValidIb(mem_manager,
+    //                     &emu_state.m_dcb.m_ib_index,
+    //                     callbacks,
+    //                     ib_ptr,
+    //                     m_submit_index,
+    //                     0))
+    //     return false;
+    // emu_state.m_dcb.m_cur_va = UINT64_MAX;
+    // emu_state.m_ccb.m_cur_va = UINT64_MAX;
     emu_state.m_de_counter = 0;
     emu_state.m_ce_counter = 0;
     emu_state.m_is_dcb_blocked = false;
-    emu_state.m_dcb.m_is_in_ib1_chain_ib = false;
-    emu_state.m_dcb.m_is_in_ib2 = false;
-    emu_state.m_ccb.m_is_in_ib1_chain_ib = false;
-    emu_state.m_ccb.m_is_in_ib2 = false;
-    if (emu_state.m_dcb.m_ib_index != UINT32_MAX)
+    // emu_state.m_dcb.m_is_in_ib1_chain_ib = false;
+    // emu_state.m_dcb.m_is_in_ib2 = false;
+    // emu_state.m_dcb.m_top_of_stack = EmulateState::CbState::kPrimaryRing;
+    // emu_state.m_ccb.m_is_in_ib1_chain_ib = false;
+    // emu_state.m_ccb.m_is_in_ib2 = false;
+    EmulateState::IbStack *primary_ring = &emu_state.m_dcb
+                                           .m_ib_stack[EmulateState::CbState::kPrimaryRing];
+    primary_ring->m_cur_va = UINT64_MAX;
+    primary_ring->m_ib_queue_index = primary_ring->m_ib_queue_size = 0;
+
+    // Push all the IBs in this submit onto the primary ring stack entry
+    for (uint32_t i = 0; i < num_ibs; ++i)
     {
-        const IndirectBufferInfo &ib_info = ib_ptr[emu_state.m_dcb.m_ib_index];
-        emu_state.m_dcb.m_va = ib_info.m_va_addr;
-    }
-
-    while (emu_state.m_dcb.m_va != UINT64_MAX || emu_state.m_ccb.m_va != UINT64_MAX)
-    {
-        // Sanity check: Dcb cannot be both blocked and finished processing
-        DIVE_ASSERT((emu_state.m_is_dcb_blocked && emu_state.m_dcb.m_va != UINT64_MAX) ||
-                    !emu_state.m_is_dcb_blocked);
-
-        uint64_t va = emu_state.m_ccb.m_va;
-        if (!emu_state.m_is_dcb_blocked && emu_state.m_dcb.m_va != UINT64_MAX)
-            va = emu_state.m_dcb.m_va;
-
-        if (emu_state.m_is_dcb_blocked && emu_state.m_ccb.m_va == UINT64_MAX)
+        const IndirectBufferInfo &ib_info = ib_ptr[i];
+        if (!QueueIB(ib_info.m_va_addr,
+                     ib_info.m_size_in_dwords,
+                     ib_info.m_skip,
+                     IbType::kNormal,
+                     &emu_state.m_dcb))
         {
-            DIVE_ERROR_MSG("Dcb hang at 0x%llx waiting on ccb, but no ccb packets left!\n",
-                           (unsigned long long)emu_state.m_dcb.m_va);
+            return false;
+        }
+    }
+    if (!AdvanceToQueuedIB(mem_manager, &emu_state.m_dcb, callbacks))
+        return false;
+
+    // Could be pointing to an IB that needs to be "skipped"
+    // Advance to the next valid IB in that case
+    if (!CheckAndAdvanceIB(mem_manager, &emu_state.m_dcb, callbacks))
+        return false;
+
+    // Should always be emulating something in an IB. If it's parked at the primary ring,
+    // then that means emulation has completed
+    while (emu_state.m_dcb.m_top_of_stack != EmulateState::CbState::kPrimaryRing)
+    {
+        // Callbacks + advance
+        EmulateState::IbStack *cur_ib_level = &emu_state.m_dcb
+                                               .m_ib_stack[emu_state.m_dcb.m_top_of_stack];
+
+        Pm4Header header;
+        if (!mem_manager.CopyMemory(&header,
+                                    m_submit_index,
+                                    cur_ib_level->m_cur_va,
+                                    sizeof(Pm4Header)))
+        {
+            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
+                           (unsigned long long)cur_ib_level->m_cur_va);
             return false;
         }
 
-        // Callbacks + advance
-        if (emu_state.m_dcb.m_va != UINT64_MAX)
+        // We only care about Type 2, 4 and 7 packets
+        Pm4Type type = Pm4Type::kUnknown;
+        if (header.type == 2)  // NOP
+            type = Pm4Type::kType2;
+        else if (header.type == 4)  // Register write
+            type = Pm4Type::kType4;
+        if (header.type == 7)  // PM4 opcode
+            type = Pm4Type::kType7;
+
+        // Check validity of packet
+        if (type == Pm4Type::kType4)
         {
-            Pm4Header header;
-            if (!mem_manager.CopyMemory(&header,
-                                        m_submit_index,
-                                        emu_state.m_dcb.m_va,
-                                        sizeof(Pm4Header)))
-            {
-                DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n", (unsigned long long)va);
+            Pm4Type4Header *type4_header = (Pm4Type4Header *)&header;
+            if (type4_header->offset_parity != CalcParity(type4_header->offset))
                 return false;
-            }
-
-            // We only care about Type 2, 4 and 7 packets
-            Pm4Type type = Pm4Type::kUnknown;
-            if (header.type == 2)  // NOP
-                type = Pm4Type::kType2;
-            else if (header.type == 4)  // Register write
-                type = Pm4Type::kType4;
-            if (header.type == 7)  // PM4 opcode
-                type = Pm4Type::kType7;
-
-            // Check validity of packet
-            if (type == Pm4Type::kType4)
-            {
-                Pm4Type4Header *type4_header = (Pm4Type4Header *)&header;
-                if (type4_header->offset_parity != CalcParity(type4_header->offset))
-                    return false;
-                if (type4_header->count_parity != CalcParity(type4_header->count))
-                    return false;
-            }
-            else if (type == Pm4Type::kType7)
-            {
-                Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
-                if (type7_header->opcode_parity != CalcParity(type7_header->opcode))
-                    return false;
-                if (type7_header->count_parity != CalcParity(type7_header->count))
-                    return false;
-                if (type7_header->zeroes != 0)
-                    return false;
-            }
-
-            if (!emu_state.m_is_dcb_blocked)
-                if (!callbacks.OnPacket(mem_manager,
-                                        m_submit_index,
-                                        emu_state.m_dcb.m_ib_index,
-                                        emu_state.m_dcb.m_va,
-                                        type,
-                                        header.u32All))
-                    return false;
-            if (!AdvanceCb(mem_manager, &emu_state, callbacks, type, header.u32All))
+            if (type4_header->count_parity != CalcParity(type4_header->count))
                 return false;
         }
+        else if (type == Pm4Type::kType7)
+        {
+            Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
+            if (type7_header->opcode_parity != CalcParity(type7_header->opcode))
+                return false;
+            if (type7_header->count_parity != CalcParity(type7_header->count))
+                return false;
+            if (type7_header->zeroes != 0)
+                return false;
+        }
+
+        if (!emu_state.m_is_dcb_blocked)
+            if (!callbacks.OnPacket(mem_manager,
+                                    m_submit_index,
+                                    emu_state.m_dcb.m_ib_index,
+                                    cur_ib_level->m_cur_va,
+                                    type,
+                                    header.u32All))
+                return false;
+        if (!AdvanceCb(mem_manager, &emu_state, callbacks, type, header.u32All))
+            return false;
     }  // while there are packets left in submit
     return true;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool EmulatePM4::GetNextValidIb(const IMemoryManager     &mem_manager,
-                                uint32_t                 *ib_index_ptr,
-                                IEmulateCallbacks        &callbacks,
-                                const IndirectBufferInfo *ib_ptr,
-                                uint32_t                  submit_index,
-                                uint32_t                  start_ib_index) const
-{
-    bool found_valid_ib = false;
-    *ib_index_ptr = GetNextIb(submit_index, start_ib_index);
-    while (!found_valid_ib && (*ib_index_ptr != UINT32_MAX))
-    {
-        IndirectBufferInfo ib_info = ib_ptr[*ib_index_ptr];
-
-        ib_info.m_skip = !mem_manager.IsValid(m_submit_index,
-                                              ib_info.m_va_addr,
-                                              ib_info.m_size_in_dwords * sizeof(uint32_t));
-
-        if (!callbacks.OnIbStart(m_submit_index, *ib_index_ptr, ib_info, IbType::kNormal))
-            return false;
-
-        // Keep going until found an ib that does not have m_skip set to true
-        found_valid_ib = true;
-        if (ib_info.m_skip)
-        {
-            if (!callbacks.OnIbEnd(m_submit_index, *ib_index_ptr, ib_info))
-                return false;
-
-            *ib_index_ptr = GetNextIb(submit_index, *ib_index_ptr + 1);
-            found_valid_ib = false;
-        }
-    }
-    return true;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t EmulatePM4::GetNextIb(uint32_t submit_index, uint32_t start_ib_index) const
-{
-    if (start_ib_index < m_num_ibs)
-        return start_ib_index;
-    return UINT32_MAX;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -768,23 +739,6 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                            Pm4Type               type,
                            uint32_t              header) const
 {
-    IndirectBufferInfo ib_info;
-    ib_info.m_skip = false;
-    if (emu_state_ptr->m_dcb.m_is_in_ib2)
-    {
-        ib_info.m_va_addr = emu_state_ptr->m_dcb.m_ib2_addr;
-        ib_info.m_size_in_dwords = emu_state_ptr->m_dcb.m_ib2_size_in_dwords;
-    }
-    else if (emu_state_ptr->m_dcb.m_is_in_ib1_chain_ib)
-    {
-        ib_info.m_va_addr = emu_state_ptr->m_dcb.m_ib1_chain_addr;
-        ib_info.m_size_in_dwords = emu_state_ptr->m_dcb.m_ib1_chain_size_in_dwords;
-    }
-    else
-    {
-        ib_info = m_ib_ptr[emu_state_ptr->m_dcb.m_ib_index];
-    }
-
     Pm4Type7Header type7_header;
     type7_header.u32All = header;
 
@@ -799,162 +753,235 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         PM4_CP_INDIRECT_BUFFER ib_packet;
         if (!mem_manager.CopyMemory(&ib_packet,
                                     m_submit_index,
-                                    emu_state_ptr->m_dcb.m_va,
+                                    emu_state_ptr->m_dcb.GetCurIb()->m_cur_va,
                                     sizeof(PM4_CP_INDIRECT_BUFFER)))
         {
             DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
-                           (unsigned long long)emu_state_ptr->m_dcb.m_va);
+                           (unsigned long long)emu_state_ptr->m_dcb.GetCurIb()->m_cur_va);
             return false;
         }
         uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
-        if (!AdvanceToIB(mem_manager,
-                         type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN,
-                         ib_addr,
-                         ib_packet.SIZE,
-                         ib_info,
-                         &emu_state_ptr->m_dcb,
-                         callbacks,
-                         type,
-                         header))
+        IbType   ib_type = (type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
+                                                                               IbType::kCall;
+        if (!QueueIB(ib_addr, ib_packet.SIZE, false, ib_type, &emu_state_ptr->m_dcb))
         {
             return false;
         }
+        AdvancePacket(&emu_state_ptr->m_dcb, header);
+        if (!AdvanceToQueuedIB(mem_manager, &emu_state_ptr->m_dcb, callbacks))
+            return false;
+    }
+    // Parse CP_SET_DRAW_STATE, since it references implicit IBs
+    else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_DRAW_STATE)
+    {
+        // For simplicity sake, treat CP_SET_DRAW_STATE essentially as multiple
+        // CALLs (i.e. jump to the next IB level), although the hardware probably
+        // doesn't do that.
+        PM4_CP_SET_DRAW_STATE packet;
+        if (!mem_manager.CopyMemory(&packet,
+                                    m_submit_index,
+                                    emu_state_ptr->m_dcb.GetCurIb()->m_cur_va,
+                                    (type7_header.count + 1) * sizeof(uint32_t)))
+        {
+            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
+                           (unsigned long long)emu_state_ptr->m_dcb.GetCurIb()->m_cur_va);
+            return false;
+        }
+        uint32_t packet_size = (packet.HEADER.count * sizeof(uint32_t));
+        uint32_t array_size = packet_size / sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
+        DIVE_ASSERT((packet_size % sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT)) == 0);
+        bool ib_queued = false;
+        for (uint32_t i = 0; i < array_size; i++)
+        {
+            if (packet.ARRAY[i].bitfields0.DISABLE_ALL_GROUPS)
+                break;
+            if (packet.ARRAY[i].bitfields0.DISABLE)
+                continue;
+
+            ib_queued = true;
+            uint64_t ib_addr = ((uint64_t)packet.ARRAY[i].bitfields2.ADDR_HI << 32) |
+                               (uint64_t)packet.ARRAY[i].bitfields1.ADDR_LO;
+            if (!QueueIB(ib_addr,
+                         packet.ARRAY[i].bitfields0.COUNT,
+                         false,
+                         IbType::kDrawState,
+                         &emu_state_ptr->m_dcb))
+            {
+                return false;
+            }
+        }
+        AdvancePacket(&emu_state_ptr->m_dcb, header);
+        if (ib_queued)
+            if (!AdvanceToQueuedIB(mem_manager, &emu_state_ptr->m_dcb, callbacks))
+                return false;
     }
     else
     {
-        if (!AdvancePacket(mem_manager, ib_info, &emu_state_ptr->m_dcb, callbacks, type, header))
-            return false;
+        AdvancePacket(&emu_state_ptr->m_dcb, header);
     }
+
+    // Could be pointing to an IB that needs to be "skipped", or reached the end of current IB.
+    // Advance to the next valid IB in that case
+    if (!CheckAndAdvanceIB(mem_manager, &emu_state_ptr->m_dcb, callbacks))
+        return false;
+
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceToIB(const IMemoryManager     &mem_manager,
-                             bool                      is_chain,
-                             uint64_t                  ib_addr,
-                             uint32_t                  ib_size_in_dwords,
-                             const IndirectBufferInfo &ib_info,
-                             EmulateState::CbState    *cb_state,
-                             IEmulateCallbacks        &callbacks,
-                             Pm4Type                   type,
-                             uint32_t                  header) const
+bool EmulatePM4::QueueIB(uint64_t               ib_addr,
+                         uint32_t               ib_size_in_dwords,
+                         bool                   skip,
+                         IbType                 ib_type,
+                         EmulateState::CbState *cb_state) const
 {
-    if (!is_chain)
+    // Grab current stack level info
+    EmulateState::IbStack *cur_ib_level = cb_state->GetCurIb();
+
+    if (cur_ib_level->m_ib_queue_size >= EmulateState::kMaxPendingIbs)
     {
-        // Call packet: CP is transitioning into an IB2
-        uint32_t packet_size = GetPacketSize(header);
-        cb_state->m_is_in_ib2 = true;
-        cb_state->m_ib2_addr = ib_addr;
-        cb_state->m_ib2_size_in_dwords = ib_size_in_dwords;
-        cb_state->m_ib1_return_va = cb_state->m_va + packet_size * sizeof(uint32_t);
+        DIVE_ASSERT(false);
+        return false;
+    }
+
+    // Add to list of IBs to CALL/CHAIN to
+    cur_ib_level->m_ib_queue_addrs[cur_ib_level->m_ib_queue_size] = ib_addr;
+    cur_ib_level->m_ib_queue_sizes_in_dwords[cur_ib_level->m_ib_queue_size] = ib_size_in_dwords;
+    cur_ib_level->m_ib_queue_skip[cur_ib_level->m_ib_queue_size] = skip;
+    cur_ib_level->m_ib_queue_type = ib_type;
+    cur_ib_level->m_ib_queue_size++;
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager  &mem_manager,
+                                   EmulateState::CbState *cb_state,
+                                   IEmulateCallbacks     &callbacks) const
+{
+    // Grab current stack level info
+    EmulateState::IbStack *cur_ib_level = cb_state->GetCurIb();
+
+    // Check if there are any queued IBs to advance to. If not, early out.
+    if (cur_ib_level->m_ib_queue_index >= cur_ib_level->m_ib_queue_size)
+        return true;
+
+    // Can't advance to a queued up IB if there are no IBs queued up!
+    DIVE_ASSERT(cur_ib_level->m_ib_queue_size != 0);
+
+    if (cur_ib_level->m_ib_queue_type != IbType::kChain)
+    {
+        DIVE_ASSERT(cb_state->m_top_of_stack < EmulateState::CbState::kTotalIbLevels - 1);
+
+        // If it's calling into another IB from the primary ring, then update the ib index. Note
+        // that only IBs called from primary ring as labelled as "normal" ibs
+        if (cur_ib_level->m_ib_queue_type == IbType::kNormal)
+            cb_state->m_ib_index = cur_ib_level->m_ib_queue_index;
+
+        // Enter next IB level (CALL)
+        cb_state->m_top_of_stack = (EmulateState::CbState::IbLevel)(cb_state->m_top_of_stack + 1);
+
+        uint32_t               index = cur_ib_level->m_ib_queue_index;
+        EmulateState::IbStack *new_ib_level = cb_state->GetCurIb();
+        new_ib_level->m_cur_va = cur_ib_level->m_ib_queue_addrs[index];
+        new_ib_level->m_cur_ib_size_in_dwords = cur_ib_level->m_ib_queue_sizes_in_dwords[index];
+        new_ib_level->m_cur_ib_skip = cur_ib_level->m_ib_queue_skip[index];
+        new_ib_level->m_cur_ib_addr = new_ib_level->m_cur_va;
+        new_ib_level->m_cur_ib_type = cur_ib_level->m_ib_queue_type;
+        new_ib_level->m_ib_queue_index = new_ib_level->m_ib_queue_size = 0;
     }
     else
     {
-        // Chain packet
-        if (!cb_state->m_is_in_ib2)
+        DIVE_ASSERT(cur_ib_level->m_ib_queue_size == 1);
+        DIVE_ASSERT(cur_ib_level->m_ib_queue_index == 0);
+
+        // The CHAIN packet should be the last packet in the current IB. Double check this.
+        uint64_t cur_end_addr = cur_ib_level->m_cur_ib_addr +
+                                cur_ib_level->m_cur_ib_size_in_dwords * sizeof(uint32_t);
+        if (cur_ib_level->m_cur_va != cur_end_addr)
         {
-            // Currently in IB1. Mark that it is in a CHAIN IB, so that a CALL to IB2 can return
-            // to this CHAIN IB
-            cb_state->m_is_in_ib1_chain_ib = true;
-            cb_state->m_ib1_chain_addr = ib_addr;
-            cb_state->m_ib1_chain_size_in_dwords = ib_size_in_dwords;
+            DIVE_ASSERT(false);
+            return false;
         }
-        else
-        {
-            // Currently in IB2. No need to keep track that it is in a CHAIN IB, since after the
-            // end of the CHAIN sequence, will go straight back to IB1
-            cb_state->m_ib2_addr = ib_addr;
-            cb_state->m_ib2_size_in_dwords = ib_size_in_dwords;
-        }
+        cur_ib_level->m_cur_va = cur_ib_level->m_ib_queue_addrs[0];
+        cur_ib_level->m_cur_ib_size_in_dwords = cur_ib_level->m_ib_queue_sizes_in_dwords[0];
+        cur_ib_level->m_cur_ib_skip = cur_ib_level->m_ib_queue_skip[0];
+        cur_ib_level->m_cur_ib_addr = cur_ib_level->m_cur_va;
     }
-    cb_state->m_va = ib_addr;
+
+    // Advance the queue index to next element in the queue
+    cur_ib_level->m_ib_queue_index++;
+
+    // "Update" current IB level since a CALL could've happened
+    cur_ib_level = cb_state->GetCurIb();
+
+    // It's possible that an application has already reset/destroyed the command buffer. Check
+    // whether the memory is valid (ie. overwritten), and skip it if it isn't
+    bool skip_ib = !mem_manager.IsValid(m_submit_index,
+                                        cur_ib_level->m_cur_va,
+                                        cur_ib_level->m_cur_ib_size_in_dwords * sizeof(uint32_t));
+    cur_ib_level->m_cur_ib_skip |= skip_ib;
 
     // Start-Ib Callback
     {
-        // It's possible that an application has already reset/destroyed the command buffer. Check
-        // whether the memory is valid (ie. overwritten), and skip it if it isn't
-        bool skip_ib = !mem_manager.IsValid(m_submit_index,
-                                            ib_addr,
-                                            ib_size_in_dwords * sizeof(uint32_t));
-
         IndirectBufferInfo call_chain_ib_info;
-        call_chain_ib_info.m_va_addr = ib_addr;
-        call_chain_ib_info.m_size_in_dwords = ib_size_in_dwords;
-        call_chain_ib_info.m_skip = skip_ib;
-        IbType ib_type = is_chain ? IbType::kChain : IbType::kCall;
-        if (!callbacks.OnIbStart(m_submit_index, cb_state->m_ib_index, call_chain_ib_info, ib_type))
-            return false;
-
-        if (skip_ib)
+        call_chain_ib_info.m_va_addr = cur_ib_level->m_cur_va;
+        call_chain_ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
+        call_chain_ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
+        if (!callbacks.OnIbStart(m_submit_index,
+                                 cb_state->m_ib_index,
+                                 call_chain_ib_info,
+                                 cur_ib_level->m_cur_ib_type))
         {
-            if (!AdvanceOutOfIB(mem_manager, ib_info, cb_state, callbacks))
-                return false;
+            return false;
         }
     }
+
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvancePacket(const IMemoryManager     &mem_manager,
-                               const IndirectBufferInfo &ib_info,
-                               EmulateState::CbState    *cb_state,
-                               IEmulateCallbacks        &callbacks,
-                               Pm4Type                   type,
-                               uint32_t                  header) const
+bool EmulatePM4::CheckAndAdvanceIB(const IMemoryManager  &mem_manager,
+                                   EmulateState::CbState *cb_state,
+                                   IEmulateCallbacks     &callbacks) const
 {
-    uint32_t packet_size = GetPacketSize(header);
-    cb_state->m_va += packet_size * sizeof(uint32_t);
-
-    // If reach the end of the IB
-    if (cb_state->m_va >= (ib_info.m_va_addr + ib_info.m_size_in_dwords * sizeof(uint32_t)))
+    // Could be pointing to an IB that needs to be "skipped", or reached the end of current IB.
+    // Loop until pointing to a "valid" IB.
+    // m_cur_va == UINT64_MAX when there are no more IBs to execute (i.e. set for primary ring)
+    while (cb_state->GetCurIb()->m_cur_va != UINT64_MAX && cb_state->GetCurIb()->EndOfCurIb())
     {
-        if (!AdvanceOutOfIB(mem_manager, ib_info, cb_state, callbacks))
+        // Done with current IB. Jump back to an earlier level.
+        if (!AdvanceOutOfIB(cb_state, callbacks))
+            return false;
+
+        // Handle any pending queued IBs
+        if (!AdvanceToQueuedIB(mem_manager, cb_state, callbacks))
             return false;
     }
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceOutOfIB(const IMemoryManager     &mem_manager,
-                                const IndirectBufferInfo &ib_info,
-                                EmulateState::CbState    *cb_state,
-                                IEmulateCallbacks        &callbacks) const
+void EmulatePM4::AdvancePacket(EmulateState::CbState *cb_state, uint32_t header) const
 {
+    uint32_t packet_size = GetPacketSize(header);
+    cb_state->GetCurIb()->m_cur_va += packet_size * sizeof(uint32_t);
+}
+
+//--------------------------------------------------------------------------------------------------
+bool EmulatePM4::AdvanceOutOfIB(EmulateState::CbState *cb_state, IEmulateCallbacks &callbacks) const
+{
+    EmulateState::IbStack *cur_ib_level = cb_state->GetCurIb();
+
+    IndirectBufferInfo ib_info;
+    ib_info.m_va_addr = cur_ib_level->m_cur_va;
+    ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
+    ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
+
     // End-Ib Callback
     if (!callbacks.OnIbEnd(m_submit_index, cb_state->m_ib_index, ib_info))
         return false;
 
-    // A call packet return
-    if (cb_state->m_is_in_ib2)
-        cb_state->m_va = cb_state->m_ib1_return_va;
-    else
-    {
-        uint32_t ib_index;
-        if (!GetNextValidIb(mem_manager,
-                            &ib_index,
-                            callbacks,
-                            m_ib_ptr,
-                            m_submit_index,
-                            cb_state->m_ib_index + 1))
-            return false;
-        cb_state->m_ib_index = ib_index;
-        cb_state->m_va = UINT64_MAX;
-        if (ib_index != UINT32_MAX)
-        {
-            const IndirectBufferInfo &next_ib_info = m_ib_ptr[ib_index];
-            cb_state->m_va = next_ib_info.m_va_addr;
-        }
-    }
-
-    // If currently not in an IB2, then must either be in an IB1 or a chain IB1
-    // In any case, either reached the end of the IB1 or the chain IB1, so set to false
-    if (!cb_state->m_is_in_ib2)
-        cb_state->m_is_in_ib1_chain_ib = false;
-
-    // If this was true, then reached the end of the IB2 and no longer in an IB2
-    // So can set this unconditionally to false
-    cb_state->m_is_in_ib2 = false;
-
+    cb_state->m_top_of_stack = (EmulateState::CbState::IbLevel)(cb_state->m_top_of_stack - 1);
     return true;
 }
 

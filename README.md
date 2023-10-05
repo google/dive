@@ -83,10 +83,18 @@ Currently, the gRPC binaries are prebuilt under the folder `prebuild``. In case 
 - Set the environment variable `ANDROID_NDK_HOME` (e.g. export ANDROID_NDK_HOME=~/andriod_sdk/ndk/25.2.9519653)
 Run the script 
 
+On Linux, run: 
 ```
 ./scripts/build_android.sh
 ```
+And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run 
 
-It will build both debug and release version of the libraries.
+```
+scripts\build_android.bat
+```
+
+
+
+It will build both debug and release version of the libraries under `build_android` folder.
 
 

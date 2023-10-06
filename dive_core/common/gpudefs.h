@@ -26,6 +26,7 @@ enum class IbType : uint8_t
     kNormal,
     kCall,
     kChain,
+    kContextSwitchIb,
     kDrawState
 };
 

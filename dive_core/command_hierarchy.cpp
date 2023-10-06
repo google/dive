@@ -1580,9 +1580,6 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
     DIVE_ASSERT(IsDrawDispatchEventOpcode(opcode) ||
                 IsBlitEvent(mem_manager, submit_index, va_addr, opcode));
 
-    // Not supported. Not sure what the formats for these are...
-    DIVE_ASSERT(opcode != CP_DRAW_INDX_BIN && opcode != CP_DRAW_INDX_2_BIN);
-
     if (opcode == CP_DRAW_INDX)
     {
         PM4_CP_DRAW_INDX packet;
@@ -1592,7 +1589,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
                       << "IndexSize:" << packet.bitfields4.INDX_SIZE << ","
                       << "VizQuery:" << packet.bitfields0.VIZ_QUERY << ")";
     }
-    else if (opcode == CP_DRAW_INDX_2)
+    else if (opcode == CP_DRAW_INDX)
     {
         PM4_CP_DRAW_INDX packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
@@ -1725,7 +1722,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
                       << "dstX2:" << packet.bitfields4.DST_X2 << ","
                       << "dstX2:" << packet.bitfields4.DST_Y2 << ")";
     }
-    else if (opcode == CP_EVENT_WRITE)
+    else if (opcode == CP_EVENT_WRITE7)
     {
         // Assumed it is a BLIT event (note: renamed to CCU_RESOLVE for a7xx)
         string_stream << "CpEventWrite(type:CCU_RESOLVE)";

@@ -743,12 +743,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     type7_header.u32All = header;
 
     // Deal with calls and chains
-    if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER ||
-                                    type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
+    if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
                                     type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
                                     type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
-                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE ||
-                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFD))
+                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE))
     {
         PM4_CP_INDIRECT_BUFFER ib_packet;
         if (!mem_manager.CopyMemory(&ib_packet,
@@ -812,8 +810,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         }
         AdvancePacket(&emu_state_ptr->m_dcb, header);
         if (ib_queued)
+        {
             if (!AdvanceToQueuedIB(mem_manager, &emu_state_ptr->m_dcb, callbacks))
                 return false;
+        }
     }
     else
     {
@@ -859,60 +859,59 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager  &mem_manager,
                                    IEmulateCallbacks     &callbacks) const
 {
     // Grab current stack level info
-    EmulateState::IbStack *cur_ib_level = cb_state->GetCurIb();
+    EmulateState::IbStack *prev_ib_level = cb_state->GetCurIb();
 
     // Check if there are any queued IBs to advance to. If not, early out.
-    if (cur_ib_level->m_ib_queue_index >= cur_ib_level->m_ib_queue_size)
+    if (prev_ib_level->m_ib_queue_index >= prev_ib_level->m_ib_queue_size)
         return true;
 
     // Can't advance to a queued up IB if there are no IBs queued up!
-    DIVE_ASSERT(cur_ib_level->m_ib_queue_size != 0);
+    DIVE_ASSERT(prev_ib_level->m_ib_queue_size != 0);
 
-    if (cur_ib_level->m_ib_queue_type != IbType::kChain)
+    if (prev_ib_level->m_ib_queue_type != IbType::kChain)
     {
         DIVE_ASSERT(cb_state->m_top_of_stack < EmulateState::CbState::kTotalIbLevels - 1);
 
         // If it's calling into another IB from the primary ring, then update the ib index. Note
         // that only IBs called from primary ring as labelled as "normal" ibs
-        if (cur_ib_level->m_ib_queue_type == IbType::kNormal)
-            cb_state->m_ib_index = cur_ib_level->m_ib_queue_index;
+        if (prev_ib_level->m_ib_queue_type == IbType::kNormal)
+            cb_state->m_ib_index = prev_ib_level->m_ib_queue_index;
 
         // Enter next IB level (CALL)
         cb_state->m_top_of_stack = (EmulateState::CbState::IbLevel)(cb_state->m_top_of_stack + 1);
 
-        uint32_t               index = cur_ib_level->m_ib_queue_index;
+        uint32_t               index = prev_ib_level->m_ib_queue_index;
         EmulateState::IbStack *new_ib_level = cb_state->GetCurIb();
-        new_ib_level->m_cur_va = cur_ib_level->m_ib_queue_addrs[index];
-        new_ib_level->m_cur_ib_size_in_dwords = cur_ib_level->m_ib_queue_sizes_in_dwords[index];
-        new_ib_level->m_cur_ib_skip = cur_ib_level->m_ib_queue_skip[index];
+        new_ib_level->m_cur_va = prev_ib_level->m_ib_queue_addrs[index];
+        new_ib_level->m_cur_ib_size_in_dwords = prev_ib_level->m_ib_queue_sizes_in_dwords[index];
+        new_ib_level->m_cur_ib_skip = prev_ib_level->m_ib_queue_skip[index];
         new_ib_level->m_cur_ib_addr = new_ib_level->m_cur_va;
-        new_ib_level->m_cur_ib_type = cur_ib_level->m_ib_queue_type;
+        new_ib_level->m_cur_ib_type = prev_ib_level->m_ib_queue_type;
         new_ib_level->m_ib_queue_index = new_ib_level->m_ib_queue_size = 0;
     }
     else
     {
-        DIVE_ASSERT(cur_ib_level->m_ib_queue_size == 1);
-        DIVE_ASSERT(cur_ib_level->m_ib_queue_index == 0);
+        DIVE_ASSERT(prev_ib_level->m_ib_queue_size == 1);
+        DIVE_ASSERT(prev_ib_level->m_ib_queue_index == 0);
 
         // The CHAIN packet should be the last packet in the current IB. Double check this.
-        uint64_t cur_end_addr = cur_ib_level->m_cur_ib_addr +
-                                cur_ib_level->m_cur_ib_size_in_dwords * sizeof(uint32_t);
-        if (cur_ib_level->m_cur_va != cur_end_addr)
+        uint64_t cur_end_addr = prev_ib_level->m_cur_ib_addr +
+                                prev_ib_level->m_cur_ib_size_in_dwords * sizeof(uint32_t);
+        if (prev_ib_level->m_cur_va != cur_end_addr)
         {
             DIVE_ASSERT(false);
             return false;
         }
-        cur_ib_level->m_cur_va = cur_ib_level->m_ib_queue_addrs[0];
-        cur_ib_level->m_cur_ib_size_in_dwords = cur_ib_level->m_ib_queue_sizes_in_dwords[0];
-        cur_ib_level->m_cur_ib_skip = cur_ib_level->m_ib_queue_skip[0];
-        cur_ib_level->m_cur_ib_addr = cur_ib_level->m_cur_va;
+        prev_ib_level->m_cur_va = prev_ib_level->m_ib_queue_addrs[0];
+        prev_ib_level->m_cur_ib_size_in_dwords = prev_ib_level->m_ib_queue_sizes_in_dwords[0];
+        prev_ib_level->m_cur_ib_skip = prev_ib_level->m_ib_queue_skip[0];
+        prev_ib_level->m_cur_ib_addr = prev_ib_level->m_cur_va;
     }
 
     // Advance the queue index to next element in the queue
-    cur_ib_level->m_ib_queue_index++;
+    prev_ib_level->m_ib_queue_index++;
 
-    // "Update" current IB level since a CALL could've happened
-    cur_ib_level = cb_state->GetCurIb();
+    EmulateState::IbStack *cur_ib_level = cb_state->GetCurIb();
 
     // It's possible that an application has already reset/destroyed the command buffer. Check
     // whether the memory is valid (ie. overwritten), and skip it if it isn't
@@ -1019,7 +1018,6 @@ bool IsDrawEventOpcode(uint32_t opcode)
     switch (opcode)
     {
     case CP_DRAW_INDX:
-    case CP_DRAW_INDX_2:
     case CP_DRAW_INDX_OFFSET:
     case CP_DRAW_INDIRECT:
     case CP_DRAW_INDX_INDIRECT:

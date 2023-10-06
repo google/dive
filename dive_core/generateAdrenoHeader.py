@@ -102,15 +102,38 @@ def outputEnums(pm4_packet_file_h, enums):
     fields = enum.findall('{http://nouveau.freedesktop.org/}value')
     enum_name = enum.attrib['name']
 
-    pm4_packet_file_h.write("enum %s\n" % enum_name)
-    pm4_packet_file_h.write("{\n")
+    # Get rid of duplicates. Always prefer the ones that appear later, since the enums
+    # are listed in ascending hardware revision order (i.e. A3xx followed by A4xx, etc)
+    enum_dict = {}
+    enum_variant_dict = {}
     for field in fields:
       enum_value_name = field.attrib['name']
 
       # Fields such as INDEX_SIZE_INVALID do not have a value and should be ignored here
       if 'value' in field.attrib:
         enum_value = int(field.attrib['value'], 0)
-        pm4_packet_file_h.write("\t%s = 0x%x,\n" % (enum_value_name, enum_value))
+
+        add_replace_in_dict = True
+        if 'variants' in field.attrib:
+          # Check if this is a more recent variant
+          if enum_value in enum_variant_dict:
+            prev_variant = enum_variant_dict[enum_value]
+            prev_ver = int(prev_variant[1],0)
+            cur_variant = field.attrib['variants']
+            cur_ver = int(cur_variant[1], 0)
+            if prev_ver > cur_ver:
+              add_replace_in_dict = False
+            else:
+              enum_variant_dict[enum_value] = field.attrib['variants']
+          else:
+            enum_variant_dict[enum_value] = field.attrib['variants']
+        if add_replace_in_dict:
+          enum_dict[enum_value] = enum_value_name
+
+    pm4_packet_file_h.write("enum %s\n" % enum_name)
+    pm4_packet_file_h.write("{\n")
+    for enum_value in enum_dict:
+      pm4_packet_file_h.write("\t%s = 0x%x,\n" % (enum_dict[enum_value], enum_value))
     pm4_packet_file_h.write("};\n\n")
 
 # ---------------------------------------------------------------------------------------

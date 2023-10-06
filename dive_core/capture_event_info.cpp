@@ -60,11 +60,11 @@ bool IsBlitEvent(const IMemoryManager &mem_manager,
     if (opcode == CP_BLIT)
         return true;
 
-    if (opcode == CP_EVENT_WRITE)
+    if (opcode == CP_EVENT_WRITE7)
     {
         PM4_CP_EVENT_WRITE packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, addr, sizeof(packet)));
-        if (packet.bitfields0.EVENT == BLIT)  // aka CCU_RESOLVE
+        if (packet.bitfields0.EVENT == CCU_RESOLVE)  // aka BLIT
             return true;
     }
     return false;

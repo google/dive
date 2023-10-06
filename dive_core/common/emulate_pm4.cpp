@@ -769,6 +769,38 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         if (!AdvanceToQueuedIB(mem_manager, &emu_state_ptr->m_dcb, callbacks))
             return false;
     }
+    // Parse CP_SET_CTXSWITCH_IB, since it references implicit IBs
+    else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_CTXSWITCH_IB)
+    {
+        // For simplicity sake, treat CP_SET_CTXSWITCH_IB essentially as a
+        // CALL (i.e. jump to the next IB level), although the hardware probably
+        // doesn't do that.
+        PM4_CP_SET_CTXSWITCH_IB packet;
+        if (!mem_manager.CopyMemory(&packet,
+                                    m_submit_index,
+                                    emu_state_ptr->m_dcb.GetCurIb()->m_cur_va,
+                                    (type7_header.count + 1) * sizeof(uint32_t)))
+        {
+            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
+                           (unsigned long long)emu_state_ptr->m_dcb.GetCurIb()->m_cur_va);
+            return false;
+        }
+
+        uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
+                            (uint64_t)packet.bitfields0.ADDR_LO;
+        if (!QueueIB(ib_addr,
+                        packet.bitfields2.DWORDS,
+                        false,
+                        IbType::kContextSwitchIb,
+                        &emu_state_ptr->m_dcb))
+        {
+            return false;
+        }
+        AdvancePacket(&emu_state_ptr->m_dcb, header);
+        if (!AdvanceToQueuedIB(mem_manager, &emu_state_ptr->m_dcb, callbacks))
+            return false;
+
+    }
     // Parse CP_SET_DRAW_STATE, since it references implicit IBs
     else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_DRAW_STATE)
     {

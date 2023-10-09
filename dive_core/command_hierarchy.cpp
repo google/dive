@@ -1745,6 +1745,7 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
 
         RegInfo temp = {};
         temp.m_name = "Unknown";
+        temp.m_enum_handle = UINT8_MAX;
         if (reg_info_ptr == nullptr)
             reg_info_ptr = &temp;
 

@@ -34,8 +34,6 @@ struct DeviceDispatchTable
 {
     PFN_vkGetDeviceProcAddr pfn_get_device_proc_addr = nullptr;
     PFN_vkQueuePresentKHR   QueuePresentKHR = nullptr;
-#ifdef VK_USE_PLATFORM_XCB_KHR
-#endif  // VK_USE_PLATFORM_XCB_KHR
 };
 
 void InitInstanceDispatchTable(VkInstance                instance,

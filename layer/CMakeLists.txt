@@ -21,17 +21,14 @@ project(diveCaptureLayer)
 set(CMAKE_CXX_STANDARD 17)
 set(target_name VkLayer_dive)
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/dispatch.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.h"
+set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.h"
 )
 
-set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/dispatch.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_base.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_impl.cc"
+set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_base.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_android.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
 )
@@ -83,3 +80,22 @@ set_target_properties(${target_name}
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 
+
+set(target_name XrApiLayer_dive)
+set(XR_LAYER_SRC_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
+    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/xr_generated_dispatch_table.c)
+
+add_library(${target_name} SHARED ${XR_LAYER_SRC_FILES})
+set_target_properties(${target_name}
+    PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
+)
+target_include_directories(${target_name} PUBLIC 
+    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/include
+    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
+    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
+)
+    
+if(ANDROID)
+    target_link_libraries(${target_name}  log)
+endif()

@@ -79,7 +79,6 @@ void rd_start(const char *name, const char *fmt, ...)
 	int n = cnt++;
 	const char *testnum;
 	va_list  args;
-
 	testnum = getenv("TESTNUM");
 	if (testnum) {
 		n = strtol(testnum, NULL, 0);
@@ -89,7 +88,11 @@ void rd_start(const char *name, const char *fmt, ...)
 	}
 
 	fd = open(buf, O_WRONLY| O_TRUNC | O_CREAT, 0644);
-
+	// GOOGLE: check the return value of the open function call.
+	if(fd == -1) {
+		LOGI("failed to open file: %s, error: %s", buf, strerror(errno));
+		exit(-1);
+	}
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
@@ -137,6 +140,9 @@ void rd_write_section(enum rd_sect_type type, const void *buf, int sz)
 	uint32_t val = ~0;
 
 	// GOOGLE: Write out rd file only when capturing flag is enabled.
+	if (type == RD_GPU_ID) {
+		gpu_id = *(unsigned int *)buf;
+	}
 	if(!IsCapturing()) {
 		return;
 	}
@@ -149,9 +155,6 @@ void rd_write_section(enum rd_sect_type type, const void *buf, int sz)
 		printf("opened rd, %d\n", fd);
 	}
 
-	if (type == RD_GPU_ID) {
-		gpu_id = *(unsigned int *)buf;
-	}
 
 	rd_write(&val, 4);
 	rd_write(&val, 4);

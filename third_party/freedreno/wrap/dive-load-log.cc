@@ -17,10 +17,13 @@ limitations under the License.
 
 #include "dive-wrap.h"
 
+#include <unistd.h>
+#include <pthread.h>
+
 
 #if defined(__ANDROID__)
 struct DiveWrapLoadLog
 {
-    DiveWrapLoadLog() { LOGI("Libwrap loaded ..."); }
+    DiveWrapLoadLog() { LOGI("Libwrap loaded in pid %d, thread id %ld...", getpid(),pthread_self()); }
 } load_log;
 #endif

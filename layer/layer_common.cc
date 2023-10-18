@@ -14,18 +14,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#pragma once
+#include "layer_common.h"
 
-#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
 
 namespace DiveLayer
 {
 
-inline uintptr_t DataKey(const void *object)
+bool IsLibwrapLoaded()
 {
-    return (uintptr_t)(*(void **)object);
+    bool loaded = false;
+#if defined(__ANDROID__)
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (!maps)
+    {
+        return loaded;
+    }
+
+    char  *line = NULL;
+    size_t size = 0;
+    while (getline(&line, &size, maps) > 0)
+    {
+        if (strstr(line, "libwrap.so"))
+        {
+            loaded = true;
+            break;
+        }
+    }
+    free(line);
+    fclose(maps);
+#endif
+    return loaded;
 }
-
-bool IsLibwrapLoaded();
-
 }  // namespace DiveLayer

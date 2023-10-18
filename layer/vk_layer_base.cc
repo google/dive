@@ -38,44 +38,23 @@ limitations under the License.
 namespace DiveLayer
 {
 
-bool is_libwrap_loaded()
-{
-    bool loaded = false;
-#if defined(__ANDROID__)
-    FILE *maps = fopen("/proc/self/maps", "r");
-    if (!maps)
-    {
-        return loaded;
-    }
-
-    char  *line = NULL;
-    size_t size = 0;
-    while (getline(&line, &size, maps) > 0)
-    {
-        if (strstr(line, "libwrap.so"))
-        {
-            loaded = true;
-            break;
-        }
-    }
-    free(line);
-    fclose(maps);
-#endif
-    return loaded;
-}
-
 // Declare our per-instance and per-device contexts.
 // These are created and initialized in vkCreateInstance and vkCreateDevice.
 struct InstanceData
 {
     VkInstance            instance;
     InstanceDispatchTable dispatch_table;
+    bool                  is_libwrap_loaded;
     std::thread           server_thread;
 
-    InstanceData() :
-        server_thread(std::thread(Dive::server_main))
+    InstanceData()
     {
-        LOGI("libwrap loaded: %d", is_libwrap_loaded());
+        is_libwrap_loaded = IsLibwrapLoaded();
+        LOGI("libwrap loaded: %d", is_libwrap_loaded);
+        if (is_libwrap_loaded)
+        {
+            server_thread = std::thread(Dive::server_main);
+        }
     }
 
     ~InstanceData()

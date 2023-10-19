@@ -131,25 +131,27 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
     m_same_submit_only = same_submit_copy_only;
 
     // Sorting required for GetMaxContiguousSize(), GetMemoryOfUnknownSizeViaCallback(), and others
-    std::sort(m_memory_blocks.begin(),
-              m_memory_blocks.end(),
-              [&](const MemoryBlock &lhs, const MemoryBlock &rhs) -> bool {
-                  // Only if m_same_submit_only does the submit affect the sort order
-                  // When this flag is not enabled, then the memory is "flattened" and memory can be
-                  // captured from any submit (ie: memory tracker not reset between submits)
-                  if (m_same_submit_only)
-                  {
-                      // Sort by submit, then by address
-                      if (lhs.m_submit_index == rhs.m_submit_index)
-                          return (lhs.m_va_addr < rhs.m_va_addr);
-                      return lhs.m_submit_index < rhs.m_submit_index;
-                  }
-                  return (lhs.m_va_addr < rhs.m_va_addr);
-              });
+    // Important: Preserve order of equivalent blocks using stable_sort (later blocks have more
+    // updated view of memory)
+    std::stable_sort(m_memory_blocks.begin(),
+                     m_memory_blocks.end(),
+                     [&](const MemoryBlock &lhs, const MemoryBlock &rhs) -> bool {
+                         // Only if m_same_submit_only does the submit affect the sort order
+                         // When this flag is not enabled, then the memory is "flattened" and memory
+                         // can be captured from any submit (ie: memory tracker not reset between
+                         // submits)
+                         if (m_same_submit_only)
+                         {
+                             // Sort by submit, then by address
+                             if (lhs.m_submit_index == rhs.m_submit_index)
+                                 return (lhs.m_va_addr < rhs.m_va_addr);
+                             return lhs.m_submit_index < rhs.m_submit_index;
+                         }
+                         return (lhs.m_va_addr < rhs.m_va_addr);
+                     });
 
-    // For some reason, freedreno's ioctl calls sometimes have allocation of same buffer twice
-    // It's possible system ioctl just ignores the second allocation. We should ignore them too
-    // This pass eliminates any duplicates
+    // In libwrap, sometimes we re-capture buffers that have been suballocated from. This means the
+    // *later* buffers have a more up-to-date view of memory
     if (m_same_submit_only)
     {
         std::vector<MemoryBlock> temp_memory_blocks;
@@ -170,7 +172,11 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
                 if (memory_block.m_va_addr != prev_addr || memory_block.m_data_size != prev_size)
                     temp_memory_blocks.push_back(memory_block);
                 else
-                    delete[] m_memory_blocks[i].m_data_ptr;
+                {
+                    // Replace previous memory block with the more updated current version
+                    delete[] temp_memory_blocks.back().m_data_ptr;
+                    temp_memory_blocks.back() = m_memory_blocks[i];
+                }
             }
             prev_addr = memory_block.m_va_addr;
             prev_size = memory_block.m_data_size;

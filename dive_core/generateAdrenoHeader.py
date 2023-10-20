@@ -130,7 +130,7 @@ def outputEnums(pm4_packet_file_h, enums):
         if add_replace_in_dict:
           enum_dict[enum_value] = enum_value_name
 
-    pm4_packet_file_h.write("enum %s\n" % enum_name)
+    pm4_packet_file_h.write("enum %s: uint32_t\n" % enum_name)
     pm4_packet_file_h.write("{\n")
     for enum_value in enum_dict:
       pm4_packet_file_h.write("\t%s = 0x%x,\n" % (enum_dict[enum_value], enum_value))

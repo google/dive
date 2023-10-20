@@ -191,39 +191,60 @@ private:
     // Keep all emulation state together
     struct EmulateState
     {
-        struct CbState
+        static const uint32_t kMaxPendingIbs = 100;
+        struct IbStack
         {
-            uint32_t m_ib_index;
-            uint64_t m_va;
-            bool     m_is_in_ib1_chain_ib;
-            bool     m_is_in_ib2;
-            uint64_t m_ib1_chain_addr;
-            uint32_t m_ib1_chain_size_in_dwords;
-            uint64_t m_ib2_addr;
-            uint32_t m_ib2_size_in_dwords;
-            uint64_t m_ib1_return_va;
+            // VA at the current IB level
+            // If m_ib_queue_size is non-zero, then it is currently iterating through the queue
+            // and executing those IBs. m_cur_va is only applicable once execution returns
+            // to the current IB level
+            uint64_t m_cur_va;
+            uint64_t m_cur_ib_addr;
+            uint32_t m_cur_ib_size_in_dwords;
+            bool     m_cur_ib_skip;
+            IbType   m_cur_ib_type;
+
+            // IB queue (for storing pending CALLs or CHAINs)
+            IbType   m_ib_queue_type;
+            uint64_t m_ib_queue_addrs[kMaxPendingIbs];
+            uint32_t m_ib_queue_sizes_in_dwords[kMaxPendingIbs];
+            bool     m_ib_queue_skip[kMaxPendingIbs];
+            uint32_t m_ib_queue_index;
+            uint32_t m_ib_queue_size;
+
+            bool EndOfCurIb() const
+            {
+                bool endAddr = (m_cur_va >=
+                                (m_cur_ib_addr + m_cur_ib_size_in_dwords * sizeof(uint32_t)));
+                return (m_cur_ib_skip || endAddr);
+            }
         };
-        int32_t m_de_counter;
-        int32_t m_ce_counter;
-        bool    m_is_dcb_blocked;
 
-        CbState m_dcb;
-        CbState m_ccb;
+        // Index of top-most IB (i.e. IB1)
+        uint32_t m_ib_index;
+
+        // Stack to managing the different IB levels
+        // Top-most element contains the current Program Counter
+        // If top of stack is at IB0, then that means there's nothing to execute
+        enum IbLevel
+        {
+            kPrimaryRing,
+            kIb1,
+            kIb2,
+            kIb3,
+
+            // There's no IB4 in the GPU, but it's useful to have one in the emulator in case a
+            // CP_SET_DRAW_STATE is called from an IB3, since we're emulating those packets as
+            // CALLs (I'm not sure if that's even possible, but better safe than sorry!)
+            kIb4,
+
+            kTotalIbLevels
+        };
+        uint32_t m_submit_index;
+        IbStack  m_ib_stack[kTotalIbLevels];
+        IbLevel  m_top_of_stack;
+        IbStack *GetCurIb() { return &m_ib_stack[m_top_of_stack]; }
     };
-
-    // Calls GetNextIb() repeatedly until a valid IB is encountered, with OnIbStart() callback
-    // called for all candidate Ibs, even "invalid ones". An IB is "invalid" if its m_skip is
-    // set to true.
-    bool GetNextValidIb(const IMemoryManager     &mem_manager,
-                        uint32_t                 *ib_index_ptr,
-                        IEmulateCallbacks        &callbacks,
-                        const IndirectBufferInfo *ib_ptr,
-                        uint32_t                  submit_index,
-                        uint32_t                  start_ib_index) const;
-
-    // Find next index of dcb (if dcb_desired==1) or ccb (if dcb_desired==0) ib. Returns UINT32_MAX
-    // if not found. Dcb - Draw command buffer. Ccb - Constant command buffer. Ib - Indirect Buffer.
-    uint32_t GetNextIb(uint32_t submit_index, uint32_t start_ib_index) const;
 
     // Advance dcb pointer after advancing past the packet header. Returns "true" if dcb is blocked.
     bool AdvanceCb(const IMemoryManager &mem_manager,
@@ -232,37 +253,31 @@ private:
                    Pm4Type               type,
                    uint32_t              header) const;
 
+    // Helper function to queue up an IB for later CALL or CHAIN
+    // Use AdvanceToIB to actually jump to the 1st queued up IB
+    bool QueueIB(uint64_t      ib_addr,
+                 uint32_t      ib_size_in_dwords,
+                 bool          skip,
+                 IbType        ib_type,
+                 EmulateState *emu_state) const;
+
     // Helper function to help with advancing emulation to IB
-    bool AdvanceToIB(const IMemoryManager     &mem_manager,
-                     bool                      is_chain,
-                     uint64_t                  ib_addr,
-                     uint32_t                  ib_size_in_dwords,
-                     const IndirectBufferInfo &ib_info,
-                     EmulateState::CbState    *cb_state,
-                     IEmulateCallbacks        &callbacks,
-                     Pm4Type                   type,
-                     uint32_t                  header) const;
+    bool AdvanceToQueuedIB(const IMemoryManager &mem_manager,
+                           EmulateState         *emu_state,
+                           IEmulateCallbacks    &callbacks) const;
+
+    // Helper function to advance to next valid IB IF current one is ended/skipped
+    bool CheckAndAdvanceIB(const IMemoryManager &mem_manager,
+                           EmulateState         *emu_state,
+                           IEmulateCallbacks    &callbacks) const;
 
     // Helper function to help with advancing emulation to next packet
-    bool AdvancePacket(const IMemoryManager     &mem_manager,
-                       const IndirectBufferInfo &ib_info,
-                       EmulateState::CbState    *cb_state,
-                       IEmulateCallbacks        &callbacks,
-                       Pm4Type                   type,
-                       uint32_t                  header) const;
+    void AdvancePacket(EmulateState *emu_state, uint32_t header) const;
 
     // Helper function to help with advancing emulation out of IB
-    bool AdvanceOutOfIB(const IMemoryManager     &mem_manager,
-                        const IndirectBufferInfo &ib_info,
-                        EmulateState::CbState    *cb_state,
-                        IEmulateCallbacks        &callbacks) const;
+    bool AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &callbacks) const;
 
     uint32_t CalcParity(uint32_t val);
-
-    // Emulation source
-    uint32_t                  m_submit_index;
-    uint32_t                  m_num_ibs;
-    const IndirectBufferInfo *m_ib_ptr;
 };
 
 //--------------------------------------------------------------------------------------------------

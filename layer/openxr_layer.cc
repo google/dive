@@ -22,10 +22,13 @@ limitations under the License.
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "capture_service/log.h"
+#include "capture_service/server.h"
+#include "capture_service/trace_mgr.h"
 #include "layer_common.h"
 #include "loader_interfaces.h"
 #include "xr_generated_dispatch_table.h"
@@ -52,6 +55,26 @@ struct XrInstanceData
 {
     XrInstance               instance;
     XrGeneratedDispatchTable dispatch_table;
+    bool                     is_libwrap_loaded;
+    std::thread              server_thread;
+
+    XrInstanceData()
+    {
+        is_libwrap_loaded = IsLibwrapLoaded();
+        LOGI("libwrap loaded: %d", is_libwrap_loaded);
+        if (is_libwrap_loaded)
+        {
+            server_thread = std::thread(Dive::server_main);
+        }
+    }
+    ~XrInstanceData()
+    {
+        if (is_libwrap_loaded && server_thread.joinable())
+        {
+            LOGI("Wait for server thread to join");
+            server_thread.join();
+        }
+    }
 };
 
 struct XrSessionData
@@ -104,19 +127,21 @@ XrSessionData *GetXrSessionLayerData(uintptr_t key)
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession             session,
                                                       const XrFrameEndInfo *frameEndInfo)
 {
+    XrResult result = XrResult::XR_ERROR_HANDLE_INVALID;
 
     LOGD("ApiDiveLayerXrEndFrame key %lu, sess %p \n", DataKey(session), session);
     auto sess_data = GetXrSessionLayerData(DataKey(session));
     if (sess_data)
     {
-        return sess_data->dispatch_table.EndFrame(session, frameEndInfo);
+        result = sess_data->dispatch_table.EndFrame(session, frameEndInfo);
     }
     else
     {
         LOGE("sess_data is null in ApiDiveLayerXrEndFrame\n");
     }
+    Dive::GetTraceMgr().OnNewFrame();
 
-    return XrResult::XR_ERROR_HANDLE_INVALID;
+    return result;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL

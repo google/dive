@@ -31,6 +31,7 @@ set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_android.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
 )
 
 include_directories(${CMAKE_SOURCE_DIR}
@@ -60,8 +61,8 @@ if(ANDROID)
 endif()
 
 target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
-target_link_directories(${target_name}
-PRIVATE ${CMAKE_SOURCE_DIR}/capture_service)
+target_link_directories(${target_name} 
+    PRIVATE ${CMAKE_SOURCE_DIR}/capture_service)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
@@ -83,7 +84,9 @@ set_target_properties(${target_name}
 
 set(target_name XrApiLayer_dive)
 set(XR_LAYER_SRC_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
-    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/xr_generated_dispatch_table.c)
+    "${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/xr_generated_dispatch_table.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
+    )
 
 add_library(${target_name} SHARED ${XR_LAYER_SRC_FILES})
 set_target_properties(${target_name}
@@ -95,7 +98,7 @@ target_include_directories(${target_name} PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
     ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
 )
-    
-if(ANDROID)
-    target_link_libraries(${target_name}  log)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
+target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})

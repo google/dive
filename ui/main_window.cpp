@@ -590,8 +590,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnOpenFile()
 {
-    QString supported_files = QStringLiteral(
-    "Dive files (*.dive) ;; RGP files (*.rgp) ;; All files (*.*)");
+    QString supported_files = QStringLiteral("Dive files (*.rd) ;; All files (*.*)");
     QString file_name = QFileDialog::getOpenFileName(this,
                                                      "Open Document",
                                                      Settings::Get()->ReadLastFilePath(),

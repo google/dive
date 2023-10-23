@@ -204,11 +204,9 @@ def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str):
       high = int(bitfield.attrib['high'])
       bitfield_start = low
       bitfield_width = high - low + 1
-      pm4_info_file.write(extra_front_tab_str + "\t\t%s %s : %d;\n" % (bitfield_type, bitfield_name, bitfield_width)) 
     elif 'pos' in bitfield.attrib:
       bitfield_start = int(bitfield.attrib['pos'])
       bitfield_width = 1
-      pm4_info_file.write(extra_front_tab_str + "\t\t%s %s : 1;\n" % (bitfield_type, bitfield_name)) 
     else:
       raise Exception("Encountered a bitfield with no pos/low/high!") 
     
@@ -220,6 +218,8 @@ def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str):
     # Handle the case where some bits are skipped like CP_EVENT_WRITE7
     if cur_offset != bitfield_start:
       pm4_packet_file_h.write(extra_front_tab_str + "\t\tuint32_t : %d;\n" % (bitfield_start - cur_offset))
+
+    pm4_info_file.write(extra_front_tab_str + "\t\t%s %s : %d;\n" % (bitfield_type, bitfield_name, bitfield_width)) 
 
     cur_offset = bitfield_start + bitfield_width
 

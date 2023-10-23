@@ -831,8 +831,8 @@ opcode: CP_LOAD_STATE4 (30) (4 dwords)
 <bitset name="vgt_draw_initiator" inline="yes">
 	<bitfield name="PRIM_TYPE" low="0" high="5" type="pc_di_primtype"/>
 	<bitfield name="SOURCE_SELECT" low="6" high="7" type="pc_di_src_sel"/>
-	<bitfield name="VIS_CULL" low="9" high="10" type="pc_di_vis_cull_mode"/>
-	<bitfield name="INDEX_SIZE" pos="11" type="pc_di_index_size"/>
+	<bitfield name="VIS_CULL" low="8" high="9" type="pc_di_vis_cull_mode"/>
+	<bitfield name="INDEX_SIZE" low="10" high="11" type="pc_di_index_size"/>
 	<bitfield name="NOT_EOP" pos="12" type="boolean"/>
 	<bitfield name="SMALL_INDEX" pos="13" type="boolean"/>
 	<bitfield name="PRE_DRAW_INITIATOR_ENABLE" pos="14" type="boolean"/>

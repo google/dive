@@ -25,6 +25,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
+set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
 if(ANDROID)
     add_subdirectory(third_party/freedreno)

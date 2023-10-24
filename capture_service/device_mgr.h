@@ -16,6 +16,7 @@ limitations under the License.
 
 #pragma once
 
+#include "android_application.h"
 #include "command_utils.h"
 
 #include <memory>
@@ -43,13 +44,12 @@ public:
     ~AndroidDevice();
 
     std::vector<std::string> ListPackage() const;
-    std::string              GetMainActivity(const std::string &package) const;
     std::string              GetDeviceDisplayName() const;
 
-    void              SetupApp(const std::string &package);
-    void              CleanupAPP(const std::string &package);
-    void              StartApp(const std::string &package, const std::string &activity);
-    void              StopApp(const std::string &package);
+    void              SetupApp(const std::string &package, const ApplicationType type);
+    void              CleanupAPP();
+    void              StartApp();
+    void              StopApp();
     const AdbSession &Adb() const { return m_adb; }
 
     void SetupDevice();
@@ -58,11 +58,11 @@ public:
     void RetrieveTraceFile(const std::string &trace_file_path, const std::string &save_path);
 
 private:
-    const std::string m_serial;
-    DeviceInfo        m_dev_info;
-    AdbSession        m_adb;
-    DeviceState       m_original_state;
-    std::string       m_selected_package;
+    const std::string                   m_serial;
+    DeviceInfo                          m_dev_info;
+    AdbSession                          m_adb;
+    DeviceState                         m_original_state;
+    std::unique_ptr<AndroidApplication> app;
 };
 
 class DeviceManager

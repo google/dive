@@ -15,14 +15,17 @@ limitations under the License.
 */
 
 #include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <ostream>
+#include <string>
 #include <thread>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "android_application.h"
 #include "client.h"
 #include "command_utils.h"
 #include "device_mgr.h"
@@ -86,16 +89,18 @@ std::string AbslUnparseFlag(Command command)
 ABSL_FLAG(Command,
           command,
           Command::kNone,
-          "list of actions: \n list_device\n list_package\n run\n capture\n");
+          "list of actions: \n\tlist_device \n\tlist_package \n\trun \n\tcapture");
 ABSL_FLAG(std::string, target, "localhost:19999", "Server address");
 ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
-ABSL_FLAG(std::string, activity, "", "Activity to run for the package");
+ABSL_FLAG(int,
+          type,
+          0,
+          "application type: \n\t0 for OpenXR applications \n\t 1 for Vulkan applications");
 
-void print_usage(const char* app)
+void print_usage()
 {
-    std::cout << "Usage: \n";
-    std::cout << "\t" << app << " device_serial package_name [activity]" << std::endl;
+    std::cout << absl::ProgramUsageMessage() << std::endl;
 }
 
 bool list_device(const Dive::DeviceManager& mgr)
@@ -131,41 +136,31 @@ bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
     return true;
 }
 
-bool run_package(Dive::DeviceManager& mgr, const std::string& package, const std::string& activity)
+bool run_package(Dive::DeviceManager& mgr, const std::string& package, const int app_type)
 {
     std::string serial = absl::GetFlag(FLAGS_device);
 
     if (serial.empty() || package.empty())
     {
-        std::cout << "Please run with --device [serial] --package [package]" << std::endl;
+        print_usage();
         return false;
     }
     auto dev = mgr.SelectDevice(serial);
-    dev->SetupApp(package);
+    if (app_type == 0)
+        dev->SetupApp(package, Dive::ApplicationType::OPENXR);
+    else if (app_type == 1)
+        dev->SetupApp(package, Dive::ApplicationType::VULKAN);
 
-    std::string target_activity = dev->GetMainActivity(package);
-    if (!activity.empty())
-    {
-        if (target_activity != activity)
-        {
-            std::cout << "detected activity is " << target_activity << ", specified is " << activity
-                      << std::endl;
-            target_activity = activity;
-        }
-    }
-
-    dev->StartApp(package, target_activity);
+    dev->StartApp();
     return true;
 }
 
-bool run_and_capture(Dive::DeviceManager& mgr,
-                     const std::string&   package,
-                     const std::string&   activity)
+bool run_and_capture(Dive::DeviceManager& mgr, const std::string& package)
 {
 
     std::string target_str = absl::GetFlag(FLAGS_target);
-
-    run_package(mgr, package, activity);
+    int         app_type = absl::GetFlag(FLAGS_type);
+    run_package(mgr, package, app_type);
 
     Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     std::this_thread::sleep_for(2000ms);
@@ -191,16 +186,16 @@ int main(int argc, char** argv)
     Command     cmd = absl::GetFlag(FLAGS_command);
     std::string serial = absl::GetFlag(FLAGS_device);
     std::string package = absl::GetFlag(FLAGS_package);
-    std::string activity = absl::GetFlag(FLAGS_activity);
+    int         app_type = absl::GetFlag(FLAGS_type);
 
     Dive::DeviceManager mgr;
-    auto list = mgr.ListDevice();
+    auto                list = mgr.ListDevice();
     if (list.empty())
     {
         std::cout << "No device connected" << std::endl;
         return 0;
     }
-    
+
     switch (cmd)
     {
     case Command::kListDevice:
@@ -216,18 +211,18 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        run_package(mgr, package, activity);
+        run_package(mgr, package, app_type);
         break;
     }
 
     case Command::kRunAndCapture:
     {
-        run_and_capture(mgr, package, activity);
+        run_and_capture(mgr, package);
         break;
     }
     case Command::kNone:
     {
-        print_usage(argv[0]);
+        print_usage();
         break;
     }
     }

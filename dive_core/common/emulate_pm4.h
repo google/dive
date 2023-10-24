@@ -191,7 +191,7 @@ private:
     // Keep all emulation state together
     struct EmulateState
     {
-        static const uint32_t kMaxPendingIbs = 100;
+        static const uint32_t kMaxPendingIbs = 256;
         struct IbStack
         {
             // VA at the current IB level

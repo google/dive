@@ -859,6 +859,9 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 				((devinfo->chip_id >> 8) & 0xff) * 1;
 		}
 		rd_write_section(RD_GPU_ID, &gpu_id, sizeof(gpu_id));
+		uint64_t chip_id = devinfo->chip_id;
+		rd_write_section(RD_CHIP_ID, &chip_id, sizeof(chip_id));
+
 		printf("\t\tgpu_id: %d\n", gpu_id);
 		printf("\t\tgmem_sizebytes: 0x%x\n", (uint32_t)devinfo->gmem_sizebytes);
 #ifdef FAKE

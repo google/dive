@@ -17,9 +17,12 @@ limitations under the License.
 #include "dive-wrap.h"
 
 #include <pthread.h>
+#include <stdlib.h>
 
 static pthread_mutex_t capture_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static int capture_state = 0;
+
+void rd_end(void);
 
 int IsCapturing() 
 {

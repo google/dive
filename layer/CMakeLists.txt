@@ -80,7 +80,10 @@ set_target_properties(${target_name}
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
-
+if(ANDROID)
+    install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/vk_layer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()
 
 set(target_name XrApiLayer_dive)
 set(XR_LAYER_SRC_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
@@ -102,3 +105,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
+
+if(ANDROID)
+    install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()

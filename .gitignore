@@ -34,3 +34,4 @@ prebuild/grpc/Debug/lib/grpc_authorization_provider.lib
 prebuild/grpc/Debug/lib/grpc_unsecure.lib
 prebuild/grpc/Debug/lib/libprotobufd.lib
 prebuild/grpc/Debug/lib/libprotocd.lib
+install/

@@ -51,3 +51,5 @@ add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-strip"  --strip-unneeded 
             "${CMAKE_BINARY_DIR}/bin/lib${target_name}.so"
             COMMENT "Strip debug symbols done on final binary.")
+
+install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})

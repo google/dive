@@ -187,7 +187,7 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     std::filesystem::path p(trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    mgr.GetDevice()->RetrieveTraceFile(trace_file_path, target);
+    mgr.GetDevice()->RetrieveTraceFile(trace_file_path, target.generic_string());
     std::cout << "Capture saved at " << target << std::endl;
 
     return true;

@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <ostream>
 #include <string>
@@ -100,10 +101,15 @@ ABSL_FLAG(Command,
 ABSL_FLAG(std::string, target, "localhost:19999", "Server address");
 ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
-ABSL_FLAG(int,
-          type,
-          0,
-          "application type: \n\t0 for OpenXR applications \n\t 1 for Vulkan applications");
+ABSL_FLAG(
+std::string,
+type,
+"openxr",
+"application type: \n\t`openxr` for OpenXR applications \n\t `vulkan` for Vulkan applications");
+ABSL_FLAG(std::string,
+          capture_path,
+          ".",
+          "specify the full path to save the capture, default to current directory");
 
 void print_usage()
 {
@@ -143,7 +149,7 @@ bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
     return true;
 }
 
-bool run_package(Dive::DeviceManager& mgr, const std::string& package, const int app_type)
+bool run_package(Dive::DeviceManager& mgr, const std::string& package, const std::string& app_type)
 {
     std::string serial = absl::GetFlag(FLAGS_device);
 
@@ -153,12 +159,37 @@ bool run_package(Dive::DeviceManager& mgr, const std::string& package, const int
         return false;
     }
     auto dev = mgr.SelectDevice(serial);
-    if (app_type == 0)
+    if (app_type == "openxr")
         dev->SetupApp(package, Dive::ApplicationType::OPENXR);
-    else if (app_type == 1)
+    else if (app_type == "vulkan")
         dev->SetupApp(package, Dive::ApplicationType::VULKAN);
-
+    else
+    {
+        print_usage();
+        return false;
+    }
     dev->StartApp();
+    return true;
+}
+
+bool trigger_capture(Dive::DeviceManager& mgr)
+{
+    std::string target_str = absl::GetFlag(FLAGS_target);
+    std::string capture_path = absl::GetFlag(FLAGS_capture_path);
+    std::string input;
+
+    Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+    std::cout << "TestConnection reply: " << client.TestConnection() << std::endl;
+
+    std::string trace_file_path = client.RequestStartTrace();
+    std::cout << "Trigger capture: " << trace_file_path << std::endl;
+
+    std::filesystem::path p(trace_file_path);
+    std::filesystem::path target(capture_path);
+    target /= p.filename();
+    mgr.GetDevice()->RetrieveTraceFile(trace_file_path, target);
+    std::cout << "Capture saved at " << target << std::endl;
+
     return true;
 }
 
@@ -166,21 +197,17 @@ bool run_and_capture(Dive::DeviceManager& mgr, const std::string& package)
 {
 
     std::string target_str = absl::GetFlag(FLAGS_target);
-    int         app_type = absl::GetFlag(FLAGS_type);
+    std::string app_type = absl::GetFlag(FLAGS_type);
     run_package(mgr, package, app_type);
+    std::this_thread::sleep_for(5000ms);
+    trigger_capture(mgr);
 
-    Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
-    std::this_thread::sleep_for(2000ms);
-    std::cout << "TestConnection reply: " << client.TestConnection() << std::endl;
-
-    std::string trace_file_path = client.RequestStartTrace();
-    std::cout << "Trigger capture: " << trace_file_path << std::endl;
-    std::this_thread::sleep_for(5s);
-
-    mgr.GetDevice()->RetrieveTraceFile(trace_file_path, ".");
-
-    std::this_thread::sleep_for(2000ms);
-    std::cout << "TestConnection reply: " << client.TestConnection() << std::endl;
+    std::cout << "Press Enter to exit" << std::endl;
+    std::string input;
+    if (std::getline(std::cin, input))
+    {
+        std::cout << "Exiting..." << std::endl;
+    }
 
     return true;
 }
@@ -201,6 +228,28 @@ bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& packag
     return true;
 }
 
+bool process_input(Dive::DeviceManager& mgr)
+{
+    std::cout << "Press key t+enter to trigger a capture. \nPress any other key + enter to exit.";
+
+    std::string input;
+    while (std::getline(std::cin, input))
+    {
+        if (input == "t")
+        {
+            std::cout << "key t pressed " << std::endl;
+            trigger_capture(mgr);
+        }
+        else
+        {
+            break;
+        }
+        std::cout << "Press key t+enter to trigger a capture. \nPress enter to exit.";
+    }
+
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     absl::SetProgramUsageMessage("Run app with --help for more details");
@@ -209,7 +258,7 @@ int main(int argc, char** argv)
     Command     cmd = absl::GetFlag(FLAGS_command);
     std::string serial = absl::GetFlag(FLAGS_device);
     std::string package = absl::GetFlag(FLAGS_package);
-    int         app_type = absl::GetFlag(FLAGS_type);
+    std::string app_type = absl::GetFlag(FLAGS_type);
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
@@ -234,7 +283,11 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        run_package(mgr, package, app_type);
+        if (run_package(mgr, package, app_type))
+        {
+            process_input(mgr);
+        }
+
         break;
     }
 
@@ -253,12 +306,5 @@ int main(int argc, char** argv)
         print_usage();
         break;
     }
-    }
-
-    std::cout << "Press Enter to exit" << std::endl;
-    std::string input;
-    if (std::getline(std::cin, input))
-    {
-        std::cout << "Exiting..." << std::endl;
     }
 }

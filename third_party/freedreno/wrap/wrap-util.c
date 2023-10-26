@@ -28,6 +28,8 @@
 
 static int fd = -1;
 static unsigned int gpu_id;
+// GOOGLE: Store the chip ID.
+static uint64_t chip_id = 0;
 
 #ifdef USE_PTHREADS
 static pthread_mutex_t l = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
@@ -106,6 +108,11 @@ void rd_start(const char *name, const char *fmt, ...)
 		 */
 		rd_write_section(RD_GPU_ID, &gpu_id, sizeof(gpu_id));
 	}
+
+	// GOOGLE: Write out the chip id.
+	if(chip_id) {
+		rd_write_section(RD_CHIP_ID, &chip_id, sizeof(chip_id));
+	}
 }
 
 void rd_end(void)
@@ -142,6 +149,9 @@ void rd_write_section(enum rd_sect_type type, const void *buf, int sz)
 	// GOOGLE: Write out rd file only when capturing flag is enabled.
 	if (type == RD_GPU_ID) {
 		gpu_id = *(unsigned int *)buf;
+	}
+	if (type == RD_CHIP_ID) {
+		chip_id = *(uint64_t *)buf;
 	}
 	if(!IsCapturing()) {
 		return;

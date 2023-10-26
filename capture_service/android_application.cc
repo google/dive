@@ -129,7 +129,7 @@ std::string AndroidApplication::GetMainActivity()
 void AndroidApplication::Start()
 {
     m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP");
-    m_dev.Adb().Run(absl::StrFormat("shell am start %s/%s", m_package, m_main_activity));
+    m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s/%s", m_package, m_main_activity));
     m_started = true;
 }
 

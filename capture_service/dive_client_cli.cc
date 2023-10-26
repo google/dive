@@ -39,6 +39,7 @@ enum class Command
     kListPackage,
     kRunPackage,
     kRunAndCapture,
+    kCleanup,
 };
 
 bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
@@ -63,6 +64,11 @@ bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
         *command = Command::kRunAndCapture;
         return true;
     }
+    if (text == "cleanup")
+    {
+        *command = Command::kCleanup;
+        return true;
+    }
     if (text.empty())
     {
         *command = Command::kNone;
@@ -81,6 +87,7 @@ std::string AbslUnparseFlag(Command command)
     case Command::kListPackage: return "list_package";
     case Command::kRunPackage: return "run";
     case Command::kRunAndCapture: return "capture";
+    case Command::kCleanup: return "cleanup";
 
     default: return absl::StrCat(command);
     }
@@ -178,6 +185,22 @@ bool run_and_capture(Dive::DeviceManager& mgr, const std::string& package)
     return true;
 }
 
+bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& package)
+{
+    std::string serial = absl::GetFlag(FLAGS_device);
+
+    if (serial.empty() || package.empty())
+    {
+        std::cout << "Please run with `--device [serial]` and `--package [package]` options."
+                  << std::endl;
+        print_usage();
+        return false;
+    }
+
+    mgr.Cleanup(serial, package);
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     absl::SetProgramUsageMessage("Run app with --help for more details");
@@ -218,6 +241,11 @@ int main(int argc, char** argv)
     case Command::kRunAndCapture:
     {
         run_and_capture(mgr, package);
+        break;
+    }
+    case Command::kCleanup:
+    {
+        clean_up_app_and_device(mgr, package);
         break;
     }
     case Command::kNone:

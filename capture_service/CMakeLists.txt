@@ -102,8 +102,8 @@ else()
     absl::flags_parse
     absl::algorithm
     )
-
-    add_executable(dive_client_cli dive_client_cli.cc device_mgr.cc command_utils.cc)
+ 
+    add_executable(dive_client_cli dive_client_cli.cc device_mgr.cc command_utils.cc android_application.cc)
     target_link_libraries(dive_client_cli
       dive_grpc_proto
       client
@@ -114,5 +114,6 @@ else()
       absl::algorithm
       absl::strings
       )
+      install(TARGETS dive_client_cli DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 endif()

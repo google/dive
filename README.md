@@ -93,8 +93,45 @@ And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run
 scripts\build_android.bat
 ```
 
-
-
 It will build both debug and release version of the libraries under `build_android` folder.
 
+### CLI Tool for capture and cleanup
+#### Capture with command line tool for Android applications
+Currently the command line tool supports capture OpenXR and Vulkan applications on Android. To Get a capture, please refer to the above sections to checkout the code and build the Android libraries. In addition to that, you'll need to build and install the CLI tool.
 
+On Linux, run: 
+```
+./scripts/build_android.sh
+```
+
+```
+mkdir build
+cd build
+cmake -GNinja ..
+ninja
+ninja install
+```
+
+And the libraries and CLI will be installed under the `install` folder.
+Run `./dive_client_cli  --help` for help.
+
+Examples:
+ - Install the dependencies on device and start the package and do a capture
+ ```
+ ./dive_client_cli --device  9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type 1
+ ```
+
+ - Install the dependencies on device and start the package
+ ```
+ ./dive_client_cli --device  9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type 0
+
+ ```
+
+#### Cleanup
+
+The command line tool will clean up the device and application automatically at exit. If somehow it crashed and left the device in a uncleaned state, you can run following command to clean it up
+
+```
+./dive_client_cli --command cleanup --package de.saschawillems.vulkanBloom --device 9A221FFAZ004TL
+```
+This will remove all the libraries installed and the settings that had been setup by Dive for the package.

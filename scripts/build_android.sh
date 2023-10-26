@@ -44,6 +44,9 @@ do
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
         ${SRC_DIR}
 
-    cmake --build . --config=${build} -j 
+    cmake --build . --config=${build} -j
+    if [ ${build} == "Release" ]; then
+        cmake --install .
+    fi
     popd
 done

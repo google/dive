@@ -76,6 +76,7 @@ public:
     }
 
     AndroidDevice *GetDevice() const { return m_device.get(); }
+    void           Cleanup(const std::string &serial, const std::string &package);
 
 private:
     std::unique_ptr<AndroidDevice> m_device;

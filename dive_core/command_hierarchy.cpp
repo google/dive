@@ -1571,6 +1571,118 @@ void CommandHierarchyCreator::ParseVulkanCallMarker(char    *marker_ptr,
     return;
 }
 
+static const std::string ConvertPrimTypeToStr(pc_di_primtype pt)
+{
+    std::string s;
+    switch (pt)
+    {
+    case DI_PT_NONE: s = "NONE"; break;
+    case DI_PT_POINTLIST_PSIZE: s = "POINTLIST_PSIZE"; break;
+    case DI_PT_LINELIST: s = "LINELIST"; break;
+    case DI_PT_LINESTRIP: s = "LINESTRIP"; break;
+    case DI_PT_TRILIST: s = "TRIANGLELIST"; break;
+    case DI_PT_TRIFAN: s = "TRIANGLE_FAN"; break;
+    case DI_PT_TRISTRIP: s = "TRIANGLESTRIP"; break;
+    case DI_PT_LINELOOP: s = "LINELOOP"; break;
+    case DI_PT_RECTLIST: s = "RECTLIST"; break;
+    case DI_PT_POINTLIST: s = "POINTLIST"; break;
+    case DI_PT_LINE_ADJ: s = "LINE_ADJ"; break;
+    case DI_PT_LINESTRIP_ADJ: s = "LINESTRIP_ADJ"; break;
+    case DI_PT_TRI_ADJ: s = "TRI_ADJ"; break;
+    case DI_PT_TRISTRIP_ADJ: s = "TRISTRIP_ADJ"; break;
+    case DI_PT_PATCHES0: s = "PATCHES0"; break;
+    case DI_PT_PATCHES1: s = "PATCHES1"; break;
+    case DI_PT_PATCHES2: s = "PATCHES2"; break;
+    case DI_PT_PATCHES3: s = "PATCHES3"; break;
+    case DI_PT_PATCHES4: s = "PATCHES4"; break;
+    case DI_PT_PATCHES5: s = "PATCHES5"; break;
+    case DI_PT_PATCHES6: s = "PATCHES6"; break;
+    case DI_PT_PATCHES7: s = "PATCHES7"; break;
+    case DI_PT_PATCHES8: s = "PATCHES8"; break;
+    case DI_PT_PATCHES9: s = "PATCHES9"; break;
+    case DI_PT_PATCHES10: s = "PATCHES10"; break;
+    case DI_PT_PATCHES11: s = "PATCHES11"; break;
+    case DI_PT_PATCHES12: s = "PATCHES12"; break;
+    case DI_PT_PATCHES13: s = "PATCHES13"; break;
+    case DI_PT_PATCHES14: s = "PATCHES14"; break;
+    case DI_PT_PATCHES15: s = "PATCHES15"; break;
+    case DI_PT_PATCHES16: s = "PATCHES16"; break;
+    case DI_PT_PATCHES17: s = "PATCHES17"; break;
+    case DI_PT_PATCHES18: s = "PATCHES18"; break;
+    case DI_PT_PATCHES19: s = "PATCHES19"; break;
+    case DI_PT_PATCHES20: s = "PATCHES20"; break;
+    case DI_PT_PATCHES21: s = "PATCHES21"; break;
+    case DI_PT_PATCHES22: s = "PATCHES22"; break;
+    case DI_PT_PATCHES23: s = "PATCHES23"; break;
+    case DI_PT_PATCHES24: s = "PATCHES24"; break;
+    case DI_PT_PATCHES25: s = "PATCHES25"; break;
+    case DI_PT_PATCHES26: s = "PATCHES26"; break;
+    case DI_PT_PATCHES27: s = "PATCHES27"; break;
+    case DI_PT_PATCHES28: s = "PATCHES28"; break;
+    case DI_PT_PATCHES29: s = "PATCHES29"; break;
+    case DI_PT_PATCHES30: s = "PATCHES30"; break;
+    case DI_PT_PATCHES31: s = "PATCHES31"; break;
+    }
+    return s;
+}
+
+// TODO(wangra): do not output following properties for now since this will make the text too
+// long maybe move this to state tracking tab
+// static const std::string ConvertSrcSelToStr(pc_di_src_sel pt)
+//{
+//     std::string s;
+//     switch (pt)
+//     {
+//     case DI_SRC_SEL_DMA: s = "DMA"; break;
+//     case DI_SRC_SEL_IMMEDIATE: s = "Immediate"; break;
+//     case DI_SRC_SEL_AUTO_INDEX: s = "Auto Index"; break;
+//     case DI_SRC_SEL_AUTO_XFB: s = "Auto XFB"; break;
+//     default: DIVE_ASSERT(false); break;
+//     }
+//     return s;
+// }
+//
+// static const std::string ConvertVisCullModeToStr(pc_di_vis_cull_mode vcm)
+//{
+//     std::string s;
+//     switch (vcm)
+//     {
+//     case IGNORE_VISIBILITY: s = "Ignore Visibility"; break;
+//     case USE_VISIBILITY: s = "Use Visibility"; break;
+//     default: DIVE_ASSERT(false); break;
+//     }
+//     return s;
+// }
+//
+// static const std::string ConvertPatchTypeToStr(a6xx_patch_type pt)
+//{
+//     std::string s;
+//     switch (pt)
+//     {
+//     case TESS_QUADS: s = "Tessellation Quad"; break;
+//     case TESS_TRIANGLES: s = "Tessellation Triangle"; break;
+//     case TESS_ISOLINES: s = "Tessellation Isolines"; break;
+//     default: DIVE_ASSERT(false); break;
+//     }
+//     return s;
+// }
+
+template<typename VgtDrawInitiatorField>
+std::string OutputVgtDrawInitiator(VgtDrawInitiatorField packet)
+{
+    std::string s = "Primitve Type:" + ConvertPrimTypeToStr(packet.bitfields0.PRIM_TYPE) + ","
+    // TODO(wangra): do not output following properties for now since this will make the text too
+    // long maybe move this to state tracking tab
+    /* + "Source Select:" + ConvertSrcSelToStr(packet.bitfields0.SOURCE_SELECT) + "," +
+    "Visibility Cull Mode:" + ConvertVisCullModeToStr(packet.bitfields0.VIS_CULL) +
+    "," + "Patch Type:" + ConvertPatchTypeToStr(packet.bitfields0.PATCH_TYPE) +
+    "," + "GS Enabled:" + ((packet.bitfields0.GS_ENABLE != 0) ? "True" : "False") +
+    "," + "Tessellation Enabled:" +
+    ((packet.bitfields0.TESS_ENABLE != 0) ? "True" : "False") + ","*/
+    ;
+    return s;
+}
+
 //--------------------------------------------------------------------------------------------------
 std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_manager,
                                                     uint32_t              submit_index,
@@ -1601,7 +1713,8 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
     {
         PM4_CP_DRAW_INDX_OFFSET packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndexOffset(NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
+        string_stream << "DrawIndexOffset(" << OutputVgtDrawInitiator(packet)
+                      << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
                       << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
                       << "FirstIndex:" << packet.bitfields3.FIRST_INDX << ","
                       << "IndexBase:" << packet.bitfields4.INDX_BASE << ","
@@ -1612,7 +1725,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
     {
         PM4_CP_DRAW_INDIRECT packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndirect(VgtDrawInitiator:" << packet._0 << ","
+        string_stream << "DrawIndirect(" << OutputVgtDrawInitiator(packet)
                       << "IndirectLo:" << std::hex << "0x" << packet.bitfields1.INDIRECT_LO << ","
                       << "IndirectHi:"
                       << "0x" << packet.bitfields2.INDIRECT_HI << std::dec << ")";
@@ -1621,7 +1734,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
     {
         PM4_CP_DRAW_INDX_INDIRECT packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndexIndirect(VgtDrawInitiator:" << packet._0 << ","
+        string_stream << "DrawIndexIndirect(" << OutputVgtDrawInitiator(packet)
                       << "IndexBaseLo:" << std::hex << "0x" << packet.bitfields1.INDX_BASE_LO << ","
                       << "IndexBaseHi:"
                       << "0x" << packet.bitfields2.INDX_BASE_HI << std::dec << ","
@@ -1637,7 +1750,8 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         mem_manager.CopyMemory(&base_packet, submit_index, va_addr, sizeof(base_packet)));
         if (base_packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
         {
-            string_stream << "DrawIndirectMulti(DrawCount:" << base_packet.DRAW_COUNT << ","
+            string_stream << "DrawIndirectMulti(" << OutputVgtDrawInitiator(base_packet)
+                          << "DrawCount:" << base_packet.DRAW_COUNT << ","
                           << "Indirect:" << std::hex << "0x" << base_packet.INDIRECT << std::dec
                           << ","
                           << "Stride:" << base_packet.STRIDE << ","
@@ -1647,7 +1761,8 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
-            string_stream << "DrawIndirectMultiIndexed(DrawCount:" << packet.DRAW_COUNT << ","
+            string_stream << "DrawIndirectMultiIndexed(" << OutputVgtDrawInitiator(base_packet)
+                          << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
                           << "MaxIndices:" << packet.MAX_INDICES << ","
                           << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
@@ -1658,7 +1773,8 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
-            string_stream << "DrawIndirectMultiIndirect(DrawCount:" << packet.DRAW_COUNT << ","
+            string_stream << "DrawIndirectMultiIndirect(" << OutputVgtDrawInitiator(base_packet)
+                          << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
                           << "IndirectCount:" << packet.INDIRECT_COUNT << ","
                           << "Stride:" << packet.STRIDE << ","
@@ -1668,8 +1784,9 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
-            string_stream << "DrawIndirectMultiIndirectIndexed(DrawCount:" << packet.DRAW_COUNT
-                          << ","
+            string_stream << "DrawIndirectMultiIndirectIndexed("
+                          << OutputVgtDrawInitiator(base_packet)
+                          << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
                           << "MaxIndices:" << packet.MAX_INDICES << ","
                           << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","

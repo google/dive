@@ -341,12 +341,12 @@ void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_st
 
         // Assumption: These are all set together. All-or-nothing.
         uint32_t viewport_reg = viewport_reg_start + 6 * viewport_id;
-        xOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 1);
-        xScale.u32All = m_state_tracker.GetRegValue(viewport_reg);
-        yOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 3);
-        yScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 2);
-        zOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 5);
-        zScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 4);
+        xOffset.u32All = m_state_tracker.GetRegValue(viewport_reg);
+        xScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 1);
+        yOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 2);
+        yScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 3);
+        zOffset.u32All = m_state_tracker.GetRegValue(viewport_reg + 4);
+        zScale.u32All = m_state_tracker.GetRegValue(viewport_reg + 5);
 
         VkViewport viewport;
         viewport.x = xOffset.f32All - xScale.f32All;

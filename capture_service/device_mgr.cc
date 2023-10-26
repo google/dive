@@ -163,6 +163,32 @@ std::vector<std::string> DeviceManager::ListDevice() const
 
     return dev_list;
 }
+void DeviceManager::Cleanup(const std::string &serial, const std::string &package)
+{
+    AdbSession adb(serial);
+    // Remove installed libs and libraries on device.
+    adb.Run("root");
+    adb.Run("wait-for-device");
+    adb.Run("remount");
+
+    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true);
+    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true);
+    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true);
+    adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath), true);
+    adb.Run(absl::StrFormat("forward --remove tcp:%d", kPort), true);
+
+    adb.Run("shell settings delete global enable_gpu_debug_layers");
+    adb.Run("shell settings delete global gpu_debug_app");
+    adb.Run("shell settings delete global gpu_debug_layers");
+    adb.Run("shell settings delete global gpu_debug_layer_app");
+    adb.Run("shell settings delete global gpu_debug_layers_gles");
+
+    // If package specified, remove package related settings.
+    if (!package.empty())
+    {
+        adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package));
+    }
+}
 
 void AndroidDevice::RetrieveTraceFile(const std::string &trace_file_path,
                                       const std::string &save_path)

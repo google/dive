@@ -269,7 +269,9 @@
             <Synthetic Name="LogicOpEnabled" >
                 <Expand>
                     <ArrayItems>
-                            <Size>m_size</Size>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
                         <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
@@ -277,7 +279,9 @@
             <Synthetic Name="LogicOp" >
                 <Expand>
                     <ArrayItems>
-                            <Size>m_size</Size>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
                         <ValuePointer>((VkLogicOp*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
@@ -302,143 +306,99 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="ZAddr" >
+            <Synthetic Name="LRZEnabled" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((uint64_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLRZEnabledOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="HTileAddr" >
+            <Synthetic Name="LRZWrite" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((uint64_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLRZWriteOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="HiZEnabled" >
+            <Synthetic Name="LRZDirStatus" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((a6xx_lrz_dir_status*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirStatusOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="HiSEnabled" >
+            <Synthetic Name="LRZDirWrite" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirWriteOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="ZCompressEnabled" >
+            <Synthetic Name="ZTestMode" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((a6xx_ztest_mode*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZTestModeOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="StencilCompressEnabled" >
+            <Synthetic Name="BinW" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kBinWOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="CompressedZFetchEnabled" >
+            <Synthetic Name="BinH" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="ZFormat" >
+            <Synthetic Name="RenderMode" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((a6xx_render_mode*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="ZOrder" >
+            <Synthetic Name="BuffersLocation" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((a6xx_buffers_location*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kBuffersLocationOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="VSLateAlloc" >
+            <Synthetic Name="ThreadSize" >
                 <Expand>
                     <ArrayItems>
                             <Size>m_size</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_cap))</ValuePointer>
+                        <ValuePointer>((a6xx_threadsize*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kThreadSizeOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="DccEnabled" >
+            <Synthetic Name="EnableAllHelperLanes" >
                 <Expand>
                     <ArrayItems>
-                            <Direction>Forward</Direction>
-                            <Rank>2</Rank>
-                            <Size>$i == 0 ? m_size : 8</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_cap))</ValuePointer>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kEnableAllHelperLanesOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Synthetic Name="ColorFormat" >
+            <Synthetic Name="EnablePartialHelperLanes" >
                 <Expand>
                     <ArrayItems>
-                            <Direction>Forward</Direction>
-                            <Rank>2</Rank>
-                            <Size>$i == 0 ? m_size : 8</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_cap))</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Height" >
-                <Expand>
-                    <ArrayItems>
-                            <Direction>Forward</Direction>
-                            <Rank>2</Rank>
-                            <Size>$i == 0 ? m_size : 8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_cap))</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Width" >
-                <Expand>
-                    <ArrayItems>
-                            <Direction>Forward</Direction>
-                            <Rank>2</Rank>
-                            <Size>$i == 0 ? m_size : 8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_cap))</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Vgpr" >
-                <Expand>
-                    <ArrayItems>
-                            <Direction>Forward</Direction>
-                            <Rank>2</Rank>
-                            <Size>$i == 0 ? m_size : Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_cap))</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Sgpr" >
-                <Expand>
-                    <ArrayItems>
-                            <Direction>Forward</Direction>
-                            <Rank>2</Rank>
-                            <Size>$i == 0 ? m_size : Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_cap))</ValuePointer>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
@@ -550,12 +510,26 @@
             <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
+            <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
             <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
                     <ArrayItems>
@@ -576,96 +550,42 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirStatus" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_lrz_dir_status*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirStatusOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ZTestMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_ztest_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZTestModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinW" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinWOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BuffersLocation" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_buffers_location*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBuffersLocationOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ThreadSize" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_threadsize*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kThreadSizeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
+            <Item Name="EnableAllHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnableAllHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -775,12 +695,26 @@
             <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
+            <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
             <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
                     <ArrayItems>
@@ -801,96 +735,42 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirStatus" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_lrz_dir_status*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirStatusOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ZTestMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_ztest_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZTestModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinW" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinWOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BuffersLocation" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_buffers_location*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBuffersLocationOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ThreadSize" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_threadsize*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kThreadSizeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
+            <Item Name="EnableAllHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnableAllHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -1000,12 +880,26 @@
             <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
+            <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
             <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
                     <ArrayItems>
@@ -1026,96 +920,42 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirStatus" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_lrz_dir_status*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirStatusOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ZTestMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_ztest_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZTestModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinW" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinWOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BuffersLocation" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_buffers_location*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBuffersLocationOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ThreadSize" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_threadsize*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kThreadSizeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
+            <Item Name="EnableAllHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnableAllHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -1225,12 +1065,26 @@
             <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
+            <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="LogicOp" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((VkLogicOp*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLogicOpOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kLogicOpArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
             <Synthetic Name="Attachment" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
                     <ArrayItems>
@@ -1251,96 +1105,42 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <Item Name="ZAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HTileAddr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHTileAddrOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiZEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiZEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirStatus" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_lrz_dir_status*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirStatusOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="HiSEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kHiSEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="LRZDirWrite" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kLRZDirWriteOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ZTestMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_ztest_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZTestModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="StencilCompressEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilCompressEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinW" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinWOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="CompressedZFetchEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kCompressedZFetchEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="ZOrder" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((Pal::Gfx9::Chip::ZOrder*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kZOrderOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="BuffersLocation" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_buffers_location*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBuffersLocationOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Item Name="VSLateAlloc" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVSLateAllocOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            <Item Name="ThreadSize" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_threadsize*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kThreadSizeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
-            <Synthetic Name="DccEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDccEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kDccEnabledArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="ColorFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((Pal::Gfx9::Chip::ColorFormat*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kColorFormatOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kColorFormatArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Height" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0HeightOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0HeightArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Mip0Width" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>8</Size>
-                        <ValuePointer>((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMip0WidthOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kMip0WidthArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Vgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kVgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kVgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="Sgpr" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                <Expand>
-                    <ArrayItems>
-                        <Direction>Forward</Direction>
-                        <Rank>1</Rank>
-                        <Size>Dive::kShaderStageCount</Size>
-                        <ValuePointer>((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kSgprOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kSgprArrayCount</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
+            <Item Name="EnableAllHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnableAllHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>

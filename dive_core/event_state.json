@@ -2,11 +2,12 @@
     "header": {
         "path": "dive_core/event_state.h",
         "includes": [
+            "adreno.h",
             "common.h",
+            "dive_core/common/gpudefs.h",
             "info_id.h",
             "struct_of_arrays.h",
-            "dive_core/common/gpudefs.h",
-            "third_party/Vulkan-Headers/include/vulkan/vulkan.h",
+            "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
         ],
         "options": [
             "isSet",
@@ -230,13 +231,25 @@
                     "name": "LogicOpEnabled",
                     "ty": "bool",
                     "category": "Color Blend",
-                    "desc": "Whether to apply Logical Operations"
+                    "desc": "Whether to apply Logical Operations",
+                    "array_dims": [
+                        {
+                            "name": "attachment",
+                            "count": "8"
+                        }
+                    ]
                 },
                 {
                     "name": "LogicOp",
                     "ty": "VkLogicOp",
                     "category": "Color Blend",
-                    "desc": "Which logical operation to apply"
+                    "desc": "Which logical operation to apply",
+                    "array_dims": [
+                        {
+                            "name": "attachment",
+                            "count": "8"
+                        }
+                    ]
                 },
                 {
                     "name": "Attachment",
@@ -262,139 +275,77 @@
                         }
                     ]
                 },
-                {
-                    "name": "ZAddr",
-                    "ty": "uint64_t",
-                    "category": "GPU-specific",
-                    "desc": "The read and write VA of depth buffer (assumed to be same)"
-                },
-                {
-                    "name": "HTileAddr",
-                    "ty": "uint64_t",
-                    "category": "GPU-specific",
-                    "desc": "VA of DB's HTile buffer"
-                },
-                {
-                    "name": "HiZEnabled",
+				{
+                    "name": "LRZEnabled",
                     "ty": "bool",
                     "category": "GPU-specific",
-                    "desc": "Whether Hi-Z is enabled for depth"
+                    "desc": "Whether LRZ is enabled for depth"
                 },
-                {
-                    "name": "HiSEnabled",
+				{
+                    "name": "LRZWrite",
                     "ty": "bool",
                     "category": "GPU-specific",
-                    "desc": "Whether Hi-S is enabled for stencil"
+                    "desc": "Whether LRZ write is enabled"
                 },
                 {
-                    "name": "ZCompressEnabled",
+                    "name": "LRZDirStatus",
+                    "ty": "a6xx_lrz_dir_status",
+                    "category": "GPU-specific",
+                    "desc": "LRZ direction"
+                },
+				{
+                    "name": "LRZDirWrite",
                     "ty": "bool",
                     "category": "GPU-specific",
-                    "desc": "Whether plane compression is enabled for depth buffers. To reduce bandwidth impact"
+                    "desc": "Whether LRZ direction write is enabled"
                 },
                 {
-                    "name": "StencilCompressEnabled",
-                    "ty": "bool",
+                    "name": "ZTestMode",
+                    "ty": "a6xx_ztest_mode",
                     "category": "GPU-specific",
-                    "desc": "Whether compression is enabled for stencil buffers. To reduce bandwidth impact"
+                    "desc": "Depth test mode"
                 },
                 {
-                    "name": "CompressedZFetchEnabled",
-                    "ty": "bool",
-                    "category": "GPU-specific",
-                    "desc": "Whether shader fetch of compressed depth buffers is enabled"
-                },
-                {
-                    "name": "ZFormat",
-                    "ty": "Dive::Legacy::ZFormat",
-                    "category": "GPU-specific",
-                    "desc": "Internal GPU format of the depth buffer"
-                },
-                {
-                    "name": "ZOrder",
-                    "ty": "Dive::Legacy::ZOrder",
-                    "category": "GPU-specific",
-                    "desc": "Indicates application preference for LateZ, EarlyZ, or ReZ"
-                },
-                {
-                    "name": "VSLateAlloc",
-                    "ty": "uint16_t",
-                    "category": "GPU-specific",
-                    "desc": "Late VS wavefront allocation count. Value is the number of wavefronts minus one, since at least one VS wave can always launch with late alloc enabled"
-                },
-                {
-                    "name": "DccEnabled",
-                    "ty": "bool",
-                    "category": "GPU-specific",
-                    "desc": "Whether DCC-based bandwidth-saving color compression is enabled",
-                    "array_dims": [
-                        {
-                            "name": "attachment",
-                            "count": "8"
-                        }
-                    ]
-                },
-                {
-                    "name": "ColorFormat",
-                    "ty": "Dive::Legacy::ColorFormat",
-                    "category": "GPU-specific",
-                    "desc": "Per target attachment hardware color format",
-                    "array_dims": [
-                        {
-                            "name": "attachment",
-                            "count": "8"
-                        }
-                    ]
-                },
-                {
-                    "name": "Mip0Height",
+                    "name": "BinW",
                     "ty": "uint32_t",
                     "category": "GPU-specific",
-                    "desc": "Per target attachment mip0 height",
-                    "array_dims": [
-                        {
-                            "name": "attachment",
-                            "count": "8"
-                        }
-                    ]
+                    "desc": "Bin width"
                 },
                 {
-                    "name": "Mip0Width",
+                    "name": "BinH",
                     "ty": "uint32_t",
                     "category": "GPU-specific",
-                    "desc": "Per target attachment mip0 width",
-                    "array_dims": [
-                        {
-                            "name": "attachment",
-                            "count": "8"
-                        }
-                    ]
+                    "desc": "Bin Height"
                 },
                 {
-                    "name": "Vgpr",
-                    "ty": "uint16_t",
+                    "name": "RenderMode",
+                    "ty": "a6xx_render_mode",
                     "category": "GPU-specific",
-                    "desc": "Per shader stage vector general purpose register count. Always rounded up to nearest multiple of 4.",
-                    "array_dims": [
-                        {
-                            "name": "stage",
-                            "ty": "Dive::ShaderStage",
-                            "count": "Dive::kShaderStageCount"
-                        }
-                    ]
+                    "desc": "Whether in binning pass or rendering pass"
                 },
                 {
-                    "name": "Sgpr",
-                    "ty": "uint16_t",
+                    "name": "BuffersLocation",
+                    "ty": "a6xx_buffers_location",
                     "category": "GPU-specific",
-                    "desc": "Per shader stage scalar general purpose register count. Always rounded up to nearest multiple of 16",
-                    "array_dims": [
-                        {
-                            "name": "stage",
-                            "ty": "Dive::ShaderStage",
-                            "count": "Dive::kShaderStageCount"
-                        }
-                    ]
+                    "desc": "Whether the target buffer is in GMEM or SYSMEM"
+                },
+                {
+                    "name": "ThreadSize",
+                    "ty": "a6xx_threadsize",
+                    "category": "GPU-specific",
+                    "desc": "Whether the thread size is 64 or 128"
+                },
+                {
+                    "name": "EnableAllHelperLanes",
+                    "ty": "bool",
+                    "category": "GPU-specific",
+                    "desc": "Whether all helper lanes are enabled of the 2x2 quad for fine derivatives"
+                },
+				{
+                    "name": "EnablePartialHelperLanes",
+                    "ty": "bool",
+                    "category": "GPU-specific",
+                    "desc": "Whether 3 out of 4 helper lanes are enabled of the 2x2 quad for coarse derivatives"
                 }
             ]
         }

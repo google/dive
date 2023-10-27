@@ -179,13 +179,13 @@ void py_event_state(py::module &m) {
     , reinterpret_cast<const numpy_type<float>::type*>(self.MaxDepthBoundsPtr()));
         })
             .def("logic_op_enabled", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<bool>::type>({ self.size()},         {
-                sizeof(numpy_type<bool>::type)}
+            return py::array_t<numpy_type<bool>::type>({ self.size(), 8},         {
+                sizeof(numpy_type<bool>::type)* 8, sizeof(numpy_type<bool>::type)* 8}
     , reinterpret_cast<const numpy_type<bool>::type*>(self.LogicOpEnabledPtr()));
         })
             .def("logic_op", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<VkLogicOp>::type>({ self.size()},         {
-                sizeof(numpy_type<VkLogicOp>::type)}
+            return py::array_t<numpy_type<VkLogicOp>::type>({ self.size(), 8},         {
+                sizeof(numpy_type<VkLogicOp>::type)* 8, sizeof(numpy_type<VkLogicOp>::type)* 8}
     , reinterpret_cast<const numpy_type<VkLogicOp>::type*>(self.LogicOpPtr()));
         })
             .def("attachment", [](const EventStateInfo &self) {
@@ -198,85 +198,65 @@ void py_event_state(py::module &m) {
                 sizeof(numpy_type<float>::type)* 4, sizeof(numpy_type<float>::type)* 4}
     , reinterpret_cast<const numpy_type<float>::type*>(self.BlendConstantPtr()));
         })
-            .def("z_addr", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint64_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint64_t>::type)}
-    , reinterpret_cast<const numpy_type<uint64_t>::type*>(self.ZAddrPtr()));
-        })
-            .def("h_tile_addr", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint64_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint64_t>::type)}
-    , reinterpret_cast<const numpy_type<uint64_t>::type*>(self.HTileAddrPtr()));
-        })
-            .def("hi_z_enabled", [](const EventStateInfo &self) {
+            .def("lrz_enabled", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.HiZEnabledPtr()));
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LRZEnabledPtr()));
         })
-            .def("hi_s_enabled", [](const EventStateInfo &self) {
+            .def("lrz_write", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.HiSEnabledPtr()));
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LRZWritePtr()));
         })
-            .def("z_compress_enabled", [](const EventStateInfo &self) {
+            .def("lrz_dir_status", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<a6xx_lrz_dir_status>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_lrz_dir_status>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_lrz_dir_status>::type*>(self.LRZDirStatusPtr()));
+        })
+            .def("lrz_dir_write", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.ZCompressEnabledPtr()));
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LRZDirWritePtr()));
         })
-            .def("stencil_compress_enabled", [](const EventStateInfo &self) {
+            .def("z_test_mode", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<a6xx_ztest_mode>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_ztest_mode>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_ztest_mode>::type*>(self.ZTestModePtr()));
+        })
+            .def("bin_w", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<uint32_t>::type>({ self.size()},         {
+                sizeof(numpy_type<uint32_t>::type)}
+    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.BinWPtr()));
+        })
+            .def("bin_h", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<uint32_t>::type>({ self.size()},         {
+                sizeof(numpy_type<uint32_t>::type)}
+    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.BinHPtr()));
+        })
+            .def("render_mode", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<a6xx_render_mode>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_render_mode>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_render_mode>::type*>(self.RenderModePtr()));
+        })
+            .def("buffers_location", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<a6xx_buffers_location>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_buffers_location>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_buffers_location>::type*>(self.BuffersLocationPtr()));
+        })
+            .def("thread_size", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<a6xx_threadsize>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_threadsize>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_threadsize>::type*>(self.ThreadSizePtr()));
+        })
+            .def("enable_all_helper_lanes", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.StencilCompressEnabledPtr()));
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.EnableAllHelperLanesPtr()));
         })
-            .def("compressed_z_fetch_enabled", [](const EventStateInfo &self) {
+            .def("enable_partial_helper_lanes", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.CompressedZFetchEnabledPtr()));
-        })
-            .def("z_format", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<Pal::Gfx9::Chip::ZFormat>::type>({ self.size()},         {
-                sizeof(numpy_type<Pal::Gfx9::Chip::ZFormat>::type)}
-    , reinterpret_cast<const numpy_type<Pal::Gfx9::Chip::ZFormat>::type*>(self.ZFormatPtr()));
-        })
-            .def("z_order", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<Pal::Gfx9::Chip::ZOrder>::type>({ self.size()},         {
-                sizeof(numpy_type<Pal::Gfx9::Chip::ZOrder>::type)}
-    , reinterpret_cast<const numpy_type<Pal::Gfx9::Chip::ZOrder>::type*>(self.ZOrderPtr()));
-        })
-            .def("vs_late_alloc", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint16_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint16_t>::type)}
-    , reinterpret_cast<const numpy_type<uint16_t>::type*>(self.VSLateAllocPtr()));
-        })
-            .def("dcc_enabled", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<bool>::type>({ self.size(), 8},         {
-                sizeof(numpy_type<bool>::type)* 8, sizeof(numpy_type<bool>::type)* 8}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.DccEnabledPtr()));
-        })
-            .def("color_format", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<Pal::Gfx9::Chip::ColorFormat>::type>({ self.size(), 8},         {
-                sizeof(numpy_type<Pal::Gfx9::Chip::ColorFormat>::type)* 8, sizeof(numpy_type<Pal::Gfx9::Chip::ColorFormat>::type)* 8}
-    , reinterpret_cast<const numpy_type<Pal::Gfx9::Chip::ColorFormat>::type*>(self.ColorFormatPtr()));
-        })
-            .def("mip0_height", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint32_t>::type>({ self.size(), 8},         {
-                sizeof(numpy_type<uint32_t>::type)* 8, sizeof(numpy_type<uint32_t>::type)* 8}
-    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.Mip0HeightPtr()));
-        })
-            .def("mip0_width", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint32_t>::type>({ self.size(), 8},         {
-                sizeof(numpy_type<uint32_t>::type)* 8, sizeof(numpy_type<uint32_t>::type)* 8}
-    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.Mip0WidthPtr()));
-        })
-            .def("vgpr", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint16_t>::type>({ self.size(), Dive::kShaderStageCount},         {
-                sizeof(numpy_type<uint16_t>::type)* Dive::kShaderStageCount, sizeof(numpy_type<uint16_t>::type)* Dive::kShaderStageCount}
-    , reinterpret_cast<const numpy_type<uint16_t>::type*>(self.VgprPtr()));
-        })
-            .def("sgpr", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<uint16_t>::type>({ self.size(), Dive::kShaderStageCount},         {
-                sizeof(numpy_type<uint16_t>::type)* Dive::kShaderStageCount, sizeof(numpy_type<uint16_t>::type)* Dive::kShaderStageCount}
-    , reinterpret_cast<const numpy_type<uint16_t>::type*>(self.SgprPtr()));
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.EnablePartialHelperLanesPtr()));
         })
         .def("to_dataframe", [](const EventStateInfo &self) {
         py::object DataFrame = py::module::import("pandas").attr("DataFrame");
@@ -378,12 +358,22 @@ void py_event_state(py::module &m) {
                                 dict["max_depth_bounds"] = py::array_t<numpy_type<float>::type>({ self.size()},         {
                 sizeof(numpy_type<float>::type)}
     , reinterpret_cast<const numpy_type<float>::type*>(self.MaxDepthBoundsPtr()));
-                                dict["logic_op_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
-                sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.LogicOpEnabledPtr()));
-                                dict["logic_op"] = py::array_t<numpy_type<VkLogicOp>::type>({ self.size()},         {
-                sizeof(numpy_type<VkLogicOp>::type)}
-    , reinterpret_cast<const numpy_type<VkLogicOp>::type*>(self.LogicOpPtr()));
+                                    for(uint32_t attachment=0; attachment<8; ++attachment)
+                {
+                    std::ostringstream key;
+                    key << "logic_op_enabled"<< "_" <<  attachment;
+                    dict[py::cast(key.str())] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)* 8}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LogicOpEnabledPtr(EventStateId(0), attachment)));
+                }
+                                    for(uint32_t attachment=0; attachment<8; ++attachment)
+                {
+                    std::ostringstream key;
+                    key << "logic_op"<< "_" <<  attachment;
+                    dict[py::cast(key.str())] = py::array_t<numpy_type<VkLogicOp>::type>({ self.size()},         {
+                sizeof(numpy_type<VkLogicOp>::type)* 8}
+    , reinterpret_cast<const numpy_type<VkLogicOp>::type*>(self.LogicOpPtr(EventStateId(0), attachment)));
+                }
                                     for(uint32_t attachment=0; attachment<8; ++attachment)
                 {
                     std::ostringstream key;
@@ -400,84 +390,42 @@ void py_event_state(py::module &m) {
                 sizeof(numpy_type<float>::type)* 4}
     , reinterpret_cast<const numpy_type<float>::type*>(self.BlendConstantPtr(EventStateId(0), channel)));
                 }
-                                dict["z_addr"] = py::array_t<numpy_type<uint64_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint64_t>::type)}
-    , reinterpret_cast<const numpy_type<uint64_t>::type*>(self.ZAddrPtr()));
-                                dict["h_tile_addr"] = py::array_t<numpy_type<uint64_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint64_t>::type)}
-    , reinterpret_cast<const numpy_type<uint64_t>::type*>(self.HTileAddrPtr()));
-                                dict["hi_z_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                                dict["lrz_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.HiZEnabledPtr()));
-                                dict["hi_s_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LRZEnabledPtr()));
+                                dict["lrz_write"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.HiSEnabledPtr()));
-                                dict["z_compress_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LRZWritePtr()));
+                                dict["lrz_dir_status"] = py::array_t<numpy_type<a6xx_lrz_dir_status>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_lrz_dir_status>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_lrz_dir_status>::type*>(self.LRZDirStatusPtr()));
+                                dict["lrz_dir_write"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.ZCompressEnabledPtr()));
-                                dict["stencil_compress_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.LRZDirWritePtr()));
+                                dict["z_test_mode"] = py::array_t<numpy_type<a6xx_ztest_mode>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_ztest_mode>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_ztest_mode>::type*>(self.ZTestModePtr()));
+                                dict["bin_w"] = py::array_t<numpy_type<uint32_t>::type>({ self.size()},         {
+                sizeof(numpy_type<uint32_t>::type)}
+    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.BinWPtr()));
+                                dict["bin_h"] = py::array_t<numpy_type<uint32_t>::type>({ self.size()},         {
+                sizeof(numpy_type<uint32_t>::type)}
+    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.BinHPtr()));
+                                dict["render_mode"] = py::array_t<numpy_type<a6xx_render_mode>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_render_mode>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_render_mode>::type*>(self.RenderModePtr()));
+                                dict["buffers_location"] = py::array_t<numpy_type<a6xx_buffers_location>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_buffers_location>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_buffers_location>::type*>(self.BuffersLocationPtr()));
+                                dict["thread_size"] = py::array_t<numpy_type<a6xx_threadsize>::type>({ self.size()},         {
+                sizeof(numpy_type<a6xx_threadsize>::type)}
+    , reinterpret_cast<const numpy_type<a6xx_threadsize>::type*>(self.ThreadSizePtr()));
+                                dict["enable_all_helper_lanes"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.StencilCompressEnabledPtr()));
-                                dict["compressed_z_fetch_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.EnableAllHelperLanesPtr()));
+                                dict["enable_partial_helper_lanes"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.CompressedZFetchEnabledPtr()));
-                                dict["z_format"] = py::array_t<numpy_type<Pal::Gfx9::Chip::ZFormat>::type>({ self.size()},         {
-                sizeof(numpy_type<Pal::Gfx9::Chip::ZFormat>::type)}
-    , reinterpret_cast<const numpy_type<Pal::Gfx9::Chip::ZFormat>::type*>(self.ZFormatPtr()));
-                                dict["z_order"] = py::array_t<numpy_type<Pal::Gfx9::Chip::ZOrder>::type>({ self.size()},         {
-                sizeof(numpy_type<Pal::Gfx9::Chip::ZOrder>::type)}
-    , reinterpret_cast<const numpy_type<Pal::Gfx9::Chip::ZOrder>::type*>(self.ZOrderPtr()));
-                                dict["vs_late_alloc"] = py::array_t<numpy_type<uint16_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint16_t>::type)}
-    , reinterpret_cast<const numpy_type<uint16_t>::type*>(self.VSLateAllocPtr()));
-                                    for(uint32_t attachment=0; attachment<8; ++attachment)
-                {
-                    std::ostringstream key;
-                    key << "dcc_enabled"<< "_" <<  attachment;
-                    dict[py::cast(key.str())] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
-                sizeof(numpy_type<bool>::type)* 8}
-    , reinterpret_cast<const numpy_type<bool>::type*>(self.DccEnabledPtr(EventStateId(0), attachment)));
-                }
-                                    for(uint32_t attachment=0; attachment<8; ++attachment)
-                {
-                    std::ostringstream key;
-                    key << "color_format"<< "_" <<  attachment;
-                    dict[py::cast(key.str())] = py::array_t<numpy_type<Pal::Gfx9::Chip::ColorFormat>::type>({ self.size()},         {
-                sizeof(numpy_type<Pal::Gfx9::Chip::ColorFormat>::type)* 8}
-    , reinterpret_cast<const numpy_type<Pal::Gfx9::Chip::ColorFormat>::type*>(self.ColorFormatPtr(EventStateId(0), attachment)));
-                }
-                                    for(uint32_t attachment=0; attachment<8; ++attachment)
-                {
-                    std::ostringstream key;
-                    key << "mip0_height"<< "_" <<  attachment;
-                    dict[py::cast(key.str())] = py::array_t<numpy_type<uint32_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint32_t>::type)* 8}
-    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.Mip0HeightPtr(EventStateId(0), attachment)));
-                }
-                                    for(uint32_t attachment=0; attachment<8; ++attachment)
-                {
-                    std::ostringstream key;
-                    key << "mip0_width"<< "_" <<  attachment;
-                    dict[py::cast(key.str())] = py::array_t<numpy_type<uint32_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint32_t>::type)* 8}
-    , reinterpret_cast<const numpy_type<uint32_t>::type*>(self.Mip0WidthPtr(EventStateId(0), attachment)));
-                }
-                                    for(uint32_t stage=0; stage<Dive::kShaderStageCount; ++stage)
-                {
-                    std::ostringstream key;
-                    key << "vgpr"<< "_" <<  stage;
-                    dict[py::cast(key.str())] = py::array_t<numpy_type<uint16_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint16_t>::type)* Dive::kShaderStageCount}
-    , reinterpret_cast<const numpy_type<uint16_t>::type*>(self.VgprPtr(EventStateId(0), static_cast<Dive::ShaderStage>(stage))));
-                }
-                                    for(uint32_t stage=0; stage<Dive::kShaderStageCount; ++stage)
-                {
-                    std::ostringstream key;
-                    key << "sgpr"<< "_" <<  stage;
-                    dict[py::cast(key.str())] = py::array_t<numpy_type<uint16_t>::type>({ self.size()},         {
-                sizeof(numpy_type<uint16_t>::type)* Dive::kShaderStageCount}
-    , reinterpret_cast<const numpy_type<uint16_t>::type*>(self.SgprPtr(EventStateId(0), static_cast<Dive::ShaderStage>(stage))));
-                }
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.EnablePartialHelperLanesPtr()));
                 return DataFrame(dict);
     });
 

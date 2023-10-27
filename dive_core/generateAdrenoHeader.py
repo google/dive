@@ -184,8 +184,7 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
 
 
 # ---------------------------------------------------------------------------------------
-def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str):
-  cur_offset = 0
+def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str, cur_offset):
   for bitfield in bitfields:
     if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
       continue
@@ -222,6 +221,7 @@ def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str):
     pm4_info_file.write(extra_front_tab_str + "\t\t%s %s : %d;\n" % (bitfield_type, bitfield_name, bitfield_width)) 
 
     cur_offset = bitfield_start + bitfield_width
+  return cur_offset
 
 # ---------------------------------------------------------------------------------------
 def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
@@ -236,6 +236,7 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
 
   type = None
   use_bitset_as_type = False
+  cur_bitfield_offset = 0
   if 'type' in reg.attrib:
     type = reg.attrib['type']
     if type:
@@ -257,7 +258,7 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
           
           pm4_info_file.write(extra_front_tab_str + "\tstruct\n") 
           pm4_info_file.write(extra_front_tab_str + "\t{\n") 
-          outputBitfields(pm4_info_file, bitset, extra_front_tab_str)
+          cur_bitfield_offset = outputBitfields(pm4_info_file, bitset, extra_front_tab_str, cur_bitfield_offset)
                   
   bitfields = reg.findall('{http://nouveau.freedesktop.org/}bitfield')
   # This handles the case where bitfields is used to extend bitset type, see SP_VS_CTRL_REG0
@@ -265,7 +266,7 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
     if not use_bitset_as_type:
       pm4_info_file.write(extra_front_tab_str + "\tstruct\n") 
       pm4_info_file.write(extra_front_tab_str + "\t{\n")
-    outputBitfields(pm4_info_file, bitfields, extra_front_tab_str)
+    cur_bitfield_offset = outputBitfields(pm4_info_file, bitfields, extra_front_tab_str, cur_bitfield_offset)
 
   if use_bitset_as_type or bitfields:
     pm4_info_file.write(extra_front_tab_str + "\t}bitfields" + postfix + ";\n\n")

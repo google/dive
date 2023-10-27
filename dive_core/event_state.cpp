@@ -86,22 +86,18 @@ typename EventStateInfo::Id::basic_type new_cap)
     auto old_logic_op_ptr = LogicOpPtr();
     auto old_attachment_ptr = AttachmentPtr();
     auto old_blend_constant_ptr = BlendConstantPtr();
-    auto old_z_addr_ptr = ZAddrPtr();
-    auto old_h_tile_addr_ptr = HTileAddrPtr();
-    auto old_hi_z_enabled_ptr = HiZEnabledPtr();
-    auto old_hi_s_enabled_ptr = HiSEnabledPtr();
-    auto old_z_compress_enabled_ptr = ZCompressEnabledPtr();
-    auto old_stencil_compress_enabled_ptr = StencilCompressEnabledPtr();
-    auto old_compressed_z_fetch_enabled_ptr = CompressedZFetchEnabledPtr();
-    auto old_z_format_ptr = ZFormatPtr();
-    auto old_z_order_ptr = ZOrderPtr();
-    auto old_vs_late_alloc_ptr = VSLateAllocPtr();
-    auto old_dcc_enabled_ptr = DccEnabledPtr();
-    auto old_color_format_ptr = ColorFormatPtr();
-    auto old_mip0_height_ptr = Mip0HeightPtr();
-    auto old_mip0_width_ptr = Mip0WidthPtr();
-    auto old_vgpr_ptr = VgprPtr();
-    auto old_sgpr_ptr = SgprPtr();
+    auto old_lrz_enabled_ptr = LRZEnabledPtr();
+    auto old_lrz_write_ptr = LRZWritePtr();
+    auto old_lrz_dir_status_ptr = LRZDirStatusPtr();
+    auto old_lrz_dir_write_ptr = LRZDirWritePtr();
+    auto old_z_test_mode_ptr = ZTestModePtr();
+    auto old_bin_w_ptr = BinWPtr();
+    auto old_bin_h_ptr = BinHPtr();
+    auto old_render_mode_ptr = RenderModePtr();
+    auto old_buffers_location_ptr = BuffersLocationPtr();
+    auto old_thread_size_ptr = ThreadSizePtr();
+    auto old_enable_all_helper_lanes_ptr = EnableAllHelperLanesPtr();
+    auto old_enable_partial_helper_lanes_ptr = EnablePartialHelperLanesPtr();
 
     // `old_buffer` keeps the old buffer from being deallocated before we have
     // copied the data into the new buffer. The old buffer will be deallocated
@@ -218,52 +214,41 @@ typename EventStateInfo::Id::basic_type new_cap)
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
     memcpy(BlendConstantPtr(), old_blend_constant_ptr, kBlendConstantSize * m_size);
-    static_assert(std::is_trivially_copyable<uint64_t>::value,
-                  "Field type must be trivially copyable");
-    memcpy(ZAddrPtr(), old_z_addr_ptr, kZAddrSize * m_size);
-    static_assert(std::is_trivially_copyable<uint64_t>::value,
-                  "Field type must be trivially copyable");
-    memcpy(HTileAddrPtr(), old_h_tile_addr_ptr, kHTileAddrSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(HiZEnabledPtr(), old_hi_z_enabled_ptr, kHiZEnabledSize * m_size);
+    memcpy(LRZEnabledPtr(), old_lrz_enabled_ptr, kLRZEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(HiSEnabledPtr(), old_hi_s_enabled_ptr, kHiSEnabledSize * m_size);
-    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(ZCompressEnabledPtr(), old_z_compress_enabled_ptr, kZCompressEnabledSize * m_size);
-    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(StencilCompressEnabledPtr(),
-           old_stencil_compress_enabled_ptr,
-           kStencilCompressEnabledSize * m_size);
-    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(CompressedZFetchEnabledPtr(),
-           old_compressed_z_fetch_enabled_ptr,
-           kCompressedZFetchEnabledSize * m_size);
-    static_assert(std::is_trivially_copyable<Dive::Legacy::ZFormat>::value,
+    memcpy(LRZWritePtr(), old_lrz_write_ptr, kLRZWriteSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_lrz_dir_status>::value,
                   "Field type must be trivially copyable");
-    memcpy(ZFormatPtr(), old_z_format_ptr, kZFormatSize * m_size);
-    static_assert(std::is_trivially_copyable<Dive::Legacy::ZOrder>::value,
-                  "Field type must be trivially copyable");
-    memcpy(ZOrderPtr(), old_z_order_ptr, kZOrderSize * m_size);
-    static_assert(std::is_trivially_copyable<uint16_t>::value,
-                  "Field type must be trivially copyable");
-    memcpy(VSLateAllocPtr(), old_vs_late_alloc_ptr, kVSLateAllocSize * m_size);
+    memcpy(LRZDirStatusPtr(), old_lrz_dir_status_ptr, kLRZDirStatusSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(DccEnabledPtr(), old_dcc_enabled_ptr, kDccEnabledSize * m_size);
-    static_assert(std::is_trivially_copyable<Dive::Legacy::ColorFormat>::value,
+    memcpy(LRZDirWritePtr(), old_lrz_dir_write_ptr, kLRZDirWriteSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_ztest_mode>::value,
                   "Field type must be trivially copyable");
-    memcpy(ColorFormatPtr(), old_color_format_ptr, kColorFormatSize * m_size);
+    memcpy(ZTestModePtr(), old_z_test_mode_ptr, kZTestModeSize * m_size);
     static_assert(std::is_trivially_copyable<uint32_t>::value,
                   "Field type must be trivially copyable");
-    memcpy(Mip0HeightPtr(), old_mip0_height_ptr, kMip0HeightSize * m_size);
+    memcpy(BinWPtr(), old_bin_w_ptr, kBinWSize * m_size);
     static_assert(std::is_trivially_copyable<uint32_t>::value,
                   "Field type must be trivially copyable");
-    memcpy(Mip0WidthPtr(), old_mip0_width_ptr, kMip0WidthSize * m_size);
-    static_assert(std::is_trivially_copyable<uint16_t>::value,
+    memcpy(BinHPtr(), old_bin_h_ptr, kBinHSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_render_mode>::value,
                   "Field type must be trivially copyable");
-    memcpy(VgprPtr(), old_vgpr_ptr, kVgprSize * m_size);
-    static_assert(std::is_trivially_copyable<uint16_t>::value,
+    memcpy(RenderModePtr(), old_render_mode_ptr, kRenderModeSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_buffers_location>::value,
                   "Field type must be trivially copyable");
-    memcpy(SgprPtr(), old_sgpr_ptr, kSgprSize * m_size);
+    memcpy(BuffersLocationPtr(), old_buffers_location_ptr, kBuffersLocationSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_threadsize>::value,
+                  "Field type must be trivially copyable");
+    memcpy(ThreadSizePtr(), old_thread_size_ptr, kThreadSizeSize * m_size);
+    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
+    memcpy(EnableAllHelperLanesPtr(),
+           old_enable_all_helper_lanes_ptr,
+           kEnableAllHelperLanesSize * m_size);
+    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
+    memcpy(EnablePartialHelperLanesPtr(),
+           old_enable_partial_helper_lanes_ptr,
+           kEnablePartialHelperLanesSize * m_size);
 
     // Update the debug-only ponters to the arrays
 #ifndef NDEBUG
@@ -300,22 +285,18 @@ typename EventStateInfo::Id::basic_type new_cap)
     DBG_logic_op = LogicOpPtr();
     DBG_attachment = AttachmentPtr();
     DBG_blend_constant = BlendConstantPtr();
-    DBG_z_addr = ZAddrPtr();
-    DBG_h_tile_addr = HTileAddrPtr();
-    DBG_hi_z_enabled = HiZEnabledPtr();
-    DBG_hi_s_enabled = HiSEnabledPtr();
-    DBG_z_compress_enabled = ZCompressEnabledPtr();
-    DBG_stencil_compress_enabled = StencilCompressEnabledPtr();
-    DBG_compressed_z_fetch_enabled = CompressedZFetchEnabledPtr();
-    DBG_z_format = ZFormatPtr();
-    DBG_z_order = ZOrderPtr();
-    DBG_vs_late_alloc = VSLateAllocPtr();
-    DBG_dcc_enabled = DccEnabledPtr();
-    DBG_color_format = ColorFormatPtr();
-    DBG_mip0_height = Mip0HeightPtr();
-    DBG_mip0_width = Mip0WidthPtr();
-    DBG_vgpr = VgprPtr();
-    DBG_sgpr = SgprPtr();
+    DBG_lrz_enabled = LRZEnabledPtr();
+    DBG_lrz_write = LRZWritePtr();
+    DBG_lrz_dir_status = LRZDirStatusPtr();
+    DBG_lrz_dir_write = LRZDirWritePtr();
+    DBG_z_test_mode = ZTestModePtr();
+    DBG_bin_w = BinWPtr();
+    DBG_bin_h = BinHPtr();
+    DBG_render_mode = RenderModePtr();
+    DBG_buffers_location = BuffersLocationPtr();
+    DBG_thread_size = ThreadSizePtr();
+    DBG_enable_all_helper_lanes = EnableAllHelperLanesPtr();
+    DBG_enable_partial_helper_lanes = EnablePartialHelperLanesPtr();
 #endif
 }
 
@@ -371,8 +352,14 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     new (StencilOpStateBackPtr(Id(m_size))) VkStencilOpState();
     new (MinDepthBoundsPtr(Id(m_size))) float();
     new (MaxDepthBoundsPtr(Id(m_size))) float();
-    new (LogicOpEnabledPtr(Id(m_size))) bool();
-    new (LogicOpPtr(Id(m_size))) VkLogicOp();
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
+    {
+        new (LogicOpEnabledPtr(Id(m_size), attachment)) bool();
+    }
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
+    {
+        new (LogicOpPtr(Id(m_size), attachment)) VkLogicOp();
+    }
     for (uint32_t attachment = 0; attachment < 8; ++attachment)
     {
         new (AttachmentPtr(Id(m_size), attachment)) VkPipelineColorBlendAttachmentState();
@@ -381,40 +368,18 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     {
         new (BlendConstantPtr(Id(m_size), channel)) float();
     }
-    new (ZAddrPtr(Id(m_size))) uint64_t();
-    new (HTileAddrPtr(Id(m_size))) uint64_t();
-    new (HiZEnabledPtr(Id(m_size))) bool();
-    new (HiSEnabledPtr(Id(m_size))) bool();
-    new (ZCompressEnabledPtr(Id(m_size))) bool();
-    new (StencilCompressEnabledPtr(Id(m_size))) bool();
-    new (CompressedZFetchEnabledPtr(Id(m_size))) bool();
-    new (ZFormatPtr(Id(m_size))) Dive::Legacy::ZFormat();
-    new (ZOrderPtr(Id(m_size))) Dive::Legacy::ZOrder();
-    new (VSLateAllocPtr(Id(m_size))) uint16_t();
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
-    {
-        new (DccEnabledPtr(Id(m_size), attachment)) bool();
-    }
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
-    {
-        new (ColorFormatPtr(Id(m_size), attachment)) Dive::Legacy::ColorFormat();
-    }
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
-    {
-        new (Mip0HeightPtr(Id(m_size), attachment)) uint32_t();
-    }
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
-    {
-        new (Mip0WidthPtr(Id(m_size), attachment)) uint32_t();
-    }
-    for (uint32_t stage = 0; stage < Dive::kShaderStageCount; ++stage)
-    {
-        new (VgprPtr(Id(m_size), static_cast<Dive::ShaderStage>(stage))) uint16_t();
-    }
-    for (uint32_t stage = 0; stage < Dive::kShaderStageCount; ++stage)
-    {
-        new (SgprPtr(Id(m_size), static_cast<Dive::ShaderStage>(stage))) uint16_t();
-    }
+    new (LRZEnabledPtr(Id(m_size))) bool();
+    new (LRZWritePtr(Id(m_size))) bool();
+    new (LRZDirStatusPtr(Id(m_size))) a6xx_lrz_dir_status();
+    new (LRZDirWritePtr(Id(m_size))) bool();
+    new (ZTestModePtr(Id(m_size))) a6xx_ztest_mode();
+    new (BinWPtr(Id(m_size))) uint32_t();
+    new (BinHPtr(Id(m_size))) uint32_t();
+    new (RenderModePtr(Id(m_size))) a6xx_render_mode();
+    new (BuffersLocationPtr(Id(m_size))) a6xx_buffers_location();
+    new (ThreadSizePtr(Id(m_size))) a6xx_threadsize();
+    new (EnableAllHelperLanesPtr(Id(m_size))) bool();
+    new (EnablePartialHelperLanesPtr(Id(m_size))) bool();
 
     Id id(m_size);
     m_size += 1;
@@ -461,38 +426,30 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetStencilOpStateBack(other_obj.StencilOpStateBack(other_id));
     SetMinDepthBounds(other_obj.MinDepthBounds(other_id));
     SetMaxDepthBounds(other_obj.MaxDepthBounds(other_id));
-    SetLogicOpEnabled(other_obj.LogicOpEnabled(other_id));
-    SetLogicOp(other_obj.LogicOp(other_id));
+    memcpy(m_obj_ptr->LogicOpEnabledPtr(m_id),
+           other_obj.LogicOpEnabledPtr(other_id),
+           EventStateInfo::kLogicOpEnabledSize);
+    memcpy(m_obj_ptr->LogicOpPtr(m_id),
+           other_obj.LogicOpPtr(other_id),
+           EventStateInfo::kLogicOpSize);
     memcpy(m_obj_ptr->AttachmentPtr(m_id),
            other_obj.AttachmentPtr(other_id),
            EventStateInfo::kAttachmentSize);
     memcpy(m_obj_ptr->BlendConstantPtr(m_id),
            other_obj.BlendConstantPtr(other_id),
            EventStateInfo::kBlendConstantSize);
-    SetZAddr(other_obj.ZAddr(other_id));
-    SetHTileAddr(other_obj.HTileAddr(other_id));
-    SetHiZEnabled(other_obj.HiZEnabled(other_id));
-    SetHiSEnabled(other_obj.HiSEnabled(other_id));
-    SetZCompressEnabled(other_obj.ZCompressEnabled(other_id));
-    SetStencilCompressEnabled(other_obj.StencilCompressEnabled(other_id));
-    SetCompressedZFetchEnabled(other_obj.CompressedZFetchEnabled(other_id));
-    SetZFormat(other_obj.ZFormat(other_id));
-    SetZOrder(other_obj.ZOrder(other_id));
-    SetVSLateAlloc(other_obj.VSLateAlloc(other_id));
-    memcpy(m_obj_ptr->DccEnabledPtr(m_id),
-           other_obj.DccEnabledPtr(other_id),
-           EventStateInfo::kDccEnabledSize);
-    memcpy(m_obj_ptr->ColorFormatPtr(m_id),
-           other_obj.ColorFormatPtr(other_id),
-           EventStateInfo::kColorFormatSize);
-    memcpy(m_obj_ptr->Mip0HeightPtr(m_id),
-           other_obj.Mip0HeightPtr(other_id),
-           EventStateInfo::kMip0HeightSize);
-    memcpy(m_obj_ptr->Mip0WidthPtr(m_id),
-           other_obj.Mip0WidthPtr(other_id),
-           EventStateInfo::kMip0WidthSize);
-    memcpy(m_obj_ptr->VgprPtr(m_id), other_obj.VgprPtr(other_id), EventStateInfo::kVgprSize);
-    memcpy(m_obj_ptr->SgprPtr(m_id), other_obj.SgprPtr(other_id), EventStateInfo::kSgprSize);
+    SetLRZEnabled(other_obj.LRZEnabled(other_id));
+    SetLRZWrite(other_obj.LRZWrite(other_id));
+    SetLRZDirStatus(other_obj.LRZDirStatus(other_id));
+    SetLRZDirWrite(other_obj.LRZDirWrite(other_id));
+    SetZTestMode(other_obj.ZTestMode(other_id));
+    SetBinW(other_obj.BinW(other_id));
+    SetBinH(other_obj.BinH(other_id));
+    SetRenderMode(other_obj.RenderMode(other_id));
+    SetBuffersLocation(other_obj.BuffersLocation(other_id));
+    SetThreadSize(other_obj.ThreadSize(other_id));
+    SetEnableAllHelperLanes(other_obj.EnableAllHelperLanes(other_id));
+    SetEnablePartialHelperLanes(other_obj.EnablePartialHelperLanes(other_id));
 }
 
 template<>
@@ -654,14 +611,20 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         other.SetMaxDepthBounds(val);
     }
     {
-        auto val = LogicOpEnabled();
-        SetLogicOpEnabled(other.LogicOpEnabled());
-        other.SetLogicOpEnabled(val);
+        bool  val[EventStateInfo::kLogicOpEnabledArrayCount];
+        auto *ptr = m_obj_ptr->LogicOpEnabledPtr(m_id);
+        auto *other_ptr = other.m_obj_ptr->LogicOpEnabledPtr(other.m_id);
+        memcpy(val, ptr, EventStateInfo::kLogicOpEnabledSize);
+        memcpy(ptr, other_ptr, EventStateInfo::kLogicOpEnabledSize);
+        memcpy(other_ptr, val, EventStateInfo::kLogicOpEnabledSize);
     }
     {
-        auto val = LogicOp();
-        SetLogicOp(other.LogicOp());
-        other.SetLogicOp(val);
+        VkLogicOp val[EventStateInfo::kLogicOpArrayCount];
+        auto     *ptr = m_obj_ptr->LogicOpPtr(m_id);
+        auto     *other_ptr = other.m_obj_ptr->LogicOpPtr(other.m_id);
+        memcpy(val, ptr, EventStateInfo::kLogicOpSize);
+        memcpy(ptr, other_ptr, EventStateInfo::kLogicOpSize);
+        memcpy(other_ptr, val, EventStateInfo::kLogicOpSize);
     }
     {
         VkPipelineColorBlendAttachmentState val[EventStateInfo::kAttachmentArrayCount];
@@ -680,102 +643,64 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         memcpy(other_ptr, val, EventStateInfo::kBlendConstantSize);
     }
     {
-        auto val = ZAddr();
-        SetZAddr(other.ZAddr());
-        other.SetZAddr(val);
+        auto val = LRZEnabled();
+        SetLRZEnabled(other.LRZEnabled());
+        other.SetLRZEnabled(val);
     }
     {
-        auto val = HTileAddr();
-        SetHTileAddr(other.HTileAddr());
-        other.SetHTileAddr(val);
+        auto val = LRZWrite();
+        SetLRZWrite(other.LRZWrite());
+        other.SetLRZWrite(val);
     }
     {
-        auto val = HiZEnabled();
-        SetHiZEnabled(other.HiZEnabled());
-        other.SetHiZEnabled(val);
+        auto val = LRZDirStatus();
+        SetLRZDirStatus(other.LRZDirStatus());
+        other.SetLRZDirStatus(val);
     }
     {
-        auto val = HiSEnabled();
-        SetHiSEnabled(other.HiSEnabled());
-        other.SetHiSEnabled(val);
+        auto val = LRZDirWrite();
+        SetLRZDirWrite(other.LRZDirWrite());
+        other.SetLRZDirWrite(val);
     }
     {
-        auto val = ZCompressEnabled();
-        SetZCompressEnabled(other.ZCompressEnabled());
-        other.SetZCompressEnabled(val);
+        auto val = ZTestMode();
+        SetZTestMode(other.ZTestMode());
+        other.SetZTestMode(val);
     }
     {
-        auto val = StencilCompressEnabled();
-        SetStencilCompressEnabled(other.StencilCompressEnabled());
-        other.SetStencilCompressEnabled(val);
+        auto val = BinW();
+        SetBinW(other.BinW());
+        other.SetBinW(val);
     }
     {
-        auto val = CompressedZFetchEnabled();
-        SetCompressedZFetchEnabled(other.CompressedZFetchEnabled());
-        other.SetCompressedZFetchEnabled(val);
+        auto val = BinH();
+        SetBinH(other.BinH());
+        other.SetBinH(val);
     }
     {
-        auto val = ZFormat();
-        SetZFormat(other.ZFormat());
-        other.SetZFormat(val);
+        auto val = RenderMode();
+        SetRenderMode(other.RenderMode());
+        other.SetRenderMode(val);
     }
     {
-        auto val = ZOrder();
-        SetZOrder(other.ZOrder());
-        other.SetZOrder(val);
+        auto val = BuffersLocation();
+        SetBuffersLocation(other.BuffersLocation());
+        other.SetBuffersLocation(val);
     }
     {
-        auto val = VSLateAlloc();
-        SetVSLateAlloc(other.VSLateAlloc());
-        other.SetVSLateAlloc(val);
+        auto val = ThreadSize();
+        SetThreadSize(other.ThreadSize());
+        other.SetThreadSize(val);
     }
     {
-        bool  val[EventStateInfo::kDccEnabledArrayCount];
-        auto *ptr = m_obj_ptr->DccEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->DccEnabledPtr(other.m_id);
-        memcpy(val, ptr, EventStateInfo::kDccEnabledSize);
-        memcpy(ptr, other_ptr, EventStateInfo::kDccEnabledSize);
-        memcpy(other_ptr, val, EventStateInfo::kDccEnabledSize);
+        auto val = EnableAllHelperLanes();
+        SetEnableAllHelperLanes(other.EnableAllHelperLanes());
+        other.SetEnableAllHelperLanes(val);
     }
     {
-        Dive::Legacy::ColorFormat val[EventStateInfo::kColorFormatArrayCount];
-        auto                     *ptr = m_obj_ptr->ColorFormatPtr(m_id);
-        auto                     *other_ptr = other.m_obj_ptr->ColorFormatPtr(other.m_id);
-        memcpy(val, ptr, EventStateInfo::kColorFormatSize);
-        memcpy(ptr, other_ptr, EventStateInfo::kColorFormatSize);
-        memcpy(other_ptr, val, EventStateInfo::kColorFormatSize);
-    }
-    {
-        uint32_t val[EventStateInfo::kMip0HeightArrayCount];
-        auto    *ptr = m_obj_ptr->Mip0HeightPtr(m_id);
-        auto    *other_ptr = other.m_obj_ptr->Mip0HeightPtr(other.m_id);
-        memcpy(val, ptr, EventStateInfo::kMip0HeightSize);
-        memcpy(ptr, other_ptr, EventStateInfo::kMip0HeightSize);
-        memcpy(other_ptr, val, EventStateInfo::kMip0HeightSize);
-    }
-    {
-        uint32_t val[EventStateInfo::kMip0WidthArrayCount];
-        auto    *ptr = m_obj_ptr->Mip0WidthPtr(m_id);
-        auto    *other_ptr = other.m_obj_ptr->Mip0WidthPtr(other.m_id);
-        memcpy(val, ptr, EventStateInfo::kMip0WidthSize);
-        memcpy(ptr, other_ptr, EventStateInfo::kMip0WidthSize);
-        memcpy(other_ptr, val, EventStateInfo::kMip0WidthSize);
-    }
-    {
-        uint16_t val[EventStateInfo::kVgprArrayCount];
-        auto    *ptr = m_obj_ptr->VgprPtr(m_id);
-        auto    *other_ptr = other.m_obj_ptr->VgprPtr(other.m_id);
-        memcpy(val, ptr, EventStateInfo::kVgprSize);
-        memcpy(ptr, other_ptr, EventStateInfo::kVgprSize);
-        memcpy(other_ptr, val, EventStateInfo::kVgprSize);
-    }
-    {
-        uint16_t val[EventStateInfo::kSgprArrayCount];
-        auto    *ptr = m_obj_ptr->SgprPtr(m_id);
-        auto    *other_ptr = other.m_obj_ptr->SgprPtr(other.m_id);
-        memcpy(val, ptr, EventStateInfo::kSgprSize);
-        memcpy(ptr, other_ptr, EventStateInfo::kSgprSize);
-        memcpy(other_ptr, val, EventStateInfo::kSgprSize);
+        auto val = EnablePartialHelperLanes();
+        SetEnablePartialHelperLanes(other.EnablePartialHelperLanes());
+        other.SetEnablePartialHelperLanes(val);
     }
 }
 

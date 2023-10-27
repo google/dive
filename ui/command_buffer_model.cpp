@@ -26,8 +26,8 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
 static const char *CommandBufferColumnNames[] = {
-    "DE Command Buffer",
-    "CE Command Buffer",
+    "Command Buffer",
+    "IB Level",
     "Address",
 };
 
@@ -75,6 +75,14 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     if (!index.isValid())
         return QVariant();
 
+    if (role == Qt::TextAlignmentRole)
+    {
+        if (index.column() == CommandBufferModel::kColumnIbLevel)
+            return int(Qt::AlignHCenter | Qt::AlignVCenter);
+        else
+            return int(Qt::AlignLeft | Qt::AlignVCenter);
+    }
+
     if (role != Qt::DisplayRole)
         return QVariant();
 
@@ -82,6 +90,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
     // Column 2: Address (will be swapped via moveSection() to be visually the 0th column)
+    // This forces the expand/collapse icon to be part of the pm4 column
     if (index.column() == CommandBufferModel::kColumnAddress)
     {
         if (node_type == Dive::NodeType::kPacketNode)
@@ -96,27 +105,24 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
             return QVariant();
         }
     }
-    int target_column = 0;
-    switch (node_type)
+    else if (index.column() == CommandBufferModel::kColumnIbLevel)
     {
-    case Dive::NodeType::kPacketNode:
-    {
-        target_column = m_command_hierarchy.GetPacketNodeIsCe(node_index) ? 1 : 0;
-        break;
+        if (node_type == Dive::NodeType::kPacketNode)
+        {
+            uint64_t           ib_level = m_command_hierarchy.GetPacketNodeIbLevel(node_index);
+            std::ostringstream ib_level_string_stream;
+            ib_level_string_stream << ib_level;
+            return QString::fromStdString(ib_level_string_stream.str());
+        }
+        else
+        {
+            return QVariant();
+        }
     }
-    case Dive::NodeType::kRegNode:
-    case Dive::NodeType::kFieldNode:
+    else  // if (index.column() == CommandBufferModel::kColumnPm4)
     {
-        target_column = m_command_hierarchy.GetRegFieldNodeIsCe(node_index) ? 1 : 0;
-        break;
+        return QString(m_command_hierarchy.GetNodeDesc(node_index));
     }
-    default: DIVE_ASSERT(false);
-    };
-
-    // Column 0 for DE packets, and column 1 is for CE packets
-    if (index.column() != target_column)
-        return QVariant();
-    return QString(m_command_hierarchy.GetNodeDesc(node_index));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -136,6 +142,14 @@ QVariant CommandBufferModel::headerData(int section, Qt::Orientation orientation
         if (section < CommandBufferModel::kColumnCount)
             return QVariant(tr(CommandBufferColumnNames[section]));
     }
+    else if (role == Qt::TextAlignmentRole)
+    {
+        if (section == CommandBufferModel::kColumnPm4)
+            return int(Qt::AlignHCenter | Qt::AlignVCenter);
+        else
+            return int(Qt::AlignLeft | Qt::AlignVCenter);
+    }
+
     return QVariant();
 }
 
@@ -155,7 +169,18 @@ QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &pa
     }
 
     uint64_t parent_node_index = (uint64_t)(parent.internalPointer());
-    uint64_t child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, row);
+
+    // Children order is the "normal" children followed by the "shared" children
+    uint64_t child_node_index = UINT64_MAX;
+    if ((uint32_t)row < m_topology_ptr->GetNumChildren(parent_node_index))
+    {
+        child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, row);
+    }
+    else if (m_topology_ptr->GetNumSharedChildren(parent_node_index) > 0)
+    {
+        uint32_t index = row - m_topology_ptr->GetNumChildren(parent_node_index);
+        child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, index);
+    }
     if (child_node_index != UINT64_MAX)
         return createIndex(row, column, (void *)child_node_index);
     else
@@ -169,26 +194,9 @@ QModelIndex CommandBufferModel::parent(const QModelIndex &index) const
         return QModelIndex();
 
     uint64_t child_node_index = (uint64_t)(index.internalPointer());
-
-    // Root item. No parent.
-    if (m_command_hierarchy.GetNodeType(child_node_index) == Dive::NodeType::kPacketNode)
-        return QModelIndex();
-
-    uint64_t row;
-    uint64_t parent_node_index = m_topology_ptr->GetParentNodeIndex(child_node_index);
-
-    // Packet nodes serve as root nodes in this model, and packet nodes in particular are "shared"
-    // nodes with many parents. So use a map to determine which child this packet node with respect
-    // to the selected node.
-    if (m_command_hierarchy.GetNodeType(parent_node_index) != Dive::NodeType::kPacketNode)
-        row = m_topology_ptr->GetChildIndex(parent_node_index);
-    else
-    {
-        auto it = m_node_index_to_row_map.find(parent_node_index);
-        DIVE_ASSERT(it != m_node_index_to_row_map.end());
-        row = it->second;
-    }
-    return createIndex(row, 0, (void *)parent_node_index);
+    auto     it = m_node_index_to_parent_map.find(child_node_index);
+    DIVE_ASSERT(it != m_node_index_to_parent_map.end());
+    return it->second;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -206,8 +214,12 @@ int CommandBufferModel::rowCount(const QModelIndex &parent) const
         return num_children;
     }
 
+    // Return sum of shared children + normal children
+    //  Normal Children: The packet fields
+    //  Shared Children: Additional packets (e.g. for packets from INDIRECT_BUFFERS packet)
     uint64_t parent_node_index = (uint64_t)(parent.internalPointer());
-    uint64_t num_children = m_topology_ptr->GetNumChildren(parent_node_index);
+    uint64_t num_children = m_topology_ptr->GetNumChildren(parent_node_index) +
+                            m_topology_ptr->GetNumSharedChildren(parent_node_index);
     return num_children;
 }
 
@@ -220,17 +232,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 
     emit beginResetModel();
     m_selected_node_index = selected_node_index;
-
-    // Keep track of the child-index for each packet node;
-    uint64_t num_children = m_topology_ptr->GetNumSharedChildren(m_selected_node_index);
-    for (uint64_t child = 0; child < num_children; ++child)
-    {
-        uint64_t child_node_index = m_topology_ptr->GetSharedChildNodeIndex(m_selected_node_index,
-                                                                            child);
-        DIVE_ASSERT(m_command_hierarchy.GetNodeType(child_node_index) ==
-                    Dive::NodeType::kPacketNode);
-        m_node_index_to_row_map[child_node_index] = child;
-    }
+    CreateNodeToParentMap(UINT64_MAX, selected_node_index);
     emit endResetModel();
 }
 
@@ -264,4 +266,44 @@ QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QV
     }
 
     return result;
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index)
+{
+    // Because shared (i.e. packet) nodes can have multiple parents, a map is created to match
+    // those packets to the parent as seen during a specific traversal
+
+    // Recursive function to traverse through all shared nodes in the tree
+    uint64_t num_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
+    for (uint64_t child = 0; child < num_children; ++child)
+    {
+        uint64_t    child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
+                                                                            child);
+        QModelIndex model_index = QModelIndex();
+        if (parent_row != UINT64_MAX)
+            model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+        m_node_index_to_parent_map[child_node_index] = model_index;
+
+        CreateNodeToParentMap(child, child_node_index);
+    }
+
+    // To keep things simple, also include non-shared nodes in this mapping
+    // This way the parent() function will be a simple map lookup regardless of packet type
+    // Also, check parent_row against UINT64_MAX, since only the shared children of the root node
+    // should be considered
+    if (parent_row != UINT64_MAX)
+    {
+        num_children = m_topology_ptr->GetNumChildren(parent_node_index);
+        for (uint64_t child = 0; child < num_children; ++child)
+        {
+            uint64_t child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, child);
+            QModelIndex model_index = QModelIndex();
+            if (parent_row != UINT64_MAX)
+                model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+            m_node_index_to_parent_map[child_node_index] = model_index;
+
+            CreateNodeToParentMap(child, child_node_index);
+        }
+    }
 }

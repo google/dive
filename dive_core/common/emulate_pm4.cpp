@@ -947,6 +947,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
         IndirectBufferInfo call_chain_ib_info;
         call_chain_ib_info.m_va_addr = cur_ib_level->m_cur_va;
         call_chain_ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
+        call_chain_ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
         call_chain_ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
         if (!callbacks.OnIbStart(emu_state->m_submit_index,
                                  emu_state->m_ib_index,
@@ -993,16 +994,18 @@ bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &call
 {
     EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
 
+    emu_state->m_top_of_stack = (EmulateState::IbLevel)(emu_state->m_top_of_stack - 1);
+
     IndirectBufferInfo ib_info;
     ib_info.m_va_addr = cur_ib_level->m_cur_va;
     ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
+    ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
     ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
 
     // End-Ib Callback
     if (!callbacks.OnIbEnd(emu_state->m_submit_index, emu_state->m_ib_index, ib_info))
         return false;
 
-    emu_state->m_top_of_stack = (EmulateState::IbLevel)(emu_state->m_top_of_stack - 1);
     return true;
 }
 

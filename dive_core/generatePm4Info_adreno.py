@@ -54,7 +54,8 @@ struct RegField {
     uint32_t m_type         : 8;  // ValueType enum
     uint32_t m_enum_handle  : 8;
     uint32_t m_shift        : 6;
-    uint32_t                : 10;
+    uint32_t m_shr          : 5; // used to shift left to extract the "original" value, range: [0, 31]
+    uint32_t                : 5;
     uint64_t m_mask;
     const char* m_name;
 };
@@ -91,6 +92,7 @@ void Pm4InfoInit();
 const char *GetOpCodeString(uint32_t op_code);
 const RegInfo *GetRegInfo(uint32_t reg);
 const RegInfo *GetRegByName(const char *);
+const RegField *GetRegFieldByName(const char *name, const RegInfo *info);
 uint32_t GetRegOffsetByName(const char *name);
 const char *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
@@ -102,6 +104,7 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
   outputHeader(pm4_info_file)
   pm4_info_file.write("#include \"%s\"\n" % (pm4_info_header_file_name))
   pm4_info_file.writelines("""
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <vector>
@@ -227,7 +230,9 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
             raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[bitfield_type])
           enum_handle = str(enum_index_dict[bitfield_type])
 
-      # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
+      shr = 0
+      if 'shr' in bitfield.attrib:
+        shr = int(bitfield.attrib['shr'])
       # TODO: Store the align, and variants bits. The 'type' field in particular should reference
       #  an enum value when appropriate
 
@@ -244,10 +249,11 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
       else:
         raise Exception("Encountered a bitfield with no pos/low/high!")
 
-      pm4_info_file.write("    { %s, %s, %d, 0x%x, \"%s\" }, "  % (
+      pm4_info_file.write("    { %s, %s, %d, %d, 0x%x, \"%s\" }, "  % (
           getTypeEnumString(bitfield_type),
           enum_handle,
           shift,
+          shr,
           mask,
           name
         ))
@@ -585,6 +591,21 @@ const RegInfo *GetRegByName(const char *name)
     if (i == g_sRegNameToIndex.end())
         return nullptr;
     return GetRegInfo(i->second);
+}
+
+const RegField *GetRegFieldByName(const char *name, const RegInfo *info)
+{
+    if (info == nullptr)
+        return nullptr;
+
+    const std::vector<RegField> &field = info->m_fields;
+    auto i = std::find_if(field.begin(), field.end(), [&](const RegField& f) {
+        return strcmp(name, f.m_name) == 0;
+    });
+
+    if (i == info->m_fields.end())
+        return nullptr;
+    return &(*i);
 }
 
 uint32_t GetRegOffsetByName(const char *name)

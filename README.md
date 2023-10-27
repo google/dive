@@ -93,8 +93,49 @@ And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run
 scripts\build_android.bat
 ```
 
-
-
 It will build both debug and release version of the libraries under `build_android` folder.
 
+### CLI Tool for capture and cleanup
+#### Capture with command line tool for Android applications
+Currently the command line tool supports capture OpenXR and Vulkan applications on Android. To Get a capture, please refer to the above sections to checkout the code and build the Android libraries. In addition to that, you'll need to build and install the CLI tool.
 
+On Linux, run: 
+```
+./scripts/build_android.sh
+```
+
+```
+mkdir build
+cd build
+cmake -GNinja ..
+ninja
+ninja install
+```
+
+And the libraries and CLI will be installed under the `install` folder.
+Run `./dive_client_cli  --help` for help.
+
+You can find out the device serial by run `adb devices` or by `./dive_client_cli --command list_device`
+
+Examples:
+ - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
+ ```
+ ./dive_client_cli --device  9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --capture_path "~/captures"
+ ```
+
+ - Install the dependencies on device and start the package
+ ```
+ ./dive_client_cli --device  9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --capture_path "~/captures"
+ ```
+Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
+
+The capture files will be saved at the path specified with the `--capture_path` option or the current directory if this option not specified. 
+
+#### Cleanup
+
+The command line tool will clean up the device and application automatically at exit. If somehow it crashed and left the device in a uncleaned state, you can run following command to clean it up
+
+```
+./dive_client_cli --command cleanup --package de.saschawillems.vulkanBloom --device 9A221FFAZ004TL
+```
+This will remove all the libraries installed and the settings that had been setup by Dive for the package.

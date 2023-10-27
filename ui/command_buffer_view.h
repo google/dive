@@ -33,9 +33,9 @@ class CommandBufferViewDelegate : public QStyledItemDelegate
 public:
     CommandBufferViewDelegate(const CommandBufferView *command_buffer_view_ptr);
 
-    void paint(QPainter *                  painter,
+    void paint(QPainter                   *painter,
                const QStyleOptionViewItem &option,
-               const QModelIndex &         index) const override;
+               const QModelIndex          &index) const override;
 
 private:
     const CommandBufferView *m_command_buffer_view_ptr;
@@ -48,8 +48,7 @@ class CommandBufferView : public DiveTreeView
 
 public:
     CommandBufferView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent = nullptr);
-    virtual bool RenderBranch(const QModelIndex &index) const override;
-    void         Reset();
+    void Reset();
 
 public slots:
     // Search CommandBufferView by input text

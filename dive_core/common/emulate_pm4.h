@@ -41,6 +41,7 @@ struct IndirectBufferInfo
 {
     uint64_t m_va_addr;
     uint32_t m_size_in_dwords;
+    uint8_t  m_ib_level;
 
     // Set to true to avoid emulating this IB, probably because it was not captured
     bool m_skip;

@@ -33,8 +33,8 @@ class CommandBufferModel : public QAbstractItemModel
 public:
     enum ColumnType : int
     {
-        kColumnDE,
-        kColumnCE,
+        kColumnPm4,
+        kColumnIbLevel,  // Swapped to second column in code.
         kColumnAddress,  // Swapped to first column in code.
         kColumnCount
     };
@@ -65,10 +65,9 @@ public slots:
     void OnSelectionChanged(const QModelIndex &index);
 
 private:
-    void                          AddPackets(uint64_t node_index);
-    void                          AddMarkerPackets(uint64_t marker_node_index);
-    uint64_t                      m_selected_node_index = UINT64_MAX;
-    std::map<uint64_t, uint64_t>  m_node_index_to_row_map;
-    const Dive::CommandHierarchy &m_command_hierarchy;
-    const Dive::Topology         *m_topology_ptr = nullptr;
+    void     CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index);
+    uint64_t m_selected_node_index = UINT64_MAX;
+    std::map<uint64_t, QModelIndex> m_node_index_to_parent_map;
+    const Dive::CommandHierarchy   &m_command_hierarchy;
+    const Dive::Topology           *m_topology_ptr = nullptr;
 };

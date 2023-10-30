@@ -735,6 +735,8 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
         IbType   ib_type = (type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
                                                                                IbType::kCall;
+        emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
+        emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
         if (!QueueIB(ib_addr, ib_packet.SIZE, false, ib_type, emu_state_ptr))
         {
             return false;
@@ -762,6 +764,8 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
 
         uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
                            (uint64_t)packet.bitfields0.ADDR_LO;
+        emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
+        emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
         if (!QueueIB(ib_addr,
                      packet.bitfields2.DWORDS,
                      false,
@@ -794,6 +798,8 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         uint32_t array_size = packet_size / sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
         DIVE_ASSERT((packet_size % sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT)) == 0);
         bool ib_queued = false;
+        emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
+        emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
         for (uint32_t i = 0; i < array_size; i++)
         {
             if (packet.ARRAY[i].bitfields0.DISABLE_ALL_GROUPS)

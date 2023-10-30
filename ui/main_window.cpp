@@ -578,9 +578,8 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - begin)
                            .count();
-#ifndef NDEBUG
-    DIVE_TRACE("Time used to load the capture is %f seconds.", (time_used_to_load_ms / 1000.0));
-#endif
+
+    DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.", (time_used_to_load_ms / 1000.0));
 
     FileLoaded();
 

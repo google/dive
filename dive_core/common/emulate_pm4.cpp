@@ -716,12 +716,18 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     Pm4Type7Header type7_header;
     type7_header.u32All = header;
 
+    // Note: CP_COND_INDIRECT_BUFFER_PFE is not parsed here because it isn't used by Turnip.
+    // When it shows up in production driver captures, the IB addr and size values are all
+    // garbage. Not sure what it's used for at this point.
+    if (type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE)
+        DIVE_LOG("Packet ignored: CP_COND_INDIRECT_BUFFER_PFE\n");
+
     // Deal with calls and chains
     if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
                                     type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
-                                    type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
-                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE))
+                                    type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN))
     {
+
         PM4_CP_INDIRECT_BUFFER ib_packet;
         if (!mem_manager.CopyMemory(&ib_packet,
                                     emu_state_ptr->m_submit_index,

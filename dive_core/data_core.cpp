@@ -631,41 +631,14 @@ void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_
         rb_mrt_blend_control.bitfields.ALPHA_BLEND_OPCODE);
         event_state_it->SetAttachment(rt_id, attach);
 
+        const bool logic_op_enabled = (rb_mrt_control.bitfields.ROP_ENABLE == 1);
+        // Be careful!!! Here we assume the enum `VkLogicOp` matches exactly `a3xx_rop_code`
+        const VkLogicOp op = static_cast<VkLogicOp>(rb_mrt_control.bitfields.ROP_CODE);
+        event_state_it->SetLogicOpEnabled(rt_id, logic_op_enabled);
+        event_state_it->SetLogicOp(rt_id, op);
+
         ++rt_id;
     }
-
-    // TODO(wangra): rop code should be set per MR
-    // if (m_state_tracker.IsContextStateSet(mmCB_COLOR_CONTROL))
-    //{
-    //    CB_COLOR_CONTROL cb_color_control;
-    //    cb_color_control.u32All = m_state_tracker.GetContextRegData(mmCB_COLOR_CONTROL);
-
-    //    VkLogicOp op = VK_LOGIC_OP_MAX_ENUM;
-    //    switch (cb_color_control.bits.ROP3)
-    //    {
-    //    case 0x00: op = VK_LOGIC_OP_CLEAR; break;
-    //    case 0x88: op = VK_LOGIC_OP_AND; break;
-    //    case 0x44: op = VK_LOGIC_OP_AND_REVERSE; break;
-    //    case 0xCC: op = VK_LOGIC_OP_COPY; break;
-    //    case 0x22: op = VK_LOGIC_OP_AND_INVERTED; break;
-    //    case 0xAA: op = VK_LOGIC_OP_NO_OP; break;
-    //    case 0x66: op = VK_LOGIC_OP_XOR; break;
-    //    case 0xEE: op = VK_LOGIC_OP_OR; break;
-    //    case 0x11: op = VK_LOGIC_OP_NOR; break;
-    //    case 0x99: op = VK_LOGIC_OP_EQUIVALENT; break;
-    //    case 0x55: op = VK_LOGIC_OP_INVERT; break;
-    //    case 0xDD: op = VK_LOGIC_OP_OR_REVERSE; break;
-    //    case 0x33: op = VK_LOGIC_OP_COPY_INVERTED; break;
-    //    case 0xBB: op = VK_LOGIC_OP_OR_INVERTED; break;
-    //    case 0x77: op = VK_LOGIC_OP_NAND; break;
-    //    case 0xFF: op = VK_LOGIC_OP_SET; break;
-    //    };
-    //    event_state_it->SetLogicOp(op);
-
-    //    // Setting op to COPY is equivalent to disabling the logic-op, since it's the default
-    //    // behavior. In fact, from PM4 perspective, the 2 are indistinguishable
-    //    event_state_it->SetLogicOpEnabled(op != VK_LOGIC_OP_COPY);
-    //}
 
     // Assumption: The ICD sets all of the color channels together. So it is enough
     // to check whether just 1 of them is set or not. It's all or nothing.
@@ -692,6 +665,78 @@ void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_
 }
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator event_state_it) {}
+void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator event_state_it)
+{
+    // LRZ related
+    uint32_t gras_lrz_cntl_reg_offset = GetRegOffsetByName("GRAS_LRZ_CNTL");
+    if (m_state_tracker.IsRegSet(gras_lrz_cntl_reg_offset))
+    {
+        GRAS_LRZ_CNTL gras_lrz_cntl;
+        gras_lrz_cntl.u32All = m_state_tracker.GetRegValue(gras_lrz_cntl_reg_offset);
+        const auto                bitfields = gras_lrz_cntl.bitfields;
+        const bool                lrz_enabled = bitfields.ENABLE;
+        const bool                lrz_write = bitfields.LRZ_WRITE;
+        const a6xx_lrz_dir_status lrz_dir_status = bitfields.DIR;
+        const bool                lrz_dir_write = bitfields.DIR_WRITE;
+
+        event_state_it->SetLRZEnabled(lrz_enabled);
+        if (lrz_enabled)
+        {
+            event_state_it->SetLRZWrite(lrz_write);
+            event_state_it->SetLRZDirStatus(lrz_dir_status);
+            event_state_it->SetLRZDirWrite(lrz_dir_write);
+        }
+    }
+
+    uint32_t gras_su_depth_plane_cntl_reg_offset = GetRegOffsetByName("GRAS_SU_DEPTH_PLANE_CNTL");
+    if (m_state_tracker.IsRegSet(gras_su_depth_plane_cntl_reg_offset))
+    {
+        GRAS_SU_DEPTH_PLANE_CNTL gras_su_depth_plane_cntl;
+        gras_su_depth_plane_cntl.u32All = m_state_tracker.GetRegValue(
+        gras_su_depth_plane_cntl_reg_offset);
+        a6xx_ztest_mode ztest_mode = gras_su_depth_plane_cntl.bitfields.Z_MODE;
+        event_state_it->SetZTestMode(ztest_mode);
+    }
+
+    // binning related
+    uint32_t gras_bin_cntl_reg_offset = GetRegOffsetByName("GRAS_BIN_CONTROL");
+    if (m_state_tracker.IsRegSet(gras_bin_cntl_reg_offset))
+    {
+        const RegInfo  *reg_info = GetRegInfo(gras_bin_cntl_reg_offset);
+        const RegField *reg_field_w = GetRegFieldByName("BINW", reg_info);
+        DIVE_ASSERT(reg_field_w != nullptr);
+        const RegField *reg_field_h = GetRegFieldByName("BINH", reg_info);
+        DIVE_ASSERT(reg_field_h != nullptr);
+        GRAS_BIN_CONTROL gras_bin_cntl;
+        gras_bin_cntl.u32All = m_state_tracker.GetRegValue(gras_bin_cntl_reg_offset);
+        const auto             bitfields = gras_bin_cntl.bitfields;
+        const uint32_t         binw = bitfields.BINW << reg_field_w->m_shr;
+        const uint32_t         binh = bitfields.BINH << reg_field_h->m_shr;
+        const a6xx_render_mode render_mode = bitfields.RENDER_MODE;
+        // TODO(wangra): this is only available on a6xx, should disable this on a7xx captures
+        const a6xx_buffers_location buffers_location = bitfields.BUFFERS_LOCATION;
+
+        event_state_it->SetBinW(binw);
+        event_state_it->SetBinH(binh);
+        event_state_it->SetRenderMode(render_mode);
+        event_state_it->SetBuffersLocation(buffers_location);
+    }
+
+    // helper lane related
+    uint32_t sp_fs_ctrl_reg_offset = GetRegOffsetByName("SP_FS_CTRL_REG0");
+    if (m_state_tracker.IsRegSet(sp_fs_ctrl_reg_offset))
+    {
+        SP_FS_CTRL_REG0 sp_fs_ctrl;
+        sp_fs_ctrl.u32All = m_state_tracker.GetRegValue(sp_fs_ctrl_reg_offset);
+        const auto            bitfields = sp_fs_ctrl.bitfields;
+        const a6xx_threadsize thread_size = bitfields.THREADSIZE;
+        const bool            enable_all_helper_lanes = bitfields.LODPIXMASK;
+        const bool            enable_partial_helper_lanes = bitfields.PIXLODENABLE;
+
+        event_state_it->SetThreadSize(thread_size);
+        event_state_it->SetEnableAllHelperLanes(enable_all_helper_lanes);
+        event_state_it->SetEnablePartialHelperLanes(enable_partial_helper_lanes);
+    }
+}
 
 }  // namespace Dive

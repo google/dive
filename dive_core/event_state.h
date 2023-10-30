@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "adreno.h"
 #include "common.h"
 #include "dive_core/common/gpudefs.h"
 #include "info_id.h"
@@ -288,6 +289,258 @@ protected:
     Id         m_id;
 };
 
+template<typename CONFIG> class EventStateInfoLogicOpEnabledArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
+    using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
+    EventStateInfoLogicOpEnabledArray() = default;
+    EventStateInfoLogicOpEnabledArray(const EventStateInfoLogicOpEnabledArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoLogicOpEnabledArray(SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id   id() const { return m_id; }
+    SOA& obj() const { return *m_obj_ptr; }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD LogicOpEnabled: Whether to apply Logical Operations
+
+    // `Get(uint32_t attachment)` returns the value of the LogicOpEnabled field of the referenced
+    // object
+    inline bool Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->LogicOpEnabled(m_id, attachment);
+    }
+
+    // `Set(value)` sets the LogicOpEnabled field of the referenced object
+    inline const LogicOpEnabledArray& Set(uint32_t attachment, bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetLogicOpEnabled(m_id, attachment, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsLogicOpEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsLogicOpEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetLogicOpEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpEnabledName();
+    }
+
+    inline const char* GetLogicOpEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpEnabledDescription();
+    }
+
+protected:
+    SOA* m_obj_ptr = nullptr;
+    Id   m_id;
+};
+
+template<typename CONFIG> class EventStateInfoLogicOpEnabledConstArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
+    using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
+    EventStateInfoLogicOpEnabledConstArray() = default;
+    EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledArray<CONFIG>& other) :
+        m_obj_ptr(&other.obj()),
+        m_id(other.id())
+    {
+    }
+    EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledConstArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoLogicOpEnabledConstArray(const SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id         id() const { return m_id; }
+    const SOA& obj() const { return *m_obj_ptr; }
+    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD LogicOpEnabled: Whether to apply Logical Operations
+
+    // `Get(uint32_t attachment)` returns the value of the LogicOpEnabled field of the referenced
+    // object
+    inline bool Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->LogicOpEnabled(m_id, attachment);
+    }
+
+    inline bool IsLogicOpEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsLogicOpEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetLogicOpEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpEnabledName();
+    }
+
+    inline const char* GetLogicOpEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpEnabledDescription();
+    }
+
+protected:
+    const SOA* m_obj_ptr = nullptr;
+    Id         m_id;
+};
+
+template<typename CONFIG> class EventStateInfoLogicOpArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using LogicOpArray = typename CONFIG::LogicOpArray;
+    using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
+    EventStateInfoLogicOpArray() = default;
+    EventStateInfoLogicOpArray(const EventStateInfoLogicOpArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoLogicOpArray(SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id   id() const { return m_id; }
+    SOA& obj() const { return *m_obj_ptr; }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD LogicOp: Which logical operation to apply
+
+    // `Get(uint32_t attachment)` returns the value of the LogicOp field of the referenced object
+    inline VkLogicOp Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->LogicOp(m_id, attachment);
+    }
+
+    // `Set(value)` sets the LogicOp field of the referenced object
+    inline const LogicOpArray& Set(uint32_t attachment, VkLogicOp value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetLogicOp(m_id, attachment, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsLogicOpSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsLogicOpSet(m_id, attachment);
+    }
+
+    inline const char* GetLogicOpName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpName();
+    }
+
+    inline const char* GetLogicOpDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpDescription();
+    }
+
+protected:
+    SOA* m_obj_ptr = nullptr;
+    Id   m_id;
+};
+
+template<typename CONFIG> class EventStateInfoLogicOpConstArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using LogicOpArray = typename CONFIG::LogicOpArray;
+    using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
+    EventStateInfoLogicOpConstArray() = default;
+    EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpArray<CONFIG>& other) :
+        m_obj_ptr(&other.obj()),
+        m_id(other.id())
+    {
+    }
+    EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpConstArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoLogicOpConstArray(const SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id         id() const { return m_id; }
+    const SOA& obj() const { return *m_obj_ptr; }
+    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD LogicOp: Which logical operation to apply
+
+    // `Get(uint32_t attachment)` returns the value of the LogicOp field of the referenced object
+    inline VkLogicOp Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->LogicOp(m_id, attachment);
+    }
+
+    inline bool IsLogicOpSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsLogicOpSet(m_id, attachment);
+    }
+
+    inline const char* GetLogicOpName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpName();
+    }
+
+    inline const char* GetLogicOpDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLogicOpDescription();
+    }
+
+protected:
+    const SOA* m_obj_ptr = nullptr;
+    Id         m_id;
+};
+
 template<typename CONFIG> class EventStateInfoAttachmentArray
 {
 public:
@@ -539,950 +792,6 @@ protected:
     Id         m_id;
 };
 
-template<typename CONFIG> class EventStateInfoDccEnabledArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using DccEnabledArray = typename CONFIG::DccEnabledArray;
-    using DccEnabledConstArray = typename CONFIG::DccEnabledConstArray;
-    EventStateInfoDccEnabledArray() = default;
-    EventStateInfoDccEnabledArray(const EventStateInfoDccEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoDccEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
-    SOA& obj() const { return *m_obj_ptr; }
-    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD DccEnabled: Whether DCC-based bandwidth-saving color compression is enabled
-
-    // `Get(uint32_t attachment)` returns the value of the DccEnabled field of the referenced object
-    inline bool Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->DccEnabled(m_id, attachment);
-    }
-
-    // `Set(value)` sets the DccEnabled field of the referenced object
-    inline const DccEnabledArray& Set(uint32_t attachment, bool value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetDccEnabled(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsDccEnabledSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsDccEnabledSet(m_id, attachment);
-    }
-
-    inline const char* GetDccEnabledName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledName();
-    }
-
-    inline const char* GetDccEnabledDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledDescription();
-    }
-
-protected:
-    SOA* m_obj_ptr = nullptr;
-    Id   m_id;
-};
-
-template<typename CONFIG> class EventStateInfoDccEnabledConstArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using DccEnabledArray = typename CONFIG::DccEnabledArray;
-    using DccEnabledConstArray = typename CONFIG::DccEnabledConstArray;
-    EventStateInfoDccEnabledConstArray() = default;
-    EventStateInfoDccEnabledConstArray(const EventStateInfoDccEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
-    EventStateInfoDccEnabledConstArray(const EventStateInfoDccEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoDccEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
-    const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD DccEnabled: Whether DCC-based bandwidth-saving color compression is enabled
-
-    // `Get(uint32_t attachment)` returns the value of the DccEnabled field of the referenced object
-    inline bool Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->DccEnabled(m_id, attachment);
-    }
-
-    inline bool IsDccEnabledSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsDccEnabledSet(m_id, attachment);
-    }
-
-    inline const char* GetDccEnabledName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledName();
-    }
-
-    inline const char* GetDccEnabledDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledDescription();
-    }
-
-protected:
-    const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
-};
-
-template<typename CONFIG> class EventStateInfoColorFormatArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using ColorFormatArray = typename CONFIG::ColorFormatArray;
-    using ColorFormatConstArray = typename CONFIG::ColorFormatConstArray;
-    EventStateInfoColorFormatArray() = default;
-    EventStateInfoColorFormatArray(const EventStateInfoColorFormatArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoColorFormatArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
-    SOA& obj() const { return *m_obj_ptr; }
-    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD ColorFormat: Per target attachment hardware color format
-
-    // `Get(uint32_t attachment)` returns the value of the ColorFormat field of the referenced
-    // object
-    inline Dive::Legacy::ColorFormat Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ColorFormat(m_id, attachment);
-    }
-
-    // `Set(value)` sets the ColorFormat field of the referenced object
-    inline const ColorFormatArray& Set(uint32_t attachment, Dive::Legacy::ColorFormat value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetColorFormat(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsColorFormatSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsColorFormatSet(m_id, attachment);
-    }
-
-    inline const char* GetColorFormatName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatName();
-    }
-
-    inline const char* GetColorFormatDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatDescription();
-    }
-
-protected:
-    SOA* m_obj_ptr = nullptr;
-    Id   m_id;
-};
-
-template<typename CONFIG> class EventStateInfoColorFormatConstArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using ColorFormatArray = typename CONFIG::ColorFormatArray;
-    using ColorFormatConstArray = typename CONFIG::ColorFormatConstArray;
-    EventStateInfoColorFormatConstArray() = default;
-    EventStateInfoColorFormatConstArray(const EventStateInfoColorFormatArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
-    EventStateInfoColorFormatConstArray(const EventStateInfoColorFormatConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoColorFormatConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
-    const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD ColorFormat: Per target attachment hardware color format
-
-    // `Get(uint32_t attachment)` returns the value of the ColorFormat field of the referenced
-    // object
-    inline Dive::Legacy::ColorFormat Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ColorFormat(m_id, attachment);
-    }
-
-    inline bool IsColorFormatSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsColorFormatSet(m_id, attachment);
-    }
-
-    inline const char* GetColorFormatName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatName();
-    }
-
-    inline const char* GetColorFormatDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatDescription();
-    }
-
-protected:
-    const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
-};
-
-template<typename CONFIG> class EventStateInfoMip0HeightArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using Mip0HeightArray = typename CONFIG::Mip0HeightArray;
-    using Mip0HeightConstArray = typename CONFIG::Mip0HeightConstArray;
-    EventStateInfoMip0HeightArray() = default;
-    EventStateInfoMip0HeightArray(const EventStateInfoMip0HeightArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoMip0HeightArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
-    SOA& obj() const { return *m_obj_ptr; }
-    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Height: Per target attachment mip0 height
-
-    // `Get(uint32_t attachment)` returns the value of the Mip0Height field of the referenced object
-    inline uint32_t Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Height(m_id, attachment);
-    }
-
-    // `Set(value)` sets the Mip0Height field of the referenced object
-    inline const Mip0HeightArray& Set(uint32_t attachment, uint32_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetMip0Height(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsMip0HeightSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0HeightSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0HeightName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightName();
-    }
-
-    inline const char* GetMip0HeightDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightDescription();
-    }
-
-    inline uint32_t Min() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::max();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = std::min<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Max() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::min();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = std::max<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Sum() const
-    {
-        uint32_t res = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = res + value;
-        }
-
-        return res;
-    }
-    inline uint32_t Avg() const
-    {
-        uint32_t res = 0;
-        uint32_t count = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = res + value;
-            ++count;
-        }
-
-        return res / count;
-    }
-
-protected:
-    SOA* m_obj_ptr = nullptr;
-    Id   m_id;
-};
-
-template<typename CONFIG> class EventStateInfoMip0HeightConstArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using Mip0HeightArray = typename CONFIG::Mip0HeightArray;
-    using Mip0HeightConstArray = typename CONFIG::Mip0HeightConstArray;
-    EventStateInfoMip0HeightConstArray() = default;
-    EventStateInfoMip0HeightConstArray(const EventStateInfoMip0HeightArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
-    EventStateInfoMip0HeightConstArray(const EventStateInfoMip0HeightConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoMip0HeightConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
-    const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Height: Per target attachment mip0 height
-
-    // `Get(uint32_t attachment)` returns the value of the Mip0Height field of the referenced object
-    inline uint32_t Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Height(m_id, attachment);
-    }
-
-    inline bool IsMip0HeightSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0HeightSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0HeightName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightName();
-    }
-
-    inline const char* GetMip0HeightDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightDescription();
-    }
-
-    inline uint32_t Min() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::max();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = std::min<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Max() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::min();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = std::max<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Sum() const
-    {
-        uint32_t res = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = res + value;
-        }
-
-        return res;
-    }
-    inline uint32_t Avg() const
-    {
-        uint32_t res = 0;
-        uint32_t count = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Height(m_id, attachment);
-            res = res + value;
-            ++count;
-        }
-
-        return res / count;
-    }
-
-protected:
-    const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
-};
-
-template<typename CONFIG> class EventStateInfoMip0WidthArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using Mip0WidthArray = typename CONFIG::Mip0WidthArray;
-    using Mip0WidthConstArray = typename CONFIG::Mip0WidthConstArray;
-    EventStateInfoMip0WidthArray() = default;
-    EventStateInfoMip0WidthArray(const EventStateInfoMip0WidthArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoMip0WidthArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
-    SOA& obj() const { return *m_obj_ptr; }
-    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Width: Per target attachment mip0 width
-
-    // `Get(uint32_t attachment)` returns the value of the Mip0Width field of the referenced object
-    inline uint32_t Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Width(m_id, attachment);
-    }
-
-    // `Set(value)` sets the Mip0Width field of the referenced object
-    inline const Mip0WidthArray& Set(uint32_t attachment, uint32_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetMip0Width(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsMip0WidthSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0WidthSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0WidthName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthName();
-    }
-
-    inline const char* GetMip0WidthDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthDescription();
-    }
-
-    inline uint32_t Min() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::max();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = std::min<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Max() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::min();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = std::max<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Sum() const
-    {
-        uint32_t res = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = res + value;
-        }
-
-        return res;
-    }
-    inline uint32_t Avg() const
-    {
-        uint32_t res = 0;
-        uint32_t count = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = res + value;
-            ++count;
-        }
-
-        return res / count;
-    }
-
-protected:
-    SOA* m_obj_ptr = nullptr;
-    Id   m_id;
-};
-
-template<typename CONFIG> class EventStateInfoMip0WidthConstArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using Mip0WidthArray = typename CONFIG::Mip0WidthArray;
-    using Mip0WidthConstArray = typename CONFIG::Mip0WidthConstArray;
-    EventStateInfoMip0WidthConstArray() = default;
-    EventStateInfoMip0WidthConstArray(const EventStateInfoMip0WidthArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
-    EventStateInfoMip0WidthConstArray(const EventStateInfoMip0WidthConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoMip0WidthConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
-    const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Width: Per target attachment mip0 width
-
-    // `Get(uint32_t attachment)` returns the value of the Mip0Width field of the referenced object
-    inline uint32_t Get(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Width(m_id, attachment);
-    }
-
-    inline bool IsMip0WidthSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0WidthSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0WidthName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthName();
-    }
-
-    inline const char* GetMip0WidthDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthDescription();
-    }
-
-    inline uint32_t Min() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::max();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = std::min<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Max() const
-    {
-        uint32_t res = std::numeric_limits<uint32_t>::min();
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = std::max<uint32_t>(res, value);
-        }
-
-        return res;
-    }
-    inline uint32_t Sum() const
-    {
-        uint32_t res = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = res + value;
-        }
-
-        return res;
-    }
-    inline uint32_t Avg() const
-    {
-        uint32_t res = 0;
-        uint32_t count = 0;
-        for (uint32_t attachment = 0; attachment < 8; ++attachment)
-        {
-            auto value = m_obj_ptr->Mip0Width(m_id, attachment);
-            res = res + value;
-            ++count;
-        }
-
-        return res / count;
-    }
-
-protected:
-    const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
-};
-
-template<typename CONFIG> class EventStateInfoVgprArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using VgprArray = typename CONFIG::VgprArray;
-    using VgprConstArray = typename CONFIG::VgprConstArray;
-    EventStateInfoVgprArray() = default;
-    EventStateInfoVgprArray(const EventStateInfoVgprArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoVgprArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
-    SOA& obj() const { return *m_obj_ptr; }
-    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Vgpr: Per shader stage vector general purpose register count. Always rounded up to
-    // nearest multiple of 4.
-
-    // `Get(Dive::ShaderStage stage)` returns the value of the Vgpr field of the referenced object
-    inline uint16_t Get(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Vgpr(m_id, stage);
-    }
-
-    // `Set(value)` sets the Vgpr field of the referenced object
-    inline const VgprArray& Set(Dive::ShaderStage stage, uint16_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetVgpr(m_id, stage, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsVgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsVgprSet(m_id, stage);
-    }
-
-    inline const char* GetVgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprName();
-    }
-
-    inline const char* GetVgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprDescription();
-    }
-
-protected:
-    SOA* m_obj_ptr = nullptr;
-    Id   m_id;
-};
-
-template<typename CONFIG> class EventStateInfoVgprConstArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using VgprArray = typename CONFIG::VgprArray;
-    using VgprConstArray = typename CONFIG::VgprConstArray;
-    EventStateInfoVgprConstArray() = default;
-    EventStateInfoVgprConstArray(const EventStateInfoVgprArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
-    EventStateInfoVgprConstArray(const EventStateInfoVgprConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoVgprConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
-    const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Vgpr: Per shader stage vector general purpose register count. Always rounded up to
-    // nearest multiple of 4.
-
-    // `Get(Dive::ShaderStage stage)` returns the value of the Vgpr field of the referenced object
-    inline uint16_t Get(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Vgpr(m_id, stage);
-    }
-
-    inline bool IsVgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsVgprSet(m_id, stage);
-    }
-
-    inline const char* GetVgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprName();
-    }
-
-    inline const char* GetVgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprDescription();
-    }
-
-protected:
-    const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
-};
-
-template<typename CONFIG> class EventStateInfoSgprArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using SgprArray = typename CONFIG::SgprArray;
-    using SgprConstArray = typename CONFIG::SgprConstArray;
-    EventStateInfoSgprArray() = default;
-    EventStateInfoSgprArray(const EventStateInfoSgprArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoSgprArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
-    SOA& obj() const { return *m_obj_ptr; }
-    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Sgpr: Per shader stage scalar general purpose register count. Always rounded up to
-    // nearest multiple of 16
-
-    // `Get(Dive::ShaderStage stage)` returns the value of the Sgpr field of the referenced object
-    inline uint16_t Get(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Sgpr(m_id, stage);
-    }
-
-    // `Set(value)` sets the Sgpr field of the referenced object
-    inline const SgprArray& Set(Dive::ShaderStage stage, uint16_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetSgpr(m_id, stage, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsSgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsSgprSet(m_id, stage);
-    }
-
-    inline const char* GetSgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprName();
-    }
-
-    inline const char* GetSgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprDescription();
-    }
-
-protected:
-    SOA* m_obj_ptr = nullptr;
-    Id   m_id;
-};
-
-template<typename CONFIG> class EventStateInfoSgprConstArray
-{
-public:
-    using Id = typename CONFIG::Id;
-    using SOA = typename CONFIG::SOA;
-    using Ref = typename CONFIG::Ref;
-    using SgprArray = typename CONFIG::SgprArray;
-    using SgprConstArray = typename CONFIG::SgprConstArray;
-    EventStateInfoSgprConstArray() = default;
-    EventStateInfoSgprConstArray(const EventStateInfoSgprArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
-    EventStateInfoSgprConstArray(const EventStateInfoSgprConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoSgprConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
-    const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
-
-    //-----------------------------------------------
-    // REF FIELD Sgpr: Per shader stage scalar general purpose register count. Always rounded up to
-    // nearest multiple of 16
-
-    // `Get(Dive::ShaderStage stage)` returns the value of the Sgpr field of the referenced object
-    inline uint16_t Get(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Sgpr(m_id, stage);
-    }
-
-    inline bool IsSgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsSgprSet(m_id, stage);
-    }
-
-    inline const char* GetSgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprName();
-    }
-
-    inline const char* GetSgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprDescription();
-    }
-
-protected:
-    const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
-};
-
 //--------------------------------------------------------------------------------------------------
 // Ref represents a reference to a single element.
 // Fields can be accessed using e.g. `ref.MyField()` or `ref.SetMyField(42)`.
@@ -1497,22 +806,14 @@ public:
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     using ScissorArray = typename CONFIG::ScissorArray;
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
+    using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
+    using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
+    using LogicOpArray = typename CONFIG::LogicOpArray;
+    using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     using AttachmentArray = typename CONFIG::AttachmentArray;
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
-    using DccEnabledArray = typename CONFIG::DccEnabledArray;
-    using DccEnabledConstArray = typename CONFIG::DccEnabledConstArray;
-    using ColorFormatArray = typename CONFIG::ColorFormatArray;
-    using ColorFormatConstArray = typename CONFIG::ColorFormatConstArray;
-    using Mip0HeightArray = typename CONFIG::Mip0HeightArray;
-    using Mip0HeightConstArray = typename CONFIG::Mip0HeightConstArray;
-    using Mip0WidthArray = typename CONFIG::Mip0WidthArray;
-    using Mip0WidthConstArray = typename CONFIG::Mip0WidthConstArray;
-    using VgprArray = typename CONFIG::VgprArray;
-    using VgprConstArray = typename CONFIG::VgprConstArray;
-    using SgprArray = typename CONFIG::SgprArray;
-    using SgprConstArray = typename CONFIG::SgprConstArray;
     EventStateInfoRefT() = default;
     EventStateInfoRefT(const EventStateInfoRefT& other) :
         m_obj_ptr(other.m_obj_ptr),
@@ -2611,25 +1912,33 @@ public:
     //-----------------------------------------------
     // REF FIELD LogicOpEnabled: Whether to apply Logical Operations
 
-    // `LogicOpEnabled()` returns the value of the LogicOpEnabled field of the referenced object
-    inline bool LogicOpEnabled() const
+    // `LogicOpEnabled(uint32_t attachment)` returns the value of the LogicOpEnabled field of the
+    // referenced object
+    inline bool LogicOpEnabled(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->LogicOpEnabled(m_id);
+        return m_obj_ptr->LogicOpEnabled(m_id, attachment);
+    }
+
+    // `LogicOpEnabled()` returns the array of values of the LogicOpEnabled field of the referenced
+    // object
+    inline LogicOpEnabledArray LogicOpEnabled() const
+    {
+        return LogicOpEnabledArray(m_obj_ptr, m_id);
     }
 
     // `SetLogicOpEnabled(value)` sets the LogicOpEnabled field of the referenced object
-    inline const Ref& SetLogicOpEnabled(bool value) const
+    inline const Ref& SetLogicOpEnabled(uint32_t attachment, bool value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetLogicOpEnabled(m_id, value);
+        m_obj_ptr->SetLogicOpEnabled(m_id, attachment, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsLogicOpEnabledSet() const
+    inline bool IsLogicOpEnabledSet(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsLogicOpEnabledSet(m_id);
+        return m_obj_ptr->IsLogicOpEnabledSet(m_id, attachment);
     }
 
     inline const char* GetLogicOpEnabledName() const
@@ -2647,25 +1956,29 @@ public:
     //-----------------------------------------------
     // REF FIELD LogicOp: Which logical operation to apply
 
-    // `LogicOp()` returns the value of the LogicOp field of the referenced object
-    inline VkLogicOp LogicOp() const
+    // `LogicOp(uint32_t attachment)` returns the value of the LogicOp field of the referenced
+    // object
+    inline VkLogicOp LogicOp(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->LogicOp(m_id);
+        return m_obj_ptr->LogicOp(m_id, attachment);
     }
 
+    // `LogicOp()` returns the array of values of the LogicOp field of the referenced object
+    inline LogicOpArray LogicOp() const { return LogicOpArray(m_obj_ptr, m_id); }
+
     // `SetLogicOp(value)` sets the LogicOp field of the referenced object
-    inline const Ref& SetLogicOp(VkLogicOp value) const
+    inline const Ref& SetLogicOp(uint32_t attachment, VkLogicOp value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetLogicOp(m_id, value);
+        m_obj_ptr->SetLogicOp(m_id, attachment, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsLogicOpSet() const
+    inline bool IsLogicOpSet(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsLogicOpSet(m_id);
+        return m_obj_ptr->IsLogicOpSet(m_id, attachment);
     }
 
     inline const char* GetLogicOpName() const
@@ -2763,611 +2076,440 @@ public:
     }
 
     //-----------------------------------------------
-    // REF FIELD ZAddr: The read and write VA of depth buffer (assumed to be same)
+    // REF FIELD LRZEnabled: Whether LRZ is enabled for depth
 
-    // `ZAddr()` returns the value of the ZAddr field of the referenced object
-    inline uint64_t ZAddr() const
+    // `LRZEnabled()` returns the value of the LRZEnabled field of the referenced object
+    inline bool LRZEnabled() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZAddr(m_id);
+        return m_obj_ptr->LRZEnabled(m_id);
     }
 
-    // `SetZAddr(value)` sets the ZAddr field of the referenced object
-    inline const Ref& SetZAddr(uint64_t value) const
+    // `SetLRZEnabled(value)` sets the LRZEnabled field of the referenced object
+    inline const Ref& SetLRZEnabled(bool value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetZAddr(m_id, value);
+        m_obj_ptr->SetLRZEnabled(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsZAddrSet() const
+    inline bool IsLRZEnabledSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZAddrSet(m_id);
+        return m_obj_ptr->IsLRZEnabledSet(m_id);
     }
 
-    inline const char* GetZAddrName() const
+    inline const char* GetLRZEnabledName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZAddrName();
+        return m_obj_ptr->GetLRZEnabledName();
     }
 
-    inline const char* GetZAddrDescription() const
+    inline const char* GetLRZEnabledDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZAddrDescription();
+        return m_obj_ptr->GetLRZEnabledDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD HTileAddr: VA of DB's HTile buffer
+    // REF FIELD LRZWrite: Whether LRZ write is enabled
 
-    // `HTileAddr()` returns the value of the HTileAddr field of the referenced object
-    inline uint64_t HTileAddr() const
+    // `LRZWrite()` returns the value of the LRZWrite field of the referenced object
+    inline bool LRZWrite() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->HTileAddr(m_id);
+        return m_obj_ptr->LRZWrite(m_id);
     }
 
-    // `SetHTileAddr(value)` sets the HTileAddr field of the referenced object
-    inline const Ref& SetHTileAddr(uint64_t value) const
+    // `SetLRZWrite(value)` sets the LRZWrite field of the referenced object
+    inline const Ref& SetLRZWrite(bool value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetHTileAddr(m_id, value);
+        m_obj_ptr->SetLRZWrite(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsHTileAddrSet() const
+    inline bool IsLRZWriteSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsHTileAddrSet(m_id);
+        return m_obj_ptr->IsLRZWriteSet(m_id);
     }
 
-    inline const char* GetHTileAddrName() const
+    inline const char* GetLRZWriteName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHTileAddrName();
+        return m_obj_ptr->GetLRZWriteName();
     }
 
-    inline const char* GetHTileAddrDescription() const
+    inline const char* GetLRZWriteDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHTileAddrDescription();
+        return m_obj_ptr->GetLRZWriteDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD HiZEnabled: Whether Hi-Z is enabled for depth
+    // REF FIELD LRZDirStatus: LRZ direction
 
-    // `HiZEnabled()` returns the value of the HiZEnabled field of the referenced object
-    inline bool HiZEnabled() const
+    // `LRZDirStatus()` returns the value of the LRZDirStatus field of the referenced object
+    inline a6xx_lrz_dir_status LRZDirStatus() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->HiZEnabled(m_id);
+        return m_obj_ptr->LRZDirStatus(m_id);
     }
 
-    // `SetHiZEnabled(value)` sets the HiZEnabled field of the referenced object
-    inline const Ref& SetHiZEnabled(bool value) const
+    // `SetLRZDirStatus(value)` sets the LRZDirStatus field of the referenced object
+    inline const Ref& SetLRZDirStatus(a6xx_lrz_dir_status value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetHiZEnabled(m_id, value);
+        m_obj_ptr->SetLRZDirStatus(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsHiZEnabledSet() const
+    inline bool IsLRZDirStatusSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsHiZEnabledSet(m_id);
+        return m_obj_ptr->IsLRZDirStatusSet(m_id);
     }
 
-    inline const char* GetHiZEnabledName() const
+    inline const char* GetLRZDirStatusName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiZEnabledName();
+        return m_obj_ptr->GetLRZDirStatusName();
     }
 
-    inline const char* GetHiZEnabledDescription() const
+    inline const char* GetLRZDirStatusDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiZEnabledDescription();
+        return m_obj_ptr->GetLRZDirStatusDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD HiSEnabled: Whether Hi-S is enabled for stencil
+    // REF FIELD LRZDirWrite: Whether LRZ direction write is enabled
 
-    // `HiSEnabled()` returns the value of the HiSEnabled field of the referenced object
-    inline bool HiSEnabled() const
+    // `LRZDirWrite()` returns the value of the LRZDirWrite field of the referenced object
+    inline bool LRZDirWrite() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->HiSEnabled(m_id);
+        return m_obj_ptr->LRZDirWrite(m_id);
     }
 
-    // `SetHiSEnabled(value)` sets the HiSEnabled field of the referenced object
-    inline const Ref& SetHiSEnabled(bool value) const
+    // `SetLRZDirWrite(value)` sets the LRZDirWrite field of the referenced object
+    inline const Ref& SetLRZDirWrite(bool value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetHiSEnabled(m_id, value);
+        m_obj_ptr->SetLRZDirWrite(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsHiSEnabledSet() const
+    inline bool IsLRZDirWriteSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsHiSEnabledSet(m_id);
+        return m_obj_ptr->IsLRZDirWriteSet(m_id);
     }
 
-    inline const char* GetHiSEnabledName() const
+    inline const char* GetLRZDirWriteName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiSEnabledName();
+        return m_obj_ptr->GetLRZDirWriteName();
     }
 
-    inline const char* GetHiSEnabledDescription() const
+    inline const char* GetLRZDirWriteDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiSEnabledDescription();
+        return m_obj_ptr->GetLRZDirWriteDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD ZCompressEnabled: Whether plane compression is enabled for depth buffers. To reduce
-    // bandwidth impact
+    // REF FIELD ZTestMode: Depth test mode
 
-    // `ZCompressEnabled()` returns the value of the ZCompressEnabled field of the referenced object
-    inline bool ZCompressEnabled() const
+    // `ZTestMode()` returns the value of the ZTestMode field of the referenced object
+    inline a6xx_ztest_mode ZTestMode() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZCompressEnabled(m_id);
+        return m_obj_ptr->ZTestMode(m_id);
     }
 
-    // `SetZCompressEnabled(value)` sets the ZCompressEnabled field of the referenced object
-    inline const Ref& SetZCompressEnabled(bool value) const
+    // `SetZTestMode(value)` sets the ZTestMode field of the referenced object
+    inline const Ref& SetZTestMode(a6xx_ztest_mode value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetZCompressEnabled(m_id, value);
+        m_obj_ptr->SetZTestMode(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsZCompressEnabledSet() const
+    inline bool IsZTestModeSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZCompressEnabledSet(m_id);
+        return m_obj_ptr->IsZTestModeSet(m_id);
     }
 
-    inline const char* GetZCompressEnabledName() const
+    inline const char* GetZTestModeName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZCompressEnabledName();
+        return m_obj_ptr->GetZTestModeName();
     }
 
-    inline const char* GetZCompressEnabledDescription() const
+    inline const char* GetZTestModeDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZCompressEnabledDescription();
+        return m_obj_ptr->GetZTestModeDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD StencilCompressEnabled: Whether compression is enabled for stencil buffers. To
-    // reduce bandwidth impact
+    // REF FIELD BinW: Bin width
 
-    // `StencilCompressEnabled()` returns the value of the StencilCompressEnabled field of the
+    // `BinW()` returns the value of the BinW field of the referenced object
+    inline uint32_t BinW() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->BinW(m_id);
+    }
+
+    // `SetBinW(value)` sets the BinW field of the referenced object
+    inline const Ref& SetBinW(uint32_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetBinW(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsBinWSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsBinWSet(m_id);
+    }
+
+    inline const char* GetBinWName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinWName();
+    }
+
+    inline const char* GetBinWDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinWDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD BinH: Bin Height
+
+    // `BinH()` returns the value of the BinH field of the referenced object
+    inline uint32_t BinH() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->BinH(m_id);
+    }
+
+    // `SetBinH(value)` sets the BinH field of the referenced object
+    inline const Ref& SetBinH(uint32_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetBinH(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsBinHSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsBinHSet(m_id);
+    }
+
+    inline const char* GetBinHName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinHName();
+    }
+
+    inline const char* GetBinHDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinHDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD RenderMode: Whether in binning pass or rendering pass
+
+    // `RenderMode()` returns the value of the RenderMode field of the referenced object
+    inline a6xx_render_mode RenderMode() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->RenderMode(m_id);
+    }
+
+    // `SetRenderMode(value)` sets the RenderMode field of the referenced object
+    inline const Ref& SetRenderMode(a6xx_render_mode value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetRenderMode(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsRenderModeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsRenderModeSet(m_id);
+    }
+
+    inline const char* GetRenderModeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetRenderModeName();
+    }
+
+    inline const char* GetRenderModeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetRenderModeDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD BuffersLocation: Whether the target buffer is in GMEM or SYSMEM
+
+    // `BuffersLocation()` returns the value of the BuffersLocation field of the referenced object
+    inline a6xx_buffers_location BuffersLocation() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->BuffersLocation(m_id);
+    }
+
+    // `SetBuffersLocation(value)` sets the BuffersLocation field of the referenced object
+    inline const Ref& SetBuffersLocation(a6xx_buffers_location value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetBuffersLocation(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsBuffersLocationSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsBuffersLocationSet(m_id);
+    }
+
+    inline const char* GetBuffersLocationName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBuffersLocationName();
+    }
+
+    inline const char* GetBuffersLocationDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBuffersLocationDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ThreadSize: Whether the thread size is 64 or 128
+
+    // `ThreadSize()` returns the value of the ThreadSize field of the referenced object
+    inline a6xx_threadsize ThreadSize() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ThreadSize(m_id);
+    }
+
+    // `SetThreadSize(value)` sets the ThreadSize field of the referenced object
+    inline const Ref& SetThreadSize(a6xx_threadsize value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetThreadSize(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsThreadSizeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsThreadSizeSet(m_id);
+    }
+
+    inline const char* GetThreadSizeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetThreadSizeName();
+    }
+
+    inline const char* GetThreadSizeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetThreadSizeDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD EnableAllHelperLanes: Whether all helper lanes are enabled of the 2x2 quad for fine
+    // derivatives
+
+    // `EnableAllHelperLanes()` returns the value of the EnableAllHelperLanes field of the
     // referenced object
-    inline bool StencilCompressEnabled() const
+    inline bool EnableAllHelperLanes() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->StencilCompressEnabled(m_id);
+        return m_obj_ptr->EnableAllHelperLanes(m_id);
     }
 
-    // `SetStencilCompressEnabled(value)` sets the StencilCompressEnabled field of the referenced
-    // object
-    inline const Ref& SetStencilCompressEnabled(bool value) const
+    // `SetEnableAllHelperLanes(value)` sets the EnableAllHelperLanes field of the referenced object
+    inline const Ref& SetEnableAllHelperLanes(bool value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetStencilCompressEnabled(m_id, value);
+        m_obj_ptr->SetEnableAllHelperLanes(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsStencilCompressEnabledSet() const
+    inline bool IsEnableAllHelperLanesSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsStencilCompressEnabledSet(m_id);
+        return m_obj_ptr->IsEnableAllHelperLanesSet(m_id);
     }
 
-    inline const char* GetStencilCompressEnabledName() const
+    inline const char* GetEnableAllHelperLanesName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetStencilCompressEnabledName();
+        return m_obj_ptr->GetEnableAllHelperLanesName();
     }
 
-    inline const char* GetStencilCompressEnabledDescription() const
+    inline const char* GetEnableAllHelperLanesDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetStencilCompressEnabledDescription();
+        return m_obj_ptr->GetEnableAllHelperLanesDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD CompressedZFetchEnabled: Whether shader fetch of compressed depth buffers is
-    // enabled
+    // REF FIELD EnablePartialHelperLanes: Whether 3 out of 4 helper lanes are enabled of the 2x2
+    // quad for coarse derivatives
 
-    // `CompressedZFetchEnabled()` returns the value of the CompressedZFetchEnabled field of the
+    // `EnablePartialHelperLanes()` returns the value of the EnablePartialHelperLanes field of the
     // referenced object
-    inline bool CompressedZFetchEnabled() const
+    inline bool EnablePartialHelperLanes() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->CompressedZFetchEnabled(m_id);
+        return m_obj_ptr->EnablePartialHelperLanes(m_id);
     }
 
-    // `SetCompressedZFetchEnabled(value)` sets the CompressedZFetchEnabled field of the referenced
-    // object
-    inline const Ref& SetCompressedZFetchEnabled(bool value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetCompressedZFetchEnabled(m_id, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsCompressedZFetchEnabledSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsCompressedZFetchEnabledSet(m_id);
-    }
-
-    inline const char* GetCompressedZFetchEnabledName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetCompressedZFetchEnabledName();
-    }
-
-    inline const char* GetCompressedZFetchEnabledDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetCompressedZFetchEnabledDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD ZFormat: Internal GPU format of the depth buffer
-
-    // `ZFormat()` returns the value of the ZFormat field of the referenced object
-    inline Dive::Legacy::ZFormat ZFormat() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZFormat(m_id);
-    }
-
-    // `SetZFormat(value)` sets the ZFormat field of the referenced object
-    inline const Ref& SetZFormat(Dive::Legacy::ZFormat value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetZFormat(m_id, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsZFormatSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZFormatSet(m_id);
-    }
-
-    inline const char* GetZFormatName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZFormatName();
-    }
-
-    inline const char* GetZFormatDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZFormatDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD ZOrder: Indicates application preference for LateZ, EarlyZ, or ReZ
-
-    // `ZOrder()` returns the value of the ZOrder field of the referenced object
-    inline Dive::Legacy::ZOrder ZOrder() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZOrder(m_id);
-    }
-
-    // `SetZOrder(value)` sets the ZOrder field of the referenced object
-    inline const Ref& SetZOrder(Dive::Legacy::ZOrder value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetZOrder(m_id, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsZOrderSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZOrderSet(m_id);
-    }
-
-    inline const char* GetZOrderName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZOrderName();
-    }
-
-    inline const char* GetZOrderDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZOrderDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD VSLateAlloc: Late VS wavefront allocation count. Value is the number of wavefronts
-    // minus one, since at least one VS wave can always launch with late alloc enabled
-
-    // `VSLateAlloc()` returns the value of the VSLateAlloc field of the referenced object
-    inline uint16_t VSLateAlloc() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->VSLateAlloc(m_id);
-    }
-
-    // `SetVSLateAlloc(value)` sets the VSLateAlloc field of the referenced object
-    inline const Ref& SetVSLateAlloc(uint16_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetVSLateAlloc(m_id, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsVSLateAllocSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsVSLateAllocSet(m_id);
-    }
-
-    inline const char* GetVSLateAllocName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVSLateAllocName();
-    }
-
-    inline const char* GetVSLateAllocDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVSLateAllocDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD DccEnabled: Whether DCC-based bandwidth-saving color compression is enabled
-
-    // `DccEnabled(uint32_t attachment)` returns the value of the DccEnabled field of the referenced
-    // object
-    inline bool DccEnabled(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->DccEnabled(m_id, attachment);
-    }
-
-    // `DccEnabled()` returns the array of values of the DccEnabled field of the referenced object
-    inline DccEnabledArray DccEnabled() const { return DccEnabledArray(m_obj_ptr, m_id); }
-
-    // `SetDccEnabled(value)` sets the DccEnabled field of the referenced object
-    inline const Ref& SetDccEnabled(uint32_t attachment, bool value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetDccEnabled(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsDccEnabledSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsDccEnabledSet(m_id, attachment);
-    }
-
-    inline const char* GetDccEnabledName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledName();
-    }
-
-    inline const char* GetDccEnabledDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD ColorFormat: Per target attachment hardware color format
-
-    // `ColorFormat(uint32_t attachment)` returns the value of the ColorFormat field of the
+    // `SetEnablePartialHelperLanes(value)` sets the EnablePartialHelperLanes field of the
     // referenced object
-    inline Dive::Legacy::ColorFormat ColorFormat(uint32_t attachment) const
+    inline const Ref& SetEnablePartialHelperLanes(bool value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ColorFormat(m_id, attachment);
-    }
-
-    // `ColorFormat()` returns the array of values of the ColorFormat field of the referenced object
-    inline ColorFormatArray ColorFormat() const { return ColorFormatArray(m_obj_ptr, m_id); }
-
-    // `SetColorFormat(value)` sets the ColorFormat field of the referenced object
-    inline const Ref& SetColorFormat(uint32_t attachment, Dive::Legacy::ColorFormat value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetColorFormat(m_id, attachment, value);
+        m_obj_ptr->SetEnablePartialHelperLanes(m_id, value);
         return static_cast<const Ref&>(*this);
     }
 
-    inline bool IsColorFormatSet(uint32_t attachment) const
+    inline bool IsEnablePartialHelperLanesSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsColorFormatSet(m_id, attachment);
+        return m_obj_ptr->IsEnablePartialHelperLanesSet(m_id);
     }
 
-    inline const char* GetColorFormatName() const
+    inline const char* GetEnablePartialHelperLanesName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatName();
+        return m_obj_ptr->GetEnablePartialHelperLanesName();
     }
 
-    inline const char* GetColorFormatDescription() const
+    inline const char* GetEnablePartialHelperLanesDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Height: Per target attachment mip0 height
-
-    // `Mip0Height(uint32_t attachment)` returns the value of the Mip0Height field of the referenced
-    // object
-    inline uint32_t Mip0Height(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Height(m_id, attachment);
-    }
-
-    // `Mip0Height()` returns the array of values of the Mip0Height field of the referenced object
-    inline Mip0HeightArray Mip0Height() const { return Mip0HeightArray(m_obj_ptr, m_id); }
-
-    // `SetMip0Height(value)` sets the Mip0Height field of the referenced object
-    inline const Ref& SetMip0Height(uint32_t attachment, uint32_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetMip0Height(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsMip0HeightSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0HeightSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0HeightName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightName();
-    }
-
-    inline const char* GetMip0HeightDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Width: Per target attachment mip0 width
-
-    // `Mip0Width(uint32_t attachment)` returns the value of the Mip0Width field of the referenced
-    // object
-    inline uint32_t Mip0Width(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Width(m_id, attachment);
-    }
-
-    // `Mip0Width()` returns the array of values of the Mip0Width field of the referenced object
-    inline Mip0WidthArray Mip0Width() const { return Mip0WidthArray(m_obj_ptr, m_id); }
-
-    // `SetMip0Width(value)` sets the Mip0Width field of the referenced object
-    inline const Ref& SetMip0Width(uint32_t attachment, uint32_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetMip0Width(m_id, attachment, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsMip0WidthSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0WidthSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0WidthName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthName();
-    }
-
-    inline const char* GetMip0WidthDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Vgpr: Per shader stage vector general purpose register count. Always rounded up to
-    // nearest multiple of 4.
-
-    // `Vgpr(Dive::ShaderStage stage)` returns the value of the Vgpr field of the referenced object
-    inline uint16_t Vgpr(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Vgpr(m_id, stage);
-    }
-
-    // `Vgpr()` returns the array of values of the Vgpr field of the referenced object
-    inline VgprArray Vgpr() const { return VgprArray(m_obj_ptr, m_id); }
-
-    // `SetVgpr(value)` sets the Vgpr field of the referenced object
-    inline const Ref& SetVgpr(Dive::ShaderStage stage, uint16_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetVgpr(m_id, stage, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsVgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsVgprSet(m_id, stage);
-    }
-
-    inline const char* GetVgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprName();
-    }
-
-    inline const char* GetVgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Sgpr: Per shader stage scalar general purpose register count. Always rounded up to
-    // nearest multiple of 16
-
-    // `Sgpr(Dive::ShaderStage stage)` returns the value of the Sgpr field of the referenced object
-    inline uint16_t Sgpr(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Sgpr(m_id, stage);
-    }
-
-    // `Sgpr()` returns the array of values of the Sgpr field of the referenced object
-    inline SgprArray Sgpr() const { return SgprArray(m_obj_ptr, m_id); }
-
-    // `SetSgpr(value)` sets the Sgpr field of the referenced object
-    inline const Ref& SetSgpr(Dive::ShaderStage stage, uint16_t value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetSgpr(m_id, stage, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsSgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsSgprSet(m_id, stage);
-    }
-
-    inline const char* GetSgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprName();
-    }
-
-    inline const char* GetSgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprDescription();
+        return m_obj_ptr->GetEnablePartialHelperLanesDescription();
     }
 
     EventStateInfoRefT& operator=(const EventStateInfoRefT& other) = delete;
@@ -3396,22 +2538,14 @@ public:
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     using ScissorArray = typename CONFIG::ScissorArray;
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
+    using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
+    using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
+    using LogicOpArray = typename CONFIG::LogicOpArray;
+    using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     using AttachmentArray = typename CONFIG::AttachmentArray;
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
-    using DccEnabledArray = typename CONFIG::DccEnabledArray;
-    using DccEnabledConstArray = typename CONFIG::DccEnabledConstArray;
-    using ColorFormatArray = typename CONFIG::ColorFormatArray;
-    using ColorFormatConstArray = typename CONFIG::ColorFormatConstArray;
-    using Mip0HeightArray = typename CONFIG::Mip0HeightArray;
-    using Mip0HeightConstArray = typename CONFIG::Mip0HeightConstArray;
-    using Mip0WidthArray = typename CONFIG::Mip0WidthArray;
-    using Mip0WidthConstArray = typename CONFIG::Mip0WidthConstArray;
-    using VgprArray = typename CONFIG::VgprArray;
-    using VgprConstArray = typename CONFIG::VgprConstArray;
-    using SgprArray = typename CONFIG::SgprArray;
-    using SgprConstArray = typename CONFIG::SgprConstArray;
     EventStateInfoConstRefT() = default;
     EventStateInfoConstRefT(const Ref& other) :
         m_obj_ptr(&other.obj()),
@@ -4279,17 +3413,25 @@ public:
     //-----------------------------------------------
     // REF FIELD LogicOpEnabled: Whether to apply Logical Operations
 
-    // `LogicOpEnabled()` returns the value of the LogicOpEnabled field of the referenced object
-    inline bool LogicOpEnabled() const
+    // `LogicOpEnabled(uint32_t attachment)` returns the value of the LogicOpEnabled field of the
+    // referenced object
+    inline bool LogicOpEnabled(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->LogicOpEnabled(m_id);
+        return m_obj_ptr->LogicOpEnabled(m_id, attachment);
     }
 
-    inline bool IsLogicOpEnabledSet() const
+    // `LogicOpEnabled()` returns the array of values of the LogicOpEnabled field of the referenced
+    // object
+    inline LogicOpEnabledConstArray LogicOpEnabled() const
+    {
+        return LogicOpEnabledConstArray(m_obj_ptr, m_id);
+    }
+
+    inline bool IsLogicOpEnabledSet(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsLogicOpEnabledSet(m_id);
+        return m_obj_ptr->IsLogicOpEnabledSet(m_id, attachment);
     }
 
     inline const char* GetLogicOpEnabledName() const
@@ -4307,17 +3449,21 @@ public:
     //-----------------------------------------------
     // REF FIELD LogicOp: Which logical operation to apply
 
-    // `LogicOp()` returns the value of the LogicOp field of the referenced object
-    inline VkLogicOp LogicOp() const
+    // `LogicOp(uint32_t attachment)` returns the value of the LogicOp field of the referenced
+    // object
+    inline VkLogicOp LogicOp(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->LogicOp(m_id);
+        return m_obj_ptr->LogicOp(m_id, attachment);
     }
 
-    inline bool IsLogicOpSet() const
+    // `LogicOp()` returns the array of values of the LogicOp field of the referenced object
+    inline LogicOpConstArray LogicOp() const { return LogicOpConstArray(m_obj_ptr, m_id); }
+
+    inline bool IsLogicOpSet(uint32_t attachment) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsLogicOpSet(m_id);
+        return m_obj_ptr->IsLogicOpSet(m_id, attachment);
     }
 
     inline const char* GetLogicOpName() const
@@ -4401,484 +3547,343 @@ public:
     }
 
     //-----------------------------------------------
-    // REF FIELD ZAddr: The read and write VA of depth buffer (assumed to be same)
+    // REF FIELD LRZEnabled: Whether LRZ is enabled for depth
 
-    // `ZAddr()` returns the value of the ZAddr field of the referenced object
-    inline uint64_t ZAddr() const
+    // `LRZEnabled()` returns the value of the LRZEnabled field of the referenced object
+    inline bool LRZEnabled() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZAddr(m_id);
+        return m_obj_ptr->LRZEnabled(m_id);
     }
 
-    inline bool IsZAddrSet() const
+    inline bool IsLRZEnabledSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZAddrSet(m_id);
+        return m_obj_ptr->IsLRZEnabledSet(m_id);
     }
 
-    inline const char* GetZAddrName() const
+    inline const char* GetLRZEnabledName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZAddrName();
+        return m_obj_ptr->GetLRZEnabledName();
     }
 
-    inline const char* GetZAddrDescription() const
+    inline const char* GetLRZEnabledDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZAddrDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD HTileAddr: VA of DB's HTile buffer
-
-    // `HTileAddr()` returns the value of the HTileAddr field of the referenced object
-    inline uint64_t HTileAddr() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->HTileAddr(m_id);
-    }
-
-    inline bool IsHTileAddrSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsHTileAddrSet(m_id);
-    }
-
-    inline const char* GetHTileAddrName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHTileAddrName();
-    }
-
-    inline const char* GetHTileAddrDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHTileAddrDescription();
+        return m_obj_ptr->GetLRZEnabledDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD HiZEnabled: Whether Hi-Z is enabled for depth
+    // REF FIELD LRZWrite: Whether LRZ write is enabled
 
-    // `HiZEnabled()` returns the value of the HiZEnabled field of the referenced object
-    inline bool HiZEnabled() const
+    // `LRZWrite()` returns the value of the LRZWrite field of the referenced object
+    inline bool LRZWrite() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->HiZEnabled(m_id);
+        return m_obj_ptr->LRZWrite(m_id);
     }
 
-    inline bool IsHiZEnabledSet() const
+    inline bool IsLRZWriteSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsHiZEnabledSet(m_id);
+        return m_obj_ptr->IsLRZWriteSet(m_id);
     }
 
-    inline const char* GetHiZEnabledName() const
+    inline const char* GetLRZWriteName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiZEnabledName();
+        return m_obj_ptr->GetLRZWriteName();
     }
 
-    inline const char* GetHiZEnabledDescription() const
+    inline const char* GetLRZWriteDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiZEnabledDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD HiSEnabled: Whether Hi-S is enabled for stencil
-
-    // `HiSEnabled()` returns the value of the HiSEnabled field of the referenced object
-    inline bool HiSEnabled() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->HiSEnabled(m_id);
-    }
-
-    inline bool IsHiSEnabledSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsHiSEnabledSet(m_id);
-    }
-
-    inline const char* GetHiSEnabledName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiSEnabledName();
-    }
-
-    inline const char* GetHiSEnabledDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetHiSEnabledDescription();
+        return m_obj_ptr->GetLRZWriteDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD ZCompressEnabled: Whether plane compression is enabled for depth buffers. To reduce
-    // bandwidth impact
+    // REF FIELD LRZDirStatus: LRZ direction
 
-    // `ZCompressEnabled()` returns the value of the ZCompressEnabled field of the referenced object
-    inline bool ZCompressEnabled() const
+    // `LRZDirStatus()` returns the value of the LRZDirStatus field of the referenced object
+    inline a6xx_lrz_dir_status LRZDirStatus() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZCompressEnabled(m_id);
+        return m_obj_ptr->LRZDirStatus(m_id);
     }
 
-    inline bool IsZCompressEnabledSet() const
+    inline bool IsLRZDirStatusSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZCompressEnabledSet(m_id);
+        return m_obj_ptr->IsLRZDirStatusSet(m_id);
     }
 
-    inline const char* GetZCompressEnabledName() const
+    inline const char* GetLRZDirStatusName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZCompressEnabledName();
+        return m_obj_ptr->GetLRZDirStatusName();
     }
 
-    inline const char* GetZCompressEnabledDescription() const
+    inline const char* GetLRZDirStatusDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZCompressEnabledDescription();
+        return m_obj_ptr->GetLRZDirStatusDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD StencilCompressEnabled: Whether compression is enabled for stencil buffers. To
-    // reduce bandwidth impact
+    // REF FIELD LRZDirWrite: Whether LRZ direction write is enabled
 
-    // `StencilCompressEnabled()` returns the value of the StencilCompressEnabled field of the
+    // `LRZDirWrite()` returns the value of the LRZDirWrite field of the referenced object
+    inline bool LRZDirWrite() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->LRZDirWrite(m_id);
+    }
+
+    inline bool IsLRZDirWriteSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsLRZDirWriteSet(m_id);
+    }
+
+    inline const char* GetLRZDirWriteName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLRZDirWriteName();
+    }
+
+    inline const char* GetLRZDirWriteDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetLRZDirWriteDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ZTestMode: Depth test mode
+
+    // `ZTestMode()` returns the value of the ZTestMode field of the referenced object
+    inline a6xx_ztest_mode ZTestMode() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ZTestMode(m_id);
+    }
+
+    inline bool IsZTestModeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsZTestModeSet(m_id);
+    }
+
+    inline const char* GetZTestModeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetZTestModeName();
+    }
+
+    inline const char* GetZTestModeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetZTestModeDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD BinW: Bin width
+
+    // `BinW()` returns the value of the BinW field of the referenced object
+    inline uint32_t BinW() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->BinW(m_id);
+    }
+
+    inline bool IsBinWSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsBinWSet(m_id);
+    }
+
+    inline const char* GetBinWName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinWName();
+    }
+
+    inline const char* GetBinWDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinWDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD BinH: Bin Height
+
+    // `BinH()` returns the value of the BinH field of the referenced object
+    inline uint32_t BinH() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->BinH(m_id);
+    }
+
+    inline bool IsBinHSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsBinHSet(m_id);
+    }
+
+    inline const char* GetBinHName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinHName();
+    }
+
+    inline const char* GetBinHDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBinHDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD RenderMode: Whether in binning pass or rendering pass
+
+    // `RenderMode()` returns the value of the RenderMode field of the referenced object
+    inline a6xx_render_mode RenderMode() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->RenderMode(m_id);
+    }
+
+    inline bool IsRenderModeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsRenderModeSet(m_id);
+    }
+
+    inline const char* GetRenderModeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetRenderModeName();
+    }
+
+    inline const char* GetRenderModeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetRenderModeDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD BuffersLocation: Whether the target buffer is in GMEM or SYSMEM
+
+    // `BuffersLocation()` returns the value of the BuffersLocation field of the referenced object
+    inline a6xx_buffers_location BuffersLocation() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->BuffersLocation(m_id);
+    }
+
+    inline bool IsBuffersLocationSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsBuffersLocationSet(m_id);
+    }
+
+    inline const char* GetBuffersLocationName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBuffersLocationName();
+    }
+
+    inline const char* GetBuffersLocationDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetBuffersLocationDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ThreadSize: Whether the thread size is 64 or 128
+
+    // `ThreadSize()` returns the value of the ThreadSize field of the referenced object
+    inline a6xx_threadsize ThreadSize() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ThreadSize(m_id);
+    }
+
+    inline bool IsThreadSizeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsThreadSizeSet(m_id);
+    }
+
+    inline const char* GetThreadSizeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetThreadSizeName();
+    }
+
+    inline const char* GetThreadSizeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetThreadSizeDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD EnableAllHelperLanes: Whether all helper lanes are enabled of the 2x2 quad for fine
+    // derivatives
+
+    // `EnableAllHelperLanes()` returns the value of the EnableAllHelperLanes field of the
     // referenced object
-    inline bool StencilCompressEnabled() const
+    inline bool EnableAllHelperLanes() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->StencilCompressEnabled(m_id);
+        return m_obj_ptr->EnableAllHelperLanes(m_id);
     }
 
-    inline bool IsStencilCompressEnabledSet() const
+    inline bool IsEnableAllHelperLanesSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsStencilCompressEnabledSet(m_id);
+        return m_obj_ptr->IsEnableAllHelperLanesSet(m_id);
     }
 
-    inline const char* GetStencilCompressEnabledName() const
+    inline const char* GetEnableAllHelperLanesName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetStencilCompressEnabledName();
+        return m_obj_ptr->GetEnableAllHelperLanesName();
     }
 
-    inline const char* GetStencilCompressEnabledDescription() const
+    inline const char* GetEnableAllHelperLanesDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetStencilCompressEnabledDescription();
+        return m_obj_ptr->GetEnableAllHelperLanesDescription();
     }
 
     //-----------------------------------------------
-    // REF FIELD CompressedZFetchEnabled: Whether shader fetch of compressed depth buffers is
-    // enabled
+    // REF FIELD EnablePartialHelperLanes: Whether 3 out of 4 helper lanes are enabled of the 2x2
+    // quad for coarse derivatives
 
-    // `CompressedZFetchEnabled()` returns the value of the CompressedZFetchEnabled field of the
+    // `EnablePartialHelperLanes()` returns the value of the EnablePartialHelperLanes field of the
     // referenced object
-    inline bool CompressedZFetchEnabled() const
+    inline bool EnablePartialHelperLanes() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->CompressedZFetchEnabled(m_id);
+        return m_obj_ptr->EnablePartialHelperLanes(m_id);
     }
 
-    inline bool IsCompressedZFetchEnabledSet() const
+    inline bool IsEnablePartialHelperLanesSet() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsCompressedZFetchEnabledSet(m_id);
+        return m_obj_ptr->IsEnablePartialHelperLanesSet(m_id);
     }
 
-    inline const char* GetCompressedZFetchEnabledName() const
+    inline const char* GetEnablePartialHelperLanesName() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetCompressedZFetchEnabledName();
+        return m_obj_ptr->GetEnablePartialHelperLanesName();
     }
 
-    inline const char* GetCompressedZFetchEnabledDescription() const
+    inline const char* GetEnablePartialHelperLanesDescription() const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetCompressedZFetchEnabledDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD ZFormat: Internal GPU format of the depth buffer
-
-    // `ZFormat()` returns the value of the ZFormat field of the referenced object
-    inline Dive::Legacy::ZFormat ZFormat() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZFormat(m_id);
-    }
-
-    inline bool IsZFormatSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZFormatSet(m_id);
-    }
-
-    inline const char* GetZFormatName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZFormatName();
-    }
-
-    inline const char* GetZFormatDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZFormatDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD ZOrder: Indicates application preference for LateZ, EarlyZ, or ReZ
-
-    // `ZOrder()` returns the value of the ZOrder field of the referenced object
-    inline Dive::Legacy::ZOrder ZOrder() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ZOrder(m_id);
-    }
-
-    inline bool IsZOrderSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsZOrderSet(m_id);
-    }
-
-    inline const char* GetZOrderName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZOrderName();
-    }
-
-    inline const char* GetZOrderDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetZOrderDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD VSLateAlloc: Late VS wavefront allocation count. Value is the number of wavefronts
-    // minus one, since at least one VS wave can always launch with late alloc enabled
-
-    // `VSLateAlloc()` returns the value of the VSLateAlloc field of the referenced object
-    inline uint16_t VSLateAlloc() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->VSLateAlloc(m_id);
-    }
-
-    inline bool IsVSLateAllocSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsVSLateAllocSet(m_id);
-    }
-
-    inline const char* GetVSLateAllocName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVSLateAllocName();
-    }
-
-    inline const char* GetVSLateAllocDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVSLateAllocDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD DccEnabled: Whether DCC-based bandwidth-saving color compression is enabled
-
-    // `DccEnabled(uint32_t attachment)` returns the value of the DccEnabled field of the referenced
-    // object
-    inline bool DccEnabled(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->DccEnabled(m_id, attachment);
-    }
-
-    // `DccEnabled()` returns the array of values of the DccEnabled field of the referenced object
-    inline DccEnabledConstArray DccEnabled() const { return DccEnabledConstArray(m_obj_ptr, m_id); }
-
-    inline bool IsDccEnabledSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsDccEnabledSet(m_id, attachment);
-    }
-
-    inline const char* GetDccEnabledName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledName();
-    }
-
-    inline const char* GetDccEnabledDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetDccEnabledDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD ColorFormat: Per target attachment hardware color format
-
-    // `ColorFormat(uint32_t attachment)` returns the value of the ColorFormat field of the
-    // referenced object
-    inline Dive::Legacy::ColorFormat ColorFormat(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->ColorFormat(m_id, attachment);
-    }
-
-    // `ColorFormat()` returns the array of values of the ColorFormat field of the referenced object
-    inline ColorFormatConstArray ColorFormat() const
-    {
-        return ColorFormatConstArray(m_obj_ptr, m_id);
-    }
-
-    inline bool IsColorFormatSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsColorFormatSet(m_id, attachment);
-    }
-
-    inline const char* GetColorFormatName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatName();
-    }
-
-    inline const char* GetColorFormatDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetColorFormatDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Height: Per target attachment mip0 height
-
-    // `Mip0Height(uint32_t attachment)` returns the value of the Mip0Height field of the referenced
-    // object
-    inline uint32_t Mip0Height(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Height(m_id, attachment);
-    }
-
-    // `Mip0Height()` returns the array of values of the Mip0Height field of the referenced object
-    inline Mip0HeightConstArray Mip0Height() const { return Mip0HeightConstArray(m_obj_ptr, m_id); }
-
-    inline bool IsMip0HeightSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0HeightSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0HeightName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightName();
-    }
-
-    inline const char* GetMip0HeightDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0HeightDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Mip0Width: Per target attachment mip0 width
-
-    // `Mip0Width(uint32_t attachment)` returns the value of the Mip0Width field of the referenced
-    // object
-    inline uint32_t Mip0Width(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Mip0Width(m_id, attachment);
-    }
-
-    // `Mip0Width()` returns the array of values of the Mip0Width field of the referenced object
-    inline Mip0WidthConstArray Mip0Width() const { return Mip0WidthConstArray(m_obj_ptr, m_id); }
-
-    inline bool IsMip0WidthSet(uint32_t attachment) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMip0WidthSet(m_id, attachment);
-    }
-
-    inline const char* GetMip0WidthName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthName();
-    }
-
-    inline const char* GetMip0WidthDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMip0WidthDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Vgpr: Per shader stage vector general purpose register count. Always rounded up to
-    // nearest multiple of 4.
-
-    // `Vgpr(Dive::ShaderStage stage)` returns the value of the Vgpr field of the referenced object
-    inline uint16_t Vgpr(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Vgpr(m_id, stage);
-    }
-
-    // `Vgpr()` returns the array of values of the Vgpr field of the referenced object
-    inline VgprConstArray Vgpr() const { return VgprConstArray(m_obj_ptr, m_id); }
-
-    inline bool IsVgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsVgprSet(m_id, stage);
-    }
-
-    inline const char* GetVgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprName();
-    }
-
-    inline const char* GetVgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetVgprDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD Sgpr: Per shader stage scalar general purpose register count. Always rounded up to
-    // nearest multiple of 16
-
-    // `Sgpr(Dive::ShaderStage stage)` returns the value of the Sgpr field of the referenced object
-    inline uint16_t Sgpr(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->Sgpr(m_id, stage);
-    }
-
-    // `Sgpr()` returns the array of values of the Sgpr field of the referenced object
-    inline SgprConstArray Sgpr() const { return SgprConstArray(m_obj_ptr, m_id); }
-
-    inline bool IsSgprSet(Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsSgprSet(m_id, stage);
-    }
-
-    inline const char* GetSgprName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprName();
-    }
-
-    inline const char* GetSgprDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetSgprDescription();
+        return m_obj_ptr->GetEnablePartialHelperLanesDescription();
     }
 
     EventStateInfoConstRefT& operator=(const EventStateInfoConstRefT& other) = delete;
@@ -4905,22 +3910,14 @@ public:
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     using ScissorArray = typename CONFIG::ScissorArray;
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
+    using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
+    using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
+    using LogicOpArray = typename CONFIG::LogicOpArray;
+    using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     using AttachmentArray = typename CONFIG::AttachmentArray;
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
-    using DccEnabledArray = typename CONFIG::DccEnabledArray;
-    using DccEnabledConstArray = typename CONFIG::DccEnabledConstArray;
-    using ColorFormatArray = typename CONFIG::ColorFormatArray;
-    using ColorFormatConstArray = typename CONFIG::ColorFormatConstArray;
-    using Mip0HeightArray = typename CONFIG::Mip0HeightArray;
-    using Mip0HeightConstArray = typename CONFIG::Mip0HeightConstArray;
-    using Mip0WidthArray = typename CONFIG::Mip0WidthArray;
-    using Mip0WidthConstArray = typename CONFIG::Mip0WidthConstArray;
-    using VgprArray = typename CONFIG::VgprArray;
-    using VgprConstArray = typename CONFIG::VgprConstArray;
-    using SgprArray = typename CONFIG::SgprArray;
-    using SgprConstArray = typename CONFIG::SgprConstArray;
 
     // `size()` returns the number of elements
     inline typename Id::basic_type size() const { return m_size; }
@@ -6768,43 +5765,54 @@ public:
                                        kLogicOpEnabledOffset * m_cap);
     }
     // `LogicOpEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* LogicOpEnabledPtr(Id id) const
+    inline const bool* LogicOpEnabledPtr(Id id, uint32_t attachment = 0) const
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
                                        kLogicOpEnabledOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
 
         ;
     }
-    inline bool* LogicOpEnabledPtr(Id id)
+    inline bool* LogicOpEnabledPtr(Id id, uint32_t attachment = 0)
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
                                        kLogicOpEnabledOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
 
         ;
     }
     // `LogicOpEnabled(id)` retuns the `LogicOpEnabled` element of the object identified by `id`
-    inline bool LogicOpEnabled(Id id) const
+    inline bool LogicOpEnabled(Id id, uint32_t attachment) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *LogicOpEnabledPtr(id);
+        return *LogicOpEnabledPtr(id, attachment);
+    }
+
+    // `LogicOpEnabled(id)` returns the array of values of the LogicOpEnabled field of the object
+    // identified by `id`
+    inline LogicOpEnabledArray LogicOpEnabled(Id id)
+    {
+        return LogicOpEnabledArray(static_cast<SOA*>(this), id);
+    }
+    inline LogicOpEnabledConstArray LogicOpEnabled(Id id) const
+    {
+        return LogicOpEnabledConstArray(static_cast<const SOA*>(this), id);
     }
 
     // `SetLogicOpEnabled(id,value)` sets the `LogicOpEnabled` element of the object identified by
     // `id`
-    inline SOA& SetLogicOpEnabled(Id id, bool value)
+    inline SOA& SetLogicOpEnabled(Id id, uint32_t attachment, bool value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *LogicOpEnabledPtr(id) = value;
-        MarkFieldSet(id, kLogicOpEnabledIndex);
+        *LogicOpEnabledPtr(id, attachment) = value;
+        MarkFieldSet(id, kLogicOpEnabledIndex + attachment);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsLogicOpEnabledSet(Id id) const
+    inline bool IsLogicOpEnabledSet(Id id, uint32_t attachment) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kLogicOpEnabledIndex);
+        return IsFieldSet(id, kLogicOpEnabledIndex + attachment);
     }
 
     inline const char* GetLogicOpEnabledName() const { return "LogicOpEnabled"; }
@@ -6829,42 +5837,50 @@ public:
                                             kLogicOpOffset * m_cap);
     }
     // `LogicOpPtr()` returns a shared pointer to an array of `size()` elements
-    inline const VkLogicOp* LogicOpPtr(Id id) const
+    inline const VkLogicOp* LogicOpPtr(Id id, uint32_t attachment = 0) const
     {
         return reinterpret_cast<VkLogicOp*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
                                             kLogicOpOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
 
         ;
     }
-    inline VkLogicOp* LogicOpPtr(Id id)
+    inline VkLogicOp* LogicOpPtr(Id id, uint32_t attachment = 0)
     {
         return reinterpret_cast<VkLogicOp*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
                                             kLogicOpOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
 
         ;
     }
     // `LogicOp(id)` retuns the `LogicOp` element of the object identified by `id`
-    inline VkLogicOp LogicOp(Id id) const
+    inline VkLogicOp LogicOp(Id id, uint32_t attachment) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *LogicOpPtr(id);
+        return *LogicOpPtr(id, attachment);
+    }
+
+    // `LogicOp(id)` returns the array of values of the LogicOp field of the object identified by
+    // `id`
+    inline LogicOpArray      LogicOp(Id id) { return LogicOpArray(static_cast<SOA*>(this), id); }
+    inline LogicOpConstArray LogicOp(Id id) const
+    {
+        return LogicOpConstArray(static_cast<const SOA*>(this), id);
     }
 
     // `SetLogicOp(id,value)` sets the `LogicOp` element of the object identified by `id`
-    inline SOA& SetLogicOp(Id id, VkLogicOp value)
+    inline SOA& SetLogicOp(Id id, uint32_t attachment, VkLogicOp value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *LogicOpPtr(id) = value;
-        MarkFieldSet(id, kLogicOpIndex);
+        *LogicOpPtr(id, attachment) = value;
+        MarkFieldSet(id, kLogicOpIndex + attachment);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsLogicOpSet(Id id) const
+    inline bool IsLogicOpSet(Id id, uint32_t attachment) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kLogicOpIndex);
+        return IsFieldSet(id, kLogicOpIndex + attachment);
     }
 
     inline const char* GetLogicOpName() const { return "LogicOp"; }
@@ -7016,1036 +6032,718 @@ public:
     }
 
     //-----------------------------------------------
-    // FIELD ZAddr: The read and write VA of depth buffer (assumed to be same)
+    // FIELD LRZEnabled: Whether LRZ is enabled for depth
 
-    // `ZAddrPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint64_t* ZAddrPtr() const
+    // `LRZEnabledPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* LRZEnabledPtr() const
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kZAddrOffset * m_cap);
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZEnabledOffset * m_cap);
     }
-    inline uint64_t* ZAddrPtr()
+    inline bool* LRZEnabledPtr()
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kZAddrOffset * m_cap);
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZEnabledOffset * m_cap);
     }
-    // `ZAddrPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint64_t* ZAddrPtr(Id id) const
+    // `LRZEnabledPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* LRZEnabledPtr(Id id) const
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kZAddrOffset * m_cap) +
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    inline uint64_t* ZAddrPtr(Id id)
+    inline bool* LRZEnabledPtr(Id id)
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kZAddrOffset * m_cap) +
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    // `ZAddr(id)` retuns the `ZAddr` element of the object identified by `id`
-    inline uint64_t ZAddr(Id id) const
+    // `LRZEnabled(id)` retuns the `LRZEnabled` element of the object identified by `id`
+    inline bool LRZEnabled(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *ZAddrPtr(id);
+        return *LRZEnabledPtr(id);
     }
 
-    // `SetZAddr(id,value)` sets the `ZAddr` element of the object identified by `id`
-    inline SOA& SetZAddr(Id id, uint64_t value)
+    // `SetLRZEnabled(id,value)` sets the `LRZEnabled` element of the object identified by `id`
+    inline SOA& SetLRZEnabled(Id id, bool value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *ZAddrPtr(id) = value;
-        MarkFieldSet(id, kZAddrIndex);
+        *LRZEnabledPtr(id) = value;
+        MarkFieldSet(id, kLRZEnabledIndex);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsZAddrSet(Id id) const
+    inline bool IsLRZEnabledSet(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kZAddrIndex);
+        return IsFieldSet(id, kLRZEnabledIndex);
     }
 
-    inline const char* GetZAddrName() const { return "ZAddr"; }
+    inline const char* GetLRZEnabledName() const { return "LRZEnabled"; }
 
-    inline const char* GetZAddrDescription() const
+    inline const char* GetLRZEnabledDescription() const
     {
-        return "The read and write VA of depth buffer (assumed to be same)";
+        return "Whether LRZ is enabled for depth";
     }
 
     //-----------------------------------------------
-    // FIELD HTileAddr: VA of DB's HTile buffer
+    // FIELD LRZWrite: Whether LRZ write is enabled
 
-    // `HTileAddrPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint64_t* HTileAddrPtr() const
+    // `LRZWritePtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* LRZWritePtr() const
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kHTileAddrOffset * m_cap);
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZWriteOffset * m_cap);
     }
-    inline uint64_t* HTileAddrPtr()
+    inline bool* LRZWritePtr()
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kHTileAddrOffset * m_cap);
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZWriteOffset * m_cap);
     }
-    // `HTileAddrPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint64_t* HTileAddrPtr(Id id) const
+    // `LRZWritePtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* LRZWritePtr(Id id) const
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kHTileAddrOffset * m_cap) +
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    inline uint64_t* HTileAddrPtr(Id id)
+    inline bool* LRZWritePtr(Id id)
     {
-        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kHTileAddrOffset * m_cap) +
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kLRZWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    // `HTileAddr(id)` retuns the `HTileAddr` element of the object identified by `id`
-    inline uint64_t HTileAddr(Id id) const
+    // `LRZWrite(id)` retuns the `LRZWrite` element of the object identified by `id`
+    inline bool LRZWrite(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *HTileAddrPtr(id);
+        return *LRZWritePtr(id);
     }
 
-    // `SetHTileAddr(id,value)` sets the `HTileAddr` element of the object identified by `id`
-    inline SOA& SetHTileAddr(Id id, uint64_t value)
+    // `SetLRZWrite(id,value)` sets the `LRZWrite` element of the object identified by `id`
+    inline SOA& SetLRZWrite(Id id, bool value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *HTileAddrPtr(id) = value;
-        MarkFieldSet(id, kHTileAddrIndex);
+        *LRZWritePtr(id) = value;
+        MarkFieldSet(id, kLRZWriteIndex);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsHTileAddrSet(Id id) const
+    inline bool IsLRZWriteSet(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kHTileAddrIndex);
+        return IsFieldSet(id, kLRZWriteIndex);
     }
 
-    inline const char* GetHTileAddrName() const { return "HTileAddr"; }
+    inline const char* GetLRZWriteName() const { return "LRZWrite"; }
 
-    inline const char* GetHTileAddrDescription() const { return "VA of DB's HTile buffer"; }
+    inline const char* GetLRZWriteDescription() const { return "Whether LRZ write is enabled"; }
 
     //-----------------------------------------------
-    // FIELD HiZEnabled: Whether Hi-Z is enabled for depth
+    // FIELD LRZDirStatus: LRZ direction
 
-    // `HiZEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* HiZEnabledPtr() const
+    // `LRZDirStatusPtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_lrz_dir_status* LRZDirStatusPtr() const
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiZEnabledOffset * m_cap);
+        return reinterpret_cast<a6xx_lrz_dir_status*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                      kLRZDirStatusOffset * m_cap);
     }
-    inline bool* HiZEnabledPtr()
+    inline a6xx_lrz_dir_status* LRZDirStatusPtr()
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiZEnabledOffset * m_cap);
+        return reinterpret_cast<a6xx_lrz_dir_status*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                      kLRZDirStatusOffset * m_cap);
     }
-    // `HiZEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* HiZEnabledPtr(Id id) const
+    // `LRZDirStatusPtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_lrz_dir_status* LRZDirStatusPtr(Id id) const
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiZEnabledOffset * m_cap) +
+        return reinterpret_cast<a6xx_lrz_dir_status*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                      kLRZDirStatusOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    inline bool* HiZEnabledPtr(Id id)
+    inline a6xx_lrz_dir_status* LRZDirStatusPtr(Id id)
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiZEnabledOffset * m_cap) +
+        return reinterpret_cast<a6xx_lrz_dir_status*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                      kLRZDirStatusOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    // `HiZEnabled(id)` retuns the `HiZEnabled` element of the object identified by `id`
-    inline bool HiZEnabled(Id id) const
+    // `LRZDirStatus(id)` retuns the `LRZDirStatus` element of the object identified by `id`
+    inline a6xx_lrz_dir_status LRZDirStatus(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *HiZEnabledPtr(id);
+        return *LRZDirStatusPtr(id);
     }
 
-    // `SetHiZEnabled(id,value)` sets the `HiZEnabled` element of the object identified by `id`
-    inline SOA& SetHiZEnabled(Id id, bool value)
+    // `SetLRZDirStatus(id,value)` sets the `LRZDirStatus` element of the object identified by `id`
+    inline SOA& SetLRZDirStatus(Id id, a6xx_lrz_dir_status value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *HiZEnabledPtr(id) = value;
-        MarkFieldSet(id, kHiZEnabledIndex);
+        *LRZDirStatusPtr(id) = value;
+        MarkFieldSet(id, kLRZDirStatusIndex);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsHiZEnabledSet(Id id) const
+    inline bool IsLRZDirStatusSet(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kHiZEnabledIndex);
+        return IsFieldSet(id, kLRZDirStatusIndex);
     }
 
-    inline const char* GetHiZEnabledName() const { return "HiZEnabled"; }
+    inline const char* GetLRZDirStatusName() const { return "LRZDirStatus"; }
 
-    inline const char* GetHiZEnabledDescription() const
-    {
-        return "Whether Hi-Z is enabled for depth";
-    }
+    inline const char* GetLRZDirStatusDescription() const { return "LRZ direction"; }
 
     //-----------------------------------------------
-    // FIELD HiSEnabled: Whether Hi-S is enabled for stencil
+    // FIELD LRZDirWrite: Whether LRZ direction write is enabled
 
-    // `HiSEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* HiSEnabledPtr() const
+    // `LRZDirWritePtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* LRZDirWritePtr() const
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiSEnabledOffset * m_cap);
+                                       kLRZDirWriteOffset * m_cap);
     }
-    inline bool* HiSEnabledPtr()
+    inline bool* LRZDirWritePtr()
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiSEnabledOffset * m_cap);
+                                       kLRZDirWriteOffset * m_cap);
     }
-    // `HiSEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* HiSEnabledPtr(Id id) const
+    // `LRZDirWritePtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* LRZDirWritePtr(Id id) const
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiSEnabledOffset * m_cap) +
+                                       kLRZDirWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    inline bool* HiSEnabledPtr(Id id)
+    inline bool* LRZDirWritePtr(Id id)
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kHiSEnabledOffset * m_cap) +
+                                       kLRZDirWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    // `HiSEnabled(id)` retuns the `HiSEnabled` element of the object identified by `id`
-    inline bool HiSEnabled(Id id) const
+    // `LRZDirWrite(id)` retuns the `LRZDirWrite` element of the object identified by `id`
+    inline bool LRZDirWrite(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *HiSEnabledPtr(id);
+        return *LRZDirWritePtr(id);
     }
 
-    // `SetHiSEnabled(id,value)` sets the `HiSEnabled` element of the object identified by `id`
-    inline SOA& SetHiSEnabled(Id id, bool value)
+    // `SetLRZDirWrite(id,value)` sets the `LRZDirWrite` element of the object identified by `id`
+    inline SOA& SetLRZDirWrite(Id id, bool value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *HiSEnabledPtr(id) = value;
-        MarkFieldSet(id, kHiSEnabledIndex);
+        *LRZDirWritePtr(id) = value;
+        MarkFieldSet(id, kLRZDirWriteIndex);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsHiSEnabledSet(Id id) const
+    inline bool IsLRZDirWriteSet(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kHiSEnabledIndex);
+        return IsFieldSet(id, kLRZDirWriteIndex);
     }
 
-    inline const char* GetHiSEnabledName() const { return "HiSEnabled"; }
+    inline const char* GetLRZDirWriteName() const { return "LRZDirWrite"; }
 
-    inline const char* GetHiSEnabledDescription() const
+    inline const char* GetLRZDirWriteDescription() const
     {
-        return "Whether Hi-S is enabled for stencil";
+        return "Whether LRZ direction write is enabled";
     }
 
     //-----------------------------------------------
-    // FIELD ZCompressEnabled: Whether plane compression is enabled for depth buffers. To reduce
-    // bandwidth impact
+    // FIELD ZTestMode: Depth test mode
 
-    // `ZCompressEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* ZCompressEnabledPtr() const
+    // `ZTestModePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_ztest_mode* ZTestModePtr() const
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kZCompressEnabledOffset * m_cap);
+        return reinterpret_cast<a6xx_ztest_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kZTestModeOffset * m_cap);
     }
-    inline bool* ZCompressEnabledPtr()
+    inline a6xx_ztest_mode* ZTestModePtr()
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kZCompressEnabledOffset * m_cap);
+        return reinterpret_cast<a6xx_ztest_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kZTestModeOffset * m_cap);
     }
-    // `ZCompressEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* ZCompressEnabledPtr(Id id) const
+    // `ZTestModePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_ztest_mode* ZTestModePtr(Id id) const
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kZCompressEnabledOffset * m_cap) +
+        return reinterpret_cast<a6xx_ztest_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kZTestModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    inline bool* ZCompressEnabledPtr(Id id)
+    inline a6xx_ztest_mode* ZTestModePtr(Id id)
     {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kZCompressEnabledOffset * m_cap) +
+        return reinterpret_cast<a6xx_ztest_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kZTestModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    // `ZCompressEnabled(id)` retuns the `ZCompressEnabled` element of the object identified by `id`
-    inline bool ZCompressEnabled(Id id) const
+    // `ZTestMode(id)` retuns the `ZTestMode` element of the object identified by `id`
+    inline a6xx_ztest_mode ZTestMode(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *ZCompressEnabledPtr(id);
+        return *ZTestModePtr(id);
     }
 
-    // `SetZCompressEnabled(id,value)` sets the `ZCompressEnabled` element of the object identified
+    // `SetZTestMode(id,value)` sets the `ZTestMode` element of the object identified by `id`
+    inline SOA& SetZTestMode(Id id, a6xx_ztest_mode value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ZTestModePtr(id) = value;
+        MarkFieldSet(id, kZTestModeIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsZTestModeSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kZTestModeIndex);
+    }
+
+    inline const char* GetZTestModeName() const { return "ZTestMode"; }
+
+    inline const char* GetZTestModeDescription() const { return "Depth test mode"; }
+
+    //-----------------------------------------------
+    // FIELD BinW: Bin width
+
+    // `BinWPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint32_t* BinWPtr() const
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinWOffset * m_cap);
+    }
+    inline uint32_t* BinWPtr()
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinWOffset * m_cap);
+    }
+    // `BinWPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint32_t* BinWPtr(Id id) const
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinWOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint32_t* BinWPtr(Id id)
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinWOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `BinW(id)` retuns the `BinW` element of the object identified by `id`
+    inline uint32_t BinW(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *BinWPtr(id);
+    }
+
+    // `SetBinW(id,value)` sets the `BinW` element of the object identified by `id`
+    inline SOA& SetBinW(Id id, uint32_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *BinWPtr(id) = value;
+        MarkFieldSet(id, kBinWIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsBinWSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kBinWIndex);
+    }
+
+    inline const char* GetBinWName() const { return "BinW"; }
+
+    inline const char* GetBinWDescription() const { return "Bin width"; }
+
+    //-----------------------------------------------
+    // FIELD BinH: Bin Height
+
+    // `BinHPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint32_t* BinHPtr() const
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinHOffset * m_cap);
+    }
+    inline uint32_t* BinHPtr()
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinHOffset * m_cap);
+    }
+    // `BinHPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint32_t* BinHPtr(Id id) const
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinHOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint32_t* BinHPtr(Id id)
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kBinHOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `BinH(id)` retuns the `BinH` element of the object identified by `id`
+    inline uint32_t BinH(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *BinHPtr(id);
+    }
+
+    // `SetBinH(id,value)` sets the `BinH` element of the object identified by `id`
+    inline SOA& SetBinH(Id id, uint32_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *BinHPtr(id) = value;
+        MarkFieldSet(id, kBinHIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsBinHSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kBinHIndex);
+    }
+
+    inline const char* GetBinHName() const { return "BinH"; }
+
+    inline const char* GetBinHDescription() const { return "Bin Height"; }
+
+    //-----------------------------------------------
+    // FIELD RenderMode: Whether in binning pass or rendering pass
+
+    // `RenderModePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_render_mode* RenderModePtr() const
+    {
+        return reinterpret_cast<a6xx_render_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                   kRenderModeOffset * m_cap);
+    }
+    inline a6xx_render_mode* RenderModePtr()
+    {
+        return reinterpret_cast<a6xx_render_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                   kRenderModeOffset * m_cap);
+    }
+    // `RenderModePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_render_mode* RenderModePtr(Id id) const
+    {
+        return reinterpret_cast<a6xx_render_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                   kRenderModeOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline a6xx_render_mode* RenderModePtr(Id id)
+    {
+        return reinterpret_cast<a6xx_render_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                   kRenderModeOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `RenderMode(id)` retuns the `RenderMode` element of the object identified by `id`
+    inline a6xx_render_mode RenderMode(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *RenderModePtr(id);
+    }
+
+    // `SetRenderMode(id,value)` sets the `RenderMode` element of the object identified by `id`
+    inline SOA& SetRenderMode(Id id, a6xx_render_mode value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *RenderModePtr(id) = value;
+        MarkFieldSet(id, kRenderModeIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsRenderModeSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kRenderModeIndex);
+    }
+
+    inline const char* GetRenderModeName() const { return "RenderMode"; }
+
+    inline const char* GetRenderModeDescription() const
+    {
+        return "Whether in binning pass or rendering pass";
+    }
+
+    //-----------------------------------------------
+    // FIELD BuffersLocation: Whether the target buffer is in GMEM or SYSMEM
+
+    // `BuffersLocationPtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_buffers_location* BuffersLocationPtr() const
+    {
+        return reinterpret_cast<a6xx_buffers_location*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                        kBuffersLocationOffset * m_cap);
+    }
+    inline a6xx_buffers_location* BuffersLocationPtr()
+    {
+        return reinterpret_cast<a6xx_buffers_location*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                        kBuffersLocationOffset * m_cap);
+    }
+    // `BuffersLocationPtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_buffers_location* BuffersLocationPtr(Id id) const
+    {
+        return reinterpret_cast<a6xx_buffers_location*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                        kBuffersLocationOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline a6xx_buffers_location* BuffersLocationPtr(Id id)
+    {
+        return reinterpret_cast<a6xx_buffers_location*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                        kBuffersLocationOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `BuffersLocation(id)` retuns the `BuffersLocation` element of the object identified by `id`
+    inline a6xx_buffers_location BuffersLocation(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *BuffersLocationPtr(id);
+    }
+
+    // `SetBuffersLocation(id,value)` sets the `BuffersLocation` element of the object identified by
+    // `id`
+    inline SOA& SetBuffersLocation(Id id, a6xx_buffers_location value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *BuffersLocationPtr(id) = value;
+        MarkFieldSet(id, kBuffersLocationIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsBuffersLocationSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kBuffersLocationIndex);
+    }
+
+    inline const char* GetBuffersLocationName() const { return "BuffersLocation"; }
+
+    inline const char* GetBuffersLocationDescription() const
+    {
+        return "Whether the target buffer is in GMEM or SYSMEM";
+    }
+
+    //-----------------------------------------------
+    // FIELD ThreadSize: Whether the thread size is 64 or 128
+
+    // `ThreadSizePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_threadsize* ThreadSizePtr() const
+    {
+        return reinterpret_cast<a6xx_threadsize*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kThreadSizeOffset * m_cap);
+    }
+    inline a6xx_threadsize* ThreadSizePtr()
+    {
+        return reinterpret_cast<a6xx_threadsize*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kThreadSizeOffset * m_cap);
+    }
+    // `ThreadSizePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_threadsize* ThreadSizePtr(Id id) const
+    {
+        return reinterpret_cast<a6xx_threadsize*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kThreadSizeOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline a6xx_threadsize* ThreadSizePtr(Id id)
+    {
+        return reinterpret_cast<a6xx_threadsize*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                  kThreadSizeOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `ThreadSize(id)` retuns the `ThreadSize` element of the object identified by `id`
+    inline a6xx_threadsize ThreadSize(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *ThreadSizePtr(id);
+    }
+
+    // `SetThreadSize(id,value)` sets the `ThreadSize` element of the object identified by `id`
+    inline SOA& SetThreadSize(Id id, a6xx_threadsize value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ThreadSizePtr(id) = value;
+        MarkFieldSet(id, kThreadSizeIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsThreadSizeSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kThreadSizeIndex);
+    }
+
+    inline const char* GetThreadSizeName() const { return "ThreadSize"; }
+
+    inline const char* GetThreadSizeDescription() const
+    {
+        return "Whether the thread size is 64 or 128";
+    }
+
+    //-----------------------------------------------
+    // FIELD EnableAllHelperLanes: Whether all helper lanes are enabled of the 2x2 quad for fine
+    // derivatives
+
+    // `EnableAllHelperLanesPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* EnableAllHelperLanesPtr() const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kEnableAllHelperLanesOffset * m_cap);
+    }
+    inline bool* EnableAllHelperLanesPtr()
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kEnableAllHelperLanesOffset * m_cap);
+    }
+    // `EnableAllHelperLanesPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* EnableAllHelperLanesPtr(Id id) const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kEnableAllHelperLanesOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline bool* EnableAllHelperLanesPtr(Id id)
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kEnableAllHelperLanesOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `EnableAllHelperLanes(id)` retuns the `EnableAllHelperLanes` element of the object identified
     // by `id`
-    inline SOA& SetZCompressEnabled(Id id, bool value)
+    inline bool EnableAllHelperLanes(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        *ZCompressEnabledPtr(id) = value;
-        MarkFieldSet(id, kZCompressEnabledIndex);
+        return *EnableAllHelperLanesPtr(id);
+    }
+
+    // `SetEnableAllHelperLanes(id,value)` sets the `EnableAllHelperLanes` element of the object
+    // identified by `id`
+    inline SOA& SetEnableAllHelperLanes(Id id, bool value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *EnableAllHelperLanesPtr(id) = value;
+        MarkFieldSet(id, kEnableAllHelperLanesIndex);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsZCompressEnabledSet(Id id) const
+    inline bool IsEnableAllHelperLanesSet(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kZCompressEnabledIndex);
+        return IsFieldSet(id, kEnableAllHelperLanesIndex);
     }
 
-    inline const char* GetZCompressEnabledName() const { return "ZCompressEnabled"; }
+    inline const char* GetEnableAllHelperLanesName() const { return "EnableAllHelperLanes"; }
 
-    inline const char* GetZCompressEnabledDescription() const
+    inline const char* GetEnableAllHelperLanesDescription() const
     {
-        return "Whether plane compression is enabled for depth buffers. To reduce bandwidth impact";
+        return "Whether all helper lanes are enabled of the 2x2 quad for fine derivatives";
     }
 
     //-----------------------------------------------
-    // FIELD StencilCompressEnabled: Whether compression is enabled for stencil buffers. To reduce
-    // bandwidth impact
+    // FIELD EnablePartialHelperLanes: Whether 3 out of 4 helper lanes are enabled of the 2x2 quad
+    // for coarse derivatives
 
-    // `StencilCompressEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* StencilCompressEnabledPtr() const
+    // `EnablePartialHelperLanesPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* EnablePartialHelperLanesPtr() const
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kStencilCompressEnabledOffset * m_cap);
+                                       kEnablePartialHelperLanesOffset * m_cap);
     }
-    inline bool* StencilCompressEnabledPtr()
+    inline bool* EnablePartialHelperLanesPtr()
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kStencilCompressEnabledOffset * m_cap);
+                                       kEnablePartialHelperLanesOffset * m_cap);
     }
-    // `StencilCompressEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* StencilCompressEnabledPtr(Id id) const
+    // `EnablePartialHelperLanesPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* EnablePartialHelperLanesPtr(Id id) const
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kStencilCompressEnabledOffset * m_cap) +
+                                       kEnablePartialHelperLanesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    inline bool* StencilCompressEnabledPtr(Id id)
+    inline bool* EnablePartialHelperLanesPtr(Id id)
     {
         return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kStencilCompressEnabledOffset * m_cap) +
+                                       kEnablePartialHelperLanesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
         ;
     }
-    // `StencilCompressEnabled(id)` retuns the `StencilCompressEnabled` element of the object
+    // `EnablePartialHelperLanes(id)` retuns the `EnablePartialHelperLanes` element of the object
     // identified by `id`
-    inline bool StencilCompressEnabled(Id id) const
+    inline bool EnablePartialHelperLanes(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return *StencilCompressEnabledPtr(id);
+        return *EnablePartialHelperLanesPtr(id);
     }
 
-    // `SetStencilCompressEnabled(id,value)` sets the `StencilCompressEnabled` element of the object
-    // identified by `id`
-    inline SOA& SetStencilCompressEnabled(Id id, bool value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *StencilCompressEnabledPtr(id) = value;
-        MarkFieldSet(id, kStencilCompressEnabledIndex);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsStencilCompressEnabledSet(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kStencilCompressEnabledIndex);
-    }
-
-    inline const char* GetStencilCompressEnabledName() const { return "StencilCompressEnabled"; }
-
-    inline const char* GetStencilCompressEnabledDescription() const
-    {
-        return "Whether compression is enabled for stencil buffers. To reduce bandwidth impact";
-    }
-
-    //-----------------------------------------------
-    // FIELD CompressedZFetchEnabled: Whether shader fetch of compressed depth buffers is enabled
-
-    // `CompressedZFetchEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* CompressedZFetchEnabledPtr() const
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kCompressedZFetchEnabledOffset * m_cap);
-    }
-    inline bool* CompressedZFetchEnabledPtr()
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kCompressedZFetchEnabledOffset * m_cap);
-    }
-    // `CompressedZFetchEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* CompressedZFetchEnabledPtr(Id id) const
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kCompressedZFetchEnabledOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    inline bool* CompressedZFetchEnabledPtr(Id id)
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kCompressedZFetchEnabledOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    // `CompressedZFetchEnabled(id)` retuns the `CompressedZFetchEnabled` element of the object
-    // identified by `id`
-    inline bool CompressedZFetchEnabled(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *CompressedZFetchEnabledPtr(id);
-    }
-
-    // `SetCompressedZFetchEnabled(id,value)` sets the `CompressedZFetchEnabled` element of the
+    // `SetEnablePartialHelperLanes(id,value)` sets the `EnablePartialHelperLanes` element of the
     // object identified by `id`
-    inline SOA& SetCompressedZFetchEnabled(Id id, bool value)
+    inline SOA& SetEnablePartialHelperLanes(Id id, bool value)
     {
         DIVE_ASSERT(IsValidId(id));
-        *CompressedZFetchEnabledPtr(id) = value;
-        MarkFieldSet(id, kCompressedZFetchEnabledIndex);
+        *EnablePartialHelperLanesPtr(id) = value;
+        MarkFieldSet(id, kEnablePartialHelperLanesIndex);
         return static_cast<SOA&>(*this);
     }
 
-    inline bool IsCompressedZFetchEnabledSet(Id id) const
+    inline bool IsEnablePartialHelperLanesSet(Id id) const
     {
         DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kCompressedZFetchEnabledIndex);
+        return IsFieldSet(id, kEnablePartialHelperLanesIndex);
     }
 
-    inline const char* GetCompressedZFetchEnabledName() const { return "CompressedZFetchEnabled"; }
-
-    inline const char* GetCompressedZFetchEnabledDescription() const
-    {
-        return "Whether shader fetch of compressed depth buffers is enabled";
-    }
-
-    //-----------------------------------------------
-    // FIELD ZFormat: Internal GPU format of the depth buffer
-
-    // `ZFormatPtr()` returns a shared pointer to an array of `size()` elements
-    inline const Dive::Legacy::ZFormat* ZFormatPtr() const
-    {
-        return reinterpret_cast<Dive::Legacy::ZFormat*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                        kZFormatOffset * m_cap);
-    }
-    inline Dive::Legacy::ZFormat* ZFormatPtr()
-    {
-        return reinterpret_cast<Dive::Legacy::ZFormat*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                        kZFormatOffset * m_cap);
-    }
-    // `ZFormatPtr()` returns a shared pointer to an array of `size()` elements
-    inline const Dive::Legacy::ZFormat* ZFormatPtr(Id id) const
-    {
-        return reinterpret_cast<Dive::Legacy::ZFormat*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                        kZFormatOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    inline Dive::Legacy::ZFormat* ZFormatPtr(Id id)
-    {
-        return reinterpret_cast<Dive::Legacy::ZFormat*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                        kZFormatOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    // `ZFormat(id)` retuns the `ZFormat` element of the object identified by `id`
-    inline Dive::Legacy::ZFormat ZFormat(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *ZFormatPtr(id);
-    }
-
-    // `SetZFormat(id,value)` sets the `ZFormat` element of the object identified by `id`
-    inline SOA& SetZFormat(Id id, Dive::Legacy::ZFormat value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *ZFormatPtr(id) = value;
-        MarkFieldSet(id, kZFormatIndex);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsZFormatSet(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kZFormatIndex);
-    }
-
-    inline const char* GetZFormatName() const { return "ZFormat"; }
-
-    inline const char* GetZFormatDescription() const
-    {
-        return "Internal GPU format of the depth buffer";
-    }
-
-    //-----------------------------------------------
-    // FIELD ZOrder: Indicates application preference for LateZ, EarlyZ, or ReZ
-
-    // `ZOrderPtr()` returns a shared pointer to an array of `size()` elements
-    inline const Dive::Legacy::ZOrder* ZOrderPtr() const
-    {
-        return reinterpret_cast<Dive::Legacy::ZOrder*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                       kZOrderOffset * m_cap);
-    }
-    inline Dive::Legacy::ZOrder* ZOrderPtr()
-    {
-        return reinterpret_cast<Dive::Legacy::ZOrder*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                       kZOrderOffset * m_cap);
-    }
-    // `ZOrderPtr()` returns a shared pointer to an array of `size()` elements
-    inline const Dive::Legacy::ZOrder* ZOrderPtr(Id id) const
-    {
-        return reinterpret_cast<Dive::Legacy::ZOrder*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                       kZOrderOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    inline Dive::Legacy::ZOrder* ZOrderPtr(Id id)
-    {
-        return reinterpret_cast<Dive::Legacy::ZOrder*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                                       kZOrderOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    // `ZOrder(id)` retuns the `ZOrder` element of the object identified by `id`
-    inline Dive::Legacy::ZOrder ZOrder(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *ZOrderPtr(id);
-    }
-
-    // `SetZOrder(id,value)` sets the `ZOrder` element of the object identified by `id`
-    inline SOA& SetZOrder(Id id, Dive::Legacy::ZOrder value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *ZOrderPtr(id) = value;
-        MarkFieldSet(id, kZOrderIndex);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsZOrderSet(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kZOrderIndex);
-    }
-
-    inline const char* GetZOrderName() const { return "ZOrder"; }
-
-    inline const char* GetZOrderDescription() const
-    {
-        return "Indicates application preference for LateZ, EarlyZ, or ReZ";
-    }
-
-    //-----------------------------------------------
-    // FIELD VSLateAlloc: Late VS wavefront allocation count. Value is the number of wavefronts
-    // minus one, since at least one VS wave can always launch with late alloc enabled
-
-    // `VSLateAllocPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint16_t* VSLateAllocPtr() const
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVSLateAllocOffset * m_cap);
-    }
-    inline uint16_t* VSLateAllocPtr()
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVSLateAllocOffset * m_cap);
-    }
-    // `VSLateAllocPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint16_t* VSLateAllocPtr(Id id) const
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVSLateAllocOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    inline uint16_t* VSLateAllocPtr(Id id)
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVSLateAllocOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    // `VSLateAlloc(id)` retuns the `VSLateAlloc` element of the object identified by `id`
-    inline uint16_t VSLateAlloc(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *VSLateAllocPtr(id);
-    }
-
-    // `SetVSLateAlloc(id,value)` sets the `VSLateAlloc` element of the object identified by `id`
-    inline SOA& SetVSLateAlloc(Id id, uint16_t value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *VSLateAllocPtr(id) = value;
-        MarkFieldSet(id, kVSLateAllocIndex);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsVSLateAllocSet(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kVSLateAllocIndex);
-    }
-
-    inline const char* GetVSLateAllocName() const { return "VSLateAlloc"; }
-
-    inline const char* GetVSLateAllocDescription() const
-    {
-        return "Late VS wavefront allocation count. Value is the number of wavefronts minus one, "
-               "since at least one VS wave can always launch with late alloc enabled";
-    }
-
-    //-----------------------------------------------
-    // FIELD DccEnabled: Whether DCC-based bandwidth-saving color compression is enabled
-
-    // `DccEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* DccEnabledPtr() const
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kDccEnabledOffset * m_cap);
-    }
-    inline bool* DccEnabledPtr()
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kDccEnabledOffset * m_cap);
-    }
-    // `DccEnabledPtr()` returns a shared pointer to an array of `size()` elements
-    inline const bool* DccEnabledPtr(Id id, uint32_t attachment = 0) const
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kDccEnabledOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    inline bool* DccEnabledPtr(Id id, uint32_t attachment = 0)
-    {
-        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                       kDccEnabledOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    // `DccEnabled(id)` retuns the `DccEnabled` element of the object identified by `id`
-    inline bool DccEnabled(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *DccEnabledPtr(id, attachment);
-    }
-
-    // `DccEnabled(id)` returns the array of values of the DccEnabled field of the object identified
-    // by `id`
-    inline DccEnabledArray DccEnabled(Id id)
-    {
-        return DccEnabledArray(static_cast<SOA*>(this), id);
-    }
-    inline DccEnabledConstArray DccEnabled(Id id) const
-    {
-        return DccEnabledConstArray(static_cast<const SOA*>(this), id);
-    }
-
-    // `SetDccEnabled(id,value)` sets the `DccEnabled` element of the object identified by `id`
-    inline SOA& SetDccEnabled(Id id, uint32_t attachment, bool value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *DccEnabledPtr(id, attachment) = value;
-        MarkFieldSet(id, kDccEnabledIndex + attachment);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsDccEnabledSet(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kDccEnabledIndex + attachment);
-    }
-
-    inline const char* GetDccEnabledName() const { return "DccEnabled"; }
-
-    inline const char* GetDccEnabledDescription() const
-    {
-        return "Whether DCC-based bandwidth-saving color compression is enabled";
-    }
-
-    //-----------------------------------------------
-    // FIELD ColorFormat: Per target attachment hardware color format
-
-    // `ColorFormatPtr()` returns a shared pointer to an array of `size()` elements
-    inline const Dive::Legacy::ColorFormat* ColorFormatPtr() const
-    {
-        return reinterpret_cast<Dive::Legacy::ColorFormat*>(
-        reinterpret_cast<uint8_t*>(m_buffer.get()) + kColorFormatOffset * m_cap);
-    }
-    inline Dive::Legacy::ColorFormat* ColorFormatPtr()
-    {
-        return reinterpret_cast<Dive::Legacy::ColorFormat*>(
-        reinterpret_cast<uint8_t*>(m_buffer.get()) + kColorFormatOffset * m_cap);
-    }
-    // `ColorFormatPtr()` returns a shared pointer to an array of `size()` elements
-    inline const Dive::Legacy::ColorFormat* ColorFormatPtr(Id id, uint32_t attachment = 0) const
-    {
-        return reinterpret_cast<Dive::Legacy::ColorFormat*>(
-               reinterpret_cast<uint8_t*>(m_buffer.get()) + kColorFormatOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    inline Dive::Legacy::ColorFormat* ColorFormatPtr(Id id, uint32_t attachment = 0)
-    {
-        return reinterpret_cast<Dive::Legacy::ColorFormat*>(
-               reinterpret_cast<uint8_t*>(m_buffer.get()) + kColorFormatOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    // `ColorFormat(id)` retuns the `ColorFormat` element of the object identified by `id`
-    inline Dive::Legacy::ColorFormat ColorFormat(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *ColorFormatPtr(id, attachment);
-    }
-
-    // `ColorFormat(id)` returns the array of values of the ColorFormat field of the object
-    // identified by `id`
-    inline ColorFormatArray ColorFormat(Id id)
+    inline const char* GetEnablePartialHelperLanesName() const
     {
-        return ColorFormatArray(static_cast<SOA*>(this), id);
+        return "EnablePartialHelperLanes";
     }
-    inline ColorFormatConstArray ColorFormat(Id id) const
-    {
-        return ColorFormatConstArray(static_cast<const SOA*>(this), id);
-    }
-
-    // `SetColorFormat(id,value)` sets the `ColorFormat` element of the object identified by `id`
-    inline SOA& SetColorFormat(Id id, uint32_t attachment, Dive::Legacy::ColorFormat value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *ColorFormatPtr(id, attachment) = value;
-        MarkFieldSet(id, kColorFormatIndex + attachment);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsColorFormatSet(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kColorFormatIndex + attachment);
-    }
-
-    inline const char* GetColorFormatName() const { return "ColorFormat"; }
-
-    inline const char* GetColorFormatDescription() const
-    {
-        return "Per target attachment hardware color format";
-    }
-
-    //-----------------------------------------------
-    // FIELD Mip0Height: Per target attachment mip0 height
-
-    // `Mip0HeightPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint32_t* Mip0HeightPtr() const
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0HeightOffset * m_cap);
-    }
-    inline uint32_t* Mip0HeightPtr()
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0HeightOffset * m_cap);
-    }
-    // `Mip0HeightPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint32_t* Mip0HeightPtr(Id id, uint32_t attachment = 0) const
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0HeightOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    inline uint32_t* Mip0HeightPtr(Id id, uint32_t attachment = 0)
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0HeightOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    // `Mip0Height(id)` retuns the `Mip0Height` element of the object identified by `id`
-    inline uint32_t Mip0Height(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *Mip0HeightPtr(id, attachment);
-    }
-
-    // `Mip0Height(id)` returns the array of values of the Mip0Height field of the object identified
-    // by `id`
-    inline Mip0HeightArray Mip0Height(Id id)
-    {
-        return Mip0HeightArray(static_cast<SOA*>(this), id);
-    }
-    inline Mip0HeightConstArray Mip0Height(Id id) const
-    {
-        return Mip0HeightConstArray(static_cast<const SOA*>(this), id);
-    }
-
-    // `SetMip0Height(id,value)` sets the `Mip0Height` element of the object identified by `id`
-    inline SOA& SetMip0Height(Id id, uint32_t attachment, uint32_t value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *Mip0HeightPtr(id, attachment) = value;
-        MarkFieldSet(id, kMip0HeightIndex + attachment);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsMip0HeightSet(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kMip0HeightIndex + attachment);
-    }
-
-    inline const char* GetMip0HeightName() const { return "Mip0Height"; }
-
-    inline const char* GetMip0HeightDescription() const
-    {
-        return "Per target attachment mip0 height";
-    }
-
-    //-----------------------------------------------
-    // FIELD Mip0Width: Per target attachment mip0 width
-
-    // `Mip0WidthPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint32_t* Mip0WidthPtr() const
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0WidthOffset * m_cap);
-    }
-    inline uint32_t* Mip0WidthPtr()
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0WidthOffset * m_cap);
-    }
-    // `Mip0WidthPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint32_t* Mip0WidthPtr(Id id, uint32_t attachment = 0) const
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0WidthOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    inline uint32_t* Mip0WidthPtr(Id id, uint32_t attachment = 0)
-    {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kMip0WidthOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * 8 + attachment
-
-        ;
-    }
-    // `Mip0Width(id)` retuns the `Mip0Width` element of the object identified by `id`
-    inline uint32_t Mip0Width(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *Mip0WidthPtr(id, attachment);
-    }
-
-    // `Mip0Width(id)` returns the array of values of the Mip0Width field of the object identified
-    // by `id`
-    inline Mip0WidthArray Mip0Width(Id id) { return Mip0WidthArray(static_cast<SOA*>(this), id); }
-    inline Mip0WidthConstArray Mip0Width(Id id) const
-    {
-        return Mip0WidthConstArray(static_cast<const SOA*>(this), id);
-    }
-
-    // `SetMip0Width(id,value)` sets the `Mip0Width` element of the object identified by `id`
-    inline SOA& SetMip0Width(Id id, uint32_t attachment, uint32_t value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *Mip0WidthPtr(id, attachment) = value;
-        MarkFieldSet(id, kMip0WidthIndex + attachment);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsMip0WidthSet(Id id, uint32_t attachment) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kMip0WidthIndex + attachment);
-    }
-
-    inline const char* GetMip0WidthName() const { return "Mip0Width"; }
-
-    inline const char* GetMip0WidthDescription() const
-    {
-        return "Per target attachment mip0 width";
-    }
-
-    //-----------------------------------------------
-    // FIELD Vgpr: Per shader stage vector general purpose register count. Always rounded up to
-    // nearest multiple of 4.
-
-    // `VgprPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint16_t* VgprPtr() const
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVgprOffset * m_cap);
-    }
-    inline uint16_t* VgprPtr()
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVgprOffset * m_cap);
-    }
-    // `VgprPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint16_t* VgprPtr(
-    Id                id,
-    Dive::ShaderStage stage = static_cast<Dive::ShaderStage>(0)) const
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVgprOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * Dive::kShaderStageCount +
-               static_cast<uint32_t>(stage)
-
-        ;
-    }
-    inline uint16_t* VgprPtr(Id id, Dive::ShaderStage stage = static_cast<Dive::ShaderStage>(0))
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kVgprOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * Dive::kShaderStageCount +
-               static_cast<uint32_t>(stage)
-
-        ;
-    }
-    // `Vgpr(id)` retuns the `Vgpr` element of the object identified by `id`
-    inline uint16_t Vgpr(Id id, Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *VgprPtr(id, stage);
-    }
-
-    // `Vgpr(id)` returns the array of values of the Vgpr field of the object identified by `id`
-    inline VgprArray      Vgpr(Id id) { return VgprArray(static_cast<SOA*>(this), id); }
-    inline VgprConstArray Vgpr(Id id) const
-    {
-        return VgprConstArray(static_cast<const SOA*>(this), id);
-    }
-
-    // `SetVgpr(id,value)` sets the `Vgpr` element of the object identified by `id`
-    inline SOA& SetVgpr(Id id, Dive::ShaderStage stage, uint16_t value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *VgprPtr(id, stage) = value;
-        MarkFieldSet(id, kVgprIndex + static_cast<uint32_t>(stage));
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsVgprSet(Id id, Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kVgprIndex + static_cast<uint32_t>(stage));
-    }
-
-    inline const char* GetVgprName() const { return "Vgpr"; }
-
-    inline const char* GetVgprDescription() const
-    {
-        return "Per shader stage vector general purpose register count. Always rounded up to "
-               "nearest multiple of 4.";
-    }
-
-    //-----------------------------------------------
-    // FIELD Sgpr: Per shader stage scalar general purpose register count. Always rounded up to
-    // nearest multiple of 16
-
-    // `SgprPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint16_t* SgprPtr() const
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kSgprOffset * m_cap);
-    }
-    inline uint16_t* SgprPtr()
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kSgprOffset * m_cap);
-    }
-    // `SgprPtr()` returns a shared pointer to an array of `size()` elements
-    inline const uint16_t* SgprPtr(
-    Id                id,
-    Dive::ShaderStage stage = static_cast<Dive::ShaderStage>(0)) const
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kSgprOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * Dive::kShaderStageCount +
-               static_cast<uint32_t>(stage)
-
-        ;
-    }
-    inline uint16_t* SgprPtr(Id id, Dive::ShaderStage stage = static_cast<Dive::ShaderStage>(0))
-    {
-        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                           kSgprOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id) * Dive::kShaderStageCount +
-               static_cast<uint32_t>(stage)
-
-        ;
-    }
-    // `Sgpr(id)` retuns the `Sgpr` element of the object identified by `id`
-    inline uint16_t Sgpr(Id id, Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *SgprPtr(id, stage);
-    }
-
-    // `Sgpr(id)` returns the array of values of the Sgpr field of the object identified by `id`
-    inline SgprArray      Sgpr(Id id) { return SgprArray(static_cast<SOA*>(this), id); }
-    inline SgprConstArray Sgpr(Id id) const
-    {
-        return SgprConstArray(static_cast<const SOA*>(this), id);
-    }
-
-    // `SetSgpr(id,value)` sets the `Sgpr` element of the object identified by `id`
-    inline SOA& SetSgpr(Id id, Dive::ShaderStage stage, uint16_t value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *SgprPtr(id, stage) = value;
-        MarkFieldSet(id, kSgprIndex + static_cast<uint32_t>(stage));
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsSgprSet(Id id, Dive::ShaderStage stage) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kSgprIndex + static_cast<uint32_t>(stage));
-    }
-
-    inline const char* GetSgprName() const { return "Sgpr"; }
 
-    inline const char* GetSgprDescription() const
+    inline const char* GetEnablePartialHelperLanesDescription() const
     {
-        return "Per shader stage scalar general purpose register count. Always rounded up to "
-               "nearest multiple of 16";
+        return "Whether 3 out of 4 helper lanes are enabled of the 2x2 quad for coarse derivatives";
     }
 
     // `operator[]` returns a reference to an element identified by `id`. E.g.:
@@ -8364,20 +7062,22 @@ protected:
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLogicOpEnabledIndex = PARTIAL_INDEX_EventStateInfo;
     static constexpr size_t   kLogicOpEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLogicOpEnabledSize = sizeof(bool);
+    static constexpr size_t   kLogicOpEnabledArrayCount = 8;
+    static constexpr size_t   kLogicOpEnabledSize = sizeof(bool) * kLogicOpEnabledArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLogicOpEnabledOffset + kLogicOpEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kLogicOpEnabledIndex + 1
+#define PARTIAL_INDEX_EventStateInfo kLogicOpEnabledIndex + kLogicOpEnabledArrayCount
     static_assert(alignof(VkLogicOp) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLogicOpIndex = PARTIAL_INDEX_EventStateInfo;
     static constexpr size_t   kLogicOpOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLogicOpSize = sizeof(VkLogicOp);
+    static constexpr size_t   kLogicOpArrayCount = 8;
+    static constexpr size_t   kLogicOpSize = sizeof(VkLogicOp) * kLogicOpArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLogicOpOffset + kLogicOpSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kLogicOpIndex + 1
+#define PARTIAL_INDEX_EventStateInfo kLogicOpIndex + kLogicOpArrayCount
     static_assert(alignof(VkPipelineColorBlendAttachmentState) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kAttachmentIndex = PARTIAL_INDEX_EventStateInfo;
@@ -8399,157 +7099,114 @@ protected:
 #define PARTIAL_SIZE_EventStateInfo kBlendConstantOffset + kBlendConstantSize
 #undef PARTIAL_INDEX_EventStateInfo
 #define PARTIAL_INDEX_EventStateInfo kBlendConstantIndex + kBlendConstantArrayCount
-    static_assert(alignof(uint64_t) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kZAddrIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kZAddrOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kZAddrSize = sizeof(uint64_t);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kZAddrOffset + kZAddrSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kZAddrIndex + 1
-    static_assert(alignof(uint64_t) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kHTileAddrIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kHTileAddrOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kHTileAddrSize = sizeof(uint64_t);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kHTileAddrOffset + kHTileAddrSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kHTileAddrIndex + 1
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kHiZEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kHiZEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kHiZEnabledSize = sizeof(bool);
+    static constexpr uint32_t kLRZEnabledIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kLRZEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kLRZEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kHiZEnabledOffset + kHiZEnabledSize
+#define PARTIAL_SIZE_EventStateInfo kLRZEnabledOffset + kLRZEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kHiZEnabledIndex + 1
+#define PARTIAL_INDEX_EventStateInfo kLRZEnabledIndex + 1
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kHiSEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kHiSEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kHiSEnabledSize = sizeof(bool);
+    static constexpr uint32_t kLRZWriteIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kLRZWriteOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kLRZWriteSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kHiSEnabledOffset + kHiSEnabledSize
+#define PARTIAL_SIZE_EventStateInfo kLRZWriteOffset + kLRZWriteSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kHiSEnabledIndex + 1
+#define PARTIAL_INDEX_EventStateInfo kLRZWriteIndex + 1
+    static_assert(alignof(a6xx_lrz_dir_status) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kLRZDirStatusIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kLRZDirStatusOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kLRZDirStatusSize = sizeof(a6xx_lrz_dir_status);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kLRZDirStatusOffset + kLRZDirStatusSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kLRZDirStatusIndex + 1
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kZCompressEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kZCompressEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kZCompressEnabledSize = sizeof(bool);
+    static constexpr uint32_t kLRZDirWriteIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kLRZDirWriteOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kLRZDirWriteSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kZCompressEnabledOffset + kZCompressEnabledSize
+#define PARTIAL_SIZE_EventStateInfo kLRZDirWriteOffset + kLRZDirWriteSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kZCompressEnabledIndex + 1
-    static_assert(alignof(bool) <= kAlignment,
+#define PARTIAL_INDEX_EventStateInfo kLRZDirWriteIndex + 1
+    static_assert(alignof(a6xx_ztest_mode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kStencilCompressEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kStencilCompressEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kStencilCompressEnabledSize = sizeof(bool);
+    static constexpr uint32_t kZTestModeIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kZTestModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kZTestModeSize = sizeof(a6xx_ztest_mode);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kStencilCompressEnabledOffset + kStencilCompressEnabledSize
+#define PARTIAL_SIZE_EventStateInfo kZTestModeOffset + kZTestModeSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kStencilCompressEnabledIndex + 1
-    static_assert(alignof(bool) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kCompressedZFetchEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kCompressedZFetchEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kCompressedZFetchEnabledSize = sizeof(bool);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kCompressedZFetchEnabledOffset + kCompressedZFetchEnabledSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kCompressedZFetchEnabledIndex + 1
-    static_assert(alignof(Dive::Legacy::ZFormat) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kZFormatIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kZFormatOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kZFormatSize = sizeof(Dive::Legacy::ZFormat);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kZFormatOffset + kZFormatSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kZFormatIndex + 1
-    static_assert(alignof(Dive::Legacy::ZOrder) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kZOrderIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kZOrderOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kZOrderSize = sizeof(Dive::Legacy::ZOrder);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kZOrderOffset + kZOrderSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kZOrderIndex + 1
-    static_assert(alignof(uint16_t) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kVSLateAllocIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kVSLateAllocOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kVSLateAllocSize = sizeof(uint16_t);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kVSLateAllocOffset + kVSLateAllocSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kVSLateAllocIndex + 1
-    static_assert(alignof(bool) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kDccEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDccEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDccEnabledArrayCount = 8;
-    static constexpr size_t   kDccEnabledSize = sizeof(bool) * kDccEnabledArrayCount;
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kDccEnabledOffset + kDccEnabledSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kDccEnabledIndex + kDccEnabledArrayCount
-    static_assert(alignof(Dive::Legacy::ColorFormat) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kColorFormatIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kColorFormatOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kColorFormatArrayCount = 8;
-    static constexpr size_t   kColorFormatSize = sizeof(Dive::Legacy::ColorFormat) *
-                                               kColorFormatArrayCount;
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kColorFormatOffset + kColorFormatSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kColorFormatIndex + kColorFormatArrayCount
+#define PARTIAL_INDEX_EventStateInfo kZTestModeIndex + 1
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kMip0HeightIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMip0HeightOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMip0HeightArrayCount = 8;
-    static constexpr size_t   kMip0HeightSize = sizeof(uint32_t) * kMip0HeightArrayCount;
+    static constexpr uint32_t kBinWIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kBinWOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kBinWSize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kMip0HeightOffset + kMip0HeightSize
+#define PARTIAL_SIZE_EventStateInfo kBinWOffset + kBinWSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kMip0HeightIndex + kMip0HeightArrayCount
+#define PARTIAL_INDEX_EventStateInfo kBinWIndex + 1
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kMip0WidthIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMip0WidthOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMip0WidthArrayCount = 8;
-    static constexpr size_t   kMip0WidthSize = sizeof(uint32_t) * kMip0WidthArrayCount;
+    static constexpr uint32_t kBinHIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kBinHOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kBinHSize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kMip0WidthOffset + kMip0WidthSize
+#define PARTIAL_SIZE_EventStateInfo kBinHOffset + kBinHSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kMip0WidthIndex + kMip0WidthArrayCount
-    static_assert(alignof(uint16_t) <= kAlignment,
+#define PARTIAL_INDEX_EventStateInfo kBinHIndex + 1
+    static_assert(alignof(a6xx_render_mode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kVgprIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kVgprOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kVgprArrayCount = Dive::kShaderStageCount;
-    static constexpr size_t   kVgprSize = sizeof(uint16_t) * kVgprArrayCount;
+    static constexpr uint32_t kRenderModeIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kRenderModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kRenderModeSize = sizeof(a6xx_render_mode);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kVgprOffset + kVgprSize
+#define PARTIAL_SIZE_EventStateInfo kRenderModeOffset + kRenderModeSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kVgprIndex + kVgprArrayCount
-    static_assert(alignof(uint16_t) <= kAlignment,
+#define PARTIAL_INDEX_EventStateInfo kRenderModeIndex + 1
+    static_assert(alignof(a6xx_buffers_location) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kSgprIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kSgprOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kSgprArrayCount = Dive::kShaderStageCount;
-    static constexpr size_t   kSgprSize = sizeof(uint16_t) * kSgprArrayCount;
+    static constexpr uint32_t kBuffersLocationIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kBuffersLocationOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kBuffersLocationSize = sizeof(a6xx_buffers_location);
 #undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kSgprOffset + kSgprSize
+#define PARTIAL_SIZE_EventStateInfo kBuffersLocationOffset + kBuffersLocationSize
 #undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kSgprIndex + kSgprArrayCount
+#define PARTIAL_INDEX_EventStateInfo kBuffersLocationIndex + 1
+    static_assert(alignof(a6xx_threadsize) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kThreadSizeIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kThreadSizeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kThreadSizeSize = sizeof(a6xx_threadsize);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kThreadSizeOffset + kThreadSizeSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kThreadSizeIndex + 1
+    static_assert(alignof(bool) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kEnableAllHelperLanesIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kEnableAllHelperLanesOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kEnableAllHelperLanesSize = sizeof(bool);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kEnableAllHelperLanesOffset + kEnableAllHelperLanesSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kEnableAllHelperLanesIndex + 1
+    static_assert(alignof(bool) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kEnablePartialHelperLanesIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kEnablePartialHelperLanesOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kEnablePartialHelperLanesSize = sizeof(bool);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kEnablePartialHelperLanesOffset + kEnablePartialHelperLanesSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kEnablePartialHelperLanesIndex + 1
 
     // Number of bytes required to store each element
     static constexpr size_t kElemSize = PARTIAL_SIZE_EventStateInfo;
@@ -8621,22 +7278,18 @@ protected:
     VkLogicOp*                           DBG_logic_op;
     VkPipelineColorBlendAttachmentState* DBG_attachment;
     float*                               DBG_blend_constant;
-    uint64_t*                            DBG_z_addr;
-    uint64_t*                            DBG_h_tile_addr;
-    bool*                                DBG_hi_z_enabled;
-    bool*                                DBG_hi_s_enabled;
-    bool*                                DBG_z_compress_enabled;
-    bool*                                DBG_stencil_compress_enabled;
-    bool*                                DBG_compressed_z_fetch_enabled;
-    Dive::Legacy::ZFormat*               DBG_z_format;
-    Dive::Legacy::ZOrder*                DBG_z_order;
-    uint16_t*                            DBG_vs_late_alloc;
-    bool*                                DBG_dcc_enabled;
-    Dive::Legacy::ColorFormat*           DBG_color_format;
-    uint32_t*                            DBG_mip0_height;
-    uint32_t*                            DBG_mip0_width;
-    uint16_t*                            DBG_vgpr;
-    uint16_t*                            DBG_sgpr;
+    bool*                                DBG_lrz_enabled;
+    bool*                                DBG_lrz_write;
+    a6xx_lrz_dir_status*                 DBG_lrz_dir_status;
+    bool*                                DBG_lrz_dir_write;
+    a6xx_ztest_mode*                     DBG_z_test_mode;
+    uint32_t*                            DBG_bin_w;
+    uint32_t*                            DBG_bin_h;
+    a6xx_render_mode*                    DBG_render_mode;
+    a6xx_buffers_location*               DBG_buffers_location;
+    a6xx_threadsize*                     DBG_thread_size;
+    bool*                                DBG_enable_all_helper_lanes;
+    bool*                                DBG_enable_partial_helper_lanes;
 #endif
 };
 class EventStateInfoRef;
@@ -8654,22 +7307,14 @@ struct EventStateInfo_CONFIG
     using ViewportConstArray = EventStateInfoViewportConstArray<EventStateInfo_CONFIG>;
     using ScissorArray = EventStateInfoScissorArray<EventStateInfo_CONFIG>;
     using ScissorConstArray = EventStateInfoScissorConstArray<EventStateInfo_CONFIG>;
+    using LogicOpEnabledArray = EventStateInfoLogicOpEnabledArray<EventStateInfo_CONFIG>;
+    using LogicOpEnabledConstArray = EventStateInfoLogicOpEnabledConstArray<EventStateInfo_CONFIG>;
+    using LogicOpArray = EventStateInfoLogicOpArray<EventStateInfo_CONFIG>;
+    using LogicOpConstArray = EventStateInfoLogicOpConstArray<EventStateInfo_CONFIG>;
     using AttachmentArray = EventStateInfoAttachmentArray<EventStateInfo_CONFIG>;
     using AttachmentConstArray = EventStateInfoAttachmentConstArray<EventStateInfo_CONFIG>;
     using BlendConstantArray = EventStateInfoBlendConstantArray<EventStateInfo_CONFIG>;
     using BlendConstantConstArray = EventStateInfoBlendConstantConstArray<EventStateInfo_CONFIG>;
-    using DccEnabledArray = EventStateInfoDccEnabledArray<EventStateInfo_CONFIG>;
-    using DccEnabledConstArray = EventStateInfoDccEnabledConstArray<EventStateInfo_CONFIG>;
-    using ColorFormatArray = EventStateInfoColorFormatArray<EventStateInfo_CONFIG>;
-    using ColorFormatConstArray = EventStateInfoColorFormatConstArray<EventStateInfo_CONFIG>;
-    using Mip0HeightArray = EventStateInfoMip0HeightArray<EventStateInfo_CONFIG>;
-    using Mip0HeightConstArray = EventStateInfoMip0HeightConstArray<EventStateInfo_CONFIG>;
-    using Mip0WidthArray = EventStateInfoMip0WidthArray<EventStateInfo_CONFIG>;
-    using Mip0WidthConstArray = EventStateInfoMip0WidthConstArray<EventStateInfo_CONFIG>;
-    using VgprArray = EventStateInfoVgprArray<EventStateInfo_CONFIG>;
-    using VgprConstArray = EventStateInfoVgprConstArray<EventStateInfo_CONFIG>;
-    using SgprArray = EventStateInfoSgprArray<EventStateInfo_CONFIG>;
-    using SgprConstArray = EventStateInfoSgprConstArray<EventStateInfo_CONFIG>;
 };
 template<>
 void EventStateInfoRefT<EventStateInfo_CONFIG>::assign(

@@ -264,27 +264,23 @@ void EventStateView::BuildDescriptionMap(Dive::EventStateInfo::ConstIterator eve
     ADD_FIELD_DESC(event_state_it->GetAttachmentName(), event_state_it->GetAttachmentDescription());
     ADD_FIELD_DESC(event_state_it->GetBlendConstantName(),
                    event_state_it->GetBlendConstantDescription());
-    ADD_FIELD_DESC(event_state_it->GetZAddrName(), event_state_it->GetZAddrDescription());
-    ADD_FIELD_DESC(event_state_it->GetHTileAddrName(), event_state_it->GetHTileAddrDescription());
-    ADD_FIELD_DESC(event_state_it->GetHiZEnabledName(), event_state_it->GetHiZEnabledDescription());
-    ADD_FIELD_DESC(event_state_it->GetHiSEnabledName(), event_state_it->GetHiSEnabledDescription());
-    ADD_FIELD_DESC(event_state_it->GetZCompressEnabledName(),
-                   event_state_it->GetZCompressEnabledDescription());
-    ADD_FIELD_DESC(event_state_it->GetStencilCompressEnabledName(),
-                   event_state_it->GetStencilCompressEnabledDescription());
-    ADD_FIELD_DESC(event_state_it->GetCompressedZFetchEnabledName(),
-                   event_state_it->GetCompressedZFetchEnabledDescription());
-    ADD_FIELD_DESC(event_state_it->GetZFormatName(), event_state_it->GetZFormatDescription());
-    ADD_FIELD_DESC(event_state_it->GetZOrderName(), event_state_it->GetZOrderDescription());
-    ADD_FIELD_DESC(event_state_it->GetVSLateAllocName(),
-                   event_state_it->GetVSLateAllocDescription());
-    ADD_FIELD_DESC(event_state_it->GetDccEnabledName(), event_state_it->GetDccEnabledDescription());
-    ADD_FIELD_DESC(event_state_it->GetColorFormatName(),
-                   event_state_it->GetColorFormatDescription());
-    ADD_FIELD_DESC(event_state_it->GetMip0HeightName(), event_state_it->GetMip0HeightDescription());
-    ADD_FIELD_DESC(event_state_it->GetMip0WidthName(), event_state_it->GetMip0WidthDescription());
-    ADD_FIELD_DESC(event_state_it->GetVgprName(), event_state_it->GetVgprDescription());
-    ADD_FIELD_DESC(event_state_it->GetSgprName(), event_state_it->GetSgprDescription());
+    ADD_FIELD_DESC(event_state_it->GetLRZEnabledName(), event_state_it->GetLRZEnabledDescription());
+    ADD_FIELD_DESC(event_state_it->GetLRZWriteName(), event_state_it->GetLRZWriteDescription());
+    ADD_FIELD_DESC(event_state_it->GetLRZDirStatusName(),
+                   event_state_it->GetLRZDirStatusDescription());
+    ADD_FIELD_DESC(event_state_it->GetLRZDirWriteName(),
+                   event_state_it->GetLRZDirWriteDescription());
+    ADD_FIELD_DESC(event_state_it->GetZTestModeName(), event_state_it->GetZTestModeDescription());
+    ADD_FIELD_DESC(event_state_it->GetBinWName(), event_state_it->GetBinWDescription());
+    ADD_FIELD_DESC(event_state_it->GetBinHName(), event_state_it->GetBinHDescription());
+    ADD_FIELD_DESC(event_state_it->GetRenderModeName(), event_state_it->GetRenderModeDescription());
+    ADD_FIELD_DESC(event_state_it->GetBuffersLocationName(),
+                   event_state_it->GetBuffersLocationDescription());
+    ADD_FIELD_DESC(event_state_it->GetThreadSizeName(), event_state_it->GetThreadSizeDescription());
+    ADD_FIELD_DESC(event_state_it->GetEnableAllHelperLanesName(),
+                   event_state_it->GetEnableAllHelperLanesDescription());
+    ADD_FIELD_DESC(event_state_it->GetEnablePartialHelperLanesName(),
+                   event_state_it->GetEnablePartialHelperLanesDescription());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -679,30 +675,6 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
 {
     QList<QTreeWidgetItem *> items;
 
-    // LogicOpEnabled
-    if (event_state_it->IsLogicOpEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName(),
-                            event_state_it->LogicOpEnabled(),
-                            prev_event_state_it->IsLogicOpEnabledSet(),
-                            prev_event_state_it->LogicOpEnabled(),
-                            items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetLogicOpEnabledName(), items)
-
-    // LogicOp
-    if (event_state_it->IsLogicOpSet())
-    {
-        ADD_FIELD_TYPE_STRING(event_state_it->GetLogicOpName(),
-                              GetVkLogicOp(event_state_it->LogicOp()),
-                              prev_event_state_it->IsLogicOpSet(),
-                              GetVkLogicOp(prev_event_state_it->LogicOp()),
-                              items)
-    }
-    else
-    {
-        ADD_FIELD_NOT_SET(event_state_it->GetLogicOpName(), items)
-    }
-
     // Attachment
     {
         QList<QTreeWidgetItem *> child_items;
@@ -710,6 +682,33 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
         {
             if (event_state_it->IsAttachmentSet(i))
             {
+                // LogicOpEnabled
+                if (event_state_it->IsLogicOpEnabledSet(i))
+                    ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName() +
+                                        QString::number(i),
+                                        event_state_it->LogicOpEnabled(i),
+                                        prev_event_state_it->IsLogicOpEnabledSet(i),
+                                        prev_event_state_it->LogicOpEnabled(i),
+                                        child_items)
+                else
+                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpEnabledName() + QString::number(i),
+                                      child_items)
+
+                // LogicOp
+                if (event_state_it->IsLogicOpSet(i))
+                {
+                    ADD_FIELD_TYPE_STRING(event_state_it->GetLogicOpName() + QString::number(i),
+                                          GetVkLogicOp(event_state_it->LogicOp(i)),
+                                          prev_event_state_it->IsLogicOpSet(i),
+                                          GetVkLogicOp(prev_event_state_it->LogicOp(i)),
+                                          child_items)
+                }
+                else
+                {
+                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpName() + QString::number(i),
+                                      child_items)
+                }
+
                 QString                             value;
                 VkPipelineColorBlendAttachmentState attach = event_state_it->Attachment(i);
 
@@ -795,273 +794,194 @@ void EventStateView::DisplayHardwareSpecificStates(
 Dive::EventStateInfo::ConstIterator event_state_it,
 Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items, depth_target_items, color_target_items;
+    QList<QTreeWidgetItem *> depth_target_items, binning_items, thread_items;
 
-    // ZAddr
-    if (event_state_it->IsZAddrSet())
-        ADD_FIELD_TYPE_STRING(event_state_it->GetZAddrName(),
-                              "0x" + QString::number(event_state_it->ZAddr(), 16).toUpper(),
-                              prev_event_state_it->IsZAddrSet(),
-                              "0x" + QString::number(prev_event_state_it->ZAddr(), 16).toUpper(),
-                              depth_target_items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetZAddrName(), depth_target_items)
-
-    // HTileAddr
-    if (event_state_it->IsHTileAddrSet())
-        ADD_FIELD_TYPE_STRING(event_state_it->GetHTileAddrName(),
-                              "0x" + QString::number(event_state_it->HTileAddr(), 16).toUpper(),
-                              prev_event_state_it->IsHTileAddrSet(),
-                              "0x" +
-                              QString::number(prev_event_state_it->HTileAddr(), 16).toUpper(),
-                              depth_target_items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetHTileAddrName(), depth_target_items)
-
-    // HiZEnabled
-    if (event_state_it->IsHiZEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetHiZEnabledName(),
-                            event_state_it->HiZEnabled(),
-                            prev_event_state_it->IsHiZEnabledSet(),
-                            prev_event_state_it->HiZEnabled(),
+    if (event_state_it->IsLRZEnabledSet())
+        ADD_FIELD_TYPE_BOOL(event_state_it->GetLRZEnabledName(),
+                            event_state_it->LRZEnabled(),
+                            prev_event_state_it->IsLRZEnabledSet(),
+                            prev_event_state_it->LRZEnabled(),
                             depth_target_items)
     else
-        ADD_FIELD_NOT_SET(event_state_it->GetHiZEnabledName(), depth_target_items)
+        ADD_FIELD_NOT_SET(event_state_it->GetLRZEnabledName(), depth_target_items)
 
-    // HiSEnabled
-    if (event_state_it->IsHiSEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetHiSEnabledName(),
-                            event_state_it->HiSEnabled(),
-                            prev_event_state_it->IsHiSEnabledSet(),
-                            prev_event_state_it->HiSEnabled(),
+    if (event_state_it->IsLRZWriteSet())
+        ADD_FIELD_TYPE_BOOL(event_state_it->GetLRZWriteName(),
+                            event_state_it->LRZWrite(),
+                            prev_event_state_it->IsLRZWriteSet(),
+                            prev_event_state_it->LRZWrite(),
                             depth_target_items)
     else
-        ADD_FIELD_NOT_SET(event_state_it->GetHiSEnabledName(), depth_target_items)
+        ADD_FIELD_NOT_SET(event_state_it->GetLRZWriteName(), depth_target_items)
 
-    // ZCompressEnabled
-    if (event_state_it->IsZCompressEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetZCompressEnabledName(),
-                            event_state_it->ZCompressEnabled(),
-                            prev_event_state_it->IsZCompressEnabledSet(),
-                            prev_event_state_it->ZCompressEnabled(),
-                            depth_target_items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetZCompressEnabledName(), depth_target_items)
+    auto LRZDirStatusToStr = [](const a6xx_lrz_dir_status &status) -> QString {
+        std::string s;
+        switch (status)
+        {
+        case LRZ_DIR_LE: s = "Less Equal"; break;
+        case LRZ_DIR_GE: s = "Greater Equal"; break;
+        case LRZ_DIR_INVALID: s = "Invalid"; break;
+        default:
+            s = "Undefined";
+            break;  // TODO(wangra): we have cases where this value is 0, same with cffdump
+        }
+        return QString::fromStdString(s);
+    };
 
-    // StencilCompressEnabled
-    if (event_state_it->IsStencilCompressEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetStencilCompressEnabledName(),
-                            event_state_it->StencilCompressEnabled(),
-                            prev_event_state_it->IsStencilCompressEnabledSet(),
-                            prev_event_state_it->StencilCompressEnabled(),
-                            depth_target_items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetStencilCompressEnabledName(), depth_target_items)
-
-    // CompressedZFetchEnabled
-    if (event_state_it->IsCompressedZFetchEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetCompressedZFetchEnabledName(),
-                            event_state_it->CompressedZFetchEnabled(),
-                            prev_event_state_it->IsCompressedZFetchEnabledSet(),
-                            prev_event_state_it->CompressedZFetchEnabled(),
-                            depth_target_items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetCompressedZFetchEnabledName(), depth_target_items)
-
-    // ZFormat
-    if (event_state_it->IsZFormatSet())
-        ADD_FIELD_TYPE_STRING(event_state_it->GetZFormatName(),
-                              GetZFormat(event_state_it->ZFormat()),
-                              prev_event_state_it->IsZFormatSet(),
-                              GetZFormat(prev_event_state_it->ZFormat()),
+    if (event_state_it->IsLRZDirStatusSet())
+        ADD_FIELD_TYPE_STRING(event_state_it->GetLRZDirStatusName(),
+                              LRZDirStatusToStr(event_state_it->LRZDirStatus()),
+                              prev_event_state_it->IsLRZDirStatusSet(),
+                              LRZDirStatusToStr(prev_event_state_it->LRZDirStatus()),
                               depth_target_items)
     else
-        ADD_FIELD_NOT_SET(event_state_it->GetZFormatName(), depth_target_items)
+        ADD_FIELD_NOT_SET(event_state_it->GetLRZDirStatusName(), depth_target_items)
 
-    // ZOrder
-    if (event_state_it->IsZOrderSet())
-        ADD_FIELD_TYPE_STRING(event_state_it->GetZOrderName(),
-                              GetZOrder(event_state_it->ZOrder()),
-                              prev_event_state_it->IsZOrderSet(),
-                              GetZOrder(prev_event_state_it->ZOrder()),
+    if (event_state_it->IsLRZDirWriteSet())
+        ADD_FIELD_TYPE_BOOL(event_state_it->GetLRZDirWriteName(),
+                            event_state_it->LRZDirWrite(),
+                            prev_event_state_it->IsLRZDirWriteSet(),
+                            prev_event_state_it->LRZDirWrite(),
+                            depth_target_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetLRZDirWriteName(), depth_target_items)
+
+    auto ZTestModeToStr = [](const a6xx_ztest_mode &mode) -> QString {
+        std::string s;
+        switch (mode)
+        {
+        case A6XX_EARLY_Z: s = "Early Z"; break;
+        case A6XX_LATE_Z: s = "Late Z"; break;
+        case A6XX_EARLY_LRZ_LATE_Z: s = "Early Z LRZ Late Z"; break;
+        case A6XX_INVALID_ZTEST: s = "Invalid ZTest"; break;
+        default: DIVE_ASSERT(false); break;
+        }
+        return QString::fromStdString(s);
+    };
+
+    if (event_state_it->IsZTestModeSet())
+        ADD_FIELD_TYPE_STRING(event_state_it->GetZTestModeName(),
+                              ZTestModeToStr(event_state_it->ZTestMode()),
+                              prev_event_state_it->IsZTestModeSet(),
+                              ZTestModeToStr(prev_event_state_it->ZTestMode()),
                               depth_target_items)
     else
-        ADD_FIELD_NOT_SET(event_state_it->GetZOrderName(), depth_target_items)
+        ADD_FIELD_NOT_SET(event_state_it->GetZTestModeName(), depth_target_items)
 
-    // VSLateAlloc
-    if (event_state_it->IsVSLateAllocSet())
-    {
-        ADD_FIELD_TYPE_NUMBER(event_state_it->GetVSLateAllocName(),
-                              event_state_it->VSLateAlloc(),
-                              prev_event_state_it->IsVSLateAllocSet(),
-                              prev_event_state_it->VSLateAlloc(),
-                              depth_target_items)
-    }
+    if (event_state_it->IsBinWSet())
+        ADD_FIELD_TYPE_NUMBER(event_state_it->GetBinWName(),
+                              event_state_it->BinW(),
+                              prev_event_state_it->IsBinWSet(),
+                              prev_event_state_it->BinW(),
+                              binning_items)
     else
-    {
-        ADD_FIELD_NOT_SET(event_state_it->GetVSLateAllocName(), depth_target_items)
-    }
+        ADD_FIELD_NOT_SET(event_state_it->GetZTestModeName(), depth_target_items)
 
-    // DccEnabled
-    {
-        QList<QTreeWidgetItem *> child_items;
-        for (uint16_t i = 0; i < 8; ++i)
+    if (event_state_it->IsBinHSet())
+        ADD_FIELD_TYPE_NUMBER(event_state_it->GetBinHName(),
+                              event_state_it->BinH(),
+                              prev_event_state_it->IsBinHSet(),
+                              prev_event_state_it->BinH(),
+                              binning_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetZTestModeName(), binning_items)
+
+    auto RenderModeToStr = [](const a6xx_render_mode &mode) -> QString {
+        std::string s;
+        switch (mode)
         {
-            QString field_name = "Target# " + QString::number(i);
-            if (event_state_it->IsDccEnabledSet(i))
-            {
-                ADD_FIELD_TYPE_BOOL(field_name,
-                                    event_state_it->DccEnabled(i),
-                                    prev_event_state_it->IsDccEnabledSet(i),
-                                    prev_event_state_it->DccEnabled(i),
-                                    child_items);
-            }
-            else
-                ADD_FIELD_NOT_SET(field_name, child_items);
+        case RENDERING_PASS: s = "Rendering Pass"; break;
+        case BINNING_PASS: s = "Binning Pass"; break;
+        default: DIVE_ASSERT(false); break;
         }
+        return QString::fromStdString(s);
+    };
 
-        QTreeWidgetItem
-        *child_widget_item = new QTreeWidgetItem((QTreeWidget *)0,
-                                                 QStringList(event_state_it->GetDccEnabledName()));
-        child_widget_item->insertChildren(0, child_items);
-        color_target_items.append(child_widget_item);
-    }
+    if (event_state_it->IsRenderModeSet())
+        ADD_FIELD_TYPE_STRING(event_state_it->GetRenderModeName(),
+                              RenderModeToStr(event_state_it->RenderMode()),
+                              prev_event_state_it->IsRenderModeSet(),
+                              RenderModeToStr(prev_event_state_it->RenderMode()),
+                              binning_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetRenderModeName(), binning_items)
 
-    // ColorFormat
-    {
-        QList<QTreeWidgetItem *> child_items;
-        for (uint16_t i = 0; i < 8; ++i)
+    // only valid for A6xx
+    auto BuffersLocationToStr = [](const a6xx_buffers_location &location) -> QString {
+        std::string s;
+        switch (location)
         {
-            QString field_name = "Target# " + QString::number(i);
-            if (event_state_it->IsColorFormatSet(i))
-            {
-                ADD_FIELD_TYPE_STRING(field_name,
-                                      QString(GetColorFormat(event_state_it->ColorFormat(i))),
-                                      prev_event_state_it->IsColorFormatSet(i),
-                                      QString(GetColorFormat(prev_event_state_it->ColorFormat(i))),
-                                      child_items);
-            }
-            else
-                ADD_FIELD_NOT_SET(field_name, child_items);
+        case BUFFERS_IN_GMEM: s = "Buffers in GMEM"; break;
+        case BUFFERS_IN_SYSMEM: s = "Buffers in SYSMEM"; break;
+        default: s = "Unknown"; break;
         }
+        return QString::fromStdString(s);
+    };
 
-        QTreeWidgetItem
-        *child_widget_item = new QTreeWidgetItem((QTreeWidget *)0,
-                                                 QStringList(event_state_it->GetColorFormatName()));
-        child_widget_item->insertChildren(0, child_items);
-        color_target_items.append(child_widget_item);
-    }
+    if (event_state_it->IsBuffersLocationSet())
+        ADD_FIELD_TYPE_STRING(event_state_it->GetBuffersLocationName(),
+                              BuffersLocationToStr(event_state_it->BuffersLocation()),
+                              prev_event_state_it->IsBuffersLocationSet(),
+                              BuffersLocationToStr(prev_event_state_it->BuffersLocation()),
+                              binning_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetBuffersLocationName(), binning_items)
 
-    // Mip0Height
-    {
-        QList<QTreeWidgetItem *> child_items;
-        for (uint16_t i = 0; i < 8; ++i)
+    auto ThreadSizeToStr = [](const a6xx_threadsize &size) -> QString {
+        std::string s;
+        switch (size)
         {
-            QString field_name = "Target# " + QString::number(i);
-            if (event_state_it->IsMip0HeightSet(i))
-            {
-                ADD_FIELD_TYPE_NUMBER(field_name,
-                                      event_state_it->Mip0Height(i),
-                                      prev_event_state_it->IsMip0HeightSet(i),
-                                      prev_event_state_it->Mip0Height(i),
-                                      child_items);
-            }
-            else
-                ADD_FIELD_NOT_SET(field_name, child_items);
+        case THREAD64: s = "Thread 64"; break;
+        case THREAD128: s = "Thread 128"; break;
+        default: DIVE_ASSERT(false); break;
         }
+        return QString::fromStdString(s);
+    };
 
-        QTreeWidgetItem
-        *child_widget_item = new QTreeWidgetItem((QTreeWidget *)0,
-                                                 QStringList(event_state_it->GetMip0HeightName()));
-        child_widget_item->insertChildren(0, child_items);
-        color_target_items.append(child_widget_item);
-    }
+    if (event_state_it->IsThreadSizeSet())
+        ADD_FIELD_TYPE_STRING(event_state_it->GetThreadSizeName(),
+                              ThreadSizeToStr(event_state_it->ThreadSize()),
+                              prev_event_state_it->IsThreadSizeSet(),
+                              ThreadSizeToStr(prev_event_state_it->ThreadSize()),
+                              thread_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetThreadSizeName(), thread_items)
 
-    // Mip0Width
-    {
-        QList<QTreeWidgetItem *> child_items;
-        for (uint16_t i = 0; i < 8; ++i)
-        {
-            QString field_name = "Target# " + QString::number(i);
-            if (event_state_it->IsMip0WidthSet(i))
-            {
-                ADD_FIELD_TYPE_NUMBER(field_name,
-                                      event_state_it->Mip0Width(i),
-                                      prev_event_state_it->IsMip0WidthSet(i),
-                                      prev_event_state_it->Mip0Width(i),
-                                      child_items);
-            }
-            else
-                ADD_FIELD_NOT_SET(field_name, child_items);
-        }
+    if (event_state_it->IsEnableAllHelperLanesSet())
+        ADD_FIELD_TYPE_BOOL(event_state_it->GetEnableAllHelperLanesName(),
+                            event_state_it->EnableAllHelperLanes(),
+                            prev_event_state_it->IsEnableAllHelperLanesSet(),
+                            prev_event_state_it->EnableAllHelperLanes(),
+                            thread_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetEnableAllHelperLanesName(), thread_items)
 
-        QTreeWidgetItem *child_widget_item = new QTreeWidgetItem((QTreeWidget *)0,
-                                                                 QStringList(event_state_it
-                                                                             ->GetMip0WidthName()));
-        child_widget_item->insertChildren(0, child_items);
-        color_target_items.append(child_widget_item);
-    }
-
-    QString shader_stage[] = { "CS", "GS", "HS", "PS", "VS" };
-    // Vgpr
-    {
-        QList<QTreeWidgetItem *> child_items;
-        for (uint32_t stage = 0; stage < Dive::kShaderStageCount; ++stage)
-        {
-            if (event_state_it->IsVgprSet((Dive::ShaderStage)stage))
-            {
-                ADD_FIELD_TYPE_NUMBER(shader_stage[stage],
-                                      event_state_it->Vgpr((Dive::ShaderStage)stage),
-                                      prev_event_state_it->IsVgprSet((Dive::ShaderStage)stage),
-                                      prev_event_state_it->Vgpr((Dive::ShaderStage)stage),
-                                      child_items);
-            }
-            else
-                ADD_FIELD_NOT_SET(shader_stage[stage], child_items);
-        }
-
-        QTreeWidgetItem *child_widget_item = new QTreeWidgetItem((QTreeWidget *)0,
-                                                                 QStringList(
-                                                                 event_state_it->GetVgprName()));
-        child_widget_item->insertChildren(0, child_items);
-        items.append(child_widget_item);
-    }
-
-    // Sgpr
-    {
-        QList<QTreeWidgetItem *> child_items;
-        for (uint32_t stage = 0; stage < Dive::kShaderStageCount; ++stage)
-        {
-            if (event_state_it->IsSgprSet((Dive::ShaderStage)stage))
-            {
-                ADD_FIELD_TYPE_NUMBER(shader_stage[stage],
-                                      event_state_it->Sgpr((Dive::ShaderStage)stage),
-                                      prev_event_state_it->IsSgprSet((Dive::ShaderStage)stage),
-                                      prev_event_state_it->Sgpr((Dive::ShaderStage)stage),
-                                      child_items);
-            }
-            else
-                ADD_FIELD_NOT_SET(shader_stage[stage], child_items);
-        }
-
-        QTreeWidgetItem *child_widget_item = new QTreeWidgetItem((QTreeWidget *)0,
-                                                                 QStringList(
-                                                                 event_state_it->GetSgprName()));
-        child_widget_item->insertChildren(0, child_items);
-        items.append(child_widget_item);
-    }
+    if (event_state_it->IsEnablePartialHelperLanesSet())
+        ADD_FIELD_TYPE_BOOL(event_state_it->GetEnablePartialHelperLanesName(),
+                            event_state_it->EnablePartialHelperLanes(),
+                            prev_event_state_it->IsEnablePartialHelperLanesSet(),
+                            prev_event_state_it->EnablePartialHelperLanes(),
+                            thread_items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetEnablePartialHelperLanesName(), thread_items)
 
     QTreeWidgetItem *tree_widget_item = new QTreeWidgetItem(m_event_state_tree);
     tree_widget_item->setText(0, "GPU-specific");
+
+    QTreeWidgetItem *thread_item = new QTreeWidgetItem;
+    thread_item->setText(0, "Threads Invocation");
+    thread_item->insertChildren(0, thread_items);
+    tree_widget_item->insertChild(0, thread_item);
+
     QTreeWidgetItem *depth_target_item = new QTreeWidgetItem;
     depth_target_item->setText(0, "Depth Targets");
     depth_target_item->insertChildren(0, depth_target_items);
-    QTreeWidgetItem *color_target_item = new QTreeWidgetItem;
-    color_target_item->setText(0, "Color Targets");
-    color_target_item->insertChildren(0, color_target_items);
     tree_widget_item->insertChild(0, depth_target_item);
-    tree_widget_item->insertChild(0, color_target_item);
-    tree_widget_item->insertChildren(0, items);
+
+    QTreeWidgetItem *binning_item = new QTreeWidgetItem;
+    binning_item->setText(0, "Tiling and Binning");
+    binning_item->insertChildren(0, binning_items);
+    tree_widget_item->insertChild(0, binning_item);
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -94,15 +94,14 @@ def clang_format(path: str) -> None:
     if 'CLANG_FORMAT' in os.environ:
         clang_format_path = os.environ['CLANG_FORMAT']
     else:
-        clang_format_path = shutil.which("clang-format-7.0.1") or \
-                            shutil.which("clang-format-7") or \
+        clang_format_path = shutil.which("clang-format-14") or \
                             shutil.which("clang-format")
     if not clang_format_path or not os.path.isfile(clang_format_path):
         raise (Exception("Could not find clang-format"))
     res = subprocess.run([clang_format_path, "--version"],
                          capture_output=True,
                          check=True)
-    if not res.stdout.decode('utf-8').startswith("clang-format version 7"):
+    if not res.stdout.decode('utf-8').startswith("clang-format version 14"):
         raise (Exception("Incorrect clang-format version"))
     subprocess.run([clang_format_path, "-i", path], check=True)
 

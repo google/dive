@@ -762,21 +762,26 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
             return false;
         }
 
-        uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
-                           (uint64_t)packet.bitfields0.ADDR_LO;
-        emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
-        emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
-        if (!QueueIB(ib_addr,
-                     packet.bitfields2.DWORDS,
-                     false,
-                     IbType::kContextSwitchIb,
-                     emu_state_ptr))
-        {
-            return false;
-        }
+        // Sometimes this packet is used for purposes other than to jump to an IB. Check size.
+        // Example: When TYPE is SAVE_IB
         AdvancePacket(emu_state_ptr, header);
-        if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
-            return false;
+        if (packet.bitfields2.DWORDS != 0)
+        {
+            uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
+                               (uint64_t)packet.bitfields0.ADDR_LO;
+            emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
+            emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
+            if (!QueueIB(ib_addr,
+                         packet.bitfields2.DWORDS,
+                         false,
+                         IbType::kContextSwitchIb,
+                         emu_state_ptr))
+            {
+                return false;
+            }
+            if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
+                return false;
+        }
     }
     // Parse CP_SET_DRAW_STATE, since it references implicit IBs
     else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_DRAW_STATE)

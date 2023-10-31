@@ -864,7 +864,7 @@ bool EmulatePM4::QueueIB(uint64_t      ib_addr,
     if (ib_size_in_dwords == 0)
         return true;
 
-    if (cur_ib_level->m_ib_queue_size >= EmulateState::kMaxPendingIbs)
+    if (cur_ib_level->m_ib_queue_size >= kMaxPendingIbs)
     {
         DIVE_ASSERT(false);
         return false;

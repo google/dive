@@ -14,29 +14,22 @@
  limitations under the License.
 */
 
-// Warning: This is a common file that is shared with the Dive GUI tool!
-
 #pragma once
 
-// The common folder is used by both the GUI tool and the PAL capture code
-// A macro is defined for the GUI tool
-#ifndef DIVE_GUI_TOOL
-#    define DIVE_PAL_CAPTURE
-#endif
+void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...);
 
-#ifdef DIVE_PAL_CAPTURE
-#    include "palAssert.h"
-#    define DIVE_ASSERT PAL_ASSERT
-#    define DIVE_ERROR_MSG(_pReasonFmt, ...) PAL_ALERT_ALWAYS_MSG(_pReasonFmt, ##__VA_ARGS__)
+#include <assert.h>
+#include <stdio.h>
+
+#define DIVE_ERROR_MSG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
+#define DIVE_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
+
+#ifndef NDEBUG  // DEBUG
+#    define DIVE_ASSERT(p) assert(p)
+#    define DIVE_DEBUG_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
 #else
-
-void DIVE_LOG(const char* file, int line, const char* format, ...);
-
-#    include <assert.h>
-#    include <stdio.h>
-#    define DIVE_ASSERT assert
-#    define DIVE_ERROR_MSG(...) DIVE_LOG(__FILE__, __LINE__, __VA_ARGS__)
-#    define DIVE_TRACE(...) DIVE_LOG(__FILE__, __LINE__, __VA_ARGS__)
+#    define DIVE_ASSERT(...) ((void)0)
+#    define DIVE_DEBUG_LOG(...) ((void)0)
 #endif
 
 // This does not get compiled out, so safe to call it in RELEASE

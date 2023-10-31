@@ -37,9 +37,11 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     m_command_buffer_view = new CommandBufferView(command_hierarchy);
     m_command_buffer_view->setModel(m_command_buffer_model);
 
-    // Put address column (column 3) to the left of the tree. This forces the expand/collapse
-    // icon to be part of the 2nd column (originally 1st)
+    // Move the address column to be the 1st column, followed by the IB Level column
+    // This allows the expand/collapse icon to be part of what was originally the 1st column (i.e.
+    // the pm4 column)
     m_command_buffer_view->header()->moveSection(2, 0);
+    m_command_buffer_view->header()->moveSection(2, 1);
 
     m_search_trigger_button = new QPushButton;
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));

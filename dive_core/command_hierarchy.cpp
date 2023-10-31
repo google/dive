@@ -361,12 +361,12 @@ uint8_t CommandHierarchy::GetPacketNodeOpcode(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandHierarchy::GetPacketNodeIsCe(uint64_t node_index) const
+uint8_t CommandHierarchy::GetPacketNodeIbLevel(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
     DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kPacketNode);
     const AuxInfo &info = m_nodes.m_aux_info[node_index];
-    return info.packet_node.m_is_ce_packet;
+    return info.packet_node.m_ib_level;
 }
 //--------------------------------------------------------------------------------------------------
 bool CommandHierarchy::GetRegFieldNodeIsCe(uint64_t node_index) const
@@ -480,14 +480,14 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::IbNode(uint32_t ib_index,
 //--------------------------------------------------------------------------------------------------
 CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::PacketNode(uint64_t addr,
                                                                 uint8_t  opcode,
-                                                                bool     is_ce_packet)
+                                                                uint8_t  ib_level)
 {
     // Addresses should only be 48-bits
     DIVE_ASSERT(addr == (addr & 0x0000FFFFFFFFFFFF));
     AuxInfo info(0);
     info.packet_node.m_addr = (addr & 0x0000FFFFFFFFFFFF);
     info.packet_node.m_opcode = opcode;
-    info.packet_node.m_is_ce_packet = is_ce_packet;
+    info.packet_node.m_ib_level = ib_level;
     return info;
 }
 
@@ -554,9 +554,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_p
     }
 
     m_num_events = 0;
-    m_cur_submit_node_index = UINT64_MAX;
-    m_dcb_ib_stack.clear();
-    m_ccb_ib_stack.clear();
     m_flatten_chain_nodes = flatten_chain_nodes;
 
     for (uint32_t submit_index = 0; submit_index < capture_data.GetNumSubmits(); ++submit_index)
@@ -675,9 +672,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     }
 
     m_num_events = 0;
-    m_cur_submit_node_index = UINT64_MAX;
-    m_dcb_ib_stack.clear();
-    m_ccb_ib_stack.clear();
     m_flatten_chain_nodes = false;
 
     uint32_t submit_index = 0;
@@ -773,20 +767,20 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
                                                                            !ib_info.m_skip);
     uint64_t ib_node_index = AddNode(NodeType::kIbNode, ib_string_stream.str(), aux_info);
 
-    // Determine parent node and update m_cur_non_chain_#cb_ib_node_index
+    // Determine parent node
     uint64_t parent_node_index = m_cur_submit_node_index;
-    if (!m_dcb_ib_stack.empty())
+    if (!m_ib_stack.empty())
     {
-        parent_node_index = m_dcb_ib_stack.back();
+        parent_node_index = m_ib_stack.back();
     }
 
     if (m_flatten_chain_nodes && type == IbType::kChain)
     {
         // If flatten enabled, then add to the nearest non-chain node parent
         // Find first previous non-CHAIN parent
-        for (size_t i = m_dcb_ib_stack.size() - 1; i != SIZE_MAX; i--)
+        for (size_t i = m_ib_stack.size() - 1; i != SIZE_MAX; i--)
         {
-            uint64_t index = m_dcb_ib_stack[i];
+            uint64_t index = m_ib_stack[i];
             IbType   cur_type = m_command_hierarchy_ptr->GetIbNodeType(index);
             if (cur_type != IbType::kChain)
             {
@@ -799,8 +793,10 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     AddChild(CommandHierarchy::kEngineTopology, parent_node_index, ib_node_index);
     AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, ib_node_index);
 
-    m_dcb_ib_stack.push_back(ib_node_index);
-
+    m_ib_stack.push_back(ib_node_index);
+    if (m_cur_ib_packet_node_index != UINT64_MAX)
+        m_cur_shared_node_parent_index = m_cur_ib_packet_node_index;
+    m_cur_ib_level = ib_info.m_ib_level;
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     return true;
@@ -811,23 +807,28 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
                                       uint32_t                  ib_index,
                                       const IndirectBufferInfo &ib_info)
 {
-    DIVE_ASSERT(!m_dcb_ib_stack.empty());
+    DIVE_ASSERT(!m_ib_stack.empty());
 
     // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
     // because the emulator does not keep track of IBs in an internal stack. So start by
     // popping all consecutive CHAIN IBs
     IbType type;
-    type = m_command_hierarchy_ptr->GetIbNodeType(m_dcb_ib_stack.back());
-    while (!m_dcb_ib_stack.empty() && type == IbType::kChain)
+    type = m_command_hierarchy_ptr->GetIbNodeType(m_ib_stack.back());
+    while (!m_ib_stack.empty() && type == IbType::kChain)
     {
-        m_dcb_ib_stack.pop_back();
-        type = m_command_hierarchy_ptr->GetIbNodeType(m_dcb_ib_stack.back());
+        m_ib_stack.pop_back();
+        type = m_command_hierarchy_ptr->GetIbNodeType(m_ib_stack.back());
     }
 
-    m_dcb_ib_stack.pop_back();
+    m_ib_stack.pop_back();
     OnVulkanMarkerEnd();
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
+    m_cur_ib_level = ib_info.m_ib_level;
+
+    // Reset back to submit node being the parent (as opposed to, possibly, the indirect_buffer
+    // packet)
+    m_cur_shared_node_parent_index = m_cur_submit_node_index;
     return true;
 }
 
@@ -850,12 +851,14 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                                false,
                                                type,
                                                header);
-    AddSharedChild(CommandHierarchy::kEngineTopology, m_cur_submit_node_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kSubmitTopology, m_cur_submit_node_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kAllEventTopology, m_cur_submit_node_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kRgpTopology, m_cur_submit_node_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kEngineTopology, m_dcb_ib_stack.back(), packet_node_index);
-    AddSharedChild(CommandHierarchy::kSubmitTopology, m_dcb_ib_stack.back(), packet_node_index);
+
+    uint64_t parent_index = m_cur_shared_node_parent_index;
+    AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kSubmitTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kRgpTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kEngineTopology, m_ib_stack.back(), packet_node_index);
+    AddSharedChild(CommandHierarchy::kSubmitTopology, m_ib_stack.back(), packet_node_index);
 
     uint32_t opcode = UINT32_MAX;
     if (type == Pm4Type::kType7)
@@ -949,6 +952,11 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         }
         AddChild(CommandHierarchy::kRgpTopology, parent_node_index, event_node_index);
         m_node_parent_info[CommandHierarchy::kRgpTopology][event_node_index] = parent_node_index;
+    }
+    else if ((opcode == CP_INDIRECT_BUFFER_PFE || opcode == CP_INDIRECT_BUFFER_PFD ||
+              opcode == CP_INDIRECT_BUFFER_CHAIN || opcode == CP_COND_INDIRECT_BUFFER_PFE))
+    {
+        m_cur_ib_packet_node_index = packet_node_index;
     }
     // vulkan call NOP packages. Currently contains call parameters(except parameters in array),
     // each call is in one NOP packet.
@@ -1044,7 +1052,10 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, submit_node_index);
     AddChild(CommandHierarchy::kRgpTopology, Topology::kRootNodeIndex, submit_node_index);
     m_cur_submit_node_index = submit_node_index;
+    m_cur_shared_node_parent_index = m_cur_submit_node_index;
     m_cur_engine_index = submit_info.GetEngineIndex();
+    m_cur_ib_packet_node_index = UINT64_MAX;
+    m_ib_stack.clear();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1136,9 +1147,6 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
             AddChild(CommandHierarchy::kRgpTopology, Topology::kRootNodeIndex, present_node_index);
         }
     }
-    m_cur_submit_node_index = UINT64_MAX;
-    m_ccb_ib_stack.clear();
-    m_dcb_ib_stack.clear();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1161,7 +1169,7 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
         CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
                                                                                    type7_header
                                                                                    .opcode,
-                                                                                   is_ce_packet);
+                                                                                   m_cur_ib_level);
 
         uint64_t packet_node_index = AddNode(NodeType::kPacketNode,
                                              packet_string_stream.str(),
@@ -1294,7 +1302,7 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
 
         CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
                                                                                    UINT8_MAX,
-                                                                                   is_ce_packet);
+                                                                                   m_cur_ib_level);
 
         uint64_t packet_node_index = AddNode(NodeType::kPacketNode,
                                              packet_string_stream.str(),

@@ -716,12 +716,18 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     Pm4Type7Header type7_header;
     type7_header.u32All = header;
 
+    // Note: CP_COND_INDIRECT_BUFFER_PFE is not parsed here because it isn't used by Turnip.
+    // When it shows up in production driver captures, the IB addr and size values are all
+    // garbage. Not sure what it's used for at this point.
+    if (type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE)
+        DIVE_LOG("Packet ignored: CP_COND_INDIRECT_BUFFER_PFE\n");
+
     // Deal with calls and chains
     if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
                                     type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
-                                    type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN ||
-                                    type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE))
+                                    type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN))
     {
+
         PM4_CP_INDIRECT_BUFFER ib_packet;
         if (!mem_manager.CopyMemory(&ib_packet,
                                     emu_state_ptr->m_submit_index,
@@ -762,21 +768,26 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
             return false;
         }
 
-        uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
-                           (uint64_t)packet.bitfields0.ADDR_LO;
-        emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
-        emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
-        if (!QueueIB(ib_addr,
-                     packet.bitfields2.DWORDS,
-                     false,
-                     IbType::kContextSwitchIb,
-                     emu_state_ptr))
-        {
-            return false;
-        }
+        // Sometimes this packet is used for purposes other than to jump to an IB. Check size.
+        // Example: When TYPE is SAVE_IB
         AdvancePacket(emu_state_ptr, header);
-        if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
-            return false;
+        if (packet.bitfields2.DWORDS != 0)
+        {
+            uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
+                               (uint64_t)packet.bitfields0.ADDR_LO;
+            emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
+            emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
+            if (!QueueIB(ib_addr,
+                         packet.bitfields2.DWORDS,
+                         false,
+                         IbType::kContextSwitchIb,
+                         emu_state_ptr))
+            {
+                return false;
+            }
+            if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
+                return false;
+        }
     }
     // Parse CP_SET_DRAW_STATE, since it references implicit IBs
     else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_DRAW_STATE)
@@ -936,6 +947,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
         IndirectBufferInfo call_chain_ib_info;
         call_chain_ib_info.m_va_addr = cur_ib_level->m_cur_va;
         call_chain_ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
+        call_chain_ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
         call_chain_ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
         if (!callbacks.OnIbStart(emu_state->m_submit_index,
                                  emu_state->m_ib_index,
@@ -982,16 +994,18 @@ bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &call
 {
     EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
 
+    emu_state->m_top_of_stack = (EmulateState::IbLevel)(emu_state->m_top_of_stack - 1);
+
     IndirectBufferInfo ib_info;
     ib_info.m_va_addr = cur_ib_level->m_cur_va;
     ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
+    ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
     ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
 
     // End-Ib Callback
     if (!callbacks.OnIbEnd(emu_state->m_submit_index, emu_state->m_ib_index, ib_info))
         return false;
 
-    emu_state->m_top_of_stack = (EmulateState::IbLevel)(emu_state->m_top_of_stack - 1);
     return true;
 }
 

@@ -216,7 +216,7 @@ public:
     uint32_t         GetEventNodeId(uint64_t node_index) const;
     uint64_t         GetPacketNodeAddr(uint64_t node_index) const;
     uint8_t          GetPacketNodeOpcode(uint64_t node_index) const;
-    bool             GetPacketNodeIsCe(uint64_t node_index) const;
+    uint8_t          GetPacketNodeIbLevel(uint64_t node_index) const;
     bool             GetRegFieldNodeIsCe(uint64_t node_index) const;
     SyncType         GetSyncNodeSyncType(uint64_t node_index) const;
     SyncInfo         GetSyncNodeSyncInfo(uint64_t node_index) const;
@@ -280,8 +280,8 @@ private:
         {
             uint64_t m_addr : 48;
             uint64_t m_opcode : 8;
-            uint64_t m_is_ce_packet : 1;
-            uint64_t m_reserved : 7;
+            uint64_t m_ib_level : 3;
+            uint64_t m_reserved : 5;
         } packet_node;
 
         struct
@@ -303,7 +303,7 @@ private:
                               IbType   ib_type,
                               uint32_t size_in_dwords,
                               bool     fully_captured);
-        static AuxInfo PacketNode(uint64_t addr, uint8_t opcode, bool is_ce_packet);
+        static AuxInfo PacketNode(uint64_t addr, uint8_t opcode, uint8_t ib_level);
         static AuxInfo RegFieldNode(bool is_ce_packet);
         static AuxInfo EventNode(uint32_t event_id);
         static AuxInfo MarkerNode(MarkerType type, uint32_t id = 0);
@@ -393,6 +393,7 @@ private:
 
     void     OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info);
     void     OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info);
+    void     PreSubmitReset();
     uint64_t AddPacketNode(const IMemoryManager &mem_manager,
                            uint32_t              submit_index,
                            uint64_t              va_addr,
@@ -538,13 +539,16 @@ private:
                          // VkBeginCommandBuffer.
 
     std::vector<uint64_t> m_internal_marker_stack;  // Current internal marker begin/end stack
-    std::vector<uint64_t> m_dcb_ib_stack;           // Tracks current DCB IB stack
-    std::vector<uint64_t> m_ccb_ib_stack;           // Tracks current CCB IB stack
+    std::vector<uint64_t> m_ib_stack;               // Tracks current IB stack
     std::vector<uint64_t> m_renderpass_stack;       // render pass marker begin/end stack
 
-    uint32_t m_num_events;             // Number of events so far
-    Packets  m_packets;                // Packets added since last event
-    uint64_t m_cur_submit_node_index;  // Current submit node being processed
+    uint32_t m_num_events;  // Number of events so far
+    Packets  m_packets;     // Packets added since last event
+
+    uint64_t m_cur_shared_node_parent_index;  // The current parent of any shared node being added
+    uint64_t m_cur_submit_node_index;         // Current submit node being processed
+    uint64_t m_cur_ib_packet_node_index;      // Current ib packet node being processed
+    uint8_t  m_cur_ib_level;
 
     // Flattening is the process of forcing chain ib nodes to only ever be child to non-chain ib
     // nodes, even when daisy chaining across multiple chain ib nodes. This makes the topology

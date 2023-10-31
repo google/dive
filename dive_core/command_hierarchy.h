@@ -471,6 +471,11 @@ private:
                                        uint64_t              packet_node_index,
                                        size_t                field_start = 0,
                                        size_t                field_last = SIZE_MAX - 1);
+    void        CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
+                                           uint32_t              submit_index,
+                                           uint64_t              va_addr,
+                                           uint64_t              set_draw_state_node_index,
+                                           uint32_t              header);
 
     uint64_t AddNode(NodeType                  type,
                      const std::string        &desc,
@@ -517,6 +522,12 @@ private:
         }
     };
 
+    struct SetDrawStateGroupInfo
+    {
+        uint64_t m_group_node_index;
+        uint64_t m_group_addr;
+    };
+
     CommandHierarchy  *m_command_hierarchy_ptr;  // Pointer to class being created
     const CaptureData *m_capture_data_ptr;
 
@@ -541,6 +552,10 @@ private:
     std::vector<uint64_t> m_internal_marker_stack;  // Current internal marker begin/end stack
     std::vector<uint64_t> m_ib_stack;               // Tracks current IB stack
     std::vector<uint64_t> m_renderpass_stack;       // render pass marker begin/end stack
+
+    // Cache the most recent cp_set_draw_state node, to append IBs to later
+    SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs];
+    uint32_t              m_group_info_size;
 
     uint32_t m_num_events;  // Number of events so far
     Packets  m_packets;     // Packets added since last event

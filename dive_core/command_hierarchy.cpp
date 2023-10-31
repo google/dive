@@ -725,6 +725,10 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
                                         const IndirectBufferInfo &ib_info,
                                         IbType                    type)
 {
+    // Make all subsequent shared node parent the actual IB-packet
+    if (m_cur_ib_packet_node_index != UINT64_MAX)
+        m_cur_shared_node_parent_index = m_cur_ib_packet_node_index;
+
     // Create IB description string
     std::ostringstream ib_string_stream;
     if (type == IbType::kNormal)
@@ -755,6 +759,19 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
         ib_string_stream << "DrawState IB"
                          << ", Address: 0x" << std::hex << ib_info.m_va_addr
                          << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
+
+        // Make all subsequent shared node parent be the relevant group in the set_draw_state packet
+        uint64_t group_index = UINT64_MAX;
+        for (uint32_t i = 0; i < m_group_info_size; ++i)
+        {
+            if (m_group_info[i].m_group_addr == ib_info.m_va_addr)
+            {
+                group_index = m_group_info[i].m_group_node_index;
+                break;
+            }
+        }
+        DIVE_ASSERT(group_index != UINT64_MAX);
+        m_cur_shared_node_parent_index = group_index;
     }
 
     if (ib_info.m_skip)
@@ -794,8 +811,6 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, ib_node_index);
 
     m_ib_stack.push_back(ib_node_index);
-    if (m_cur_ib_packet_node_index != UINT64_MAX)
-        m_cur_shared_node_parent_index = m_cur_ib_packet_node_index;
     m_cur_ib_level = ib_info.m_ib_level;
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
@@ -857,6 +872,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     AddSharedChild(CommandHierarchy::kSubmitTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kRgpTopology, parent_index, packet_node_index);
+
     AddSharedChild(CommandHierarchy::kEngineTopology, m_ib_stack.back(), packet_node_index);
     AddSharedChild(CommandHierarchy::kSubmitTopology, m_ib_stack.back(), packet_node_index);
 
@@ -877,6 +893,10 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         // Cache packets that may be part of the vkBeginCommandBuffer.
         m_cmd_begin_packet_node_indices.push_back(packet_node_index);
     }
+
+    // Cache set_draw_state packet
+    if (opcode == CP_SET_DRAW_STATE)
+        CacheSetDrawStateGroupInfo(mem_manager, submit_index, va_addr, packet_node_index, header);
 
     bool is_marker = false;
     if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, opcode))
@@ -2099,6 +2119,46 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
         }
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
+                                                         uint32_t              submit_index,
+                                                         uint64_t              va_addr,
+                                                         uint64_t set_draw_state_node_index,
+                                                         uint32_t header)
+{
+    Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
+
+    // Find all the children of the set_draw_state packet, which should contain array indices
+    // Using any of the topologies where field nodes are added will work
+    uint64_t               index = set_draw_state_node_index;
+    std::vector<uint64_t> &children = m_node_children[CommandHierarchy::kSubmitTopology][0][index];
+
+    // Obtain the address of each of the children group IBs
+    PM4_CP_SET_DRAW_STATE packet;
+    DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+                                       submit_index,
+                                       va_addr,
+                                       (type7_header->count + 1) * sizeof(uint32_t)));
+
+    // Sanity check: The # of children should match the array size
+    uint32_t total_size_bytes = (type7_header->count * sizeof(uint32_t));
+    uint32_t per_element_size = sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
+    uint32_t array_size = total_size_bytes / per_element_size;
+    DIVE_ASSERT(total_size_bytes % per_element_size == 0);
+    DIVE_ASSERT(children.size() == array_size);
+
+    // Cache group node index and address
+    for (uint32_t i = 0; i < array_size; ++i)
+    {
+        uint64_t ib_addr = ((uint64_t)packet.ARRAY[i].bitfields2.ADDR_HI << 32) |
+                           (uint64_t)packet.ARRAY[i].bitfields1.ADDR_LO;
+        m_group_info[i].m_group_node_index = children[i];
+        m_group_info[i].m_group_addr = ib_addr;
+    }
+
+    m_group_info_size = array_size;
 }
 
 //--------------------------------------------------------------------------------------------------

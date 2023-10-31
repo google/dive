@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04-16core
+    runs-on: ubuntu-22.04
     steps:
     - name: Check out code
       uses: actions/checkout@v3
@@ -84,7 +84,7 @@ jobs:
 
 
   build_Linux_Debug:
-    runs-on: ubuntu-22.04-16core
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -108,7 +108,7 @@ jobs:
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
 
   build_Linux_Release:
-    runs-on: ubuntu-22.04-16core
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -132,7 +132,7 @@ jobs:
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
 
   build_Android:
-    runs-on: ubuntu-22.04-16core
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3

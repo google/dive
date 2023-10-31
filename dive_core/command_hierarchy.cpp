@@ -867,13 +867,18 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         opcode = type7_header->opcode;
     }
 
-    // Cache all packets added (will cache until encounter next event/IB)
-    m_packets.Add(opcode, va_addr, packet_node_index);
+    // Only cache submit-level packets
+    // All other packets are added as children to other submit-level packets already
+    if (parent_index == m_cur_submit_node_index)
+    {
+        // Cache all packets added (will cache until encounter next event/IB)
+        m_packets.Add(opcode, va_addr, packet_node_index);
 
-    // Cache packets that may be part of the vkBeginCommandBuffer.
-    m_cmd_begin_packet_node_indices.push_back(packet_node_index);
+        // Cache packets that may be part of the vkBeginCommandBuffer.
+        m_cmd_begin_packet_node_indices.push_back(packet_node_index);
+    }
+
     bool is_marker = false;
-
     if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, opcode))
     {
         uint64_t event_node_index = UINT64_MAX;

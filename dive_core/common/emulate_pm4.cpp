@@ -860,6 +860,10 @@ bool EmulatePM4::QueueIB(uint64_t      ib_addr,
     // Grab current stack level info
     EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
 
+    // Queue up only non-0-sized IBs
+    if (ib_size_in_dwords == 0)
+        return true;
+
     if (cur_ib_level->m_ib_queue_size >= EmulateState::kMaxPendingIbs)
     {
         DIVE_ASSERT(false);

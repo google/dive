@@ -26,6 +26,7 @@ jobs:
         git branch -a
         sudo apt-get update --yes
         sudo apt-get install --yes git clang-format-14
+        sudo apt-get install python3-mako --yes
 
     - name: Run lint script
       run: ./scripts/clangformat.sh
@@ -51,6 +52,10 @@ jobs:
           version: 1.10.0
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: ilammy/setup-nasm@v1
+      - name: Install dependency
+        run: |
+          C:/hostedtoolcache/windows/Python/3.11.6/x64/python3.exe -m pip install mako
+          C:/hostedtoolcache/windows/Python/3.12.0/x64/python3.exe -m pip install mako
       - name: Build the UI
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 16 2019" -A x64 ..
@@ -77,6 +82,10 @@ jobs:
           version: 1.10.0
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: ilammy/setup-nasm@v1
+      - name: Install dependency
+        run: |
+          C:/hostedtoolcache/windows/Python/3.11.6/x64/python3.exe -m pip install mako
+          C:/hostedtoolcache/windows/Python/3.12.0/x64/python3.exe -m pip install mako
       - name: Build the UI
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 16 2019" -A x64 ..
@@ -96,6 +105,8 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes cmake gcc-10  clang-14 libsystemd-dev libbsd-dev ninja-build
+          /opt/hostedtoolcache/Python/3.11.6/x64/bin/pip install mako
+          /opt/hostedtoolcache/Python/3.12.0/x64/bin/pip install mako
           which gcc-10
           which clang-14
       - name: Prepare Vulkan SDK
@@ -120,6 +131,8 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes cmake gcc-10 clang-14 libsystemd-dev libbsd-dev ninja-build
+          /opt/hostedtoolcache/Python/3.11.6/x64/bin/pip install mako
+          /opt/hostedtoolcache/Python/3.12.0/x64/bin/pip install mako
           which gcc-10
           which clang-14
       - name: Prepare Vulkan SDK
@@ -142,6 +155,7 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes cmake ninja-build
+          sudo apt-get install python3-mako --yes
       - uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:

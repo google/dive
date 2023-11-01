@@ -22,6 +22,8 @@
 #include "capture_layer/generated/command_decoder.h"
 #include "capture_layer/generated/command_printer.h"
 #include "dive_core/command_hierarchy.h"
+#include "freedreno_dev_info.h"
+#include "pm4_info.h"
 
 namespace Dive
 {
@@ -955,9 +957,26 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
         case RD_PROGRAM:
         case RD_VERT_SHADER:
         case RD_FRAG_SHADER:
-        // case RD_BUFFER_CONTENTS:
+            // case RD_BUFFER_CONTENTS:
+            capture_file.seekg(block_info.m_data_size, std::ios::cur);
+            break;
         case RD_GPU_ID:
-        case RD_CHIP_ID: capture_file.seekg(block_info.m_data_size, std::ios::cur);
+        {
+            DIVE_ASSERT(block_info.m_data_size == 4);
+            uint32_t gpu_id = 0;
+            capture_file.read(reinterpret_cast<char *>(&gpu_id), block_info.m_data_size);
+            SetGPUID(gpu_id / 100);
+        }
+        break;
+        case RD_CHIP_ID:
+        {
+            DIVE_ASSERT(block_info.m_data_size == 8);
+            fd_dev_id dev_id;
+            capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id), block_info.m_data_size);
+            auto info = fd_dev_info(&dev_id);
+            SetGPUID(info->chip);
+        }
+        break;
         }
     }
     m_memory.Finalize(true, true);

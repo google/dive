@@ -37,6 +37,8 @@ set(PM4_INFO_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info")
 set(PM4_GENERATED_SRC_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info.cpp")
 set(PM4_GENERATED_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info.h")
 set(ADRENO_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/adreno.h")
+set(A6XX_PY_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/a6xx.py")
+set(FREEDRENO_DEVICES_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/freedreno_devices.h")
 
 if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
   find_program (Python3_EXECUTABLE python3)
@@ -72,6 +74,33 @@ add_custom_command(
 )
 add_custom_target(adreno_header ALL DEPENDS ${ADRENO_HDR_FILE})
 
+add_custom_command(
+    OUTPUT ${A6XX_PY_FILE}
+    COMMAND ${Python3_EXECUTABLE} ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/registers/gen_header.py
+                   "--rnn"
+                   "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/registers"
+                   "--xml"
+                   "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/registers/adreno/a6xx.xml"
+                   "py-defines"
+                   > ${A6XX_PY_FILE}
+    DEPENDS "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/registers/gen_header.py"
+    WORKING_DIRECTORY ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/registers
+    VERBATIM
+)
+add_custom_target(a6xx_py ALL DEPENDS ${A6XX_PY_FILE})
+
+add_custom_command(
+    OUTPUT ${FREEDRENO_DEVICES_HDR_FILE}
+    COMMAND ${Python3_EXECUTABLE} ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_devices.py
+                   "-p"
+                   "${DIVE_CORE_GENERATED_FILE_DIR}"
+                   > ${FREEDRENO_DEVICES_HDR_FILE}
+    DEPENDS "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_devices.py"
+            "${A6XX_PY_FILE}"
+    VERBATIM
+)
+add_custom_target(freedreno_devices_header ALL DEPENDS ${FREEDRENO_DEVICES_HDR_FILE})
+
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
@@ -85,20 +114,27 @@ endif()
 file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
 file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
 
+file(GLOB_RECURSE FREEDRENO_SRC_FILES "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_dev_info.c")
+
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR} ${DIVE_CORE_GENERATED_FILE_DIR})
 
 include_directories(${CMAKE_SOURCE_DIR}/capture_layer)
 include_directories(${CMAKE_SOURCE_DIR}/capture_layer/generated)
 
+include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common)
+include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/)
+
 
 add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
 
 add_library(${PROJECT_NAME} STATIC ${HDR_FILES} ${SRC_FILES}
-  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES}
+  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES}
   "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_printer.cpp" "${CMAKE_SOURCE_DIR}/capture_layer/command_printer_brief.cpp"
   "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_decoder.cpp" )
 add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)
+add_dependencies(${PROJECT_NAME} a6xx_py)
+add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")

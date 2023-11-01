@@ -713,13 +713,17 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
         const uint32_t         binw = bitfields.BINW << reg_field_w->m_shr;
         const uint32_t         binh = bitfields.BINH << reg_field_h->m_shr;
         const a6xx_render_mode render_mode = bitfields.RENDER_MODE;
-        // TODO(wangra): this is only available on a6xx, should disable this on a7xx captures
-        const a6xx_buffers_location buffers_location = bitfields.BUFFERS_LOCATION;
 
         event_state_it->SetBinW(binw);
         event_state_it->SetBinH(binh);
         event_state_it->SetRenderMode(render_mode);
-        event_state_it->SetBuffersLocation(buffers_location);
+
+        // this is only available on a6xx
+        if (IsFieldEnabled(GetRegFieldByName("BUFFERS_LOCATION", reg_info)))
+        {
+            const a6xx_buffers_location buffers_location = bitfields.BUFFERS_LOCATION;
+            event_state_it->SetBuffersLocation(buffers_location);
+        }
     }
 
     // helper lane related

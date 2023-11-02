@@ -948,18 +948,13 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
         case RD_NONE:
         case RD_TEST:
         case RD_CMD:
-        // case RD_GPUADDR:
         case RD_CONTEXT:
         case RD_CMDSTREAM:
-        // case RD_CMDSTREAM_ADDR:
         case RD_PARAM:
         case RD_FLUSH:
         case RD_PROGRAM:
         case RD_VERT_SHADER:
-        case RD_FRAG_SHADER:
-            // case RD_BUFFER_CONTENTS:
-            capture_file.seekg(block_info.m_data_size, std::ios::cur);
-            break;
+        case RD_FRAG_SHADER: capture_file.seekg(block_info.m_data_size, std::ios::cur); break;
         case RD_GPU_ID:
         {
             DIVE_ASSERT(block_info.m_data_size == 4);

@@ -91,7 +91,6 @@ else()
                         absl::flags_parse)
   set_property(TARGET client PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-
   add_executable(client_cli client_cli.cc)
   target_link_libraries(client_cli
     dive_grpc_proto
@@ -102,18 +101,27 @@ else()
     absl::flags_parse
     absl::algorithm
     )
- 
-    add_executable(dive_client_cli dive_client_cli.cc device_mgr.cc command_utils.cc android_application.cc)
-    target_link_libraries(dive_client_cli
-      dive_grpc_proto
-      client
-      ${_GRPC_GRPCPP}
-      ${_PROTOBUF_LIBPROTOBUF}
-      absl::flags
-      absl::flags_parse
-      absl::algorithm
-      absl::strings
-      )
-      install(TARGETS dive_client_cli DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+  add_library(device_mgr device_mgr.cc command_utils.cc android_application.cc)
+  target_link_libraries(device_mgr 
+  absl::flags
+  absl::flags_parse
+  absl::algorithm
+  absl::strings)
+
+  add_executable(dive_client_cli dive_client_cli.cc )
+  target_link_libraries(dive_client_cli
+    dive_grpc_proto
+    device_mgr
+    client
+    ${_GRPC_GRPCPP}
+    ${_PROTOBUF_LIBPROTOBUF}
+    absl::flags
+    absl::flags_parse
+    absl::algorithm
+    absl::strings
+    )
+
+    install(TARGETS dive_client_cli DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 endif()

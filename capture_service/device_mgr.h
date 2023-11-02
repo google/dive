@@ -19,6 +19,7 @@ limitations under the License.
 #include "android_application.h"
 #include "command_utils.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -81,5 +82,7 @@ public:
 private:
     std::unique_ptr<AndroidDevice> m_device;
 };
+
+std::filesystem::path ResolveAndroidLibPath(std::string name);
 
 }  // namespace Dive

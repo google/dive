@@ -34,16 +34,15 @@
 #include <cstdlib>
 #include <filesystem>
 
-#include "dive_core/log.h"
-
 #include "about_window.h"
 #include "buffer_view.h"
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "command_model.h"
+#include "dive_core/log.h"
 #include "dive_tree_view.h"
 #include "settings.h"
-
+#include "trace_window.h"
 #ifndef NDEBUG
 #    include "event_timing/event_timing_view.h"
 #endif
@@ -223,6 +222,8 @@ MainWindow::MainWindow()
     horizontal_splitter->setStretchFactor(1, 2);
     horizontal_splitter->setStretchFactor(2, 1);
 
+    m_trace_dig = new TraceDialog();
+
     // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.
     setCentralWidget(horizontal_splitter);
@@ -305,6 +306,11 @@ MainWindow::MainWindow()
                      &EventSelection::crossReference,
                      this,
                      &MainWindow::OnCrossReference);
+    QObject::connect(m_trace_dig,
+                     &TraceDialog::TraceAvailable,
+                     this,
+                     &MainWindow::OnTraceAvailable);
+
     QObject::connect(this, &MainWindow::FileLoaded, m_text_file_view, &TextFileView::OnFileLoaded);
     QObject::connect(this, &MainWindow::FileLoaded, this, &MainWindow::OnFileLoaded);
     foreach (auto expand_to_lvl_button, m_expand_to_lvl_buttons)
@@ -333,6 +339,12 @@ MainWindow::MainWindow()
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
     m_hover_help->SetDataCore(m_data_core);
     setAccessibleName("DiveMainWindow");
+}
+
+void MainWindow::OnTraceAvailable(const QString &path)
+{
+    qDebug() << "Trace is at " << path;
+    LoadFile(path.toStdString().c_str(), true);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -655,21 +667,9 @@ void MainWindow::OnCaptureTrigger()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCapture(bool is_capture_delayed)
 {
-    if (!is_capture_delayed && !m_capture_saved && !m_unsaved_capture_path.empty())
-    {
-        QMessageBox warning_box;
-        warning_box.setText("The current capture is not saved.");
-        warning_box.setInformativeText("Do you want to proceed with a new capture?");
-        warning_box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
-        warning_box.setDefaultButton(QMessageBox::Ok);
-        warning_box.setModal(true);
-        int ret = warning_box.exec();
-
-        if (ret == QMessageBox::Cancel)
-            return;
-    }
-
-    UpdateOverlay("Capture in progress. Please wait...");
+    // TraceDialog trace ;
+    m_trace_dig->exec();
+    // trace.exec();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -915,7 +915,6 @@ void MainWindow::CreateMenus()
 
     m_capture_menu = menuBar()->addMenu(tr("&Capture"));
     m_capture_menu->addAction(m_capture_action);
-    m_capture_menu->addAction(m_capture_delay_action);
 
     m_help_menu = menuBar()->addMenu(tr("&Help"));
     m_help_menu->addAction(m_about_action);

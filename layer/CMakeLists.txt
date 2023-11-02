@@ -81,8 +81,9 @@ set_target_properties(${target_name}
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 if(ANDROID)
+    configure_file("manifest/XrApiLayer_dive.json" "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json" COPYONLY)
     install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/vk_layer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
 
 set(target_name XrApiLayer_dive)

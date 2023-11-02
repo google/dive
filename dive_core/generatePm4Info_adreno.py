@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 
 from common import isBuiltInType
 from common import gatherAllEnums
+from common import GetGPUVariantsBitField
 
 
 # ---------------------------------------------------------------------------------------
@@ -48,14 +49,26 @@ def outputH(pm4_info_file):
 
 enum ValueType { kBoolean, kUint, kInt, kFloat, kFixed, kAddress, kWaddress, kHex, kOther };
 
+enum GPUVariantType 
+{ 
+    kGPUVariantNone = 0x0,
+    kA2XX = 0x1, 
+    kA3XX = 0x2, 
+    kA4XX = 0x4, 
+    kA5XX = 0x8, 
+    kA6XX = 0x10, 
+    kA7XX = 0x20, 
+};
+
 static const uint32_t kInvalidRegOffset = UINT32_MAX;
 
 struct RegField {
-    uint32_t m_type         : 8;  // ValueType enum
+    uint32_t m_type         : 4;  // ValueType enum, range [0, 15]
     uint32_t m_enum_handle  : 8;
     uint32_t m_shift        : 6;
-    uint32_t m_shr          : 5; // used to shift left to extract the "original" value, range: [0, 31]
-    uint32_t                : 5;
+    uint32_t m_shr          : 5;  // used to shift left to extract the "original" value, range: [0, 31]
+    uint32_t m_gpu_variants : 6;  // only 6 bits are used for now, see GPUVariantType
+    uint32_t                : 3;
     uint64_t m_mask;
     const char* m_name;
 };
@@ -63,9 +76,10 @@ struct RegField {
 struct RegInfo {
     const char* m_name;
     uint32_t m_is_64_bit    : 1;   // Either 32 or 64 bit
-    uint32_t m_type         : 8;   // ValueType enum
+    uint32_t m_type         : 4;   // ValueType enum, range [0, 15]
     uint32_t m_enum_handle  : 8;
-    uint32_t                : 5;
+    uint32_t m_gpu_variants : 6;   // only 6 bits are used for now, see GPUVariantType
+    uint32_t                : 13;
     std::vector<RegField> m_fields;
 };
 
@@ -73,10 +87,10 @@ struct PacketField {
     const char* m_name;
     uint32_t m_is_variant_opcode : 1;   // If 1, then is used to indicate variant
     uint32_t m_dword             : 8;
-    uint32_t m_type              : 8;   // ValueType enum
+    uint32_t m_type              : 4;   // ValueType enum, range [0, 15]
     uint32_t m_enum_handle       : 8;
     uint32_t m_shift             : 6;
-    uint32_t                     : 1;
+    uint32_t                     : 5;
     uint32_t m_mask;
 };
 
@@ -97,6 +111,8 @@ uint32_t GetRegOffsetByName(const char *name);
 const char *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name);
+void SetGPUID(uint32_t gpu_id);
+bool IsFieldEnabled(const RegField *field);
 """)
 
 # ---------------------------------------------------------------------------------------
@@ -104,24 +120,47 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
   outputHeader(pm4_info_file)
   pm4_info_file.write("#include \"%s\"\n" % (pm4_info_header_file_name))
   pm4_info_file.writelines("""
+#include <assert.h>
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <string>
 #include <vector>
-#include <assert.h>
+#include "dive_core/common/common.h"
 
 static std::map<uint32_t, const char*> g_sOpCodeToString;
 static std::map<uint32_t, RegInfo> g_sRegInfo;
 struct cmp_str
 {
-    bool operator()(char const *a, char const *b) const
+    bool operator()(const std::string& a, const std::string& b) const
     {
-        return std::strcmp(a, b) < 0;
+        return std::strcmp(a.c_str(), b.c_str()) < 0;
     }
 };
-static std::map<const char *, uint32_t, cmp_str> g_sRegNameToIndex;
+static std::map<std::string, uint32_t, cmp_str> g_sRegNameToIndex;
 static std::vector<std::map<uint32_t, const char*>> g_sEnumReflection;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
+static GPUVariantType g_sGPU_variant = kGPUVariantNone;
+
+std::string GetGPUStr(GPUVariantType variant)
+{
+    std::string s;
+    switch(variant)
+    {
+    case kA2XX: s = "A2XX"; break;
+    case kA3XX: s = "A3XX"; break;
+    case kA4XX: s = "A4XX"; break;
+    case kA5XX: s = "A5XX"; break;
+    case kA6XX: s = "A6XX"; break;
+    case kA7XX: s = "A7XX"; break;
+    case kGPUVariantNone:
+    default:
+        DIVE_ASSERT(false);
+        break;
+    }
+    return s;
+}
+
 """
   )
 
@@ -181,7 +220,7 @@ def getTypeEnumString(type):
   return type_string
 
 # ---------------------------------------------------------------------------------------
-def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64):
+def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64, variants):
     is_64_string = "0"
     if is_64 is True:
       is_64_string = "1"
@@ -210,7 +249,8 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
             raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[type])
           enum_handle = str(enum_index_dict[type])
 
-    pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, {" % (offset, name, is_64_string, getTypeEnumString(type), enum_handle))
+    variants_bitfield = GetGPUVariantsBitField(variants)
+    pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, %s, {" % (offset, name, is_64_string, getTypeEnumString(type), enum_handle, variants_bitfield))
 
     # Iterate through optional bitfields
     for bitfield in bitfields:
@@ -249,11 +289,16 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
       else:
         raise Exception("Encountered a bitfield with no pos/low/high!")
 
-      pm4_info_file.write("    { %s, %s, %d, %d, 0x%x, \"%s\" }, "  % (
+      variants_bitfield = 0
+      if 'variants' in bitfield.attrib:
+        variants_bitfield = GetGPUVariantsBitField(bitfield.attrib['variants'])
+
+      pm4_info_file.write("    { %s, %s, %d, %d, %d, 0x%x, \"%s\" }, "  % (
           getTypeEnumString(bitfield_type),
           enum_handle,
           shift,
           shr,
+          variants_bitfield,
           mask,
           name
         ))
@@ -282,7 +327,10 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     is_64 = False
     if reg.tag == '{http://nouveau.freedesktop.org/}reg64':
       is_64 = True
-    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64)
+    variants = ""
+    if 'variants' in reg.attrib:
+      variants = reg.attrib['variants']
+    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64, variants)
 
   # Iterate and output the arrays as a sequence of reg32s with an index as a suffix
   arrays = a6xx_domain.findall('{http://nouveau.freedesktop.org/}array')
@@ -294,11 +342,16 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
 
     # Create a list of 32-bit and 64-bit registers
     array_regs = []
+    reg_variants = []
     for element in array:
       is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
       is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
       if is_reg_32 or is_reg_64:
         array_regs.append(element)
+      variants = ""
+      if 'variants' in element.attrib:
+        variants = element.attrib['variants']
+      reg_variants.append(variants)
 
     # Arrays with stride==1 just generate a series of registers with index suffixes
     # Arrays with stride==2 and no reg32s/reg64s are going to generate a 64-bit register entry
@@ -308,10 +361,10 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     for i in range(0,length):
       if stride == 1:
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
-                             offset+i, array_name+str(i), [], None, enum_index_dict, False)
+                             offset+i, array_name+str(i), [], None, enum_index_dict, False, "")
       elif stride == 2 and not array_regs:
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
-                             offset+i*stride, array_name+"_LO", [], None, enum_index_dict, True)
+                             offset+i*stride, array_name+"_LO", [], None, enum_index_dict, True, "")
       else:
         for reg_idx, reg in enumerate(array_regs):
           reg_name = reg.attrib['name']
@@ -325,7 +378,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
             is_64 = True
           outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
                                offset+i*stride+reg_offset, array_name+str(i)+"_"+reg_name, \
-                               bitfields, type, enum_index_dict, is_64)
+                               bitfields, type, enum_index_dict, is_64, reg_variants[reg_idx])
   return
 
 # ---------------------------------------------------------------------------------------
@@ -562,10 +615,32 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       pm4_info_file.write(" } }));\n")
   pm4_info_file.write("\n")
 
-  pm4_info_file.write("    for (auto &reg : g_sRegInfo)\n")
-  pm4_info_file.write("    {\n")
-  pm4_info_file.write("         g_sRegNameToIndex[reg.second.m_name] = reg.first;\n")
-  pm4_info_file.write("    }\n")
+  # Append _A?XX to the name if there is any variant
+  # This is to handle the cases where the regsiters have the same name 
+  # but different offset for different variants, like PC_POLYGON_MODE
+  pm4_info_file.write("\tfor (auto &reg : g_sRegInfo)\n")
+  pm4_info_file.write("\t{\n")
+  pm4_info_file.write("\t\tconst std::string& name = reg.second.m_name;\n")
+  pm4_info_file.write("\t\tuint32_t gpu_variants = reg.second.m_gpu_variants;\n")
+  pm4_info_file.write("\t\tif (gpu_variants != 0)\n")
+  pm4_info_file.write("\t\t{\n")
+  pm4_info_file.write("\t\t\tuint32_t bit_offset = 0;\n")
+  pm4_info_file.write("\t\t\twhile(gpu_variants != 0)\n")
+  pm4_info_file.write("\t\t\t{ \n")
+  pm4_info_file.write("\t\t\t\tif ((gpu_variants & 0x1) != 0)\n")
+  pm4_info_file.write("\t\t\t\t{\n")
+  pm4_info_file.write("\t\t\t\t\tconst std::string name_with_variant = name + \"_\" + GetGPUStr(static_cast<GPUVariantType>(1 << (bit_offset)));\n")
+  pm4_info_file.write("\t\t\t\t\tg_sRegNameToIndex[name_with_variant] = reg.first;\n")
+  pm4_info_file.write("\t\t\t\t}\n")
+  pm4_info_file.write("\t\t\t\tgpu_variants = gpu_variants>>1;\n")
+  pm4_info_file.write("\t\t\t\t++bit_offset;\n")
+  pm4_info_file.write("\t\t\t}\n")
+  pm4_info_file.write("\t\t}\n")
+  pm4_info_file.write("\t\telse\n")
+  pm4_info_file.write("\t\t{\n")
+  pm4_info_file.write("\t\t\tg_sRegNameToIndex[name] = reg.first;\n")
+  pm4_info_file.write("\t\t}\n")
+  pm4_info_file.write("\t}\n")
 
 # ---------------------------------------------------------------------------------------
 
@@ -587,10 +662,12 @@ const RegInfo *GetRegInfo(uint32_t reg)
 
 const RegInfo *GetRegByName(const char *name)
 {
-    auto i = g_sRegNameToIndex.find(name);
-    if (i == g_sRegNameToIndex.end())
+    uint32_t offset = GetRegOffsetByName(name);
+    if(offset == kInvalidRegOffset)
+    {
         return nullptr;
-    return GetRegInfo(i->second);
+    }
+    return GetRegInfo(offset);
 }
 
 const RegField *GetRegFieldByName(const char *name, const RegInfo *info)
@@ -610,9 +687,18 @@ const RegField *GetRegFieldByName(const char *name, const RegInfo *info)
 
 uint32_t GetRegOffsetByName(const char *name)
 {
-    auto i = g_sRegNameToIndex.find(name);
+    DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
+    std::string str = std::string(name);
+    auto i = g_sRegNameToIndex.find(str);
     if (i == g_sRegNameToIndex.end())
-        return kInvalidRegOffset;
+    {
+        std::string name_with_variant = str + "_" + GetGPUStr(g_sGPU_variant);
+        i = g_sRegNameToIndex.find(name_with_variant);
+        if (i == g_sRegNameToIndex.end())
+        {
+            return kInvalidRegOffset;
+        }
+    }
     return i->second;
 }
 
@@ -643,6 +729,24 @@ const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name)
             return &it->second;
     }
     return nullptr;
+}
+
+void SetGPUID(uint32_t gpu_id)
+{
+    if((gpu_id >= 2) && (gpu_id <= 7))
+    {
+        g_sGPU_variant = static_cast<GPUVariantType>(1 << (gpu_id - 2));
+    }
+    else
+    {
+        g_sGPU_variant = kGPUVariantNone;
+    }
+}
+
+bool IsFieldEnabled(const RegField* field) 
+{
+    DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
+    return (g_sGPU_variant & field->m_gpu_variants) != 0;
 }
 """
   )

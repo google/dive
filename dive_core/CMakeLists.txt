@@ -29,6 +29,9 @@ else()
   set(NATVIS_FILES "")
 endif()
 
+# Disable following warnings for compiling .c files in mesa 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-override-init -Wno-sign-compare")
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 

@@ -177,6 +177,7 @@ private:
 class EmulatePM4
 {
 public:
+    static const uint32_t kMaxPendingIbs = 100;
     EmulatePM4();
 
     // Emulate a submit
@@ -192,7 +193,6 @@ private:
     // Keep all emulation state together
     struct EmulateState
     {
-        static const uint32_t kMaxPendingIbs = 100;
         struct IbStack
         {
             // VA at the current IB level

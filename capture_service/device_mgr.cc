@@ -16,11 +16,9 @@ limitations under the License.
 
 #include "device_mgr.h"
 
-#include <iostream>
+#include <filesystem>
 #include <memory>
-#include <sstream>
 
-#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -78,14 +76,42 @@ std::vector<std::string> AndroidDevice::ListPackage() const
     return package_list;
 }
 
+std::filesystem::path ResolveAndroidLibPath(std::string name)
+{
+    std::vector<std::filesystem::path> search_paths{ std::filesystem::path{
+                                                     "../../build_android/Release/bin" },
+                                                     std::filesystem::path{ "../../install" },
+                                                     std::filesystem::path{ "./" } };
+    std::filesystem::path              lib_path;
+
+    for (const auto &p : search_paths)
+    {
+        lib_path = p / name;
+        if (std::filesystem::exists(lib_path))
+        {
+            break;
+        }
+    }
+
+    lib_path = std::filesystem::canonical(lib_path);
+    LOGD("%s is at %s \n", name.c_str(), lib_path.generic_string().c_str());
+    return lib_path;
+}
+
 void AndroidDevice::SetupDevice()
 {
     Adb().Run("shell setenforce 0");
     Adb().Run("shell getenforce");
 
-    Adb().Run(absl::StrFormat("push %s %s", kWrapLibName, kTargetPath));
-    Adb().Run(absl::StrFormat("push %s %s", kVkLayerLibName, kTargetPath));
-    Adb().Run(absl::StrFormat("push %s %s", kXrLayerLibName, kTargetPath));
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
+                              kTargetPath));
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
+                              kTargetPath));
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
+                              kTargetPath));
     Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort));
 }
 

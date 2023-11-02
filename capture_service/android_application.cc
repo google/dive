@@ -191,7 +191,10 @@ void OpenXRApplication::Setup()
     m_dev.Adb().Run("wait-for-device");
     m_dev.Adb().Run("remount");
     m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath));
-    m_dev.Adb().Run(absl::StrFormat("push %s %s", kManifestFileName, kManifestFilePath));
+    m_dev.Adb().Run(
+    absl::StrFormat("push %s %s",
+                    ResolveAndroidLibPath(kManifestFileName).generic_string().c_str(),
+                    kManifestFilePath));
     m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
                                     m_package,
                                     kTargetPath,

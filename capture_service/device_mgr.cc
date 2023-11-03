@@ -42,8 +42,6 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
 
     LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
     LOGD("select: %s\n", GetDeviceDisplayName().c_str());
-
-    SetupDevice();
 }
 
 AndroidDevice::~AndroidDevice()

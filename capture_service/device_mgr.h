@@ -76,6 +76,8 @@ public:
         return m_device.get();
     }
 
+    void RemoveDevice() { m_device = nullptr; }
+
     AndroidDevice *GetDevice() const { return m_device.get(); }
     void           Cleanup(const std::string &serial, const std::string &package);
 

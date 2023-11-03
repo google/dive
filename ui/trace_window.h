@@ -36,6 +36,7 @@ class TraceDialog : public QDialog
 
 public:
     TraceDialog(QWidget *parent = 0);
+    void Cleanup() { m_dev_mgr.RemoveDevice(); }
 
 private slots:
     void OnDeviceSelected(const QString &);

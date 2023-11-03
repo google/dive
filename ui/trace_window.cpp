@@ -78,6 +78,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     qDebug() << "selected " << m_cur_dev.c_str();
 
     auto device = m_dev_mgr.SelectDevice(m_cur_dev);
+    device->SetupDevice();
     m_pkg_list = device->ListPackage();
     for (size_t i = 0; i < m_pkg_list.size(); i++)
     {
@@ -139,9 +140,17 @@ void TraceDialog::OnPackageSelected(const QString &s)
 
 void TraceDialog::OnStartClicked()
 {
+    auto device = m_dev_mgr.GetDevice();
+    assert(device != nullptr);
+    if (!device)
+    {
+        // TODO: add a warning message.
+        return;
+    }
+
+    device->SetupDevice();
     int         ty = m_app_type_box->currentIndex();
     std::string ty_str = kAppTypes[ty];
-    auto        device = m_dev_mgr.GetDevice();
 
     if (m_run_button->text() == QString("&Start Application"))
     {
@@ -176,15 +185,28 @@ void TraceDialog::OnCaptureClicked()
     const std::string server_str = "localhost:19999";
 
     Dive::DiveClient client(grpc::CreateChannel(server_str, grpc::InsecureChannelCredentials()));
-    std::cout << "TestConnection reply: " << client.TestConnection() << std::endl;
+    absl::StatusOr<std::string> reply = client.TestConnection();
+    if (reply.ok())
+        std::cout << "Test connection succeed" << std::endl;
+    else
+    {
+        std::cout << "Test connection failed: " << reply.status() << std::endl;
+        return;
+    }
 
-    std::string trace_file_path = client.RequestStartTrace();
-    std::cout << "Trigger capture: " << trace_file_path << std::endl;
+    absl::StatusOr<std::string> trace_file_path = client.RequestStartTrace();
+    if (trace_file_path.ok())
+        std::cout << "Trigger capture: " << *trace_file_path << std::endl;
+    else
+    {
+        std::cout << "Trigger capture failed: " << trace_file_path.status() << std::endl;
+        return;
+    }
     std::string           capture_path = ".";
-    std::filesystem::path p(trace_file_path);
+    std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    m_dev_mgr.GetDevice()->RetrieveTraceFile(trace_file_path, target.generic_string());
+    m_dev_mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
     std::cout << "Capture saved at " << target.generic_string() << std::endl;
 
     QString t(target.generic_string().c_str());

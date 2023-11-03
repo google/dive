@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <memory>
 
+#include "absl/status/statusor.h"
 #include "dive_service.grpc.pb.h"
 #include "grpcpp/grpcpp.h"
 
@@ -31,11 +32,11 @@ public:
     {
     }
 
-    std::string RequestStartTrace();
+    absl::StatusOr<std::string> RequestStartTrace();
 
-    std::string TestConnection();
+    absl::StatusOr<std::string> TestConnection();
 
-    std::string RunCommand(const std::string &command);
+    absl::StatusOr<std::string> RunCommand(const std::string &command);
 
 private:
     std::unique_ptr<DiveService::Stub> m_stub;

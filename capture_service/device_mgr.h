@@ -19,6 +19,7 @@ limitations under the License.
 #include "android_application.h"
 #include "command_utils.h"
 
+#include <cassert>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -72,6 +73,7 @@ public:
     std::vector<std::string> ListDevice() const;
     AndroidDevice           *SelectDevice(const std::string &serial)
     {
+        assert(!serial.empty());
         m_device = std::make_unique<AndroidDevice>(serial);
         return m_device.get();
     }

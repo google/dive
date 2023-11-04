@@ -35,9 +35,10 @@
 #include <filesystem>
 #include <iostream>
 
+#include "capture_service/client.h"
 namespace
 {
-const std::vector<std::string> kAppTypes{ "OpenXR", "Vulkan" };
+const std::vector<std::string> kAppTypes{ "Vulkan", "OpenXR" };
 }
 
 // =================================================================================================
@@ -75,11 +76,15 @@ TraceDialog::TraceDialog(QWidget *parent)
     {
         m_cur_dev = m_devices[0];
     }
-    qDebug() << "selected " << m_cur_dev.c_str();
+    qDebug() << "Device selected: " << m_cur_dev.c_str();
 
-    auto device = m_dev_mgr.SelectDevice(m_cur_dev);
-    device->SetupDevice();
-    m_pkg_list = device->ListPackage();
+    if (!m_cur_dev.empty())
+    {
+        auto device = m_dev_mgr.SelectDevice(m_cur_dev);
+        device->SetupDevice();
+        m_pkg_list = device->ListPackage();
+    }
+
     for (size_t i = 0; i < m_pkg_list.size(); i++)
     {
         QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
@@ -120,21 +125,31 @@ TraceDialog::TraceDialog(QWidget *parent)
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnCaptureClicked);
 }
 
+TraceDialog::~TraceDialog()
+{
+    m_dev_mgr.RemoveDevice();
+}
+
 void TraceDialog::OnDeviceSelected(const QString &s)
 {
     int dev_index = m_dev_box->currentIndex();
-    qDebug() << "selected " << s << " " << m_dev_box->currentIndex();
-    qDebug() << "selected " << m_cur_dev.c_str();
+    qDebug() << "Device selected: " << m_cur_dev.c_str();
     assert(static_cast<size_t>(dev_index) < m_devices.size());
     m_cur_dev = m_devices[dev_index];
     assert(m_cur_dev == s.toStdString());
     auto device = m_dev_mgr.SelectDevice(m_cur_dev);
     m_pkg_list = device->ListPackage();
+    m_pkg_model->clear();
+    for (size_t i = 0; i < m_pkg_list.size(); i++)
+    {
+        QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
+        m_pkg_model->appendRow(item);
+    }
 }
 
 void TraceDialog::OnPackageSelected(const QString &s)
 {
-    qDebug() << "selected " << s << " " << m_pkg_box->currentIndex();
+    qDebug() << "Package selected: " << s << " " << m_pkg_box->currentIndex();
     m_cur_pkg = m_pkg_list[m_pkg_box->currentIndex()];
 }
 
@@ -151,9 +166,9 @@ void TraceDialog::OnStartClicked()
     device->SetupDevice();
     int         ty = m_app_type_box->currentIndex();
     std::string ty_str = kAppTypes[ty];
-
     if (m_run_button->text() == QString("&Start Application"))
     {
+        device->CleanupAPP();
         m_run_button->setText("&Starting..");
         m_run_button->setDisabled(true);
 
@@ -187,19 +202,25 @@ void TraceDialog::OnCaptureClicked()
     Dive::DiveClient client(grpc::CreateChannel(server_str, grpc::InsecureChannelCredentials()));
     absl::StatusOr<std::string> reply = client.TestConnection();
     if (reply.ok())
-        std::cout << "Test connection succeed" << std::endl;
+    {
+        qDebug() << "Test connection succeed";
+    }
     else
     {
-        std::cout << "Test connection failed: " << reply.status() << std::endl;
+        std::string err_msg(reply.status().message());
+        qDebug() << "Test connection failed: " << err_msg.c_str();
         return;
     }
 
     absl::StatusOr<std::string> trace_file_path = client.RequestStartTrace();
     if (trace_file_path.ok())
-        std::cout << "Trigger capture: " << *trace_file_path << std::endl;
+    {
+        qDebug() << "Trigger capture: " << (*trace_file_path).c_str();
+    }
     else
     {
-        std::cout << "Trigger capture failed: " << trace_file_path.status() << std::endl;
+        std::string err_msg(trace_file_path.status().message());
+        qDebug() << "Trigger capture failed: " << err_msg.c_str();
         return;
     }
     std::string           capture_path = ".";
@@ -207,8 +228,8 @@ void TraceDialog::OnCaptureClicked()
     std::filesystem::path target(capture_path);
     target /= p.filename();
     m_dev_mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
-    std::cout << "Capture saved at " << target.generic_string() << std::endl;
+    qDebug() << "Capture saved at " << target.generic_string().c_str();
 
-    QString t(target.generic_string().c_str());
-    emit    TraceAvailable(t);
+    QString capture_saved_path(target.generic_string().c_str());
+    emit    TraceAvailable(capture_saved_path);
 }

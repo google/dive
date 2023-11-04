@@ -16,7 +16,6 @@
 
 #include <qobjectdefs.h>
 #include <QDialog>
-#include "capture_service/client.h"
 #include "capture_service/device_mgr.h"
 
 #pragma once
@@ -36,6 +35,7 @@ class TraceDialog : public QDialog
 
 public:
     TraceDialog(QWidget *parent = 0);
+    ~TraceDialog();
     void Cleanup() { m_dev_mgr.RemoveDevice(); }
 
 private slots:

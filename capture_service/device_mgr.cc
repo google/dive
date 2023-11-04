@@ -71,6 +71,7 @@ std::vector<std::string> AndroidDevice::ListPackage() const
             package_list.push_back(fields[1]);
         }
     }
+    std::sort(package_list.begin(), package_list.end());
     return package_list;
 }
 
@@ -80,7 +81,7 @@ std::filesystem::path ResolveAndroidLibPath(std::string name)
                                                      "../../build_android/Release/bin" },
                                                      std::filesystem::path{ "../../install" },
                                                      std::filesystem::path{ "./" } };
-    std::filesystem::path              lib_path;
+    std::filesystem::path              lib_path{ name };
 
     for (const auto &p : search_paths)
     {
@@ -150,10 +151,7 @@ void AndroidDevice::SetupApp(const std::string &package, const ApplicationType t
 
 void AndroidDevice::CleanupAPP()
 {
-    if (app)
-    {
-        app->Cleanup();
-    }
+    app = nullptr;
 }
 
 void AndroidDevice::StartApp()

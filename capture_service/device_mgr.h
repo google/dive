@@ -45,7 +45,12 @@ public:
     explicit AndroidDevice(const std::string &serial);
     ~AndroidDevice();
 
-    std::vector<std::string> ListPackage() const;
+    struct PackageListOptions
+    {
+        bool with_system_package;
+        bool debuggable_only;
+    };
+    std::vector<std::string> ListPackage(PackageListOptions option = { 0, 1 }) const;
     std::string              GetDeviceDisplayName() const;
 
     void              SetupApp(const std::string &package, const ApplicationType type);

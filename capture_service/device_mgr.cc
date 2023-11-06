@@ -57,17 +57,30 @@ std::string AndroidDevice::GetDeviceDisplayName() const
     return absl::StrCat(m_dev_info.m_manufacturer, " ", m_dev_info.m_model, " (", m_serial, ")");
 }
 
-std::vector<std::string> AndroidDevice::ListPackage() const
+std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) const
 {
     std::vector<std::string> package_list;
-
-    std::string              output = Adb().Run("shell pm list packages").Out();
+    std::string              cmd = "shell pm list packages";
+    if (!option.with_system_package)
+    {
+        cmd += " -3";
+    }
+    std::string              output = Adb().Run(cmd).Out();
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
     for (const auto &line : lines)
     {
         std::vector<std::string> fields = absl::StrSplit(line, ':');
         if (fields.size() == 2 && fields[0] == "package")
         {
+            if (option.debuggable_only)
+            {
+                std::string output = Adb().Run("shell dumpsys package " + fields[1]).Out();
+                // TODO: find out more reliable way to find if app is debuggable.
+                if (!absl::StrContains(output, "DEBUGGABLE"))
+                {
+                    continue;
+                }
+            }
             package_list.push_back(fields[1]);
         }
     }
@@ -182,6 +195,7 @@ std::vector<std::string> DeviceManager::ListDevice() const
         if (fields.size() == 2 && fields[1] == "device")
             dev_list.push_back(fields[0]);
     }
+    std::sort(dev_list.begin(), dev_list.end());
 
     return dev_list;
 }

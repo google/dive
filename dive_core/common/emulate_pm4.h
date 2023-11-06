@@ -42,6 +42,7 @@ struct IndirectBufferInfo
     uint64_t m_va_addr;
     uint32_t m_size_in_dwords;
     uint8_t  m_ib_level;
+    uint32_t m_enable_mask;
 
     // Set to true to avoid emulating this IB, probably because it was not captured
     bool m_skip;
@@ -225,6 +226,7 @@ private:
             uint64_t m_cur_ib_addr;
             uint32_t m_cur_ib_size_in_dwords;
             bool     m_cur_ib_skip;
+            uint32_t m_cur_ib_enable_mask;
             IbType   m_cur_ib_type;
 
             // IB queue (for storing pending CALLs or CHAINs)
@@ -232,6 +234,7 @@ private:
             uint64_t m_ib_queue_addrs[kMaxPendingIbs];
             uint32_t m_ib_queue_sizes_in_dwords[kMaxPendingIbs];
             bool     m_ib_queue_skip[kMaxPendingIbs];
+            uint32_t m_ib_queue_enable_mask[kMaxPendingIbs];
             uint32_t m_ib_queue_index;
             uint32_t m_ib_queue_size;
 
@@ -269,7 +272,8 @@ private:
                  uint32_t      ib_size_in_dwords,
                  bool          skip,
                  IbType        ib_type,
-                 EmulateState *emu_state) const;
+                 EmulateState *emu_state,
+                 uint32_t      enable_mask = 7) const;
 
     // Helper function to help with advancing emulation to IB
     bool AdvanceToQueuedIB(const IMemoryManager &mem_manager,

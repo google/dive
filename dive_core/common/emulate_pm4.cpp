@@ -910,6 +910,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
             if (packet.ARRAY[i].bitfields0.DISABLE)
                 continue;
 
+            uint32_t enable_mask = packet.ARRAY[i].bitfields0.BINNING |
+                                   (packet.ARRAY[i].bitfields0.GMEM << 1) |
+                                   (packet.ARRAY[i].bitfields0.SYSMEM << 2);
+
             ib_queued = true;
             uint64_t ib_addr = ((uint64_t)packet.ARRAY[i].bitfields2.ADDR_HI << 32) |
                                (uint64_t)packet.ARRAY[i].bitfields1.ADDR_LO;
@@ -917,7 +921,8 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                          packet.ARRAY[i].bitfields0.COUNT,
                          false,
                          IbType::kDrawState,
-                         emu_state_ptr))
+                         emu_state_ptr,
+                         enable_mask))
             {
                 return false;
             }
@@ -947,7 +952,8 @@ bool EmulatePM4::QueueIB(uint64_t      ib_addr,
                          uint32_t      ib_size_in_dwords,
                          bool          skip,
                          IbType        ib_type,
-                         EmulateState *emu_state) const
+                         EmulateState *emu_state,
+                         uint32_t      enable_mask) const
 {
     // Grab current stack level info
     EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
@@ -966,6 +972,7 @@ bool EmulatePM4::QueueIB(uint64_t      ib_addr,
     cur_ib_level->m_ib_queue_addrs[cur_ib_level->m_ib_queue_size] = ib_addr;
     cur_ib_level->m_ib_queue_sizes_in_dwords[cur_ib_level->m_ib_queue_size] = ib_size_in_dwords;
     cur_ib_level->m_ib_queue_skip[cur_ib_level->m_ib_queue_size] = skip;
+    cur_ib_level->m_ib_queue_enable_mask[cur_ib_level->m_ib_queue_size] = enable_mask;
     cur_ib_level->m_ib_queue_type = ib_type;
     cur_ib_level->m_ib_queue_size++;
     return true;
@@ -1003,6 +1010,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
         new_ib_level->m_cur_va = prev_ib_level->m_ib_queue_addrs[index];
         new_ib_level->m_cur_ib_size_in_dwords = prev_ib_level->m_ib_queue_sizes_in_dwords[index];
         new_ib_level->m_cur_ib_skip = prev_ib_level->m_ib_queue_skip[index];
+        new_ib_level->m_cur_ib_enable_mask = prev_ib_level->m_ib_queue_enable_mask[index];
         new_ib_level->m_cur_ib_addr = new_ib_level->m_cur_va;
         new_ib_level->m_cur_ib_type = prev_ib_level->m_ib_queue_type;
         new_ib_level->m_ib_queue_index = new_ib_level->m_ib_queue_size = 0;
@@ -1023,6 +1031,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
         prev_ib_level->m_cur_va = prev_ib_level->m_ib_queue_addrs[0];
         prev_ib_level->m_cur_ib_size_in_dwords = prev_ib_level->m_ib_queue_sizes_in_dwords[0];
         prev_ib_level->m_cur_ib_skip = prev_ib_level->m_ib_queue_skip[0];
+        prev_ib_level->m_cur_ib_enable_mask = prev_ib_level->m_ib_queue_enable_mask[0];
         prev_ib_level->m_cur_ib_addr = prev_ib_level->m_cur_va;
     }
 
@@ -1045,6 +1054,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
         call_chain_ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
         call_chain_ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
         call_chain_ib_info.m_skip = cur_ib_level->m_cur_ib_skip;
+        call_chain_ib_info.m_enable_mask = cur_ib_level->m_cur_ib_enable_mask;
         if (!callbacks.OnIbStart(emu_state->m_submit_index,
                                  emu_state->m_ib_index,
                                  call_chain_ib_info,

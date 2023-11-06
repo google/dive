@@ -148,6 +148,7 @@ bool CaptureMetadataCreator::OnIbStart(uint32_t                  submit_index,
                                        const IndirectBufferInfo &ib_info,
                                        IbType                    type)
 {
+    m_state_tracker.PushEnableMask(ib_info.m_enable_mask);
     return true;
 }
 
@@ -156,6 +157,7 @@ bool CaptureMetadataCreator::OnIbEnd(uint32_t                  submit_index,
                                      uint32_t                  ib_index,
                                      const IndirectBufferInfo &ib_info)
 {
+    m_state_tracker.PopEnableMask();
     return true;
 }
 

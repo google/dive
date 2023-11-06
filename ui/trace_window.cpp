@@ -15,6 +15,7 @@
 */
 
 #include "trace_window.h"
+#include <qcombobox.h>
 #include <qdebug.h>
 #include <QCheckBox>
 #include <QComboBox>
@@ -33,7 +34,6 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 #include <filesystem>
-#include <iostream>
 
 #include "capture_service/client.h"
 namespace
@@ -44,7 +44,6 @@ const std::vector<std::string> kAppTypes{ "Vulkan", "OpenXR" };
 // =================================================================================================
 // TraceDialog
 // =================================================================================================
-
 TraceDialog::TraceDialog(QWidget *parent)
 {
     m_capture_layout = new QHBoxLayout();

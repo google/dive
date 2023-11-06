@@ -26,6 +26,7 @@ enum class ApplicationType
     OPENXR,
     VULKAN,
     GLES,
+    UNKNOWN,
 };
 
 class AndroidDevice;
@@ -36,17 +37,21 @@ public:
     AndroidApplication(AndroidDevice &dev, std::string package, ApplicationType type);
     virtual ~AndroidApplication() = default;
 
-    virtual void Setup() = 0;
-    virtual void Cleanup() = 0;
-    void         Start();
-    void         Stop();
-    std::string  GetMainActivity();
+    virtual void       Setup() = 0;
+    virtual void       Cleanup() = 0;
+    void               Start();
+    void               Stop();
+    const std::string &GetMainActivity() const { return m_main_activity; };
+    bool               IsDebuggable() const { return m_is_debuggable; }
 
 protected:
+    void ParsePackage();
+
     AndroidDevice  &m_dev;
     std::string     m_package;
     ApplicationType m_type;
     std::string     m_main_activity;
+    bool            m_is_debuggable;
     bool            m_started;
 };
 

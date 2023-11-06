@@ -79,6 +79,10 @@ enum class Pm4Type { kType2, kType4, kType7, kUnknown };
 // clang-format on
 
 //--------------------------------------------------------------------------------------------------
+// The number of bits IB enable masks: BINNING, GMEM, SYSMEM
+static constexpr uint32_t kShaderEnableBitCount = 3;
+
+//--------------------------------------------------------------------------------------------------
 class IEmulateCallbacks
 {
 public:
@@ -148,29 +152,32 @@ public:
     uint32_t GetBufferSize() const;
 
     // Reset the state tracker
-    void Reset()
-    {
-        memset(m_reg, 0, sizeof(m_reg));
-        memset(m_reg_is_set, 0, sizeof(m_reg_is_set));
-    }
+    void Reset();
 
-    uint32_t GetRegValue(uint32_t offset) const { return m_reg[offset]; }
+    void PushEnableMask(uint32_t enable_mask);
 
-    void SetReg(uint32_t offset, uint32_t value)
-    {
-        m_reg[offset] = value;
-        m_reg_is_set[offset / 8] |= (1 << (offset % 8));
-    }
+    void PopEnableMask();
 
-    bool IsRegSet(uint32_t offset) const
-    {
-        return !!(m_reg_is_set[offset / 8] & (1 << (offset % 8)));
-    }
+    uint32_t GetRegValue(uint32_t offset, uint32_t enable_mask) const;
+
+    uint32_t GetRegValue(uint32_t offset) const;
+
+    uint64_t GetReg64Value(uint32_t offset, uint32_t enable_mask) const;
+
+    uint64_t GetReg64Value(uint32_t offset) const;
+
+    void SetReg(uint32_t offset, uint32_t value);
+
+    bool IsRegSet(uint32_t offset) const;
+
+    bool IsRegSet(uint32_t offset, uint32_t enable_mask) const;
 
 private:
-    static const size_t kNumRegs = 0xffff + 1;
-    uint32_t            m_reg[kNumRegs];
-    uint8_t             m_reg_is_set[(kNumRegs / 8) + 1];
+    static constexpr size_t kNumRegs = 0xffff + 1;
+    uint32_t                m_reg[kShaderEnableBitCount][kNumRegs];
+    uint8_t                 m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1];
+    uint32_t                m_enable_mask = (1u << kShaderEnableBitCount) - 1;
+    std::vector<uint32_t>   m_enable_mask_stack;
 };
 
 //--------------------------------------------------------------------------------------------------

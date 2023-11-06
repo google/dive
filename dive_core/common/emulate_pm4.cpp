@@ -589,6 +589,98 @@ uint32_t EmulateStateTracker::GetBufferSize() const
     // return m_buffer_size;
     return 0;
 }
+
+//--------------------------------------------------------------------------------------------------
+void EmulateStateTracker::Reset()
+{
+    memset(m_reg, 0, sizeof(m_reg));
+    memset(m_reg_is_set, 0, sizeof(m_reg_is_set));
+}
+
+//--------------------------------------------------------------------------------------------------
+void EmulateStateTracker::PushEnableMask(uint32_t enable_mask)
+{
+    m_enable_mask_stack.push_back(m_enable_mask);
+    m_enable_mask = enable_mask;
+}
+
+//--------------------------------------------------------------------------------------------------
+void EmulateStateTracker::PopEnableMask()
+{
+    m_enable_mask = m_enable_mask_stack.back();
+    m_enable_mask_stack.pop_back();
+}
+
+//--------------------------------------------------------------------------------------------------
+uint32_t EmulateStateTracker::GetRegValue(uint32_t offset, uint32_t enable_mask) const
+{
+    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
+    {
+        if (enable_mask & (1u << i))
+        {
+            return m_reg[i][offset];
+        }
+    }
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+uint32_t EmulateStateTracker::GetRegValue(uint32_t offset) const
+{
+    return GetRegValue(offset, m_enable_mask);
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t EmulateStateTracker::GetReg64Value(uint32_t offset, uint32_t enable_mask) const
+{
+    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
+    {
+        if (enable_mask & (1u << i))
+        {
+            return ((uint64_t)m_reg[i][offset]) | (((uint64_t)m_reg[i][offset + 1]) << 32);
+        }
+    }
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t EmulateStateTracker::GetReg64Value(uint32_t offset) const
+{
+    return GetRegValue(offset, m_enable_mask);
+}
+
+//--------------------------------------------------------------------------------------------------
+void EmulateStateTracker::SetReg(uint32_t offset, uint32_t value)
+{
+    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
+    {
+        if (m_enable_mask & (1u << i))
+        {
+            m_reg[i][offset] = value;
+            m_reg_is_set[i][offset / 8] |= (1 << (offset % 8));
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+bool EmulateStateTracker::IsRegSet(uint32_t offset) const
+{
+    return IsRegSet(offset, m_enable_mask);
+}
+
+//--------------------------------------------------------------------------------------------------
+bool EmulateStateTracker::IsRegSet(uint32_t offset, uint32_t enable_mask) const
+{
+    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
+    {
+        if (enable_mask & (1u << i))
+        {
+            return !!(m_reg_is_set[i][offset / 8] & (1 << (offset % 8)));
+        }
+    }
+    return false;
+}
+
 /*
 //--------------------------------------------------------------------------------------------------
 void EmulateStateTracker::UpdateUserDataRegsSetSinceLastEvent(ShaderStage stage,

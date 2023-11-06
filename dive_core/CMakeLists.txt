@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 
 project(dive_core)
 
@@ -29,9 +29,6 @@ else()
   set(NATVIS_FILES "")
 endif()
 
-# Disable following warnings for compiling .c files in mesa 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-override-init -Wno-sign-compare")
-
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -42,6 +39,8 @@ set(PM4_GENERATED_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/pm4_info.h")
 set(ADRENO_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/adreno.h")
 set(A6XX_PY_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/a6xx.py")
 set(FREEDRENO_DEVICES_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/freedreno_devices.h")
+set(FREEDRENO_IR3_ISA_SRC_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/ir3-isa.c")
+set(FREEDRENO_IR3_ISA_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/ir3-isa.h")
 
 if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
   find_program (Python3_EXECUTABLE python3)
@@ -126,6 +125,7 @@ include_directories(${CMAKE_SOURCE_DIR}/capture_layer/generated)
 
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common)
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/)
+include_directories(${THIRDPARTY_DIRECTORY}/mesa/include/)
 
 
 add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
@@ -138,6 +138,60 @@ add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
+
+
+if (MSVC)
+  # freedreno_ir3 build is currently disabled on MSVC
+else()
+  add_custom_command(
+      OUTPUT ${FREEDRENO_IR3_ISA_SRC_FILE} ${FREEDRENO_IR3_ISA_HDR_FILE}
+      COMMAND ${Python3_EXECUTABLE} ${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py
+                    "--xml"
+                    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
+                    "--out-c" ${FREEDRENO_IR3_ISA_SRC_FILE}
+                    "--out-h" ${FREEDRENO_IR3_ISA_HDR_FILE}
+      DEPENDS "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py"
+              "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
+      VERBATIM
+  )
+
+  add_library(freedreno_ir3 STATIC
+    ${FREEDRENO_IR3_ISA_SRC_FILE}
+    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/hash_table.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/log.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_file.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_misc.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/simple_mtx.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/softfloat.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_call_once.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_debug.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_printf.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_process.c"
+  )
+
+  target_include_directories(freedreno_ir3 PRIVATE
+    "${THIRDPARTY_DIRECTORY}/mesa/include"
+    "${THIRDPARTY_DIRECTORY}/mesa/src"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
+  )
+  target_compile_definitions(freedreno_ir3 PRIVATE
+    -DHAVE_ENDIAN_H
+    -DHAVE_FUNC_ATTRIBUTE_PACKED
+    -DHAVE_STRUCT_TIMESPEC
+    -DHAVE_PTHREAD
+  )
+  target_compile_options(freedreno_ir3 PRIVATE -fPIC)
+  add_dependencies(${PROJECT_NAME} freedreno_ir3)
+  target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
+endif()
 
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
@@ -158,5 +212,8 @@ if (MSVC)
   # 4201: prevent nameless struct/union
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
 else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -fPIC)
+  target_compile_options(${PROJECT_NAME} PRIVATE
+    -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-sign-compare -fPIC
+    $<$<COMPILE_LANGUAGE:C>:-Wno-override-init>
+  )
 endif()

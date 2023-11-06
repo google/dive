@@ -80,6 +80,14 @@ enum class Pm4Type { kType2, kType4, kType7, kUnknown };
 // clang-format on
 
 //--------------------------------------------------------------------------------------------------
+enum class ShaderEnableBit : uint32_t
+{
+    kBINNING = 0x1,
+    kGMEM = 0x2,
+    kSYSMEM = 0x4,
+};
+
+//--------------------------------------------------------------------------------------------------
 // The number of bits IB enable masks: BINNING, GMEM, SYSMEM
 static constexpr uint32_t kShaderEnableBitCount = 3;
 

@@ -620,8 +620,8 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
     // Used to keep track of progress of emulation so far
     EmulateState emu_state;
     emu_state.m_submit_index = submit_index;
-    emu_state.m_top_of_stack = EmulateState::kPrimaryRing;
-    EmulateState::IbStack *primary_ring = &emu_state.m_ib_stack[EmulateState::kPrimaryRing];
+    emu_state.m_top_of_stack = IbLevel::kPrimaryRing;
+    EmulateState::IbStack *primary_ring = &emu_state.m_ib_stack[IbLevel::kPrimaryRing];
     primary_ring->m_cur_va = UINT64_MAX;
     primary_ring->m_ib_queue_index = primary_ring->m_ib_queue_size = 0;
 
@@ -648,7 +648,7 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
 
     // Should always be emulating something in an IB. If it's parked at the primary ring,
     // then that means emulation has completed
-    while (emu_state.m_top_of_stack != EmulateState::kPrimaryRing)
+    while (emu_state.m_top_of_stack != IbLevel::kPrimaryRing)
     {
         // Callbacks + advance
         EmulateState::IbStack *cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
@@ -896,7 +896,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
 
     if (prev_ib_level->m_ib_queue_type != IbType::kChain)
     {
-        DIVE_ASSERT(emu_state->m_top_of_stack < EmulateState::kTotalIbLevels - 1);
+        DIVE_ASSERT(emu_state->m_top_of_stack < IbLevel::kTotalIbLevels - 1);
 
         // If it's calling into another IB from the primary ring, then update the ib index. Note
         // that only IBs called from primary ring as labelled as "normal" ibs
@@ -904,7 +904,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
             emu_state->m_ib_index = prev_ib_level->m_ib_queue_index;
 
         // Enter next IB level (CALL)
-        emu_state->m_top_of_stack = (EmulateState::IbLevel)(emu_state->m_top_of_stack + 1);
+        emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack + 1);
 
         uint32_t               index = prev_ib_level->m_ib_queue_index;
         EmulateState::IbStack *new_ib_level = emu_state->GetCurIb();
@@ -998,7 +998,7 @@ bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &call
 {
     EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
 
-    emu_state->m_top_of_stack = (EmulateState::IbLevel)(emu_state->m_top_of_stack - 1);
+    emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack - 1);
 
     IndirectBufferInfo ib_info;
     ib_info.m_va_addr = cur_ib_level->m_cur_va;

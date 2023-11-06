@@ -560,10 +560,10 @@ private:
     uint32_t m_num_events;  // Number of events so far
     Packets  m_packets;     // Packets added since last event
 
-    uint64_t m_cur_shared_node_parent_index;  // The current parent of any shared node being added
-    uint64_t m_cur_submit_node_index;         // Current submit node being processed
-    uint64_t m_cur_ib_packet_node_index;      // Current ib packet node being processed
+    uint64_t m_cur_submit_node_index;     // Current submit node being processed
+    uint64_t m_cur_ib_packet_node_index;  // Current ib packet node being processed
     uint8_t  m_cur_ib_level;
+    uint64_t m_shared_node_ib_parent_stack[EmulatePM4::kTotalIbLevels];
 
     // Flattening is the process of forcing chain ib nodes to only ever be child to non-chain ib
     // nodes, even when daisy chaining across multiple chain ib nodes. This makes the topology

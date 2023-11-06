@@ -124,11 +124,12 @@ void ShaderView::OnEventSelected(uint64_t node_index)
     if (node_index == UINT64_MAX)
         return;
 
-    const Dive::CaptureMetadata  &metadata = m_data_core.GetCaptureMetadata();
+    // const Dive::CaptureMetadata  &metadata = m_data_core.GetCaptureMetadata();
     const Dive::CommandHierarchy &command_hierarchy = m_data_core.GetCommandHierarchy();
-    const uint32_t kShaderStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
 
     auto update_shader_list = [&](uint64_t event_node_index) {
+        return;
+        /*
         uint32_t event_id = command_hierarchy.GetEventNodeId(event_node_index);
         if (event_id >= metadata.m_event_info.size())
         {
@@ -201,6 +202,7 @@ void ShaderView::OnEventSelected(uint64_t node_index)
                 treeItem->setText(5, tr(buffer));
             }
         }
+        */
     };
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(node_index);
@@ -244,11 +246,10 @@ void ShaderView::OnShaderSelectionChanged()
     m_shader_code_text->clear();
 
     // Determine shader type by matching column 0 string
-    uint32_t selected_stage = (uint32_t)item_ptr->GetShaderStage();
     uint32_t shader_index = item_ptr->GetShaderIndex();
 
     const Dive::CaptureMetadata &metadata = m_data_core.GetCaptureMetadata();
-    const Dive::ShaderInfo      &shader_info = metadata.m_shaders[selected_stage][shader_index];
+    const Dive::ShaderInfo      &shader_info = metadata.m_shaders[shader_index];
     m_shader_code_text->append(shader_info.m_disassembly.GetListing().c_str());
     m_shader_code_text->moveCursor(QTextCursor::Start);
     m_shader_code_text->setReadOnly(true);

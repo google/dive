@@ -239,44 +239,73 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
         is_valid_shader |= !is_dispatch && (shader != (uint32_t)ShaderStage::kShaderStageCs);
 
         EventInfo &cur_event_info = m_capture_metadata.m_event_info.back();
-        uint64_t   addr = m_state_tracker.GetCurShaderAddr((ShaderStage)shader);
-        if (is_valid_shader && (addr != UINT64_MAX))
+
+        for (uint32_t enable_index = 0; enable_index < kShaderEnableBitCount; ++enable_index)
         {
-            // Has it been added already? If so, just add the index
-            if (m_shader_addrs[shader].find(addr) != m_shader_addrs[shader].end())
+            uint32_t enable_mask = 1u << enable_index;
+
+            uint64_t addr = m_state_tracker.GetCurShaderAddr((ShaderStage)shader, enable_mask);
+
+            if (is_valid_shader && (addr != UINT64_MAX))
             {
-                cur_event_info.m_shader_indices[shader] = m_shader_addrs[shader][addr];
+                // Check if we've already seen a shader at this address, in which case we just need
+                // to reference the existing shader.
+                if (m_shader_addrs.find(addr) != m_shader_addrs.end())
+                {
+                    uint32_t shader_index = m_shader_addrs[addr];
+                    {
+                        // Check if this event already has a reference to this shader, in which case
+                        // we just add to the existing reference's enable mask.
+                        bool found = false;
+                        for (auto &reference : cur_event_info.m_shader_references)
+                        {
+                            if (reference.m_shader_index == shader_index)
+                            {
+                                reference.m_enable_mask |= enable_mask;
+                                found = true;
+                            }
+                        }
+                        if (found)
+                            continue;
+                    }
+                    ShaderReference reference;
+                    reference.m_shader_index = shader_index;
+                    reference.m_stage = (ShaderStage)shader;
+                    reference.m_enable_mask = enable_mask;
+                    cur_event_info.m_shader_references.push_back(reference);
+                }
+                else
+                {
+                    // We haven't seen this shader address before, so we need to create the shader
+                    // info.
+                    uint64_t max_size = mem_manager.GetMaxContiguousSize(submit_index, addr);
+                    uint8_t *data_ptr = new uint8_t[max_size];
+                    if (!mem_manager.CopyMemory(data_ptr, submit_index, addr, max_size))
+                        return false;
+
+                    ShaderInfo shader_info;
+                    shader_info.m_addr = addr;
+                    shader_info.m_disassembly.Init(data_ptr,
+                                                   shader_info.m_addr,
+                                                   max_size,
+                                                   &cur_event_info.m_metadata_log);
+                    delete[] data_ptr;
+
+                    // Can only get the actual size after parsing the shader
+                    shader_info.m_size = shader_info.m_disassembly.GetShaderSize();
+
+                    uint32_t shader_index = (uint32_t)m_capture_metadata.m_shaders.size();
+                    m_capture_metadata.m_shaders.push_back(shader_info);
+                    m_shader_addrs.insert(std::make_pair(addr, shader_index));
+
+                    // Add the shader index to the EventInfo
+                    ShaderReference reference;
+                    reference.m_shader_index = m_shader_addrs[addr];
+                    reference.m_stage = (ShaderStage)shader;
+                    reference.m_enable_mask = enable_mask;
+                    cur_event_info.m_shader_references.push_back(reference);
+                }
             }
-            else
-            {
-                uint64_t max_size = mem_manager.GetMaxContiguousSize(submit_index, addr);
-                uint8_t *data_ptr = new uint8_t[max_size];
-                if (!mem_manager.CopyMemory(data_ptr, submit_index, addr, max_size))
-                    return false;
-
-                ShaderInfo shader_info;
-                shader_info.m_addr = addr;
-                shader_info.m_disassembly.Init(data_ptr,
-                                               shader_info.m_addr,
-                                               max_size,
-                                               &cur_event_info.m_metadata_log);
-                delete[] data_ptr;
-
-                // Can only get the actual size after parsing the shader
-                shader_info.m_size = shader_info.m_disassembly.GetShaderSize();
-
-                uint32_t shader_index = (uint32_t)m_capture_metadata.m_shaders[shader].size();
-                m_capture_metadata.m_shaders[shader].push_back(shader_info);
-                m_shader_addrs[shader].insert(std::make_pair(addr, shader_index));
-
-                // Add the shader index to the EventInfo
-                cur_event_info.m_shader_indices[shader] = shader_index;
-            }
-        }
-        else
-        {
-            // Shader stage not used, so add UINT32_MAX
-            cur_event_info.m_shader_indices[shader] = UINT32_MAX;
         }
     }
     return true;

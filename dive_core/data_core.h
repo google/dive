@@ -35,7 +35,7 @@ struct CaptureMetadata
     CommandHierarchy m_command_hierarchy;
 
     // Information about each shader in the capture
-    std::vector<ShaderInfo> m_shaders[(uint32_t)ShaderStage::kShaderStageCount];
+    std::vector<ShaderInfo> m_shaders;
 
     // Information about each buffer in the capture
     std::vector<BufferInfo> m_buffers;
@@ -155,7 +155,7 @@ private:
     void FillHardwareSpecificStates(EventStateInfo::Iterator event_state_it);
 
     // Map from shader address to shader index (in m_capture_metadata.m_shaders)
-    std::map<uint64_t, uint32_t> m_shader_addrs[(uint32_t)ShaderStage::kShaderStageCount];
+    std::map<uint64_t, uint32_t> m_shader_addrs;
 
     // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
     std::map<uint64_t, uint32_t> m_buffer_addrs;

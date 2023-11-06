@@ -44,6 +44,13 @@ struct BufferInfo
     Dive::Legacy::SQ_SEL_XYZW01   m_dst_sel_w;
 };
 
+struct ShaderReference
+{
+    uint32_t    m_shader_index = UINT32_MAX;
+    ShaderStage m_stage;
+    uint32_t    m_enable_mask;
+};
+
 //--------------------------------------------------------------------------------------------------
 struct EventInfo
 {
@@ -55,8 +62,8 @@ struct EventInfo
     // the metadata.
     DeferredLog m_metadata_log;
 
-    // Indices of each shader used in the event. Set to UINT32_MAX if not applicable
-    uint32_t m_shader_indices[(uint32_t)ShaderStage::kShaderStageCount] = { UINT32_MAX };
+    // References of each shader used in the event.
+    std::vector<ShaderReference> m_shader_references;
 
     // Submit that contains this event
     uint32_t m_submit_index;

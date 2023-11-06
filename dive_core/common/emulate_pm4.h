@@ -177,6 +177,21 @@ private:
 class EmulatePM4
 {
 public:
+    enum IbLevel
+    {
+        kPrimaryRing,
+        kIb1,
+        kIb2,
+        kIb3,
+
+        // There's no IB4 in the GPU, but it's useful to have one in the emulator in case a
+        // CP_SET_DRAW_STATE is called from an IB3, since we're emulating those packets as
+        // CALLs (I'm not sure if that's even possible, but better safe than sorry!)
+        kIb4,
+
+        kTotalIbLevels
+    };
+
     static const uint32_t kMaxPendingIbs = 100;
     EmulatePM4();
 
@@ -224,24 +239,11 @@ private:
         // Index of top-most IB (i.e. IB1)
         uint32_t m_ib_index;
 
+        uint32_t m_submit_index;
+
         // Stack to managing the different IB levels
         // Top-most element contains the current Program Counter
         // If top of stack is at IB0, then that means there's nothing to execute
-        enum IbLevel
-        {
-            kPrimaryRing,
-            kIb1,
-            kIb2,
-            kIb3,
-
-            // There's no IB4 in the GPU, but it's useful to have one in the emulator in case a
-            // CP_SET_DRAW_STATE is called from an IB3, since we're emulating those packets as
-            // CALLs (I'm not sure if that's even possible, but better safe than sorry!)
-            kIb4,
-
-            kTotalIbLevels
-        };
-        uint32_t m_submit_index;
         IbStack  m_ib_stack[kTotalIbLevels];
         IbLevel  m_top_of_stack;
         IbStack *GetCurIb() { return &m_ib_stack[m_top_of_stack]; }

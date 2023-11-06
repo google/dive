@@ -146,7 +146,7 @@ public:
     bool     IsUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t offset) const;
 
     // Returns UINT64_MAX if shader not set
-    uint64_t GetCurShaderAddr(ShaderStage stage) const;
+    uint64_t GetCurShaderAddr(ShaderStage stage, uint32_t enable_mask) const;
 
     // Get address/size of most recent PM4 buffer (eg. extended user data, sh load buffers, etc)
     uint64_t GetBufferAddr() const;

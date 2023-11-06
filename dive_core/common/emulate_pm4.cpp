@@ -571,9 +571,23 @@ bool EmulateStateTracker::IsUserDataRegsSetSinceLastEvent(ShaderStage stage, uin
     return false;
 }
 //--------------------------------------------------------------------------------------------------
-uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage stage) const
+uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage stage, uint32_t enable_mask) const
 {
-    return UINT64_MAX;
+    uint32_t offset = UINT32_MAX;
+    switch (stage)
+    {
+    case ShaderStage::kShaderStageCs: offset = 0xa9b4 /* SP_CS_OBJ_START */; break;
+    case ShaderStage::kShaderStageGs: offset = 0xa88d /* SP_GS_OBJ_START */; break;
+    case ShaderStage::kShaderStageHs: offset = 0xa834 /* SP_HS_OBJ_START */; break;
+    case ShaderStage::kShaderStagePs: offset = 0xa983 /* SP_FS_OBJ_START */; break;
+    case ShaderStage::kShaderStageVs: offset = 0xa81c /* SP_VS_OBJ_START */; break;
+    default: return UINT64_MAX;
+    }
+    if (!IsRegSet(offset, enable_mask))
+    {
+        return UINT64_MAX;
+    }
+    return GetReg64Value(offset, enable_mask);
 }
 
 //--------------------------------------------------------------------------------------------------

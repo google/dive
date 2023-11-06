@@ -77,12 +77,10 @@ ShaderView::ShaderView(const Dive::DataCore &data_core) :
     m_shader_list = new QTreeWidget();
     m_shader_list->setColumnCount(4);
     m_shader_list->setHeaderLabels(QStringList() << "Shader Stage"
+                                                 << "Enable Mask"
                                                  << "Address"
                                                  << "Size"
-                                                 << "VGPRs"
-                                                 << "SGPRs"
-                                                 << "Preferred Heap"
-                                                 << "PSO Hash");
+                                                 << "GPRs");
     m_shader_code_text = new ShaderTextView();
     layout->addWidget(m_shader_list);
     layout->setStretchFactor(m_shader_list, 1);
@@ -124,20 +122,19 @@ void ShaderView::OnEventSelected(uint64_t node_index)
     if (node_index == UINT64_MAX)
         return;
 
-    // const Dive::CaptureMetadata  &metadata = m_data_core.GetCaptureMetadata();
+    const Dive::CaptureMetadata  &metadata = m_data_core.GetCaptureMetadata();
     const Dive::CommandHierarchy &command_hierarchy = m_data_core.GetCommandHierarchy();
 
     auto update_shader_list = [&](uint64_t event_node_index) {
-        return;
-        /*
         uint32_t event_id = command_hierarchy.GetEventNodeId(event_node_index);
         if (event_id >= metadata.m_event_info.size())
         {
             return;
         }
         const Dive::EventInfo &event = metadata.m_event_info[event_id];
-        for (uint32_t shader_stage = 0; shader_stage < kShaderStageCount; ++shader_stage)
+        for (const auto &reference : event.m_shader_references)
         {
+            auto shader_stage = (uint32_t)reference.m_stage;
             // Do not add shaders that are not used by the event
             if (event.m_type != Dive::EventInfo::EventType::kDraw &&
                 event.m_type != Dive::EventInfo::EventType::kDispatch)
@@ -149,60 +146,68 @@ void ShaderView::OnEventSelected(uint64_t node_index)
                 (shader_stage != (uint32_t)Dive::ShaderStage::kShaderStageCs))
                 continue;
 
-            uint32_t shader_index = event.m_shader_indices[shader_stage];
+            uint32_t shader_index = reference.m_shader_index;
             if (shader_index != UINT32_MAX)
             {
-                const Dive::ShaderInfo &shader_info = metadata
-                                                      .m_shaders[shader_stage][shader_index];
+                const Dive::ShaderInfo &shader_info = metadata.m_shaders[shader_index];
                 ShaderWidgetItem *treeItem = new ShaderWidgetItem((Dive::ShaderStage)shader_stage,
                                                                   shader_index,
                                                                   event_id,
                                                                   m_shader_list);
 
-                // Column 0
+                // Column 0: Shader Stage
                 treeItem->setText(0, tr(kShaderStageStrings[shader_stage]));
 
-                // Column 1
+                // Column 1: Enable Mask
+                {
+                    std::ostringstream ostr;
+                    bool               empty = true;
+                    if (reference.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kBINNING)
+                    {
+                        if (!empty)
+                        {
+                            ostr << " | ";
+                        }
+                        empty = false;
+                        ostr << "BINNING";
+                    }
+                    if (reference.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kGMEM)
+                    {
+                        if (!empty)
+                        {
+                            ostr << " | ";
+                        }
+                        empty = false;
+                        ostr << "GMEM";
+                    }
+                    if (reference.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kSYSMEM)
+                    {
+                        if (!empty)
+                        {
+                            ostr << " | ";
+                        }
+                        empty = false;
+                        ostr << "SYSMEM";
+                    }
+                    treeItem->setText(1, tr(ostr.str().c_str()));
+                }
+
+                // Column 2: Address
                 const uint32_t buffer_size = 256;
                 char           buffer[buffer_size];
                 snprintf(buffer, buffer_size, "%p", (void *)shader_info.m_addr);
-                treeItem->setText(1, tr(buffer));
-
-                // Column 2
-                static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
-                snprintf(buffer, 256, "%llu", (unsigned long long)shader_info.m_size);
                 treeItem->setText(2, tr(buffer));
 
-                // Column 3&4: VGPRs, SGPRs: TODO(rwang): removed from cleanup
-                const Dive::CaptureData &capture_data = m_data_core.GetCaptureData();
+                // Column 3: size
+                static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
+                snprintf(buffer, 256, "%llu", (unsigned long long)shader_info.m_size);
+                treeItem->setText(3, tr(buffer));
 
-                // Column 5: Preferred heap
-                const Dive::MemoryManager        &memory = capture_data.GetMemoryManager();
-                const Dive::MemoryAllocationInfo &mem_alloc_info = memory.GetMemoryAllocationInfo();
-                const Dive::MemoryAllocationData *mem_alloc_ptr;
-                mem_alloc_ptr = mem_alloc_info.FindInternalAllocation(shader_info.m_addr,
-                                                                      shader_info.m_size);
-                DIVE_ASSERT(mem_alloc_ptr != nullptr);
-                switch ((Dive::MemoryAllocationData::GpuHeap)mem_alloc_ptr->m_preferred_heap)
-                {
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapLocal:
-                    snprintf(buffer, buffer_size, "Local");
-                    break;
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapInvisible:
-                    snprintf(buffer, buffer_size, "Invisible");
-                    break;
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartUswc:
-                    snprintf(buffer, buffer_size, "GartUswc");
-                    break;
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
-                    snprintf(buffer, buffer_size, "GartCacheable");
-                    break;
-                default: DIVE_ASSERT(false);
-                }
-                treeItem->setText(5, tr(buffer));
+                // Column 4: GPRs
+                snprintf(buffer, 256, "%u", shader_info.m_disassembly.GetGPRCount());
+                treeItem->setText(4, tr(buffer));
             }
         }
-        */
     };
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(node_index);

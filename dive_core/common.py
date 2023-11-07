@@ -1,3 +1,6 @@
+import xml.etree.ElementTree as ET
+import copy
+
 # Common functions
 import ctypes
 import re
@@ -87,3 +90,38 @@ def gatherAllEnums(registers_et_root):
       for enum in domain_enums:
         enums.append(enum)
   return enums
+
+# ---------------------------------------------------------------------------------------
+def addMissingDomains(registers_et_root):
+  # CP_INDIRECT_BUFFER
+  new_domain = ET.SubElement(registers_et_root, '{http://nouveau.freedesktop.org/}domain', name='CP_INDIRECT_BUFFER')
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='0', name='ADDR_LO', type='hex'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='1', name='ADDR_HI', type='hex'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='SIZE', type='uint'))
+
+  # CP_INDIRECT_BUFFER_PFD
+  new_domain = ET.SubElement(registers_et_root, '{http://nouveau.freedesktop.org/}domain', name='CP_INDIRECT_BUFFER_PFD')
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='0', name='ADDR_LO', type='hex'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='1', name='ADDR_HI', type='hex'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='SIZE', type='uint'))
+
+  # CP_INDIRECT_BUFFER_PFE
+  new_domain = ET.SubElement(registers_et_root, '{http://nouveau.freedesktop.org/}domain', name='CP_INDIRECT_BUFFER_PFE')
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='0', name='ADDR_LO', type='hex'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='1', name='ADDR_HI', type='hex'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='SIZE', type='uint'))
+
+ # Grab and make a copy of CP_LOAD_STATE. Get rid of the enums.
+  cp_load_state_domain = registers_et_root.find('./{http://nouveau.freedesktop.org/}domain[@name="CP_LOAD_STATE6"]')
+  cp_load_state_geom = copy.deepcopy(cp_load_state_domain)
+  for child in cp_load_state_geom.findall('{http://nouveau.freedesktop.org/}enum'):
+    cp_load_state_geom.remove(child)
+
+  # CP_LOAD_STATE6_GEOM, which is same structurally as CP_LOAD_STATE except for an extra DWORD
+  cp_load_state_geom.attrib["name"] = "CP_LOAD_STATE6_GEOM"
+  registers_et_root.append(cp_load_state_geom)
+
+  # CP_LOAD_STATE6_FRAG, which is same structurally as CP_LOAD_STATE except for an extra DWORD
+  cp_load_state_frag = copy.deepcopy(cp_load_state_geom)
+  cp_load_state_frag.attrib["name"] = "CP_LOAD_STATE6_FRAG"
+  registers_et_root.append(cp_load_state_frag)

@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from common import isBuiltInType
 from common import gatherAllEnums
 from common import GetGPUVariantsBitField
-
+from common import addMissingDomains
 
 # ---------------------------------------------------------------------------------------
 def outputHeader(pm4_info_file):
@@ -49,15 +49,15 @@ def outputH(pm4_info_file):
 
 enum ValueType { kBoolean, kUint, kInt, kFloat, kFixed, kAddress, kWaddress, kHex, kOther };
 
-enum GPUVariantType 
-{ 
+enum GPUVariantType
+{
     kGPUVariantNone = 0x0,
-    kA2XX = 0x1, 
-    kA3XX = 0x2, 
-    kA4XX = 0x4, 
-    kA5XX = 0x8, 
-    kA6XX = 0x10, 
-    kA7XX = 0x20, 
+    kA2XX = 0x1,
+    kA3XX = 0x2,
+    kA4XX = 0x4,
+    kA5XX = 0x8,
+    kA6XX = 0x10,
+    kA7XX = 0x20,
 };
 
 static const uint32_t kInvalidRegOffset = UINT32_MAX;
@@ -616,7 +616,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   pm4_info_file.write("\n")
 
   # Append _A?XX to the name if there is any variant
-  # This is to handle the cases where the regsiters have the same name 
+  # This is to handle the cases where the regsiters have the same name
   # but different offset for different variants, like PC_POLYGON_MODE
   pm4_info_file.write("\tfor (auto &reg : g_sRegInfo)\n")
   pm4_info_file.write("\t{\n")
@@ -743,7 +743,7 @@ void SetGPUID(uint32_t gpu_id)
     }
 }
 
-bool IsFieldEnabled(const RegField* field) 
+bool IsFieldEnabled(const RegField* field)
 {
     DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
     return (g_sGPU_variant & field->m_gpu_variants) != 0;
@@ -791,6 +791,7 @@ try:
   head, tail = os.path.split(sys.argv[3] + ".h")
   pm4_info_filename_h = tail
 
+  addMissingDomains(registers_et_root)
 
   # Parse type3 opcodes
   # There can be multiple opcodes with the same value, to support different adreno versions

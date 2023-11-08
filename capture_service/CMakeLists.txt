@@ -58,17 +58,24 @@ target_link_libraries(dive_grpc_proto PRIVATE
               ${_PROTOBUF_LIBPROTOBUF})
 set_property(TARGET dive_grpc_proto PROPERTY POSITION_INDEPENDENT_CODE 1)
 
+if(WIN32)
+  set(COMMAND_UTILS_SRC "command_utils_win32.cc")
+  add_definitions(-DUNICODE -D_UNICODE)
+else()
+  set(COMMAND_UTILS_SRC "command_utils.cc")
+endif()
+
 if(ANDROID)
   add_library(service
               service.cc
               trace_mgr.cc
               android_trace_mgr.cc
-              command_utils.cc)
+              ${COMMAND_UTILS_SRC})
 else()
   add_library(service
               service.cc
               trace_mgr.cc
-              command_utils.cc)
+              ${COMMAND_UTILS_SRC})
 endif()
 target_link_libraries(service PRIVATE
                       dive_grpc_proto
@@ -102,7 +109,7 @@ else()
     absl::algorithm
     )
 
-  add_library(device_mgr device_mgr.cc command_utils.cc android_application.cc)
+  add_library(device_mgr device_mgr.cc ${COMMAND_UTILS_SRC} android_application.cc)
   target_link_libraries(device_mgr 
   absl::flags
   absl::flags_parse

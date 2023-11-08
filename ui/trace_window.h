@@ -36,7 +36,7 @@ class TraceDialog : public QDialog
 public:
     TraceDialog(QWidget *parent = 0);
     ~TraceDialog();
-    void Cleanup() { m_dev_mgr.RemoveDevice(); }
+    void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
 
 private slots:
     void OnDeviceSelected(const QString &);
@@ -70,7 +70,6 @@ private:
     QHBoxLayout *m_button_layout;
 
     QVBoxLayout             *m_main_layout;
-    Dive::DeviceManager      m_dev_mgr;
     std::vector<std::string> m_devices;
     std::string              m_cur_dev;
     std::vector<std::string> m_pkg_list;

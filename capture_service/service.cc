@@ -16,12 +16,10 @@ limitations under the License.
 
 #include "service.h"
 
-#include <iostream>
 #include <memory>
 #include <string>
 
 #include "absl/flags/flag.h"
-#include "absl/flags/parse.h"
 #include "absl/strings/str_format.h"
 #include "trace_mgr.h"
 #include "command_utils.h"

@@ -16,15 +16,12 @@ limitations under the License.
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
-#include <cstddef>
 #include <cstring>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
-#include <vector>
 
 #include "capture_service/log.h"
 #include "capture_service/server.h"

@@ -22,10 +22,7 @@ limitations under the License.
 #    include <android/log.h>
 #endif
 
-#include <string.h>
 #include <cstring>
-#include <string>
-#include <unordered_map>
 
 #if defined __ANDROID__
 

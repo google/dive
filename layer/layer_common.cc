@@ -18,7 +18,6 @@ limitations under the License.
 
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 
 namespace DiveLayer
 {

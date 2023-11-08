@@ -20,7 +20,7 @@
 #   set CMAKE_PREFIX_PATH=%QTDIR%;%CMAKE_PREFIX_PATH%
 #   set PATH=%QTDIR%\\bin;%PATH%                        # (Windows) To allow DLLS to be found
 
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.5)
 
 project(dive_ui)
 

@@ -16,12 +16,8 @@ limitations under the License.
 
 #include "command_utils.h"
 
-#include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <iostream>
-#include <memory>
-#include <thread>
 #include "absl/strings/ascii.h"
 #include "log.h"
 

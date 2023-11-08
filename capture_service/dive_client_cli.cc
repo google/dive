@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <chrono>
-#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <ostream>
@@ -28,7 +26,6 @@ limitations under the License.
 #include "absl/flags/usage.h"
 #include "android_application.h"
 #include "client.h"
-#include "command_utils.h"
 #include "device_mgr.h"
 
 using namespace std::chrono_literals;

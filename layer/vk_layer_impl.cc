@@ -16,18 +16,14 @@ limitations under the License.
 
 #include "vk_layer_impl.h"
 
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
-#include <thread>
 #if defined(__ANDROID__)
 #    include <dlfcn.h>
 #endif
 
 #include <vulkan/vulkan_core.h>
 
-#include "capture_service/log.h"
 #include "capture_service/trace_mgr.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

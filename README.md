@@ -17,6 +17,10 @@ git submodule update --init --recursive
   ```
     export ANDROID_NDK_HOME=~/andriod_sdk/ndk/25.2.9519653
   ``` 
+ - Mako Templates for Python: can be installed with following commandline
+  ```
+    pip install Mako
+  ```
 
 ### Building Dive host tool on Linux
 ```

@@ -969,7 +969,11 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
             fd_dev_id dev_id;
             capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id), block_info.m_data_size);
             auto info = fd_dev_info(&dev_id);
-            SetGPUID(info->chip);
+            // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid values
+            if (info != nullptr)
+            {
+                SetGPUID(info->chip);
+            }
         }
         break;
         }

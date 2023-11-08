@@ -505,6 +505,7 @@ def outputEnums(pm4_info_file, enum_list):
     pm4_info_file.write(" }); // %s (%d)\n" % (enum_info[0], idx))
 
 # ---------------------------------------------------------------------------------------
+# This function adds info for PM4 packets as well as structs that have no opcodes (e.g. V#s/T#s/S#s)
 def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
 
@@ -514,9 +515,9 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   for domain in domains:
     domain_name = domain.attrib['name']
 
-    # Check if it is a domain describing a PM4 packet
+    # Check if it is a domain describing a PM4 packet, OR see if it a "A6XX_" packet (e.g. V#s/T#s/S#s)
     pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
-    if pm4_type_packet is None:
+    if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
       continue
 
     # There are 2 PM4 packet types with stripe tags, see CP_DRAW_INDIRECT_MULTI and CP_DRAW_INDX_INDIRECT for example
@@ -555,13 +556,21 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       # Filter out everything but the reg32 and reg64 elements from the packet definition
       # First let's add it to a dict so we can ignore duplicates (some stripes redefine root registers)
       reg_dict = {}
+      skip_this_packet = False
       for element in pm4_packet:
         is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
         is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
         if is_reg_32 or is_reg_64:
-          offset = int(element.attrib['offset'])
+          offset = int(element.attrib['offset'],0)
+          # There are certain packets (e.g. A6XX_PDC) which have register offsets
+          # instead of packet offsets, for some weird reason. Skip those packets.
+          if offset > 1000:
+            skip_this_packet = True
+            break
           if not (offset in reg_dict):
             reg_dict[offset] = element
+      if skip_this_packet:
+        break
 
       # Add the registers from the variant-specific section (i.e. stripe)
       stripe = variant[1]
@@ -571,9 +580,10 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
           is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
           is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
           if is_reg_32 or is_reg_64:
-            offset = int(element.attrib['offset'])
+            offset = int(element.attrib['offset'],0)
             if not (offset in reg_dict):
               reg_dict[offset] = element
+
         # Add the prefix to the packet_name
         if 'prefix' in stripe.attrib:
           prefix = stripe.attrib['prefix']
@@ -592,9 +602,11 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       reg_list = list(reg_dict.values())
 
       # Sort based on offset
-      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset']))
+      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset'],0))
 
-      opcode = int(pm4_type_packet.attrib['value'],0)
+      opcode = 0xffffffff
+      if pm4_type_packet is not None:
+        opcode = int(pm4_type_packet.attrib['value'],0)
       pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
       pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
       outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
@@ -781,10 +793,6 @@ try:
           for sub_tree_child in sub_tree.getroot():
             registers_et_root.append(sub_tree_child)
 
-  # Find child with enum = "vgt_event_type"
-
-  elements = registers_et_root.findall('{http://nouveau.freedesktop.org/}enum')
-
   pm4_info_file_h = open(sys.argv[3] + ".h", "w")
   pm4_info_file_cpp = open(sys.argv[3] + ".cpp", "w")
 
@@ -805,8 +813,8 @@ try:
     if 'name' in pm4_type_packet.attrib and 'value' in pm4_type_packet.attrib:
       pm4_name = pm4_type_packet.attrib['name']
       pm4_value = pm4_type_packet.attrib['value']
-      # Only add ones that start with "CP_*"
-      if pm4_name.startswith("CP_"):
+      # Only add ones that start with "CP_*" or "A6XX_*"
+      if pm4_name.startswith("CP_") or pm4_name.startswith("A6XX_"):
         opcode_dict[pm4_value] = pm4_name
 
 

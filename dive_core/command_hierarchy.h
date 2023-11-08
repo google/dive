@@ -465,12 +465,15 @@ private:
     void        AppendPacketFieldNodes(const IMemoryManager &mem_manager,
                                        uint32_t              submit_index,
                                        uint64_t              va_addr,
-                                       bool                  is_ce_packet,
-                                       Pm4Type7Header        type7_header,
+                                       uint32_t              dword_count,
+                                       bool                  append_extra_dwords,
                                        const PacketInfo     *packet_info_ptr,
                                        uint64_t              packet_node_index,
-                                       size_t                field_start = 0,
-                                       size_t                field_last = SIZE_MAX - 1);
+                                       const char           *prefix = "");
+    void        AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager,
+                                             uint32_t              submit_index,
+                                             uint64_t              va_addr,
+                                             uint64_t              packet_node_index);
     void        CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
                                            uint32_t              submit_index,
                                            uint64_t              va_addr,

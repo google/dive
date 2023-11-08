@@ -981,6 +981,11 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     {
         m_cur_ib_packet_node_index = packet_node_index;
     }
+    else if (opcode == CP_LOAD_STATE6 || opcode == CP_LOAD_STATE6_GEOM ||
+             opcode == CP_LOAD_STATE6_FRAG)
+    {
+        AppendLoadStateExtBufferNode(mem_manager, submit_index, va_addr, packet_node_index);
+    }
     // vulkan call NOP packages. Currently contains call parameters(except parameters in array),
     // each call is in one NOP packet.
     else if (opcode == CP_NOP)
@@ -1302,13 +1307,19 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
         else
         */
         {
+            // If there are missing packet fields, then output the raw DWORDS directly
+            // Some packets, such as CP_LOAD_STATE6_* handle this explicitly elsewhere
+            bool append_extra_dwords = (type7_header.opcode != CP_LOAD_STATE6 &&
+                                        type7_header.opcode != CP_LOAD_STATE6_GEOM &&
+                                        type7_header.opcode != CP_LOAD_STATE6_FRAG);
+
             const PacketInfo *packet_info_ptr = GetPacketInfo(type7_header.opcode);
             DIVE_ASSERT(packet_info_ptr != nullptr);
             AppendPacketFieldNodes(mem_manager,
                                    submit_index,
                                    va_addr,
-                                   is_ce_packet,
-                                   type7_header,
+                                   type7_header.count,
+                                   append_extra_dwords,
                                    packet_info_ptr,
                                    packet_node_index);
         }
@@ -1990,18 +2001,12 @@ void CommandHierarchyCreator::AppendEventWriteFieldNodes(const IMemoryManager   
 void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_manager,
                                                      uint32_t              submit_index,
                                                      uint64_t              va_addr,
-                                                     bool                  is_ce_packet,
-                                                     Pm4Type7Header        type7_header,
+                                                     uint32_t              dword_count,
+                                                     bool                  append_extra_dwords,
                                                      const PacketInfo     *packet_info_ptr,
                                                      uint64_t              packet_node_index,
-                                                     size_t                field_start,
-                                                     size_t                field_last)
+                                                     const char           *prefix)
 {
-    // Do a min(), since field_last defaults to UINT64_MAX
-    size_t end_field = (packet_info_ptr->m_fields.size() < field_last + 1) ?
-                       (uint32_t)packet_info_ptr->m_fields.size() :
-                       field_last + 1;
-
     // Loop through each field and append it to packet
     uint32_t base_dword = 0;  // For tracking non-0 array fields
     uint32_t end_dword = UINT32_MAX;
@@ -2015,7 +2020,7 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
         // If this is a packet with arrays, and there are more dwords left,
         // then add a parent node for each index
         uint64_t parent_node_index = packet_node_index;
-        if ((packet_info_ptr->m_max_array_size > 1) && (base_dword < type7_header.count))
+        if ((packet_info_ptr->m_max_array_size > 1) && (base_dword < dword_count))
         {
             std::ostringstream field_string_stream;
             field_string_stream << array;
@@ -2032,7 +2037,7 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             parent_node_index = array_node_index;
         }
 
-        for (size_t field = field_start; field < end_field; ++field)
+        for (size_t field = 0; field < packet_info_ptr->m_fields.size(); ++field)
         {
             const PacketField &packet_field = packet_info_ptr->m_fields[field];
 
@@ -2041,7 +2046,7 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
 
             // Some packets end early sometimes and do not use all fields (e.g. CP_EVENT_WRITE with
             // CACHE_CLEAN)
-            if (field_dword > type7_header.count)
+            if (field_dword > dword_count)
             {
                 packet_end_early = true;
                 break;
@@ -2059,7 +2064,7 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
 
             // Field item
             std::ostringstream field_string_stream;
-            field_string_stream << packet_field.m_name << ": ";
+            field_string_stream << prefix << packet_field.m_name << ": ";
             if (packet_field.m_enum_handle != UINT8_MAX)
             {
                 const char *enum_str = GetEnumString(packet_field.m_enum_handle, field_value);
@@ -2071,9 +2076,8 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             else
                 OutputValue(field_string_stream, (ValueType)packet_field.m_type, field_value);
 
-            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
-            is_ce_packet);
-            uint64_t field_node_index = AddNode(NodeType::kFieldNode,
+            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+            uint64_t                  field_node_index = AddNode(NodeType::kFieldNode,
                                                 field_string_stream.str(),
                                                 aux_info);
 
@@ -2089,32 +2093,160 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
     }
 
     // If there are missing packet fields, then output the raw DWORDS directly
-    if (end_dword < type7_header.count)
+    // Some packets, such as CP_LOAD_STATE6_* handle this explicitly elsewhere
+    if (append_extra_dwords)
     {
-        for (size_t i = end_dword + 1; i <= type7_header.count; i++)
+        if (end_dword < dword_count)
         {
-            uint32_t dword_value = 0;
-            uint64_t dword_va_addr = va_addr + i * sizeof(uint32_t);
-            bool     ret = mem_manager.CopyMemory(&dword_value,
-                                              submit_index,
-                                              dword_va_addr,
-                                              sizeof(uint32_t));
-            DIVE_VERIFY(ret);  // This should never fail!
+            for (size_t i = end_dword + 1; i <= dword_count; i++)
+            {
+                uint32_t dword_value = 0;
+                uint64_t dword_va_addr = va_addr + i * sizeof(uint32_t);
+                bool     ret = mem_manager.CopyMemory(&dword_value,
+                                                  submit_index,
+                                                  dword_va_addr,
+                                                  sizeof(uint32_t));
+                DIVE_VERIFY(ret);  // This should never fail!
 
-            std::ostringstream field_string_stream;
-            field_string_stream << "(DWORD " << i << "): 0x" << std::hex << dword_value;
+                std::ostringstream field_string_stream;
+                field_string_stream << prefix << "(DWORD " << i << "): 0x" << std::hex
+                                    << dword_value;
 
-            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(
-            is_ce_packet);
-            uint64_t field_node_index = AddNode(NodeType::kFieldNode,
-                                                field_string_stream.str(),
-                                                aux_info);
+                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+                uint64_t                  field_node_index = AddNode(NodeType::kFieldNode,
+                                                    field_string_stream.str(),
+                                                    aux_info);
 
-            // Add it as child to packet_node
-            AddChild(CommandHierarchy::kEngineTopology, packet_node_index, field_node_index);
-            AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, field_node_index);
-            AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, field_node_index);
-            AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
+                // Add it as child to packet_node
+                AddChild(CommandHierarchy::kEngineTopology, packet_node_index, field_node_index);
+                AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, field_node_index);
+                AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, field_node_index);
+                AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
+            }
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager,
+                                                           uint32_t              submit_index,
+                                                           uint64_t              va_addr,
+                                                           uint64_t              packet_node_index)
+{
+    PM4_CP_LOAD_STATE6 packet;
+    DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+
+    enum class StateBlockCat
+    {
+        kTex,
+        kShader,
+        kIbo
+    };
+    StateBlockCat cat;
+    switch (packet.bitfields0.STATE_BLOCK)
+    {
+    case SB6_VS_TEX:
+    case SB6_HS_TEX:
+    case SB6_DS_TEX:
+    case SB6_GS_TEX:
+    case SB6_FS_TEX:
+    case SB6_CS_TEX: cat = StateBlockCat::kTex; break;
+    case SB6_VS_SHADER:
+    case SB6_HS_SHADER:
+    case SB6_DS_SHADER:
+    case SB6_GS_SHADER:
+    case SB6_FS_SHADER:
+    case SB6_CS_SHADER: cat = StateBlockCat::kShader; break;
+    case SB6_IBO:
+    case SB6_CS_IBO:
+        DIVE_ASSERT(false);  // These seem to be specific to pre-A6XX
+        cat = StateBlockCat::kIbo;
+        break;
+    default: DIVE_ASSERT(false); cat = StateBlockCat::kTex;
+    }
+
+    uint64_t ext_src_addr = 0;
+    switch (packet.bitfields0.STATE_SRC)
+    {
+    case SS6_DIRECT: ext_src_addr = va_addr + sizeof(PM4_CP_LOAD_STATE6); break;
+    case SS6_BINDLESS:
+        DIVE_ASSERT(false);  // Not supported yet
+        break;
+    case SS6_INDIRECT:
+        ext_src_addr = packet.u32All1 & 0xfffffffc;
+        ext_src_addr |= ((uint64_t)packet.u32All2) << 32;
+        break;
+    case SS6_UBO: DIVE_ASSERT(false);  // Not used. Not sure what it's for
+    }
+
+    auto AppendSharps = [&](const char *sharp_struct_name, uint32_t sharp_struct_size) {
+        for (uint32_t i = 0; i < packet.bitfields0.NUM_UNIT; ++i)
+        {
+            uint64_t          ubo_addr = ext_src_addr + i * sharp_struct_size;
+            const PacketInfo *packet_info_ptr = GetPacketInfo(0xffffffff, sharp_struct_name);
+            DIVE_ASSERT(packet_info_ptr != nullptr);
+            std::ostringstream prefix_stream;
+            prefix_stream << "  [" << i << "] ";
+            AppendPacketFieldNodes(mem_manager,
+                                   submit_index,
+                                   ubo_addr,
+                                   sharp_struct_size / sizeof(uint32_t),
+                                   false,
+                                   packet_info_ptr,
+                                   packet_node_index,
+                                   prefix_stream.str().c_str());
+        }
+    };
+
+    if (cat == StateBlockCat::kTex)
+    {
+        if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
+            AppendSharps("A6XX_TEX_SAMP", sizeof(A6XX_TEX_SAMP));
+        else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
+            AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
+        else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
+            AppendSharps("A6XX_UBO", sizeof(A6XX_UBO));
+    }
+    else if (cat == StateBlockCat::kShader)
+    {
+        // Shader program
+        if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
+        {
+        }
+        // Constant data
+        else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
+        {
+            // NUM_UNIT is in unit of float4s
+            // Add 4 dwords per line
+            for (uint32_t i = 0; i < packet.bitfields0.NUM_UNIT; ++i)
+            {
+                std::ostringstream string_stream;
+                for (uint32_t j = 0; j < 4; ++j)
+                {
+                    float    value;
+                    uint64_t addr = ext_src_addr + ((i * 4 + j) * sizeof(float));
+                    DIVE_VERIFY(mem_manager.CopyMemory(&value, submit_index, addr, sizeof(float)));
+                    string_stream << std::fixed << std::setw(11) << std::setprecision(6);
+                    string_stream << value << " ";
+                }
+
+                // Add it as child to packet_node
+                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+                uint64_t                  const_node_index = AddNode(NodeType::kFieldNode,
+                                                    string_stream.str(),
+                                                    aux_info);
+                AddChild(CommandHierarchy::kEngineTopology, packet_node_index, const_node_index);
+                AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, const_node_index);
+                AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, const_node_index);
+                AddChild(CommandHierarchy::kRgpTopology, packet_node_index, const_node_index);
+            }
+        }
+        else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
+            AppendSharps("A6XX_UBO", sizeof(A6XX_UBO));
+        else if (packet.bitfields0.STATE_TYPE == ST6_IBO)
+        {
+            DIVE_ASSERT(packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER);
+            AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
         }
     }
 }

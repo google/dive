@@ -42,7 +42,10 @@ public:
     {
     }
 
-    CommandResult Run(const std::string &command, bool quiet = false) const;
+    inline CommandResult Run(const std::string &command, bool quiet = true) const
+    {
+        return RunCommand("adb -s " + m_serial + " " + command, quiet);
+    }
 
 private:
     std::string m_serial;

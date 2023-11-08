@@ -46,6 +46,7 @@ const std::vector<std::string> kAppTypes{ "Vulkan", "OpenXR" };
 // =================================================================================================
 TraceDialog::TraceDialog(QWidget *parent)
 {
+    qDebug() << "TraceDialog created.";
     m_capture_layout = new QHBoxLayout();
     m_dev_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
@@ -65,7 +66,7 @@ TraceDialog::TraceDialog(QWidget *parent)
 
     m_main_layout = new QVBoxLayout();
 
-    m_devices = m_dev_mgr.ListDevice();
+    m_devices = Dive::GetDeviceManager().ListDevice();
     for (size_t i = 0; i < m_devices.size(); i++)
     {
         QStandardItem *item = new QStandardItem(m_devices[i].c_str());
@@ -74,12 +75,12 @@ TraceDialog::TraceDialog(QWidget *parent)
     if (!m_devices.empty())
     {
         m_cur_dev = m_devices[0];
+        qDebug() << "Device selected: " << m_cur_dev.c_str();
     }
-    qDebug() << "Device selected: " << m_cur_dev.c_str();
 
     if (!m_cur_dev.empty())
     {
-        auto device = m_dev_mgr.SelectDevice(m_cur_dev);
+        auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
         device->SetupDevice();
         m_pkg_list = device->ListPackage();
     }
@@ -126,17 +127,23 @@ TraceDialog::TraceDialog(QWidget *parent)
 
 TraceDialog::~TraceDialog()
 {
-    m_dev_mgr.RemoveDevice();
+    qDebug() << "TraceDialog destroyed.";
+    Dive::GetDeviceManager().RemoveDevice();
 }
 
 void TraceDialog::OnDeviceSelected(const QString &s)
 {
+    if (s.isEmpty())
+    {
+        qDebug() << "No devices selected";
+        return;
+    }
     int dev_index = m_dev_box->currentIndex();
     qDebug() << "Device selected: " << m_cur_dev.c_str();
     assert(static_cast<size_t>(dev_index) < m_devices.size());
     m_cur_dev = m_devices[dev_index];
     assert(m_cur_dev == s.toStdString());
-    auto device = m_dev_mgr.SelectDevice(m_cur_dev);
+    auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
     m_pkg_list = device->ListPackage();
     m_pkg_model->clear();
     for (size_t i = 0; i < m_pkg_list.size(); i++)
@@ -154,8 +161,7 @@ void TraceDialog::OnPackageSelected(const QString &s)
 
 void TraceDialog::OnStartClicked()
 {
-    auto device = m_dev_mgr.GetDevice();
-    assert(device != nullptr);
+    auto device = Dive::GetDeviceManager().GetDevice();
     if (!device)
     {
         // TODO: add a warning message.
@@ -226,7 +232,8 @@ void TraceDialog::OnCaptureClicked()
     std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    m_dev_mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    Dive::GetDeviceManager().GetDevice()->RetrieveTraceFile(*trace_file_path,
+                                                            target.generic_string());
     qDebug() << "Capture saved at " << target.generic_string().c_str();
 
     QString capture_saved_path(target.generic_string().c_str());

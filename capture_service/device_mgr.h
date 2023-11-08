@@ -45,6 +45,9 @@ public:
     explicit AndroidDevice(const std::string &serial);
     ~AndroidDevice();
 
+    AndroidDevice &operator=(const AndroidDevice &) = delete;
+    AndroidDevice(const AndroidDevice &) = delete;
+
     struct PackageListOptions
     {
         bool with_system_package;
@@ -75,23 +78,37 @@ private:
 class DeviceManager
 {
 public:
+    DeviceManager() = default;
+    DeviceManager &operator=(const DeviceManager &) = delete;
+    DeviceManager(const DeviceManager &) = delete;
+
     std::vector<std::string> ListDevice() const;
     AndroidDevice           *SelectDevice(const std::string &serial)
     {
         assert(!serial.empty());
-        m_device = std::make_unique<AndroidDevice>(serial);
+        if (!serial.empty())
+        {
+            m_device = std::make_unique<AndroidDevice>(serial);
+        }
         return m_device.get();
     }
 
-    void RemoveDevice() { m_device = nullptr; }
+    void RemoveDevice()
+    {
+        if (m_device != nullptr)
+        {
+            m_device = nullptr;
+        }
+    }
 
     AndroidDevice *GetDevice() const { return m_device.get(); }
     void           Cleanup(const std::string &serial, const std::string &package);
 
 private:
-    std::unique_ptr<AndroidDevice> m_device;
+    std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
 
-std::filesystem::path ResolveAndroidLibPath(std::string name);
+std::filesystem::path ResolveAndroidLibPath(const std::string &name);
 
+DeviceManager &GetDeviceManager();
 }  // namespace Dive

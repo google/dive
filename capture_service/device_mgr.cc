@@ -30,6 +30,12 @@ limitations under the License.
 namespace Dive
 {
 
+DeviceManager &GetDeviceManager()
+{
+    static DeviceManager mgr;
+    return mgr;
+}
+
 AndroidDevice::AndroidDevice(const std::string &serial) :
     m_serial(serial),
     m_adb(serial)
@@ -42,6 +48,7 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
 
     LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
     LOGD("select: %s\n", GetDeviceDisplayName().c_str());
+    LOGD("AndroidDevice created.\n");
 }
 
 AndroidDevice::~AndroidDevice()
@@ -50,6 +57,7 @@ AndroidDevice::~AndroidDevice()
     {
         CleanupDevice();
     }
+    LOGD("AndroidDevice destroyed.\n");
 }
 
 std::string AndroidDevice::GetDeviceDisplayName() const
@@ -72,25 +80,28 @@ std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) c
         std::vector<std::string> fields = absl::StrSplit(line, ':');
         if (fields.size() == 2 && fields[0] == "package")
         {
+            std::string package(absl::StripAsciiWhitespace(fields[1]));
             if (option.debuggable_only)
             {
-                std::string output = Adb().Run("shell dumpsys package " + fields[1]).Out();
+                std::string output = Adb().Run("shell dumpsys package " + package).Out();
                 // TODO: find out more reliable way to find if app is debuggable.
                 if (!absl::StrContains(output, "DEBUGGABLE"))
                 {
                     continue;
                 }
             }
-            package_list.push_back(fields[1]);
+            package_list.push_back(package);
         }
     }
     std::sort(package_list.begin(), package_list.end());
     return package_list;
 }
 
-std::filesystem::path ResolveAndroidLibPath(std::string name)
+std::filesystem::path ResolveAndroidLibPath(const std::string &name)
 {
-    std::vector<std::filesystem::path> search_paths{ std::filesystem::path{
+    LOGD("cwd: %s\n", std::filesystem::current_path().c_str());
+    std::vector<std::filesystem::path> search_paths{ std::filesystem::path{ "./install" },
+                                                     std::filesystem::path{
                                                      "../../build_android/Release/bin" },
                                                      std::filesystem::path{ "../../install" },
                                                      std::filesystem::path{ "./" } };

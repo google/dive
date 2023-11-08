@@ -223,7 +223,6 @@ MainWindow::MainWindow()
     horizontal_splitter->setStretchFactor(2, 1);
 
     m_trace_dig = new TraceDialog(this);
-    m_trace_dig->setAttribute(Qt::WA_DeleteOnClose);
 
     // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.

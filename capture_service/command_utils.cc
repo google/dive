@@ -28,14 +28,6 @@ limitations under the License.
 namespace Dive
 {
 
-#if defined(WIN32)
-// TODO(renfeng): figure out how to run exe on Windows
-CommandResult RunCommand(const std::string &command, bool quiet)
-{
-    CommandResult result;
-    return result;
-}
-#else
 CommandResult RunCommand(const std::string &command, bool quiet)
 {
     CommandResult result;
@@ -78,10 +70,5 @@ CommandResult RunCommand(const std::string &command, bool quiet)
 
     return result;
 }
-#endif
 
-CommandResult AdbSession::Run(const std::string &command, bool quiet) const
-{
-    return RunCommand("adb -s " + m_serial + " " + command, quiet);
-}
 }  // namespace Dive

@@ -16,11 +16,9 @@ limitations under the License.
 
 #include "device_mgr.h"
 
-#include <iostream>
+#include <filesystem>
 #include <memory>
-#include <sstream>
 
-#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -44,8 +42,6 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
 
     LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
     LOGD("select: %s\n", GetDeviceDisplayName().c_str());
-
-    SetupDevice();
 }
 
 AndroidDevice::~AndroidDevice()
@@ -61,21 +57,57 @@ std::string AndroidDevice::GetDeviceDisplayName() const
     return absl::StrCat(m_dev_info.m_manufacturer, " ", m_dev_info.m_model, " (", m_serial, ")");
 }
 
-std::vector<std::string> AndroidDevice::ListPackage() const
+std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) const
 {
     std::vector<std::string> package_list;
-
-    std::string              output = Adb().Run("shell pm list packages").Out();
+    std::string              cmd = "shell pm list packages";
+    if (!option.with_system_package)
+    {
+        cmd += " -3";
+    }
+    std::string              output = Adb().Run(cmd).Out();
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
     for (const auto &line : lines)
     {
         std::vector<std::string> fields = absl::StrSplit(line, ':');
         if (fields.size() == 2 && fields[0] == "package")
         {
+            if (option.debuggable_only)
+            {
+                std::string output = Adb().Run("shell dumpsys package " + fields[1]).Out();
+                // TODO: find out more reliable way to find if app is debuggable.
+                if (!absl::StrContains(output, "DEBUGGABLE"))
+                {
+                    continue;
+                }
+            }
             package_list.push_back(fields[1]);
         }
     }
+    std::sort(package_list.begin(), package_list.end());
     return package_list;
+}
+
+std::filesystem::path ResolveAndroidLibPath(std::string name)
+{
+    std::vector<std::filesystem::path> search_paths{ std::filesystem::path{
+                                                     "../../build_android/Release/bin" },
+                                                     std::filesystem::path{ "../../install" },
+                                                     std::filesystem::path{ "./" } };
+    std::filesystem::path              lib_path{ name };
+
+    for (const auto &p : search_paths)
+    {
+        lib_path = p / name;
+        if (std::filesystem::exists(lib_path))
+        {
+            break;
+        }
+    }
+
+    lib_path = std::filesystem::canonical(lib_path);
+    LOGD("%s is at %s \n", name.c_str(), lib_path.generic_string().c_str());
+    return lib_path;
 }
 
 void AndroidDevice::SetupDevice()
@@ -83,9 +115,15 @@ void AndroidDevice::SetupDevice()
     Adb().Run("shell setenforce 0");
     Adb().Run("shell getenforce");
 
-    Adb().Run(absl::StrFormat("push %s %s", kWrapLibName, kTargetPath));
-    Adb().Run(absl::StrFormat("push %s %s", kVkLayerLibName, kTargetPath));
-    Adb().Run(absl::StrFormat("push %s %s", kXrLayerLibName, kTargetPath));
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
+                              kTargetPath));
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
+                              kTargetPath));
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
+                              kTargetPath));
     Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort));
 }
 
@@ -126,10 +164,7 @@ void AndroidDevice::SetupApp(const std::string &package, const ApplicationType t
 
 void AndroidDevice::CleanupAPP()
 {
-    if (app)
-    {
-        app->Cleanup();
-    }
+    app = nullptr;
 }
 
 void AndroidDevice::StartApp()
@@ -160,6 +195,7 @@ std::vector<std::string> DeviceManager::ListDevice() const
         if (fields.size() == 2 && fields[1] == "device")
             dev_list.push_back(fields[0]);
     }
+    std::sort(dev_list.begin(), dev_list.end());
 
     return dev_list;
 }

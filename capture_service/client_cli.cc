@@ -32,8 +32,9 @@ int main(int argc, char **argv)
     std::string      target_str = absl::GetFlag(FLAGS_target);
     Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
 
-    std::string reply = client.RequestStartTrace();
-    std::cout << "Capture is save on device at: " << reply << std::endl;
+    auto reply = client.RequestStartTrace();
+    if (reply.ok())
+        std::cout << "Capture is save on device at: " << *reply << std::endl;
 
     return 0;
 }

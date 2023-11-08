@@ -117,13 +117,15 @@ AndroidApplication::AndroidApplication(AndroidDevice  &dev,
     m_type(type),
     m_started(false)
 {
-    m_main_activity = std::move(GetMainActivity());
+    ParsePackage();
 }
 
-std::string AndroidApplication::GetMainActivity()
+void AndroidApplication::ParsePackage()
 {
     std::string output = m_dev.Adb().Run("shell dumpsys package " + m_package, true).Out();
-    return ParsePackageForActivity(output, m_package);
+
+    m_main_activity = ParsePackageForActivity(output, m_package);
+    m_is_debuggable = absl::StrContains(output, "DEBUGGABLE");
 }
 
 void AndroidApplication::Start()
@@ -191,7 +193,10 @@ void OpenXRApplication::Setup()
     m_dev.Adb().Run("wait-for-device");
     m_dev.Adb().Run("remount");
     m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath));
-    m_dev.Adb().Run(absl::StrFormat("push %s %s", kManifestFileName, kManifestFilePath));
+    m_dev.Adb().Run(
+    absl::StrFormat("push %s %s",
+                    ResolveAndroidLibPath(kManifestFileName).generic_string().c_str(),
+                    kManifestFilePath));
     m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
                                     m_package,
                                     kTargetPath,

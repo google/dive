@@ -20,6 +20,8 @@ limitations under the License.
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "client.h"
 #include "dive_service.grpc.pb.h"
 #include "grpcpp/grpcpp.h"
@@ -29,12 +31,12 @@ namespace Dive
 using grpc::ClientContext;
 using grpc::Status;
 
-std::string DiveClient::RequestStartTrace()
+absl::StatusOr<std::string> DiveClient::RequestStartTrace()
 {
-    TraceRequest request;
-    TraceReply   reply;
-    ClientContext  context;
-    Status         status = m_stub->StartTrace(&context, request, &reply);
+    TraceRequest  request;
+    TraceReply    reply;
+    ClientContext context;
+    Status        status = m_stub->StartTrace(&context, request, &reply);
 
     if (status.ok())
     {
@@ -43,15 +45,15 @@ std::string DiveClient::RequestStartTrace()
     else
     {
         std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-        return "RPC failed";
+        return absl::UnavailableError(status.error_message());
     }
 }
 
-std::string DiveClient::TestConnection()
+absl::StatusOr<std::string> DiveClient::TestConnection()
 {
-    TestRequest request;
-    TestReply   reply;
-    ClientContext     context;
+    TestRequest   request;
+    TestReply     reply;
+    ClientContext context;
     request.set_message("Test connection request");
     Status status = m_stub->TestConnection(&context, request, &reply);
 
@@ -62,11 +64,11 @@ std::string DiveClient::TestConnection()
     else
     {
         std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-        return "RPC failed";
+        return absl::UnavailableError(status.error_message());
     }
 }
 
-std::string DiveClient::RunCommand(const std::string &command)
+absl::StatusOr<std::string> DiveClient::RunCommand(const std::string &command)
 {
     RunCommandRequest request;
     RunCommandReply   reply;
@@ -81,7 +83,7 @@ std::string DiveClient::RunCommand(const std::string &command)
     else
     {
         std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-        return "RPC failed";
+        return absl::UnavailableError(status.error_message());
     }
 }
 }  // namespace Dive

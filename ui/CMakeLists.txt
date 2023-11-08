@@ -44,27 +44,27 @@ if(MSVC)
   set(SRC_FILES ${SRC_FILES} ${RC_FILES})
 endif()
 
-# file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/capture_layer/common/*.h")
-# file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/capture_layer/common/*.cpp")
-
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include )
 include_directories(${CMAKE_SOURCE_DIR})
 # Include CMAKE_BINARY_DIR for generated files.
 include_directories(${CMAKE_BINARY_DIR})
+
+#include gRPC headers
+include_directories(
+"${CMAKE_BINARY_DIR}/capture_service"
+"${CMAKE_SOURCE_DIR}/third_party/grpc/include"
+"${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/protobuf/src/"
+)
 # Tell CMake to create the Dive executable
 add_executable(${PROJECT_NAME} WIN32 ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} resources.qrc)
 
 # Use the Widgets module from Qt 5
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
-target_link_libraries(${PROJECT_NAME} dive_core)
+target_link_libraries(${PROJECT_NAME} dive_core device_mgr client)
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
   target_link_libraries(${PROJECT_NAME}  stdc++fs)
-endif()
-
-if(WIN32)
-  target_link_libraries(${PROJECT_NAME} wsock32 ws2_32)
 endif()
 
 # Custom executable name
@@ -84,7 +84,7 @@ if (MSVC)
   # 4127: "conditional expression is constant" warnings
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127)
 else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-inconsistent-missing-override)
 endif()
 
 # Collect 3rd party licenses
@@ -99,3 +99,5 @@ if (MSVC)
   add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
 endif()
+
+install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})

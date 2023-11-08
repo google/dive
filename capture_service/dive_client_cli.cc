@@ -137,6 +137,7 @@ bool list_device(const Dive::DeviceManager& mgr)
 bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
 {
     auto device = mgr.SelectDevice(device_serial);
+    device->SetupDevice();
     auto packages = device->ListPackage();
 
     int index = 0;
@@ -159,6 +160,7 @@ bool run_package(Dive::DeviceManager& mgr, const std::string& package, const std
         return false;
     }
     auto dev = mgr.SelectDevice(serial);
+    dev->SetupDevice();
     if (app_type == "openxr")
         dev->SetupApp(package, Dive::ApplicationType::OPENXR);
     else if (app_type == "vulkan")
@@ -179,15 +181,22 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     std::string input;
 
     Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
-    std::cout << "TestConnection reply: " << client.TestConnection() << std::endl;
+    absl::StatusOr<std::string> reply = client.TestConnection();
+    if (reply.ok())
+        std::cout << *reply << std::endl;
+    else
+        std::cout << "TestConnection failed with " << reply.status() << std::endl;
 
-    std::string trace_file_path = client.RequestStartTrace();
-    std::cout << "Trigger capture: " << trace_file_path << std::endl;
+    absl::StatusOr<std::string> trace_file_path = client.RequestStartTrace();
+    if (trace_file_path.ok())
+        std::cout << "Trigger capture: " << *trace_file_path << std::endl;
+    else
+        std::cout << "Failed to trigger capture: " << trace_file_path.status() << std::endl;
 
-    std::filesystem::path p(trace_file_path);
+    std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    mgr.GetDevice()->RetrieveTraceFile(trace_file_path, target.generic_string());
+    mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
     std::cout << "Capture saved at " << target << std::endl;
 
     return true;

@@ -49,6 +49,7 @@ class QItemSelection;
 class TreeViewComboBox;
 class SearchDialog;
 class CaptureSettingView;
+class TraceDialog;
 enum class EventMode;
 
 #define MESSAGE_TIMEOUT 2500
@@ -90,6 +91,7 @@ private slots:
     void UpdateOverlay(const QString &);
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded();
+    void OnTraceAvailable(const QString &);
 
 private:
     void    CreateActions();
@@ -105,19 +107,20 @@ private:
     void    HideOverlay();
     void    UpdateTabAvailability();
 
-    QMenu    *m_file_menu;
-    QMenu    *m_recent_captures_menu;
-    QAction  *m_open_action;
-    QAction  *m_save_action;
-    QAction  *m_save_as_action;
-    QAction  *m_exit_action;
-    QMenu    *m_capture_menu;
-    QAction  *m_capture_action;
-    QAction  *m_capture_delay_action;
-    QAction  *m_capture_setting_action;
-    QMenu    *m_help_menu;
-    QAction  *m_about_action;
-    QToolBar *m_file_tool_bar;
+    QMenu       *m_file_menu;
+    QMenu       *m_recent_captures_menu;
+    QAction     *m_open_action;
+    QAction     *m_save_action;
+    QAction     *m_save_as_action;
+    QAction     *m_exit_action;
+    QMenu       *m_capture_menu;
+    QAction     *m_capture_action;
+    QAction     *m_capture_delay_action;
+    QAction     *m_capture_setting_action;
+    QMenu       *m_help_menu;
+    QAction     *m_about_action;
+    QToolBar    *m_file_tool_bar;
+    TraceDialog *m_trace_dig;
 
     enum
     {

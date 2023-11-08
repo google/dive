@@ -725,9 +725,11 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
                                         const IndirectBufferInfo &ib_info,
                                         IbType                    type)
 {
+    m_cur_ib_level = ib_info.m_ib_level;
+
     // Make all subsequent shared node parent the actual IB-packet
     if (m_cur_ib_packet_node_index != UINT64_MAX)
-        m_cur_shared_node_parent_index = m_cur_ib_packet_node_index;
+        m_shared_node_ib_parent_stack[m_cur_ib_level] = m_cur_ib_packet_node_index;
 
     // Create IB description string
     std::ostringstream ib_string_stream;
@@ -771,7 +773,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
             }
         }
         DIVE_ASSERT(group_index != UINT64_MAX);
-        m_cur_shared_node_parent_index = group_index;
+        m_shared_node_ib_parent_stack[m_cur_ib_level] = group_index;
     }
 
     if (ib_info.m_skip)
@@ -811,7 +813,6 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, ib_node_index);
 
     m_ib_stack.push_back(ib_node_index);
-    m_cur_ib_level = ib_info.m_ib_level;
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     return true;
@@ -840,10 +841,6 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     m_cur_ib_level = ib_info.m_ib_level;
-
-    // Reset back to submit node being the parent (as opposed to, possibly, the indirect_buffer
-    // packet)
-    m_cur_shared_node_parent_index = m_cur_submit_node_index;
     return true;
 }
 
@@ -867,7 +864,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                                type,
                                                header);
 
-    uint64_t parent_index = m_cur_shared_node_parent_index;
+    uint64_t parent_index = m_shared_node_ib_parent_stack[m_cur_ib_level];
     AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kSubmitTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
@@ -979,7 +976,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         m_node_parent_info[CommandHierarchy::kRgpTopology][event_node_index] = parent_node_index;
     }
     else if ((opcode == CP_INDIRECT_BUFFER_PFE || opcode == CP_INDIRECT_BUFFER_PFD ||
-              opcode == CP_INDIRECT_BUFFER_CHAIN || opcode == CP_COND_INDIRECT_BUFFER_PFE))
+              opcode == CP_INDIRECT_BUFFER_CHAIN || opcode == CP_COND_INDIRECT_BUFFER_PFE ||
+              opcode == CP_SET_CTXSWITCH_IB))
     {
         m_cur_ib_packet_node_index = packet_node_index;
     }
@@ -1077,8 +1075,8 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, submit_node_index);
     AddChild(CommandHierarchy::kRgpTopology, Topology::kRootNodeIndex, submit_node_index);
     m_cur_submit_node_index = submit_node_index;
-    m_cur_shared_node_parent_index = m_cur_submit_node_index;
-    m_cur_engine_index = submit_info.GetEngineIndex();
+    m_cur_ib_level = 1;
+    m_shared_node_ib_parent_stack[m_cur_ib_level] = m_cur_submit_node_index;
     m_cur_ib_packet_node_index = UINT64_MAX;
     m_ib_stack.clear();
 }

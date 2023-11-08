@@ -288,10 +288,11 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
   for domain in domains:
     domain_name = domain.attrib['name']
 
-    # Check if it is a domain describing a PM4 packet
+    # Check if it is a domain describing a PM4 packet, OR see if it a "A6XX_" packet (e.g. V#s/T#s/S#s)
     pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
-    if pm4_type_packet is None:
+    if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
       continue
+
 
     # There are only 2 PM4 packets with array tags: CP_SET_DRAW_STATE and CP_SET_PSEUDO_REG
     array = domain.find('./{http://nouveau.freedesktop.org/}array')
@@ -323,23 +324,34 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       # Filter out everything but the reg32 and reg64 elements from the packet definition
       # First let's add it to a dict so we can ignore duplicates (some stripes redefine root registers)
       reg_dict = {}
+      skip_this_packet = False
       for element in pm4_packet:
         is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
         is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
         if is_reg_32 or is_reg_64:
-          offset = int(element.attrib['offset'])
+          offset = int(element.attrib['offset'],0)
+          # There are certain packets (e.g. A6XX_PDC) which have register offsets
+          # instead of packet offsets, for some weird reason. Skip those packets.
+          if offset > 1000:
+            skip_this_packet = True
+            break
           if not (offset in reg_dict):
             reg_dict[offset] = element
+      if skip_this_packet:
+        break
+
 
       # Add the registers from the variant-specific section (i.e. stripe)
       stripe = variant[1]
-      packet_name = "PM4_" + domain_name
+      packet_name = domain_name
+      if pm4_type_packet is not None: # Add prefix for PM4 packets only
+        packet_name = "PM4_" + packet_name
       if stripe:
         for element in variant[1]:
           is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
           is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
           if is_reg_32 or is_reg_64:
-            offset = int(element.attrib['offset'])
+            offset = int(element.attrib['offset'],0)
             if not (offset in reg_dict):
               reg_dict[offset] = element
         # Add a postfix to the packet_name if it is a non-chip stripe
@@ -366,7 +378,7 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       reg_list = list(reg_dict.values())
 
       # Sort based on offset
-      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset']))
+      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset'],0))
 
       pm4_packet_file_h.write("//------------------------------------------------\n")
 

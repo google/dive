@@ -69,15 +69,14 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_devices = Dive::GetDeviceManager().ListDevice();
     for (size_t i = 0; i < m_devices.size(); i++)
     {
-        QStandardItem *item = new QStandardItem(m_devices[i].c_str());
+        QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
         m_dev_model->appendRow(item);
     }
     if (!m_devices.empty())
     {
-        m_cur_dev = m_devices[0];
-        qDebug() << "Device selected: " << m_cur_dev.c_str();
+        m_cur_dev = m_devices[0].m_serial;
+        qDebug() << "Device selected: " << m_devices[0].GetDisplayName().c_str();
     }
-
     if (!m_cur_dev.empty())
     {
         auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
@@ -103,8 +102,8 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_capture_layout->addWidget(m_dev_box);
     m_capture_layout->addWidget(m_pkg_label);
     m_capture_layout->addWidget(m_pkg_box);
+    m_capture_layout->addWidget(m_app_type_label);
     m_capture_layout->addWidget(m_app_type_box);
-
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
 
@@ -116,7 +115,6 @@ TraceDialog::TraceDialog(QWidget *parent)
                      SIGNAL(currentIndexChanged(const QString &)),
                      this,
                      SLOT(OnDeviceSelected(const QString &)));
-
     QObject::connect(m_pkg_box,
                      SIGNAL(currentIndexChanged(const QString &)),
                      this,
@@ -141,8 +139,7 @@ void TraceDialog::OnDeviceSelected(const QString &s)
     int dev_index = m_dev_box->currentIndex();
     qDebug() << "Device selected: " << m_cur_dev.c_str();
     assert(static_cast<size_t>(dev_index) < m_devices.size());
-    m_cur_dev = m_devices[dev_index];
-    assert(m_cur_dev == s.toStdString());
+    m_cur_dev = m_devices[dev_index].m_serial;
     auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
     m_pkg_list = device->ListPackage();
     m_pkg_model->clear();

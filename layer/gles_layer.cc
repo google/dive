@@ -27,7 +27,7 @@ limitations under the License.
 #if defined __ANDROID__
 
 #    define xstr(a) str(a)
-#    define str(a) #a
+#    define str(a) #    a
 #    define LOG_TAG "glesLayer" xstr(LAYERNAME)
 #    define ALOGI(msg, ...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, (msg), __VA_ARGS__)
 // Announce if anything loads this layer.  LAYERNAME is defined in Android.mk

@@ -30,8 +30,11 @@ namespace Dive
 
 struct DeviceInfo
 {
+    std::string m_serial;
     std::string m_manufacturer;
     std::string m_model;
+
+    std::string GetDisplayName() const;
 };
 
 struct DeviceState
@@ -82,27 +85,11 @@ public:
     DeviceManager &operator=(const DeviceManager &) = delete;
     DeviceManager(const DeviceManager &) = delete;
 
-    std::vector<std::string> ListDevice() const;
-    AndroidDevice           *SelectDevice(const std::string &serial)
-    {
-        assert(!serial.empty());
-        if (!serial.empty())
-        {
-            m_device = std::make_unique<AndroidDevice>(serial);
-        }
-        return m_device.get();
-    }
-
-    void RemoveDevice()
-    {
-        if (m_device != nullptr)
-        {
-            m_device = nullptr;
-        }
-    }
-
-    AndroidDevice *GetDevice() const { return m_device.get(); }
-    void           Cleanup(const std::string &serial, const std::string &package);
+    std::vector<DeviceInfo> ListDevice() const;
+    AndroidDevice          *SelectDevice(const std::string &serial);
+    void                    RemoveDevice() { m_device = nullptr; }
+    AndroidDevice          *GetDevice() const { return m_device.get(); }
+    void                    Cleanup(const std::string &serial, const std::string &package);
 
 private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };

@@ -21,20 +21,20 @@ limitations under the License.
 
 #include "absl/flags/flag.h"
 #include "absl/strings/str_format.h"
-#include "trace_mgr.h"
 #include "command_utils.h"
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/health_check_service_interface.h"
 #include "log.h"
+#include "trace_mgr.h"
 
 ABSL_FLAG(uint16_t, port, 19999, "Server port for the service");
 
 namespace Dive
 {
 
-grpc::Status DiveServiceImpl::StartTrace(grpc::ServerContext  *context,
-                                           const TraceRequest *request,
-                                           TraceReply         *reply)
+grpc::Status DiveServiceImpl::StartTrace(grpc::ServerContext *context,
+                                         const TraceRequest  *request,
+                                         TraceReply          *reply)
 {
     GetTraceMgr().TriggerTrace();
     GetTraceMgr().WaitForTraceDone();

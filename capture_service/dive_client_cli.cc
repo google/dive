@@ -125,7 +125,7 @@ bool list_device(const Dive::DeviceManager& mgr)
     std::cout << "Devices: " << std::endl;
     for (const auto& device : list)
     {
-        std::cout << ++index << " : " << device << std::endl;
+        std::cout << ++index << " : " << device.GetDisplayName() << std::endl;
     }
 
     return true;

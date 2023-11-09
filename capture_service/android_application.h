@@ -43,6 +43,7 @@ public:
     void               Stop();
     const std::string &GetMainActivity() const { return m_main_activity; };
     bool               IsDebuggable() const { return m_is_debuggable; }
+    bool               IsRunning() const { return m_started; }
 
 protected:
     void ParsePackage();

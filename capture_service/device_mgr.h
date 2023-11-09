@@ -59,11 +59,12 @@ public:
     std::vector<std::string> ListPackage(PackageListOptions option = { 0, 1 }) const;
     std::string              GetDeviceDisplayName() const;
 
-    void              SetupApp(const std::string &package, const ApplicationType type);
-    void              CleanupAPP();
-    void              StartApp();
-    void              StopApp();
-    const AdbSession &Adb() const { return m_adb; }
+    void                SetupApp(const std::string &package, const ApplicationType type);
+    void                CleanupAPP();
+    void                StartApp();
+    void                StopApp();
+    const AdbSession   &Adb() const { return m_adb; }
+    AndroidApplication *GetCurrentApplication() { return app.get(); }
 
     void SetupDevice();
     void CleanupDevice();

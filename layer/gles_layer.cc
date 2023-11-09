@@ -23,7 +23,8 @@ limitations under the License.
 #endif
 
 #include <cstring>
-
+#include <string>
+#include <unordered_map>
 #if defined __ANDROID__
 
 #    define xstr(a) str(a)

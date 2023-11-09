@@ -19,7 +19,6 @@
 void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...);
 
 #include <assert.h>
-#include <stdio.h>
 
 #define DIVE_ERROR_MSG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
 #define DIVE_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)

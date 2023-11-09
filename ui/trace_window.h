@@ -69,9 +69,9 @@ private:
     QPushButton *m_run_button;
     QHBoxLayout *m_button_layout;
 
-    QVBoxLayout             *m_main_layout;
-    std::vector<std::string> m_devices;
-    std::string              m_cur_dev;
-    std::vector<std::string> m_pkg_list;
-    std::string              m_cur_pkg;
+    QVBoxLayout                  *m_main_layout;
+    std::vector<Dive::DeviceInfo> m_devices;
+    std::string                   m_cur_dev;
+    std::vector<std::string>      m_pkg_list;
+    std::string                   m_cur_pkg;
 };

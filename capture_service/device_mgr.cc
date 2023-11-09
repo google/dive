@@ -36,6 +36,11 @@ DeviceManager &GetDeviceManager()
     return mgr;
 }
 
+std::string DeviceInfo::GetDisplayName() const
+{
+    return absl::StrCat(m_manufacturer, " ", m_model, " (", m_serial, ")");
+}
+
 AndroidDevice::AndroidDevice(const std::string &serial) :
     m_serial(serial),
     m_adb(serial)
@@ -43,6 +48,7 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
     Adb().Run("root");
     Adb().Run("wait-for-device");
     m_original_state.m_enforce = Adb().Run("shell getenforce").Out();
+    m_dev_info.m_serial = serial;
     m_dev_info.m_model = Adb().Run("shell getprop ro.product.model").Out();
     m_dev_info.m_manufacturer = Adb().Run("shell getprop ro.product.manufacturer").Out();
 
@@ -62,7 +68,7 @@ AndroidDevice::~AndroidDevice()
 
 std::string AndroidDevice::GetDeviceDisplayName() const
 {
-    return absl::StrCat(m_dev_info.m_manufacturer, " ", m_dev_info.m_model, " (", m_serial, ")");
+    return m_dev_info.GetDisplayName();
 }
 
 std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) const
@@ -194,9 +200,11 @@ void AndroidDevice::StopApp()
     }
 }
 
-std::vector<std::string> DeviceManager::ListDevice() const
+std::vector<DeviceInfo> DeviceManager::ListDevice() const
 {
-    std::vector<std::string> dev_list;
+    std::vector<std::string> serial_list;
+    std::vector<DeviceInfo>  dev_list;
+
     std::string              output = RunCommand("adb devices").Out();
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
 
@@ -204,12 +212,33 @@ std::vector<std::string> DeviceManager::ListDevice() const
     {
         std::vector<std::string> fields = absl::StrSplit(line, '\t');
         if (fields.size() == 2 && fields[1] == "device")
-            dev_list.push_back(fields[0]);
+            serial_list.push_back(fields[0]);
     }
-    std::sort(dev_list.begin(), dev_list.end());
 
+    for (auto &serial : serial_list)
+    {
+        DeviceInfo dev;
+        AdbSession adb(serial);
+
+        dev.m_serial = std::move(serial);
+        dev.m_manufacturer = adb.Run("shell getprop ro.product.manufacturer").Out();
+        dev.m_model = adb.Run("shell getprop ro.product.model").Out();
+
+        dev_list.emplace_back(std::move(dev));
+    }
     return dev_list;
 }
+
+AndroidDevice *DeviceManager::SelectDevice(const std::string &serial)
+{
+    assert(!serial.empty());
+    if (!serial.empty())
+    {
+        m_device = std::make_unique<AndroidDevice>(serial);
+    }
+    return m_device.get();
+}
+
 void DeviceManager::Cleanup(const std::string &serial, const std::string &package)
 {
     AdbSession adb(serial);

@@ -17,7 +17,6 @@ limitations under the License.
 #include "android_application.h"
 
 #include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "constants.h"
@@ -151,7 +150,7 @@ VulkanApplication::~VulkanApplication()
 
 void VulkanApplication::Setup()
 {
-    LOGD("Setup Vulkan application");
+    LOGD("Setup Vulkan application: %s\n", m_package.c_str());
     m_dev.Adb().Run("root");
     m_dev.Adb().Run("wait-for-device");
     Stop();
@@ -167,12 +166,12 @@ void VulkanApplication::Setup()
                                     kTargetPath,
                                     kWrapLibName));
     m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package));
-    LOGD("Setup Vulkan application done");
+    LOGD("Setup Vulkan application %s done\n", m_package.c_str());
 }
 
 void VulkanApplication::Cleanup()
 {
-    LOGD("Cleanup Vulkan application");
+    LOGD("Cleanup Vulkan application %s", m_package.c_str());
     m_dev.Adb().Run("root");
     m_dev.Adb().Run("wait-for-device");
 
@@ -183,12 +182,12 @@ void VulkanApplication::Cleanup()
     m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app");
     m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles");
     m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package));
-    LOGD("Cleanup Vulkan application done");
+    LOGD("Cleanup Vulkan application %s done", m_package.c_str());
 }
 
 void OpenXRApplication::Setup()
 {
-    LOGD("OpenXRApplication Setup");
+    LOGD("OpenXRApplication %s Setup\n", m_package.c_str());
     m_dev.Adb().Run("root");
     m_dev.Adb().Run("wait-for-device");
     m_dev.Adb().Run("remount");
@@ -202,18 +201,18 @@ void OpenXRApplication::Setup()
                                     kTargetPath,
                                     kWrapLibName));
     m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package));
-    LOGD("OpenXRApplication Setup done.");
+    LOGD("OpenXRApplication %s Setup done.\n", m_package.c_str());
 }
 
 void OpenXRApplication::Cleanup()
 {
-    LOGD("OpenXRApplication Cleanup");
+    LOGD("OpenXRApplication %s cleanup.\n", m_package.c_str());
     m_dev.Adb().Run("root");
     m_dev.Adb().Run("wait-for-device");
     m_dev.Adb().Run("remount");
     m_dev.Adb().Run(absl::StrFormat("shell rm -r %s", kManifestFilePath));
     m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package));
-    LOGD("OpenXRApplication Cleanup done.");
+    LOGD("OpenXRApplication %s cleanup done.", m_package.c_str());
 }
 
 OpenXRApplication::~OpenXRApplication()

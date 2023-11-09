@@ -22,7 +22,6 @@ limitations under the License.
 #include <cassert>
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <thread>

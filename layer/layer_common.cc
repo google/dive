@@ -17,8 +17,8 @@ limitations under the License.
 #include "layer_common.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <iostream>
 
 namespace DiveLayer
 {

@@ -667,10 +667,7 @@ void MainWindow::OnCaptureTrigger()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCapture(bool is_capture_delayed)
 {
-    if (QDialog::Rejected == m_trace_dig->exec())
-    {
-        m_trace_dig->Cleanup();
-    }
+    m_trace_dig->exec();
 }
 
 //--------------------------------------------------------------------------------------------------

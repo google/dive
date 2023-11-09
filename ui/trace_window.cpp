@@ -17,6 +17,7 @@
 #include "trace_window.h"
 #include <qcombobox.h>
 #include <qdebug.h>
+#include <qmessagebox.h>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
@@ -162,6 +163,10 @@ void TraceDialog::OnStartClicked()
     if (!device)
     {
         // TODO: add a warning message.
+        QMessageBox msgBox;
+        msgBox.setText("No device/application selected. Please select a device and application and "
+                       "then try again.");
+        msgBox.exec();
         return;
     }
 

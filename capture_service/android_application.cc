@@ -137,6 +137,7 @@ void AndroidApplication::Start()
 void AndroidApplication::Stop()
 {
     m_dev.Adb().Run(absl::StrFormat("shell am force-stop %s", m_package));
+    m_started = false;
 }
 
 VulkanApplication::~VulkanApplication()

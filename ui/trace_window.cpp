@@ -63,7 +63,9 @@ TraceDialog::TraceDialog(QWidget *parent)
 
     m_button_layout = new QHBoxLayout();
     m_run_button = new QPushButton("&Start Application", this);
+    m_run_button->setEnabled(false);
     m_capture_button = new QPushButton("&Trace", this);
+    m_capture_button->setEnabled(false);
 
     m_main_layout = new QVBoxLayout();
 
@@ -155,6 +157,7 @@ void TraceDialog::OnPackageSelected(const QString &s)
 {
     qDebug() << "Package selected: " << s << " " << m_pkg_box->currentIndex();
     m_cur_pkg = m_pkg_list[m_pkg_box->currentIndex()];
+    m_run_button->setEnabled(true);
 }
 
 void TraceDialog::OnStartClicked()
@@ -162,7 +165,6 @@ void TraceDialog::OnStartClicked()
     auto device = Dive::GetDeviceManager().GetDevice();
     if (!device)
     {
-        // TODO: add a warning message.
         QMessageBox msgBox;
         msgBox.setText("No device/application selected. Please select a device and application and "
                        "then try again.");
@@ -191,14 +193,21 @@ void TraceDialog::OnStartClicked()
         }
 
         device->StartApp();
-        m_run_button->setDisabled(false);
-        m_run_button->setText("&Stop");
+        auto cur_app = device->GetCurrentApplication();
+
+        if (cur_app && cur_app->IsRunning())
+        {
+            m_run_button->setDisabled(false);
+            m_run_button->setText("&Stop");
+            m_capture_button->setEnabled(true);
+        }
     }
     else
     {
         qDebug() << "Stop package " << m_cur_pkg.c_str();
         device->StopApp();
         m_run_button->setText("&Start Application");
+        m_capture_button->setEnabled(false);
     }
 }
 

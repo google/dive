@@ -37,6 +37,17 @@ struct DeviceInfo
     std::string GetDisplayName() const;
 };
 
+inline bool operator==(const DeviceInfo &lhs, const DeviceInfo &rhs)
+{
+    return lhs.m_serial == rhs.m_serial && lhs.m_manufacturer == rhs.m_manufacturer &&
+           lhs.m_model == rhs.m_model;
+}
+
+inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs)
+{
+    return !(lhs == rhs);
+}
+
 struct DeviceState
 {
     std::string m_enforce;

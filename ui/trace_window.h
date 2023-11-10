@@ -14,7 +14,6 @@
  limitations under the License.
 */
 
-#include <qobjectdefs.h>
 #include <QDialog>
 #include "capture_service/device_mgr.h"
 
@@ -36,6 +35,7 @@ class TraceDialog : public QDialog
 public:
     TraceDialog(QWidget *parent = 0);
     ~TraceDialog();
+    void UpdateDeviceList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
 
 private slots:
@@ -48,10 +48,6 @@ signals:
     void TraceAvailable(const QString &);
 
 private:
-    QLabel *m_device_lable;
-    QLabel *m_app_package_lable;
-    QLabel *m_app_type_lable;
-
     QHBoxLayout        *m_capture_layout;
     QLabel             *m_dev_label;
     QStandardItemModel *m_dev_model;

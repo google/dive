@@ -667,6 +667,7 @@ void MainWindow::OnCaptureTrigger()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCapture(bool is_capture_delayed)
 {
+    m_trace_dig->UpdateDeviceList();
     m_trace_dig->exec();
 }
 

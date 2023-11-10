@@ -132,6 +132,30 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
+void TraceDialog::UpdateDeviceList()
+{
+    auto cur_list = Dive::GetDeviceManager().ListDevice();
+    if (cur_list == m_devices)
+    {
+        qDebug() << "No changes from the list of the connected devices. ";
+        return;
+    }
+
+    m_devices = cur_list;
+    m_dev_model->clear();
+
+    for (size_t i = 0; i < m_devices.size(); i++)
+    {
+        QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+        m_dev_model->appendRow(item);
+        // Keep the original selected devices as selected.
+        if (m_cur_dev == m_devices[i].m_serial)
+        {
+            m_dev_box->setCurrentIndex(static_cast<int>(i));
+        }
+    }
+}
+
 void TraceDialog::OnDeviceSelected(const QString &s)
 {
     if (s.isEmpty())
@@ -142,6 +166,12 @@ void TraceDialog::OnDeviceSelected(const QString &s)
     int dev_index = m_dev_box->currentIndex();
     qDebug() << "Device selected: " << m_cur_dev.c_str();
     assert(static_cast<size_t>(dev_index) < m_devices.size());
+
+    if (m_cur_dev == m_devices[dev_index].m_serial)
+    {
+        return;
+    }
+
     m_cur_dev = m_devices[dev_index].m_serial;
     auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
     m_pkg_list = device->ListPackage();

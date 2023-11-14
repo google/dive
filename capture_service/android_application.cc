@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "android_application.h"
 
+#include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -116,113 +117,127 @@ AndroidApplication::AndroidApplication(AndroidDevice  &dev,
     m_type(type),
     m_started(false)
 {
-    ParsePackage();
+    ParsePackage().IgnoreError();
 }
 
-void AndroidApplication::ParsePackage()
+absl::Status AndroidApplication::ParsePackage()
 {
-    std::string output = m_dev.Adb().Run("shell dumpsys package " + m_package, true).Out();
+    std::string output;
+    ASSIGN_OR_RETURN(output,
+                     m_dev.Adb().RunAndGetResult("shell dumpsys package " + m_package, true));
 
     m_main_activity = ParsePackageForActivity(output, m_package);
     m_is_debuggable = absl::StrContains(output, "DEBUGGABLE");
+    return absl::OkStatus();
 }
 
-void AndroidApplication::Start()
+absl::Status AndroidApplication::Start()
 {
-    m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP");
-    m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s/%s", m_package, m_main_activity));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s/%s", m_package, m_main_activity)));
     m_started = true;
+    return absl::OkStatus();
 }
 
-void AndroidApplication::Stop()
+absl::Status AndroidApplication::Stop()
 {
-    m_dev.Adb().Run(absl::StrFormat("shell am force-stop %s", m_package));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am force-stop %s", m_package)));
     m_started = false;
+    return absl::OkStatus();
 }
 
 VulkanApplication::~VulkanApplication()
 {
     if (m_started)
     {
-        Stop();
+        Stop().IgnoreError();
     }
-    Cleanup();
+    Cleanup().IgnoreError();
 }
 
-void VulkanApplication::Setup()
+absl::Status VulkanApplication::Setup()
 {
     LOGD("Setup Vulkan application: %s\n", m_package.c_str());
-    m_dev.Adb().Run("root");
-    m_dev.Adb().Run("wait-for-device");
-    Stop();
+    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
+    Stop().IgnoreError();
 
-    m_dev.Adb().Run(
-    absl::StrFormat("shell run-as %s cp %s/%s .", m_package, kTargetPath, kVkLayerLibName));
-    m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1");
-    m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package));
-    m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package));
-    m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_layers %s", kVkLayerName));
-    m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
-                                    m_package,
-                                    kTargetPath,
-                                    kWrapLibName));
-    m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell run-as %s cp %s/%s .", m_package, kTargetPath, kVkLayerLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell settings put global gpu_debug_layers %s", kVkLayerName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
+                                                    m_package,
+                                                    kTargetPath,
+                                                    kWrapLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package)));
     LOGD("Setup Vulkan application %s done\n", m_package.c_str());
+    return absl::OkStatus();
 }
 
-void VulkanApplication::Cleanup()
+absl::Status VulkanApplication::Cleanup()
 {
     LOGD("Cleanup Vulkan application %s", m_package.c_str());
-    m_dev.Adb().Run("root");
-    m_dev.Adb().Run("wait-for-device");
+    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
 
-    m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName), true);
-    m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers");
-    m_dev.Adb().Run("shell settings delete global gpu_debug_app");
-    m_dev.Adb().Run("shell settings delete global gpu_debug_layers");
-    m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app");
-    m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles");
-    m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName), true));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_app"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layers"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles"));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     LOGD("Cleanup Vulkan application %s done", m_package.c_str());
+    return absl::OkStatus();
 }
 
-void OpenXRApplication::Setup()
+absl::Status OpenXRApplication::Setup()
 {
     LOGD("OpenXRApplication %s Setup\n", m_package.c_str());
-    m_dev.Adb().Run("root");
-    m_dev.Adb().Run("wait-for-device");
-    m_dev.Adb().Run("remount");
-    m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath));
-    m_dev.Adb().Run(
+    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
     absl::StrFormat("push %s %s",
                     ResolveAndroidLibPath(kManifestFileName).generic_string().c_str(),
-                    kManifestFilePath));
-    m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
-                                    m_package,
-                                    kTargetPath,
-                                    kWrapLibName));
-    m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package));
+                    kManifestFilePath)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
+                                                    m_package,
+                                                    kTargetPath,
+                                                    kWrapLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package)));
     LOGD("OpenXRApplication %s Setup done.\n", m_package.c_str());
+    return absl::OkStatus();
 }
 
-void OpenXRApplication::Cleanup()
+absl::Status OpenXRApplication::Cleanup()
 {
     LOGD("OpenXRApplication %s cleanup.\n", m_package.c_str());
-    m_dev.Adb().Run("root");
-    m_dev.Adb().Run("wait-for-device");
-    m_dev.Adb().Run("remount");
-    m_dev.Adb().Run(absl::StrFormat("shell rm -r %s", kManifestFilePath));
-    m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package));
+    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell rm -r %s", kManifestFilePath)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     LOGD("OpenXRApplication %s cleanup done.", m_package.c_str());
+    return absl::OkStatus();
 }
 
 OpenXRApplication::~OpenXRApplication()
 {
     if (m_started)
     {
-        Stop();
+        Stop().IgnoreError();
     }
-    Cleanup();
+    Cleanup().IgnoreError();
 }
 
 }  // namespace Dive

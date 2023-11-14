@@ -48,6 +48,8 @@ signals:
     void TraceAvailable(const QString &);
 
 private:
+    void ShowErrorMessage(const std::string &err_msg);
+
     QHBoxLayout        *m_capture_layout;
     QLabel             *m_dev_label;
     QStandardItemModel *m_dev_model;

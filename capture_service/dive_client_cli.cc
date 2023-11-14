@@ -133,11 +133,28 @@ bool list_device(const Dive::DeviceManager& mgr)
 
 bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
 {
-    auto device = mgr.SelectDevice(device_serial);
-    device->SetupDevice();
-    auto packages = device->ListPackage();
+    auto dev_ret = mgr.SelectDevice(device_serial);
+    if (!dev_ret.ok())
+    {
+        std::cout << "Failed to select device: " << dev_ret.status().message() << std::endl;
+        return false;
+    }
+    auto device = *dev_ret;
+    auto ret = device->SetupDevice();
+    if (!ret.ok())
+    {
+        std::cout << "Failed to setup device, error: " << ret.message() << std::endl;
+        return false;
+    }
 
-    int index = 0;
+    auto result = device->ListPackage();
+    if (!result.ok())
+    {
+        std::cout << "Failed to list packages, error: " << ret.message() << std::endl;
+        return false;
+    }
+    std::vector<std::string> packages = *result;
+    int                      index = 0;
     std::cout << "Packages: " << std::endl;
     for (const auto& package : packages)
     {
@@ -156,19 +173,43 @@ bool run_package(Dive::DeviceManager& mgr, const std::string& package, const std
         print_usage();
         return false;
     }
-    auto dev = mgr.SelectDevice(serial);
-    dev->SetupDevice();
+    auto dev_ret = mgr.SelectDevice(serial);
+
+    if (!dev_ret.ok())
+    {
+        std::cout << "Failed to select device " << dev_ret.status().message() << std::endl;
+        return false;
+    }
+    auto dev = *dev_ret;
+    auto ret = dev->SetupDevice();
+    if (!ret.ok())
+    {
+        std::cout << "Failed to setup device, error: " << ret.message() << std::endl;
+        return false;
+    }
+
     if (app_type == "openxr")
-        dev->SetupApp(package, Dive::ApplicationType::OPENXR);
+        ret = dev->SetupApp(package, Dive::ApplicationType::OPENXR);
     else if (app_type == "vulkan")
-        dev->SetupApp(package, Dive::ApplicationType::VULKAN);
+        ret = dev->SetupApp(package, Dive::ApplicationType::VULKAN);
     else
     {
         print_usage();
         return false;
     }
-    dev->StartApp();
-    return true;
+    if (!ret.ok())
+    {
+        std::cout << "Failed to setup app, error: " << ret.message() << std::endl;
+        return false;
+    }
+
+    ret = dev->StartApp();
+    if (!ret.ok())
+    {
+        std::cout << "Failed to start app, error: " << ret.message() << std::endl;
+    }
+
+    return ret.ok();
 }
 
 bool trigger_capture(Dive::DeviceManager& mgr)
@@ -193,10 +234,13 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
-    std::cout << "Capture saved at " << target << std::endl;
+    auto ret = mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    if (ret.ok())
+        std::cout << "Capture saved at " << target << std::endl;
+    else
+        std::cout << "Failed to retrieve capture file" << std::endl;
 
-    return true;
+    return ret.ok();
 }
 
 bool run_and_capture(Dive::DeviceManager& mgr, const std::string& package)
@@ -230,8 +274,7 @@ bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& packag
         return false;
     }
 
-    mgr.Cleanup(serial, package);
-    return true;
+    return mgr.Cleanup(serial, package).ok();
 }
 
 bool process_input(Dive::DeviceManager& mgr)

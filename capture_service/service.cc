@@ -56,8 +56,11 @@ grpc::Status DiveServiceImpl::RunCommand(grpc::ServerContext     *context,
                                          RunCommandReply         *reply)
 {
     LOGD("Request command %s", request->command().c_str());
-    auto out = ::Dive::RunCommand(request->command()).Out();
-    reply->set_output(out);
+    auto result = ::Dive::RunCommand(request->command());
+    if (result.ok())
+    {
+        reply->set_output(*result);
+    }
 
     return grpc::Status::OK;
 }

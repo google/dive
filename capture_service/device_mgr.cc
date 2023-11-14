@@ -19,6 +19,8 @@ limitations under the License.
 #include <filesystem>
 #include <memory>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -45,25 +47,33 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
     m_serial(serial),
     m_adb(serial)
 {
-    Adb().Run("root");
-    Adb().Run("wait-for-device");
-    m_original_state.m_enforce = Adb().Run("shell getenforce").Out();
-    m_dev_info.m_serial = serial;
-    m_dev_info.m_model = Adb().Run("shell getprop ro.product.model").Out();
-    m_dev_info.m_manufacturer = Adb().Run("shell getprop ro.product.manufacturer").Out();
-
-    LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
-    LOGD("select: %s\n", GetDeviceDisplayName().c_str());
-    LOGD("AndroidDevice created.\n");
 }
 
 AndroidDevice::~AndroidDevice()
 {
     if (!m_serial.empty())
     {
-        CleanupDevice();
+        CleanupDevice().IgnoreError();
     }
     LOGD("AndroidDevice destroyed.\n");
+}
+
+absl::Status AndroidDevice::Init()
+{
+    RETURN_IF_ERROR(Adb().Run("root"));
+    RETURN_IF_ERROR(Adb().Run("wait-for-device"));
+
+    ASSIGN_OR_RETURN(m_original_state.m_enforce, Adb().RunAndGetResult("shell getenforce"));
+    m_dev_info.m_serial = m_serial;
+    ASSIGN_OR_RETURN(m_dev_info.m_model, Adb().RunAndGetResult("shell getprop ro.product.model"));
+    ASSIGN_OR_RETURN(m_dev_info.m_manufacturer,
+                     Adb().RunAndGetResult("shell getprop ro.product.manufacturer"));
+
+    LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
+    LOGD("select: %s\n", GetDeviceDisplayName().c_str());
+    LOGD("AndroidDevice created.\n");
+
+    return absl::OkStatus();
 }
 
 std::string AndroidDevice::GetDeviceDisplayName() const
@@ -71,7 +81,7 @@ std::string AndroidDevice::GetDeviceDisplayName() const
     return m_dev_info.GetDisplayName();
 }
 
-std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) const
+absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListOptions option) const
 {
     std::vector<std::string> package_list;
     std::string              cmd = "shell pm list packages";
@@ -79,7 +89,14 @@ std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) c
     {
         cmd += " -3";
     }
-    std::string              output = Adb().Run(cmd).Out();
+    std::string                 output;
+    absl::StatusOr<std::string> result = Adb().RunAndGetResult(cmd);
+    if (!result.ok())
+    {
+        return result.status();
+    }
+    output = *result;
+
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
     for (const auto &line : lines)
     {
@@ -89,7 +106,12 @@ std::vector<std::string> AndroidDevice::ListPackage(PackageListOptions option) c
             std::string package(absl::StripAsciiWhitespace(fields[1]));
             if (option.debuggable_only)
             {
-                std::string output = Adb().Run("shell dumpsys package " + package).Out();
+                result = Adb().RunAndGetResult("shell dumpsys package " + package);
+                if (!result.ok())
+                {
+                    return result.status();
+                }
+                output = *result;
                 // TODO: find out more reliable way to find if app is debuggable.
                 if (!absl::StrContains(output, "DEBUGGABLE"))
                 {
@@ -127,46 +149,53 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name)
     return lib_path;
 }
 
-void AndroidDevice::SetupDevice()
+absl::Status AndroidDevice::SetupDevice()
 {
-    Adb().Run("shell setenforce 0");
-    Adb().Run("shell getenforce");
+    RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
+    RETURN_IF_ERROR(Adb().Run("shell getenforce"));
 
-    Adb().Run(absl::StrFormat("push %s %s",
-                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
-                              kTargetPath));
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("push %s %s",
+                                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
+                                              kTargetPath)));
+    RETURN_IF_ERROR(
     Adb().Run(absl::StrFormat("push %s %s",
                               ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
-                              kTargetPath));
+                              kTargetPath)));
+    RETURN_IF_ERROR(
     Adb().Run(absl::StrFormat("push %s %s",
                               ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
-                              kTargetPath));
-    Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort));
+                              kTargetPath)));
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort)));
+
+    return absl::OkStatus();
 }
 
-void AndroidDevice::CleanupDevice()
+absl::Status AndroidDevice::CleanupDevice()
 {
     LOGD("Cleanup device %s\n", m_serial.c_str());
     const auto &enforce = m_original_state.m_enforce;
     if (enforce.find("Enforcing") != enforce.npos)
     {
         LOGD("restore Enforcing to Enforcing\n");
-        Adb().Run("shell setenforce 1");
+        RETURN_IF_ERROR(Adb().Run("shell setenforce 1"));
     }
     else if (enforce.find("Permissive") != enforce.npos)
     {
         LOGD("restore Enforcing to Permissive\n");
-        Adb().Run("shell setenforce 0");
+        RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
     }
 
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true);
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true);
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true);
-    Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true);
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
+    RETURN_IF_ERROR(
+    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
+    RETURN_IF_ERROR(
+    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
     LOGD("Cleanup device %s done\n", m_serial.c_str());
+    return absl::OkStatus();
 }
 
-void AndroidDevice::SetupApp(const std::string &package, const ApplicationType type)
+absl::Status AndroidDevice::SetupApp(const std::string &package, const ApplicationType type)
 {
     if (type == ApplicationType::VULKAN)
     {
@@ -177,27 +206,32 @@ void AndroidDevice::SetupApp(const std::string &package, const ApplicationType t
     {
         app = std::make_unique<OpenXRApplication>(*this, package, type);
     }
+
+    return app->Setup();
 }
 
-void AndroidDevice::CleanupAPP()
+absl::Status AndroidDevice::CleanupAPP()
 {
     app = nullptr;
+    return absl::OkStatus();
 }
 
-void AndroidDevice::StartApp()
+absl::Status AndroidDevice::StartApp()
 {
     if (app)
     {
-        app->Start();
+        return app->Start();
     }
+    return absl::OkStatus();
 }
 
-void AndroidDevice::StopApp()
+absl::Status AndroidDevice::StopApp()
 {
     if (app)
     {
-        app->Stop();
+        return app->Stop();
     }
+    return absl::OkStatus();
 }
 
 std::vector<DeviceInfo> DeviceManager::ListDevice() const
@@ -205,7 +239,17 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
     std::vector<std::string> serial_list;
     std::vector<DeviceInfo>  dev_list;
 
-    std::string              output = RunCommand("adb devices").Out();
+    std::string                 output;
+    absl::StatusOr<std::string> result = RunCommand("adb devices");
+    if (result.ok())
+    {
+        output = *result;
+    }
+    else
+    {
+        return dev_list;
+    }
+
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
 
     for (const auto &line : lines)
@@ -221,55 +265,86 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
         AdbSession adb(serial);
 
         dev.m_serial = std::move(serial);
-        dev.m_manufacturer = adb.Run("shell getprop ro.product.manufacturer").Out();
-        dev.m_model = adb.Run("shell getprop ro.product.model").Out();
+        result = adb.RunAndGetResult("shell getprop ro.product.manufacturer");
+        if (result.ok())
+        {
+            dev.m_manufacturer = *result;
+        }
+        else
+        {
+            continue;
+        }
+
+        result = adb.RunAndGetResult("shell getprop ro.product.model");
+        if (result.ok())
+        {
+            dev.m_model = *result;
+        }
+        else
+        {
+            continue;
+        }
 
         dev_list.emplace_back(std::move(dev));
     }
     return dev_list;
 }
 
-AndroidDevice *DeviceManager::SelectDevice(const std::string &serial)
+absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &serial)
 {
     assert(!serial.empty());
-    if (!serial.empty())
+    if (serial.empty())
     {
-        m_device = std::make_unique<AndroidDevice>(serial);
+        return absl::InvalidArgumentError("Device Serial is empty");
     }
+
+    m_device = std::make_unique<AndroidDevice>(serial);
+    if (!m_device)
+    {
+        return absl::UnavailableError("Failed to allocate memory for AndroidDevice");
+    }
+
+    absl::Status status = m_device->Init();
+    if (!status.ok())
+    {
+        return status;
+    }
+
     return m_device.get();
 }
 
-void DeviceManager::Cleanup(const std::string &serial, const std::string &package)
+absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string &package)
 {
     AdbSession adb(serial);
     // Remove installed libs and libraries on device.
-    adb.Run("root");
-    adb.Run("wait-for-device");
-    adb.Run("remount");
+    RETURN_IF_ERROR(adb.Run("root"));
+    RETURN_IF_ERROR(adb.Run("wait-for-device"));
+    RETURN_IF_ERROR(adb.Run("remount"));
 
-    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true);
-    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true);
-    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true);
-    adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath), true);
-    adb.Run(absl::StrFormat("forward --remove tcp:%d", kPort), true);
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath), true));
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
 
-    adb.Run("shell settings delete global enable_gpu_debug_layers");
-    adb.Run("shell settings delete global gpu_debug_app");
-    adb.Run("shell settings delete global gpu_debug_layers");
-    adb.Run("shell settings delete global gpu_debug_layer_app");
-    adb.Run("shell settings delete global gpu_debug_layers_gles");
+    RETURN_IF_ERROR(adb.Run("shell settings delete global enable_gpu_debug_layers"));
+    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_app"));
+    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers"));
+    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layer_app"));
+    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers_gles"));
 
     // If package specified, remove package related settings.
     if (!package.empty())
     {
-        adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package));
+        RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)));
     }
+    return absl::OkStatus();
 }
 
-void AndroidDevice::RetrieveTraceFile(const std::string &trace_file_path,
-                                      const std::string &save_path)
+absl::Status AndroidDevice::RetrieveTraceFile(const std::string &trace_file_path,
+                                              const std::string &save_path)
 {
-    Adb().Run(absl::StrFormat("pull %s %s", trace_file_path, save_path));
+    return Adb().Run(absl::StrFormat("pull %s %s", trace_file_path, save_path));
 }
 
 }  // namespace Dive

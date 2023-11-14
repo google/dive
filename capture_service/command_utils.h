@@ -17,21 +17,43 @@ limitations under the License.
 #pragma once
 
 #include <string>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 
 namespace Dive
 {
+// StatusOr Macros simplified from protobuf/stubs/status_macros.h
+#define RETURN_IF_ERROR(expr)               \
+    do                                      \
+    {                                       \
+        const absl::Status status = (expr); \
+        if (!status.ok())                   \
+            return status;                  \
+    } while (0)
 
-struct CommandResult
+template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
 {
-    std::string        m_output;
-    std::string        m_err;
-    int                m_ret = -1;
-    bool               Ok() const { return m_ret == 0; }
-    const std::string &Out() const { return m_output; }
-    const std::string &Err() const { return m_err; }
-};
+    if (result.ok())
+    {
+        lhs = *result;
+    }
+    return result.status();
+}
 
-CommandResult RunCommand(const std::string &command, bool quiet = false);
+#define STATUS_MACROS_CONCAT_NAME_INNER(x, y) x##y
+#define STATUS_MACROS_CONCAT_NAME(x, y) STATUS_MACROS_CONCAT_NAME_INNER(x, y)
+
+#define ASSIGN_OR_RETURN_IMPL(status, lhs, rexpr)         \
+    absl::Status status = DoAssignOrReturn(lhs, (rexpr)); \
+    if (!status.ok())                                     \
+        return status;
+
+#define ASSIGN_OR_RETURN(lhs, rexpr) \
+    ASSIGN_OR_RETURN_IMPL(STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), lhs, rexpr);
+
+// Runs a command line application.
+// Returns the output of the command if it finished successfully, or error status otherwise
+absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet = false);
 
 class AdbSession
 {
@@ -42,7 +64,16 @@ public:
     {
     }
 
-    inline CommandResult Run(const std::string &command, bool quiet = true) const
+    // Run runs the commands and returns the status of that commands.
+    inline absl::Status Run(const std::string &command, bool quiet = true) const
+    {
+        return RunCommand("adb -s " + m_serial + " " + command, quiet).status();
+    }
+
+    // RunAndGetResult runs the commands and returns the output of the command if it finished
+    // successfully, or error status otherwise
+    inline absl::StatusOr<std::string> RunAndGetResult(const std::string &command,
+                                                       bool               quiet = true) const
     {
         return RunCommand("adb -s " + m_serial + " " + command, quiet);
     }

@@ -17,6 +17,8 @@ limitations under the License.
 #include "command_utils.h"
 
 #include <vector>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "log.h"
 #ifndef WIN32
@@ -27,13 +29,14 @@ limitations under the License.
 namespace Dive
 {
 
-CommandResult RunCommand(const std::string &command, bool quiet)
+absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
 {
-    CommandResult result;
-    HANDLE        hChildStdOutRd = NULL;
-    HANDLE        hChildStdOutWr = NULL;
-    HANDLE        hChildStdErrRd = NULL;
-    HANDLE        hChildStdErrWr = NULL;
+    std::string output;
+    std::string err_msg;
+    HANDLE      hChildStdOutRd = NULL;
+    HANDLE      hChildStdOutWr = NULL;
+    HANDLE      hChildStdErrRd = NULL;
+    HANDLE      hChildStdErrWr = NULL;
 
     SECURITY_ATTRIBUTES sa;
     STARTUPINFO         si;
@@ -49,23 +52,27 @@ CommandResult RunCommand(const std::string &command, bool quiet)
 
     if (!CreatePipe(&hChildStdOutRd, &hChildStdOutWr, &sa, 0))
     {
-        LOGE("Create pipe to read stdout failed.");
-        return result;
+        err_msg = "Create pipe to read stdout failed.";
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
     if (!SetHandleInformation(hChildStdOutRd, HANDLE_FLAG_INHERIT, 0))
     {
-        LOGE("SetHandleInformation for stdout failed.");
-        return result;
+        err_msg = "SetHandleInformation for stdout failed.";
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
     if (!CreatePipe(&hChildStdErrRd, &hChildStdErrWr, &sa, 0))
     {
-        LOGE("CreatePipe for stderr failed");
-        return result;
+        err_msg = "CreatePipe for stderr failed.";
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
     if (!SetHandleInformation(hChildStdErrRd, HANDLE_FLAG_INHERIT, 0))
     {
-        LOGE("SetHandleInformation for stdout failed");
-        return result;
+        err_msg = "SetHandleInformation for stdout failed.";
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
 
     si.cb = sizeof(si);
@@ -79,8 +86,9 @@ CommandResult RunCommand(const std::string &command, bool quiet)
     int res = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, cmd.data(), len);
     if (res == 0)
     {
-        LOGE("Failed to convert std::string to utf-8 string");
-        return result;
+        err_msg = "Failed to convert std::string to utf-8 string.";
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
 
     bool bSuccess = CreateProcessW(NULL,
@@ -96,8 +104,9 @@ CommandResult RunCommand(const std::string &command, bool quiet)
 
     if (!bSuccess)
     {
-        LOGE("Error create process %d", GetLastError());
-        return result;
+        err_msg = absl::StrFormat("Error create process %d", GetLastError());
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
     else
     {
@@ -113,44 +122,48 @@ CommandResult RunCommand(const std::string &command, bool quiet)
     for (;;)
     {
         success = ReadFile(hChildStdOutRd, buf, sizeof(buf), &dwOutputRead, NULL);
-        result.m_output += std::string(buf, dwOutputRead);
+        output += std::string(buf, dwOutputRead);
         if (!success && !dwOutputRead)
             break;
     }
-    result.m_output = absl::StripAsciiWhitespace(result.m_output);
+    output = absl::StripAsciiWhitespace(output);
 
     for (;;)
     {
         success = ReadFile(hChildStdErrRd, buf, sizeof(buf), &dwErrorRead, NULL);
-        result.m_err += std::string(buf, dwErrorRead);
+        output += std::string(buf, dwErrorRead);
 
         if (!success && !dwErrorRead)
             break;
     }
-    result.m_err = absl::StripAsciiWhitespace(result.m_err);
+    output = absl::StripAsciiWhitespace(output);
 
     CloseHandle(hChildStdOutRd);
     CloseHandle(hChildStdErrRd);
 
     WaitForSingleObject(pi.hProcess, INFINITE);
-    GetExitCodeProcess(pi.hProcess, (LPDWORD)&result.m_ret);
-    LOGD("result->m_ret is %d\n", result.m_ret);
+    int ret = 0;
+    GetExitCodeProcess(pi.hProcess, (LPDWORD)&ret);
+    LOGD("result->m_ret is %d\n", ret);
     if (!quiet)
     {
-        LOGI("Command: %s\n Output: %s\n", command.c_str(), result.m_output.c_str());
+        LOGI("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
     }
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    if (!result.Ok() && !quiet)
+    if (ret != 0 && !quiet)
     {
 
-        LOGE("Command `%s` failed with return code %d, stderr: %s \n",
-             command.c_str(),
-             result.m_ret,
-             result.m_output.c_str());
+        err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s \n",
+                                  command.c_str(),
+                                  ret,
+                                  output);
+
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
-    return result;
+    return output;
 }
 
 }  // namespace Dive

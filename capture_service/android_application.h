@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include <string>
+#include "absl/status/status.h"
 
 namespace Dive
 {
@@ -37,16 +38,16 @@ public:
     AndroidApplication(AndroidDevice &dev, std::string package, ApplicationType type);
     virtual ~AndroidApplication() = default;
 
-    virtual void       Setup() = 0;
-    virtual void       Cleanup() = 0;
-    void               Start();
-    void               Stop();
-    const std::string &GetMainActivity() const { return m_main_activity; };
-    bool               IsDebuggable() const { return m_is_debuggable; }
-    bool               IsRunning() const { return m_started; }
+    virtual absl::Status Setup() = 0;
+    virtual absl::Status Cleanup() = 0;
+    absl::Status         Start();
+    absl::Status         Stop();
+    const std::string   &GetMainActivity() const { return m_main_activity; };
+    bool                 IsDebuggable() const { return m_is_debuggable; }
+    bool                 IsRunning() const { return m_started; }
 
 protected:
-    void ParsePackage();
+    absl::Status ParsePackage();
 
     AndroidDevice  &m_dev;
     std::string     m_package;
@@ -60,26 +61,20 @@ class VulkanApplication : public AndroidApplication
 {
 public:
     VulkanApplication(AndroidDevice &dev, std::string package, ApplicationType type) :
-        AndroidApplication(dev, package, type)
-    {
-        Setup();
-    };
+        AndroidApplication(dev, package, type){};
     virtual ~VulkanApplication();
-    virtual void Setup() override;
-    virtual void Cleanup() override;
+    virtual absl::Status Setup() override;
+    virtual absl::Status Cleanup() override;
 };
 
 class OpenXRApplication : public AndroidApplication
 {
 public:
     OpenXRApplication(AndroidDevice &dev, std::string package, ApplicationType type) :
-        AndroidApplication(dev, package, type)
-    {
-        Setup();
-    };
+        AndroidApplication(dev, package, type){};
     virtual ~OpenXRApplication();
-    virtual void Setup() override;
-    virtual void Cleanup() override;
+    virtual absl::Status Setup() override;
+    virtual absl::Status Cleanup() override;
 };
 
 }  // namespace Dive

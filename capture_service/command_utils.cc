@@ -18,25 +18,28 @@ limitations under the License.
 
 #include <cstdio>
 #include <cstring>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/str_format.h"
 #include "log.h"
 
 namespace Dive
 {
-
-CommandResult RunCommand(const std::string &command, bool quiet)
+absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
 {
-    CommandResult result;
-    std::string   cmd_str = command + " 2>&1";  // Get both stdout and stderr;
-    FILE         *pipe = popen(cmd_str.c_str(), "r");
+    std::string output;
+    std::string err_msg;
+    std::string cmd_str = command + " 2>&1";  // Get both stdout and stderr;
+    FILE       *pipe = popen(cmd_str.c_str(), "r");
     if (!pipe)
     {
-        LOGE("Popen call failed\n");
-        return result;
+        err_msg = "Popen call failed\n";
+        LOGE("%s\n", err_msg.c_str());
+        return absl::InternalError(err_msg);
     }
 
-    char        buf[128];
-    std::string output;
+    char buf[128];
     while (fgets(buf, 128, pipe) != nullptr)
     {
         output += std::string(buf);
@@ -46,25 +49,22 @@ CommandResult RunCommand(const std::string &command, bool quiet)
         LOGD("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
     }
     output = absl::StripAsciiWhitespace(output);
-    result.m_ret = pclose(pipe);
-    if (result.Ok())
+    int ret = pclose(pipe);
+    if (ret != 0)
     {
-        result.m_output = std::move(output);
-    }
-    else
-    {
+        std::string
+        err_msg = absl::StrFormat("Command `%s` failed with return code %d, stderr: %s \n",
+                                  command,
+                                  ret,
+                                  output);
         if (!quiet)
         {
-            LOGE("Command `%s` failed with return code %d, stderr: %s \n",
-                 command.c_str(),
-                 result.m_ret,
-                 output.c_str());
+            LOGE("%s", err_msg.c_str());
         }
-
-        result.m_err = std::move(output);
+        return absl::InternalError(err_msg);
     }
 
-    return result;
+    return output;
 }
 
 }  // namespace Dive

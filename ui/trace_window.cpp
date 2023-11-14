@@ -36,6 +36,7 @@
 #include <QVBoxLayout>
 #include <filesystem>
 
+#include "absl/strings/str_cat.h"
 #include "capture_service/client.h"
 namespace
 {
@@ -82,9 +83,27 @@ TraceDialog::TraceDialog(QWidget *parent)
     }
     if (!m_cur_dev.empty())
     {
-        auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
-        device->SetupDevice();
-        m_pkg_list = device->ListPackage();
+        auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
+        if (dev_ret.ok())
+        {
+            auto device = *dev_ret;
+            auto ret = device->SetupDevice();
+            if (ret.ok())
+            {
+                auto result = device->ListPackage();
+                if (result.ok())
+                {
+                    m_pkg_list = *result;
+                }
+                ret.Update(result.status());
+            }
+            if (!ret.ok())
+            {
+                std::string err_msg = absl::StrCat("Failed to list package, error: ",
+                                                   ret.message());
+                qDebug() << err_msg.c_str();
+            }
+        }
     }
 
     for (size_t i = 0; i < m_pkg_list.size(); i++)
@@ -132,6 +151,13 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
+void TraceDialog::ShowErrorMessage(const std::string &err_msg)
+{
+    QMessageBox msgBox;
+    msgBox.setText(err_msg.c_str());
+    msgBox.exec();
+    return;
+}
 void TraceDialog::UpdateDeviceList()
 {
     auto cur_list = Dive::GetDeviceManager().ListDevice();
@@ -173,8 +199,31 @@ void TraceDialog::OnDeviceSelected(const QString &s)
     }
 
     m_cur_dev = m_devices[dev_index].m_serial;
-    auto device = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
-    m_pkg_list = device->ListPackage();
+    auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
+    if (!dev_ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Failed to select device ",
+                                           m_cur_dev.c_str(),
+                                           ", error: ",
+                                           dev_ret.status().message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return;
+    }
+    auto device = *dev_ret;
+    auto ret = device->ListPackage();
+    if (!ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Failed to list package for device ",
+                                           m_cur_dev,
+                                           " error: ",
+                                           ret.status().message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+
+        return;
+    }
+    m_pkg_list = *ret;
     m_pkg_model->clear();
     for (size_t i = 0; i < m_pkg_list.size(); i++)
     {
@@ -195,19 +244,26 @@ void TraceDialog::OnStartClicked()
     auto device = Dive::GetDeviceManager().GetDevice();
     if (!device)
     {
-        QMessageBox msgBox;
-        msgBox.setText("No device/application selected. Please select a device and application and "
-                       "then try again.");
-        msgBox.exec();
+        std::string
+        err_msg = "No device/application selected. Please select a device and application and "
+                  "then try again.";
+        ShowErrorMessage(err_msg);
         return;
     }
-
-    device->SetupDevice();
+    absl::Status ret = device->SetupDevice();
+    if (!ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Fail to setup device: ", ret.message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return;
+    }
     int         ty = m_app_type_box->currentIndex();
     std::string ty_str = kAppTypes[ty];
+
     if (m_run_button->text() == QString("&Start Application"))
     {
-        device->CleanupAPP();
+        device->CleanupAPP().IgnoreError();
         m_run_button->setText("&Starting..");
         m_run_button->setDisabled(true);
 
@@ -215,14 +271,33 @@ void TraceDialog::OnStartClicked()
                  << ", type: " << ty_str.c_str();
         if (ty_str == "OpenXR")
         {
-            device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR);
+            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR);
         }
         else if (ty_str == "Vulkan")
         {
-            device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN);
+            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN);
         }
-
-        device->StartApp();
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Fail to setup for package ",
+                                               m_cur_pkg,
+                                               " error: ",
+                                               ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return;
+        }
+        ret = device->StartApp();
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Fail to start package ",
+                                               m_cur_pkg,
+                                               " error: ",
+                                               ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return;
+        }
         auto cur_app = device->GetCurrentApplication();
 
         if (cur_app && cur_app->IsRunning())
@@ -235,7 +310,7 @@ void TraceDialog::OnStartClicked()
     else
     {
         qDebug() << "Stop package " << m_cur_pkg.c_str();
-        device->StopApp();
+        device->StopApp().IgnoreError();
         m_run_button->setText("&Start Application");
         m_capture_button->setEnabled(false);
     }
@@ -265,17 +340,34 @@ void TraceDialog::OnCaptureClicked()
     }
     else
     {
-        std::string err_msg(trace_file_path.status().message());
-        qDebug() << "Trigger capture failed: " << err_msg.c_str();
+        std::string err_msg = absl::StrCat("Trigger capture failed: ",
+                                           trace_file_path.status().message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
         return;
     }
     std::string           capture_path = ".";
     std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    Dive::GetDeviceManager().GetDevice()->RetrieveTraceFile(*trace_file_path,
-                                                            target.generic_string());
-    qDebug() << "Capture saved at " << target.generic_string().c_str();
+    auto device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        qDebug() << "Failed to connect to device";
+        return;
+    }
+
+    auto ret = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    if (ret.ok())
+        qDebug() << "Capture saved at " << target.generic_string().c_str();
+    else
+    {
+        std::string err_msg = absl::StrCat("Failed to retrieve trace file, error: ", ret.message());
+
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return;
+    }
 
     QString capture_saved_path(target.generic_string().c_str());
     emit    TraceAvailable(capture_saved_path);

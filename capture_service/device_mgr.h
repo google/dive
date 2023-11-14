@@ -16,6 +16,8 @@ limitations under the License.
 
 #pragma once
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "android_application.h"
 #include "command_utils.h"
 
@@ -62,25 +64,27 @@ public:
     AndroidDevice &operator=(const AndroidDevice &) = delete;
     AndroidDevice(const AndroidDevice &) = delete;
 
+    absl::Status Init();
+    absl::Status SetupDevice();
+    absl::Status CleanupDevice();
+
     struct PackageListOptions
     {
         bool with_system_package;
         bool debuggable_only;
     };
-    std::vector<std::string> ListPackage(PackageListOptions option = { 0, 1 }) const;
-    std::string              GetDeviceDisplayName() const;
 
-    void                SetupApp(const std::string &package, const ApplicationType type);
-    void                CleanupAPP();
-    void                StartApp();
-    void                StopApp();
+    absl::StatusOr<std::vector<std::string>> ListPackage(PackageListOptions option = { 0,
+                                                                                       1 }) const;
+    std::string                              GetDeviceDisplayName() const;
+    absl::Status        SetupApp(const std::string &package, const ApplicationType type);
+    absl::Status        CleanupAPP();
+    absl::Status        StartApp();
+    absl::Status        StopApp();
     const AdbSession   &Adb() const { return m_adb; }
     AndroidApplication *GetCurrentApplication() { return app.get(); }
-
-    void SetupDevice();
-    void CleanupDevice();
-
-    void RetrieveTraceFile(const std::string &trace_file_path, const std::string &save_path);
+    absl::Status        RetrieveTraceFile(const std::string &trace_file_path,
+                                          const std::string &save_path);
 
 private:
     const std::string                   m_serial;
@@ -97,11 +101,11 @@ public:
     DeviceManager &operator=(const DeviceManager &) = delete;
     DeviceManager(const DeviceManager &) = delete;
 
-    std::vector<DeviceInfo> ListDevice() const;
-    AndroidDevice          *SelectDevice(const std::string &serial);
-    void                    RemoveDevice() { m_device = nullptr; }
-    AndroidDevice          *GetDevice() const { return m_device.get(); }
-    void                    Cleanup(const std::string &serial, const std::string &package);
+    std::vector<DeviceInfo>         ListDevice() const;
+    absl::StatusOr<AndroidDevice *> SelectDevice(const std::string &serial);
+    void                            RemoveDevice() { m_device = nullptr; }
+    AndroidDevice                  *GetDevice() const { return m_device.get(); }
+    absl::Status                    Cleanup(const std::string &serial, const std::string &package);
 
 private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };

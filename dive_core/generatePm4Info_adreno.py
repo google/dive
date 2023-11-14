@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from common import isBuiltInType
 from common import gatherAllEnums
 from common import GetGPUVariantsBitField
-
+from common import addMissingDomains
 
 # ---------------------------------------------------------------------------------------
 def outputHeader(pm4_info_file):
@@ -49,15 +49,15 @@ def outputH(pm4_info_file):
 
 enum ValueType { kBoolean, kUint, kInt, kFloat, kFixed, kAddress, kWaddress, kHex, kOther };
 
-enum GPUVariantType 
-{ 
+enum GPUVariantType
+{
     kGPUVariantNone = 0x0,
-    kA2XX = 0x1, 
-    kA3XX = 0x2, 
-    kA4XX = 0x4, 
-    kA5XX = 0x8, 
-    kA6XX = 0x10, 
-    kA7XX = 0x20, 
+    kA2XX = 0x1,
+    kA3XX = 0x2,
+    kA4XX = 0x4,
+    kA5XX = 0x8,
+    kA6XX = 0x10,
+    kA7XX = 0x20,
 };
 
 static const uint32_t kInvalidRegOffset = UINT32_MAX;
@@ -505,6 +505,7 @@ def outputEnums(pm4_info_file, enum_list):
     pm4_info_file.write(" }); // %s (%d)\n" % (enum_info[0], idx))
 
 # ---------------------------------------------------------------------------------------
+# This function adds info for PM4 packets as well as structs that have no opcodes (e.g. V#s/T#s/S#s)
 def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
 
@@ -514,9 +515,9 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   for domain in domains:
     domain_name = domain.attrib['name']
 
-    # Check if it is a domain describing a PM4 packet
+    # Check if it is a domain describing a PM4 packet, OR see if it a "A6XX_" packet (e.g. V#s/T#s/S#s)
     pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
-    if pm4_type_packet is None:
+    if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
       continue
 
     # There are 2 PM4 packet types with stripe tags, see CP_DRAW_INDIRECT_MULTI and CP_DRAW_INDX_INDIRECT for example
@@ -555,13 +556,21 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       # Filter out everything but the reg32 and reg64 elements from the packet definition
       # First let's add it to a dict so we can ignore duplicates (some stripes redefine root registers)
       reg_dict = {}
+      skip_this_packet = False
       for element in pm4_packet:
         is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
         is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
         if is_reg_32 or is_reg_64:
-          offset = int(element.attrib['offset'])
+          offset = int(element.attrib['offset'],0)
+          # There are certain packets (e.g. A6XX_PDC) which have register offsets
+          # instead of packet offsets, for some weird reason. Skip those packets.
+          if offset > 1000:
+            skip_this_packet = True
+            break
           if not (offset in reg_dict):
             reg_dict[offset] = element
+      if skip_this_packet:
+        break
 
       # Add the registers from the variant-specific section (i.e. stripe)
       stripe = variant[1]
@@ -571,9 +580,10 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
           is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
           is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
           if is_reg_32 or is_reg_64:
-            offset = int(element.attrib['offset'])
+            offset = int(element.attrib['offset'],0)
             if not (offset in reg_dict):
               reg_dict[offset] = element
+
         # Add the prefix to the packet_name
         if 'prefix' in stripe.attrib:
           prefix = stripe.attrib['prefix']
@@ -592,9 +602,11 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       reg_list = list(reg_dict.values())
 
       # Sort based on offset
-      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset']))
+      reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset'],0))
 
-      opcode = int(pm4_type_packet.attrib['value'],0)
+      opcode = 0xffffffff
+      if pm4_type_packet is not None:
+        opcode = int(pm4_type_packet.attrib['value'],0)
       pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
       pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
       outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
@@ -616,7 +628,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   pm4_info_file.write("\n")
 
   # Append _A?XX to the name if there is any variant
-  # This is to handle the cases where the regsiters have the same name 
+  # This is to handle the cases where the regsiters have the same name
   # but different offset for different variants, like PC_POLYGON_MODE
   pm4_info_file.write("\tfor (auto &reg : g_sRegInfo)\n")
   pm4_info_file.write("\t{\n")
@@ -743,7 +755,7 @@ void SetGPUID(uint32_t gpu_id)
     }
 }
 
-bool IsFieldEnabled(const RegField* field) 
+bool IsFieldEnabled(const RegField* field)
 {
     DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
     return (g_sGPU_variant & field->m_gpu_variants) != 0;
@@ -781,16 +793,13 @@ try:
           for sub_tree_child in sub_tree.getroot():
             registers_et_root.append(sub_tree_child)
 
-  # Find child with enum = "vgt_event_type"
-
-  elements = registers_et_root.findall('{http://nouveau.freedesktop.org/}enum')
-
   pm4_info_file_h = open(sys.argv[3] + ".h", "w")
   pm4_info_file_cpp = open(sys.argv[3] + ".cpp", "w")
 
   head, tail = os.path.split(sys.argv[3] + ".h")
   pm4_info_filename_h = tail
 
+  addMissingDomains(registers_et_root)
 
   # Parse type3 opcodes
   # There can be multiple opcodes with the same value, to support different adreno versions
@@ -804,8 +813,8 @@ try:
     if 'name' in pm4_type_packet.attrib and 'value' in pm4_type_packet.attrib:
       pm4_name = pm4_type_packet.attrib['name']
       pm4_value = pm4_type_packet.attrib['value']
-      # Only add ones that start with "CP_*"
-      if pm4_name.startswith("CP_"):
+      # Only add ones that start with "CP_*" or "A6XX_*"
+      if pm4_name.startswith("CP_") or pm4_name.startswith("A6XX_"):
         opcode_dict[pm4_value] = pm4_name
 
 

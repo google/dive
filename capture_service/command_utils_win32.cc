@@ -76,9 +76,10 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
     }
 
     si.cb = sizeof(si);
-    si.dwFlags |= STARTF_USESTDHANDLES;
+    si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
     si.hStdOutput = hChildStdOutWr;
     si.hStdError = hChildStdErrWr;
+    si.wShowWindow = SW_HIDE;
 
     int                  len = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, NULL, 0);
     std::vector<wchar_t> cmd(len);

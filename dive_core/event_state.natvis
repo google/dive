@@ -402,6 +402,42 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
+            <Synthetic Name="UBWCEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCLosslessEnabled" >
+                <Expand>
+                    <ArrayItems>
+                            <Direction>Forward</Direction>
+                            <Rank>2</Rank>
+                            <Size>$i == 0 ? m_size : 8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCEnabledOnDS" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOnDSOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCLosslessEnabledOnDS" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
         </Expand>
     </Type>
     <Type Name="Dive::EventStateInfoRef">
@@ -585,6 +621,32 @@
             </Item>
             <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="UBWCEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCLosslessEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCLosslessEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="UBWCEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
 </Expand>
 
@@ -771,6 +833,32 @@
             <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Synthetic Name="UBWCEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCLosslessEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCLosslessEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="UBWCEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -956,6 +1044,32 @@
             <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Synthetic Name="UBWCEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCLosslessEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCLosslessEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="UBWCEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -1140,6 +1254,32 @@
             </Item>
             <Item Name="EnablePartialHelperLanes" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kEnablePartialHelperLanesOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Synthetic Name="UBWCEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="UBWCLosslessEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                <Expand>
+                    <ArrayItems>
+                        <Direction>Forward</Direction>
+                        <Rank>1</Rank>
+                        <Size>8</Size>
+                        <ValuePointer>((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOffset * m_obj_ptr->m_cap)) + m_id.m_id * EventStateInfo::kUBWCLosslessEnabledArrayCount</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Item Name="UBWCEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
 </Expand>
 

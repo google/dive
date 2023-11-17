@@ -622,16 +622,16 @@ void CaptureMetadataCreator::FillDepthState(EventStateInfo::Iterator event_state
 void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_state_it)
 {
     uint32_t rt_id = 0;
-    uint32_t rb_mrt_reg_start = GetRegOffsetByName("RB_MRT0_CONTROL");
-    DIVE_ASSERT(rb_mrt_reg_start != kInvalidRegOffset);
+    uint32_t rb_mrt_ctl_reg_start = GetRegOffsetByName("RB_MRT0_CONTROL");
+    DIVE_ASSERT(rb_mrt_ctl_reg_start != kInvalidRegOffset);
     constexpr uint32_t kElemCount = 8;
-    while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_reg_start + kElemCount * rt_id))
+    while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_ctl_reg_start + kElemCount * rt_id))
     {
         RB_MRT_CONTROL       rb_mrt_control;
         RB_MRT_BLEND_CONTROL rb_mrt_blend_control;
 
         // Assumption: These are all set together. All-or-nothing.
-        const uint32_t mrt_reg = rb_mrt_reg_start + kElemCount * rt_id;
+        const uint32_t mrt_reg = rb_mrt_ctl_reg_start + kElemCount * rt_id;
         rb_mrt_control.u32All = m_state_tracker.GetRegValue(mrt_reg);
         rb_mrt_blend_control.u32All = m_state_tracker.GetRegValue(mrt_reg + 1);
 
@@ -771,6 +771,42 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
         event_state_it->SetThreadSize(thread_size);
         event_state_it->SetEnableAllHelperLanes(enable_all_helper_lanes);
         event_state_it->SetEnablePartialHelperLanes(enable_partial_helper_lanes);
+    }
+
+    // UBWC
+    // in the case of BUF_INFO and RB_DEPTH_BUFFER_INFO, A6xx and A7xx+ variants share the same
+    // register but with different bitfields, so we cannot use IsFieldEnabled() to check if the
+    // field is enabled or not for current GPU
+    uint32_t           rt_id = 0;
+    constexpr uint32_t kElemCount = 8;
+    uint32_t           rb_mrt_buf_info_reg_start = GetRegOffsetByName("RB_MRT0_BUF_INFO");
+    DIVE_ASSERT(rb_mrt_buf_info_reg_start != kInvalidRegOffset);
+    while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_buf_info_reg_start + kElemCount * rt_id))
+    {
+        RB_MRT_BUF_INFO rb_mrt_buf_info;
+        const uint32_t  mrt_reg = rb_mrt_buf_info_reg_start + kElemCount * rt_id;
+        rb_mrt_buf_info.u32All = m_state_tracker.GetRegValue(mrt_reg);
+        event_state_it->SetUBWCEnabled(rt_id, rb_mrt_buf_info.bitfields.COLOR_TILE_MODE == TILE6_3);
+        if (GetGPUVariantType() >= kA7XX)
+        {
+            event_state_it->SetUBWCLosslessEnabled(rt_id,
+                                                   rb_mrt_buf_info.bitfields.LOSSLESSCOMPEN == 1);
+        }
+        ++rt_id;
+    }
+
+    if (GetGPUVariantType() >= kA7XX)
+    {
+        uint32_t rb_depth_buf_info_offset = GetRegOffsetByName("RB_DEPTH_BUFFER_INFO");
+        DIVE_ASSERT(rb_depth_buf_info_offset != kInvalidRegOffset);
+        if (m_state_tracker.IsRegSet(rb_depth_buf_info_offset))
+        {
+            RB_DEPTH_BUFFER_INFO depth_buffer_info;
+            depth_buffer_info.u32All = m_state_tracker.GetRegValue(rb_depth_buf_info_offset);
+            event_state_it->SetUBWCEnabledOnDS(depth_buffer_info.bitfields.TILEMODE == TILE6_3);
+            event_state_it->SetUBWCLosslessEnabledOnDS(depth_buffer_info.bitfields.LOSSLESSCOMPEN ==
+                                                       1);
+        }
     }
 }
 

@@ -346,6 +346,42 @@
                     "ty": "bool",
                     "category": "GPU-specific",
                     "desc": "Whether 3 out of 4 helper lanes are enabled of the 2x2 quad for coarse derivatives"
+                },
+				{
+                    "name": "UBWCEnabled",
+                    "ty": "bool",
+                    "category": "GPU-specific",
+                    "desc": "Whether UBWC is enabled for this attachment",
+                    "array_dims": [
+                        {
+                            "name": "attachment",
+                            "count": "8"
+                        }
+                    ]
+                },
+				{
+                    "name": "UBWCLosslessEnabled",
+                    "ty": "bool",
+                    "category": "GPU-specific",
+                    "desc": "Whether UBWC Lossless compression (A7XX+) is enabled for this attachment",
+                    "array_dims": [
+                        {
+                            "name": "attachment",
+                            "count": "8"
+                        }
+                    ]
+                },
+				{
+                    "name": "UBWCEnabledOnDS",
+                    "ty": "bool",
+                    "category": "GPU-specific",
+                    "desc": "Whether UBWC is enabled for this depth stencil attachment"
+                },
+				{
+                    "name": "UBWCLosslessEnabledOnDS",
+                    "ty": "bool",
+                    "category": "GPU-specific",
+                    "desc": "Whether UBWC Lossless compression (A7XX+) is enabled for this depth stencil attachment"
                 }
             ]
         }

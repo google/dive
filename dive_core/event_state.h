@@ -792,6 +792,264 @@ protected:
     Id         m_id;
 };
 
+template<typename CONFIG> class EventStateInfoUBWCEnabledArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
+    using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
+    EventStateInfoUBWCEnabledArray() = default;
+    EventStateInfoUBWCEnabledArray(const EventStateInfoUBWCEnabledArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoUBWCEnabledArray(SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id   id() const { return m_id; }
+    SOA& obj() const { return *m_obj_ptr; }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCEnabled: Whether UBWC is enabled for this attachment
+
+    // `Get(uint32_t attachment)` returns the value of the UBWCEnabled field of the referenced
+    // object
+    inline bool Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCEnabled(m_id, attachment);
+    }
+
+    // `Set(value)` sets the UBWCEnabled field of the referenced object
+    inline const UBWCEnabledArray& Set(uint32_t attachment, bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetUBWCEnabled(m_id, attachment, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsUBWCEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledName();
+    }
+
+    inline const char* GetUBWCEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledDescription();
+    }
+
+protected:
+    SOA* m_obj_ptr = nullptr;
+    Id   m_id;
+};
+
+template<typename CONFIG> class EventStateInfoUBWCEnabledConstArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
+    using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
+    EventStateInfoUBWCEnabledConstArray() = default;
+    EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledArray<CONFIG>& other) :
+        m_obj_ptr(&other.obj()),
+        m_id(other.id())
+    {
+    }
+    EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledConstArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoUBWCEnabledConstArray(const SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id         id() const { return m_id; }
+    const SOA& obj() const { return *m_obj_ptr; }
+    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCEnabled: Whether UBWC is enabled for this attachment
+
+    // `Get(uint32_t attachment)` returns the value of the UBWCEnabled field of the referenced
+    // object
+    inline bool Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCEnabled(m_id, attachment);
+    }
+
+    inline bool IsUBWCEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledName();
+    }
+
+    inline const char* GetUBWCEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledDescription();
+    }
+
+protected:
+    const SOA* m_obj_ptr = nullptr;
+    Id         m_id;
+};
+
+template<typename CONFIG> class EventStateInfoUBWCLosslessEnabledArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
+    using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
+    EventStateInfoUBWCLosslessEnabledArray() = default;
+    EventStateInfoUBWCLosslessEnabledArray(const EventStateInfoUBWCLosslessEnabledArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoUBWCLosslessEnabledArray(SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id   id() const { return m_id; }
+    SOA& obj() const { return *m_obj_ptr; }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCLosslessEnabled: Whether UBWC Lossless compression (A7XX+) is enabled for this
+    // attachment
+
+    // `Get(uint32_t attachment)` returns the value of the UBWCLosslessEnabled field of the
+    // referenced object
+    inline bool Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCLosslessEnabled(m_id, attachment);
+    }
+
+    // `Set(value)` sets the UBWCLosslessEnabled field of the referenced object
+    inline const UBWCLosslessEnabledArray& Set(uint32_t attachment, bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetUBWCLosslessEnabled(m_id, attachment, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsUBWCLosslessEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCLosslessEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCLosslessEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledName();
+    }
+
+    inline const char* GetUBWCLosslessEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledDescription();
+    }
+
+protected:
+    SOA* m_obj_ptr = nullptr;
+    Id   m_id;
+};
+
+template<typename CONFIG> class EventStateInfoUBWCLosslessEnabledConstArray
+{
+public:
+    using Id = typename CONFIG::Id;
+    using SOA = typename CONFIG::SOA;
+    using Ref = typename CONFIG::Ref;
+    using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
+    using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
+    EventStateInfoUBWCLosslessEnabledConstArray() = default;
+    EventStateInfoUBWCLosslessEnabledConstArray(
+    const EventStateInfoUBWCLosslessEnabledArray<CONFIG>& other) :
+        m_obj_ptr(&other.obj()),
+        m_id(other.id())
+    {
+    }
+    EventStateInfoUBWCLosslessEnabledConstArray(
+    const EventStateInfoUBWCLosslessEnabledConstArray& other) :
+        m_obj_ptr(other.m_obj_ptr),
+        m_id(other.m_id)
+    {
+    }
+    EventStateInfoUBWCLosslessEnabledConstArray(const SOA* obj_ptr, Id id) :
+        m_obj_ptr(obj_ptr),
+        m_id(id)
+    {
+    }
+    Id         id() const { return m_id; }
+    const SOA& obj() const { return *m_obj_ptr; }
+    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCLosslessEnabled: Whether UBWC Lossless compression (A7XX+) is enabled for this
+    // attachment
+
+    // `Get(uint32_t attachment)` returns the value of the UBWCLosslessEnabled field of the
+    // referenced object
+    inline bool Get(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCLosslessEnabled(m_id, attachment);
+    }
+
+    inline bool IsUBWCLosslessEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCLosslessEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCLosslessEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledName();
+    }
+
+    inline const char* GetUBWCLosslessEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledDescription();
+    }
+
+protected:
+    const SOA* m_obj_ptr = nullptr;
+    Id         m_id;
+};
+
 //--------------------------------------------------------------------------------------------------
 // Ref represents a reference to a single element.
 // Fields can be accessed using e.g. `ref.MyField()` or `ref.SetMyField(42)`.
@@ -814,6 +1072,10 @@ public:
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
+    using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
+    using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
+    using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
+    using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoRefT() = default;
     EventStateInfoRefT(const EventStateInfoRefT& other) :
         m_obj_ptr(other.m_obj_ptr),
@@ -2512,6 +2774,166 @@ public:
         return m_obj_ptr->GetEnablePartialHelperLanesDescription();
     }
 
+    //-----------------------------------------------
+    // REF FIELD UBWCEnabled: Whether UBWC is enabled for this attachment
+
+    // `UBWCEnabled(uint32_t attachment)` returns the value of the UBWCEnabled field of the
+    // referenced object
+    inline bool UBWCEnabled(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCEnabled(m_id, attachment);
+    }
+
+    // `UBWCEnabled()` returns the array of values of the UBWCEnabled field of the referenced object
+    inline UBWCEnabledArray UBWCEnabled() const { return UBWCEnabledArray(m_obj_ptr, m_id); }
+
+    // `SetUBWCEnabled(value)` sets the UBWCEnabled field of the referenced object
+    inline const Ref& SetUBWCEnabled(uint32_t attachment, bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetUBWCEnabled(m_id, attachment, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsUBWCEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledName();
+    }
+
+    inline const char* GetUBWCEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCLosslessEnabled: Whether UBWC Lossless compression (A7XX+) is enabled for this
+    // attachment
+
+    // `UBWCLosslessEnabled(uint32_t attachment)` returns the value of the UBWCLosslessEnabled field
+    // of the referenced object
+    inline bool UBWCLosslessEnabled(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCLosslessEnabled(m_id, attachment);
+    }
+
+    // `UBWCLosslessEnabled()` returns the array of values of the UBWCLosslessEnabled field of the
+    // referenced object
+    inline UBWCLosslessEnabledArray UBWCLosslessEnabled() const
+    {
+        return UBWCLosslessEnabledArray(m_obj_ptr, m_id);
+    }
+
+    // `SetUBWCLosslessEnabled(value)` sets the UBWCLosslessEnabled field of the referenced object
+    inline const Ref& SetUBWCLosslessEnabled(uint32_t attachment, bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetUBWCLosslessEnabled(m_id, attachment, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsUBWCLosslessEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCLosslessEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCLosslessEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledName();
+    }
+
+    inline const char* GetUBWCLosslessEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCEnabledOnDS: Whether UBWC is enabled for this depth stencil attachment
+
+    // `UBWCEnabledOnDS()` returns the value of the UBWCEnabledOnDS field of the referenced object
+    inline bool UBWCEnabledOnDS() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCEnabledOnDS(m_id);
+    }
+
+    // `SetUBWCEnabledOnDS(value)` sets the UBWCEnabledOnDS field of the referenced object
+    inline const Ref& SetUBWCEnabledOnDS(bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetUBWCEnabledOnDS(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsUBWCEnabledOnDSSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCEnabledOnDSSet(m_id);
+    }
+
+    inline const char* GetUBWCEnabledOnDSName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledOnDSName();
+    }
+
+    inline const char* GetUBWCEnabledOnDSDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledOnDSDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCLosslessEnabledOnDS: Whether UBWC Lossless compression (A7XX+) is enabled for
+    // this depth stencil attachment
+
+    // `UBWCLosslessEnabledOnDS()` returns the value of the UBWCLosslessEnabledOnDS field of the
+    // referenced object
+    inline bool UBWCLosslessEnabledOnDS() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCLosslessEnabledOnDS(m_id);
+    }
+
+    // `SetUBWCLosslessEnabledOnDS(value)` sets the UBWCLosslessEnabledOnDS field of the referenced
+    // object
+    inline const Ref& SetUBWCLosslessEnabledOnDS(bool value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetUBWCLosslessEnabledOnDS(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsUBWCLosslessEnabledOnDSSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCLosslessEnabledOnDSSet(m_id);
+    }
+
+    inline const char* GetUBWCLosslessEnabledOnDSName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledOnDSName();
+    }
+
+    inline const char* GetUBWCLosslessEnabledOnDSDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledOnDSDescription();
+    }
+
     EventStateInfoRefT& operator=(const EventStateInfoRefT& other) = delete;
     void                assign(const SOA& other_obj, Id other_id) const;
     void                swap(const Ref& other) const;
@@ -2546,6 +2968,10 @@ public:
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
+    using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
+    using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
+    using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
+    using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoConstRefT() = default;
     EventStateInfoConstRefT(const Ref& other) :
         m_obj_ptr(&other.obj()),
@@ -3886,6 +4312,136 @@ public:
         return m_obj_ptr->GetEnablePartialHelperLanesDescription();
     }
 
+    //-----------------------------------------------
+    // REF FIELD UBWCEnabled: Whether UBWC is enabled for this attachment
+
+    // `UBWCEnabled(uint32_t attachment)` returns the value of the UBWCEnabled field of the
+    // referenced object
+    inline bool UBWCEnabled(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCEnabled(m_id, attachment);
+    }
+
+    // `UBWCEnabled()` returns the array of values of the UBWCEnabled field of the referenced object
+    inline UBWCEnabledConstArray UBWCEnabled() const
+    {
+        return UBWCEnabledConstArray(m_obj_ptr, m_id);
+    }
+
+    inline bool IsUBWCEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledName();
+    }
+
+    inline const char* GetUBWCEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCLosslessEnabled: Whether UBWC Lossless compression (A7XX+) is enabled for this
+    // attachment
+
+    // `UBWCLosslessEnabled(uint32_t attachment)` returns the value of the UBWCLosslessEnabled field
+    // of the referenced object
+    inline bool UBWCLosslessEnabled(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCLosslessEnabled(m_id, attachment);
+    }
+
+    // `UBWCLosslessEnabled()` returns the array of values of the UBWCLosslessEnabled field of the
+    // referenced object
+    inline UBWCLosslessEnabledConstArray UBWCLosslessEnabled() const
+    {
+        return UBWCLosslessEnabledConstArray(m_obj_ptr, m_id);
+    }
+
+    inline bool IsUBWCLosslessEnabledSet(uint32_t attachment) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCLosslessEnabledSet(m_id, attachment);
+    }
+
+    inline const char* GetUBWCLosslessEnabledName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledName();
+    }
+
+    inline const char* GetUBWCLosslessEnabledDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCEnabledOnDS: Whether UBWC is enabled for this depth stencil attachment
+
+    // `UBWCEnabledOnDS()` returns the value of the UBWCEnabledOnDS field of the referenced object
+    inline bool UBWCEnabledOnDS() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCEnabledOnDS(m_id);
+    }
+
+    inline bool IsUBWCEnabledOnDSSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCEnabledOnDSSet(m_id);
+    }
+
+    inline const char* GetUBWCEnabledOnDSName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledOnDSName();
+    }
+
+    inline const char* GetUBWCEnabledOnDSDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCEnabledOnDSDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD UBWCLosslessEnabledOnDS: Whether UBWC Lossless compression (A7XX+) is enabled for
+    // this depth stencil attachment
+
+    // `UBWCLosslessEnabledOnDS()` returns the value of the UBWCLosslessEnabledOnDS field of the
+    // referenced object
+    inline bool UBWCLosslessEnabledOnDS() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->UBWCLosslessEnabledOnDS(m_id);
+    }
+
+    inline bool IsUBWCLosslessEnabledOnDSSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsUBWCLosslessEnabledOnDSSet(m_id);
+    }
+
+    inline const char* GetUBWCLosslessEnabledOnDSName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledOnDSName();
+    }
+
+    inline const char* GetUBWCLosslessEnabledOnDSDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetUBWCLosslessEnabledOnDSDescription();
+    }
+
     EventStateInfoConstRefT& operator=(const EventStateInfoConstRefT& other) = delete;
 
 protected:
@@ -3918,6 +4474,10 @@ public:
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
+    using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
+    using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
+    using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
+    using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
 
     // `size()` returns the number of elements
     inline typename Id::basic_type size() const { return m_size; }
@@ -6746,6 +7306,276 @@ public:
         return "Whether 3 out of 4 helper lanes are enabled of the 2x2 quad for coarse derivatives";
     }
 
+    //-----------------------------------------------
+    // FIELD UBWCEnabled: Whether UBWC is enabled for this attachment
+
+    // `UBWCEnabledPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCEnabledPtr() const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOffset * m_cap);
+    }
+    inline bool* UBWCEnabledPtr()
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOffset * m_cap);
+    }
+    // `UBWCEnabledPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCEnabledPtr(Id id, uint32_t attachment = 0) const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
+
+        ;
+    }
+    inline bool* UBWCEnabledPtr(Id id, uint32_t attachment = 0)
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
+
+        ;
+    }
+    // `UBWCEnabled(id)` retuns the `UBWCEnabled` element of the object identified by `id`
+    inline bool UBWCEnabled(Id id, uint32_t attachment) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *UBWCEnabledPtr(id, attachment);
+    }
+
+    // `UBWCEnabled(id)` returns the array of values of the UBWCEnabled field of the object
+    // identified by `id`
+    inline UBWCEnabledArray UBWCEnabled(Id id)
+    {
+        return UBWCEnabledArray(static_cast<SOA*>(this), id);
+    }
+    inline UBWCEnabledConstArray UBWCEnabled(Id id) const
+    {
+        return UBWCEnabledConstArray(static_cast<const SOA*>(this), id);
+    }
+
+    // `SetUBWCEnabled(id,value)` sets the `UBWCEnabled` element of the object identified by `id`
+    inline SOA& SetUBWCEnabled(Id id, uint32_t attachment, bool value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *UBWCEnabledPtr(id, attachment) = value;
+        MarkFieldSet(id, kUBWCEnabledIndex + attachment);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsUBWCEnabledSet(Id id, uint32_t attachment) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kUBWCEnabledIndex + attachment);
+    }
+
+    inline const char* GetUBWCEnabledName() const { return "UBWCEnabled"; }
+
+    inline const char* GetUBWCEnabledDescription() const
+    {
+        return "Whether UBWC is enabled for this attachment";
+    }
+
+    //-----------------------------------------------
+    // FIELD UBWCLosslessEnabled: Whether UBWC Lossless compression (A7XX+) is enabled for this
+    // attachment
+
+    // `UBWCLosslessEnabledPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCLosslessEnabledPtr() const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOffset * m_cap);
+    }
+    inline bool* UBWCLosslessEnabledPtr()
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOffset * m_cap);
+    }
+    // `UBWCLosslessEnabledPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCLosslessEnabledPtr(Id id, uint32_t attachment = 0) const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
+
+        ;
+    }
+    inline bool* UBWCLosslessEnabledPtr(Id id, uint32_t attachment = 0)
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id) * 8 + attachment
+
+        ;
+    }
+    // `UBWCLosslessEnabled(id)` retuns the `UBWCLosslessEnabled` element of the object identified
+    // by `id`
+    inline bool UBWCLosslessEnabled(Id id, uint32_t attachment) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *UBWCLosslessEnabledPtr(id, attachment);
+    }
+
+    // `UBWCLosslessEnabled(id)` returns the array of values of the UBWCLosslessEnabled field of the
+    // object identified by `id`
+    inline UBWCLosslessEnabledArray UBWCLosslessEnabled(Id id)
+    {
+        return UBWCLosslessEnabledArray(static_cast<SOA*>(this), id);
+    }
+    inline UBWCLosslessEnabledConstArray UBWCLosslessEnabled(Id id) const
+    {
+        return UBWCLosslessEnabledConstArray(static_cast<const SOA*>(this), id);
+    }
+
+    // `SetUBWCLosslessEnabled(id,value)` sets the `UBWCLosslessEnabled` element of the object
+    // identified by `id`
+    inline SOA& SetUBWCLosslessEnabled(Id id, uint32_t attachment, bool value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *UBWCLosslessEnabledPtr(id, attachment) = value;
+        MarkFieldSet(id, kUBWCLosslessEnabledIndex + attachment);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsUBWCLosslessEnabledSet(Id id, uint32_t attachment) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kUBWCLosslessEnabledIndex + attachment);
+    }
+
+    inline const char* GetUBWCLosslessEnabledName() const { return "UBWCLosslessEnabled"; }
+
+    inline const char* GetUBWCLosslessEnabledDescription() const
+    {
+        return "Whether UBWC Lossless compression (A7XX+) is enabled for this attachment";
+    }
+
+    //-----------------------------------------------
+    // FIELD UBWCEnabledOnDS: Whether UBWC is enabled for this depth stencil attachment
+
+    // `UBWCEnabledOnDSPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCEnabledOnDSPtr() const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOnDSOffset * m_cap);
+    }
+    inline bool* UBWCEnabledOnDSPtr()
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOnDSOffset * m_cap);
+    }
+    // `UBWCEnabledOnDSPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCEnabledOnDSPtr(Id id) const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOnDSOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline bool* UBWCEnabledOnDSPtr(Id id)
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCEnabledOnDSOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `UBWCEnabledOnDS(id)` retuns the `UBWCEnabledOnDS` element of the object identified by `id`
+    inline bool UBWCEnabledOnDS(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *UBWCEnabledOnDSPtr(id);
+    }
+
+    // `SetUBWCEnabledOnDS(id,value)` sets the `UBWCEnabledOnDS` element of the object identified by
+    // `id`
+    inline SOA& SetUBWCEnabledOnDS(Id id, bool value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *UBWCEnabledOnDSPtr(id) = value;
+        MarkFieldSet(id, kUBWCEnabledOnDSIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsUBWCEnabledOnDSSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kUBWCEnabledOnDSIndex);
+    }
+
+    inline const char* GetUBWCEnabledOnDSName() const { return "UBWCEnabledOnDS"; }
+
+    inline const char* GetUBWCEnabledOnDSDescription() const
+    {
+        return "Whether UBWC is enabled for this depth stencil attachment";
+    }
+
+    //-----------------------------------------------
+    // FIELD UBWCLosslessEnabledOnDS: Whether UBWC Lossless compression (A7XX+) is enabled for this
+    // depth stencil attachment
+
+    // `UBWCLosslessEnabledOnDSPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCLosslessEnabledOnDSPtr() const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOnDSOffset * m_cap);
+    }
+    inline bool* UBWCLosslessEnabledOnDSPtr()
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOnDSOffset * m_cap);
+    }
+    // `UBWCLosslessEnabledOnDSPtr()` returns a shared pointer to an array of `size()` elements
+    inline const bool* UBWCLosslessEnabledOnDSPtr(Id id) const
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOnDSOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline bool* UBWCLosslessEnabledOnDSPtr(Id id)
+    {
+        return reinterpret_cast<bool*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                       kUBWCLosslessEnabledOnDSOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `UBWCLosslessEnabledOnDS(id)` retuns the `UBWCLosslessEnabledOnDS` element of the object
+    // identified by `id`
+    inline bool UBWCLosslessEnabledOnDS(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *UBWCLosslessEnabledOnDSPtr(id);
+    }
+
+    // `SetUBWCLosslessEnabledOnDS(id,value)` sets the `UBWCLosslessEnabledOnDS` element of the
+    // object identified by `id`
+    inline SOA& SetUBWCLosslessEnabledOnDS(Id id, bool value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *UBWCLosslessEnabledOnDSPtr(id) = value;
+        MarkFieldSet(id, kUBWCLosslessEnabledOnDSIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsUBWCLosslessEnabledOnDSSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kUBWCLosslessEnabledOnDSIndex);
+    }
+
+    inline const char* GetUBWCLosslessEnabledOnDSName() const { return "UBWCLosslessEnabledOnDS"; }
+
+    inline const char* GetUBWCLosslessEnabledOnDSDescription() const
+    {
+        return "Whether UBWC Lossless compression (A7XX+) is enabled for this depth stencil "
+               "attachment";
+    }
+
     // `operator[]` returns a reference to an element identified by `id`. E.g.:
     //   `my_soa[some_id].MyField()`
     inline Ref      operator[](Id id) { return Ref(static_cast<SOA*>(this), id); }
@@ -7207,6 +8037,45 @@ protected:
 #define PARTIAL_SIZE_EventStateInfo kEnablePartialHelperLanesOffset + kEnablePartialHelperLanesSize
 #undef PARTIAL_INDEX_EventStateInfo
 #define PARTIAL_INDEX_EventStateInfo kEnablePartialHelperLanesIndex + 1
+    static_assert(alignof(bool) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kUBWCEnabledIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kUBWCEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kUBWCEnabledArrayCount = 8;
+    static constexpr size_t   kUBWCEnabledSize = sizeof(bool) * kUBWCEnabledArrayCount;
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kUBWCEnabledOffset + kUBWCEnabledSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kUBWCEnabledIndex + kUBWCEnabledArrayCount
+    static_assert(alignof(bool) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kUBWCLosslessEnabledIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kUBWCLosslessEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kUBWCLosslessEnabledArrayCount = 8;
+    static constexpr size_t   kUBWCLosslessEnabledSize = sizeof(bool) *
+                                                       kUBWCLosslessEnabledArrayCount;
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kUBWCLosslessEnabledOffset + kUBWCLosslessEnabledSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kUBWCLosslessEnabledIndex + kUBWCLosslessEnabledArrayCount
+    static_assert(alignof(bool) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kUBWCEnabledOnDSIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kUBWCEnabledOnDSOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kUBWCEnabledOnDSSize = sizeof(bool);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kUBWCEnabledOnDSOffset + kUBWCEnabledOnDSSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kUBWCEnabledOnDSIndex + 1
+    static_assert(alignof(bool) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kUBWCLosslessEnabledOnDSIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kUBWCLosslessEnabledOnDSOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kUBWCLosslessEnabledOnDSSize = sizeof(bool);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kUBWCLosslessEnabledOnDSOffset + kUBWCLosslessEnabledOnDSSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kUBWCLosslessEnabledOnDSIndex + 1
 
     // Number of bytes required to store each element
     static constexpr size_t kElemSize = PARTIAL_SIZE_EventStateInfo;
@@ -7290,6 +8159,10 @@ protected:
     a6xx_threadsize*                     DBG_thread_size;
     bool*                                DBG_enable_all_helper_lanes;
     bool*                                DBG_enable_partial_helper_lanes;
+    bool*                                DBG_ubwc_enabled;
+    bool*                                DBG_ubwc_lossless_enabled;
+    bool*                                DBG_ubwc_enabled_on_ds;
+    bool*                                DBG_ubwc_lossless_enabled_on_ds;
 #endif
 };
 class EventStateInfoRef;
@@ -7315,6 +8188,11 @@ struct EventStateInfo_CONFIG
     using AttachmentConstArray = EventStateInfoAttachmentConstArray<EventStateInfo_CONFIG>;
     using BlendConstantArray = EventStateInfoBlendConstantArray<EventStateInfo_CONFIG>;
     using BlendConstantConstArray = EventStateInfoBlendConstantConstArray<EventStateInfo_CONFIG>;
+    using UBWCEnabledArray = EventStateInfoUBWCEnabledArray<EventStateInfo_CONFIG>;
+    using UBWCEnabledConstArray = EventStateInfoUBWCEnabledConstArray<EventStateInfo_CONFIG>;
+    using UBWCLosslessEnabledArray = EventStateInfoUBWCLosslessEnabledArray<EventStateInfo_CONFIG>;
+    using UBWCLosslessEnabledConstArray = EventStateInfoUBWCLosslessEnabledConstArray<
+    EventStateInfo_CONFIG>;
 };
 template<>
 void EventStateInfoRefT<EventStateInfo_CONFIG>::assign(

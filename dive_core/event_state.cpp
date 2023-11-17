@@ -98,6 +98,10 @@ typename EventStateInfo::Id::basic_type new_cap)
     auto old_thread_size_ptr = ThreadSizePtr();
     auto old_enable_all_helper_lanes_ptr = EnableAllHelperLanesPtr();
     auto old_enable_partial_helper_lanes_ptr = EnablePartialHelperLanesPtr();
+    auto old_ubwc_enabled_ptr = UBWCEnabledPtr();
+    auto old_ubwc_lossless_enabled_ptr = UBWCLosslessEnabledPtr();
+    auto old_ubwc_enabled_on_ds_ptr = UBWCEnabledOnDSPtr();
+    auto old_ubwc_lossless_enabled_on_ds_ptr = UBWCLosslessEnabledOnDSPtr();
 
     // `old_buffer` keeps the old buffer from being deallocated before we have
     // copied the data into the new buffer. The old buffer will be deallocated
@@ -249,6 +253,18 @@ typename EventStateInfo::Id::basic_type new_cap)
     memcpy(EnablePartialHelperLanesPtr(),
            old_enable_partial_helper_lanes_ptr,
            kEnablePartialHelperLanesSize * m_size);
+    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
+    memcpy(UBWCEnabledPtr(), old_ubwc_enabled_ptr, kUBWCEnabledSize * m_size);
+    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
+    memcpy(UBWCLosslessEnabledPtr(),
+           old_ubwc_lossless_enabled_ptr,
+           kUBWCLosslessEnabledSize * m_size);
+    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
+    memcpy(UBWCEnabledOnDSPtr(), old_ubwc_enabled_on_ds_ptr, kUBWCEnabledOnDSSize * m_size);
+    static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
+    memcpy(UBWCLosslessEnabledOnDSPtr(),
+           old_ubwc_lossless_enabled_on_ds_ptr,
+           kUBWCLosslessEnabledOnDSSize * m_size);
 
     // Update the debug-only ponters to the arrays
 #ifndef NDEBUG
@@ -297,6 +313,10 @@ typename EventStateInfo::Id::basic_type new_cap)
     DBG_thread_size = ThreadSizePtr();
     DBG_enable_all_helper_lanes = EnableAllHelperLanesPtr();
     DBG_enable_partial_helper_lanes = EnablePartialHelperLanesPtr();
+    DBG_ubwc_enabled = UBWCEnabledPtr();
+    DBG_ubwc_lossless_enabled = UBWCLosslessEnabledPtr();
+    DBG_ubwc_enabled_on_ds = UBWCEnabledOnDSPtr();
+    DBG_ubwc_lossless_enabled_on_ds = UBWCLosslessEnabledOnDSPtr();
 #endif
 }
 
@@ -352,15 +372,16 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     new (StencilOpStateBackPtr(Id(m_size))) VkStencilOpState();
     new (MinDepthBoundsPtr(Id(m_size))) float();
     new (MaxDepthBoundsPtr(Id(m_size))) float();
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
+    constexpr uint32_t kAttachmentCount = 8;
+    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
     {
         new (LogicOpEnabledPtr(Id(m_size), attachment)) bool();
     }
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
+    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
     {
         new (LogicOpPtr(Id(m_size), attachment)) VkLogicOp();
     }
-    for (uint32_t attachment = 0; attachment < 8; ++attachment)
+    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
     {
         new (AttachmentPtr(Id(m_size), attachment)) VkPipelineColorBlendAttachmentState();
     }
@@ -380,6 +401,16 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     new (ThreadSizePtr(Id(m_size))) a6xx_threadsize();
     new (EnableAllHelperLanesPtr(Id(m_size))) bool();
     new (EnablePartialHelperLanesPtr(Id(m_size))) bool();
+    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    {
+        new (UBWCEnabledPtr(Id(m_size), attachment)) bool();
+    }
+    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    {
+        new (UBWCLosslessEnabledPtr(Id(m_size), attachment)) bool();
+    }
+    new (UBWCEnabledOnDSPtr(Id(m_size))) bool();
+    new (UBWCLosslessEnabledOnDSPtr(Id(m_size))) bool();
 
     Id id(m_size);
     m_size += 1;
@@ -450,6 +481,14 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetThreadSize(other_obj.ThreadSize(other_id));
     SetEnableAllHelperLanes(other_obj.EnableAllHelperLanes(other_id));
     SetEnablePartialHelperLanes(other_obj.EnablePartialHelperLanes(other_id));
+    memcpy(m_obj_ptr->UBWCEnabledPtr(m_id),
+           other_obj.UBWCEnabledPtr(other_id),
+           EventStateInfo::kUBWCEnabledSize);
+    memcpy(m_obj_ptr->UBWCLosslessEnabledPtr(m_id),
+           other_obj.UBWCLosslessEnabledPtr(other_id),
+           EventStateInfo::kUBWCLosslessEnabledSize);
+    SetUBWCEnabledOnDS(other_obj.UBWCEnabledOnDS(other_id));
+    SetUBWCLosslessEnabledOnDS(other_obj.UBWCLosslessEnabledOnDS(other_id));
 }
 
 template<>
@@ -701,6 +740,32 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         auto val = EnablePartialHelperLanes();
         SetEnablePartialHelperLanes(other.EnablePartialHelperLanes());
         other.SetEnablePartialHelperLanes(val);
+    }
+    {
+        bool  val[EventStateInfo::kUBWCEnabledArrayCount];
+        auto *ptr = m_obj_ptr->UBWCEnabledPtr(m_id);
+        auto *other_ptr = other.m_obj_ptr->UBWCEnabledPtr(other.m_id);
+        memcpy(val, ptr, EventStateInfo::kUBWCEnabledSize);
+        memcpy(ptr, other_ptr, EventStateInfo::kUBWCEnabledSize);
+        memcpy(other_ptr, val, EventStateInfo::kUBWCEnabledSize);
+    }
+    {
+        bool  val[EventStateInfo::kUBWCLosslessEnabledArrayCount];
+        auto *ptr = m_obj_ptr->UBWCLosslessEnabledPtr(m_id);
+        auto *other_ptr = other.m_obj_ptr->UBWCLosslessEnabledPtr(other.m_id);
+        memcpy(val, ptr, EventStateInfo::kUBWCLosslessEnabledSize);
+        memcpy(ptr, other_ptr, EventStateInfo::kUBWCLosslessEnabledSize);
+        memcpy(other_ptr, val, EventStateInfo::kUBWCLosslessEnabledSize);
+    }
+    {
+        auto val = UBWCEnabledOnDS();
+        SetUBWCEnabledOnDS(other.UBWCEnabledOnDS());
+        other.SetUBWCEnabledOnDS(val);
+    }
+    {
+        auto val = UBWCLosslessEnabledOnDS();
+        SetUBWCLosslessEnabledOnDS(other.UBWCLosslessEnabledOnDS());
+        other.SetUBWCLosslessEnabledOnDS(val);
     }
 }
 

@@ -271,11 +271,11 @@ void TraceDialog::OnStartClicked()
                  << ", type: " << ty_str.c_str();
         if (ty_str == "OpenXR")
         {
-            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR);
+            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK);
         }
         else if (ty_str == "Vulkan")
         {
-            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN);
+            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK);
         }
         if (!ret.ok())
         {

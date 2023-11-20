@@ -24,9 +24,10 @@ namespace Dive
 
 enum class ApplicationType
 {
-    OPENXR,
-    VULKAN,
-    GLES,
+    OPENXR_APK,  // OPENXR app in apk format
+    VULKAN_APK,  // VUlkan app in apk format
+    GLES_APK,    // GLES app in apk format
+    VULKAN_CLI,  // Vulkan command line application
     UNKNOWN,
 };
 
@@ -40,8 +41,8 @@ public:
 
     virtual absl::Status Setup() = 0;
     virtual absl::Status Cleanup() = 0;
-    absl::Status         Start();
-    absl::Status         Stop();
+    virtual absl::Status Start();
+    virtual absl::Status Stop();
     const std::string   &GetMainActivity() const { return m_main_activity; };
     bool                 IsDebuggable() const { return m_is_debuggable; }
     bool                 IsRunning() const { return m_started; }
@@ -60,8 +61,11 @@ protected:
 class VulkanApplication : public AndroidApplication
 {
 public:
-    VulkanApplication(AndroidDevice &dev, std::string package, ApplicationType type) :
-        AndroidApplication(dev, package, type){};
+    VulkanApplication(AndroidDevice &dev, std::string package) :
+        AndroidApplication(dev, package, ApplicationType::VULKAN_APK)
+    {
+        ParsePackage().IgnoreError();
+    };
     virtual ~VulkanApplication();
     virtual absl::Status Setup() override;
     virtual absl::Status Cleanup() override;
@@ -70,11 +74,35 @@ public:
 class OpenXRApplication : public AndroidApplication
 {
 public:
-    OpenXRApplication(AndroidDevice &dev, std::string package, ApplicationType type) :
-        AndroidApplication(dev, package, type){};
+    OpenXRApplication(AndroidDevice &dev, std::string package) :
+        AndroidApplication(dev, package, ApplicationType::OPENXR_APK)
+    {
+        ParsePackage().IgnoreError();
+    };
     virtual ~OpenXRApplication();
     virtual absl::Status Setup() override;
     virtual absl::Status Cleanup() override;
+};
+
+class VulkanCliApplication : public AndroidApplication
+{
+public:
+    VulkanCliApplication(AndroidDevice &dev, std::string binary, std::string args) :
+        AndroidApplication(dev, "", ApplicationType::VULKAN_CLI),
+        m_binary(std::move(binary)),
+        m_args(std::move(args))
+    {
+    }
+    virtual ~VulkanCliApplication();
+    virtual absl::Status Setup() override;
+    virtual absl::Status Cleanup() override;
+    virtual absl::Status Start() override;
+    virtual absl::Status Stop() override;
+
+private:
+    std::string m_binary;
+    std::string m_args;
+    std::string m_pid;
 };
 
 }  // namespace Dive

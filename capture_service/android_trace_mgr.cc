@@ -17,6 +17,7 @@ limitations under the License.
 #include "trace_mgr.h"
 
 #include <string>
+#include <thread>
 
 #include "log.h"
 
@@ -33,7 +34,8 @@ const static std::string kTraceFilePath{ "/sdcard/Download/" };
 
 namespace Dive
 {
-void AndroidTraceManager::TriggerTrace()
+
+void AndroidTraceManager::TraceByFrame()
 {
     std::string path = kTraceFilePath + "trace-frame";
     std::string num = std::to_string(m_frame_num);
@@ -46,6 +48,48 @@ void AndroidTraceManager::TriggerTrace()
     }
     SetTraceFilePath(std::string(full_path));
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+}
+
+void AndroidTraceManager::TraceByDuration()
+{
+    m_trace_num++;
+    std::string path = kTraceFilePath + "trace";
+    std::string num = std::to_string(m_trace_num);
+    char        full_path[256];
+    sprintf(full_path, "%s-%04u.rd", path.c_str(), m_trace_num);
+    SetCaptureName(path.c_str(), num.c_str());
+    {
+        absl::MutexLock lock(&m_state_lock);
+        m_state = TraceState::Triggered;
+    }
+    SetTraceFilePath(std::string(full_path));
+
+    {
+        absl::MutexLock lock(&m_state_lock);
+        SetCaptureState(1);
+        m_state = TraceState::Tracing;
+    }
+    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+
+    // TODO: pass in this duration in stead of hard code a number.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    {
+        absl::MutexLock lock(&m_state_lock);
+        SetCaptureState(0);
+        m_state = TraceState::Finished;
+    }
+}
+
+void AndroidTraceManager::TriggerTrace()
+{
+    if (m_frame_num > 0)
+    {
+        TraceByFrame();
+    }
+    else
+    {
+        TraceByDuration();
+    }
 }
 
 void AndroidTraceManager::OnNewFrame()
@@ -70,7 +114,7 @@ void AndroidTraceManager::WaitForTraceDone()
     m_state_lock.Unlock();
 }
 
-bool AndroidTraceManager::ShouldStartTrace()
+bool AndroidTraceManager::ShouldStartTrace() const
 {
 #ifndef NDEBUG
     m_state_lock.AssertHeld();
@@ -78,7 +122,7 @@ bool AndroidTraceManager::ShouldStartTrace()
     return (m_state == TraceState::Triggered);
 }
 
-bool AndroidTraceManager::ShouldStopTrace()
+bool AndroidTraceManager::ShouldStopTrace() const
 {
 #ifndef NDEBUG
     m_state_lock.AssertHeld();

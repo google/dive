@@ -114,7 +114,7 @@ void AndroidTraceManager::WaitForTraceDone()
     m_state_lock.Unlock();
 }
 
-bool AndroidTraceManager::ShouldStartTrace()
+bool AndroidTraceManager::ShouldStartTrace() const
 {
 #ifndef NDEBUG
     m_state_lock.AssertHeld();
@@ -122,7 +122,7 @@ bool AndroidTraceManager::ShouldStartTrace()
     return (m_state == TraceState::Triggered);
 }
 
-bool AndroidTraceManager::ShouldStopTrace()
+bool AndroidTraceManager::ShouldStopTrace() const
 {
 #ifndef NDEBUG
     m_state_lock.AssertHeld();

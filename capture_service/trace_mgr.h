@@ -68,8 +68,8 @@ public:
 private:
     void               TraceByFrame();
     void               TraceByDuration();
-    bool               ShouldStartTrace();
-    bool               ShouldStopTrace();
+    bool               ShouldStartTrace() const;
+    bool               ShouldStopTrace() const;
     void               OnTraceStart();
     void               OnTraceStop();
     absl::Mutex        m_state_lock;

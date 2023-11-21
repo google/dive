@@ -19,8 +19,6 @@
 #include <string.h>  // memcpy
 #include <algorithm>
 #include <iostream>
-#include "capture_layer/generated/command_decoder.h"
-#include "capture_layer/generated/command_printer.h"
 #include "dive_core/command_hierarchy.h"
 #include "freedreno_dev_info.h"
 #include "pm4_info.h"
@@ -1040,17 +1038,6 @@ const WaveInfo &CaptureData::GetWaveInfo() const
 const RegisterInfo &CaptureData::GetRegisterInfo() const
 {
     return m_registers;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumRenderPassArgs() const
-{
-    return static_cast<uint32_t>(m_render_pass_args.size());
-}
-
-const CreateRenderPassArgs &CaptureData::GetRenderPassArg(uint32_t arg_index) const
-{
-    return *m_render_pass_args[arg_index];
 }
 
 //--------------------------------------------------------------------------------------------------

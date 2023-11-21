@@ -66,6 +66,8 @@ public:
     virtual void WaitForTraceDone() override;
 
 private:
+    void               TraceByFrame();
+    void               TraceByDuration();
     bool               ShouldStartTrace();
     bool               ShouldStopTrace();
     void               OnTraceStart();
@@ -74,6 +76,7 @@ private:
     TraceState m_state ABSL_GUARDED_BY(m_state_lock) = TraceState::Idle;
     uint32_t           m_frame_num = 0;
     uint32_t           m_trace_start_frame = 0;
+    uint32_t           m_trace_num = 0;
 };
 
 TraceManager &GetTraceMgr();

@@ -12,8 +12,6 @@
 */
 
 #include "event_selection_model.h"
-#include "capture_layer/generated/command_printer.h"
-#include "capture_layer/generated/vulkan_metadata.h"
 
 //--------------------------------------------------------------------------------------------------
 EventSelection::EventSelection(const Dive::CommandHierarchy &command_hierarchy) :

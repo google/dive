@@ -19,13 +19,11 @@
 #include <assert.h>
 #include <algorithm>  // std::transform
 #include <cstdint>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
-#include "capture_layer/generated/command_decoder.h"
-#include "capture_layer/generated/command_printer.h"
-#include "capture_layer/generated/vulkan_metadata.h"
 #include "dive_core/common/common.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 
@@ -837,7 +835,6 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     }
 
     m_ib_stack.pop_back();
-    OnVulkanMarkerEnd();
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     m_cur_ib_level = ib_info.m_ib_level;
@@ -1464,127 +1461,6 @@ uint64_t CommandHierarchyCreator::AddSyncEventNode(const IMemoryManager &mem_man
 uint32_t CommandHierarchyCreator::GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords)
 {
     return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-void CommandHierarchyCreator::ParseVulkanCmdBeginMarker(char    *marker_ptr,
-                                                        uint32_t marker_size,
-                                                        uint64_t submit_node_index,
-                                                        uint64_t packet_node_index)
-{
-    uint64_t marker_node_index = UINT64_MAX;
-    uint64_t parent_node_index = submit_node_index;
-
-    const auto *marker = reinterpret_cast<const NopVulkanCallHeader *>(marker_ptr);
-    DIVE_ASSERT(marker->signature == kNopPayloadSignature);
-    DIVE_ASSERT(marker->cmdID == static_cast<uint8_t>(VKCmdID::vkBeginCommandBufferCmdID));
-
-    std::stringstream cmd_args_ss;
-    char             *args = marker_ptr + sizeof(NopVulkanCallHeader);
-    PrintCommandParametersBrief(cmd_args_ss,
-                                static_cast<VKCmdID>(marker->cmdID),
-                                args,
-                                marker_size,
-                                m_capture_data_ptr->GetVulkanMetadataVersion());
-
-    CommandHierarchy::AuxInfo
-    aux_info = CommandHierarchy::AuxInfo::MarkerNode(CommandHierarchy::MarkerType::kDiveMetadata,
-                                                     marker->cmdID);
-    marker_node_index = AddNode(NodeType::kMarkerNode,
-                                VulkanCmdList[static_cast<uint32_t>(marker->cmdID)] +
-                                cmd_args_ss.str(),
-                                aux_info,
-                                args,
-                                marker_size);
-
-    size_t num_nodes = m_cmd_begin_event_node_indices.size();
-    if (num_nodes > 0)
-    {
-        parent_node_index = m_node_parent_info[CommandHierarchy::kAllEventTopology]
-                                              [m_cmd_begin_event_node_indices[0]];
-
-        // Remove the event nodes (which belongs to vkBeginCommandBuffer) that have already been
-        // added to the hierarchy and add them as children of vkBeginCommandBuffer
-        RemoveListOfChildren(CommandHierarchy::kAllEventTopology,
-                             parent_node_index,
-                             m_cmd_begin_event_node_indices);
-
-        for (size_t i = 0; i < num_nodes; i++)
-        {
-            AddChild(CommandHierarchy::kAllEventTopology,
-                     marker_node_index,
-                     m_cmd_begin_event_node_indices[i]);
-        }
-
-        parent_node_index = m_node_parent_info[CommandHierarchy::kRgpTopology]
-                                              [m_cmd_begin_event_node_indices[0]];
-
-        RemoveListOfChildren(CommandHierarchy::kRgpTopology,
-                             parent_node_index,
-                             m_cmd_begin_event_node_indices);
-    }
-
-    parent_node_index = submit_node_index;
-    // If this is the start of secondary command buffer, add another indent level.
-    if (m_is_secondary_cmdbuf_started)
-    {
-        DIVE_ASSERT(m_secondary_cmdbuf_root_index != UINT64_MAX);
-        parent_node_index = m_secondary_cmdbuf_root_index;
-        m_marker_stack.push_back(m_secondary_cmdbuf_root_index);
-        m_internal_marker_stack.push_back(m_secondary_cmdbuf_root_index);
-    }
-
-    AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, marker_node_index);
-    AddChild(CommandHierarchy::kRgpTopology, parent_node_index, marker_node_index);
-
-    for (size_t i = 0; i < num_nodes; i++)
-    {
-        AddChild(CommandHierarchy::kRgpTopology,
-                 marker_node_index,
-                 m_cmd_begin_event_node_indices[i]);
-    }
-
-    for (auto i : m_cmd_begin_packet_node_indices)
-    {
-        AddSharedChild(CommandHierarchy::kAllEventTopology, marker_node_index, i);
-        AddSharedChild(CommandHierarchy::kRgpTopology, marker_node_index, i);
-    }
-
-    m_vulkan_cmd_stack.push_back(marker_node_index);
-    m_cmd_begin_event_node_indices.clear();
-    m_cmd_begin_packet_node_indices.clear();
-    m_node_parent_info.clear();
-}
-
-// Called on the implicit end of the vulkan command marker.
-void CommandHierarchyCreator::OnVulkanMarkerEnd()
-{
-    if (m_has_unended_vulkan_marker)
-    {
-        DIVE_ASSERT(!m_marker_stack.empty());
-        DIVE_ASSERT(!m_internal_marker_stack.empty());
-        m_marker_stack.pop_back();
-        m_internal_marker_stack.pop_back();
-
-        m_has_unended_vulkan_marker = false;
-    }
-
-    // If we are the end of secondary commandary buffer, we have another level of indention need to
-    // be reduced.
-    if (m_cur_vulkan_cmd_id == static_cast<uint32_t>(VKCmdID::vkEndCommandBufferCmdID) &&
-        m_is_secondary_cmdbuf_started)
-    {
-        if (!m_marker_stack.empty())
-        {
-            m_marker_stack.pop_back();
-        }
-
-        if (!m_internal_marker_stack.empty())
-        {
-            m_internal_marker_stack.pop_back();
-        }
-        m_cur_vulkan_cmd_id = UINT32_MAX;
-    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2528,52 +2404,6 @@ bool CommandHierarchyCreator::IsVulkanNonEventNode(uint64_t node_index) const
 //--------------------------------------------------------------------------------------------------
 bool CommandHierarchyCreator::IsVulkanEvent(uint32_t cmd_id) const
 {
-    switch (static_cast<VKCmdID>(cmd_id))
-    {
-    // Draw & Dispatch
-    case VKCmdID::vkCmdDrawCmdID:
-    case VKCmdID::vkCmdDrawIndexedCmdID:
-    case VKCmdID::vkCmdDrawIndirectCmdID:
-    case VKCmdID::vkCmdDrawIndexedIndirectCmdID:
-    case VKCmdID::vkCmdDispatchCmdID:
-    case VKCmdID::vkCmdDispatchIndirectCmdID:
-    case VKCmdID::vkCmdDrawIndirectCountAMDCmdID:
-    case VKCmdID::vkCmdDrawIndexedIndirectCountAMDCmdID:
-    case VKCmdID::vkCmdDispatchBaseKHRCmdID:
-    case VKCmdID::vkCmdDispatchBaseCmdID:
-    case VKCmdID::vkCmdDrawIndirectCountKHRCmdID:
-    case VKCmdID::vkCmdDrawIndexedIndirectCountKHRCmdID:
-
-    // Pipeline barrier
-    case VKCmdID::vkCmdPipelineBarrierCmdID:
-
-    // Render pass
-    case VKCmdID::vkCmdBeginRenderPassCmdID:
-    case VKCmdID::vkCmdEndRenderPassCmdID:
-
-    // Clear Cmds
-    case VKCmdID::vkCmdClearAttachmentsCmdID:
-    case VKCmdID::vkCmdClearColorImageCmdID:
-    case VKCmdID::vkCmdClearDepthStencilImageCmdID:
-
-    // Buffer and Image
-    case VKCmdID::vkCmdFillBufferCmdID:
-    case VKCmdID::vkCmdCopyImageCmdID:
-    case VKCmdID::vkCmdCopyBufferToImageCmdID:
-    case VKCmdID::vkCmdCopyBufferCmdID:
-    case VKCmdID::vkCmdCopyImageToBufferCmdID:
-
-    // Query pool
-    case VKCmdID::vkCmdResetQueryPoolCmdID:
-    case VKCmdID::vkCmdCopyQueryPoolResultsCmdID: return true;
-
-    // Secondary command buffers
-    case VKCmdID::vkCmdExecuteCommandsCmdID: return true;
-
-    case VKCmdID::vkQueueSubmit: return true;
-
-    default: break;
-    }
     return false;
 }
 

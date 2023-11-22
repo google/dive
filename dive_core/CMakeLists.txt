@@ -131,9 +131,7 @@ include_directories(${THIRDPARTY_DIRECTORY}/mesa/include/)
 add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
 
 add_library(${PROJECT_NAME} STATIC ${HDR_FILES} ${SRC_FILES}
-  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES}
-  "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_printer.cpp" "${CMAKE_SOURCE_DIR}/capture_layer/command_printer_brief.cpp"
-  "${CMAKE_SOURCE_DIR}/capture_layer/generated/command_decoder.cpp" )
+  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES})
 add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)

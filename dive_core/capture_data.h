@@ -19,8 +19,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include "capture_layer/generated/command_arguments.h"
-#include "capture_layer/linear_allocator.h"
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
@@ -348,8 +346,6 @@ public:
     {
         return m_vulkan_metadata_header;
     }
-    uint32_t                    GetNumRenderPassArgs() const;
-    const CreateRenderPassArgs &GetRenderPassArg(uint32_t arg_index) const;
 
     CaptureData &operator=(CaptureData &&) = default;
 
@@ -384,21 +380,19 @@ private:
 
     void Finalize(const CaptureDataHeader &data_header);
 
-    CaptureDataHeader::CaptureType      m_capture_type;
-    std::vector<SubmitInfo>             m_submits;
-    std::vector<PresentInfo>            m_presents;  // More than 1 if multi-frame capture
-    std::vector<RingInfo>               m_rings;
-    std::vector<TextInfo>               m_text;
-    WaveInfo                            m_waves;
-    RegisterInfo                        m_registers;
-    VulkanMetadataBlockHeader           m_vulkan_metadata_header;
-    DynamicLinearAllocator<>            m_metadata_allocator;
-    std::vector<CreateRenderPassArgs *> m_render_pass_args;
-    MemoryManager                       m_memory;
-    ProgressTracker                    *m_progress_tracker;
-    ILog                               *m_log_ptr;
-    std::string                         m_cur_capture_file;
-    CaptureDataHeader                   m_data_header;
+    CaptureDataHeader::CaptureType m_capture_type;
+    std::vector<SubmitInfo>        m_submits;
+    std::vector<PresentInfo>       m_presents;  // More than 1 if multi-frame capture
+    std::vector<RingInfo>          m_rings;
+    std::vector<TextInfo>          m_text;
+    WaveInfo                       m_waves;
+    RegisterInfo                   m_registers;
+    VulkanMetadataBlockHeader      m_vulkan_metadata_header;
+    MemoryManager                  m_memory;
+    ProgressTracker               *m_progress_tracker;
+    ILog                          *m_log_ptr;
+    std::string                    m_cur_capture_file;
+    CaptureDataHeader              m_data_header;
 };
 
 }  // namespace Dive

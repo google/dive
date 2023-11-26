@@ -76,48 +76,19 @@ TraceDialog::TraceDialog(QWidget *parent)
         QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
         m_dev_model->appendRow(item);
     }
-    if (!m_devices.empty())
-    {
-        m_cur_dev = m_devices[0].m_serial;
-        qDebug() << "Device selected: " << m_devices[0].GetDisplayName().c_str();
-    }
-    if (!m_cur_dev.empty())
-    {
-        auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
-        if (dev_ret.ok())
-        {
-            auto device = *dev_ret;
-            auto ret = device->SetupDevice();
-            if (ret.ok())
-            {
-                auto result = device->ListPackage();
-                if (result.ok())
-                {
-                    m_pkg_list = *result;
-                }
-                ret.Update(result.status());
-            }
-            if (!ret.ok())
-            {
-                std::string err_msg = absl::StrCat("Failed to list package, error: ",
-                                                   ret.message());
-                qDebug() << err_msg.c_str();
-            }
-        }
-    }
-
-    for (size_t i = 0; i < m_pkg_list.size(); i++)
-    {
-        QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
-        m_pkg_model->appendRow(item);
-    }
     for (const auto &ty : kAppTypes)
     {
         QStandardItem *item = new QStandardItem(ty.c_str());
         m_app_type_model->appendRow(item);
     }
     m_dev_box->setModel(m_dev_model);
+    m_dev_box->setCurrentIndex(-1);
+    m_dev_box->setCurrentText("Please select a device");
+
     m_pkg_box->setModel(m_pkg_model);
+    m_pkg_box->setCurrentIndex(-1);
+    m_pkg_box->setCurrentText("Please select a pckage");
+
     m_app_type_box->setModel(m_app_type_model);
 
     m_capture_layout->addWidget(m_dev_label);
@@ -158,9 +129,11 @@ void TraceDialog::ShowErrorMessage(const std::string &err_msg)
     msgBox.exec();
     return;
 }
+
 void TraceDialog::UpdateDeviceList()
 {
     auto cur_list = Dive::GetDeviceManager().ListDevice();
+    qDebug() << "m_dev_box->currentIndex() " << m_dev_box->currentIndex();
     if (cur_list == m_devices)
     {
         qDebug() << "No changes from the list of the connected devices. ";
@@ -184,15 +157,16 @@ void TraceDialog::UpdateDeviceList()
 
 void TraceDialog::OnDeviceSelected(const QString &s)
 {
-    if (s.isEmpty())
+    if (s.isEmpty() || m_dev_box->currentIndex() == -1)
     {
         qDebug() << "No devices selected";
         return;
     }
     int dev_index = m_dev_box->currentIndex();
-    qDebug() << "Device selected: " << m_cur_dev.c_str();
     assert(static_cast<size_t>(dev_index) < m_devices.size());
 
+    qDebug() << "Device selected: " << m_cur_dev.c_str() << ", index " << dev_index
+             << ", m_devices[dev_index].m_serial " << m_devices[dev_index].m_serial.c_str();
     if (m_cur_dev == m_devices[dev_index].m_serial)
     {
         return;
@@ -230,10 +204,15 @@ void TraceDialog::OnDeviceSelected(const QString &s)
         QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
         m_pkg_model->appendRow(item);
     }
+    m_pkg_box->setCurrentIndex(-1);
 }
 
 void TraceDialog::OnPackageSelected(const QString &s)
 {
+    if ((s.isEmpty() || m_pkg_box->currentIndex() == -1))
+    {
+        return;
+    }
     qDebug() << "Package selected: " << s << " " << m_pkg_box->currentIndex();
     m_cur_pkg = m_pkg_list[m_pkg_box->currentIndex()];
     m_run_button->setEnabled(true);
@@ -356,10 +335,11 @@ void TraceDialog::OnCaptureClicked()
         qDebug() << "Failed to connect to device";
         return;
     }
-
+    qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
     auto ret = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
     if (ret.ok())
-        qDebug() << "Capture saved at " << target.generic_string().c_str();
+        qDebug() << "Capture saved at "
+                 << std::filesystem::canonical(target).generic_string().c_str();
     else
     {
         std::string err_msg = absl::StrCat("Failed to retrieve trace file, error: ", ret.message());

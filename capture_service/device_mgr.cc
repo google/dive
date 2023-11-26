@@ -140,11 +140,11 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name)
         lib_path = p / name;
         if (std::filesystem::exists(lib_path))
         {
+            lib_path = std::filesystem::canonical(lib_path);
             break;
         }
     }
 
-    lib_path = std::filesystem::canonical(lib_path);
     LOGD("%s is at %s \n", name.c_str(), lib_path.generic_string().c_str());
     return lib_path;
 }

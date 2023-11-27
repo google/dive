@@ -285,12 +285,18 @@ bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& packag
 {
     std::string serial = absl::GetFlag(FLAGS_device);
 
-    if (serial.empty() || package.empty())
+    if (serial.empty())
     {
         std::cout << "Please run with `--device [serial]` and `--package [package]` options."
                   << std::endl;
         print_usage();
         return false;
+    }
+
+    if (package.empty())
+    {
+        std::cout << "Package not provided. You run run with `--package [package]` options to "
+                     "clean up package specific settings.";
     }
 
     return mgr.Cleanup(serial, package).ok();

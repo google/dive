@@ -18,8 +18,10 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "constants.h"
 #include "device_mgr.h"
 #include "log.h"
@@ -135,7 +137,7 @@ absl::Status AndroidApplication::Start()
     RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
     RETURN_IF_ERROR(
     m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s/%s", m_package, m_main_activity)));
-    m_started = true;
+    m_started = IsRunning();
     return absl::OkStatus();
 }
 
@@ -144,6 +146,22 @@ absl::Status AndroidApplication::Stop()
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am force-stop %s", m_package)));
     m_started = false;
     return absl::OkStatus();
+}
+
+bool AndroidApplication::IsRunning() const
+{
+    return IsProcessRunning(m_package);
+}
+
+bool AndroidApplication::IsProcessRunning(absl::string_view process_name) const
+{
+    auto res = m_dev.Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name), false);
+    if (!res.ok())
+        return false;
+    std::string pid = *res;
+    if (pid.empty())
+        return false;
+    return true;
 }
 
 VulkanApplication::~VulkanApplication()
@@ -278,11 +296,11 @@ absl::Status VulkanCliApplication::Start()
     const std::string cmd = absl::StrFormat("shell LD_PRELOAD=%s/%s %s %s",
                                             kTargetPath,
                                             kWrapLibName,
-                                            m_binary,
-                                            m_args);
+                                            m_command,
+                                            m_command_args);
 
     RETURN_IF_ERROR(m_dev.Adb().RunCommandBackground(cmd));
-    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().RunAndGetResult("shell pidof " + m_binary, false));
+    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().RunAndGetResult("shell pidof " + m_command, false));
     m_started = true;
     return absl::OkStatus();
 }
@@ -292,6 +310,10 @@ absl::Status VulkanCliApplication::Stop()
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell kill -9 %s", m_pid)));
     m_started = false;
     return absl::OkStatus();
+}
+bool VulkanCliApplication::IsRunning() const
+{
+    return IsProcessRunning(m_command);
 }
 
 }  // namespace Dive

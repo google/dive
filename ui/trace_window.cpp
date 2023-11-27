@@ -279,7 +279,17 @@ void TraceDialog::OnStartClicked()
         }
         auto cur_app = device->GetCurrentApplication();
 
-        if (cur_app && cur_app->IsRunning())
+        if (!cur_app->IsRunning())
+        {
+            std::string err_msg = absl::StrCat("Process for package ",
+                                               m_cur_pkg,
+                                               " not found, possibly crashed.");
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return;
+        }
+
+        if (cur_app)
         {
             m_run_button->setDisabled(false);
             m_run_button->setText("&Stop");

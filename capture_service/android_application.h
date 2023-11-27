@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <string>
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 
 namespace Dive
 {
@@ -45,10 +46,12 @@ public:
     virtual absl::Status Stop();
     const std::string   &GetMainActivity() const { return m_main_activity; };
     bool                 IsDebuggable() const { return m_is_debuggable; }
-    bool                 IsRunning() const { return m_started; }
+    bool                 IsStarted() const { return m_started; }
+    virtual bool         IsRunning() const;
 
 protected:
     absl::Status ParsePackage();
+    bool         IsProcessRunning(absl::string_view process_name) const;
 
     AndroidDevice  &m_dev;
     std::string     m_package;
@@ -87,10 +90,10 @@ public:
 class VulkanCliApplication : public AndroidApplication
 {
 public:
-    VulkanCliApplication(AndroidDevice &dev, std::string binary, std::string args) :
+    VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args) :
         AndroidApplication(dev, "", ApplicationType::VULKAN_CLI),
-        m_binary(std::move(binary)),
-        m_args(std::move(args))
+        m_command(std::move(command)),
+        m_command_args(std::move(command_args))
     {
     }
     virtual ~VulkanCliApplication();
@@ -98,10 +101,11 @@ public:
     virtual absl::Status Cleanup() override;
     virtual absl::Status Start() override;
     virtual absl::Status Stop() override;
+    virtual bool         IsRunning() const override;
 
 private:
-    std::string m_binary;
-    std::string m_args;
+    std::string m_command;
+    std::string m_command_args;
     std::string m_pid;
 };
 

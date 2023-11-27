@@ -42,7 +42,7 @@ private slots:
     void OnDeviceSelected(const QString &);
     void OnPackageSelected(const QString &);
     void OnStartClicked();
-    void OnCaptureClicked();
+    void OnTraceClicked();
 
 signals:
     void TraceAvailable(const QString &);

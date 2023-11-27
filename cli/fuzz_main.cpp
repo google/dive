@@ -15,6 +15,7 @@
 */
 
 #include <iostream>
+#include <memory>
 
 #include "dive_core/capture_data.h"
 #include "dive_core/command_hierarchy.h"
@@ -29,7 +30,9 @@ public:
 class memstream : public std::istream
 {
 public:
-    memstream(const uint8_t *p, size_t l) : std::istream(&_buffer), _buffer(p, l)
+    memstream(const uint8_t *p, size_t l) :
+        std::istream(&_buffer),
+        _buffer(p, l)
     {
         rdbuf(&_buffer);
     }

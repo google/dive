@@ -100,9 +100,6 @@ endif()
 option(DIVE_UNIT_TESTS, "Build unit tests for dive")
 
 if(DIVE_UNIT_TESTS)
-    set(CATCH2_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/catch2")
-    add_subdirectory(third_party/catch2)
-    add_subdirectory(tests/unit_tests)
 endif()
 
 option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")
@@ -113,3 +110,7 @@ if(DIVE_PYTHON_BINDINGS)
     add_subdirectory(third_party/pybind11)
     add_subdirectory(pydive)
 endif()
+
+enable_testing()
+add_test(NAME TestLoadingTrace
+         COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0052.rd )

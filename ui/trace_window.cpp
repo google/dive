@@ -113,7 +113,7 @@ TraceDialog::TraceDialog(QWidget *parent)
                      this,
                      SLOT(OnPackageSelected(const QString &)));
     QObject::connect(m_run_button, &QPushButton::clicked, this, &TraceDialog::OnStartClicked);
-    QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnCaptureClicked);
+    QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
 }
 
 TraceDialog::~TraceDialog()
@@ -305,9 +305,24 @@ void TraceDialog::OnStartClicked()
     }
 }
 
-void TraceDialog::OnCaptureClicked()
+void TraceDialog::OnTraceClicked()
 {
     const std::string server_str = "localhost:19999";
+
+    auto device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        qDebug() << "Failed to connect to device";
+        return;
+    }
+    auto app = device->GetCurrentApplication();
+    if (app == nullptr || !app->IsRunning())
+    {
+        std::string err_msg = "Application is not running, possibly crashed.";
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return;
+    }
 
     Dive::DiveClient client(grpc::CreateChannel(server_str, grpc::InsecureChannelCredentials()));
     absl::StatusOr<std::string> reply = client.TestConnection();
@@ -339,12 +354,7 @@ void TraceDialog::OnCaptureClicked()
     std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-    auto device = Dive::GetDeviceManager().GetDevice();
-    if (device == nullptr)
-    {
-        qDebug() << "Failed to connect to device";
-        return;
-    }
+
     qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
     auto ret = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
     if (ret.ok())

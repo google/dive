@@ -43,11 +43,22 @@ def outputH(pm4_info_file):
   pm4_info_file.writelines("""
 #pragma once
 
-#include <vector>
 #include <stdint.h>
 #include <string.h>
+#include <vector>
 
-enum ValueType { kBoolean, kUint, kInt, kFloat, kFixed, kAddress, kWaddress, kHex, kOther };
+enum ValueType
+{
+    kBoolean,
+    kUint,
+    kInt,
+    kFloat,
+    kFixed,
+    kAddress,
+    kWaddress,
+    kHex,
+    kOther
+};
 
 enum GPUVariantType
 {
@@ -60,59 +71,69 @@ enum GPUVariantType
     kA7XX = 0x20,
 };
 
-static const uint32_t kInvalidRegOffset = UINT32_MAX;
+constexpr uint32_t kInvalidRegOffset = UINT32_MAX;
+// be careful when increase this value
+// this is used in
+// - RegField::m_gpu_variants, so the unused bits needs to be adjusted
+// - key of g_sRegInfo, the register offset needs at least 16bits, so kGPUVariantsBits cannot be
+// larger than 16
+constexpr uint32_t kGPUVariantsBits = 6;
 
-struct RegField {
-    uint32_t m_type         : 4;  // ValueType enum, range [0, 15]
-    uint32_t m_enum_handle  : 8;
-    uint32_t m_shift        : 6;
-    uint32_t m_shr          : 5;  // used to shift left to extract the "original" value, range: [0, 31]
-    uint32_t m_gpu_variants : 6;  // only 6 bits are used for now, see GPUVariantType
-    uint32_t                : 3;
-    uint64_t m_mask;
-    const char* m_name;
+struct RegField
+{
+    uint32_t m_type : 4;  // ValueType enum, range [0, 15]
+    uint32_t m_enum_handle : 8;
+    uint32_t m_shift : 6;
+    uint32_t m_shr : 5;  // used to shift left to extract the "original" value, range: [0, 31]
+    uint32_t m_gpu_variants : kGPUVariantsBits;  // only 6 bits are used for now, see GPUVariantType
+    uint32_t : 3;
+    uint64_t    m_mask;
+    const char *m_name;
 };
 
-struct RegInfo {
-    const char* m_name;
-    uint32_t m_is_64_bit    : 1;   // Either 32 or 64 bit
-    uint32_t m_type         : 4;   // ValueType enum, range [0, 15]
-    uint32_t m_enum_handle  : 8;
-    uint32_t m_gpu_variants : 6;   // only 6 bits are used for now, see GPUVariantType
-    uint32_t                : 13;
+struct RegInfo
+{
+    const char *m_name;
+    uint32_t    m_is_64_bit : 1;  // Either 32 or 64 bit
+    uint32_t    m_type : 4;       // ValueType enum, range [0, 15]
+    uint32_t    m_enum_handle : 8;
+    uint32_t : 19;
     std::vector<RegField> m_fields;
 };
 
-struct PacketField {
-    const char* m_name;
-    uint32_t m_is_variant_opcode : 1;   // If 1, then is used to indicate variant
-    uint32_t m_dword             : 8;
-    uint32_t m_type              : 4;   // ValueType enum, range [0, 15]
-    uint32_t m_enum_handle       : 8;
-    uint32_t m_shift             : 6;
-    uint32_t                     : 5;
+struct PacketField
+{
+    const char *m_name;
+    uint32_t    m_is_variant_opcode : 1;  // If 1, then is used to indicate variant
+    uint32_t    m_dword : 8;
+    uint32_t    m_type : 4;  // ValueType enum, range [0, 15]
+    uint32_t    m_enum_handle : 8;
+    uint32_t    m_shift : 6;
+    uint32_t : 5;
     uint32_t m_mask;
 };
 
-struct PacketInfo {
-    const char* m_name;
-    uint32_t m_max_array_size : 8;
-    uint32_t m_stripe_variant : 8;  // Which variant of the packet this is
-    uint32_t                  : 16;
+struct PacketInfo
+{
+    const char *m_name;
+    uint32_t    m_max_array_size : 8;
+    uint32_t    m_stripe_variant : 8;  // Which variant of the packet this is
+    uint32_t : 16;
     std::vector<PacketField> m_fields;
 };
 
-void Pm4InfoInit();
-const char *GetOpCodeString(uint32_t op_code);
-const RegInfo *GetRegInfo(uint32_t reg);
-const RegInfo *GetRegByName(const char *);
-const RegField *GetRegFieldByName(const char *name, const RegInfo *info);
-uint32_t GetRegOffsetByName(const char *name);
-const char *GetEnumString(uint32_t enum_handle, uint32_t val);
+void              Pm4InfoInit();
+const char       *GetOpCodeString(uint32_t op_code);
+const RegInfo    *GetRegInfo(uint32_t reg);
+const RegInfo    *GetRegByName(const char *);
+const RegField   *GetRegFieldByName(const char *name, const RegInfo *info);
+uint32_t          GetRegOffsetByName(const char *name);
+const char       *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name);
-void SetGPUID(uint32_t gpu_id);
-bool IsFieldEnabled(const RegField *field);
+void              SetGPUID(uint32_t gpu_id);
+GPUVariantType    GetGPUVariantType();
+bool              IsFieldEnabled(const RegField *field);
 """)
 
 # ---------------------------------------------------------------------------------------
@@ -250,7 +271,7 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
           enum_handle = str(enum_index_dict[type])
 
     variants_bitfield = GetGPUVariantsBitField(variants)
-    pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, %s, {" % (offset, name, is_64_string, getTypeEnumString(type), enum_handle, variants_bitfield))
+    pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, {" % (offset, variants_bitfield, name, is_64_string, getTypeEnumString(type), enum_handle))
 
     # Iterate through optional bitfields
     for bitfield in bitfields:
@@ -633,7 +654,9 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   pm4_info_file.write("\tfor (auto &reg : g_sRegInfo)\n")
   pm4_info_file.write("\t{\n")
   pm4_info_file.write("\t\tconst std::string& name = reg.second.m_name;\n")
-  pm4_info_file.write("\t\tuint32_t gpu_variants = reg.second.m_gpu_variants;\n")
+  pm4_info_file.write("\t\tconst uint32_t shift_bits = 32 - kGPUVariantsBits;\n")
+  pm4_info_file.write("\t\tuint32_t gpu_variants = reg.first << shift_bits >> shift_bits;\n")
+  pm4_info_file.write("\t\tuint32_t reg_offset = reg.first >> kGPUVariantsBits;\n")
   pm4_info_file.write("\t\tif (gpu_variants != 0)\n")
   pm4_info_file.write("\t\t{\n")
   pm4_info_file.write("\t\t\tuint32_t bit_offset = 0;\n")
@@ -642,7 +665,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   pm4_info_file.write("\t\t\t\tif ((gpu_variants & 0x1) != 0)\n")
   pm4_info_file.write("\t\t\t\t{\n")
   pm4_info_file.write("\t\t\t\t\tconst std::string name_with_variant = name + \"_\" + GetGPUStr(static_cast<GPUVariantType>(1 << (bit_offset)));\n")
-  pm4_info_file.write("\t\t\t\t\tg_sRegNameToIndex[name_with_variant] = reg.first;\n")
+  pm4_info_file.write("\t\t\t\t\tg_sRegNameToIndex[name_with_variant] = reg_offset;\n")
   pm4_info_file.write("\t\t\t\t}\n")
   pm4_info_file.write("\t\t\t\tgpu_variants = gpu_variants>>1;\n")
   pm4_info_file.write("\t\t\t\t++bit_offset;\n")
@@ -650,7 +673,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
   pm4_info_file.write("\t\t}\n")
   pm4_info_file.write("\t\telse\n")
   pm4_info_file.write("\t\t{\n")
-  pm4_info_file.write("\t\t\tg_sRegNameToIndex[name] = reg.first;\n")
+  pm4_info_file.write("\t\t\tg_sRegNameToIndex[name] = reg_offset;\n")
   pm4_info_file.write("\t\t}\n")
   pm4_info_file.write("\t}\n")
 
@@ -667,9 +690,26 @@ const char *GetOpCodeString(uint32_t op_code)
 
 const RegInfo *GetRegInfo(uint32_t reg)
 {
-    if (g_sRegInfo.find(reg) == g_sRegInfo.end())
+    auto it = std::find_if(g_sRegInfo.begin(),
+                           g_sRegInfo.end(),
+                           [&](const std::pair<uint32_t, RegInfo> &v) {
+                               const uint32_t reg_offset_v = v.first >> kGPUVariantsBits;
+
+                               const uint32_t shift_bits = 32 - kGPUVariantsBits;
+                               const uint32_t gpu_variants_mask_v = v.first << shift_bits >>
+                                                                    shift_bits;
+                               const bool same_offset = (reg == reg_offset_v);
+                               // Either the gpu variants is not explicit declared (which means all
+                               // gpus should support this) or the mask bits should match current
+                               // variant
+                               const bool match_gpu = ((gpu_variants_mask_v == 0) ||
+                                                       (g_sGPU_variant & gpu_variants_mask_v) != 0);
+
+                               return (same_offset && match_gpu);
+                           });
+    if (it == g_sRegInfo.end())
         return nullptr;
-    return &g_sRegInfo.find(reg)->second;
+    return &it->second;
 }
 
 const RegInfo *GetRegByName(const char *name)
@@ -753,6 +793,11 @@ void SetGPUID(uint32_t gpu_id)
     {
         g_sGPU_variant = kGPUVariantNone;
     }
+}
+
+GPUVariantType GetGPUVariantType()
+{
+    return g_sGPU_variant;
 }
 
 bool IsFieldEnabled(const RegField* field)

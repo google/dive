@@ -794,7 +794,7 @@ void EventStateView::DisplayHardwareSpecificStates(
 Dive::EventStateInfo::ConstIterator event_state_it,
 Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> depth_target_items, binning_items, thread_items;
+    QList<QTreeWidgetItem *> depth_target_items, binning_items, thread_items, ubwc_items;
 
     if (event_state_it->IsLRZEnabledSet())
         ADD_FIELD_TYPE_BOOL(event_state_it->GetLRZEnabledName(),
@@ -965,6 +965,57 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
     else
         ADD_FIELD_NOT_SET(event_state_it->GetEnablePartialHelperLanesName(), thread_items)
 
+    // UBWC on attatchments
+    for (uint16_t i = 0; i < 8; ++i)
+    {
+        // UBWCEnabled
+        if (event_state_it->IsUBWCEnabledSet(i))
+            ADD_FIELD_TYPE_BOOL(event_state_it->GetUBWCEnabledName() + QString("_") +
+                                QString::number(i),
+                                event_state_it->UBWCEnabled(i),
+                                prev_event_state_it->IsUBWCEnabledSet(i),
+                                prev_event_state_it->UBWCEnabled(i),
+                                ubwc_items)
+        else
+            ADD_FIELD_NOT_SET(event_state_it->GetUBWCEnabledName() + QString("_") +
+                              QString::number(i),
+                              ubwc_items)
+
+        // UBWCLosslessEnabled
+        if (event_state_it->IsUBWCLosslessEnabledSet(i))
+            ADD_FIELD_TYPE_BOOL(event_state_it->GetUBWCLosslessEnabledName() + QString("_") +
+                                QString::number(i),
+                                event_state_it->UBWCLosslessEnabled(i),
+                                prev_event_state_it->IsUBWCLosslessEnabledSet(i),
+                                prev_event_state_it->UBWCLosslessEnabled(i),
+                                ubwc_items)
+        else
+            ADD_FIELD_NOT_SET(event_state_it->GetUBWCLosslessEnabledName() + QString("_") +
+                              QString::number(i),
+                              ubwc_items)
+    }
+
+    // UBWC on Depth Stencil
+    {
+        if (event_state_it->IsUBWCEnabledOnDSSet())
+            ADD_FIELD_TYPE_BOOL(event_state_it->GetUBWCEnabledOnDSName(),
+                                event_state_it->UBWCEnabledOnDS(),
+                                prev_event_state_it->IsUBWCEnabledOnDSSet(),
+                                prev_event_state_it->UBWCEnabledOnDS(),
+                                ubwc_items)
+        else
+            ADD_FIELD_NOT_SET(event_state_it->GetUBWCEnabledOnDSName(), ubwc_items)
+
+        if (event_state_it->IsUBWCLosslessEnabledOnDSSet())
+            ADD_FIELD_TYPE_BOOL(event_state_it->GetUBWCLosslessEnabledOnDSName(),
+                                event_state_it->UBWCLosslessEnabledOnDS(),
+                                prev_event_state_it->IsUBWCLosslessEnabledOnDSSet(),
+                                prev_event_state_it->UBWCLosslessEnabledOnDS(),
+                                ubwc_items)
+        else
+            ADD_FIELD_NOT_SET(event_state_it->GetUBWCLosslessEnabledOnDSName(), ubwc_items)
+    }
+
     QTreeWidgetItem *tree_widget_item = new QTreeWidgetItem(m_event_state_tree);
     tree_widget_item->setText(0, "GPU-specific");
 
@@ -982,6 +1033,11 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
     binning_item->setText(0, "Tiling and Binning");
     binning_item->insertChildren(0, binning_items);
     tree_widget_item->insertChild(0, binning_item);
+
+    QTreeWidgetItem *ubwc_item = new QTreeWidgetItem;
+    ubwc_item->setText(0, "UBWC status");
+    ubwc_item->insertChildren(0, ubwc_items);
+    tree_widget_item->insertChild(0, ubwc_item);
 }
 
 //--------------------------------------------------------------------------------------------------

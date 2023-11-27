@@ -258,6 +258,26 @@ void py_event_state(py::module &m) {
                 sizeof(numpy_type<bool>::type)}
     , reinterpret_cast<const numpy_type<bool>::type*>(self.EnablePartialHelperLanesPtr()));
         })
+            .def("ubwc_enabled", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<bool>::type>({ self.size(), 8},         {
+                sizeof(numpy_type<bool>::type)* 8, sizeof(numpy_type<bool>::type)* 8}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCEnabledPtr()));
+        })
+            .def("ubwc_lossless_enabled", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<bool>::type>({ self.size(), 8},         {
+                sizeof(numpy_type<bool>::type)* 8, sizeof(numpy_type<bool>::type)* 8}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCLosslessEnabledPtr()));
+        })
+            .def("ubwc_enabled_on_ds", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCEnabledOnDSPtr()));
+        })
+            .def("ubwc_lossless_enabled_on_ds", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCLosslessEnabledOnDSPtr()));
+        })
         .def("to_dataframe", [](const EventStateInfo &self) {
         py::object DataFrame = py::module::import("pandas").attr("DataFrame");
         py::dict dict;
@@ -426,6 +446,28 @@ void py_event_state(py::module &m) {
                                 dict["enable_partial_helper_lanes"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
     , reinterpret_cast<const numpy_type<bool>::type*>(self.EnablePartialHelperLanesPtr()));
+                                    for(uint32_t attachment=0; attachment<8; ++attachment)
+                {
+                    std::ostringstream key;
+                    key << "ubwc_enabled"<< "_" <<  attachment;
+                    dict[py::cast(key.str())] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)* 8}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCEnabledPtr(EventStateId(0), attachment)));
+                }
+                                    for(uint32_t attachment=0; attachment<8; ++attachment)
+                {
+                    std::ostringstream key;
+                    key << "ubwc_lossless_enabled"<< "_" <<  attachment;
+                    dict[py::cast(key.str())] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)* 8}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCLosslessEnabledPtr(EventStateId(0), attachment)));
+                }
+                                dict["ubwc_enabled_on_ds"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCEnabledOnDSPtr()));
+                                dict["ubwc_lossless_enabled_on_ds"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
+                sizeof(numpy_type<bool>::type)}
+    , reinterpret_cast<const numpy_type<bool>::type*>(self.UBWCLosslessEnabledOnDSPtr()));
                 return DataFrame(dict);
     });
 

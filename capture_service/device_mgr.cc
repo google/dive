@@ -140,11 +140,11 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name)
         lib_path = p / name;
         if (std::filesystem::exists(lib_path))
         {
+            lib_path = std::filesystem::canonical(lib_path);
             break;
         }
     }
 
-    lib_path = std::filesystem::canonical(lib_path);
     LOGD("%s is at %s \n", name.c_str(), lib_path.generic_string().c_str());
     return lib_path;
 }
@@ -197,14 +197,32 @@ absl::Status AndroidDevice::CleanupDevice()
 
 absl::Status AndroidDevice::SetupApp(const std::string &package, const ApplicationType type)
 {
-    if (type == ApplicationType::VULKAN)
+    if (type == ApplicationType::VULKAN_APK)
     {
-        app = std::make_unique<VulkanApplication>(*this, package, type);
+        app = std::make_unique<VulkanApplication>(*this, package);
     }
 
-    else if (type == ApplicationType::OPENXR)
+    else if (type == ApplicationType::OPENXR_APK)
     {
-        app = std::make_unique<OpenXRApplication>(*this, package, type);
+        app = std::make_unique<OpenXRApplication>(*this, package);
+    }
+    if (app == nullptr)
+    {
+        return absl::InternalError("Failed allocate memory for AndroidApplication");
+    }
+    return app->Setup();
+}
+
+absl::Status AndroidDevice::SetupApp(const std::string    &command,
+                                     const std::string    &command_args,
+                                     const ApplicationType type)
+{
+    assert(type == ApplicationType::VULKAN_CLI);
+    app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
+
+    if (app == nullptr)
+    {
+        return absl::InternalError("Failed allocate memory for VulkanCliApplication");
     }
 
     return app->Setup();

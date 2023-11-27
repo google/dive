@@ -77,11 +77,17 @@ public:
     absl::StatusOr<std::vector<std::string>> ListPackage(PackageListOptions option = { 0,
                                                                                        1 }) const;
     std::string                              GetDeviceDisplayName() const;
-    absl::Status        SetupApp(const std::string &package, const ApplicationType type);
-    absl::Status        CleanupAPP();
-    absl::Status        StartApp();
-    absl::Status        StopApp();
-    const AdbSession   &Adb() const { return m_adb; }
+    absl::Status SetupApp(const std::string &package, const ApplicationType type);
+    absl::Status SetupApp(const std::string    &binary,
+                          const std::string    &args,
+                          const ApplicationType type);
+
+    absl::Status      CleanupAPP();
+    absl::Status      StartApp();
+    absl::Status      StopApp();
+    const AdbSession &Adb() const { return m_adb; }
+    AdbSession       &Adb() { return m_adb; }
+
     AndroidApplication *GetCurrentApplication() { return app.get(); }
     absl::Status        RetrieveTraceFile(const std::string &trace_file_path,
                                           const std::string &save_path);

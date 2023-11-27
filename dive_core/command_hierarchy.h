@@ -408,7 +408,6 @@ private:
 
     bool TryParseMarker(uint64_t submit_node_index);
 
-    void OnVulkanMarkerEnd();
     void OnGFRCommandMarkerEnd();
     void ParseVulkanCallMarker(char    *marker_ptr,
                                uint32_t marker_size,
@@ -416,10 +415,6 @@ private:
                                uint64_t packet_node_index);
 
     bool IsBeginDebugMarkerNode(uint64_t node_index);
-    void ParseVulkanCmdBeginMarker(char    *marker_ptr,
-                                   uint32_t marker_size,
-                                   uint64_t submit_node_index,
-                                   uint64_t packet_node_index);
 
     uint32_t GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords);
 

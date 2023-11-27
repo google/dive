@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include <string>
+#include <thread>
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 
@@ -63,6 +64,16 @@ public:
         m_serial(serial)
     {
     }
+    ~AdbSession()
+    {
+        for (auto &t : m_background_threads)
+        {
+            if (t.joinable())
+            {
+                t.join();
+            }
+        }
+    }
 
     // Run runs the commands and returns the status of that commands.
     inline absl::Status Run(const std::string &command, bool quiet = true) const
@@ -78,7 +89,16 @@ public:
         return RunCommand("adb -s " + m_serial + " " + command, quiet);
     }
 
+    inline absl::Status RunCommandBackground(const std::string &command)
+    {
+        std::string full_command = "adb -s " + m_serial + " " + command;
+        auto        worker = [full_command]() { RunCommand(full_command).IgnoreError(); };
+        m_background_threads.emplace_back(std::thread(worker));
+        return absl::OkStatus();
+    }
+
 private:
-    std::string m_serial;
+    std::string              m_serial;
+    std::vector<std::thread> m_background_threads;
 };
 }  // namespace Dive

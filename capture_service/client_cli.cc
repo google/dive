@@ -31,10 +31,21 @@ int main(int argc, char **argv)
     absl::ParseCommandLine(argc, argv);
     std::string      target_str = absl::GetFlag(FLAGS_target);
     Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+    auto             test_res = client.TestConnection();
+    if (test_res.ok())
+    {
+        std::cout << "Test connection succeed: " << *test_res << std::endl;
+    }
+    else
+    {
+        std::cerr << "Test connection failed: " << test_res.status().message() << std::endl;
+    }
 
     auto reply = client.RequestStartTrace();
     if (reply.ok())
+    {
         std::cout << "Capture is save on device at: " << *reply << std::endl;
+    }
 
     return 0;
 }

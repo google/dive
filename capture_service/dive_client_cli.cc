@@ -98,11 +98,15 @@ ABSL_FLAG(Command,
 ABSL_FLAG(std::string, target, "localhost:19999", "Server address");
 ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
-ABSL_FLAG(
-std::string,
-type,
-"openxr",
-"application type: \n\t`openxr` for OpenXR applications \n\t `vulkan` for Vulkan applications");
+ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli application to run");
+ABSL_FLAG(std::string, vulkan_command_args, "", "the arguments for vulkan cli application to run");
+
+ABSL_FLAG(std::string,
+          type,
+          "openxr",
+          "application type: \n\t`openxr` for OpenXR applications(apk) \n\t `vulkan` for Vulkan "
+          "applications(apk)"
+          "\n\t`vulkan_cli` for command line Vulkan application.");
 ABSL_FLAG(std::string,
           capture_path,
           ".",
@@ -164,11 +168,15 @@ bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
     return true;
 }
 
-bool run_package(Dive::DeviceManager& mgr, const std::string& package, const std::string& app_type)
+bool run_package(Dive::DeviceManager& mgr,
+                 const std::string&   app_type,
+                 const std::string&   package,
+                 const std::string&   command,
+                 const std::string&   command_args)
 {
     std::string serial = absl::GetFlag(FLAGS_device);
 
-    if (serial.empty() || package.empty())
+    if (serial.empty() || (package.empty() && command.empty()))
     {
         print_usage();
         return false;
@@ -189,9 +197,17 @@ bool run_package(Dive::DeviceManager& mgr, const std::string& package, const std
     }
 
     if (app_type == "openxr")
-        ret = dev->SetupApp(package, Dive::ApplicationType::OPENXR);
+    {
+        ret = dev->SetupApp(package, Dive::ApplicationType::OPENXR_APK);
+    }
     else if (app_type == "vulkan")
-        ret = dev->SetupApp(package, Dive::ApplicationType::VULKAN);
+    {
+        ret = dev->SetupApp(package, Dive::ApplicationType::VULKAN_APK);
+    }
+    else if (app_type == "vulkan_cli")
+    {
+        ret = dev->SetupApp(command, command_args, Dive::ApplicationType::VULKAN_CLI);
+    }
     else
     {
         print_usage();
@@ -243,12 +259,15 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     return ret.ok();
 }
 
-bool run_and_capture(Dive::DeviceManager& mgr, const std::string& package)
+bool run_and_capture(Dive::DeviceManager& mgr,
+                     const std::string&   app_type,
+                     const std::string&   package,
+                     const std::string&   command,
+                     const std::string&   command_args)
 {
 
     std::string target_str = absl::GetFlag(FLAGS_target);
-    std::string app_type = absl::GetFlag(FLAGS_type);
-    run_package(mgr, package, app_type);
+    run_package(mgr, app_type, package, command, command_args);
     std::this_thread::sleep_for(5000ms);
     trigger_capture(mgr);
 
@@ -307,6 +326,8 @@ int main(int argc, char** argv)
     Command     cmd = absl::GetFlag(FLAGS_command);
     std::string serial = absl::GetFlag(FLAGS_device);
     std::string package = absl::GetFlag(FLAGS_package);
+    std::string vulkan_command = absl::GetFlag(FLAGS_vulkan_command);
+    std::string vulkan_command_args = absl::GetFlag(FLAGS_vulkan_command_args);
     std::string app_type = absl::GetFlag(FLAGS_type);
 
     Dive::DeviceManager mgr;
@@ -332,7 +353,7 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        if (run_package(mgr, package, app_type))
+        if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args))
         {
             process_input(mgr);
         }
@@ -342,7 +363,7 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        run_and_capture(mgr, package);
+        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args);
         break;
     }
     case Command::kCleanup:

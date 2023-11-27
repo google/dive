@@ -117,7 +117,6 @@ AndroidApplication::AndroidApplication(AndroidDevice  &dev,
     m_type(type),
     m_started(false)
 {
-    ParsePackage().IgnoreError();
 }
 
 absl::Status AndroidApplication::ParsePackage()
@@ -238,6 +237,61 @@ OpenXRApplication::~OpenXRApplication()
         Stop().IgnoreError();
     }
     Cleanup().IgnoreError();
+}
+
+VulkanCliApplication::~VulkanCliApplication()
+{
+    if (m_started)
+    {
+        Stop().IgnoreError();
+    }
+    Cleanup().IgnoreError();
+}
+
+// For CLI Vulkan application, the layer library is being put at
+// kVulkanGlobalPath(/data/local/debug/vulkan), which is different from the layer for apk
+// application. For apk application, the layer is copied to the application's own storage instead of
+// the global path.
+absl::Status VulkanCliApplication::Setup()
+{
+    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("push %s %s", kVkLayerLibName, kVulkanGlobalPath)));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName), false));
+
+    return absl::OkStatus();
+}
+
+absl::Status VulkanCliApplication::Cleanup()
+{
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell rm -fr %s", kVulkanGlobalPath)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));
+
+    return absl::OkStatus();
+}
+
+absl::Status VulkanCliApplication::Start()
+{
+    const std::string cmd = absl::StrFormat("shell LD_PRELOAD=%s/%s %s %s",
+                                            kTargetPath,
+                                            kWrapLibName,
+                                            m_binary,
+                                            m_args);
+
+    RETURN_IF_ERROR(m_dev.Adb().RunCommandBackground(cmd));
+    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().RunAndGetResult("shell pidof " + m_binary, false));
+    m_started = true;
+    return absl::OkStatus();
+}
+
+absl::Status VulkanCliApplication::Stop()
+{
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell kill -9 %s", m_pid)));
+    m_started = false;
+    return absl::OkStatus();
 }
 
 }  // namespace Dive

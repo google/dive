@@ -18,8 +18,6 @@
 #include <QTextDocument>
 #include <sstream>
 #include <string>
-#include "capture_layer/generated/command_printer.h"
-#include "capture_layer/generated/vulkan_metadata.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common.h"
 #include "dive_core/common/gpudefs.h"

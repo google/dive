@@ -34,6 +34,14 @@ class DiveServiceImpl final : public DiveService::Service
     grpc::Status RunCommand(grpc::ServerContext     *context,
                             const RunCommandRequest *request,
                             RunCommandReply         *reply) override;
+
+    grpc::Status GetTraceFileMetaData(grpc::ServerContext       *context,
+                                      const FileMetaDataRequest *request,
+                                      FileMetaDataReply         *response) override;
+
+    grpc::Status DownloadFile(grpc::ServerContext                      *context,
+                              const DownLoadRequest              *request,
+                              grpc::ServerWriter<FileContent> *writer) override;
 };
 
 }  // namespace Dive

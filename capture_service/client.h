@@ -36,7 +36,11 @@ public:
 
     absl::StatusOr<std::string> TestConnection();
 
-    absl::StatusOr<std::string> RunCommand(const std::string &command);
+    absl::StatusOr<std::string> RunCommand(const std::string& command);
+    absl::StatusOr<int64_t>     GetTraceFileSize(const std::string& file_on_server);
+    absl::Status                DownloadFile(const std::string&           file_on_server,
+                                             const std::string&           save_path,
+                                             std::function<void(int64_t)> progress_callback = nullptr);
 
 private:
     std::unique_ptr<DiveService::Stub> m_stub;

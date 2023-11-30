@@ -42,10 +42,15 @@ int main(int argc, char **argv)
     }
 
     auto reply = client.RequestStartTrace();
-    if (reply.ok())
+    if (!reply.ok())
     {
-        std::cout << "Capture is save on device at: " << *reply << std::endl;
+        std::cout << "RequestStartTrace failed " << reply.status().message() << std::endl;
     }
-
+    std::cout << "Capture is save on device at: " << *reply << std::endl;
+    auto res = client.DownloadFile(*reply, "capture.rd");
+    if (!res.ok())
+    {
+        std::cout << "Download file failed " << res.message();
+    }
     return 0;
 }

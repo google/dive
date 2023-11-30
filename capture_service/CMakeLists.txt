@@ -85,6 +85,17 @@ target_link_libraries(service PRIVATE
                       ${_PROTOBUF_LIBPROTOBUF})
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
+add_executable(server server.cc
+)
+
+target_link_libraries(server PRIVATE
+                      service
+                      dive_grpc_proto
+                      absl::flags
+                      absl::flags_parse
+                      ${_GRPC_GRPCPP}
+                      ${_PROTOBUF_LIBPROTOBUF})
+
 if(ANDROID)
   target_link_libraries(service PRIVATE wrap)
 else()

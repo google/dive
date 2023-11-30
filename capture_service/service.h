@@ -39,8 +39,8 @@ class DiveServiceImpl final : public DiveService::Service
                                       const FileMetaDataRequest *request,
                                       FileMetaDataReply         *response) override;
 
-    grpc::Status DownloadFile(grpc::ServerContext                      *context,
-                              const DownLoadRequest              *request,
+    grpc::Status DownloadFile(grpc::ServerContext             *context,
+                              const DownLoadRequest           *request,
                               grpc::ServerWriter<FileContent> *writer) override;
 };
 

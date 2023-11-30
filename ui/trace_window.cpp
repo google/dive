@@ -15,9 +15,11 @@
 */
 
 #include "trace_window.h"
+
 #include <qcombobox.h>
 #include <qdebug.h>
 #include <qmessagebox.h>
+#include <qprogressdialog.h>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
@@ -33,7 +35,9 @@
 #include <QSizePolicy>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QThread>
 #include <QVBoxLayout>
+#include <cstdint>
 #include <filesystem>
 
 #include "absl/strings/str_cat.h"
@@ -122,7 +126,7 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
-void TraceDialog::ShowErrorMessage(const std::string &err_msg)
+void ShowErrorMessage(const std::string &err_msg)
 {
     QMessageBox msgBox;
     msgBox.setText(err_msg.c_str());
@@ -307,6 +311,45 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
+    QProgressDialog *progress_bar = new QProgressDialog("Downloading", nullptr, 0, 100, this);
+    progress_bar->setAutoReset(true);
+    progress_bar->setAutoClose(true);
+    TraceWorker *workerThread = new TraceWorker(progress_bar);
+    connect(workerThread, &TraceWorker::TraceAvailable, this, &TraceDialog::OnTraceAvailable);
+    connect(workerThread, &TraceWorker::finished, workerThread, &QObject::deleteLater);
+    workerThread->start();
+    std::cout << "OnTraceClicked done " << std::endl;
+}
+
+void TraceDialog::OnTraceAvailable(QString const &trace_path)
+{
+    emit TraceAvailable(trace_path);
+}
+
+void ProgressBarWorker::run()
+{
+    int64_t cur_size = 0;
+    int     percent = 0;
+    while (m_file_size && cur_size <= m_file_size)
+    {
+        if (std::filesystem::exists(m_file_name))
+        {
+            cur_size = std::filesystem::file_size(m_file_name);
+            percent = cur_size * 100 / m_file_size;
+            m_progress_bar->setValue(percent);
+            m_progress_bar->show();
+            std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
+                      << m_file_size << std::endl;
+        }
+        if (cur_size == m_file_size)
+            break;
+        sleep(1);
+    }
+    m_progress_bar->setValue(100);
+}
+
+void TraceWorker::run()
+{
     const std::string server_str = "localhost:19999";
 
     auto device = Dive::GetDeviceManager().GetDevice();
@@ -354,20 +397,52 @@ void TraceDialog::OnTraceClicked()
     std::filesystem::path p(*trace_file_path);
     std::filesystem::path target(capture_path);
     target /= p.filename();
-
     qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
-    auto ret = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    auto    ret = client.GetTraceFileSize(p.generic_string());
+    int64_t file_size = 0;
     if (ret.ok())
-        qDebug() << "Capture saved at "
-                 << std::filesystem::canonical(target).generic_string().c_str();
+    {
+        file_size = *ret;
+        std::cout << " Trace file size: " << file_size << std::endl;
+    }
     else
     {
-        std::string err_msg = absl::StrCat("Failed to retrieve trace file, error: ", ret.message());
-
+        std::string err_msg = absl::StrCat("Failed to retrieve trace file size, error: ",
+                                           ret.status().message());
         qDebug() << err_msg.c_str();
         ShowErrorMessage(err_msg);
         return;
     }
+    m_progress_bar->reset();
+
+    ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
+                                                                   target,
+                                                                   file_size);
+    connect(progress_bar_worker,
+            &TraceWorker::finished,
+            progress_bar_worker,
+            &QObject::deleteLater);
+
+    progress_bar_worker->start();
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
+    auto r = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    if (r.ok())
+        qDebug() << "Capture saved at "
+                 << std::filesystem::canonical(target).generic_string().c_str();
+    else
+    {
+        std::string err_msg = absl::StrCat("Failed to retrieve trace file, error: ", r.message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return;
+    }
+    int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::steady_clock::now() - begin)
+                                   .count();
+    qDebug() << "Time used to download the capture is " << (time_used_to_load_ms / 1000.0)
+             << " seconds.";
 
     QString capture_saved_path(target.generic_string().c_str());
     emit    TraceAvailable(capture_saved_path);

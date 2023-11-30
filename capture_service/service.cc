@@ -25,11 +25,11 @@ limitations under the License.
 #include "absl/flags/flag.h"
 #include "absl/strings/str_format.h"
 #include "command_utils.h"
+#include "constants.h"
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/health_check_service_interface.h"
 #include "log.h"
 #include "trace_mgr.h"
-#include "constants.h"
 
 ABSL_FLAG(uint16_t, port, 19999, "Server port for the service");
 

@@ -332,7 +332,7 @@ MainWindow::MainWindow()
                      this,
                      SLOT(UpdateOverlay(const QString &)));
 
-    // showMaximized();
+    showMaximized();
 
     // Set default view mode
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));

@@ -76,6 +76,7 @@ public:
     TraceDialog(QWidget *parent = 0);
     ~TraceDialog();
     void UpdateDeviceList();
+    void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
 
 private slots:
@@ -84,6 +85,8 @@ private slots:
     void OnStartClicked();
     void OnTraceClicked();
     void OnTraceAvailable(const QString &);
+    void OnDevListRefresh();
+    void OnAppListRefresh();
 
 signals:
     void TraceAvailable(const QString &);
@@ -93,11 +96,15 @@ private:
     QLabel             *m_dev_label;
     QStandardItemModel *m_dev_model;
     QComboBox          *m_dev_box;
+    QPushButton        *m_dev_refresh_button;
 
+    QHBoxLayout        *m_pkg_layout;
     QLabel             *m_pkg_label;
     QStandardItemModel *m_pkg_model;
     QComboBox          *m_pkg_box;
+    QPushButton        *m_pkg_refresh_button;
 
+    QHBoxLayout        *m_type_layout;
     QLabel             *m_app_type_label;
     QStandardItemModel *m_app_type_model;
     QComboBox          *m_app_type_box;

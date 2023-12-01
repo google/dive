@@ -42,6 +42,8 @@
 
 #include "absl/strings/str_cat.h"
 #include "capture_service/client.h"
+#include "capture_service/device_mgr.h"
+
 namespace
 {
 const std::vector<std::string> kAppTypes{ "Vulkan", "OpenXR" };
@@ -72,6 +74,10 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_capture_button = new QPushButton("&Trace", this);
     m_capture_button->setEnabled(false);
 
+    m_dev_refresh_button = new QPushButton("&Refresh", this);
+    m_pkg_refresh_button = new QPushButton("&Refresh", this);
+    m_pkg_refresh_button->setDisabled(true);
+
     m_main_layout = new QVBoxLayout();
 
     m_devices = Dive::GetDeviceManager().ListDevice();
@@ -91,20 +97,33 @@ TraceDialog::TraceDialog(QWidget *parent)
 
     m_pkg_box->setModel(m_pkg_model);
     m_pkg_box->setCurrentIndex(-1);
-    m_pkg_box->setCurrentText("Please select a pckage");
+    m_pkg_box->setCurrentText("Please select a package");
+    m_pkg_box->setMinimumSize(m_dev_box->sizeHint());
+    m_pkg_box->setSizeAdjustPolicy(
+    QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
 
     m_app_type_box->setModel(m_app_type_model);
 
     m_capture_layout->addWidget(m_dev_label);
     m_capture_layout->addWidget(m_dev_box);
-    m_capture_layout->addWidget(m_pkg_label);
-    m_capture_layout->addWidget(m_pkg_box);
-    m_capture_layout->addWidget(m_app_type_label);
-    m_capture_layout->addWidget(m_app_type_box);
+    m_capture_layout->addWidget(m_dev_refresh_button);
+
+    m_pkg_layout = new QHBoxLayout();
+    m_pkg_layout->addWidget(m_pkg_label);
+    m_pkg_layout->addWidget(m_pkg_box);
+    m_pkg_layout->addWidget(m_pkg_refresh_button);
+
+    m_type_layout = new QHBoxLayout();
+    m_type_layout->addWidget(m_app_type_label);
+    m_type_layout->addWidget(m_app_type_box);
+
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
 
     m_main_layout->addLayout(m_capture_layout);
+    m_main_layout->addLayout(m_pkg_layout);
+    m_main_layout->addLayout(m_type_layout);
+
     m_main_layout->addLayout(m_button_layout);
     setLayout(m_main_layout);
 
@@ -118,6 +137,16 @@ TraceDialog::TraceDialog(QWidget *parent)
                      SLOT(OnPackageSelected(const QString &)));
     QObject::connect(m_run_button, &QPushButton::clicked, this, &TraceDialog::OnStartClicked);
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
+
+    QObject::connect(m_dev_refresh_button,
+                     &QPushButton::clicked,
+                     this,
+                     &TraceDialog::OnDevListRefresh);
+    QObject::connect(m_pkg_refresh_button,
+                     &QPushButton::clicked,
+                     this,
+                     &TraceDialog::OnAppListRefresh);
+    setMinimumWidth(500);
 }
 
 TraceDialog::~TraceDialog()
@@ -188,27 +217,8 @@ void TraceDialog::OnDeviceSelected(const QString &s)
         ShowErrorMessage(err_msg);
         return;
     }
-    auto device = *dev_ret;
-    auto ret = device->ListPackage();
-    if (!ret.ok())
-    {
-        std::string err_msg = absl::StrCat("Failed to list package for device ",
-                                           m_cur_dev,
-                                           " error: ",
-                                           ret.status().message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
 
-        return;
-    }
-    m_pkg_list = *ret;
-    m_pkg_model->clear();
-    for (size_t i = 0; i < m_pkg_list.size(); i++)
-    {
-        QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
-        m_pkg_model->appendRow(item);
-    }
-    m_pkg_box->setCurrentIndex(-1);
+    UpdatePackageList();
 }
 
 void TraceDialog::OnPackageSelected(const QString &s)
@@ -218,7 +228,11 @@ void TraceDialog::OnPackageSelected(const QString &s)
         return;
     }
     qDebug() << "Package selected: " << s << " " << m_pkg_box->currentIndex();
-    m_cur_pkg = m_pkg_list[m_pkg_box->currentIndex()];
+    if (m_cur_pkg != m_pkg_list[m_pkg_box->currentIndex()])
+    {
+        m_cur_pkg = m_pkg_list[m_pkg_box->currentIndex()];
+        m_app_type_box->setCurrentIndex(-1);
+    }
     m_run_button->setEnabled(true);
 }
 
@@ -241,11 +255,17 @@ void TraceDialog::OnStartClicked()
         ShowErrorMessage(err_msg);
         return;
     }
-    int         ty = m_app_type_box->currentIndex();
+    int ty = m_app_type_box->currentIndex();
+    if (ty == -1)
+    {
+        ShowErrorMessage("Please select application type");
+        return;
+    }
     std::string ty_str = kAppTypes[ty];
 
     if (m_run_button->text() == QString("&Start Application"))
     {
+
         device->CleanupAPP().IgnoreError();
         m_run_button->setText("&Starting..");
         m_run_button->setDisabled(true);
@@ -311,7 +331,9 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
-    QProgressDialog *progress_bar = new QProgressDialog("Downloading", nullptr, 0, 100, this);
+    QProgressDialog *progress_bar = new QProgressDialog("Downloading ... ", nullptr, 0, 100, this);
+    progress_bar->setMinimumWidth(this->minimumWidth() + 50);
+    progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
     TraceWorker *workerThread = new TraceWorker(progress_bar);
@@ -413,7 +435,7 @@ void TraceWorker::run()
         ShowErrorMessage(err_msg);
         return;
     }
-    m_progress_bar->reset();
+    // m_progress_bar->reset();
 
     ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
                                                                    target,
@@ -428,6 +450,8 @@ void TraceWorker::run()
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
     auto r = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    progress_bar_worker->terminate();
+    m_progress_bar->setValue(100);
     if (r.ok())
         qDebug() << "Capture saved at "
                  << std::filesystem::canonical(target).generic_string().c_str();
@@ -446,4 +470,43 @@ void TraceWorker::run()
 
     QString capture_saved_path(target.generic_string().c_str());
     emit    TraceAvailable(capture_saved_path);
+}
+
+void TraceDialog::OnDevListRefresh()
+{
+    UpdateDeviceList();
+}
+void TraceDialog::OnAppListRefresh()
+{
+    UpdatePackageList();
+}
+
+void TraceDialog::UpdatePackageList()
+{
+    auto device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        return;
+    }
+
+    auto ret = device->ListPackage();
+    if (!ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Failed to list package for device ",
+                                           m_cur_dev,
+                                           " error: ",
+                                           ret.status().message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return;
+    }
+    m_pkg_list = *ret;
+    m_pkg_model->clear();
+    for (size_t i = 0; i < m_pkg_list.size(); i++)
+    {
+        QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
+        m_pkg_model->appendRow(item);
+    }
+    m_pkg_box->setCurrentIndex(-1);
+    m_pkg_refresh_button->setDisabled(false);
 }

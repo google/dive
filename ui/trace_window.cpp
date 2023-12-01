@@ -438,7 +438,7 @@ void TraceWorker::run()
     // m_progress_bar->reset();
 
     ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
-                                                                   target,
+                                                                   target.generic_string(),
                                                                    file_size);
     connect(progress_bar_worker,
             &TraceWorker::finished,

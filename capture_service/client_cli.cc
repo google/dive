@@ -39,18 +39,21 @@ int main(int argc, char **argv)
     else
     {
         std::cerr << "Test connection failed: " << test_res.status().message() << std::endl;
+        return -1;
     }
 
     auto reply = client.RequestStartTrace();
     if (!reply.ok())
     {
         std::cout << "RequestStartTrace failed " << reply.status().message() << std::endl;
+        return -1;
     }
     std::cout << "Capture is save on device at: " << *reply << std::endl;
     auto res = client.DownloadFile(*reply, "capture.rd");
     if (!res.ok())
     {
         std::cout << "Download file failed " << res.message();
+        return -1;
     }
     return 0;
 }

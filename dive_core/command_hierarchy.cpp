@@ -526,6 +526,13 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, Syn
 // =================================================================================================
 // CommandHierarchyCreator
 // =================================================================================================
+CommandHierarchyCreator::CommandHierarchyCreator(EmulateStateTracker &state_tracker) :
+    m_state_tracker(state_tracker)
+{
+    m_state_tracker.Reset();
+}
+
+//--------------------------------------------------------------------------------------------------
 bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_ptr,
                                           const CaptureData &capture_data,
                                           bool               flatten_chain_nodes,
@@ -554,35 +561,9 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_p
     m_num_events = 0;
     m_flatten_chain_nodes = flatten_chain_nodes;
 
-    for (uint32_t submit_index = 0; submit_index < capture_data.GetNumSubmits(); ++submit_index)
+    if (!ProcessSubmits(capture_data.GetSubmits(), capture_data.GetMemoryManager()))
     {
-        const Dive::SubmitInfo &submit_info = capture_data.GetSubmitInfo(submit_index);
-        OnSubmitStart(submit_index, submit_info);
-
-        if (submit_info.IsDummySubmit())
-        {
-            OnSubmitEnd(submit_index, submit_info);
-            continue;
-        }
-
-        // Only gfx or compute engine types are parsed
-        if ((submit_info.GetEngineType() != Dive::EngineType::kUniversal) &&
-            (submit_info.GetEngineType() != Dive::EngineType::kCompute) &&
-            (submit_info.GetEngineType() != Dive::EngineType::kDma))
-        {
-            OnSubmitEnd(submit_index, submit_info);
-            continue;
-        }
-
-        EmulatePM4 emu;
-        if (!emu.ExecuteSubmit(*this,
-                               capture_data.GetMemoryManager(),
-                               submit_index,
-                               submit_info.GetNumIndirectBuffers(),
-                               submit_info.GetIndirectBufferInfoPtr()))
-            return false;
-
-        OnSubmitEnd(submit_index, submit_info);
+        return false;
     }
 
     m_command_hierarchy_ptr->SetMetadataVersion(m_capture_data_ptr->GetVulkanMetadataVersion());
@@ -672,44 +653,19 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     m_num_events = 0;
     m_flatten_chain_nodes = false;
 
-    uint32_t submit_index = 0;
+    Dive::IndirectBufferInfo ib_info;
+    ib_info.m_va_addr = 0x0;
+    ib_info.m_size_in_dwords = size_in_dwords;
+    ib_info.m_skip = false;
+    std::vector<IndirectBufferInfo> ib_array;
+    ib_array.push_back(ib_info);
+    const Dive::SubmitInfo submit_info(engine_type, queue_type, 0, false, std::move(ib_array));
+
+    std::vector<SubmitInfo> submits{ submit_info };
+    TempMemoryManager       mem_manager(command_dwords, size_in_dwords);
+    if (!ProcessSubmits(submits, mem_manager))
     {
-        Dive::IndirectBufferInfo ib_info;
-        ib_info.m_va_addr = 0x0;
-        ib_info.m_size_in_dwords = size_in_dwords;
-        ib_info.m_skip = false;
-
-        std::vector<IndirectBufferInfo> ib_array;
-        ib_array.push_back(ib_info);
-
-        const Dive::SubmitInfo submit_info(engine_type, queue_type, 0, false, std::move(ib_array));
-        OnSubmitStart(submit_index, submit_info);
-
-        if (submit_info.IsDummySubmit())
-        {
-            OnSubmitEnd(submit_index, submit_info);
-            return false;
-        }
-
-        // Only gfx or compute engine types are parsed
-        if ((submit_info.GetEngineType() != Dive::EngineType::kUniversal) &&
-            (submit_info.GetEngineType() != Dive::EngineType::kCompute) &&
-            (submit_info.GetEngineType() != Dive::EngineType::kDma))
-        {
-            OnSubmitEnd(submit_index, submit_info);
-            return false;
-        }
-
-        EmulatePM4        emu;
-        TempMemoryManager mem_manager(command_dwords, size_in_dwords);
-        if (!emu.ExecuteSubmit(*this,
-                               mem_manager,
-                               submit_index,
-                               submit_info.GetNumIndirectBuffers(),
-                               submit_info.GetIndirectBufferInfoPtr()))
-            return false;
-
-        OnSubmitEnd(submit_index, submit_info);
+        return false;
     }
 
     // Convert the info in m_node_children into CommandHierarchy's topologies
@@ -723,6 +679,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
                                         const IndirectBufferInfo &ib_info,
                                         IbType                    type)
 {
+    m_state_tracker.PushEnableMask(ib_info.m_enable_mask);
     m_cur_ib_level = ib_info.m_ib_level;
 
     // Make all subsequent shared node parent the actual IB-packet
@@ -821,6 +778,7 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
                                       uint32_t                  ib_index,
                                       const IndirectBufferInfo &ib_info)
 {
+    m_state_tracker.PopEnableMask();
     DIVE_ASSERT(!m_ib_stack.empty());
 
     // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
@@ -849,6 +807,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                        Pm4Type               type,
                                        uint32_t              header)
 {
+    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, type, header))
+        return false;
     // THIS IS TEMPORARY! Only deal with typ4 & type7 packets for now
     if ((type != Pm4Type::kType4) && (type != Pm4Type::kType7))
         return true;
@@ -1314,7 +1274,7 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
             DIVE_ASSERT(packet_info_ptr != nullptr);
             AppendPacketFieldNodes(mem_manager,
                                    submit_index,
-                                   va_addr,
+                                   va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
                                    type7_header.count,
                                    append_extra_dwords,
                                    packet_info_ptr,
@@ -1419,7 +1379,8 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
     for (uint32_t field = 0; field < reg_info_ptr->m_fields.size(); ++field)
     {
         const RegField &reg_field = reg_info_ptr->m_fields[field];
-        uint64_t        field_value = (reg_value & reg_field.m_mask) >> reg_field.m_shift;
+        uint64_t        field_value = (reg_value & reg_field.m_mask) >> reg_field.m_shift
+                                                                 << reg_field.m_shr;
 
         // Field item
         std::ostringstream field_string_stream;
@@ -1796,12 +1757,7 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         offset_in_bytes += size_to_read;
 
         uint64_t reg_value = 0;
-        bool     ret = mem_manager.CopyMemory(&reg_value, submit_index, reg_va_addr, size_to_read);
-        if (!ret)
-        {
-            DIVE_ERROR_MSG("CopyMemory failed");
-            DIVE_ASSERT(ret);  // This should never fail!
-        }
+        DIVE_VERIFY(mem_manager.CopyMemory(&reg_value, submit_index, reg_va_addr, size_to_read));
         // Create the register node, as well as all its children nodes that describe the various
         // fields set in the single 32-bit register
         uint64_t reg_node_index = AddRegisterNode(reg_offset, reg_value, reg_info_ptr);
@@ -1917,6 +1873,7 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
         {
             const PacketField &packet_field = packet_info_ptr->m_fields[field];
 
+            // packet_field.m_dword keeps the total dword count so far, including current field
             uint32_t field_dword = base_dword + packet_field.m_dword;
             end_dword = field_dword;
 
@@ -1929,12 +1886,11 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             }
 
             uint32_t dword_value = 0;
-            uint64_t dword_va_addr = va_addr + field_dword * sizeof(uint32_t);
-            bool     ret = mem_manager.CopyMemory(&dword_value,
-                                              submit_index,
-                                              dword_va_addr,
-                                              sizeof(uint32_t));
-            DIVE_VERIFY(ret);  // This should never fail!
+            // (field_dword - 1) since each field is always 1 32bit register, we don't have any
+            // 64bit field
+            uint64_t dword_va_addr = va_addr + (field_dword - 1) * sizeof(uint32_t);
+            DIVE_VERIFY(
+            mem_manager.CopyMemory(&dword_value, submit_index, dword_va_addr, sizeof(uint32_t)));
 
             uint32_t field_value = (dword_value & packet_field.m_mask) >> packet_field.m_shift;
 
@@ -1978,11 +1934,10 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             {
                 uint32_t dword_value = 0;
                 uint64_t dword_va_addr = va_addr + i * sizeof(uint32_t);
-                bool     ret = mem_manager.CopyMemory(&dword_value,
-                                                  submit_index,
-                                                  dword_va_addr,
-                                                  sizeof(uint32_t));
-                DIVE_VERIFY(ret);  // This should never fail!
+                DIVE_VERIFY(mem_manager.CopyMemory(&dword_value,
+                                                   submit_index,
+                                                   dword_va_addr,
+                                                   sizeof(uint32_t)));
 
                 std::ostringstream field_string_stream;
                 field_string_stream << prefix << "(DWORD " << i << "): 0x" << std::hex
@@ -2019,6 +1974,9 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         kIbo
     };
     StateBlockCat cat;
+    const bool    is_compute = (packet.bitfields0.STATE_BLOCK == SB6_CS_TEX) ||
+                            (packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER) ||
+                            (packet.bitfields0.STATE_BLOCK == SB6_CS_IBO);
     switch (packet.bitfields0.STATE_BLOCK)
     {
     case SB6_VS_TEX:
@@ -2034,20 +1992,31 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
     case SB6_FS_SHADER:
     case SB6_CS_SHADER: cat = StateBlockCat::kShader; break;
     case SB6_IBO:
-    case SB6_CS_IBO:
-        DIVE_ASSERT(false);  // These seem to be specific to pre-A6XX
-        cat = StateBlockCat::kIbo;
-        break;
+    case SB6_CS_IBO: cat = StateBlockCat::kIbo; break;
     default: DIVE_ASSERT(false); cat = StateBlockCat::kTex;
     }
 
     uint64_t ext_src_addr = 0;
+    bool     bindless = false;
     switch (packet.bitfields0.STATE_SRC)
     {
     case SS6_DIRECT: ext_src_addr = va_addr + sizeof(PM4_CP_LOAD_STATE6); break;
     case SS6_BINDLESS:
-        DIVE_ASSERT(false);  // Not supported yet
-        break;
+    {
+        bindless = true;
+        const uint32_t base_reg = is_compute ?
+                                  GetRegOffsetByName("HLSQ_CS_BINDLESS_BASE0_DESCRIPTOR") :
+                                  GetRegOffsetByName("HLSQ_BINDLESS_BASE0_DESCRIPTOR");
+        const uint32_t reg = base_reg + (packet.u32All1 >> 28) * 2;
+        printf("%d", reg);
+
+        DIVE_ASSERT(m_state_tracker.IsRegSet(reg));
+        DIVE_ASSERT(m_state_tracker.IsRegSet(reg + 1));
+
+        ext_src_addr = m_state_tracker.GetRegValue(reg) & 0xfffffffc;
+        ext_src_addr |= ((uint64_t)m_state_tracker.GetRegValue(reg + 1)) << 32;
+    }
+    break;
     case SS6_INDIRECT:
         ext_src_addr = packet.u32All1 & 0xfffffffc;
         ext_src_addr |= ((uint64_t)packet.u32All2) << 32;
@@ -2058,14 +2027,14 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
     auto AppendSharps = [&](const char *sharp_struct_name, uint32_t sharp_struct_size) {
         for (uint32_t i = 0; i < packet.bitfields0.NUM_UNIT; ++i)
         {
-            uint64_t          ubo_addr = ext_src_addr + i * sharp_struct_size;
+            uint64_t          addr = ext_src_addr + i * sharp_struct_size;
             const PacketInfo *packet_info_ptr = GetPacketInfo(0xffffffff, sharp_struct_name);
             DIVE_ASSERT(packet_info_ptr != nullptr);
             std::ostringstream prefix_stream;
             prefix_stream << "  [" << i << "] ";
             AppendPacketFieldNodes(mem_manager,
                                    submit_index,
-                                   ubo_addr,
+                                   addr,
                                    sharp_struct_size / sizeof(uint32_t),
                                    false,
                                    packet_info_ptr,
@@ -2074,17 +2043,17 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         }
     };
 
-    if (cat == StateBlockCat::kTex)
+    switch (cat)
     {
+    case StateBlockCat::kTex:
         if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
-            AppendSharps("A6XX_TEX_SAMP", sizeof(A6XX_TEX_SAMP));
+            AppendSharps("A6XX_TEX_SAMP", bindless ? 16 : sizeof(A6XX_TEX_SAMP));
         else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
             AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
         else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
-            AppendSharps("A6XX_UBO", sizeof(A6XX_UBO));
-    }
-    else if (cat == StateBlockCat::kShader)
-    {
+            AppendSharps("A6XX_UBO", bindless ? 16 : sizeof(A6XX_UBO));
+        break;
+    case StateBlockCat::kShader:
         // Shader program
         if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
         {
@@ -2094,36 +2063,41 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         {
             // NUM_UNIT is in unit of float4s
             // Add 4 dwords per line
-            for (uint32_t i = 0; i < packet.bitfields0.NUM_UNIT; ++i)
-            {
-                std::ostringstream string_stream;
-                for (uint32_t j = 0; j < 4; ++j)
-                {
-                    float    value;
-                    uint64_t addr = ext_src_addr + ((i * 4 + j) * sizeof(float));
-                    DIVE_VERIFY(mem_manager.CopyMemory(&value, submit_index, addr, sizeof(float)));
-                    string_stream << std::fixed << std::setw(11) << std::setprecision(6);
-                    string_stream << value << " ";
-                }
-
-                // Add it as child to packet_node
-                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
-                uint64_t                  const_node_index = AddNode(NodeType::kFieldNode,
-                                                    string_stream.str(),
-                                                    aux_info);
-                AddChild(CommandHierarchy::kEngineTopology, packet_node_index, const_node_index);
-                AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, const_node_index);
-                AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, const_node_index);
-                AddChild(CommandHierarchy::kRgpTopology, packet_node_index, const_node_index);
-            }
+            AddConstantsToPacketNode<float>(mem_manager,
+                                            ext_src_addr,
+                                            packet_node_index,
+                                            packet.bitfields0.NUM_UNIT,
+                                            submit_index,
+                                            4);
         }
         else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
-            AppendSharps("A6XX_UBO", sizeof(A6XX_UBO));
+            AppendSharps("A6XX_UBO", bindless ? 16 : sizeof(A6XX_UBO));
         else if (packet.bitfields0.STATE_TYPE == ST6_IBO)
         {
             DIVE_ASSERT(packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER);
             AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
         }
+        break;
+    case StateBlockCat::kIbo:
+        if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
+            AppendSharps("A6XX_TEX_CONST", bindless ? 16 : sizeof(A6XX_TEX_CONST));
+        else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
+        {
+            // NUM_UNIT is in unit of 2 dwords
+            // Add 2 dwords per line
+            AddConstantsToPacketNode<uint32_t>(mem_manager,
+                                               ext_src_addr,
+                                               packet_node_index,
+                                               packet.bitfields0.NUM_UNIT,
+                                               submit_index,
+                                               2);
+        }
+        else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
+        {
+            // TODO(wangra): could dump textures here
+        }
+        break;
+    default: DIVE_ASSERT(false); break;
     }
 }
 
@@ -2407,4 +2381,68 @@ bool CommandHierarchyCreator::IsVulkanEvent(uint32_t cmd_id) const
     return false;
 }
 
+//--------------------------------------------------------------------------------------------------
+template<typename T> struct OutputStream
+{
+    static void SetupFormat(std::ostringstream &stream) {}
+};
+
+template<> struct OutputStream<float>
+{
+    static void SetupFormat(std::ostringstream &stream)
+    {
+        stream << std::fixed << std::setw(11) << std::setprecision(6);
+    }
+};
+
+template<> struct OutputStream<uint32_t>
+{
+    static void SetupFormat(std::ostringstream &stream) { stream << std::hex << std::setw(11); }
+};
+
+template<typename T>
+void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager &mem_manager,
+                                                       uint64_t              ext_src_addr,
+                                                       uint64_t              packet_node_index,
+                                                       uint32_t              num_unit,
+                                                       uint32_t              submit_index,
+                                                       uint32_t              value_count_per_unit)
+{
+    for (uint32_t i = 0; i < num_unit; ++i)
+    {
+        std::ostringstream string_stream;
+        for (uint32_t j = 0; j < value_count_per_unit; ++j)
+        {
+            T        value;
+            uint64_t addr = ext_src_addr + ((i * value_count_per_unit + j) * sizeof(T));
+            DIVE_VERIFY(mem_manager.CopyMemory(&value, submit_index, addr, sizeof(T)));
+            OutputStream<T>::SetupFormat(string_stream);
+            string_stream << value << " ";
+        }
+
+        // Add it as child to packet_node
+        CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+        uint64_t const_node_index = AddNode(NodeType::kFieldNode, string_stream.str(), aux_info);
+        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, const_node_index);
+        AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, const_node_index);
+        AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, const_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, const_node_index);
+    }
+}
+
+template void CommandHierarchyCreator::AddConstantsToPacketNode<float>(
+const IMemoryManager &mem_manager,
+uint64_t              ext_src_addr,
+uint64_t              packet_node_index,
+uint32_t              num_unit,
+uint32_t              submit_index,
+uint32_t              value_count_per_unit);
+
+template void CommandHierarchyCreator::AddConstantsToPacketNode<uint32_t>(
+const IMemoryManager &mem_manager,
+uint64_t              ext_src_addr,
+uint64_t              packet_node_index,
+uint32_t              num_unit,
+uint32_t              submit_index,
+uint32_t              value_count_per_unit);
 }  // namespace Dive

@@ -347,6 +347,7 @@ private:
 class CommandHierarchyCreator : public IEmulateCallbacks
 {
 public:
+    CommandHierarchyCreator(EmulateStateTracker &state_tracker);
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
@@ -391,24 +392,20 @@ private:
         uint32_t ordinal2;
     };
 
-    void     OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info);
-    void     OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info);
-    void     PreSubmitReset();
-    uint64_t AddPacketNode(const IMemoryManager &mem_manager,
-                           uint32_t              submit_index,
-                           uint64_t              va_addr,
-                           bool                  is_ce_packet,
-                           Pm4Type               type,
-                           uint32_t              header);
-    uint64_t AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
-    uint64_t AddSyncEventNode(const IMemoryManager &mem_manager,
-                              uint32_t              submit_index,
-                              uint64_t              va_addr,
-                              SyncType              sync_event);
+    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    uint64_t     AddPacketNode(const IMemoryManager &mem_manager,
+                               uint32_t              submit_index,
+                               uint64_t              va_addr,
+                               bool                  is_ce_packet,
+                               Pm4Type               type,
+                               uint32_t              header);
+    uint64_t     AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
+    uint64_t     AddSyncEventNode(const IMemoryManager &mem_manager,
+                                  uint32_t              submit_index,
+                                  uint64_t              va_addr,
+                                  SyncType              sync_event);
 
-    bool TryParseMarker(uint64_t submit_node_index);
-
-    void OnGFRCommandMarkerEnd();
     void ParseVulkanCallMarker(char    *marker_ptr,
                                uint32_t marker_size,
                                uint64_t submit_node_index,
@@ -504,6 +501,14 @@ private:
     bool IsVulkanEvent(uint32_t cmd_id) const;
     bool IsNonVulkanEvent(uint32_t cmd_id) const { return !IsVulkanEvent(cmd_id); }
 
+    template<typename T>
+    void AddConstantsToPacketNode(const IMemoryManager &mem_manager,
+                                  uint64_t              ext_src_addr,
+                                  uint64_t              packet_node_index,
+                                  uint32_t              num_unit,
+                                  uint32_t              submit_index,
+                                  uint32_t              value_count_per_unit);
+
     struct Packets
     {
         std::vector<uint64_t> m_packet_node_indices;  // Packets added since last event
@@ -526,8 +531,8 @@ private:
         uint64_t m_group_addr;
     };
 
-    CommandHierarchy  *m_command_hierarchy_ptr;  // Pointer to class being created
-    const CaptureData *m_capture_data_ptr;
+    CommandHierarchy  *m_command_hierarchy_ptr = nullptr;  // Pointer to class being created
+    const CaptureData *m_capture_data_ptr = nullptr;
 
     // Parsing State
     std::vector<uint64_t> m_marker_stack;  // Current marker begin/end stack
@@ -552,21 +557,21 @@ private:
     std::vector<uint64_t> m_renderpass_stack;       // render pass marker begin/end stack
 
     // Cache the most recent cp_set_draw_state node, to append IBs to later
-    SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs];
-    uint32_t              m_group_info_size;
+    SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs] = {};
+    uint32_t              m_group_info_size = 0;
 
-    uint32_t m_num_events;  // Number of events so far
-    Packets  m_packets;     // Packets added since last event
+    uint32_t m_num_events = 0;  // Number of events so far
+    Packets  m_packets;         // Packets added since last event
 
-    uint64_t m_cur_submit_node_index;     // Current submit node being processed
-    uint64_t m_cur_ib_packet_node_index;  // Current ib packet node being processed
-    uint8_t  m_cur_ib_level;
-    uint64_t m_shared_node_ib_parent_stack[EmulatePM4::kTotalIbLevels];
+    uint64_t m_cur_submit_node_index = 0;     // Current submit node being processed
+    uint64_t m_cur_ib_packet_node_index = 0;  // Current ib packet node being processed
+    uint8_t  m_cur_ib_level = 0;
+    uint64_t m_shared_node_ib_parent_stack[EmulatePM4::kTotalIbLevels] = {};
 
     // Flattening is the process of forcing chain ib nodes to only ever be child to non-chain ib
     // nodes, even when daisy chaining across multiple chain ib nodes. This makes the topology
     // simpler.
-    bool m_flatten_chain_nodes;
+    bool m_flatten_chain_nodes = false;
 
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
@@ -574,8 +579,10 @@ private:
     // have more than 1 parent each
     std::vector<std::vector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
 
-    uint8_t m_cur_engine_index;
-    ILog   *m_log_ptr;
+    uint8_t m_cur_engine_index = 0;
+    ILog   *m_log_ptr = nullptr;
+
+    EmulateStateTracker &m_state_tracker;
 };
 
 }  // namespace Dive

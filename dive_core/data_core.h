@@ -119,11 +119,13 @@ public:
 class CaptureMetadataCreator : public IEmulateCallbacks
 {
 public:
-    CaptureMetadataCreator(CaptureMetadata &capture_metadata);
+    CaptureMetadataCreator(CaptureMetadata &capture_metadata, EmulateStateTracker &state_tracker);
     ~CaptureMetadataCreator();
 
-    void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info);
-    void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info);
+    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+
+    const EmulateStateTracker &GetStateTracker() const { return m_state_tracker; }
 
     // Callbacks
     virtual bool OnIbStart(uint32_t                  submit_index,
@@ -160,9 +162,9 @@ private:
     // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
     std::map<uint64_t, uint32_t> m_buffer_addrs;
 
-    EmulateStateTracker m_state_tracker;
+    CaptureMetadata     &m_capture_metadata;
+    EmulateStateTracker &m_state_tracker;
 
-    CaptureMetadata &m_capture_metadata;
 #if defined(ENABLE_CAPTURE_BUFFERS)
     // SRDCallbacks is a friend class, since it is essentially doing part of
     // CaptureMetadataCreator's work and is only a separate class due to the callback nature of SRD

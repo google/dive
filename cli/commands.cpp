@@ -30,7 +30,11 @@ namespace cli
 {
 
 //--------------------------------------------------------------------------------------------------
-Command::Command(const char* name, Visibility vis) : m_name(name), m_visibility(vis) {}
+Command::Command(const char* name, Visibility vis) :
+    m_name(name),
+    m_visibility(vis)
+{
+}
 
 Command::~Command() {}
 
@@ -56,7 +60,8 @@ struct HelpCommand : Command
 HelpCommand::HelpCommand(const std::map<std::string, const Command*>* commands) :
     Command("help", kNormal),
     m_commands(*commands)
-{}
+{
+}
 
 bool HelpCommand::Visible(bool allow_internal, Visibility visiblility)
 {
@@ -122,7 +127,10 @@ struct VersionCommand : Command
     std::string Description() const override;
 };
 
-VersionCommand::VersionCommand() : Command("version", kNormal) {}
+VersionCommand::VersionCommand() :
+    Command("version", kNormal)
+{
+}
 
 int VersionCommand::operator()(int argc, int at, char** argv) const
 {
@@ -157,7 +165,10 @@ struct ExtractCommand : Command
     std::string Description() const override;
 };
 
-ExtractCommand::ExtractCommand() : Command("extract", kNormal) {}
+ExtractCommand::ExtractCommand() :
+    Command("extract", kNormal)
+{
+}
 
 int ExtractCommand::Run(const char* dive_file, const char* output_dir)
 {
@@ -222,7 +233,10 @@ struct PacketCommand : Command
     std::string Description() const override;
 };
 
-PacketCommand::PacketCommand() : Command("packet", kInternal) {}
+PacketCommand::PacketCommand() :
+    Command("packet", kInternal)
+{
+}
 
 int PacketCommand::operator()(int argc, int at, char** argv) const
 {
@@ -269,7 +283,10 @@ struct InfoCommand : Command
     std::string Description() const override;
 };
 
-InfoCommand::InfoCommand() : Command("info", kInternal) {}
+InfoCommand::InfoCommand() :
+    Command("info", kInternal)
+{
+}
 
 int InfoCommand::operator()(int argc, int at, char** argv) const
 {
@@ -356,7 +373,10 @@ struct RawPM4Command : Command
     std::string Description() const override;
 };
 
-RawPM4Command::RawPM4Command() : Command("rawpm4", kInternal) {}
+RawPM4Command::RawPM4Command() :
+    Command("rawpm4", kInternal)
+{
+}
 
 int RawPM4Command::operator()(int argc, int at, char** argv) const
 {
@@ -424,9 +444,10 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
         break;
     }
 
-    Dive::CommandHierarchyCreator cmd_hier_creator;
-    Dive::CommandHierarchy        command_hierarchy;
-    Dive::LogConsole              log;
+    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+    Dive::CommandHierarchyCreator        cmd_hier_creator(*state_tracker);
+    Dive::CommandHierarchy               command_hierarchy;
+    Dive::LogConsole                     log;
     if (!cmd_hier_creator.CreateTrees(&command_hierarchy,
                                       engine_type,
                                       queue_type,

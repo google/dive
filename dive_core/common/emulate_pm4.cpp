@@ -22,6 +22,7 @@
 #include "adreno.h"
 #include "common.h"
 #include "dive_capture_format.h"
+#include "dive_core/capture_data.h"
 #include "emulate_pm4.h"
 #include "memory_manager_base.h"
 #include "pm4_info.h"
@@ -760,15 +761,10 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
         EmulateState::IbStack *cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
 
         Pm4Header header;
-        if (!mem_manager.CopyMemory(&header,
-                                    emu_state.m_submit_index,
-                                    cur_ib_level->m_cur_va,
-                                    sizeof(Pm4Header)))
-        {
-            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
-                           (unsigned long long)cur_ib_level->m_cur_va);
-            return false;
-        }
+        DIVE_VERIFY(mem_manager.CopyMemory(&header,
+                                           emu_state.m_submit_index,
+                                           cur_ib_level->m_cur_va,
+                                           sizeof(Pm4Header)));
 
         // We only care about Type 2, 4 and 7 packets
         Pm4Type type = Pm4Type::kUnknown;
@@ -835,15 +831,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     {
 
         PM4_CP_INDIRECT_BUFFER ib_packet;
-        if (!mem_manager.CopyMemory(&ib_packet,
-                                    emu_state_ptr->m_submit_index,
-                                    emu_state_ptr->GetCurIb()->m_cur_va,
-                                    sizeof(PM4_CP_INDIRECT_BUFFER)))
-        {
-            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
-                           (unsigned long long)emu_state_ptr->GetCurIb()->m_cur_va);
-            return false;
-        }
+        DIVE_VERIFY(mem_manager.CopyMemory(&ib_packet,
+                                           emu_state_ptr->m_submit_index,
+                                           emu_state_ptr->GetCurIb()->m_cur_va,
+                                           sizeof(PM4_CP_INDIRECT_BUFFER)));
         uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
         IbType   ib_type = (type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
                                                                                IbType::kCall;
@@ -864,15 +855,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // CALL (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
         PM4_CP_SET_CTXSWITCH_IB packet;
-        if (!mem_manager.CopyMemory(&packet,
-                                    emu_state_ptr->m_submit_index,
-                                    emu_state_ptr->GetCurIb()->m_cur_va,
-                                    (type7_header.count + 1) * sizeof(uint32_t)))
-        {
-            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
-                           (unsigned long long)emu_state_ptr->GetCurIb()->m_cur_va);
-            return false;
-        }
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+                                           emu_state_ptr->m_submit_index,
+                                           emu_state_ptr->GetCurIb()->m_cur_va,
+                                           (type7_header.count + 1) * sizeof(uint32_t)));
 
         // Sometimes this packet is used for purposes other than to jump to an IB. Check size.
         // Example: When TYPE is SAVE_IB
@@ -902,15 +888,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // CALLs (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
         PM4_CP_SET_DRAW_STATE packet;
-        if (!mem_manager.CopyMemory(&packet,
-                                    emu_state_ptr->m_submit_index,
-                                    emu_state_ptr->GetCurIb()->m_cur_va,
-                                    (type7_header.count + 1) * sizeof(uint32_t)))
-        {
-            DIVE_ERROR_MSG("Unable to access packet at 0x%llx\n",
-                           (unsigned long long)emu_state_ptr->GetCurIb()->m_cur_va);
-            return false;
-        }
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+                                           emu_state_ptr->m_submit_index,
+                                           emu_state_ptr->GetCurIb()->m_cur_va,
+                                           (type7_header.count + 1) * sizeof(uint32_t)));
         uint32_t packet_size = (packet.HEADER.count * sizeof(uint32_t));
         uint32_t array_size = packet_size / sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
         DIVE_ASSERT((packet_size % sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT)) == 0);
@@ -1193,6 +1174,45 @@ uint32_t GetPacketSize(uint32_t header)
     }
     DIVE_ASSERT(false);
     return 0;
+}
+
+// =================================================================================================
+// IEmulateCallbacks
+// =================================================================================================
+
+bool IEmulateCallbacks::ProcessSubmits(const std::vector<SubmitInfo> &submits,
+                                       const IMemoryManager          &mem_manager)
+{
+    for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
+    {
+        const Dive::SubmitInfo &submit_info = submits[submit_index];
+        OnSubmitStart(submit_index, submit_info);
+
+        if (submit_info.IsDummySubmit())
+        {
+            OnSubmitEnd(submit_index, submit_info);
+            continue;
+        }
+
+        // Only gfx or compute engine types are parsed
+        if ((submit_info.GetEngineType() != Dive::EngineType::kUniversal) &&
+            (submit_info.GetEngineType() != Dive::EngineType::kCompute))
+        {
+            OnSubmitEnd(submit_index, submit_info);
+            continue;
+        }
+
+        EmulatePM4 emu;
+        if (!emu.ExecuteSubmit(*this,
+                               mem_manager,
+                               submit_index,
+                               submit_info.GetNumIndirectBuffers(),
+                               submit_info.GetIndirectBufferInfoPtr()))
+            return false;
+
+        OnSubmitEnd(submit_index, submit_info);
+    }
+    return true;
 }
 
 }  // namespace Dive

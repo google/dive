@@ -346,6 +346,7 @@ public:
     {
         return m_vulkan_metadata_header;
     }
+    const std::vector<SubmitInfo> &GetSubmits() const;
 
     CaptureData &operator=(CaptureData &&) = default;
 

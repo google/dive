@@ -36,6 +36,7 @@ namespace Dive
 
 // Forward declaration
 class IMemoryManager;
+class SubmitInfo;
 
 struct IndirectBufferInfo
 {
@@ -95,6 +96,8 @@ static constexpr uint32_t kShaderEnableBitCount = 3;
 class IEmulateCallbacks
 {
 public:
+    bool ProcessSubmits(const std::vector<SubmitInfo> &submits, const IMemoryManager &mem_manager);
+
     // Callback on an IB start. Also called for all call/chain IBs
     // A return value of false indicates to the emulator to skip parsing this IB
     virtual bool OnIbStart(uint32_t                  submit_index,
@@ -123,6 +126,9 @@ public:
     {
         return true;
     }
+
+    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) = 0;
+    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) = 0;
 };
 
 //--------------------------------------------------------------------------------------------------

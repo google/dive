@@ -166,6 +166,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
             if (memory_block.m_submit_index != prev_submit)
             {
                 prev_submit = memory_block.m_submit_index;
+                temp_memory_blocks.push_back(memory_block);
             }
             else
             {
@@ -1002,6 +1003,12 @@ uint32_t CaptureData::GetNumSubmits() const
 const SubmitInfo &CaptureData::GetSubmitInfo(uint32_t submit_index) const
 {
     return m_submits[submit_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+const std::vector<SubmitInfo> &CaptureData::GetSubmits() const
+{
+    return m_submits;
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -56,46 +56,23 @@ bool DataCore::ParseCaptureData()
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
+    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+
     // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator;
+    CommandHierarchyCreator cmd_hier_creator(*state_tracker);
     if (!cmd_hier_creator.CreateTrees(&m_capture_metadata.m_command_hierarchy,
                                       m_capture_data,
                                       true,
                                       m_log_ptr))
-        return false;
-
-    CaptureMetadataCreator metadata_creator(m_capture_metadata);
-    for (uint32_t submit_index = 0; submit_index < m_capture_data.GetNumSubmits(); ++submit_index)
     {
-        const Dive::SubmitInfo &submit_info = m_capture_data.GetSubmitInfo(submit_index);
-        metadata_creator.OnSubmitStart(submit_index, submit_info);
+        return false;
+    }
 
-        if (submit_info.IsDummySubmit())
-        {
-            metadata_creator.OnSubmitEnd(submit_index, submit_info);
-            continue;
-        }
-
-        // Only gfx or compute engine types are parsed
-        if ((submit_info.GetEngineType() != Dive::EngineType::kUniversal) &&
-            (submit_info.GetEngineType() != Dive::EngineType::kCompute))
-        {
-            metadata_creator.OnSubmitEnd(submit_index, submit_info);
-            continue;
-        }
-
-        // Assumption: A switch_buffer packet is added in between submits, which means the ce/de
-        // counters will be reset in between submits. Therefore no need to track
-        // markers/draws/counters across submit boundaries.
-        EmulatePM4 emu;
-        if (!emu.ExecuteSubmit(metadata_creator,
-                               m_capture_data.GetMemoryManager(),
-                               submit_index,
-                               submit_info.GetNumIndirectBuffers(),
-                               submit_info.GetIndirectBufferInfoPtr()))
-            return false;
-
-        metadata_creator.OnSubmitEnd(submit_index, submit_info);
+    CaptureMetadataCreator metadata_creator(m_capture_metadata, *state_tracker);
+    if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
+                                         m_capture_data.GetMemoryManager()))
+    {
+        return false;
     }
 
     return true;
@@ -127,8 +104,10 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 // =================================================================================================
 // CaptureMetadataCreator
 // =================================================================================================
-CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
-    m_capture_metadata(capture_metadata)
+CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata     &capture_metadata,
+                                               EmulateStateTracker &state_tracker) :
+    m_capture_metadata(capture_metadata),
+    m_state_tracker(state_tracker)
 {
     m_state_tracker.Reset();
 }
@@ -280,8 +259,7 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
                     // info.
                     uint64_t max_size = mem_manager.GetMaxContiguousSize(submit_index, addr);
                     uint8_t *data_ptr = new uint8_t[max_size];
-                    if (!mem_manager.CopyMemory(data_ptr, submit_index, addr, max_size))
-                        return false;
+                    DIVE_VERIFY(mem_manager.CopyMemory(data_ptr, submit_index, addr, max_size));
 
                     ShaderInfo shader_info;
                     shader_info.m_addr = addr;

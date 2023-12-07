@@ -100,9 +100,4 @@ if (MSVC)
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
 endif()
 
-# Setup working directory for windows build to find .so files
-if (MSVC)
-  set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build_android/Release/bin/")
-endif()
-
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})

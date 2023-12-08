@@ -45,12 +45,6 @@ jobs:
             version: 5.15.2
             target: desktop
             arch: win64_msvc2019_64
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          # ninja version to download. Default: 1.10.0
-          version: 1.10.0
-      - uses: ilammy/msvc-dev-cmd@v1
       - uses: ilammy/setup-nasm@v1
       - name: Install dependency
         run: |
@@ -74,12 +68,6 @@ jobs:
             version: 5.15.2
             target: desktop
             arch: win64_msvc2019_64
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          # ninja version to download. Default: 1.10.0
-          version: 1.10.0
-      - uses: ilammy/msvc-dev-cmd@v1
       - uses: ilammy/setup-nasm@v1
       - name: Install dependency
         run: |

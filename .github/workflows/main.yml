@@ -45,17 +45,10 @@ jobs:
             version: 5.15.2
             target: desktop
             arch: win64_msvc2019_64
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          # ninja version to download. Default: 1.10.0
-          version: 1.10.0
-      - uses: ilammy/msvc-dev-cmd@v1
       - uses: ilammy/setup-nasm@v1
       - name: Install dependency
         run: |
-          C:/hostedtoolcache/windows/Python/3.11.6/x64/python3.exe -m pip install mako
-          C:/hostedtoolcache/windows/Python/3.12.0/x64/python3.exe -m pip install mako
+          python3 -m pip install mako
       - name: Build the UI
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 16 2019" -A x64 ..
@@ -75,17 +68,10 @@ jobs:
             version: 5.15.2
             target: desktop
             arch: win64_msvc2019_64
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          # ninja version to download. Default: 1.10.0
-          version: 1.10.0
-      - uses: ilammy/msvc-dev-cmd@v1
       - uses: ilammy/setup-nasm@v1
       - name: Install dependency
         run: |
-          C:/hostedtoolcache/windows/Python/3.11.6/x64/python3.exe -m pip install mako
-          C:/hostedtoolcache/windows/Python/3.12.0/x64/python3.exe -m pip install mako
+          python3 -m pip install mako
       - name: Build the UI
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 16 2019" -A x64 ..
@@ -105,15 +91,9 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes cmake gcc-10  clang-14 libsystemd-dev libbsd-dev ninja-build
-          /opt/hostedtoolcache/Python/3.11.6/x64/bin/pip install mako
-          /opt/hostedtoolcache/Python/3.12.0/x64/bin/pip install mako
+          pip3 install mako
           which gcc-10
           which clang-14
-      - name: Prepare Vulkan SDK
-        uses: humbletim/setup-vulkan-sdk@v1.2.0
-        with:
-          vulkan-query-version: 1.3.204.0
-          vulkan-components: Vulkan-Headers
       - name: Build the UI with gcc-10
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
@@ -131,15 +111,9 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes cmake gcc-10 clang-14 libsystemd-dev libbsd-dev ninja-build
-          /opt/hostedtoolcache/Python/3.11.6/x64/bin/pip install mako
-          /opt/hostedtoolcache/Python/3.12.0/x64/bin/pip install mako
+          pip3 install mako
           which gcc-10
           which clang-14
-      - name: Prepare Vulkan SDK
-        uses: humbletim/setup-vulkan-sdk@v1.2.0
-        with:
-          vulkan-query-version: 1.3.204.0
-          vulkan-components: Vulkan-Headers
       - name: Build the UI with gcc-10
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..

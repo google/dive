@@ -837,9 +837,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         opcode = type7_header->opcode;
     }
 
-    // Only cache submit-level packets
-    // All other packets are added as children to other submit-level packets already
-    if (parent_index == m_cur_submit_node_index)
+    // Cache packets to be shown on event nodes
     {
         // Cache all packets added (will cache until encounter next event/IB)
         m_packets.Add(opcode, va_addr, packet_node_index);
@@ -937,6 +935,13 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
               opcode == CP_SET_CTXSWITCH_IB))
     {
         m_cur_ib_packet_node_index = packet_node_index;
+
+        // m_packets contain packets added to an event node
+        // Do not show INDIRECT_BUFFER packets in an event node. A flattening of the packets is
+        // required for event nodes, otherwise it can result in a weird situation where all the
+        // draw calls are added to an INDIRECT_BUFFER, but the INDIRECT_BUFFER is added only to
+        // the first event node
+        m_packets.Pop();
     }
     else if (opcode == CP_LOAD_STATE6 || opcode == CP_LOAD_STATE6_GEOM ||
              opcode == CP_LOAD_STATE6_FRAG)

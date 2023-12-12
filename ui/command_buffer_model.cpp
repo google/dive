@@ -55,11 +55,13 @@ void CommandBufferModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::SetTopologyToView(const Dive::Topology *topology_ptr)
+void CommandBufferModel::SetTopologyToView(const Dive::Topology *topology_ptr,
+                                           bool                  show_level_column)
 {
     emit beginResetModel();
     m_topology_ptr = topology_ptr;
     m_selected_node_index = UINT64_MAX;
+    m_show_level_column = show_level_column;
     emit endResetModel();
 }
 
@@ -107,7 +109,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     }
     else if (index.column() == CommandBufferModel::kColumnIbLevel)
     {
-        if (node_type == Dive::NodeType::kPacketNode)
+        if (node_type == Dive::NodeType::kPacketNode && m_show_level_column)
         {
             uint64_t           ib_level = m_command_hierarchy.GetPacketNodeIbLevel(node_index);
             std::ostringstream ib_level_string_stream;
@@ -140,7 +142,11 @@ QVariant CommandBufferModel::headerData(int section, Qt::Orientation orientation
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
     {
         if (section < CommandBufferModel::kColumnCount)
-            return QVariant(tr(CommandBufferColumnNames[section]));
+        {
+            // Only print out ib-level column if m_show_level_column set to true
+            if (m_show_level_column || (section != kColumnIbLevel))
+                return QVariant(tr(CommandBufferColumnNames[section]));
+        }
     }
     else if (role == Qt::TextAlignmentRole)
     {

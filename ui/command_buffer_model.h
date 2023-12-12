@@ -45,7 +45,7 @@ public:
 
     void Reset();
 
-    void SetTopologyToView(const Dive::Topology *topology_ptr);
+    void SetTopologyToView(const Dive::Topology *topology_ptr, bool show_level_column);
 
     QVariant      data(const QModelIndex &index, int role) const override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
@@ -70,4 +70,5 @@ private:
     std::map<uint64_t, QModelIndex> m_node_index_to_parent_map;
     const Dive::CommandHierarchy   &m_command_hierarchy;
     const Dive::Topology           *m_topology_ptr = nullptr;
+    bool                            m_show_level_column = true;
 };

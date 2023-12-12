@@ -61,9 +61,9 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
                      SLOT(OnSearchCommandBuffer()));
 }
 
-void CommandTabView::SetTopologyToView(const Dive::Topology *topology_ptr)
+void CommandTabView::SetTopologyToView(const Dive::Topology *topology_ptr, bool show_level_column)
 {
-    m_command_buffer_model->SetTopologyToView(topology_ptr);
+    m_command_buffer_model->SetTopologyToView(topology_ptr, show_level_column);
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -1343,6 +1343,11 @@ void OutputValue(std::ostringstream &string_stream, ValueType type, uint64_t val
         union_val.i = (uint32_t)value;
         string_stream << union_val.f;
     }
+    else if (type == ValueType::kRegID)
+    {
+        string_stream << "r" << (value >> 2) << "."
+                      << "xyzw"[value & 0x3];
+    }
     else
     {
         string_stream << "0x" << std::hex << value << std::dec;

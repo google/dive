@@ -57,6 +57,7 @@ enum ValueType
     kAddress,
     kWaddress,
     kHex,
+    kRegID,
     kOther
 };
 
@@ -239,6 +240,8 @@ def getTypeEnumString(type):
     type_string = "ValueType::kWaddress"
   elif type == "hex":
     type_string = "ValueType::kHex"
+  elif type == "a3xx_regid":
+    type_string = "ValueType::kRegID"
   return type_string
 
 # ---------------------------------------------------------------------------------------

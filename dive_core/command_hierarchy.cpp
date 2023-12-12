@@ -1356,7 +1356,7 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
 {
     // Should never have an "unknown register" unless something is seriously wrong!
     DIVE_ASSERT(reg_info_ptr != nullptr);
-
+    reg_value = reg_value << reg_info_ptr->m_shr;
     // Reg item
     std::ostringstream reg_string_stream;
     if (reg_info_ptr->m_enum_handle != UINT8_MAX)
@@ -1379,8 +1379,8 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
     for (uint32_t field = 0; field < reg_info_ptr->m_fields.size(); ++field)
     {
         const RegField &reg_field = reg_info_ptr->m_fields[field];
-        uint64_t        field_value = (reg_value & reg_field.m_mask) >> reg_field.m_shift
-                                                                 << reg_field.m_shr;
+        uint64_t        field_value = ((reg_value & reg_field.m_mask) >> reg_field.m_shift)
+                               << reg_field.m_shr;
 
         // Field item
         std::ostringstream field_string_stream;
@@ -1892,7 +1892,8 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             DIVE_VERIFY(
             mem_manager.CopyMemory(&dword_value, submit_index, dword_va_addr, sizeof(uint32_t)));
 
-            uint32_t field_value = (dword_value & packet_field.m_mask) >> packet_field.m_shift;
+            uint32_t field_value = ((dword_value & packet_field.m_mask) >> packet_field.m_shift)
+                                   << packet_field.m_shr;
 
             // Field item
             std::ostringstream field_string_stream;
@@ -2008,13 +2009,14 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
                                   GetRegOffsetByName("HLSQ_CS_BINDLESS_BASE0_DESCRIPTOR") :
                                   GetRegOffsetByName("HLSQ_BINDLESS_BASE0_DESCRIPTOR");
         const uint32_t reg = base_reg + (packet.u32All1 >> 28) * 2;
-        printf("%d", reg);
 
         DIVE_ASSERT(m_state_tracker.IsRegSet(reg));
         DIVE_ASSERT(m_state_tracker.IsRegSet(reg + 1));
 
         ext_src_addr = m_state_tracker.GetRegValue(reg) & 0xfffffffc;
         ext_src_addr |= ((uint64_t)m_state_tracker.GetRegValue(reg + 1)) << 32;
+
+        ext_src_addr += 4 * (packet.u32All1 & 0xffffff);
     }
     break;
     case SS6_INDIRECT:

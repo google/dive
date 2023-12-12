@@ -97,7 +97,8 @@ struct RegInfo
     uint32_t    m_is_64_bit : 1;  // Either 32 or 64 bit
     uint32_t    m_type : 4;       // ValueType enum, range [0, 15]
     uint32_t    m_enum_handle : 8;
-    uint32_t : 19;
+    uint32_t    m_shr : 5;  // used to shift left to extract the "original" value, range: [0, 31]
+    uint32_t : 14;
     std::vector<RegField> m_fields;
 };
 
@@ -109,8 +110,8 @@ struct PacketField
     uint32_t    m_type : 4;  // ValueType enum, range [0, 15]
     uint32_t    m_enum_handle : 8;
     uint32_t    m_shift : 6;
-    uint32_t : 5;
-    uint32_t m_mask;
+    uint32_t    m_shr : 5;  // used to shift left to extract the "original" value, range: [0, 31]
+    uint32_t    m_mask;
 };
 
 struct PacketInfo
@@ -241,7 +242,7 @@ def getTypeEnumString(type):
   return type_string
 
 # ---------------------------------------------------------------------------------------
-def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64, variants):
+def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64, variants, shr):
     is_64_string = "0"
     if is_64 is True:
       is_64_string = "1"
@@ -254,14 +255,14 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
         bitfields = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
 
         # Not found in the A6XX domain. Some of the bitsets are defined in the root.
-        if not bitfields:
+        if bitfields is None:
           bitfields = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
 
         # It's not a bitset. Let's sanity check that it's a top-level enum!
-        if not bitfields:
+        if bitfields is None:
           bitfields = []  # Create an empty list instead of a "None" object
           enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+type+'"]')
-          if not enum:
+          if enum is None:
             raise Exception("Not able to find bitset/enum " + type + " for register " + name)
           # Now that we know it's an enum, let's get the enum_handle for it!
           if type not in enum_index_dict:
@@ -271,7 +272,7 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, 
           enum_handle = str(enum_index_dict[type])
 
     variants_bitfield = GetGPUVariantsBitField(variants)
-    pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, {" % (offset, variants_bitfield, name, is_64_string, getTypeEnumString(type), enum_handle))
+    pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, {" % (offset, variants_bitfield, name, is_64_string, getTypeEnumString(type), enum_handle, shr))
 
     # Iterate through optional bitfields
     for bitfield in bitfields:
@@ -351,7 +352,11 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     variants = ""
     if 'variants' in reg.attrib:
       variants = reg.attrib['variants']
-    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64, variants)
+
+    shr = 0
+    if 'shr' in reg.attrib:
+        shr = int(reg.attrib['shr'])
+    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, offset, name, bitfields, type, enum_index_dict, is_64, variants, shr)
 
   # Iterate and output the arrays as a sequence of reg32s with an index as a suffix
   arrays = a6xx_domain.findall('{http://nouveau.freedesktop.org/}array')
@@ -380,12 +385,12 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     #   Ex: Array name: "BASE", Length: 2, Reg32 names: "ZIG/ZAG"
     #       -> 4 registers with names: BASE0_ZIG, BASE0_ZAG, BASE1_ZIG, BASE1_ZAG
     for i in range(0,length):
-      if stride == 1:
+      if stride == 1 and not array_regs:
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
-                             offset+i, array_name+str(i), [], None, enum_index_dict, False, "")
+                             offset+i, array_name+str(i), [], None, enum_index_dict, False, "", 0)
       elif stride == 2 and not array_regs:
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
-                             offset+i*stride, array_name+"_LO", [], None, enum_index_dict, True, "")
+                             offset+i*stride, array_name+"_LO", [], None, enum_index_dict, True, "", 0)
       else:
         for reg_idx, reg in enumerate(array_regs):
           reg_name = reg.attrib['name']
@@ -397,9 +402,12 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
           is_64 = False
           if reg.tag == '{http://nouveau.freedesktop.org/}reg64':
             is_64 = True
+          shr = 0
+          if 'shr' in reg.attrib:
+            shr = int(reg.attrib['shr'])
           outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, \
                                offset+i*stride+reg_offset, array_name+str(i)+"_"+reg_name, \
-                               bitfields, type, enum_index_dict, is_64, reg_variants[reg_idx])
+                               bitfields, type, enum_index_dict, is_64, reg_variants[reg_idx], shr)
   return
 
 # ---------------------------------------------------------------------------------------
@@ -434,9 +442,9 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
         enum_list[index][1][enum_value] = enum_value_name
 
 # ---------------------------------------------------------------------------------------
-def outputField(pm4_info_file, field_name, is_variant_opcode, dword, type, enum_handle, shift, mask):
-  pm4_info_file.write("{ \"%s\", %d, %d, %s, %s, %d, 0x%x }," %
-                       (field_name, is_variant_opcode, dword, getTypeEnumString(type), enum_handle, shift, mask))
+def outputField(pm4_info_file, field_name, is_variant_opcode, dword, type, enum_handle, shift, shr, mask):
+  pm4_info_file.write("{ \"%s\", %d, %d, %s, %s, %d, %d, 0x%x }," %
+                       (field_name, is_variant_opcode, dword, getTypeEnumString(type), enum_handle, shift, shr, mask))
 
 # ---------------------------------------------------------------------------------------
 def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
@@ -468,15 +476,19 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       if 'type' in element.attrib:
         type = element.attrib['type']
 
+      shr = 0
+      if 'shr' in element.attrib:
+        shr = int(element.attrib['shr'])
+
       # if 'addvariant' is an attribute, then this field is used to determine the packet variant
       is_variant_opcode = 0
       if 'addvariant' in element.attrib:
         is_variant_opcode = 1
       if is_reg_32:
-        outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, type, enum_handle, shift, mask)
+        outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, type, enum_handle, shift, shr, mask)
       elif is_reg_64:
-        outputField(pm4_info_file, field_name+"_LO", is_variant_opcode, dword_count-1, type, enum_handle, shift, mask)
-        outputField(pm4_info_file, field_name+"_HI", is_variant_opcode, dword_count, type, enum_handle, shift, mask)
+        outputField(pm4_info_file, field_name+"_LO", is_variant_opcode, dword_count-1, type, enum_handle, shift, shr, mask)
+        outputField(pm4_info_file, field_name+"_HI", is_variant_opcode, dword_count, type, enum_handle, shift, shr, mask)
 
     if is_reg_64 and len(bitfields) > 0:
       raise Exception("Found a reg64 with bitfields: " + field_name)
@@ -508,11 +520,15 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       else:
         raise Exception("Encountered a bitfield with no pos/low/high!")
 
+      shr = 0
+      if 'shr' in bitfield.attrib:
+        shr = int(bitfield.attrib['shr'])
+
       # if 'addvariant'  is an attribute, then this field is used to determine the packet variant
       is_variant_opcode = 0
       if 'addvariant' in bitfield.attrib:
         is_variant_opcode = 1
-      outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, type, enum_handle, shift, mask)
+      outputField(pm4_info_file, field_name, is_variant_opcode, dword_count, type, enum_handle, shift, shr, mask)
 
 # ---------------------------------------------------------------------------------------
 def outputEnums(pm4_info_file, enum_list):
@@ -547,7 +563,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
     array = domain.find('./{http://nouveau.freedesktop.org/}array')
     array_size = 1
     pm4_packet = domain
-    if array:
+    if array is not None:
       # Double check that there are no registers in this domain (i.e. they're all within the array block)
       if domain.find('./{http://nouveau.freedesktop.org/}reg32') or \
          domain.find('./{http://nouveau.freedesktop.org/}reg64'):
@@ -596,7 +612,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       # Add the registers from the variant-specific section (i.e. stripe)
       stripe = variant[1]
       packet_name = domain_name
-      if stripe:
+      if stripe is not None:
         for element in variant[1]:
           is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
           is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
@@ -612,7 +628,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
 
       # Determine stripe opcode for this variant/stripe
       stripe_variant = "UINT8_MAX"
-      if stripe:
+      if stripe is not None:
         varset = stripe.attrib['varset']
         if varset != "chip":
           enum = domain.find('./{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')

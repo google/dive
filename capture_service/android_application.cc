@@ -276,7 +276,9 @@ absl::Status VulkanCliApplication::Setup()
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));
     RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat("push %s %s", kVkLayerLibName, kVulkanGlobalPath)));
+    m_dev.Adb().Run(absl::StrFormat("push %s %s",
+                                    ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
+                                    kVulkanGlobalPath)));
     RETURN_IF_ERROR(
     m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName), false));
 

@@ -1306,7 +1306,11 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
 }
 
 //--------------------------------------------------------------------------------------------------
-void OutputValue(std::ostringstream &string_stream, ValueType type, uint64_t value)
+void OutputValue(std::ostringstream &string_stream,
+                 ValueType           type,
+                 uint64_t            value,
+                 uint32_t            bit_width = 0,
+                 uint32_t            radix = 0)
 {
     if (type == ValueType::kBoolean)
     {
@@ -1333,6 +1337,7 @@ void OutputValue(std::ostringstream &string_stream, ValueType type, uint64_t val
     }
     else if (type == ValueType::kFloat)
     {
+        // TODO(wangra): need to handle f16, f64 differently
         union
         {
             float    f;
@@ -1342,6 +1347,25 @@ void OutputValue(std::ostringstream &string_stream, ValueType type, uint64_t val
         DIVE_ASSERT(value <= UINT32_MAX);
         union_val.i = (uint32_t)value;
         string_stream << union_val.f;
+    }
+    else if (type == ValueType::kFixed)
+    {
+        double v = 0.0;
+        if (value & (UINT64_C(1) << bit_width))
+        {
+            v = (((double)((UINT64_C(1) << (bit_width + 1)) - value)) /
+                 ((double)(UINT64_C(1) << radix)));
+        }
+        else
+        {
+            v = (((double)value) / ((double)(UINT64_C(1) << radix)));
+        }
+        string_stream << v;
+    }
+    else if (type == ValueType::kUFixed)
+    {
+        const double v = (((double)value) / ((double)(UINT64_C(1) << radix)));
+        string_stream << v;
     }
     else if (type == ValueType::kRegID)
     {
@@ -1373,7 +1397,11 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
     else
     {
         reg_string_stream << reg_info_ptr->m_name << ": ";
-        OutputValue(reg_string_stream, (ValueType)reg_info_ptr->m_type, reg_value);
+        OutputValue(reg_string_stream,
+                    (ValueType)reg_info_ptr->m_type,
+                    reg_value,
+                    reg_info_ptr->m_bit_width,
+                    reg_info_ptr->m_radix);
     }
 
     CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
@@ -1399,7 +1427,11 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
                 OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
         }
         else
-            OutputValue(field_string_stream, (ValueType)reg_field.m_type, field_value);
+            OutputValue(field_string_stream,
+                        (ValueType)reg_field.m_type,
+                        field_value,
+                        reg_field.m_bit_width,
+                        reg_field.m_radix);
 
         uint64_t field_node_index = AddNode(NodeType::kFieldNode,
                                             field_string_stream.str(),

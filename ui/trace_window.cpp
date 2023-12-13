@@ -16,21 +16,13 @@
 
 #include "trace_window.h"
 
-#include <qcombobox.h>
-#include <qdebug.h>
-#include <qmessagebox.h>
-#include <qprogressdialog.h>
-#include <QCheckBox>
 #include <QComboBox>
-#include <QCoreApplication>
 #include <QDebug>
-#include <QDir>
-#include <QFile>
 #include <QHBoxLayout>
-#include <QIcon>
 #include <QLabel>
-#include <QPixmap>
-#include <QPlainTextEdit>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QStandardItem>
@@ -40,13 +32,16 @@
 #include <cstdint>
 #include <filesystem>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "capture_service/client.h"
 #include "capture_service/device_mgr.h"
 
 namespace
 {
-const std::vector<std::string> kAppTypes{ "Vulkan", "OpenXR" };
+const std::vector<std::string> kAppTypes{ "Vulkan APK", "OpenXR APK", "Command Line Application" };
 }
 
 // =================================================================================================
@@ -104,6 +99,14 @@ TraceDialog::TraceDialog(QWidget *parent)
 
     m_app_type_box->setModel(m_app_type_model);
 
+    m_cmd_layout = new QHBoxLayout();
+    m_file_label = new QLabel("Executable:");
+    m_cmd_input_box = new QLineEdit();
+    m_cmd_input_box->setPlaceholderText("Input a command or select from the package list");
+    m_cmd_input_box->setClearButtonEnabled(true);
+    m_cmd_layout->addWidget(m_file_label);
+    m_cmd_layout->addWidget(m_cmd_input_box);
+
     m_capture_layout->addWidget(m_dev_label);
     m_capture_layout->addWidget(m_dev_box);
     m_capture_layout->addWidget(m_dev_refresh_button);
@@ -121,6 +124,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_button_layout->addWidget(m_capture_button);
 
     m_main_layout->addLayout(m_capture_layout);
+    m_main_layout->addLayout(m_cmd_layout);
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_type_layout);
 
@@ -146,7 +150,7 @@ TraceDialog::TraceDialog(QWidget *parent)
                      &QPushButton::clicked,
                      this,
                      &TraceDialog::OnAppListRefresh);
-    setMinimumWidth(500);
+    QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
 }
 
 TraceDialog::~TraceDialog()
@@ -223,21 +227,116 @@ void TraceDialog::OnDeviceSelected(const QString &s)
 
 void TraceDialog::OnPackageSelected(const QString &s)
 {
-    if ((s.isEmpty() || m_pkg_box->currentIndex() == -1))
+    int cur_index = m_pkg_box->currentIndex();
+    qDebug() << "Package selected: " << s << ", index: " << cur_index;
+    if ((s.isEmpty() || cur_index == -1))
     {
         return;
     }
-    qDebug() << "Package selected: " << s << " " << m_pkg_box->currentIndex();
-    if (m_cur_pkg != m_pkg_list[m_pkg_box->currentIndex()])
+    if (m_cur_pkg != m_pkg_list[cur_index])
     {
-        m_cur_pkg = m_pkg_list[m_pkg_box->currentIndex()];
+        m_cur_pkg = m_pkg_list[cur_index];
         m_app_type_box->setCurrentIndex(-1);
     }
     m_run_button->setEnabled(true);
+    m_cmd_input_box->setText(m_cur_pkg.c_str());
+}
+
+void TraceDialog::OnInputCommand(const QString &text)
+{
+    qDebug() << "Input changed to " << text;
+    m_run_button->setEnabled(true);
+    m_cur_pkg = text.toStdString();
+    m_pkg_box->setCurrentIndex(-1);
+    m_app_type_box->setCurrentIndex(-1);
+}
+
+bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &app_type)
+{
+    if (device == nullptr)
+    {
+        return false;
+    }
+
+    device->CleanupAPP().IgnoreError();
+    m_run_button->setText("&Starting..");
+    m_run_button->setDisabled(true);
+
+    absl::Status ret;
+    qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
+             << ", type: " << app_type.c_str();
+    if (app_type == "OpenXR APK")
+    {
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK);
+    }
+    else if (app_type == "Vulkan APK")
+    {
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK);
+    }
+    else if (app_type == "Command Line Application")
+    {
+        std::string full_command = m_cmd_input_box->text().toStdString();
+        if (full_command.empty())
+        {
+            std::string err_msg = "Please input a valid command to execute";
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return false;
+        }
+        std::vector<std::string> v = absl::StrSplit(full_command, " ");
+        m_executable = v[0];
+
+        v.erase(v.begin());
+        m_command_args = absl::StrJoin(v, " ");
+
+        qDebug() << "exe: " << m_executable.c_str() << " args: " << m_command_args.c_str();
+        ret = device->SetupApp(m_executable, m_command_args, Dive::ApplicationType::VULKAN_CLI);
+    }
+    if (!ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Fail to setup for package ",
+                                           m_cur_pkg,
+                                           " error: ",
+                                           ret.message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return false;
+    }
+    ret = device->StartApp();
+    if (!ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Fail to start package ",
+                                           m_cur_pkg,
+                                           " error: ",
+                                           ret.message());
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return false;
+    }
+    auto cur_app = device->GetCurrentApplication();
+
+    if (!cur_app->IsRunning())
+    {
+        std::string err_msg = absl::StrCat("Process for package ",
+                                           m_cur_pkg,
+                                           " not found, possibly crashed.");
+        qDebug() << err_msg.c_str();
+        ShowErrorMessage(err_msg);
+        return false;
+    }
+
+    if (cur_app)
+    {
+        m_run_button->setDisabled(false);
+        m_run_button->setText("&Stop");
+        m_capture_button->setEnabled(true);
+    }
+    return true;
 }
 
 void TraceDialog::OnStartClicked()
 {
+    qDebug() << "Command: " << m_cmd_input_box->text();
     auto device = Dive::GetDeviceManager().GetDevice();
     if (!device)
     {
@@ -265,59 +364,10 @@ void TraceDialog::OnStartClicked()
 
     if (m_run_button->text() == QString("&Start Application"))
     {
-
-        device->CleanupAPP().IgnoreError();
-        m_run_button->setText("&Starting..");
-        m_run_button->setDisabled(true);
-
-        qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
-                 << ", type: " << ty_str.c_str();
-        if (ty_str == "OpenXR")
-        {
-            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK);
-        }
-        else if (ty_str == "Vulkan")
-        {
-            ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK);
-        }
-        if (!ret.ok())
-        {
-            std::string err_msg = absl::StrCat("Fail to setup for package ",
-                                               m_cur_pkg,
-                                               " error: ",
-                                               ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            return;
-        }
-        ret = device->StartApp();
-        if (!ret.ok())
-        {
-            std::string err_msg = absl::StrCat("Fail to start package ",
-                                               m_cur_pkg,
-                                               " error: ",
-                                               ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            return;
-        }
-        auto cur_app = device->GetCurrentApplication();
-
-        if (!cur_app->IsRunning())
-        {
-            std::string err_msg = absl::StrCat("Process for package ",
-                                               m_cur_pkg,
-                                               " not found, possibly crashed.");
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            return;
-        }
-
-        if (cur_app)
+        if (!StartPackage(device, ty_str))
         {
             m_run_button->setDisabled(false);
-            m_run_button->setText("&Stop");
-            m_capture_button->setEnabled(true);
+            m_run_button->setText("&Start Application");
         }
     }
     else
@@ -476,6 +526,7 @@ void TraceDialog::OnDevListRefresh()
 {
     UpdateDeviceList();
 }
+
 void TraceDialog::OnAppListRefresh()
 {
     UpdatePackageList();
@@ -501,6 +552,9 @@ void TraceDialog::UpdatePackageList()
         return;
     }
     m_pkg_list = *ret;
+
+    const QSignalBlocker blocker(
+    m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
     for (size_t i = 0; i < m_pkg_list.size(); i++)
     {

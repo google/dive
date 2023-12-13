@@ -31,6 +31,7 @@ class QVBoxLayout;
 class QComboBox;
 class QStandardItemModel;
 class QProgressDialog;
+class QLineEdit;
 
 class TraceWorker : public QThread
 {
@@ -87,11 +88,14 @@ private slots:
     void OnTraceAvailable(const QString &);
     void OnDevListRefresh();
     void OnAppListRefresh();
+    void OnInputCommand(const QString &);
 
 signals:
     void TraceAvailable(const QString &);
 
 private:
+    bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
+
     QHBoxLayout        *m_capture_layout;
     QLabel             *m_dev_label;
     QStandardItemModel *m_dev_model;
@@ -113,9 +117,16 @@ private:
     QPushButton *m_run_button;
     QHBoxLayout *m_button_layout;
 
+    QHBoxLayout *m_cmd_layout;
+    QLabel      *m_file_label;
+    QPushButton *m_open_button;
+    QLineEdit   *m_cmd_input_box;
+
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;
     std::string                   m_cur_dev;
     std::vector<std::string>      m_pkg_list;
     std::string                   m_cur_pkg;
+    std::string                   m_executable;
+    std::string                   m_command_args;
 };

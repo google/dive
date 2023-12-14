@@ -541,10 +541,6 @@ private:
     std::vector<uint64_t>
     m_cmd_begin_event_node_indices;  // Potential event node for vkBeginCommandBuffer
 
-    bool                  m_has_unended_vulkan_marker = false;
-    bool                  m_is_secondary_cmdbuf_started = false;
-    uint64_t              m_secondary_cmdbuf_root_index = UINT64_MAX;
-    uint32_t              m_cur_vulkan_cmd_id = UINT32_MAX;
     uint64_t              m_last_user_push_parent_node = UINT64_MAX;
     std::vector<uint64_t> m_vulkan_cmd_stack;  // Command buffer levels, first level is primary and
                                                // second level secondary command buffer
@@ -579,8 +575,7 @@ private:
     // have more than 1 parent each
     std::vector<std::vector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
 
-    uint8_t m_cur_engine_index = 0;
-    ILog   *m_log_ptr = nullptr;
+    ILog *m_log_ptr = nullptr;
 
     EmulateStateTracker &m_state_tracker;
 };

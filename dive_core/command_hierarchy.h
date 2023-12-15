@@ -471,6 +471,10 @@ private:
                                              uint32_t              submit_index,
                                              uint64_t              va_addr,
                                              uint64_t              packet_node_index);
+    void        AppendMemRegNodes(const IMemoryManager &mem_manager,
+                                  uint32_t              submit_index,
+                                  uint64_t              va_addr,
+                                  uint64_t              packet_node_index);
     void        CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
                                            uint32_t              submit_index,
                                            uint64_t              va_addr,
@@ -510,9 +514,9 @@ private:
     void AddConstantsToPacketNode(const IMemoryManager &mem_manager,
                                   uint64_t              ext_src_addr,
                                   uint64_t              packet_node_index,
-                                  uint32_t              num_unit,
+                                  uint32_t              num_dwords,
                                   uint32_t              submit_index,
-                                  uint32_t              value_count_per_unit);
+                                  uint32_t              value_count_per_row);
 
     struct Packets
     {

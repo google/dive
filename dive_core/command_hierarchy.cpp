@@ -948,6 +948,10 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     {
         AppendLoadStateExtBufferNode(mem_manager, submit_index, va_addr, packet_node_index);
     }
+    else if (opcode == CP_MEM_TO_REG)
+    {
+        AppendMemRegNodes(mem_manager, submit_index, va_addr, packet_node_index);
+    }
     // vulkan call NOP packages. Currently contains call parameters(except parameters in array),
     // each call is in one NOP packet.
     else if (opcode == CP_NOP)
@@ -2164,7 +2168,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
             AddConstantsToPacketNode<float>(mem_manager,
                                             ext_src_addr,
                                             packet_node_index,
-                                            packet.bitfields0.NUM_UNIT,
+                                            packet.bitfields0.NUM_UNIT * 4,
                                             submit_index,
                                             4);
         }
@@ -2186,7 +2190,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
             AddConstantsToPacketNode<uint32_t>(mem_manager,
                                                ext_src_addr,
                                                packet_node_index,
-                                               packet.bitfields0.NUM_UNIT,
+                                               packet.bitfields0.NUM_UNIT * 2,
                                                submit_index,
                                                2);
         }
@@ -2197,6 +2201,42 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         break;
     default: DIVE_ASSERT(false); break;
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandHierarchyCreator::AppendMemRegNodes(const IMemoryManager &mem_manager,
+                                                uint32_t              submit_index,
+                                                uint64_t              va_addr,
+                                                uint64_t              packet_node_index)
+{
+    PM4_CP_MEM_TO_REG packet;
+    DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+
+    // Add base register name
+    const RegInfo *reg_info_ptr = GetRegInfo(packet.bitfields0.REG);
+    RegInfo        temp = {};
+    temp.m_name = "Unknown";
+    temp.m_enum_handle = UINT8_MAX;
+    if (reg_info_ptr == nullptr)
+        reg_info_ptr = &temp;
+    std::ostringstream reg_string_stream;
+    reg_string_stream << "Base Register: " << reg_info_ptr->m_name;
+    CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+    uint64_t reg_node_index = AddNode(NodeType::kRegNode, reg_string_stream.str(), aux_info);
+    AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
+    AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, reg_node_index);
+    AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
+    AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
+
+    // Add memory data values
+    uint64_t ext_src_addr = ((uint64_t)packet.bitfields2.SRC_HI << 32) |
+                            (uint64_t)packet.bitfields1.SRC;
+    AddConstantsToPacketNode<uint32_t>(mem_manager,
+                                       ext_src_addr,
+                                       packet_node_index,
+                                       packet.bitfields0.CNT,
+                                       submit_index,
+                                       8);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2495,27 +2535,34 @@ template<> struct OutputStream<float>
 
 template<> struct OutputStream<uint32_t>
 {
-    static void SetupFormat(std::ostringstream &stream) { stream << std::hex << std::setw(11); }
+    static void SetupFormat(std::ostringstream &stream)
+    {
+        stream << "0x" << std::hex << std::setfill('0') << std::setw(8);
+    }
 };
 
+//--------------------------------------------------------------------------------------------------
 template<typename T>
 void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager &mem_manager,
                                                        uint64_t              ext_src_addr,
                                                        uint64_t              packet_node_index,
-                                                       uint32_t              num_unit,
+                                                       uint32_t              num_dwords,
                                                        uint32_t              submit_index,
-                                                       uint32_t              value_count_per_unit)
+                                                       uint32_t              value_count_per_row)
 {
-    for (uint32_t i = 0; i < num_unit; ++i)
+    for (uint32_t i = 0; i < num_dwords; i += value_count_per_row)
     {
         std::ostringstream string_stream;
-        for (uint32_t j = 0; j < value_count_per_unit; ++j)
+        for (uint32_t j = 0; j < value_count_per_row; ++j)
         {
-            T        value;
-            uint64_t addr = ext_src_addr + ((i * value_count_per_unit + j) * sizeof(T));
-            DIVE_VERIFY(mem_manager.CopyMemory(&value, submit_index, addr, sizeof(T)));
-            OutputStream<T>::SetupFormat(string_stream);
-            string_stream << value << " ";
+            if ((i + j) < num_dwords)
+            {
+                T        value;
+                uint64_t addr = ext_src_addr + ((i + j) * sizeof(T));
+                DIVE_VERIFY(mem_manager.CopyMemory(&value, submit_index, addr, sizeof(T)));
+                OutputStream<T>::SetupFormat(string_stream);
+                string_stream << value << " ";
+            }
         }
 
         // Add it as child to packet_node
@@ -2527,20 +2574,4 @@ void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager &mem
         AddChild(CommandHierarchy::kRgpTopology, packet_node_index, const_node_index);
     }
 }
-
-template void CommandHierarchyCreator::AddConstantsToPacketNode<float>(
-const IMemoryManager &mem_manager,
-uint64_t              ext_src_addr,
-uint64_t              packet_node_index,
-uint32_t              num_unit,
-uint32_t              submit_index,
-uint32_t              value_count_per_unit);
-
-template void CommandHierarchyCreator::AddConstantsToPacketNode<uint32_t>(
-const IMemoryManager &mem_manager,
-uint64_t              ext_src_addr,
-uint64_t              packet_node_index,
-uint32_t              num_unit,
-uint32_t              submit_index,
-uint32_t              value_count_per_unit);
 }  // namespace Dive

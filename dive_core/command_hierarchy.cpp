@@ -1268,6 +1268,15 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
         }
         else
         */
+        if (type7_header.opcode == CP_CONTEXT_REG_BUNCH)
+        {
+            AppendRegNodes(mem_manager,
+                           submit_index,
+                           va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
+                           type7_header.count,
+                           packet_node_index);
+        }
+        else
         {
             // If there are missing packet fields, then output the raw DWORDS directly
             // Some packets, such as CP_LOAD_STATE6_* handle this explicitly elsewhere
@@ -1773,10 +1782,55 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
 void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
                                              uint32_t              submit_index,
                                              uint64_t              va_addr,
+                                             uint32_t              dword_count,
+                                             uint64_t              packet_node_index)
+{
+    // This version of AppendRegNodes takes in a raw buffer consisting of register offset + value
+    // pairs
+    DIVE_ASSERT(dword_count % 2 == 0);
+    for (uint32_t i = 0; i < dword_count; i += 2)
+    {
+        struct
+        {
+            uint32_t m_reg_offset;
+            uint32_t m_reg_value;
+        } reg_pair;
+        uint64_t pair_addr = va_addr + i * sizeof(uint32_t);
+        DIVE_VERIFY(mem_manager.CopyMemory(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
+
+        const RegInfo *reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
+
+        RegInfo temp = {};
+        temp.m_name = "Unknown";
+        temp.m_enum_handle = UINT8_MAX;
+        if (reg_info_ptr == nullptr)
+            reg_info_ptr = &temp;
+
+        DIVE_ASSERT(!reg_info_ptr->m_is_64_bit);
+
+        // Create the register node, as well as all its children nodes that describe the various
+        // fields set in the single 32-bit register
+        uint64_t reg_node_index = AddRegisterNode(reg_pair.m_reg_offset,
+                                                  reg_pair.m_reg_value,
+                                                  reg_info_ptr);
+
+        // Add it as child to packet node
+        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
+        AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, reg_node_index);
+        AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
+                                             uint32_t              submit_index,
+                                             uint64_t              va_addr,
                                              Pm4Type4Header        header,
                                              uint64_t              packet_node_index)
 {
-    // uint32_t reg_offset = header.offset;
+    // This version of AppendRegNodes takes in an offset from the header, and expects a contiguous
+    // sequence of register values
 
     // Go through each register set by this packet
     uint32_t offset_in_bytes = 0;

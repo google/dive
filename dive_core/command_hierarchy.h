@@ -424,6 +424,11 @@ private:
                                uint64_t              va_addr,
                                Pm4Type4Header        header,
                                uint64_t              packet_node_index);
+    void        AppendRegNodes(const IMemoryManager &mem_manager,
+                               uint32_t              submit_index,
+                               uint64_t              va_addr,
+                               uint32_t              dword_count,
+                               uint64_t              packet_node_index);
     void        AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
                                          uint32_t                     submit_index,
                                          uint64_t                     va_addr,

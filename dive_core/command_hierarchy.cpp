@@ -860,6 +860,11 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             parent_node_index = m_marker_stack.back();
         }
 
+        if (m_render_marker_index != kInvalidRenderMarkerIndex)
+        {
+            parent_node_index = m_render_marker_index;
+        }
+
         SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode);
         if (sync_type != SyncType::kNone)
         {
@@ -980,6 +985,60 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         }
                 */
     }
+    else if (opcode == CP_SET_MARKER)
+    {
+        PM4_CP_SET_MARKER packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
+        DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
+        a6xx_marker    marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);
+        const uint64_t parent_node_index = m_cur_submit_node_index;
+
+        std::string desc;
+        bool        add_child = true;
+        switch (marker)
+        {
+            // This is emitted at the begining of the render pass if tiled rendering mode is
+            // disabled
+        case RM6_BYPASS:
+            desc = "Direct Rendering Pass";
+            break;
+            // This is emitted at the begining of the binning pass, although the binning pass could
+            // be missing even in tiled rendering mode
+        case RM6_BINNING:
+            desc = "Binning Pass";
+            break;
+            // This is emitted at the begining of the tiled rendering pass
+        case RM6_GMEM:
+            desc = "Tile Rendering Pass";
+            break;
+            // This is emitted at the end of the tiled rendering pass
+        case RM6_ENDVIS:
+            m_render_marker_index = kInvalidRenderMarkerIndex;
+            add_child = false;
+            break;
+            // This is emitted at the begining of the resolve pass
+        case RM6_RESOLVE:
+            desc = "Resolve Pass";
+            break;
+            // This is emitted for each dispatch
+        case RM6_COMPUTE:
+            desc = "Compute Dispatch";
+            break;
+            // TODO(wangra): Might need to handle following markers
+        case RM6_YIELD:
+        case RM6_BLIT2DSCALE:
+        case RM6_IB1LIST_START:
+        case RM6_IB1LIST_END:
+        default: add_child = false; break;
+        }
+
+        if (add_child)
+        {
+            m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, desc, 0);
+            AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, m_render_marker_index);
+        }
+    }
 
     // This packet is potentially implicit NOP packet for vkBeginCommandBuffer
     // if (is_marker_parsed && !m_is_parsing_cb_start_marker)
@@ -1046,6 +1105,7 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     m_shared_node_ib_parent_stack[m_cur_ib_level] = m_cur_submit_node_index;
     m_cur_ib_packet_node_index = UINT64_MAX;
     m_ib_stack.clear();
+    m_render_marker_index = kInvalidRenderMarkerIndex;
 }
 
 //--------------------------------------------------------------------------------------------------

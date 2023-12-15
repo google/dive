@@ -225,7 +225,8 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
 
             uint64_t addr = m_state_tracker.GetCurShaderAddr((ShaderStage)shader, enable_mask);
 
-            if (is_valid_shader && (addr != UINT64_MAX))
+            // TODO(wangra): need to investigate why `addr` could be 0 here
+            if (is_valid_shader && (addr != UINT64_MAX) && (addr != 0))
             {
                 // Check if we've already seen a shader at this address, in which case we just need
                 // to reference the existing shader.

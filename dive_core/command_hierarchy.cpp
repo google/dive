@@ -821,15 +821,6 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                                type,
                                                header);
 
-    uint64_t parent_index = m_shared_node_ib_parent_stack[m_cur_ib_level];
-    AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kSubmitTopology, parent_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kRgpTopology, parent_index, packet_node_index);
-
-    AddSharedChild(CommandHierarchy::kEngineTopology, m_ib_stack.back(), packet_node_index);
-    AddSharedChild(CommandHierarchy::kSubmitTopology, m_ib_stack.back(), packet_node_index);
-
     uint32_t opcode = UINT32_MAX;
     if (type == Pm4Type::kType7)
     {
@@ -1037,8 +1028,18 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         {
             m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, desc, 0);
             AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, m_render_marker_index);
+            m_shared_node_ib_parent_stack[m_cur_ib_level] = m_render_marker_index;
         }
     }
+
+    uint64_t parent_index = m_shared_node_ib_parent_stack[m_cur_ib_level];
+    AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kSubmitTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
+    AddSharedChild(CommandHierarchy::kRgpTopology, parent_index, packet_node_index);
+
+    AddSharedChild(CommandHierarchy::kEngineTopology, m_ib_stack.back(), packet_node_index);
+    AddSharedChild(CommandHierarchy::kSubmitTopology, m_ib_stack.back(), packet_node_index);
 
     // This packet is potentially implicit NOP packet for vkBeginCommandBuffer
     // if (is_marker_parsed && !m_is_parsing_cb_start_marker)
@@ -1149,13 +1150,17 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
         }
         m_packets.Clear();
 
+        uint64_t parent_node_index = m_cur_submit_node_index;
+        if (m_render_marker_index != kInvalidRenderMarkerIndex)
+        {
+            parent_node_index = m_render_marker_index;
+        }
+
         // Add the postamble_state_node to the submit_node in the event topology
         AddChild(CommandHierarchy::kAllEventTopology,
-                 m_cur_submit_node_index,
+                 parent_node_index,
                  postamble_state_node_index);
-        AddChild(CommandHierarchy::kRgpTopology,
-                 m_cur_submit_node_index,
-                 postamble_state_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, parent_node_index, postamble_state_node_index);
     }
 
     // Insert present node to event topology, when appropriate

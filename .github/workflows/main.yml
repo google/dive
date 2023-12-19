@@ -53,7 +53,9 @@ jobs:
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 16 2019" -A x64 ..
           cmake --build ./ --config Debug
-
+      - name: Run tests
+        run: |
+          cd build; ctest --output-on-failure -C Debug
   # Build the code
   build_Windows_Release:
     runs-on: windows-2019
@@ -76,6 +78,9 @@ jobs:
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 16 2019" -A x64 ..
           cmake --build ./ --config Release
+      - name: Run tests
+        run: |
+          cd build; ctest --output-on-failure -C Release
 
 
   build_Linux_Debug:
@@ -97,6 +102,9 @@ jobs:
       - name: Build the UI with gcc-10
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
+      - name: Run tests
+        run: |
+          cd build; ctest --output-on-failure -C Debug
 
   build_Linux_Release:
     runs-on: ubuntu-22.04
@@ -117,6 +125,9 @@ jobs:
       - name: Build the UI with gcc-10
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-10 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-10 .. -GNinja && ninja && cd ..
+      - name: Run tests
+        run: |
+          cd build; ctest --output-on-failure -C Release
 
   build_Android:
     runs-on: ubuntu-22.04

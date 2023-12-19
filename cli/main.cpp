@@ -16,16 +16,18 @@
 #include <vector>
 
 #include "commands.h"
+#include "pm4_info.h"
 
 using namespace Dive::cli;
 
 int main(int argc, char** argv)
 {
     Dive::cli::Init();
+    Pm4InfoInit();
 
     std::map<std::string, const Command*> commands;
     std::vector<const Command*>           commandlist = {
-        // public
+                  // public
         &CommandOf<HelpCommand>::Get(&commands),
         &CommandOf<VersionCommand>::Get(),
         &CommandOf<ExtractCommand>::Get(),

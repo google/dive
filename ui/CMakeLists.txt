@@ -48,6 +48,7 @@ include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include )
 include_directories(${CMAKE_SOURCE_DIR})
 # Include CMAKE_BINARY_DIR for generated files.
 include_directories(${CMAKE_BINARY_DIR})
+include_directories(${LibArchive_INCLUDE_DIRS})
 
 #include gRPC headers
 include_directories(

@@ -15,11 +15,16 @@
 */
 
 #include "capture_data.h"
+
 #include <assert.h>
 #include <string.h>  // memcpy
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
+#include <memory>
+#include "archive.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/common/common.h"
 #include "freedreno_dev_info.h"
 #include "pm4_info.h"
 
@@ -37,6 +42,99 @@ constexpr const uint32_t kMaxNumWavesPerBlock = 1 << 20;  // 1 MiB
 constexpr const uint32_t kMaxNumSGPRPerWave = 1 << 20;    // 1 MiB
 constexpr const uint32_t kMaxNumVGPRPerWave = 1 << 20;    // 1 MiB
 }  // namespace
+
+//--------------------------------------------------------------------------------------------------
+FileReader::FileReader(const char *file_name) :
+    m_file_name(file_name),
+    m_handle(std::unique_ptr<struct archive, decltype(&archive_read_free)>(archive_read_new(),
+                                                                           &archive_read_free))
+{
+    DIVE_ASSERT(m_handle != nullptr);
+}
+
+//--------------------------------------------------------------------------------------------------
+int FileReader::open()
+{
+
+    // Enables auto-detection code and decompression support for gzip
+    int ret = archive_read_support_filter_gzip(m_handle.get());
+    if (ret != ARCHIVE_OK)
+    {
+        std::cout << "error archive_read_support_filter_gzip : "
+                  << archive_error_string(m_handle.get());
+        return ret;
+    }
+
+    ret = archive_read_support_filter_none(m_handle.get());
+    if (ret != ARCHIVE_OK)
+    {
+        std::cout << "error archive_read_support_filter_none : "
+                  << archive_error_string(m_handle.get());
+        return ret;
+    }
+
+    // Enables support for all available formats except the "raw" format
+    ret = archive_read_support_format_all(m_handle.get());
+    if (ret != ARCHIVE_OK)
+    {
+        std::cout << "error archive_read_support_format_all : "
+                  << archive_error_string(m_handle.get());
+        return ret;
+    }
+
+    // The "raw" format handler allows libarchive to be used to read arbitrary data.
+    ret = archive_read_support_format_raw(m_handle.get());
+    if (ret != ARCHIVE_OK)
+    {
+        std::cout << "error archive_read_support_format_raw : "
+                  << archive_error_string(m_handle.get());
+        return ret;
+    }
+
+    ret = archive_read_open_filename(m_handle.get(), m_file_name.c_str(), 10240);
+    if (ret != ARCHIVE_OK)
+    {
+        std::cout << "error archive_read_open_filename : " << archive_error_string(m_handle.get());
+        return ret;
+    }
+    struct archive_entry *entry;
+    ret = archive_read_next_header(m_handle.get(), &entry);
+    if (ret != ARCHIVE_OK)
+    {
+        std::cout << "error archive_read_next_header : " << archive_error_string(m_handle.get());
+    }
+
+    return ret;
+}
+
+//--------------------------------------------------------------------------------------------------
+int64_t FileReader::read(char *buf, int64_t nbytes)
+{
+    char   *ptr = buf;
+    int64_t ret = 0;
+    while (nbytes > 0)
+    {
+        int64_t n = archive_read_data(m_handle.get(), ptr, nbytes);
+        if (n < 0)
+        {
+            fprintf(stderr, "%s\n", archive_error_string(m_handle.get()));
+            return n;
+        }
+        if (n == 0)
+            break;
+        ptr += n;
+        nbytes -= n;
+        ret += n;
+    }
+    return ret;
+}
+
+//--------------------------------------------------------------------------------------------------
+int FileReader::close()
+{
+    m_handle = nullptr;
+    return 0;
+}
 
 // =================================================================================================
 // MemoryAllocationInfo
@@ -798,15 +896,13 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(const char *file_name)
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
 {
-    // Open the file stream
-    std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
-    if (!capture_file.is_open())
+    FileReader reader(file_name);
+    if (reader.open() != 0)
     {
         std::cerr << "Not able to open: " << file_name << std::endl;
         return LoadResult::kFileIoError;
     }
-
-    auto result = LoadAdrenoRdFile(capture_file);
+    auto result = LoadAdrenoRdFile(reader);
     if (result != LoadResult::kSuccess)
     {
         std::cerr << "Error reading: " << file_name << " (" << result << ")" << std::endl;
@@ -880,7 +976,7 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file)
+CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
 {
     enum rd_sect_type
     {
@@ -917,7 +1013,8 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
     uint64_t  cur_gpu_addr = UINT64_MAX;
     uint32_t  cur_size = UINT32_MAX;
     bool      is_new_submit = false;
-    while (capture_file.read((char *)&block_info, sizeof(block_info)))
+    size_t    nread = 0;
+    while ((nread = capture_file.read((char *)&block_info, sizeof(block_info))) > 0)
     {
         if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
             return LoadResult::kCorruptData;
@@ -953,7 +1050,12 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(std::istream &capture_file
         case RD_FLUSH:
         case RD_PROGRAM:
         case RD_VERT_SHADER:
-        case RD_FRAG_SHADER: capture_file.seekg(block_info.m_data_size, std::ios::cur); break;
+        case RD_FRAG_SHADER:
+        {
+            std::vector<char> buf(block_info.m_data_size);
+            capture_file.read(buf.data(), block_info.m_data_size);
+            break;
+        }
         case RD_GPU_ID:
         {
             DIVE_ASSERT(block_info.m_data_size == 4);
@@ -1346,10 +1448,10 @@ bool CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadGpuAddressAndSize(std::istream &capture_file,
-                                        uint32_t      block_size,
-                                        uint64_t     *gpu_addr,
-                                        uint32_t     *size)
+bool CaptureData::LoadGpuAddressAndSize(FileReader &capture_file,
+                                        uint32_t    block_size,
+                                        uint64_t   *gpu_addr,
+                                        uint32_t   *size)
 {
     assert(block_size >= 2 * sizeof(uint32_t));
 
@@ -1372,9 +1474,7 @@ bool CaptureData::LoadGpuAddressAndSize(std::istream &capture_file,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file,
-                                        uint64_t      gpu_addr,
-                                        uint32_t      size)
+bool CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_addr, uint32_t size)
 {
     MemoryData raw_memory;
     raw_memory.m_data_size = size;
@@ -1392,9 +1492,9 @@ bool CaptureData::LoadMemoryBlockAdreno(std::istream &capture_file,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadCmdStreamBlockAdreno(std::istream &capture_file,
-                                           uint32_t      block_size,
-                                           bool          create_new_submit)
+bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
+                                           uint32_t    block_size,
+                                           bool        create_new_submit)
 {
     uint64_t gpu_addr;
     uint32_t size_in_dwords;

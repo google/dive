@@ -98,8 +98,6 @@ endif()
 
 option(DIVE_UNIT_TESTS, "Build unit tests for dive")
 
-if(DIVE_UNIT_TESTS)
-endif()
 
 option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")
 

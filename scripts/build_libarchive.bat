@@ -35,6 +35,8 @@ set startTime=%time%
 
     pwd
     cmake -DENABLE_TEST=OFF ^
+        -DLIBARCHIVE_STATIC=ON ^
+        -DBUILD_SHARED_LIBS=OFF ^
         -DENABLE_OPENSSL=OFF ^
         -DENABLE_LIBB2=OFF ^
         -DENABLE_LZ4=OFF ^

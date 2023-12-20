@@ -18,22 +18,26 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 if(WIN32)
     set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/libarchive/")
+    set(CMAKE_INSTALL_RPATH "${CMAKE_SOURCE_DIR}/prebuild/libarchive/bin")
+    add_compile_definitions(LIBARCHIVE_STATIC)
 endif()
 
 find_package(LibArchive QUIET)
 
 if(NOT LibArchive_FOUND)
 # Run the build script for libarchive
-    if(WIN32)
-        add_custom_command(
-            COMMAND ${CMAKE_SOURCE_DIR}/scripts/build_libarchive.bat
-        )
-        # Try again
-        find_package(LibArchive QUIET)
-        if(NOT LibArchive_FOUND)
-            message(FATAL_ERROR  "Failed to find libarchive" )
-        endif()
-    else()
+    # if(WIN32)
+    #     add_custom_command(
+    #         COMMAND ${CMAKE_SOURCE_DIR}/scripts/build_libarchive.bat
+    #     )
+    #     # Try again
+    #     find_package(LibArchive QUIET)
+    #     if(NOT LibArchive_FOUND)
+    #         message(FATAL_ERROR  "Failed to find libarchive" )
+    #     endif()
+    # else()
+
+        set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "" FORCE)
         set(ENABLE_TEST OFF CACHE INTERNAL "" FORCE)
         set(ENABLE_OPENSSL OFF CACHE INTERNAL "" FORCE)
         set(ENABLE_LIBB2 OFF CACHE INTERNAL "" FORCE)
@@ -49,8 +53,9 @@ if(NOT LibArchive_FOUND)
         add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/libarchive)
         set(LibArchive_LIBRARIES archive_static)
         set(LibArchive_INCLUDE_DIRS ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
+        add_compile_definitions(LIBARCHIVE_STATIC)
         include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/) 
-    endif()
+    # endif()
 endif()
 
 

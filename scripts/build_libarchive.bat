@@ -15,11 +15,39 @@
 @echo off
 set PROJECT_ROOT=%~dp0\..
 echo "PROJECT_ROOT: " %PROJECT_ROOT%
-set SRC_DIR= %PROJECT_ROOT%\\third_party\\libarchive
+set SRC_DIR= %PROJECT_ROOT%\\third_party\\grpc\\third_party\\zlib
 set INSTALL_ROOT=%PROJECT_ROOT%\\prebuild
 set BUILD_TYPE=Debug Release
 set startTime=%time%
 
+(for %%b in (%BUILD_TYPE%) do (
+    setlocal enabledelayedexpansion
+    set build_type=%%b
+    echo "build type is " !build_type!
+
+    set BUILD_DIR= %PROJECT_ROOT%\\build\\libz\\!build_type!
+    set INSTALL_DIR= %INSTALL_ROOT%\\libarchive\\
+    md !BUILD_DIR!
+    echo "BUILD_DIR: " !BUILD_DIR!
+    echo "INSTALL_DIR: " !INSTALL_DIR!
+    pushd !BUILD_DIR!
+
+    pwd
+    cmake -DENABLE_TEST=OFF ^
+        -DBUILD_SHARED_LIBS=OFF ^
+        -DENABLE_INSTALL=ON ^
+        -DCMAKE_CXX_STANDARD=17 ^
+        -DCMAKE_BUILD_TYPE=!build_type! ^
+        %SRC_DIR% ^
+        -DCMAKE_DEBUG_POSTFIX=d ^
+        -DCMAKE_PREFIX_PATH="!INSTALL_DIR!" ^
+        -G "Visual Studio 16 2019" -A x64
+
+    cmake --build . --config=!build_type!  
+    cmake --install . --config=!build_type! --prefix="!INSTALL_DIR!"  
+))
+
+set SRC_DIR= %PROJECT_ROOT%\\third_party\\libarchive
 
 (for %%b in (%BUILD_TYPE%) do (
     setlocal enabledelayedexpansion
@@ -51,6 +79,7 @@ set startTime=%time%
         -DENABLE_INSTALL=ON ^
         -DCMAKE_CXX_STANDARD=17 ^
         -DCMAKE_BUILD_TYPE=!build_type! ^
+        -DCMAKE_PREFIX_PATH="!INSTALL_DIR!" ^
         %SRC_DIR% ^
         -DCMAKE_DEBUG_POSTFIX=d ^
         -G "Visual Studio 16 2019" -A x64

@@ -18,6 +18,7 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 if(WIN32)
     set(CMAKE_PREFIX_PATH_PRE ${CMAKE_PREFIX_PATH})
+    # TODO(renfeng): add prebuild libarchive or remove this
     set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/libarchive/")
     add_compile_definitions(LIBARCHIVE_STATIC)
 endif()

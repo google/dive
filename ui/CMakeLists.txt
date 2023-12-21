@@ -88,22 +88,17 @@ else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-inconsistent-missing-override)
 endif()
 
-# if (WIN32)
-# message("Install archive lib to " ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG})
-# file(COPY ${CMAKE_SOURCE_DIR}/prebuild/libarchive/bin/archive.dll DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG})
-# file(COPY ${CMAKE_SOURCE_DIR}/prebuild/libarchive/bin/archived.dll DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG})
-# endif()
 # Collect 3rd party licenses
-# file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
-# file(COPY ${CMAKE_SOURCE_DIR}/third_party/catch2/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/catch2/)
-# file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
+file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
+file(COPY ${CMAKE_SOURCE_DIR}/third_party/catch2/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/catch2/)
+file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
 
 # Generate license NOTICE file
-# include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")
-# GenerateThirdPartyLicenseFile("${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/licenses/")
-# if (MSVC)
-#   add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
-# endif()
+include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")
+GenerateThirdPartyLicenseFile("${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/licenses/")
+if (MSVC)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})

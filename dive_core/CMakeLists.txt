@@ -201,8 +201,6 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   target_link_libraries(${PROJECT_NAME} PRIVATE tinfo)
 endif()
 if(WIN32)
-  # target_link_options("/NODEFAULTLIB:library")
-  # ADD_DEFINITIONS(-DNODEFAULTLIB:archive_static.lib)
   # Supress warning about deprecation of std::iterator when compile with c++17
   add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
 endif()

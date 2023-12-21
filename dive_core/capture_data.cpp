@@ -55,12 +55,11 @@ FileReader::FileReader(const char *file_name) :
 //--------------------------------------------------------------------------------------------------
 int FileReader::open()
 {
-
     // Enables auto-detection code and decompression support for gzip
     int ret = archive_read_support_filter_gzip(m_handle.get());
     if (ret != ARCHIVE_OK)
     {
-        std::cout << "error archive_read_support_filter_gzip : "
+        std::cerr << "error archive_read_support_filter_gzip: "
                   << archive_error_string(m_handle.get());
         return ret;
     }
@@ -68,7 +67,7 @@ int FileReader::open()
     ret = archive_read_support_filter_none(m_handle.get());
     if (ret != ARCHIVE_OK)
     {
-        std::cout << "error archive_read_support_filter_none : "
+        std::cerr << "error archive_read_support_filter_none: "
                   << archive_error_string(m_handle.get());
         return ret;
     }
@@ -77,7 +76,7 @@ int FileReader::open()
     ret = archive_read_support_format_all(m_handle.get());
     if (ret != ARCHIVE_OK)
     {
-        std::cout << "error archive_read_support_format_all : "
+        std::cerr << "error archive_read_support_format_all: "
                   << archive_error_string(m_handle.get());
         return ret;
     }
@@ -86,7 +85,7 @@ int FileReader::open()
     ret = archive_read_support_format_raw(m_handle.get());
     if (ret != ARCHIVE_OK)
     {
-        std::cout << "error archive_read_support_format_raw : "
+        std::cerr << "error archive_read_support_format_raw: "
                   << archive_error_string(m_handle.get());
         return ret;
     }
@@ -94,14 +93,14 @@ int FileReader::open()
     ret = archive_read_open_filename(m_handle.get(), m_file_name.c_str(), 10240);
     if (ret != ARCHIVE_OK)
     {
-        std::cout << "error archive_read_open_filename : " << archive_error_string(m_handle.get());
+        std::cerr << "error archive_read_open_filename: " << archive_error_string(m_handle.get());
         return ret;
     }
     struct archive_entry *entry;
     ret = archive_read_next_header(m_handle.get(), &entry);
     if (ret != ARCHIVE_OK)
     {
-        std::cout << "error archive_read_next_header : " << archive_error_string(m_handle.get());
+        std::cerr << "error archive_read_next_header: " << archive_error_string(m_handle.get());
     }
 
     return ret;
@@ -117,7 +116,7 @@ int64_t FileReader::read(char *buf, int64_t nbytes)
         int64_t n = archive_read_data(m_handle.get(), ptr, nbytes);
         if (n < 0)
         {
-            fprintf(stderr, "%s\n", archive_error_string(m_handle.get()));
+            std::cerr << "error archive_read_data: " << archive_error_string(m_handle.get());
             return n;
         }
         if (n == 0)
@@ -1013,8 +1012,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     uint64_t  cur_gpu_addr = UINT64_MAX;
     uint32_t  cur_size = UINT32_MAX;
     bool      is_new_submit = false;
-    size_t    nread = 0;
-    while ((nread = capture_file.read((char *)&block_info, sizeof(block_info))) > 0)
+    while (capture_file.read((char *)&block_info, sizeof(block_info)) > 0)
     {
         if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
             return LoadResult::kCorruptData;

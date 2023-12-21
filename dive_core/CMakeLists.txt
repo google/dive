@@ -123,13 +123,10 @@ file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
 file(GLOB_RECURSE FREEDRENO_SRC_FILES "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_dev_info.c")
 
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR} ${DIVE_CORE_GENERATED_FILE_DIR})
-
-include_directories(${CMAKE_SOURCE_DIR}/capture_layer)
-include_directories(${CMAKE_SOURCE_DIR}/capture_layer/generated)
-
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common)
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/)
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/include/)
+include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 
 
 add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
@@ -140,6 +137,7 @@ add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
+
 
 
 if (MSVC)
@@ -200,15 +198,14 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   target_link_libraries(${PROJECT_NAME} PRIVATE dl)
   target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
   target_link_libraries(${PROJECT_NAME} PRIVATE z)
-  if (NOT GGP)
-    target_link_libraries(${PROJECT_NAME} PRIVATE tinfo)
-  endif()
+  target_link_libraries(${PROJECT_NAME} PRIVATE tinfo)
 endif()
 if(WIN32)
   # Supress warning about deprecation of std::iterator when compile with c++17
   add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
 endif()
-
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LibArchive_LIBRARIES})
+include_directories(${LibArchive_INCLUDE_DIRS})
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union

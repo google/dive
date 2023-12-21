@@ -17,8 +17,10 @@
 #pragma once
 #include <fstream>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
+#include "archive.h"
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
@@ -312,6 +314,20 @@ private:
 };
 
 //--------------------------------------------------------------------------------------------------
+class FileReader
+{
+public:
+    FileReader(const char *file_name);
+    int     open();
+    int64_t read(char *buf, int64_t size);
+    int     close();
+
+private:
+    std::string                                                   m_file_name;
+    std::unique_ptr<struct archive, decltype(&archive_read_free)> m_handle;
+};
+
+//--------------------------------------------------------------------------------------------------
 class CaptureData
 {
 public:
@@ -351,7 +367,7 @@ public:
     CaptureData &operator=(CaptureData &&) = default;
 
     LoadResult LoadCaptureFile(std::istream &capture_file);
-    LoadResult LoadAdrenoRdFile(std::istream &capture_file);
+    LoadResult LoadAdrenoRdFile(FileReader &capture_file);
 
     bool        HasPm4Data() const { return m_submits.size() > 0; }
     std::string GetFileFormatVersion() const;
@@ -370,14 +386,14 @@ private:
     bool       LoadVulkanMetaDataBlock(std::istream &capture_file);
 
     // Adreno-specific load functions
-    bool LoadGpuAddressAndSize(std::istream &capture_file,
-                               uint32_t      block_size,
-                               uint64_t     *gpu_addr,
-                               uint32_t     *size);
-    bool LoadMemoryBlockAdreno(std::istream &capture_file, uint64_t gpu_addr, uint32_t size);
-    bool LoadCmdStreamBlockAdreno(std::istream &capture_file,
-                                  uint32_t      block_size,
-                                  bool          create_new_submit);
+    bool LoadGpuAddressAndSize(FileReader &capture_file,
+                               uint32_t    block_size,
+                               uint64_t   *gpu_addr,
+                               uint32_t   *size);
+    bool LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_addr, uint32_t size);
+    bool LoadCmdStreamBlockAdreno(FileReader &capture_file,
+                                  uint32_t    block_size,
+                                  bool        create_new_submit);
 
     void Finalize(const CaptureDataHeader &data_header);
 

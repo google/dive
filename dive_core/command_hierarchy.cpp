@@ -1046,12 +1046,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
     if (m_render_marker_index != kInvalidRenderMarkerIndex)
     {
-        AddSharedChild(CommandHierarchy::kEngineTopology, m_render_marker_index, packet_node_index);
-        AddSharedChild(CommandHierarchy::kSubmitTopology, m_render_marker_index, packet_node_index);
         AddSharedChild(CommandHierarchy::kAllEventTopology,
                        m_render_marker_index,
                        packet_node_index);
-        AddSharedChild(CommandHierarchy::kRgpTopology, m_render_marker_index, packet_node_index);
     }
 
     // This packet is potentially implicit NOP packet for vkBeginCommandBuffer

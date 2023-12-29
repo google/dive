@@ -58,7 +58,8 @@ enum class NodeType
     kPacketNode,
     kRegNode,
     kFieldNode,
-    kPresentNode
+    kPresentNode,
+    kRenderMarkerNode
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -549,6 +550,10 @@ private:
     m_cmd_begin_packet_node_indices;  // Potential packets node for vkBeginCommandBuffer
     std::vector<uint64_t>
     m_cmd_begin_event_node_indices;  // Potential event node for vkBeginCommandBuffer
+    static constexpr uint64_t kInvalidRenderMarkerIndex = static_cast<uint64_t>(-1);
+    uint64_t m_render_marker_index = kInvalidRenderMarkerIndex;  // Current render marker index,
+                                                                 // there is no nested render
+                                                                 // marker, so no need to use stack
 
     uint64_t              m_last_user_push_parent_node = UINT64_MAX;
     std::vector<uint64_t> m_vulkan_cmd_stack;  // Command buffer levels, first level is primary and

@@ -22,8 +22,7 @@ limitations under the License.
 static pthread_mutex_t capture_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static int capture_state = 0;
 
-void rd_end(void);
-
+void collect_trace_file(const char* capture_file_path);
 int IsCapturing() 
 {
 	pthread_mutex_lock(&capture_state_lock);
@@ -36,8 +35,19 @@ extern void SetCaptureState(int state)
 {
 	LOGD("SetCaptureState %d", state);
 	pthread_mutex_lock(&capture_state_lock);
+
+	if(state == 0 && capture_state == 1)
+	{
+		const char *num = getenv("TESTNUM");
+		if (!num)
+			num = "0";
+		int frame_num = atoi(num);
+		char path[1024];
+		snprintf(path, 1024, "/sdcard/Download/trace-frame-%04u.rd", frame_num);		
+		collect_trace_file(path);
+	}
+		
 	capture_state = state;
-	rd_end();
 	pthread_mutex_unlock(&capture_state_lock);
 }
 

@@ -42,7 +42,7 @@ set(CMAKE_BUILD_TYPE Debug)  # Release build didn't work (TODO: check why releas
 target_include_directories(${target_name} 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/includes
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/util)
-target_link_libraries(${target_name} log)
+target_link_libraries(${target_name} log z)
 set_target_properties(${target_name}
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"

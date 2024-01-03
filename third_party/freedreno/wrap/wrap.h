@@ -28,8 +28,6 @@
 #  include <dlfcn.h>
 #endif
 
-//#define USE_PTHREADS
-
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -55,6 +53,7 @@
 #if 0 /* uncomment for printf in logcat */
 int wrap_printf(const char *format, ...);
 #define printf wrap_printf
+#define USE_PTHREADS
 #endif
 
 void * __rd_dlsym_helper(const char *name);
@@ -66,6 +65,8 @@ void * __rd_dlsym_helper(const char *name);
 
 
 unsigned int env2u(const char *name);
+int wrap_get_next_fd(int index, int *fd);
+struct list *wrap_get_buffers_of_interest(int device_fd);
 unsigned int wrap_safe(void);
 unsigned int wrap_gpu_id(void);
 unsigned int wrap_gpu_id_patchid(void);

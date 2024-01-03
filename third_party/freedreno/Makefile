@@ -118,7 +118,7 @@ CFLAGS += -DSUPPORT_X11
 LDFLAGS_MISC = -lX11 -lm
 else ifeq ($(strip $(WINDOW_SYSTEM)),wayland)
 CFLAGS += -DSUPPORT_WAYLAND
-LDFLAGS_MISC = -lwayland-client -lm
+LDFLAGS_MISC = -lwayland-client -lwayland-egl -lm
 endif
 
 LFLAGS_3D = -lEGL -lGLESv2

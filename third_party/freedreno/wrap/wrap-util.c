@@ -23,23 +23,104 @@
 
 #include "wrap.h"
 
-// GOOGLE: Include Dive related header
-#include "dive-wrap.h"
+#define COMPRESS_TRACE
+#ifdef COMPRESS_TRACE
+#include <zlib.h>
+#define LOG_FILE_TYPE gzFile
+#define LOG_NULL_FILE NULL
+#define LOG_PRI_FILE "p"
+#define LOG_OPEN_FILE(file) gzopen((file), "w")
+#define LOG_CLOSE_FILE(file) gzclose((file))
+#define LOG_WRITE_FILE(file, buf, size) gzwrite((file), (buf), (size))
+#define LOG_SYNC_FILE(file)	gzflush((file), Z_FINISH)
+#define LOG_ERROR(file, err) gzerror((file), NULL)
+#else
+#define LOG_FILE_TYPE int
+#define LOG_NULL_FILE -1
+#define LOG_PRI_FILE "d"
+#define LOG_OPEN_FILE(file) open((file), O_WRONLY| O_TRUNC | O_CREAT, 0644)
+#define LOG_CLOSE_FILE(file) close((file))
+#define LOG_WRITE_FILE(file, buf, size) write((file), (buf), (size))
+#define LOG_SYNC_FILE(file) fsync((file))
+#define LOG_ERROR(file, err) strerror(err)
+#endif
 
-static int fd = -1;
+#define MAX_DEVICE_FILES 1024
+
+struct device_file {
+	int device_fd;
+	LOG_FILE_TYPE log_fd;
+	int open_count;
+	char file_name[PATH_MAX];
+	struct list buffers_of_interest;
+};
+static struct device_file device_files[MAX_DEVICE_FILES] = {
+	[0 ... MAX_DEVICE_FILES-1] = {-1, LOG_NULL_FILE, 0, {0}, {0}}
+};
 static unsigned int gpu_id;
-// GOOGLE: Store the chip ID.
-static uint64_t chip_id = 0;
 
 #ifdef USE_PTHREADS
 static pthread_mutex_t l = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 #endif
+
+static pthread_mutex_t write_lock = PTHREAD_MUTEX_INITIALIZER;
 
 char *getcwd(char *buf, size_t size);
 
 int __android_log_print(int prio, const char *tag,  const char *fmt, ...);
 
 static char tracebuf[4096], *tracebufp = tracebuf;
+
+static struct device_file *get_file(int device_fd)
+{
+	if (device_fd == -1)
+		return &device_files[0];
+
+	for (int i = 0; i < MAX_DEVICE_FILES; i++) {
+		struct device_file *df = &device_files[i];
+		if (device_fd == df->device_fd)
+			return df;
+	}
+	return NULL;
+}
+
+static struct device_file *add_file(int device_fd)
+{
+	if (device_fd == -1)
+		return &device_files[0];
+
+	for (int i = 0; i < MAX_DEVICE_FILES; i++) {
+		struct device_file *df = &device_files[i];
+		if (df->device_fd == -1) {
+			df->device_fd = device_fd;
+			df->buffers_of_interest = (struct list)LIST_HEAD_INIT(df->buffers_of_interest);
+			return df;
+		}
+	}
+
+	assert(0 && "Tried to add more than MAX_DEVICE_FILES device files");
+	return NULL;
+}
+
+int wrap_get_next_fd(int index, int *fd) {
+	for (int i = index; i < MAX_DEVICE_FILES; i++) {
+		struct device_file *df = &device_files[i];
+		if(df->device_fd != -1) {
+			*fd = df->device_fd;
+			return i+1;
+		}
+	}
+
+	return -1;
+}
+
+struct list *wrap_get_buffers_of_interest(int device_fd) {
+	struct device_file *df = get_file(device_fd);
+	if(df == NULL)
+		return NULL;
+
+	return &df->buffers_of_interest;
+}
 
 int wrap_printf(const char *format, ...)
 {
@@ -74,51 +155,83 @@ int wrap_printf(const char *format, ...)
 }
 
 
-void rd_start(const char *name, const char *fmt, ...)
+void rd_start(int device_fd, const char *name, const char *fmt, ...)
 {
-	char buf[256];
+	char buf[PATH_MAX];
 	static int cnt = 0;
 	int n = cnt++;
 	const char *testnum;
 	va_list  args;
+
+	struct device_file *df = add_file(device_fd);
+	assert(df != NULL);
+	if (df->log_fd != LOG_NULL_FILE)
+		return;
+
+	if (!name) {
+		name = "trace";
+	}
+
 	testnum = getenv("TESTNUM");
 	if (testnum) {
 		n = strtol(testnum, NULL, 0);
-		sprintf(buf, "%s-%04u.rd", name, n);
+		sprintf(buf, "%s-%04u.rd.inprogress", name, n);
 	} else {
-		sprintf(buf, "/sdcard/trace.rd");
+		if (device_fd == -1) {
+			if (df->open_count == 0)
+				sprintf(buf, "/sdcard/Download/%s.rd.inprogress", name);
+			else
+				sprintf(buf, "/sdcard/Download/%s-%d.rd.inprogress", name, df->open_count);
+		}
+		else {
+			if (df->open_count == 0)
+				sprintf(buf, "/sdcard/Download/%s-fd%d.rd.inprogress", name, device_fd);
+			else
+				sprintf(buf, "/sdcard/Download/%s-fd%d-%d.rd.inprogress", name, device_fd, df->open_count);
+		}
 	}
 
-	fd = open(buf, O_WRONLY| O_TRUNC | O_CREAT, 0644);
-	// GOOGLE: check the return value of the open function call.
-	if(fd == -1) {
-		LOGI("failed to open file: %s, error: %s", buf, strerror(errno));
-		exit(-1);
-	}
+	df->log_fd = LOG_OPEN_FILE(buf);
+	assert(df->log_fd != LOG_NULL_FILE);
+	strcpy(df->file_name, buf);
+	df->open_count++;
+
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
 
-	rd_write_section(RD_TEST, buf, strlen(buf));
+	rd_write_section(device_fd, RD_TEST, buf, strlen(buf));
 
 	if (gpu_id) {
 		/* no guarantee that blob driver will again get devinfo property,
 		 * so we could miss the GPU_ID section in the new rd file.. so
 		 * just hack around it:
 		 */
-		rd_write_section(RD_GPU_ID, &gpu_id, sizeof(gpu_id));
-	}
-
-	// GOOGLE: Write out the chip id.
-	if(chip_id) {
-		rd_write_section(RD_CHIP_ID, &chip_id, sizeof(chip_id));
+		rd_write_section(device_fd, RD_GPU_ID, &gpu_id, sizeof(gpu_id));
 	}
 }
 
-void rd_end(void)
+void rd_end(int device_fd)
 {
-	close(fd);
-	fd = -1;
+	char new_file_name[PATH_MAX];
+	struct device_file *df = get_file(device_fd);
+	if (df == NULL)
+		return;
+	LOG_CLOSE_FILE(df->log_fd);
+
+	/* Rename file from rd_inprogress to rd */
+	int file_name_len = strlen(df->file_name);
+	strcpy(new_file_name, df->file_name);
+
+	/* set last '.' to be new null terminator */
+	new_file_name[file_name_len - 11] = '\0';
+
+	if (rename(df->file_name, new_file_name) == -1) {
+		printf("Failed to rename trace file (%s)", strerror(errno));
+	}
+
+	df->log_fd = LOG_NULL_FILE;
+	df->device_fd = -1;
 }
 
 #if 0
@@ -127,14 +240,16 @@ volatile int*  __errno( void );
 #define errno (*__errno())
 #endif
 
-static void rd_write(const void *buf, int sz)
+static void rd_write(int device_fd, const void *buf, int sz)
 {
+	struct device_file *df = get_file(device_fd);
+	assert(df != NULL);
 	const uint8_t *cbuf = buf;
 	while (sz > 0) {
-		int ret = write(fd, cbuf, sz);
+		int ret = LOG_WRITE_FILE(df->log_fd, cbuf, sz);
 		if (ret < 0) {
-			printf("error: %d (%s)\n", ret, strerror(errno));
-			printf("fd=%d, buf=%p, sz=%d\n", fd, buf, sz);
+			printf("error: %d (%s)\n", ret, LOG_ERROR(df->log_fd, errno));
+			printf("fd=%"LOG_PRI_FILE", buf=%p, sz=%d\n", df->log_fd, buf, sz);
 			exit(-1);
 		}
 		cbuf += ret;
@@ -142,43 +257,43 @@ static void rd_write(const void *buf, int sz)
 	}
 }
 
-void rd_write_section(enum rd_sect_type type, const void *buf, int sz)
+void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, int sz)
 {
 	uint32_t val = ~0;
 
-	// GOOGLE: Write out rd file only when capturing flag is enabled.
-	if (type == RD_GPU_ID) {
-		gpu_id = *(unsigned int *)buf;
-	}
-	if (type == RD_CHIP_ID) {
-		chip_id = *(uint64_t *)buf;
-	}
-	if(!IsCapturing()) {
-		return;
-	}
-
-	if (fd == -1) {
+	struct device_file *df = get_file(device_fd);
+	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
 		const char *name = getenv("TESTNAME");
 		if (!name)
 			name = "unknown";
-		rd_start(name, "");
-		printf("opened rd, %d\n", fd);
+		rd_start(device_fd, name, "");
+		df = get_file(device_fd);
+		assert(df != NULL);
+		printf("opened rd, %"LOG_PRI_FILE"\n", df->log_fd);
 	}
 
+	if (type == RD_GPU_ID) {
+		gpu_id = *(unsigned int *)buf;
+	}
 
-	rd_write(&val, 4);
-	rd_write(&val, 4);
+	pthread_mutex_lock(&write_lock);
 
-	rd_write(&type, 4);
+	rd_write(device_fd, &val, 4);
+	rd_write(device_fd, &val, 4);
+
+	rd_write(device_fd, &type, 4);
 	val = ALIGN(sz, 4);
-	rd_write(&val, 4);
-	rd_write(buf, sz);
+	rd_write(device_fd, &val, 4);
+	rd_write(device_fd, buf, sz);
 
 	val = 0;
-	rd_write(&val, ALIGN(sz, 4) - sz);
+	rd_write(device_fd, &val, ALIGN(sz, 4) - sz);
 
-	if (wrap_safe())
-		fsync(fd);
+	if (wrap_safe()) {
+		LOG_SYNC_FILE(df->log_fd);
+	}
+
+	pthread_mutex_unlock(&write_lock);
 }
 
 unsigned int env2u(const char *name)

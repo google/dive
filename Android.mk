@@ -8,14 +8,14 @@ include $(CLEAR_VARS)
 LOCAL_MODULE	:= libwrap
 LOCAL_SRC_FILES	:= wrap/wrap-util.c wrap/wrap-syscall.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/includes $(LOCAL_PATH)/util
-LOCAL_LDLIBS := -llog -lc -ldl
+LOCAL_LDLIBS := -llog -lc -ldl -lz
 include $(BUILD_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE    := libwrapfake
 LOCAL_SRC_FILES := wrap/wrap-util.c wrap/wrap-syscall-fake.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/includes $(LOCAL_PATH)/util
-LOCAL_LDLIBS := -llog -lc -ldl
+LOCAL_LDLIBS := -llog -lc -ldl -lz
 include $(BUILD_SHARED_LIBRARY)
 
 

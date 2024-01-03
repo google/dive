@@ -28,7 +28,8 @@
 #include <ctype.h>
 
 #include "wrap.h"
-
+// GOOGLE: Include Dive related header
+#include "dive-wrap.h"
 #include "ion.h"
 
 #ifdef USE_PTHREADS
@@ -558,6 +559,11 @@ static void log_cmdaddr(int device_fd, uint64_t gpuaddr, uint32_t sizedwords)
 
 static void dump_bos(int fd)
 {
+	// GOOGLE: Dump BOs only when capturing flag is enabled.
+	if (!IsCapturing()) {
+		return;
+	}
+
 	PROLOG(mmap);
 	PROLOG(munmap);
 
@@ -607,6 +613,11 @@ static void dump_ib_prep(int device_fd)
 
 static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 {
+	// GOOGLE: Dump IBs only when capturing flag is enabled.
+	if (!IsCapturing()) {
+		return;
+	}
+
 	struct buffer *buf = find_buffer(fd, NULL, ibdesc->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
 		struct buffer *other_buf;
@@ -628,6 +639,11 @@ static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 
 static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 {
+	// GOOGLE: Dump CMDs only when capturing flag is enabled.
+	if (!IsCapturing()) {
+		return;
+	}
+
 	/* note: kgsl seems to ignore cmd->offset.. which may be a bug.. */
 	struct buffer *buf = find_buffer(fd, NULL, cmd->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {

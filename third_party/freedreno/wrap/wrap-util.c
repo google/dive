@@ -23,6 +23,10 @@
 
 #include "wrap.h"
 
+// GOOGLE: Include Dive related header
+#include "dive-wrap.h"
+
+int IsCapturing();
 #define COMPRESS_TRACE
 #ifdef COMPRESS_TRACE
 #include <zlib.h>
@@ -58,6 +62,8 @@ static struct device_file device_files[MAX_DEVICE_FILES] = {
 	[0 ... MAX_DEVICE_FILES-1] = {-1, LOG_NULL_FILE, 0, {0}, {0}}
 };
 static unsigned int gpu_id;
+// GOOGLE: Store the chip ID.
+static uint64_t chip_id = 0;
 
 #ifdef USE_PTHREADS
 static pthread_mutex_t l = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
@@ -93,6 +99,8 @@ static struct device_file *add_file(int device_fd)
 		struct device_file *df = &device_files[i];
 		if (df->device_fd == -1) {
 			df->device_fd = device_fd;
+			// GOOGLE: Add debug log.
+			LOGD("add_file: device_fd %d, log_fd %p, i %d \n", device_fd, df->log_fd, i);
 			df->buffers_of_interest = (struct list)LIST_HEAD_INIT(df->buffers_of_interest);
 			return df;
 		}
@@ -163,7 +171,19 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	const char *testnum;
 	va_list  args;
 
-	struct device_file *df = add_file(device_fd);
+	// GOOGLE: Use exsiting device_file if already being added.
+	struct device_file *df = get_file(device_fd);
+	if(df == NULL)
+	{
+		LOGD("rd_start add new device file %d\n", device_fd);
+		df = add_file(device_fd);
+	}
+
+	if(!IsCapturing()) {
+		return;
+	}
+	LOGD("rd_start with device_fd %d\n", device_fd);
+
 	assert(df != NULL);
 	if (df->log_fd != LOG_NULL_FILE)
 		return;
@@ -175,7 +195,8 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	testnum = getenv("TESTNUM");
 	if (testnum) {
 		n = strtol(testnum, NULL, 0);
-		sprintf(buf, "%s-%04u.rd.inprogress", name, n);
+		// GOOGLE: add open_count to the filename.
+		sprintf(buf, "%s-%04u-%d.rd.inprogress", name, n, df->open_count);
 	} else {
 		if (device_fd == -1) {
 			if (df->open_count == 0)
@@ -192,6 +213,11 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	}
 
 	df->log_fd = LOG_OPEN_FILE(buf);
+	// GOOGLE: Add debug log.
+	LOGD("LOG_OPEN_FILE: device_fd %d, log_fd %p buf %s\n", df->device_fd, df->log_fd, buf);
+	if(df->log_fd == LOG_NULL_FILE) {
+		LOGD("Failed to LOG_OPEN_FILE (%s)", strerror(errno));
+	}
 	assert(df->log_fd != LOG_NULL_FILE);
 	strcpy(df->file_name, buf);
 	df->open_count++;
@@ -209,6 +235,11 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 		 */
 		rd_write_section(device_fd, RD_GPU_ID, &gpu_id, sizeof(gpu_id));
 	}
+
+	// GOOGLE: Write out the chip id.
+	if(chip_id) {
+		rd_write_section(device_fd, RD_CHIP_ID, &chip_id, sizeof(chip_id));
+	}
 }
 
 void rd_end(int device_fd)
@@ -217,6 +248,8 @@ void rd_end(int device_fd)
 	struct device_file *df = get_file(device_fd);
 	if (df == NULL)
 		return;
+	// GOOGLE: Add debug log.
+	LOGD("rd_end remove device_fd %d, log_fd %p\n", device_fd, df->log_fd);
 	LOG_CLOSE_FILE(df->log_fd);
 
 	/* Rename file from rd_inprogress to rd */
@@ -261,6 +294,15 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 {
 	uint32_t val = ~0;
 
+	// GOOGLE: cache gup_id and chip_id.
+	if (type == RD_GPU_ID) {
+		gpu_id = *(unsigned int *)buf;
+	}
+	if (type == RD_CHIP_ID) {
+		chip_id = *(uint64_t *)buf;
+	}
+
+
 	struct device_file *df = get_file(device_fd);
 	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
 		const char *name = getenv("TESTNAME");
@@ -271,9 +313,9 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 		assert(df != NULL);
 		printf("opened rd, %"LOG_PRI_FILE"\n", df->log_fd);
 	}
-
-	if (type == RD_GPU_ID) {
-		gpu_id = *(unsigned int *)buf;
+	// GOOGLE: Don't capture if not in capturing mode.
+	if(!IsCapturing()) {
+		return;
 	}
 
 	pthread_mutex_lock(&write_lock);
@@ -431,4 +473,41 @@ void * __rd_dlsym_helper(const char *name)
 	}
 
 	return func;
+}
+
+// GOOGLE: Close all opened trace fd
+void collect_trace_file(const char* capture_file_path)
+{
+	char full_path[PATH_MAX];
+#if defined (COMPRESS_TRACE)
+	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
+#else
+	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
+#endif
+	LOGD("full_path is %s", full_path);
+	
+	char cmd[PATH_MAX];
+	snprintf(cmd, PATH_MAX, "touch %s", full_path);
+	system(cmd);
+	for (int i = 0; i < MAX_DEVICE_FILES; i++)
+	{
+		struct device_file* df = &device_files[i];
+		int fd = 	df->device_fd ;
+		if(fd != -1)
+		{
+			struct device_file *df = get_file(fd);
+			if (df == NULL)
+					continue;
+			LOGD("device_fd %d, log_fd %p closed in collect_trace_file \n", fd, df->log_fd);
+			LOG_CLOSE_FILE(df->log_fd);
+			df->log_fd = LOG_NULL_FILE;
+			snprintf(cmd, PATH_MAX, "cat %s %s > %s", full_path, df->file_name, full_path);
+			LOGD("CMD: %s\n", cmd);
+			system(cmd);
+			// delete the file that has been concatenated. 
+			snprintf(cmd, PATH_MAX, "rm %s ", df->file_name);
+			LOGD("CMD: %s\n", cmd);
+			system(cmd);
+        }
+	}
 }

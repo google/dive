@@ -45,10 +45,10 @@ set(LIB_SRC_FILES ${SRC_FILES})
 list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
 
 add_library(${PROJECT_NAME}_lib ${HDR_FILES} ${LIB_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${PM4_GENERATED_HDR_FILE})
-target_link_libraries(${PROJECT_NAME}_lib dive_core)
+target_link_libraries(${PROJECT_NAME}_lib PRIVATE dive_core)
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
-target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_lib)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 if (MSVC)
   # 4100: unreferenced formal parameter
@@ -59,12 +59,15 @@ else()
 endif()
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
-target_link_libraries(${PROJECT_NAME} dl)
-target_link_libraries(${PROJECT_NAME} pthread)
-target_link_libraries(${PROJECT_NAME} z)
+target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
+target_link_libraries(${PROJECT_NAME} PRIVATE z)
 if (NOT GGP)
-target_link_libraries(${PROJECT_NAME} tinfo)
+target_link_libraries(${PROJECT_NAME} PRIVATE tinfo)
 endif()
+endif()
+if(WIN32)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${ZLIB_LIBRARIES} -static)
 endif()
 
 # Fuzz only on Clang for now.

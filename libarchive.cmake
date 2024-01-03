@@ -18,7 +18,6 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 if(WIN32)
     set(CMAKE_PREFIX_PATH_PRE ${CMAKE_PREFIX_PATH})
-    # TODO(renfeng): add prebuild libarchive or remove this
     set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/libarchive/")
     add_compile_definitions(LIBARCHIVE_STATIC)
 endif()
@@ -29,6 +28,7 @@ if(LibArchive_FOUND)
     if(WIN32)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/zlib")
         find_package(ZLIB)
+        message("ZLIB_LIBRARIES is " ${ZLIB_LIBRARIES})
     endif()
 else()
     # For Windows we need to build the zlib

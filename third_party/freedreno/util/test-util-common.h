@@ -64,7 +64,7 @@ void *memcpy(void *dest, const void *src, size_t n);
 		do { \
 			static char __rd_buf[4096]; \
 			if (rd_write_section) \
-			rd_write_section(RD_CMD, __rd_buf, snprintf(__rd_buf, sizeof(__rd_buf), "%s:%d: "fmt, \
+			rd_write_section(-1, RD_CMD, __rd_buf, snprintf(__rd_buf, sizeof(__rd_buf), "%s:%d: "fmt, \
 							__FUNCTION__, __LINE__, ##__VA_ARGS__)); \
 			printf(fmt " (%s:%d)\n", \
 					##__VA_ARGS__, __FUNCTION__, __LINE__); \

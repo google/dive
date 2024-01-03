@@ -25,7 +25,12 @@ endif()
 
 find_package(LibArchive QUIET)
 
-if(NOT LibArchive_FOUND)
+if(LibArchive_FOUND)
+    if(WIN32)
+        set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/zlib")
+        find_package(ZLIB)
+    endif()
+else()
     # For Windows we need to build the zlib
     if(WIN32)
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH_PRE})

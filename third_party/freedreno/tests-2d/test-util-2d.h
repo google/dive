@@ -139,7 +139,7 @@ static PixmapPtr create_pixmap_phys(uint32_t w, uint32_t h, uint32_t format,
 	CHK(c2dCreateSurface(&pixmap->id, C2D_SOURCE | C2D_TARGET,
 			C2D_SURFACE_RGB_HOST | C2D_SURFACE_WITH_PHYS, &def));
 	DEBUG_MSG("created pixmap: %p %d", pixmap, pixmap->id);
-	rd_write_section(RD_GPUADDR, sect, sizeof(sect));
+	rd_write_section(-1, RD_GPUADDR, sect, sizeof(sect));
 	return pixmap;
 }
 

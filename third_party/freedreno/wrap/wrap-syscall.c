@@ -271,25 +271,28 @@ struct buffer {
 	int dumped;
 };
 
-static LIST_HEAD(buffers_of_interest);
-
-static struct buffer * register_buffer(void *hostptr, uint64_t flags,
-		unsigned int len, unsigned int handle)
+static struct buffer * register_buffer(int device_fd, void *hostptr,
+		uint64_t flags, unsigned int len, unsigned int handle)
 {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
+	assert(buffers_of_interest);
 	struct buffer *buf = calloc(1, sizeof *buf);
 	buf->hostptr = hostptr;
 	buf->flags = flags;
 	buf->len = len;
 	buf->handle = handle;
-	list_add(&buf->node, &buffers_of_interest);
+	list_add(&buf->node, buffers_of_interest);
 	return buf;
 }
 
-static struct buffer * find_buffer(void *hostptr, uint64_t gpuaddr,
-		uint64_t offset, unsigned int handle, unsigned id)
+static struct buffer * find_buffer(int device_fd, void *hostptr,
+        uint64_t gpuaddr, uint64_t offset, unsigned int handle, unsigned id)
 {
 	struct buffer *buf = NULL;
-	list_for_each_entry(buf, &buffers_of_interest, node) {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
+	if(!buffers_of_interest)
+		return NULL;
+	list_for_each_entry(buf, buffers_of_interest, node) {
 		if (hostptr)
 			if ((buf->hostptr <= hostptr) && (hostptr < (buf->hostptr + buf->len)))
 				return buf;
@@ -309,6 +312,18 @@ static struct buffer * find_buffer(void *hostptr, uint64_t gpuaddr,
 	return NULL;
 }
 
+static struct buffer * find_buffer_all(void *hostptr, uint64_t gpuaddr) {
+	int fd;
+	int index = 0;
+	while(-1 != (index = wrap_get_next_fd(index, &fd))) {
+		struct buffer *buf = find_buffer(fd, hostptr, gpuaddr, 0, 0, 0);
+		if(buf)
+			return buf;
+	}
+
+	return NULL;
+}
+
 static void unregister_buffer(struct buffer *buf)
 {
 	if (buf) {
@@ -322,7 +337,7 @@ static void unregister_buffer(struct buffer *buf)
 static void dump_buffer(uint64_t gpuaddr)
 {
 	static int cnt = 0;
-	struct buffer *buf = find_buffer((void *)-1, gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer_all((void *)-1, gpuaddr);
 	if (buf) {
 		char filename[32];
 		int fd;
@@ -510,6 +525,7 @@ int close(int fd)
 		if (file_table[fd].is_3d) {
 			// XXX unregister buffers
 			printf("closing 3d\n");
+			rd_end(fd);
 		}
 		file_table[fd].is_3d = 0;
 		file_table[fd].is_2d = 0;
@@ -523,22 +539,22 @@ int close(int fd)
 	return orig_close(fd);
 }
 
-static void log_gpuaddr(uint64_t gpuaddr, uint32_t len)
+static void log_gpuaddr(int device_fd, uint64_t gpuaddr, uint32_t len)
 {
 	uint32_t sect[3] = {
 			/* upper 32b of gpuaddr added after len for backwards compat */
 			gpuaddr, len, gpuaddr >> 32,
 	};
-	rd_write_section(RD_GPUADDR, sect, sizeof(sect));
+	rd_write_section(device_fd, RD_GPUADDR, sect, sizeof(sect));
 }
 
-static void log_cmdaddr(uint64_t gpuaddr, uint32_t sizedwords)
+static void log_cmdaddr(int device_fd, uint64_t gpuaddr, uint32_t sizedwords)
 {
 	uint32_t sect[3] = {
 			/* upper 32b of gpuaddr added after len for backwards compat */
 			gpuaddr, sizedwords, gpuaddr >> 32,
 	};
-	rd_write_section(RD_CMDSTREAM_ADDR, sect, sizeof(sect));
+	rd_write_section(device_fd, RD_CMDSTREAM_ADDR, sect, sizeof(sect));
 }
 
 static void dump_bos(int fd)
@@ -552,7 +568,9 @@ static void dump_bos(int fd)
 	PROLOG(munmap);
 
 	struct buffer *buf;
-	list_for_each_entry(buf, &buffers_of_interest, node) {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(fd);
+	assert(buffers_of_interest);
+	list_for_each_entry(buf, buffers_of_interest, node) {
 		if (!buf || buf->dumped)
 			continue;
 
@@ -572,8 +590,8 @@ static void dump_bos(int fd)
 			dump_len = min(buf->len, wrap_buf_len_cap());
 		}
 
-		log_gpuaddr(buf->gpuaddr, dump_len);
-		rd_write_section(RD_BUFFER_CONTENTS, buf->hostptr, dump_len);
+		log_gpuaddr(fd, buf->gpuaddr, dump_len);
+		rd_write_section(fd, RD_BUFFER_CONTENTS, buf->hostptr, dump_len);
 		buf->dumped = 1;
 
 		if (need_unmap) {
@@ -583,11 +601,12 @@ static void dump_bos(int fd)
 	}
 }
 
-static void dump_ib_prep(void)
+static void dump_ib_prep(int device_fd)
 {
 	struct buffer *other_buf;
-
-	list_for_each_entry(other_buf, &buffers_of_interest, node) {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
+	assert(buffers_of_interest);
+	list_for_each_entry(other_buf, buffers_of_interest, node) {
 		other_buf->dumped = 0;
 	}
 }
@@ -599,7 +618,7 @@ static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 		return;
 	}
 
-	struct buffer *buf = find_buffer(NULL, ibdesc->gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer(fd, NULL, ibdesc->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
 		struct buffer *other_buf;
 		uint32_t off = ibdesc->gpuaddr - buf->gpuaddr;
@@ -614,7 +633,7 @@ static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 		/* we already dump all the buffer contents, so just need
 		 * to dump the address/size of the cmdstream:
 		 */
-		log_cmdaddr(ibdesc->gpuaddr, ibdesc->sizedwords);
+		log_cmdaddr(fd, ibdesc->gpuaddr, ibdesc->sizedwords);
 	}
 }
 
@@ -626,7 +645,7 @@ static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 	}
 
 	/* note: kgsl seems to ignore cmd->offset.. which may be a bug.. */
-	struct buffer *buf = find_buffer(NULL, cmd->gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer(fd, NULL, cmd->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
 		struct buffer *other_buf;
 		uint32_t sizedwords = cmd->size / 4;
@@ -642,7 +661,7 @@ static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 		/* we already dump all the buffer contents, so just need
 		 * to dump the address/size of the cmdstream:
 		 */
-		log_cmdaddr(cmd->gpuaddr, sizedwords);
+		log_cmdaddr(fd, cmd->gpuaddr, sizedwords);
 	}
 }
 
@@ -652,7 +671,7 @@ static void kgsl_ioctl_ringbuffer_issueibcmds_pre(int fd,
 	int is2d = get_kgsl_info(fd) == &kgsl_2d_info;
 	int i;
 	struct kgsl_ibdesc *ibdesc;
-	dump_ib_prep();
+	dump_ib_prep(fd);
 	printf("\t\tdrawctxt_id:\t%08x\n", param->drawctxt_id);
 	/*
 For z180_cmdstream_issueibcmds():
@@ -718,7 +737,7 @@ so the context, restored on context switch, is the first: 320 (0x140) words
 				 */
 				printf("\t\tcontext:\n");
 				hexdump_dwords(ibdesc[i].hostptr, PACKETSIZE_STATESTREAM);
-				rd_write_section(RD_CONTEXT, ibdesc[i].hostptr,
+				rd_write_section(fd, RD_CONTEXT, ibdesc[i].hostptr,
 						PACKETSIZE_STATESTREAM * sizeof(unsigned int));
 
 				printf("\t\tcmd:\n");
@@ -727,7 +746,7 @@ so the context, restored on context switch, is the first: 320 (0x140) words
 				len = ptr[2] & 0xfff;
 				/* 5 is length of first packet, 2 for the two 7f000000's */
 				hexdump_dwords(ptr, len + 5 + 2);
-				rd_write_section(RD_CMDSTREAM, ptr,
+				rd_write_section(fd, RD_CMDSTREAM, ptr,
 						(len + 5 + 2) * sizeof(unsigned int));
 				/* dump out full buffer in case I need to go back and check
 				 * if I missed something..
@@ -755,7 +774,7 @@ static void kgsl_ioctl_submit_commands_pre(int fd,
 	int i;
 	struct kgsl_ibdesc *ibdesc;
 
-	dump_ib_prep();
+	dump_ib_prep(fd);
 
 	ibdesc = (struct kgsl_ibdesc *)param->cmdlist;
 
@@ -858,9 +877,9 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 				((devinfo->chip_id >> 16) & 0xff) * 10 +
 				((devinfo->chip_id >> 8) & 0xff) * 1;
 		}
-		rd_write_section(RD_GPU_ID, &gpu_id, sizeof(gpu_id));
+		rd_write_section(fd, RD_GPU_ID, &gpu_id, sizeof(gpu_id));
 		uint64_t chip_id = devinfo->chip_id;
-		rd_write_section(RD_CHIP_ID, &chip_id, sizeof(chip_id));
+		rd_write_section(fd, RD_CHIP_ID, &chip_id, sizeof(chip_id));
 
 		printf("\t\tgpu_id: %d\n", gpu_id);
 		printf("\t\tgmem_sizebytes: 0x%x\n", (uint32_t)devinfo->gmem_sizebytes);
@@ -1064,7 +1083,7 @@ static void kgsl_ioctl_sharedmem_from_vmalloc_pre(int fd,
 //		case 0x9000:
 //		case 0x81000:
 			/* register buffer of interest */
-			register_buffer((void *)param->hostptr, param->flags, len, 0);
+			register_buffer(fd, (void *)param->hostptr, param->flags, len, 0);
 			break;
 		}
 	}
@@ -1077,8 +1096,8 @@ static void kgsl_ioctl_sharedmem_from_vmalloc_pre(int fd,
 static void kgsl_ioctl_sharedmem_from_vmalloc_post(int fd,
 		struct kgsl_sharedmem_from_vmalloc *param)
 {
-	struct buffer *buf = find_buffer((void *)param->hostptr, 0, 0, 0, 0);
-	log_gpuaddr(param->gpuaddr, len_from_vma(param->hostptr));
+	struct buffer *buf = find_buffer(fd, (void *)param->hostptr, 0, 0, 0, 0);
+	log_gpuaddr(fd, param->gpuaddr, len_from_vma(param->hostptr));
 	if (buf)
 		buf->gpuaddr = param->gpuaddr;
 	printf("\t\tgpuaddr:\t%08x\n", param->gpuaddr);
@@ -1087,7 +1106,7 @@ static void kgsl_ioctl_sharedmem_from_vmalloc_post(int fd,
 static void kgsl_ioctl_sharedmem_free_pre(int fd,
 		struct kgsl_sharedmem_free *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, param->gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer(fd, (void *)-1, param->gpuaddr, 0, 0, 0);
 	printf("\t\tgpuaddr:\t%08x\n", param->gpuaddr);
 	unregister_buffer(buf);
 }
@@ -1103,10 +1122,10 @@ static void kgsl_ioctl_gpumem_alloc_post(int fd,
 		struct kgsl_gpumem_alloc *param)
 {
 	struct buffer *buf;
-	log_gpuaddr(param->gpuaddr, param->size);
+	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
-	buf = register_buffer(NULL, param->flags, param->size, 0);
+	buf = register_buffer(fd, NULL, param->flags, param->size, 0);
 	buf->gpuaddr = param->gpuaddr;
 	buf->offset = param->gpuaddr;
 }
@@ -1134,11 +1153,11 @@ static void kgsl_ioctl_gpumem_alloc_id_post(int fd,
 	param->gpuaddr = alloc_gpuaddr(param->mmapsize);
 #endif
 
-	log_gpuaddr(param->gpuaddr, param->size);
+	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tid:\t%u\n", param->id);
 	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
-	buf = register_buffer(NULL, param->flags, param->size, 0);
+	buf = register_buffer(fd, NULL, param->flags, param->size, 0);
 	buf->id = param->id;
 	buf->gpuaddr = param->gpuaddr;
 	buf->offset = param->gpuaddr;
@@ -1153,7 +1172,7 @@ static void kgsl_ioctl_gpumem_free_id_pre(int fd,
 static void kgsl_ioctl_gpumem_free_id_post(int fd,
 		struct kgsl_gpumem_free_id *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, 0, 0, 0, param->id);
+	struct buffer *buf = find_buffer(fd, (void *)-1, 0, 0, 0, param->id);
 	unregister_buffer(buf);
 }
 
@@ -1190,7 +1209,7 @@ static void kgls_ioctl_perfcounter_get_post(int fd,
 	printf("\t\toffset_lo:\t0x%x\n", param->offset);
 	printf("\t\toffset_hi:\t0x%x\n", param->offset_hi);
 
-	rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+	rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 			"perfcounter_get: groupid=%u, countable=%u, off_lo=0x%x, off_hi=0x%x",
 			param->groupid, param->countable, param->offset, param->offset_hi));
 }
@@ -1202,7 +1221,7 @@ static void kgls_ioctl_perfcounter_read_post(int fd,
 
 	printf("\t\tcount:\t%u\n", param->count);
 
-	rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+	rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 			"perfcounter_read: count=%u", param->count));
 
 	for (int i = 0; i < param->count; i++) {
@@ -1211,7 +1230,7 @@ static void kgls_ioctl_perfcounter_read_post(int fd,
 		printf("\t\tgroup[%i].countable:\t%u\n", i, perf->countable);
 		printf("\t\tgroup[%i].value:\t%llu\n", i, perf->value);
 
-		rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+		rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 				"\tgroup[%i]: groupid=%u, countable=%u, value=%llu",
 				i, perf->groupid, perf->countable, perf->value));
 	}
@@ -1225,7 +1244,7 @@ static void kgls_ioctl_perfcounter_put_pre(int fd,
 	printf("\t\tgroupid:\t%u\n", param->groupid);
 	printf("\t\tcountable:\t%u\n", param->countable);
 
-	rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+	rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 			"perfcounter_put: groupid=%u, countable=%u",
 			param->groupid, param->countable));
 }
@@ -1253,7 +1272,7 @@ static void kgls_ioctl_gpuobj_alloc_post(int fd,
 #endif
 	printf("\t\tid:\t%u\n", param->id);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
-	buf = register_buffer(NULL, param->flags, param->size, 0);
+	buf = register_buffer(fd, NULL, param->flags, param->size, 0);
 	buf->id = param->id;
 }
 
@@ -1266,7 +1285,7 @@ static void kgls_ioctl_gpuobj_free_pre(int fd,
 static void kgls_ioctl_gpuobj_free_post(int fd,
 		struct kgsl_gpuobj_free *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, 0, 0, 0, param->id);
+	struct buffer *buf = find_buffer(fd, (void *)-1, 0, 0, 0, param->id);
 	unregister_buffer(buf);
 }
 
@@ -1279,7 +1298,7 @@ static void kgsl_ioclt_gpuobj_info_pre(int fd,
 static void kgsl_ioclt_gpuobj_info_post(int fd,
 		struct kgsl_gpuobj_info *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, 0, 0, 0, param->id);
+	struct buffer *buf = find_buffer(fd, (void *)-1, 0, 0, 0, param->id);
 
 	/* This could be an ION buffer which we don't track */
 	if (!buf)
@@ -1292,7 +1311,7 @@ static void kgsl_ioclt_gpuobj_info_post(int fd,
 	param->va_len = buf->len;
 #endif
 
-	log_gpuaddr(param->gpuaddr, param->size);
+	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tid:\t%u\n", param->id);
 	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	buf->gpuaddr = param->gpuaddr;
@@ -1323,7 +1342,7 @@ static void kgls_ioctl_gpuobj_gpu_command_pre(int fd,
 	int i;
 	struct kgsl_command_object *cmdobj;
 
-	dump_ib_prep();
+	dump_ib_prep(fd);
 
 	dump_bos(fd);
 
@@ -1591,7 +1610,7 @@ void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 
 		printf("< [%4d]         : mmap: addr=%p, length=%u, prot=%x, flags=%x, offset=%08lx\n",
 				fd, addr, (uint32_t)length, prot, flags, offset);
@@ -1616,7 +1635,7 @@ void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 		if (buf)
 			buf->hostptr = ret;
 		else {
@@ -1625,7 +1644,7 @@ void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset
 			 * it's mmapped by id, not by gpuaddr, so try to find that
 			 * buffer via id now.
 			 */
-			buf = find_buffer(NULL, 0, 0, 0, offset >> 12);
+			buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12);
 			if (buf)
 				buf->hostptr = ret;
 		}
@@ -1646,7 +1665,7 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 
 		printf("< [%4d]         : mmap64: addr=%p, length=%u, prot=%x, flags=%x, offset=%08lx\n",
 				fd, addr, (uint32_t)length, prot, flags, offset);
@@ -1672,7 +1691,7 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 		if (buf)
 			buf->hostptr = ret;
 		else {
@@ -1681,7 +1700,7 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 			 * it's mmapped by id, not by gpuaddr, so try to find that
 			 * buffer via id now.
 			 */
-			buf = find_buffer(NULL, 0, 0, 0, offset >> 12);
+			buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12);
 			if (buf)
 				buf->hostptr = ret;
 		}
@@ -1701,7 +1720,7 @@ int munmap(void *addr, size_t length)
 
 	LOCK();
 
-	buf = find_buffer(addr, 0, 0, 0, 0);
+	buf = find_buffer_all(addr, 0);
 	if (buf) {
 		/* we need the contents at submit ioctl: */
 printf("fake munmap: buf=%p\n", buf);

@@ -56,16 +56,16 @@ enum rd_param_type {
 	RD_PARAM_BLIT_Y2,      /* BLIT_Y + BLIT_WIDTH */
 };
 
-void rd_start(const char *name, const char *fmt, ...) __attribute__((weak));
-void rd_end(void) __attribute__((weak));
-void rd_write_section(enum rd_sect_type type, const void *buf, int sz) __attribute__((weak));
+void rd_start(int device_fd, const char *name, const char *fmt, ...) __attribute__((weak));
+void rd_end(int device_fd) __attribute__((weak));
+void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, int sz) __attribute__((weak));
 
 /* for code that should run with and without libwrap, use the following
  * macros which check if the fxns are present before calling
  */
-#define RD_START(n,f,...)        do { if (rd_start) rd_start(n,f,##__VA_ARGS__); } while (0)
-#define RD_END()                 do { if (rd_end) rd_end(); } while (0)
-#define RD_WRITE_SECTION(t,b,s)  do { if (rd_write_section) rd_write_section(t,b,s); } while (0)
+#define RD_START(n,f,...)        do { if (rd_start) rd_start(-1, n,f,##__VA_ARGS__); } while (0)
+#define RD_END()                 do { if (rd_end) rd_end(-1); } while (0)
+#define RD_WRITE_SECTION(t,b,s)  do { if (rd_write_section) rd_write_section(-1,t,b,s); } while (0)
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #undef ALIGN

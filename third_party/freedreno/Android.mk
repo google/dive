@@ -9,7 +9,7 @@ LOCAL_MODULE	:= libwrap
 # GOOGLE: Add dive related source code
 LOCAL_SRC_FILES	:= wrap/dive-wrap.c wrap/dive-load-log.cc wrap/wrap-util.c wrap/wrap-syscall.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/includes $(LOCAL_PATH)/util
-LOCAL_LDLIBS := -llog -lc -ldl
+LOCAL_LDLIBS := -llog -lc -ldl -lz
 include $(BUILD_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
@@ -17,7 +17,7 @@ LOCAL_MODULE    := libwrapfake
 # GOOGLE: Add dive related source code
 LOCAL_SRC_FILES := wrap/dive-wrap.c wrap/dive-load-log.cc wrap/wrap-util.c wrap/wrap-syscall-fake.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/includes $(LOCAL_PATH)/util
-LOCAL_LDLIBS := -llog -lc -ldl
+LOCAL_LDLIBS := -llog -lc -ldl -lz
 include $(BUILD_SHARED_LIBRARY)
 
 

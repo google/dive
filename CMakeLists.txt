@@ -80,6 +80,11 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
+# Build Perfetto SDK
+set(PERFETTO_ROOT ${CMAKE_SOURCE_DIR}/third_party/perfetto)
+include_directories(${PERFETTO_ROOT}/sdk)
+add_library(perfetto STATIC ${PERFETTO_ROOT}/sdk/perfetto.cc)
+
 add_subdirectory(capture_service)
 add_subdirectory(layer)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)

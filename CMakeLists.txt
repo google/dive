@@ -80,6 +80,18 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
+# Build Perfetto SDK
+set(PERFETTO_ROOT ${CMAKE_SOURCE_DIR}/third_party/perfetto)
+include_directories(${PERFETTO_ROOT}/sdk)
+add_library(perfetto STATIC ${PERFETTO_ROOT}/sdk/perfetto.cc)
+if (WIN32)
+  # The perfetto library contains many symbols, so it needs the big object
+  # format.
+  target_compile_options(perfetto PRIVATE "/bigobj")
+  # Disable legacy features in windows.h.
+  add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+endif (WIN32)
+
 add_subdirectory(capture_service)
 add_subdirectory(layer)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)

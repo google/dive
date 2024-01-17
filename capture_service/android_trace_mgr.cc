@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "absl/strings/str_cat.h"
+#include "perfetto_trace.h"
 #include "trace_mgr.h"
 
 #include <string>
@@ -48,6 +50,10 @@ void AndroidTraceManager::TraceByFrame()
     }
     SetTraceFilePath(std::string(full_path));
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+    std::string perfetto_path = absl::StrCat(full_path, ".pftrace");
+    GetPerfettoMgr().StartNewSession(perfetto_path);
+    LOGI("wait for 1 seconds");
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
 
 void AndroidTraceManager::TraceByDuration()
@@ -72,7 +78,7 @@ void AndroidTraceManager::TraceByDuration()
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
 
     // TODO: pass in this duration in stead of hard code a number.
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
     {
         absl::MutexLock lock(&m_state_lock);
         SetCaptureState(0);

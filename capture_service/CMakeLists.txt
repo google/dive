@@ -70,7 +70,9 @@ if(ANDROID)
               service.cc
               trace_mgr.cc
               android_trace_mgr.cc
+              perfetto_trace.cc
               ${COMMAND_UTILS_SRC})
+  target_link_libraries(service PRIVATE perfetto log)
 else()
   add_library(service
               service.cc

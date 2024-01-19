@@ -101,6 +101,7 @@ void AndroidTraceManager::TriggerTrace()
 void AndroidTraceManager::OnNewFrame()
 {
     m_frame_num++;
+    GetPerfettoMgr().TraceFrame(m_frame_num);
     absl::MutexLock lock(&m_state_lock);
     if (ShouldStartTrace())
     {
@@ -109,7 +110,7 @@ void AndroidTraceManager::OnNewFrame()
     else if (ShouldStopTrace())
     {
         OnTraceStop();
-    }
+    }   
 }
 
 void AndroidTraceManager::WaitForTraceDone()
@@ -139,6 +140,7 @@ bool AndroidTraceManager::ShouldStopTrace() const
 
 void AndroidTraceManager::OnTraceStart()
 {
+    GetPerfettoMgr().TraceStartFrame();
 #ifndef NDEBUG
     m_state_lock.AssertHeld();
 #endif
@@ -150,6 +152,7 @@ void AndroidTraceManager::OnTraceStart()
 
 void AndroidTraceManager::OnTraceStop()
 {
+        GetPerfettoMgr().TraceEndFrame();
 #ifndef NDEBUG
     m_state_lock.AssertHeld();
 #endif

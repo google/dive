@@ -27,12 +27,15 @@ namespace Dive
 class PerfettoTraceManager
 {
 public:
+    PerfettoTraceManager();
     void StartNewSession(const std::string& trace_file_name);
+    void TraceStartFrame();
+    void TraceEndFrame();
+    void TraceFrame(uint32_t frame_num);
 
 private:
     void       InitializePerfetto();
     TaskRunner m_tracing_worker;
-    bool       m_initalized = false;
 };
 
 PerfettoTraceManager& GetPerfettoMgr();

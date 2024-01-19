@@ -20,35 +20,41 @@ limitations under the License.
 #include <fcntl.h>
 #include <perfetto.h>
 #include <chrono>
+#include <string>
 #include <thread>
 
 #include "log.h"
 
 PERFETTO_DEFINE_CATEGORIES(
+perfetto::Category("dive").SetDescription("Dive layer events"),
 perfetto::Category("gpu_renderstage").SetDescription("Rendering and graphics events"));
 
 PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 
 namespace Dive
 {
+PerfettoTraceManager::PerfettoTraceManager()
+{
+    InitializePerfetto();
+}
 
 void PerfettoTraceManager::InitializePerfetto()
 {
-    if (m_initalized)
-        return;
+    // TODO: setprop debug.graphics.gpu.profiler.perfetto 1
     LOGI("In InitializePerfetto \n");
     perfetto::TracingInitArgs args;
     args.backends = perfetto::kSystemBackend;
+    args.backends |= perfetto::kInProcessBackend;
+
     perfetto::Tracing::Initialize(args);
+
     bool registered = perfetto::TrackEvent::Register();
-    LOGI("Registered %d \n", registered);
-    m_initalized = true;
+    LOGI("TrackEvent Registered %d \n", registered);
 }
 
 void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
 {
-    InitializePerfetto();
-    LOGI("Begin schedule work\n");
+    LOGI("Begin schedule trace session\n");
     m_tracing_worker.Schedule([trace_file_name] {
         LOGI("In StartTracing \n");
         perfetto::TraceConfig cfg;
@@ -58,9 +64,17 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
         buffers->set_fill_policy(
         perfetto::protos::gen::TraceConfig_BufferConfig_FillPolicy_RING_BUFFER);
 
+        perfetto::protos::gen::TrackEventConfig te_cfg;
+        te_cfg.add_disabled_categories("*");
+        te_cfg.add_enabled_categories("dive");
+
+        auto *ds_cfg = cfg.add_data_sources()->mutable_config();
+        ds_cfg->set_name("track_event");
+        ds_cfg->set_track_event_config_raw(te_cfg.SerializeAsString());
+
         auto *ds_cfg_render = cfg.add_data_sources()->mutable_config();
         ds_cfg_render->set_name("gpu.renderstages");
-        cfg.set_duration_ms(8000);
+        cfg.set_duration_ms(5000);
 
         int fd = open(trace_file_name.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
         if (fd <= 0)
@@ -74,14 +88,37 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
         tracing_session->StartBlocking();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
         LOGI("StopBlocking \n");
+        perfetto::TrackEvent::Flush();
         tracing_session->StopBlocking();
         close(fd);
         LOGI("session ended \n");
     });
 
+    perfetto::ProcessTrack                 process_track = perfetto::ProcessTrack::Current();
+    perfetto::protos::gen::TrackDescriptor desc = process_track.Serialize();
+    desc.mutable_process()->set_process_name("Dive Frame marker");
+    perfetto::TrackEvent::SetTrackDescriptor(process_track, desc);
+
     LOGI("End schedule work\n");
+}
+
+void PerfettoTraceManager::TraceStartFrame()
+{
+    PERFETTO_LOG("TRACE_EVENT_BEGIN dive start tracing");
+    TRACE_EVENT_BEGIN("dive", "Dive trace action");
+}
+
+void PerfettoTraceManager::TraceEndFrame()
+{
+    PERFETTO_LOG("TRACE_EVENT_END dive end tracing");
+    TRACE_EVENT_END("dive");
+}
+
+void PerfettoTraceManager::TraceFrame(uint32_t frame_num)
+{
+    std::string event = "Frame " + std::to_string(frame_num);
+    TRACE_EVENT("dive", event.c_str());
 }
 
 PerfettoTraceManager &GetPerfettoMgr()

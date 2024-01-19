@@ -42,11 +42,11 @@ do
         -DCARES_INSTALL=OFF \
         -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
-        ${SRC_DIR}
+        ${SRC_DIR} || exit 1
 
-    cmake --build . --config=${build} -j
+    cmake --build . --config=${build} -j || exit 1
     if [ ${build} == "Release" ]; then
-        cmake --install .
+        cmake --install . || exit 1
     fi
     popd
 done

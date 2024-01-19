@@ -512,16 +512,15 @@ void TraceWorker::run()
         ShowErrorMessage(err_msg);
         return;
     }
-
+#if defined(DIVE_ENABLE_PERFETTO)
     // Get perfetto file
     std::string on_device_path = *trace_file_path;
-    
     on_device_path += ".pftrace";
     std::string download_path = target.generic_string() + ".pftrace";
     r = device->RetrieveTraceFile(on_device_path, download_path);
-    if(r.ok()) {
-        qDebug() << "Capture saved at "
-                 << download_path.c_str();  
+    if (r.ok())
+    {
+        qDebug() << "Capture saved at " << download_path.c_str();
     }
     else
     {
@@ -530,7 +529,7 @@ void TraceWorker::run()
         ShowErrorMessage(err_msg);
         return;
     }
-
+#endif
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - begin)
                                    .count();

@@ -14,29 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#pragma once
-
-#include <string>
-
-#include "task_queue.h"
+#include "perfetto_trace.h"
 
 namespace Dive
 {
+PerfettoTraceManager::PerfettoTraceManager() {}
 
-class PerfettoTraceManager
+void PerfettoTraceManager::StartNewSession(const std::string& trace_file_name) {}
+void PerfettoTraceManager::TraceStartFrame() {}
+void PerfettoTraceManager::TraceEndFrame() {}
+void PerfettoTraceManager::TraceFrame(uint32_t frame_num) {}
+void PerfettoTraceManager::InitializePerfetto() {}
+
+PerfettoTraceManager& GetPerfettoMgr()
 {
-public:
-    PerfettoTraceManager();
-    void StartNewSession(const std::string& trace_file_name);
-    void TraceStartFrame();
-    void TraceEndFrame();
-    void TraceFrame(uint32_t frame_num);
-
-private:
-    void       InitializePerfetto();
-    TaskRunner m_tracing_worker;
-};
-
-PerfettoTraceManager& GetPerfettoMgr();
-
+    static PerfettoTraceManager mgr;
+    return mgr;
+}
 }  // namespace Dive

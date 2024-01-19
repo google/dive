@@ -42,6 +42,7 @@ do
         -DCARES_INSTALL=OFF \
         -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
+        -DDIVE_ENABLE_PERFETTO=ON \
         ${SRC_DIR} || exit 1
 
     cmake --build . --config=${build} -j || exit 1

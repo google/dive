@@ -110,7 +110,7 @@ void AndroidTraceManager::OnNewFrame()
     else if (ShouldStopTrace())
     {
         OnTraceStop();
-    }   
+    }
 }
 
 void AndroidTraceManager::WaitForTraceDone()
@@ -152,7 +152,7 @@ void AndroidTraceManager::OnTraceStart()
 
 void AndroidTraceManager::OnTraceStop()
 {
-        GetPerfettoMgr().TraceEndFrame();
+    GetPerfettoMgr().TraceEndFrame();
 #ifndef NDEBUG
     m_state_lock.AssertHeld();
 #endif

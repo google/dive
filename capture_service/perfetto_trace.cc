@@ -33,6 +33,12 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 
 namespace Dive
 {
+
+namespace
+{
+// TODO(renfeng): determine how long should be the trace, and pass in the value here.
+int32_t kTraceDurationMs = 5000;
+}  // namespace
 PerfettoTraceManager::PerfettoTraceManager()
 {
     InitializePerfetto();
@@ -74,7 +80,7 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
 
         auto *ds_cfg_render = cfg.add_data_sources()->mutable_config();
         ds_cfg_render->set_name("gpu.renderstages");
-        cfg.set_duration_ms(5000);
+        cfg.set_duration_ms(kTraceDurationMs);
 
         int fd = open(trace_file_name.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
         if (fd <= 0)
@@ -87,7 +93,7 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
         LOGI("StartBlocking \n");
         tracing_session->StartBlocking();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(kTraceDurationMs));
         LOGI("StopBlocking \n");
         perfetto::TrackEvent::Flush();
         tracing_session->StopBlocking();
@@ -97,7 +103,7 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
 
     perfetto::ProcessTrack                 process_track = perfetto::ProcessTrack::Current();
     perfetto::protos::gen::TrackDescriptor desc = process_track.Serialize();
-    desc.mutable_process()->set_process_name("Dive Frame marker");
+    desc.mutable_process()->set_process_name("Dive");
     perfetto::TrackEvent::SetTrackDescriptor(process_track, desc);
 
     LOGI("End schedule work\n");
@@ -106,7 +112,7 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
 void PerfettoTraceManager::TraceStartFrame()
 {
     PERFETTO_LOG("TRACE_EVENT_BEGIN dive start tracing");
-    TRACE_EVENT_BEGIN("dive", "Dive trace action");
+    TRACE_EVENT_BEGIN("dive", "Dive trace");
 }
 
 void PerfettoTraceManager::TraceEndFrame()

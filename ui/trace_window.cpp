@@ -513,10 +513,10 @@ void TraceWorker::run()
         return;
     }
 #if defined(DIVE_ENABLE_PERFETTO)
-    // Get perfetto file
+    // Download perfetto trace file
     std::string on_device_path = *trace_file_path;
-    on_device_path += ".pftrace";
-    std::string download_path = target.generic_string() + ".pftrace";
+    on_device_path += ".perfetto";
+    std::string download_path = target.generic_string() + ".perfetto";
     r = device->RetrieveTraceFile(on_device_path, download_path);
     if (r.ok())
     {

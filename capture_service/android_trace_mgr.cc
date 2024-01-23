@@ -43,17 +43,19 @@ void AndroidTraceManager::TraceByFrame()
     std::string num = std::to_string(m_frame_num);
     char        full_path[256];
     sprintf(full_path, "%s-%04u.rd", path.c_str(), m_frame_num);
+
+    SetTraceFilePath(std::string(full_path));
+    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+    std::string perfetto_trace_path = absl::StrCat(full_path, ".perfetto");
+    GetPerfettoMgr().StartNewSession(perfetto_trace_path);
+    LOGI("wait for 1 seconds");
+    // TODO(renfeng): figure out how to check if perfetto is up and running instead of sleep here.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     SetCaptureName(path.c_str(), num.c_str());
     {
         absl::MutexLock lock(&m_state_lock);
         m_state = TraceState::Triggered;
     }
-    SetTraceFilePath(std::string(full_path));
-    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
-    std::string perfetto_path = absl::StrCat(full_path, ".pftrace");
-    GetPerfettoMgr().StartNewSession(perfetto_path);
-    LOGI("wait for 1 seconds");
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 }
 
 void AndroidTraceManager::TraceByDuration()
@@ -101,7 +103,6 @@ void AndroidTraceManager::TriggerTrace()
 void AndroidTraceManager::OnNewFrame()
 {
     m_frame_num++;
-    GetPerfettoMgr().TraceFrame(m_frame_num);
     absl::MutexLock lock(&m_state_lock);
     if (ShouldStartTrace())
     {

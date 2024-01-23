@@ -80,9 +80,11 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
-option(DIVE_ENABLE_PERFETTO, "Enalbe functionality to do perfetto trace." "ON")
+option(DIVE_ENABLE_PERFETTO, "Enalbe functionality to get perfetto trace." ON)
 # Build Perfetto SDK
 if(DIVE_ENABLE_PERFETTO)
+message("DIVE_ENABLE_PERFETTO is enabled.")
+add_compile_definitions(DIVE_ENABLE_PERFETTO=1)
 set(PERFETTO_ROOT ${CMAKE_SOURCE_DIR}/third_party/perfetto)
 include_directories(${PERFETTO_ROOT}/sdk)
 add_library(perfetto STATIC ${PERFETTO_ROOT}/sdk/perfetto.cc)

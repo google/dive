@@ -20,6 +20,7 @@ limitations under the License.
 #include <fcntl.h>
 #include <perfetto.h>
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <thread>
 
@@ -37,7 +38,9 @@ namespace Dive
 namespace
 {
 // TODO(renfeng): determine how long should be the trace, and pass in the value here.
-int32_t kTraceDurationMs = 5000;
+static constexpr int32_t kTraceDurationMs = 5000;
+static constexpr int32_t kFlushPeriodMs = 1000;
+static constexpr int32_t kBufferSize = 131072;  // 128k
 }  // namespace
 PerfettoTraceManager::PerfettoTraceManager()
 {
@@ -46,7 +49,7 @@ PerfettoTraceManager::PerfettoTraceManager()
 
 void PerfettoTraceManager::InitializePerfetto()
 {
-    // TODO: setprop debug.graphics.gpu.profiler.perfetto 1
+    // TODO(renfeng): setprop debug.graphics.gpu.profiler.perfetto 1
     LOGI("In InitializePerfetto \n");
     perfetto::TracingInitArgs args;
     args.backends = perfetto::kSystemBackend;
@@ -65,8 +68,8 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
         LOGI("In StartTracing \n");
         perfetto::TraceConfig cfg;
         auto                 *buffers = cfg.add_buffers();
-        cfg.set_flush_period_ms(1000);
-        buffers->set_size_kb(131072);
+        cfg.set_flush_period_ms(kFlushPeriodMs);
+        buffers->set_size_kb(kBufferSize);
         buffers->set_fill_policy(
         perfetto::protos::gen::TraceConfig_BufferConfig_FillPolicy_RING_BUFFER);
 

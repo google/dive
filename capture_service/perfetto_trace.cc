@@ -42,6 +42,33 @@ static constexpr int32_t kTraceDurationMs = 5000;
 static constexpr int32_t kFlushPeriodMs = 1000;
 static constexpr int32_t kBufferSize = 131072;  // 128k
 }  // namespace
+
+// Example code from perfetto sdk:
+// https://github.com/google/perfetto/blob/master/examples/sdk/example_system_wide.cc#L67
+class PerfettoSessionObserver : public perfetto::TrackEventSessionObserver
+{
+public:
+    PerfettoSessionObserver() { perfetto::TrackEvent::AddSessionObserver(this); }
+    ~PerfettoSessionObserver() override { perfetto::TrackEvent::RemoveSessionObserver(this); }
+
+    void OnStart(const perfetto::DataSourceBase::StartArgs &) override
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.notify_one();
+    }
+
+    void WaitForTracingStart()
+    {
+        PERFETTO_LOG("Waiting for tracing to start...");
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [] { return perfetto::TrackEvent::IsEnabled(); });
+        PERFETTO_LOG("Tracing started");
+    }
+
+    std::mutex              mutex;
+    std::condition_variable cv;
+};
+
 PerfettoTraceManager::PerfettoTraceManager()
 {
     InitializePerfetto();
@@ -67,8 +94,10 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
     m_tracing_worker.Schedule([trace_file_name] {
         LOGI("In StartTracing \n");
         perfetto::TraceConfig cfg;
-        auto                 *buffers = cfg.add_buffers();
+        cfg.set_duration_ms(kTraceDurationMs);
         cfg.set_flush_period_ms(kFlushPeriodMs);
+
+        auto *buffers = cfg.add_buffers();
         buffers->set_size_kb(kBufferSize);
         buffers->set_fill_policy(
         perfetto::protos::gen::TraceConfig_BufferConfig_FillPolicy_RING_BUFFER);
@@ -83,7 +112,6 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
 
         auto *ds_cfg_render = cfg.add_data_sources()->mutable_config();
         ds_cfg_render->set_name("gpu.renderstages");
-        cfg.set_duration_ms(kTraceDurationMs);
 
         int fd = open(trace_file_name.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
         if (fd <= 0)
@@ -101,7 +129,7 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
         perfetto::TrackEvent::Flush();
         tracing_session->StopBlocking();
         close(fd);
-        LOGI("session ended \n");
+        LOGI("Session ended \n");
     });
 
     perfetto::ProcessTrack                 process_track = perfetto::ProcessTrack::Current();
@@ -110,6 +138,7 @@ void PerfettoTraceManager::StartNewSession(const std::string &trace_file_name)
     perfetto::TrackEvent::SetTrackDescriptor(process_track, desc);
 
     LOGI("End schedule work\n");
+    WaitForSessionStart();
 }
 
 void PerfettoTraceManager::TraceStartFrame()
@@ -128,6 +157,13 @@ void PerfettoTraceManager::TraceFrame(uint32_t frame_num)
 {
     std::string event = "Frame " + std::to_string(frame_num);
     TRACE_EVENT("dive", event.c_str());
+}
+
+void PerfettoTraceManager::WaitForSessionStart()
+{
+    PerfettoSessionObserver session_observer;
+    session_observer.WaitForTracingStart();
+    PERFETTO_LOG("perfetto::TrackEvent::IsEnabled() %d", perfetto::TrackEvent::IsEnabled());
 }
 
 PerfettoTraceManager &GetPerfettoMgr()

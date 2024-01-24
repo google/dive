@@ -475,6 +475,28 @@ void * __rd_dlsym_helper(const char *name)
 	return func;
 }
 
+// GOOGLE: append src file to the end of the target file.
+int append_file(const char *target, const char *src)
+{
+    int fd_target = open(target, O_CREAT | O_APPEND | O_WRONLY);
+    if (fd_target < 0)
+        return -1;
+
+    int fd_src = open(src, O_RDONLY);
+    if (fd_src < 0)
+        return -1;
+    char    buf[4096];
+    ssize_t nread = 0;
+    while ((nread = read(fd_src, buf, 4096)) > 0)
+    {
+        write(fd_target, buf, nread);
+    }
+	LOGI("append file done\n");
+    close(fd_src);
+    close(fd_target);
+    return 0;
+}
+
 // GOOGLE: Close all opened trace fd
 void collect_trace_file(const char* capture_file_path)
 {
@@ -485,10 +507,7 @@ void collect_trace_file(const char* capture_file_path)
 	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
 #endif
 	LOGD("full_path is %s", full_path);
-	
-	char cmd[PATH_MAX];
-	snprintf(cmd, PATH_MAX, "touch %s", full_path);
-	system(cmd);
+
 	for (int i = 0; i < MAX_DEVICE_FILES; i++)
 	{
 		struct device_file* df = &device_files[i];
@@ -501,13 +520,12 @@ void collect_trace_file(const char* capture_file_path)
 			LOGD("device_fd %d, log_fd %p closed in collect_trace_file \n", fd, df->log_fd);
 			LOG_CLOSE_FILE(df->log_fd);
 			df->log_fd = LOG_NULL_FILE;
-			snprintf(cmd, PATH_MAX, "cat %s %s > %s", full_path, df->file_name, full_path);
-			LOGD("CMD: %s\n", cmd);
-			system(cmd);
+			if(-1 == append_file(full_path, df->file_name))
+			{
+				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);
+			}
 			// delete the file that has been concatenated. 
-			snprintf(cmd, PATH_MAX, "rm %s ", df->file_name);
-			LOGD("CMD: %s\n", cmd);
-			system(cmd);
+			remove(df->file_name);
         }
 	}
 }

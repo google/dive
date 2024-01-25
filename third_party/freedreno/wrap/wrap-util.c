@@ -524,8 +524,10 @@ void collect_trace_file(const char* capture_file_path)
 			if (df == NULL)
 					continue;
 			LOGD("device_fd %d, log_fd %p closed in collect_trace_file \n", fd, df->log_fd);
+			pthread_mutex_lock(&write_lock);
 			LOG_CLOSE_FILE(df->log_fd);
 			df->log_fd = LOG_NULL_FILE;
+			pthread_mutex_unlock(&write_lock);
 			if(-1 == append_file(full_path, df->file_name))
 			{
 				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);

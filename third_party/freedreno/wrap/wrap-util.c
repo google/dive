@@ -478,6 +478,12 @@ void * __rd_dlsym_helper(const char *name)
 // GOOGLE: append src file to the end of the target file.
 int append_file(const char *target, const char *src)
 {
+	// If target does not exist, just rename instead of copy.
+	if(access(target, F_OK) != 0)
+	{
+		rename(src, target);
+		return 0;
+	}
     int fd_target = open(target, O_CREAT | O_APPEND | O_WRONLY);
     if (fd_target < 0)
         return -1;

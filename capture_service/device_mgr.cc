@@ -166,7 +166,9 @@ absl::Status AndroidDevice::SetupDevice()
                               ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
                               kTargetPath)));
     RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort)));
-
+#if defined(DIVE_ENABLE_PERFETTO)
+    RETURN_IF_ERROR(Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 1"));
+#endif
     return absl::OkStatus();
 }
 
@@ -192,6 +194,9 @@ absl::Status AndroidDevice::CleanupDevice()
     Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
     RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
     LOGD("Cleanup device %s done\n", m_serial.c_str());
+#if defined(DIVE_ENABLE_PERFETTO)
+    RETURN_IF_ERROR(Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 0"));
+#endif
     return absl::OkStatus();
 }
 

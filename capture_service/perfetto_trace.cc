@@ -76,7 +76,6 @@ PerfettoTraceManager::PerfettoTraceManager()
 
 void PerfettoTraceManager::InitializePerfetto()
 {
-    // TODO(renfeng): setprop debug.graphics.gpu.profiler.perfetto 1
     LOGI("In InitializePerfetto \n");
     perfetto::TracingInitArgs args;
     args.backends = perfetto::kSystemBackend;

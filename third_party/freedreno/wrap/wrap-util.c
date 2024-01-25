@@ -478,6 +478,12 @@ void * __rd_dlsym_helper(const char *name)
 // GOOGLE: append src file to the end of the target file.
 int append_file(const char *target, const char *src)
 {
+	// If target does not exist, just rename instead of copy.
+	if(access(target, F_OK) != 0)
+	{
+		rename(src, target);
+		return 0;
+	}
     int fd_target = open(target, O_CREAT | O_APPEND | O_WRONLY);
     if (fd_target < 0)
         return -1;
@@ -518,8 +524,10 @@ void collect_trace_file(const char* capture_file_path)
 			if (df == NULL)
 					continue;
 			LOGD("device_fd %d, log_fd %p closed in collect_trace_file \n", fd, df->log_fd);
+			pthread_mutex_lock(&write_lock);
 			LOG_CLOSE_FILE(df->log_fd);
 			df->log_fd = LOG_NULL_FILE;
+			pthread_mutex_unlock(&write_lock);
 			if(-1 == append_file(full_path, df->file_name))
 			{
 				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);

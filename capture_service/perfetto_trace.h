@@ -31,6 +31,7 @@ public:
     void TraceStartFrame();
     void TraceEndFrame();
     void TraceFrame(uint32_t frame_num);
+    void WaitForSessionStart();
 
 private:
     void       InitializePerfetto();

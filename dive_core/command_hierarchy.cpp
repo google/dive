@@ -566,7 +566,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_p
         return false;
     }
 
-    m_command_hierarchy_ptr->SetMetadataVersion(m_capture_data_ptr->GetVulkanMetadataVersion());
     // Convert the info in m_node_children into CommandHierarchy's topologies
     CreateTopologies();
     return true;
@@ -1034,7 +1033,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         case RM6_BLIT2DSCALE:
         case RM6_IB1LIST_START:
         case RM6_IB1LIST_END:
-        default: add_child = false; break;
+        default: add_child = false; break;   
         }
 
         if (add_child)

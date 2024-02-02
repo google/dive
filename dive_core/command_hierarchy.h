@@ -223,7 +223,6 @@ public:
     SyncInfo         GetSyncNodeSyncInfo(uint64_t node_index) const;
     bool             HasVulkanMarkers() const { return m_has_vulkan_marker; }
 
-
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
 
@@ -334,9 +333,9 @@ private:
                      char              *metadata_ptr,
                      uint32_t           metadata_size);
 
-    Nodes                     m_nodes;
-    Topology                  m_topology[kTopologyTypeCount];
-    bool                      m_has_vulkan_marker = false;
+    Nodes    m_nodes;
+    Topology m_topology[kTopologyTypeCount];
+    bool     m_has_vulkan_marker = false;
 };
 
 //--------------------------------------------------------------------------------------------------

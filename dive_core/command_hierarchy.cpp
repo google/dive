@@ -1033,7 +1033,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         case RM6_BLIT2DSCALE:
         case RM6_IB1LIST_START:
         case RM6_IB1LIST_END:
-        default: add_child = false; break;   
+        default: add_child = false; break;
         }
 
         if (add_child)

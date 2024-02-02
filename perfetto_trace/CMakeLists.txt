@@ -8,4 +8,4 @@ target_link_libraries(${target}  trace_processor)
 target_include_directories(${target} PRIVATE 
     "${THIRDPARTY_DIRECTORY}/perfetto/"
     "${THIRDPARTY_DIRECTORY}/perfetto/include"
-    "${CMAKE_SOURCE_DIR}/prebuild/perfetto")
+    ${PERFETTO_BUILD_HEADER_DIR})

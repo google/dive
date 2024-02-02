@@ -210,7 +210,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${LibArchive_LIBRARIES} perfetto_t
 include_directories(${LibArchive_INCLUDE_DIRS} 
   "${THIRDPARTY_DIRECTORY}/perfetto/" 
   "${THIRDPARTY_DIRECTORY}/perfetto/include"
-  "${CMAKE_SOURCE_DIR}/prebuild/perfetto")
+  ${PERFETTO_BUILD_HEADER_DIR})
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union

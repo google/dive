@@ -45,7 +45,7 @@ bool TraceReader::LoadTraceFile()
         std::cout << "Failed to load trace file" << m_trace_file_path << std::endl;
         return false;
     }
-#ifndef NDBG
+#ifndef NDEBUG
     auto sql_result = m_trace_processor->ExecuteQuery(
     "SELECT ts, dur, name, depth, parent_stack_id, arg_set_id, render_pass, submission_id FROM "
     "gpu_slice ");

@@ -98,12 +98,13 @@ if (WIN32)
   add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 else()
     execute_process(
-        COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/libtrace_processor.a.tar.xz
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto
+        COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/linux/libtrace_processor.a.tar.xz
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto/linux
         )
-        
+
     set_property(TARGET trace_processor PROPERTY
-                     IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/prebuild/perfetto/libtrace_processor.a")
+                     IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/prebuild/perfetto/linux/libtrace_processor.a")
+    set(PERFETTO_BUILD_HEADER_DIR ${CMAKE_SOURCE_DIR}/prebuild/perfetto/linux/)
 endif (WIN32)
 endif()
 

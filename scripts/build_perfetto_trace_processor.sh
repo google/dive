@@ -18,7 +18,7 @@ PROJECT_ROOT="$(readlink -f $0)"
 PROJECT_ROOT="${PROJECT_ROOT%/*}/.."
 readonly PROJECT_ROOT="$(readlink -f ${PROJECT_ROOT})"
 readonly BUILD_DIR=${PROJECT_ROOT}/build/perfetto_trace_processor
-readonly INSTALL_DIR=${PROJECT_ROOT}/prebuild/perfetto
+readonly INSTALL_DIR=${PROJECT_ROOT}/prebuild/perfetto/linux
 readonly PERFETTO_SRC=${PROJECT_ROOT}/third_party/perfetto
 
 mkdir -p ${INSTALL_DIR}
@@ -47,6 +47,8 @@ ${PERFETTO_SRC}/tools/gn gen ${BUILD_DIR}/release --args="\
 
 ${PERFETTO_SRC}/tools/ninja -C ${BUILD_DIR}/release src/trace_processor:trace_processor
 cp ${BUILD_DIR}/release/libtrace_processor.a ${INSTALL_DIR}
-tar -Jcvf ${INSTALL_DIR}/libtrace_processor.a.tar.xz ${BUILD_DIR}/release/libtrace_processor.a
+pushd ${INSTALL_DIR}
+tar -Jcvf libtrace_processor.a.tar.xz libtrace_processor.a
+popd
 cp ${BUILD_DIR}/release/gen/build_config/perfetto_build_flags.h ${INSTALL_DIR}
 popd

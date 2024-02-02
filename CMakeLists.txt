@@ -81,6 +81,7 @@ if(DIVE_NO_DISASSEMBLY)
 endif()
 
 option(DIVE_ENABLE_PERFETTO, "Enalbe functionality to get perfetto trace." ON)
+set(DIVE_ENABLE_PERFETTO ON)
 # Build Perfetto SDK
 if(DIVE_ENABLE_PERFETTO)
 message("DIVE_ENABLE_PERFETTO is enabled.")
@@ -94,11 +95,17 @@ if (WIN32)
   target_compile_options(perfetto PRIVATE "/bigobj")
   # Disable legacy features in windows.h.
   add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+else()
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/libtrace_processor.a.tar.xz
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto
+    )
 endif (WIN32)
 endif()
 
 add_subdirectory(capture_service)
 add_subdirectory(layer)
+add_subdirectory(perfetto_trace)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)

@@ -89,6 +89,7 @@ add_compile_definitions(DIVE_ENABLE_PERFETTO=1)
 set(PERFETTO_ROOT ${CMAKE_SOURCE_DIR}/third_party/perfetto)
 include_directories(${PERFETTO_ROOT}/sdk)
 add_library(perfetto STATIC ${PERFETTO_ROOT}/sdk/perfetto.cc)
+add_library(trace_processor STATIC IMPORTED)
 if (WIN32)
   # The perfetto library contains many symbols, so it needs the big object
   # format.
@@ -96,10 +97,13 @@ if (WIN32)
   # Disable legacy features in windows.h.
   add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 else()
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/libtrace_processor.a.tar.xz
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto
-    )
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/libtrace_processor.a.tar.xz
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto
+        )
+        
+    set_property(TARGET trace_processor PROPERTY
+                     IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/prebuild/perfetto/libtrace_processor.a")
 endif (WIN32)
 endif()
 

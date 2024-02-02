@@ -48,7 +48,7 @@ add_library(${PROJECT_NAME}_lib ${HDR_FILES} ${LIB_SRC_FILES} ${PM4_GENERATED_SR
 target_link_libraries(${PROJECT_NAME}_lib PRIVATE dive_core)
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib trace_processor)
 
 if (MSVC)
   # 4100: unreferenced formal parameter
@@ -82,6 +82,7 @@ target_compile_options(capture_fuzzer
 target_link_libraries(capture_fuzzer
             PRIVATE $<$<C_COMPILER_ID:Clang>:-fsanitize=fuzzer,address>
             dive_core
+            trace_processor
             )
 
 add_executable(capture_fuzzer_loader fuzz_main.cpp)
@@ -95,5 +96,6 @@ target_compile_options(capture_fuzzer_loader
 target_link_libraries(capture_fuzzer_loader
             PRIVATE $<$<C_COMPILER_ID:Clang>:-fsanitize=address>
             dive_core
+            trace_processor
             )
 endif()

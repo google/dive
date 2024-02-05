@@ -353,9 +353,8 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
 #ifndef NDEBUG
             if (mem_block.m_data_size >= 16 * 1024 * 1024)
             {
-                printf("MemoryManager::CopyMemory data.m_data_size: %u gpu addr %lu \n",
-                       mem_block.m_data_size,
-                       va_addr);
+                std::cout << "MemoryManager::CopyMemory data.m_data_size: " << mem_block.m_data_size
+                          << " gpu addr:  " << va_addr << std::endl;
             }
 #endif
             memcpy(buffer_ptr, (void *)&mem_block.m_data_ptr[va_addr - mem_block.m_va_addr], size);
@@ -392,7 +391,7 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
             if (max_buffer_size < mem_block.m_data_size)
             {
                 max_buffer_size = mem_block.m_data_size;
-                printf("max_buffer_size %ld \n", max_buffer_size);
+                std::cout << "max_buffer_size: " << max_buffer_size << std::endl;
             }
 #endif
             // Since capture requirement is there's no overlap in m_memory_blocks within the same
@@ -863,10 +862,12 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
     {
         return LoadAdrenoRdFile(file_name);
     }
+#if defined(DIVE_ENABLE_PERFETTO)
     else if (file_extension.compare("perfetto") == 0 || file_extension.compare("pftrace") == 0)
     {
         return LoadPerfettoFile(file_name);
     }
+#endif
     else
     {
         std::cerr << "Unknown capture type: " << file_name << std::endl;
@@ -934,6 +935,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
     return result;
 }
 
+#if defined(DIVE_ENABLE_PERFETTO)
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult CaptureData::LoadPerfettoFile(const char *file_name)
 {
@@ -946,6 +948,7 @@ CaptureData::LoadResult CaptureData::LoadPerfettoFile(const char *file_name)
 
     return LoadResult::kFileIoError;
 }
+#endif
 
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)

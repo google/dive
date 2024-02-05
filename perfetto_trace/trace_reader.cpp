@@ -14,6 +14,7 @@
  limitations under the License.
 */
 
+#if defined(DIVE_ENABLE_PERFETTO)
 #include "trace_reader.h"
 
 #include <inttypes.h>
@@ -98,3 +99,4 @@ bool TraceReader::LoadTraceFile()
 }
 
 }  // namespace Dive
+#endif

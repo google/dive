@@ -368,7 +368,9 @@ public:
 
     LoadResult LoadCaptureFile(std::istream &capture_file);
     LoadResult LoadAdrenoRdFile(FileReader &capture_file);
+#if defined(DIVE_ENABLE_PERFETTO)
     LoadResult LoadPerfettoFile(const char *file_name);
+#endif
 
     bool        HasPm4Data() const { return m_submits.size() > 0; }
     std::string GetFileFormatVersion() const;

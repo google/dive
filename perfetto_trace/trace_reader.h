@@ -16,6 +16,7 @@
 
 #pragma once
 
+#if defined(DIVE_ENABLE_PERFETTO)
 #include <memory>
 #include <string>
 
@@ -35,3 +36,4 @@ private:
 };
 
 }  // namespace Dive
+#endif

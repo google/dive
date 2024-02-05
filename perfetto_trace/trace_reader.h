@@ -17,10 +17,10 @@
 #pragma once
 
 #if defined(DIVE_ENABLE_PERFETTO)
-#include <memory>
-#include <string>
+#    include <memory>
+#    include <string>
 
-#include "include/perfetto/trace_processor/trace_processor.h"
+#    include "include/perfetto/trace_processor/trace_processor.h"
 
 namespace Dive
 {

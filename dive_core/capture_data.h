@@ -372,7 +372,10 @@ public:
     LoadResult LoadPerfettoFile(const char *file_name);
 #endif
 
-    bool        HasPm4Data() const { return m_submits.size() > 0; }
+    bool HasPm4Data() const
+    {
+        return m_submits.size() > 0;
+    }
     std::string GetFileFormatVersion() const;
 
 private:

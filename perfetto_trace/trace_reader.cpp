@@ -15,13 +15,13 @@
 */
 
 #if defined(DIVE_ENABLE_PERFETTO)
-#include "trace_reader.h"
+#    include "trace_reader.h"
 
-#include <inttypes.h>
-#include <cstdint>
-#include <iostream>
-#include "include/perfetto/trace_processor/read_trace.h"
-#include "include/perfetto/trace_processor/trace_processor.h"
+#    include <inttypes.h>
+#    include <cstdint>
+#    include <iostream>
+#    include "include/perfetto/trace_processor/read_trace.h"
+#    include "include/perfetto/trace_processor/trace_processor.h"
 
 namespace Dive
 {
@@ -46,7 +46,7 @@ bool TraceReader::LoadTraceFile()
         std::cout << "Failed to load trace file" << m_trace_file_path << std::endl;
         return false;
     }
-#ifndef NDEBUG
+#    ifndef NDEBUG
     auto sql_result = m_trace_processor->ExecuteQuery(
     "SELECT ts, dur, name, depth, parent_stack_id, arg_set_id, render_pass, submission_id FROM "
     "gpu_slice ");
@@ -94,7 +94,7 @@ bool TraceReader::LoadTraceFile()
         }
         printf("\n");
     }
-#endif
+#    endif
     return true;
 }
 

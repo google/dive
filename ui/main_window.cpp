@@ -331,9 +331,9 @@ MainWindow::MainWindow()
                      SIGNAL(sendMessageSignal(const QString &)),
                      this,
                      SLOT(UpdateOverlay(const QString &)));
-
+#ifndef NDEBUG
     showMaximized();
-
+#endif
     // Set default view mode
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);

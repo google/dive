@@ -851,19 +851,29 @@ CaptureData::CaptureData(ProgressTracker *progress_tracker, ILog *log_ptr) :
 CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
 {
     std::string file_name_(file_name);
-    std::string file_extension = file_name_.find_last_of('.') != std::string::npos ?
-                                 file_name_.substr(file_name_.find_last_of('.') + 1) :
-                                 "";
-    if (file_extension.compare("dive") == 0)
+    std::string file_extension = std::filesystem::path(file_name_).extension();
+
+    if (file_extension.compare(".dive") == 0)
     {
         return LoadCaptureFile(file_name);
     }
-    else if (file_extension.compare("rd") == 0)
+    else if (file_extension.compare(".rd") == 0)
     {
+#if defined(DIVE_ENABLE_PERFETTO)
+        auto perfetto_trace_path = std::filesystem::path(file_name_ + ".perfetto");
+        if (std::filesystem::exists(perfetto_trace_path))
+        {
+            CaptureData::LoadResult res = LoadPerfettoFile(perfetto_trace_path.c_str());
+            if(res != CaptureData::LoadResult::kSuccess)
+            {
+                return res;
+            }
+        }
+#endif
         return LoadAdrenoRdFile(file_name);
     }
 #if defined(DIVE_ENABLE_PERFETTO)
-    else if (file_extension.compare("perfetto") == 0 || file_extension.compare("pftrace") == 0)
+    else if (file_extension.compare(".perfetto") == 0)
     {
         return LoadPerfettoFile(file_name);
     }

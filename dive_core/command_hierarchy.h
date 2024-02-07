@@ -222,11 +222,6 @@ public:
     SyncType         GetSyncNodeSyncType(uint64_t node_index) const;
     SyncInfo         GetSyncNodeSyncInfo(uint64_t node_index) const;
     bool             HasVulkanMarkers() const { return m_has_vulkan_marker; }
-    void             SetMetadataVersion(VulkanMetadataBlockHeader metadata_version)
-    {
-        m_metadata_version = metadata_version;
-    }
-    const VulkanMetadataBlockHeader &GetMetadataVersion() const { return m_metadata_version; }
 
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
@@ -338,10 +333,9 @@ private:
                      char              *metadata_ptr,
                      uint32_t           metadata_size);
 
-    Nodes                     m_nodes;
-    Topology                  m_topology[kTopologyTypeCount];
-    bool                      m_has_vulkan_marker = false;
-    VulkanMetadataBlockHeader m_metadata_version;
+    Nodes    m_nodes;
+    Topology m_topology[kTopologyTypeCount];
+    bool     m_has_vulkan_marker = false;
 };
 
 //--------------------------------------------------------------------------------------------------

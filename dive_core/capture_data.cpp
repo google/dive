@@ -26,6 +26,7 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "freedreno_dev_info.h"
+#include "perfetto_trace/trace_reader.h"
 #include "pm4_info.h"
 
 namespace Dive
@@ -349,6 +350,13 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
         bool encompasses = (mem_block.m_va_addr <= va_addr) && (end_addr <= mem_block_end_addr);
         if (valid_submit && encompasses)
         {
+#ifndef NDEBUG
+            if (mem_block.m_data_size >= 16 * 1024 * 1024)
+            {
+                std::cout << "MemoryManager::CopyMemory data.m_data_size: " << mem_block.m_data_size
+                          << " gpu addr:  " << va_addr << std::endl;
+            }
+#endif
             memcpy(buffer_ptr, (void *)&mem_block.m_data_ptr[va_addr - mem_block.m_va_addr], size);
             return true;
         }
@@ -378,7 +386,14 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
             const uint8_t *src_data_ptr = &mem_block.m_data_ptr[0];
             memcpy((uint8_t *)buffer_ptr + dst_offset, src_data_ptr + src_offset, size_to_copy);
             amount_copied += size_to_copy;
-
+#ifndef NDEBUG
+            static int64_t max_buffer_size = 0;
+            if (max_buffer_size < mem_block.m_data_size)
+            {
+                max_buffer_size = mem_block.m_data_size;
+                std::cout << "max_buffer_size: " << max_buffer_size << std::endl;
+            }
+#endif
             // Since capture requirement is there's no overlap in m_memory_blocks within the same
             // submit, if the memory is fully captured, then there should be exactly 'size' amount
             // memcpy-ed
@@ -847,6 +862,12 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
     {
         return LoadAdrenoRdFile(file_name);
     }
+#if defined(DIVE_ENABLE_PERFETTO)
+    else if (file_extension.compare("perfetto") == 0 || file_extension.compare("pftrace") == 0)
+    {
+        return LoadPerfettoFile(file_name);
+    }
+#endif
     else
     {
         std::cerr << "Unknown capture type: " << file_name << std::endl;
@@ -913,6 +934,21 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
 
     return result;
 }
+
+#if defined(DIVE_ENABLE_PERFETTO)
+//--------------------------------------------------------------------------------------------------
+CaptureData::LoadResult CaptureData::LoadPerfettoFile(const char *file_name)
+{
+    std::string name(file_name);
+    TraceReader reader(name);
+    if (reader.LoadTraceFile())
+    {
+        return LoadResult::kSuccess;
+    }
+
+    return LoadResult::kFileIoError;
+}
+#endif
 
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)

@@ -566,7 +566,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_p
         return false;
     }
 
-    m_command_hierarchy_ptr->SetMetadataVersion(m_capture_data_ptr->GetVulkanMetadataVersion());
     // Convert the info in m_node_children into CommandHierarchy's topologies
     CreateTopologies();
     return true;

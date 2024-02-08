@@ -55,28 +55,26 @@ std::vector<int64_t> GpuSliceDataParser::ParseDiveTraceTimestamp()
 std::vector<int64_t> GpuSliceDataParser::ParseSubmissionIds(int64_t start_ts, int64_t end_ts)
 {
     std::vector<int64_t> submission_ids;
-    {
-        std::string
-             query_str = absl::StrFormat("SELECT submission_id FROM gpu_slice WHERE "
-                                         "name=\"vkQueueSubmit\" AND ts >= %ld AND ts <= %ld",
-                                    start_ts,
-                                    end_ts);
-        auto it = m_trace_processor->ExecuteQuery(query_str);
-        if (!it.Status().ok())
-        {
-            std::cerr << "No submission found in the perfetto trace during the dive trace event."
-                      << std::endl;
-            return submission_ids;
-        }
 
-        for (uint32_t rows = 0; it.Next(); rows++)
-        {
-            auto value = it.Get(0);
-            assert(value.type == ptp::SqlValue::Type::kLong);
-            submission_ids.push_back(value.AsLong());
-        }
-        assert(!submission_ids.empty());
+    std::string query_str = absl::StrFormat("SELECT submission_id FROM gpu_slice WHERE "
+                                            "name=\"vkQueueSubmit\" AND ts >= %ld AND ts <= %ld",
+                                            start_ts,
+                                            end_ts);
+    auto        it = m_trace_processor->ExecuteQuery(query_str);
+    if (!it.Status().ok())
+    {
+        std::cerr << "No submission found in the perfetto trace during the dive trace event."
+                  << std::endl;
+        return submission_ids;
     }
+
+    for (uint32_t rows = 0; it.Next(); rows++)
+    {
+        auto value = it.Get(0);
+        assert(value.type == ptp::SqlValue::Type::kLong);
+        submission_ids.push_back(value.AsLong());
+    }
+    assert(!submission_ids.empty());
 
     return submission_ids;
 }

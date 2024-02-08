@@ -171,40 +171,16 @@ std::vector<SubmissionData> GpuSliceDataParser::ParseSubmissionData()
     return submission_data;
 }
 
-std::vector<int64_t> GpuSliceDataParser::ParseSurfaceIds(int64_t start_ts, int64_t end_ts)
-{
-    std::vector<int64_t> surface_ids;
-
-    std::string query_str = absl::StrFormat("SELECT id FROM gpu_slice WHERE "
-                                            "name=\"Surface\" AND ts >= %ld AND ts <= %ld",
-                                            start_ts,
-                                            end_ts);
-    auto        sql_result = m_trace_processor->ExecuteQuery(query_str);
-    auto&       it = sql_result;
-    if (!it.Status().ok())
-    {
-        std::cerr << "No submission found in the perfetto trace during the dive trace event."
-                  << std::endl;
-        return surface_ids;
-    }
-
-    for (uint32_t rows = 0; sql_result.Next(); rows++)
-    {
-        auto value = it.Get(0);
-        assert(value.type == ptp::SqlValue::Type::kLong);
-        surface_ids.push_back(value.AsLong());
-    }
-    assert(!surface_ids.empty());
-
-    return surface_ids;
-}
-
 std::vector<ArgsData> GpuSliceDataParser::ParseArgsData(uint32_t arg_set_id)
 {
     std::vector<ArgsData> args_set_data;
 
-    std::string query_str = absl::StrFormat("SELECT * FROM args WHERE "
-                                            "args_set_id = %u",
+    std::vector<std::string> fields = { "id",        "type",         "arg_set_id", "flat_key",
+                                        "int_value", "string_value", "real_value", "value_type" };
+    std::string              field_str = absl::StrJoin(fields, ",");
+
+    std::string query_str = absl::StrFormat("SELECT %s FROM args WHERE arg_set_id = %ld",
+                                            field_str,
                                             arg_set_id);
     auto        it = m_trace_processor->ExecuteQuery(query_str);
     if (!it.Status().ok())
@@ -216,46 +192,59 @@ std::vector<ArgsData> GpuSliceDataParser::ParseArgsData(uint32_t arg_set_id)
 
     for (uint32_t rows = 0; it.Next(); rows++)
     {
-        // TODO: store args table.
+        ArgsData arg;
+
+        int i = 0;
+        GetQueryValue(it, i++, arg.m_id, fields);
+        GetQueryValue(it, i++, arg.m_type, fields);
+        GetQueryValue(it, i++, arg.m_arg_set_id, fields);
+        GetQueryValue(it, i++, arg.m_flat_key, fields);
+        GetQueryValue(it, i++, arg.m_int_value, fields);
+        GetQueryValue(it, i++, arg.m_string_value, fields);
+        GetQueryValue(it, i++, arg.m_real_value, fields);
+        GetQueryValue(it, i++, arg.m_value_type, fields);
+        args_set_data.emplace_back(arg);
     }
 
     return args_set_data;
 }
 
-SurfaceData GpuSliceDataParser::ParseSurfaceData(int64_t surface_id)
+SurfaceData GpuSliceDataParser::ParseSurfaceData(int64_t submission_id)
 {
-    SurfaceData render_stage_data;
+    SurfaceData surface_data;
 
     std::vector<std::string> fields = { "id",   "ts",         "dur",         "submission_id",
                                         "name", "arg_set_id", "render_pass", "command_buffer" };
     std::string              field_str = absl::StrJoin(fields, ",");
 
-    std::string   query_str = absl::StrFormat("SELECT %s FROM args WHERE id = %ld",
-                                            field_str,
-                                            surface_id);
+    std::string query_str = absl::
+    StrFormat("SELECT %s FROM gpu_slice WHERE submission_id = %ld AND name=\"Surface\"",
+              field_str,
+              submission_id);
     ptp::Iterator it = m_trace_processor->ExecuteQuery(query_str);
     if (!it.Status().ok())
     {
-        std::cerr << "Failed to query surface data for surface_id:" << surface_id << std::endl;
-        return render_stage_data;
+        std::cerr << "Failed to query surface data for submission_id:" << submission_id
+                  << std::endl;
+        return surface_data;
     }
     for (uint32_t rows = 0; it.Next(); rows++)
     {
         int i = 0;
-        GetQueryValue(it, i++, render_stage_data.m_surface_id, fields);
-        GetQueryValue(it, i++, render_stage_data.m_ts, fields);
-        GetQueryValue(it, i++, render_stage_data.m_duration, fields);
-        GetQueryValue(it, i++, render_stage_data.m_submission_id, fields);
-        GetQueryValue(it, i++, render_stage_data.m_name, fields);
-        GetQueryValue(it, i++, render_stage_data.m_arg_set_id, fields);
-        GetQueryValue(it, i++, render_stage_data.m_render_pass, fields);
-        GetQueryValue(it, i++, render_stage_data.m_command_buffer, fields);
+        GetQueryValue(it, i++, surface_data.m_surface_id, fields);
+        GetQueryValue(it, i++, surface_data.m_ts, fields);
+        GetQueryValue(it, i++, surface_data.m_duration, fields);
+        GetQueryValue(it, i++, surface_data.m_submission_id, fields);
+        GetQueryValue(it, i++, surface_data.m_name, fields);
+        GetQueryValue(it, i++, surface_data.m_arg_set_id, fields);
+        GetQueryValue(it, i++, surface_data.m_render_pass, fields);
+        GetQueryValue(it, i++, surface_data.m_command_buffer, fields);
         break;  // should at most have 1 row.
     }
     // Parse args from args table
-    render_stage_data.m_args = ParseArgsData(render_stage_data.m_arg_set_id);
+    surface_data.m_args = ParseArgsData(surface_data.m_arg_set_id);
 
-    return render_stage_data;
+    return surface_data;
 }
 
 std::vector<SurfaceData> GpuSliceDataParser::ParseSurfaceData()
@@ -264,11 +253,11 @@ std::vector<SurfaceData> GpuSliceDataParser::ParseSurfaceData()
     std::vector<int64_t>     start_end_ts = ParseDiveTraceTimestamp();
     assert(start_end_ts.size() == 2);
 
-    std::vector<int64_t> surface_ids = ParseSurfaceIds(start_end_ts[0], start_end_ts[1]);
+    std::vector<int64_t> submission_ids = ParseSubmissionIds(start_end_ts[0], start_end_ts[1]);
 
-    for (auto surface_id : surface_ids)
+    for (auto submission_id : submission_ids)
     {
-        surface_data.emplace_back(ParseSurfaceData(surface_id));
+        surface_data.emplace_back(ParseSurfaceData(submission_id));
     }
 
     return surface_data;

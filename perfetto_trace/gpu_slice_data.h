@@ -20,6 +20,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "include/perfetto/trace_processor/trace_processor.h"
@@ -92,7 +93,6 @@ public:
 private:
     std::vector<int64_t>  ParseDiveTraceTimestamp();
     std::vector<int64_t>  ParseSubmissionIds(int64_t start_ts, int64_t end_ts);
-    std::vector<int64_t>  ParseSurfaceIds(int64_t start_ts, int64_t end_ts);
     int64_t               ParseStackIdForSurface(int64_t submission_id);
     SubmissionData        ParseSubmission(int64_t submission_id);
     std::vector<ArgsData> ParseArgsData(uint32_t arg_set_id);
@@ -100,42 +100,50 @@ private:
 
     std::unique_ptr<ptp::TraceProcessor> m_trace_processor;
 
-    template<typename T, typename std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
-    void GetValue(const ptp::SqlValue& value, T& field)
+    template<typename T>
+    typename std::enable_if_t<std::is_integral_v<T>, void> GetValue(const ptp::SqlValue& value,
+                                                                    T&                   field)
     {
-        field = value.AsLong();
+        if (!value.is_null())
+            field = value.AsLong();
     }
-    template<typename T, typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
-    void GetValue(const ptp::SqlValue& value, T& field)
+    template<typename T>
+    typename std::enable_if_t<std::is_floating_point_v<T>, void> GetValue(
+    const ptp::SqlValue& value,
+    T&                   field)
     {
-        field = value.AsDouble();
+        if (!value.is_null())
+            field = value.AsDouble();
     }
 
-    template<typename T, typename std::enable_if_t<std::is_same_v<std::string, T>, T>* = nullptr>
-    void GetValue(const ptp::SqlValue& value, T& field)
+    template<typename T>
+    typename std::enable_if_t<std::is_same_v<std::string, T>, void> GetValue(
+    const ptp::SqlValue& value,
+    T&                   field)
     {
-        field = value.AsString();
+        if (!value.is_null())
+            field = value.AsString();
     }
 
     template<typename T>
     void GetQueryValue(ptp::Iterator&                  it,
-                       int                             index,
+                       int                             column,
                        T&                              field,
                        const std::vector<std::string>& field_name)
     {
-        if (index > field_name.size())
+        if (column > field_name.size())
         {
-            std::cerr << "GetQueryValue:: Index out of range" << std::endl;
+            std::cerr << "GetQueryValue:: column out of range" << std::endl;
             return;
         }
 
-        if (field_name[index] != it.GetColumnName(index))
+        if (field_name[column] != it.GetColumnName(column))
         {
             std::cerr << "GetQueryValue: field name didn't match column name" << std::endl;
             return;
         }
 
-        ptp::SqlValue value = it.Get(index);
+        ptp::SqlValue value = it.Get(column);
         GetValue(value, field);
     }
 };

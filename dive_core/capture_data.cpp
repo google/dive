@@ -26,7 +26,9 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "freedreno_dev_info.h"
-#include "perfetto_trace/trace_reader.h"
+#if defined(DIVE_ENABLE_PERFETTO)
+#    include "perfetto_trace/trace_reader.h"
+#endif
 #include "pm4_info.h"
 
 namespace Dive
@@ -851,7 +853,7 @@ CaptureData::CaptureData(ProgressTracker *progress_tracker, ILog *log_ptr) :
 CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
 {
     std::string file_name_(file_name);
-    std::string file_extension = std::filesystem::path(file_name_).extension();
+    std::string file_extension = std::filesystem::path(file_name_).extension().generic_string();
 
     if (file_extension.compare(".dive") == 0)
     {

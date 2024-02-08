@@ -16,24 +16,28 @@
 
 #pragma once
 
-#if defined(DIVE_ENABLE_PERFETTO)
-#    include <memory>
-#    include <string>
+#include <memory>
+#include <string>
+#include <vector>
 
-#    include "include/perfetto/trace_processor/trace_processor.h"
+#include "gpu_slice_data.h"
+#include "include/perfetto/trace_processor/trace_processor.h"
 
 namespace Dive
 {
+namespace ptp = ::perfetto::trace_processor;
+
 class TraceReader
 {
 public:
     TraceReader(const std::string& trace_file_path);
-    bool LoadTraceFile();
+    bool        LoadTraceFile();
+    bool        LoadTraceFileFromBuffer(const std::vector<uint8_t>& data);
+    SurfaceData PopulatePerfettoTraceData();
 
 private:
-    std::string                                                m_trace_file_path;
-    std::unique_ptr<perfetto::trace_processor::TraceProcessor> m_trace_processor;
+    std::string                          m_trace_file_path;
+    std::unique_ptr<ptp::TraceProcessor> m_trace_processor;
 };
 
 }  // namespace Dive
-#endif

@@ -864,7 +864,7 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
         if (std::filesystem::exists(perfetto_trace_path))
         {
             CaptureData::LoadResult res = LoadPerfettoFile(perfetto_trace_path.c_str());
-            if(res != CaptureData::LoadResult::kSuccess)
+            if (res != CaptureData::LoadResult::kSuccess)
             {
                 return res;
             }

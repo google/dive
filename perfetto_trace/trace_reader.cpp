@@ -16,10 +16,8 @@
 
 #include "trace_reader.h"
 
-#include <inttypes.h>
 #include <cstdint>
 #include <iostream>
-#include "absl/strings/str_format.h"
 #include "include/perfetto/trace_processor/read_trace.h"
 #include "include/perfetto/trace_processor/trace_processor.h"
 #include "perfetto/trace_processor/status.h"
@@ -46,7 +44,11 @@ bool TraceReader::LoadTraceFile()
         std::cout << "Failed to load trace file" << m_trace_file_path << std::endl;
         return false;
     }
-
+#ifndef NDEBUG
+    std::vector<SubmissionData> submission_data;
+    std::vector<SurfaceData>    surface_data;
+    PopulatePerfettoTraceData(submission_data, surface_data);
+#endif
     return true;
 }
 
@@ -58,12 +60,9 @@ bool TraceReader::LoadTraceFileFromBuffer(const std::vector<uint8_t>& data)
     return m_trace_processor->Parse(std::move(blob_view)).ok();
 }
 
-SurfaceData TraceReader::PopulatePerfettoTraceData()
+bool TraceReader::PopulatePerfettoTraceData(std::vector<SubmissionData>& submission_data,
+                                            std::vector<SurfaceData>&    surface_data)
 {
-
-    std::vector<SubmissionData> submission_data;
-    std::vector<SurfaceData>    surface_data;
-
     GpuSliceDataParser sp(std::move(m_trace_processor));
     submission_data = sp.ParseSubmissionData();
 
@@ -95,7 +94,7 @@ SurfaceData TraceReader::PopulatePerfettoTraceData()
         }
     }
 #endif
-    return surface_data[0];
+    return true;
 }
 
 }  // namespace Dive

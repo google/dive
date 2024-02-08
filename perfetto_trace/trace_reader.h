@@ -31,9 +31,10 @@ class TraceReader
 {
 public:
     TraceReader(const std::string& trace_file_path);
-    bool        LoadTraceFile();
-    bool        LoadTraceFileFromBuffer(const std::vector<uint8_t>& data);
-    SurfaceData PopulatePerfettoTraceData();
+    bool LoadTraceFile();
+    bool LoadTraceFileFromBuffer(const std::vector<uint8_t>& data);
+    bool PopulatePerfettoTraceData(std::vector<SubmissionData>& submission_data,
+                                   std::vector<SurfaceData>&    surface_data);
 
 private:
     std::string                          m_trace_file_path;

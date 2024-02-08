@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <inttypes.h>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -85,52 +84,6 @@ public:
     GpuSliceDataParser(std::unique_ptr<ptp::TraceProcessor> trace_processor) :
         m_trace_processor(std::move(trace_processor))
     {
-#if 0
-        auto     sql_result = m_trace_processor->ExecuteQuery("SELECT * FROM "
-                                                              "gpu_slice ");
-        auto&    it = sql_result;
-        uint32_t column_width = 16;
-        for (uint32_t rows = 0; sql_result.Next(); rows++)
-        {
-            if (rows % 32 == 0)
-            {
-                for (uint32_t i = 0; i < sql_result.ColumnCount(); i++)
-                {
-                    printf("%-*.*s ", column_width, column_width, it.GetColumnName(i).c_str());
-                }
-                printf("\n");
-
-                std::string divider(column_width, '-');
-                for (uint32_t i = 0; i < it.ColumnCount(); i++)
-                {
-                    printf("%-*s ", column_width, divider.c_str());
-                }
-                printf("\n");
-            }
-            for (uint32_t c = 0; c < it.ColumnCount(); c++)
-            {
-                auto value = it.Get(c);
-                switch (value.type)
-                {
-                case ptp::SqlValue::Type::kNull: printf("%-*s", column_width, "[NULL]"); break;
-                case ptp::SqlValue::Type::kDouble:
-                    printf("%*f", column_width, value.double_value);
-                    break;
-                case ptp::SqlValue::Type::kLong:
-                    printf("%*" PRIi64, column_width, value.long_value);
-                    break;
-                case ptp::SqlValue::Type::kString:
-                    printf("%-*.*s", column_width, column_width, value.string_value);
-                    break;
-                case ptp::SqlValue::Type::kBytes:
-                    printf("%-*s", column_width, "<raw bytes>");
-                    break;
-                }
-                printf(" ");
-            }
-            printf("\n");
-        }
-#endif
     }
 
     std::vector<SubmissionData> ParseSubmissionData();

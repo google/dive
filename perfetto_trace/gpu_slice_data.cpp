@@ -30,10 +30,8 @@ std::vector<int64_t> GpuSliceDataParser::ParseDiveTraceTimestamp()
     int64_t              start_ts;
     int64_t              duration;
 
-    auto sql_result = m_trace_processor->ExecuteQuery(
+    auto it = m_trace_processor->ExecuteQuery(
     "SELECT ts, dur FROM slice WHERE name=\"Dive trace\"");
-    auto& it = sql_result;
-
     if (!it.Status().ok())
     {
         std::cerr << "No \"Dive trace\" found in the perfetto trace." << std::endl;
@@ -59,13 +57,11 @@ std::vector<int64_t> GpuSliceDataParser::ParseSubmissionIds(int64_t start_ts, in
     std::vector<int64_t> submission_ids;
     {
         std::string
-        query_str = absl::StrFormat("SELECT submission_id FROM gpu_slice WHERE "
-                                    "name=\"vkQueueSubmit\" AND ts >= %ld AND ts <= %ld",
+             query_str = absl::StrFormat("SELECT submission_id FROM gpu_slice WHERE "
+                                         "name=\"vkQueueSubmit\" AND ts >= %ld AND ts <= %ld",
                                     start_ts,
                                     end_ts);
-        std::cout << "query str: " << query_str << std::endl;
-        auto  sql_result = m_trace_processor->ExecuteQuery(query_str);
-        auto& it = sql_result;
+        auto it = m_trace_processor->ExecuteQuery(query_str);
         if (!it.Status().ok())
         {
             std::cerr << "No submission found in the perfetto trace during the dive trace event."
@@ -73,7 +69,7 @@ std::vector<int64_t> GpuSliceDataParser::ParseSubmissionIds(int64_t start_ts, in
             return submission_ids;
         }
 
-        for (uint32_t rows = 0; sql_result.Next(); rows++)
+        for (uint32_t rows = 0; it.Next(); rows++)
         {
             auto value = it.Get(0);
             assert(value.type == ptp::SqlValue::Type::kLong);
@@ -183,9 +179,8 @@ std::vector<int64_t> GpuSliceDataParser::ParseSurfaceIds(int64_t start_ts, int64
                                             "name=\"Surface\" AND ts >= %ld AND ts <= %ld",
                                             start_ts,
                                             end_ts);
-    std::cout << "query str: " << query_str << std::endl;
-    auto  sql_result = m_trace_processor->ExecuteQuery(query_str);
-    auto& it = sql_result;
+    auto        sql_result = m_trace_processor->ExecuteQuery(query_str);
+    auto&       it = sql_result;
     if (!it.Status().ok())
     {
         std::cerr << "No submission found in the perfetto trace during the dive trace event."
@@ -211,8 +206,7 @@ std::vector<ArgsData> GpuSliceDataParser::ParseArgsData(uint32_t arg_set_id)
     std::string query_str = absl::StrFormat("SELECT * FROM args WHERE "
                                             "args_set_id = %u",
                                             arg_set_id);
-    std::cout << "query str: " << query_str << std::endl;
-    auto it = m_trace_processor->ExecuteQuery(query_str);
+    auto        it = m_trace_processor->ExecuteQuery(query_str);
     if (!it.Status().ok())
     {
         std::cerr << "No submission found in the perfetto trace during the dive trace event."

@@ -19,8 +19,8 @@ cmake_minimum_required(VERSION 3.8)
 project(PerfettoTrace)
 set(target perfetto_trace_reader)
 
-add_library(${target} trace_reader.h trace_reader.cpp)
-target_link_libraries(${target}  trace_processor)
+add_library(${target} trace_reader.h trace_reader.cpp gpu_slice_data.h gpu_slice_data.cpp )
+target_link_libraries(${target}  trace_processor absl::str_format)
 target_include_directories(${target} PRIVATE 
     "${THIRDPARTY_DIRECTORY}/perfetto/"
     "${THIRDPARTY_DIRECTORY}/perfetto/include"

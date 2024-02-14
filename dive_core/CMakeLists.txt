@@ -205,8 +205,12 @@ if(WIN32)
   add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
   target_link_libraries(${PROJECT_NAME} PRIVATE ${ZLIB_LIBRARIES} -static)
 endif()
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LibArchive_LIBRARIES})
-include_directories(${LibArchive_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LibArchive_LIBRARIES} ${PEFFETTO_TRACE_READER_LIB})
+
+include_directories(${LibArchive_INCLUDE_DIRS} 
+  "${THIRDPARTY_DIRECTORY}/perfetto/" 
+  "${THIRDPARTY_DIRECTORY}/perfetto/include"
+  ${PERFETTO_BUILD_HEADER_DIR})
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union

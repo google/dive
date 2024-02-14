@@ -318,6 +318,12 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 		return;
 	}
 
+	// GOOGLE: Print a log if dumping big size of buffer.
+	if(sz > 131072)
+	{
+		LOGI("libwrap dump big buffer: type %u, sz %d \n", type, sz);
+	}
+
 	pthread_mutex_lock(&write_lock);
 
 	rd_write(device_fd, &val, 4);

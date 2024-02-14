@@ -80,22 +80,8 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
-option(DIVE_ENABLE_PERFETTO, "Enalbe functionality to get perfetto trace." ON)
-# Build Perfetto SDK
-if(DIVE_ENABLE_PERFETTO)
-message("DIVE_ENABLE_PERFETTO is enabled.")
-add_compile_definitions(DIVE_ENABLE_PERFETTO=1)
-set(PERFETTO_ROOT ${CMAKE_SOURCE_DIR}/third_party/perfetto)
-include_directories(${PERFETTO_ROOT}/sdk)
-add_library(perfetto STATIC ${PERFETTO_ROOT}/sdk/perfetto.cc)
-if (WIN32)
-  # The perfetto library contains many symbols, so it needs the big object
-  # format.
-  target_compile_options(perfetto PRIVATE "/bigobj")
-  # Disable legacy features in windows.h.
-  add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
-endif (WIN32)
-endif()
+option(DIVE_ENABLE_PERFETTO, "Enalbe functionality to get perfetto trace." OFF)
+include(perfetto.cmake)
 
 add_subdirectory(capture_service)
 add_subdirectory(layer)

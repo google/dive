@@ -96,9 +96,11 @@ file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_C
 # Generate license NOTICE file
 include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")
 GenerateThirdPartyLicenseFile("${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/licenses/")
+add_custom_target(notice_file ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/NOTICE")
 if (MSVC)
   add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
 endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
+add_dependencies(${PROJECT_NAME} notice_file)

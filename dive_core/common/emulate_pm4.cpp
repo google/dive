@@ -929,6 +929,117 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                 return false;
         }
     }
+    else if ((type == Pm4Type::kType7) && (type7_header.opcode == CP_START_BIN))
+    {
+
+        PM4_CP_START_BIN packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+                                           emu_state_ptr->m_submit_index,
+                                           emu_state_ptr->GetCurIb()->m_cur_va,
+                                           sizeof(PM4_CP_START_BIN)));
+
+        // The CP_START_BIN & CP_END_BIN are pm4s only availabe at a650+
+        // here is the layout:
+        //  |CP_START_BIN|
+        //  |Prefix_block_0|
+        //  |Prefix_block_1|
+        //  ...
+        //  |Prefix_block_n|
+        //  |Common_block|
+        //  |CP_END_BIN|
+        // All the prefix blocks are in a separate IB
+        // Prefix_block contains setup for each tile, like viewport/scissors with fixed block size
+        // Common_block contains drawcalls and resolve
+
+        // only add the 1st prefix block here
+        // after this ib, we jump back to the Common_block
+        // once we advance to the CP_END_BIN, we add the rest ibs
+        // it is done this way since we don't know the size of the Common_block at this point
+        // packet. (BODY_DWORDS contains 0 in all test captures.)
+        if (!QueueIB(packet.PREFIX_ADDR,
+                     packet.PREFIX_DWORDS,
+                     false,
+                     IbType::kBinPrefix,
+                     emu_state_ptr))
+        {
+            return false;
+        }
+
+        m_cp_start_bin_address = emu_state_ptr->GetCurIb()->m_cur_va +
+                                 GetPacketSize(header) * sizeof(uint32_t);
+        m_prefix_start_address = packet.PREFIX_ADDR;
+        m_prefix_block_dword_size = packet.PREFIX_DWORDS;
+        m_prefix_block_count = packet.BIN_COUNT;
+
+        AdvancePacket(emu_state_ptr, header);
+        if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
+            return false;
+    }
+    else if ((type == Pm4Type::kType7) && (type7_header.opcode == CP_END_BIN))
+    {
+        uint32_t common_block_dword_size = static_cast<uint32_t>(
+        (emu_state_ptr->GetCurIb()->m_cur_va - m_cp_start_bin_address) / sizeof(uint32_t));
+        // starts from the 2nd one since the 1st one has been added in CP_START_BIN
+        for (uint32_t bin = 1; bin < m_prefix_block_count; ++bin)
+        {
+            if (!QueueIB(m_prefix_start_address +
+                         bin * m_prefix_block_dword_size * sizeof(uint32_t),
+                         m_prefix_block_dword_size,
+                         false,
+                         IbType::kBinPrefix,
+                         emu_state_ptr))
+            {
+                return false;
+            }
+
+            if (!QueueIB(m_cp_start_bin_address,
+                         common_block_dword_size,
+                         false,
+                         IbType::kBinCommon,
+                         emu_state_ptr))
+            {
+                return false;
+            }
+        }
+
+        m_cp_start_bin_address = UINT64_MAX;
+        m_prefix_start_address = UINT64_MAX;
+        m_prefix_block_dword_size = 0;
+        m_prefix_block_count = 0;
+
+        AdvancePacket(emu_state_ptr, header);
+        if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
+            return false;
+    }
+    else if ((type == Pm4Type::kType7) && (type7_header.opcode == CP_FIXED_STRIDE_DRAW_TABLE))
+    {
+        // CP_FIXED_STRIDE_DRAW_TABLE only availabe at a7xx+
+        // Executes an array of fixed-size command buffers where each buffer is assumed to have one
+        // draw call, skipping buffers with non - visible draw calls.
+        // if CP_START_BIN/CP_END_BIN are used, and CP_FIXED_STRIDE_DRAW_TABLE is used for
+        // drawcalls, it will be in the Common_block
+        PM4_CP_FIXED_STRIDE_DRAW_TABLE packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+                                           emu_state_ptr->m_submit_index,
+                                           emu_state_ptr->GetCurIb()->m_cur_va,
+                                           sizeof(PM4_CP_FIXED_STRIDE_DRAW_TABLE)));
+
+        for (uint32_t draw = 0; draw < packet.bitfields2.COUNT; ++draw)
+        {
+            if (!QueueIB(packet.IB_BASE + draw * packet.bitfields1.STRIDE * sizeof(uint32_t),
+                         packet.bitfields1.STRIDE,
+                         false,
+                         IbType::kFixedStrideDrawTable,
+                         emu_state_ptr))
+            {
+                return false;
+            }
+        }
+
+        AdvancePacket(emu_state_ptr, header);
+        if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
+            return false;
+    }
     else
     {
         AdvancePacket(emu_state_ptr, header);

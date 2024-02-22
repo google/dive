@@ -142,9 +142,11 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
     if 'type' in element.attrib:
       type = element.attrib['type']
 
+    bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
+
     use_buildin_type = False
     if is_reg_32:
-      if type and isBuiltInType(type):
+      if ((type == None) and (len(bitfields) == 0)) or (type and isBuiltInType(type)):
           pm4_packet_file_h.write("\tuint32_t %s; // %s\n" % (field_name, type))
           use_buildin_type = True
     elif is_reg_64:
@@ -154,7 +156,6 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
     if not use_buildin_type:
       outputRegUnions(pm4_packet_file_h, domain, field_name, element, True, str(index))
 
-    bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
     bitset = None
     if type:
       bitset = domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
@@ -382,6 +383,7 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
 
       pm4_packet_file_h.write("//------------------------------------------------\n")
 
+      pm4_packet_file_h.write("#pragma pack(push, 4)\n")
       pm4_packet_file_h.write("struct %s\n" % packet_name)
       pm4_packet_file_h.write("{\n")
       pm4_packet_file_h.write("\tPm4Type7Header HEADER;\n")
@@ -394,7 +396,8 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       outputPacketRegs(pm4_packet_file_h, reg_list, prefix, domain)
       if array_size > 1:
         pm4_packet_file_h.write("\t} ARRAY[%d];\n" % array_size)
-      pm4_packet_file_h.write("};\n\n")
+      pm4_packet_file_h.write("};\n")
+      pm4_packet_file_h.write("#pragma pack(pop)\n\n")
 
 # ---------------------------------------------------------------------------------------
 if len(sys.argv) != 4:

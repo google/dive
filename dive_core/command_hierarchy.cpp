@@ -710,6 +710,24 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
                          << ", Address: 0x" << std::hex << ib_info.m_va_addr
                          << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
     }
+    else if (type == IbType::kBinPrefix)
+    {
+        ib_string_stream << "Bin Prefix IB"
+                         << ", Address: 0x" << std::hex << ib_info.m_va_addr
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
+    }
+    else if (type == IbType::kBinCommon)
+    {
+        ib_string_stream << "Bin Common IB"
+                         << ", Address: 0x" << std::hex << ib_info.m_va_addr
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
+    }
+    else if (type == IbType::kFixedStrideDrawTable)
+    {
+        ib_string_stream << "Fixed Stride Draw Table IB"
+                         << ", Address: 0x" << std::hex << ib_info.m_va_addr
+                         << ", Size (DWORDS): " << std::dec << ib_info.m_size_in_dwords;
+    }
     else if (type == IbType::kDrawState)
     {
         ib_string_stream << "DrawState IB"
@@ -849,60 +867,28 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     if (opcode == CP_SET_DRAW_STATE)
         CacheSetDrawStateGroupInfo(mem_manager, submit_index, va_addr, packet_node_index, header);
 
-    bool is_marker = false;
     if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, opcode))
     {
         uint64_t event_node_index = UINT64_MAX;
         uint64_t parent_node_index = m_cur_submit_node_index;
-        if (!m_marker_stack.empty())
-        {
-            parent_node_index = m_marker_stack.back();
-        }
-
         if (m_render_marker_index != kInvalidRenderMarkerIndex)
         {
             parent_node_index = m_render_marker_index;
         }
 
-        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode);
-        if (sync_type != SyncType::kNone)
-        {
-            // m_num_events++;
-            // auto     barrier_it = m_marker_creator.CurrentBarrier();
-            // uint64_t sync_event_node_index = AddSyncEventNode(mem_manager,
-            //                                                   submit_index,
-            //                                                   va_addr,
-            //                                                   sync_type,
-            //                                                   barrier_it->id());
-            // event_node_index = sync_event_node_index;
-            // if (barrier_it->IsValid() && barrier_it->BarrierNode() != UINT64_MAX)
-            //     parent_node_index = barrier_it->BarrierNode();
-            // this->AppendEventNodeIndex(sync_event_node_index);
-        }
-        else  // Draw/Dispatch/Blit
+        // Draw/Dispatch/Blit
         {
             std::string draw_dispatch_node_string = GetEventString(mem_manager,
                                                                    submit_index,
                                                                    va_addr,
                                                                    opcode);
             uint32_t    event_id = m_num_events++;
-            // auto        marker_it = m_marker_creator.CurrentEvent();
-            // if (!(marker_it->IsValid() && marker_it->EventNode() == UINT64_MAX))
-            // {
-            //     marker_it = nullptr;
-            // }
+
             CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
             uint64_t draw_dispatch_node_index = AddNode(NodeType::kDrawDispatchBlitNode,
                                                         draw_dispatch_node_string,
                                                         aux_info);
             AppendEventNodeIndex(draw_dispatch_node_index);
-            // if (marker_it->IsValid())
-            //     m_markers_ptr->SetEventNode(marker_it->id(), draw_dispatch_node_index);
-
-            // auto barrier_it = m_marker_creator.CurrentBarrier();
-            // if (barrier_it->IsValid() && barrier_it->BarrierNode() != UINT64_MAX)
-            //     parent_node_index = barrier_it->BarrierNode();
-
             event_node_index = draw_dispatch_node_index;
         }
 
@@ -923,14 +909,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         // Otherwise append it to the marker at the top of the marker stack.
         // Note: Events only show up in the event topology and internal RGP topology.
         AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, event_node_index);
-
         m_node_parent_info[CommandHierarchy::kAllEventTopology]
                           [event_node_index] = parent_node_index;
 
-        if (!m_internal_marker_stack.empty())
-        {
-            parent_node_index = m_internal_marker_stack.back();
-        }
         AddChild(CommandHierarchy::kRgpTopology, parent_node_index, event_node_index);
         m_node_parent_info[CommandHierarchy::kRgpTopology][event_node_index] = parent_node_index;
     }
@@ -956,46 +937,13 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     {
         AppendMemRegNodes(mem_manager, submit_index, va_addr, packet_node_index);
     }
-    // vulkan call NOP packages. Currently contains call parameters(except parameters in array),
-    // each call is in one NOP packet.
-    else if (opcode == CP_NOP)
-    {
-        /*
-        NopVulkanCallHeader nop_header;
-        bool                ret = mem_manager.CopyMemory(&nop_header.u32All,
-                                          submit_index,
-                                          va_addr + sizeof(PM4_PFP_TYPE_3_HEADER),
-                                          sizeof(nop_header));
-        DIVE_VERIFY(ret);
-
-        if (nop_header.signature == kNopPayloadSignature)
-        {
-            is_marker = true;
-            uint32_t          vulkan_call_data_len = (header.count + 1) * sizeof(uint32_t);
-            std::vector<char> vulkan_call_data(vulkan_call_data_len);
-            ret = mem_manager.CopyMemory(vulkan_call_data.data(),
-                                         submit_index,
-                                         va_addr + sizeof(PM4_PFP_TYPE_3_HEADER),
-                                         vulkan_call_data_len);
-            DIVE_ASSERT(ret);
-
-            ParseVulkanCallMarker(vulkan_call_data.data(),
-                                  vulkan_call_data_len,
-                                  m_cur_submit_node_index,
-                                  packet_node_index);
-            is_marker_parsed = true;
-            m_command_hierarchy_ptr->m_has_vulkan_marker = true;
-        }
-                */
-    }
     else if (opcode == CP_SET_MARKER)
     {
         PM4_CP_SET_MARKER packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
         // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
         DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
-        a6xx_marker    marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);
-        const uint64_t parent_node_index = m_cur_submit_node_index;
+        a6xx_marker marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);
 
         std::string desc;
         bool        add_child = true;
@@ -1006,8 +954,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         case RM6_BYPASS:
             desc = "Direct Rendering Pass";
             break;
-            // This is emitted at the begining of the binning pass, although the binning pass could
-            // be missing even in tiled rendering mode
+            // This is emitted at the begining of the binning pass, although the binning pass
+            // could be missing even in tiled rendering mode
         case RM6_BINNING:
             desc = "Binning Pass";
             break;
@@ -1017,7 +965,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             break;
             // This is emitted at the end of the tiled rendering pass
         case RM6_ENDVIS:
-            m_render_marker_index = kInvalidRenderMarkerIndex;
+            // should be paired with RM6_GMEM only if RM6_BINNING exist
             add_child = false;
             break;
             // This is emitted at the begining of the resolve pass
@@ -1025,11 +973,13 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             desc = "Resolve Pass";
             break;
             // This is emitted for each dispatch
-        case RM6_COMPUTE:
-            desc = "Compute Dispatch";
+        case RM6_COMPUTE: desc = "Compute Dispatch"; break;
+        // This seems to be the end of Resolve Pass
+        case RM6_YIELD:
+            // should be paired with RM6_RESOLVE
+            add_child = false;
             break;
             // TODO(wangra): Might need to handle following markers
-        case RM6_YIELD:
         case RM6_BLIT2DSCALE:
         case RM6_IB1LIST_START:
         case RM6_IB1LIST_END:
@@ -1039,7 +989,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         if (add_child)
         {
             m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, desc, 0);
-            AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, m_render_marker_index);
+            AddChild(CommandHierarchy::kAllEventTopology,
+                     m_cur_submit_node_index,
+                     m_render_marker_index);
         }
     }
 
@@ -1050,31 +1002,6 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                        packet_node_index);
     }
 
-    // This packet is potentially implicit NOP packet for vkBeginCommandBuffer
-    // if (is_marker_parsed && !m_is_parsing_cb_start_marker)
-    // {
-    //     m_cmd_begin_packet_node_indices.clear();
-    //     m_cmd_begin_event_node_indices.clear();
-    // }
-
-    if (!is_marker)
-    {
-        // Add it to all markers on stack, if applicable.
-        for (auto it = m_marker_stack.begin(); it != m_marker_stack.end(); ++it)
-            AddSharedChild(CommandHierarchy::kAllEventTopology, *it, packet_node_index);
-
-        for (auto it = m_internal_marker_stack.begin(); it != m_internal_marker_stack.end(); ++it)
-            AddSharedChild(CommandHierarchy::kRgpTopology, *it, packet_node_index);
-    }
-
-    // auto cb_id = m_marker_creator.CurrentCommandBuffer()->id();
-    // if (cb_id != m_cur_cb)
-    // {
-    //     const auto &cbs = m_markers_ptr->CommandBuffers();
-    //     if (cbs.IsValidId(cb_id))
-    //         m_markers_ptr->SetCommandBufferSubmit(cb_id, m_cur_engine_index);
-    //     m_cur_cb = cb_id;
-    // }
     return true;
 }
 
@@ -1133,11 +1060,6 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
                   return lhs_index < rhs_index;
               });
 
-    // If marker stack is not empty, that means those are vkCmdDebugMarkerBeginEXT() calls without
-    // the corresponding vkCmdDebugMarkerEndEXT. Clear the market stack for the next submit.
-    m_marker_stack.clear();
-    m_internal_marker_stack.clear();
-
     if (!m_packets.m_packet_node_indices.empty())
     {
         uint64_t postamble_state_node_index;
@@ -1160,10 +1082,6 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
         m_packets.Clear();
 
         uint64_t parent_node_index = m_cur_submit_node_index;
-        if (m_render_marker_index != kInvalidRenderMarkerIndex)
-        {
-            parent_node_index = m_render_marker_index;
-        }
 
         // Add the postamble_state_node to the submit_node in the event topology
         AddChild(CommandHierarchy::kAllEventTopology,

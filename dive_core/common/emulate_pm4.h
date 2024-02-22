@@ -306,6 +306,12 @@ private:
     bool AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &callbacks) const;
 
     uint32_t CalcParity(uint32_t val);
+
+    // Only used by CP_START_BIN/CP_END_BIN
+    mutable uint64_t m_cp_start_bin_address = UINT64_MAX;
+    mutable uint64_t m_prefix_start_address = UINT64_MAX;
+    mutable uint32_t m_prefix_block_dword_size = 0;
+    mutable uint32_t m_prefix_block_count = 0;
 };
 
 //--------------------------------------------------------------------------------------------------

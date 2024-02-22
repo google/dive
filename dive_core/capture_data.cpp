@@ -1046,10 +1046,6 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
 
     struct BlockInfo
     {
-        // The first 2 dwords are set to 0xffffffff
-        uint32_t m_max_uint32_1;
-        uint32_t m_max_uint32_2;
-
         uint32_t m_block_type;
 
         // The number of bytes that follow this header.
@@ -1062,8 +1058,12 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     bool      is_new_submit = false;
     while (capture_file.read((char *)&block_info, sizeof(block_info)) > 0)
     {
-        if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
-            return LoadResult::kCorruptData;
+        // Read and discard any trailing 0xffffffff padding from previous block
+        while (block_info.m_block_type == 0xffffffff && block_info.m_data_size == 0xffffffff)
+        {
+            if (capture_file.read((char *)&block_info, sizeof(block_info)) <= 0)
+                return LoadResult::kCorruptData;
+        }
 
         switch (block_info.m_block_type)
         {

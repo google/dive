@@ -154,20 +154,14 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
 #include <cstring>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "dive_core/common/common.h"
 
-static std::map<uint32_t, const char*> g_sOpCodeToString;
-static std::map<uint32_t, RegInfo> g_sRegInfo;
-struct cmp_str
-{
-    bool operator()(const std::string& a, const std::string& b) const
-    {
-        return std::strcmp(a.c_str(), b.c_str()) < 0;
-    }
-};
-static std::map<std::string, uint32_t, cmp_str> g_sRegNameToIndex;
-static std::vector<std::map<uint32_t, const char*>> g_sEnumReflection;
+static std::unordered_map<uint32_t, const char*> g_sOpCodeToString;
+static std::unordered_map<uint32_t, RegInfo> g_sRegInfo;
+static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
+static std::vector<std::unordered_map<uint32_t, const char*>> g_sEnumReflection;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
 
@@ -893,7 +887,7 @@ const char *GetEnumString(uint32_t enum_handle, uint32_t val)
 {
     if (g_sEnumReflection.size() <= enum_handle)
         return nullptr;
-    const std::map<uint32_t, const char*> &val_to_str_map = g_sEnumReflection[enum_handle];
+    const std::unordered_map<uint32_t, const char*> &val_to_str_map = g_sEnumReflection[enum_handle];
     if (val_to_str_map.find(val) == val_to_str_map.end())
         return nullptr;
     return val_to_str_map.find(val)->second;

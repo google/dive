@@ -1056,6 +1056,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     uint64_t  cur_gpu_addr = UINT64_MAX;
     uint32_t  cur_size = UINT32_MAX;
     bool      is_new_submit = false;
+    bool      skip_commands = true;
     while (capture_file.read((char *)&block_info, sizeof(block_info)) > 0)
     {
         // Read and discard any trailing 0xffffffff padding from previous block
@@ -1076,7 +1077,10 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             is_new_submit = true;
             break;
         case RD_CMDSTREAM_ADDR:
-            if (!LoadCmdStreamBlockAdreno(capture_file, block_info.m_data_size, is_new_submit))
+            if (!LoadCmdStreamBlockAdreno(capture_file,
+                                          block_info.m_data_size,
+                                          is_new_submit,
+                                          skip_commands))
                 return LoadResult::kFileIoError;
             is_new_submit = false;
             break;
@@ -1087,9 +1091,22 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             if (!LoadMemoryBlockAdreno(capture_file, cur_gpu_addr, cur_size))
                 return LoadResult::kFileIoError;
             break;
+        case RD_CMD:
+        {
+            // Skip parsing commands from system processes
+            skip_commands = false;
+            char *process_name = new char[block_info.m_data_size];
+            if (!capture_file.read((char *)process_name, block_info.m_data_size))
+                return LoadResult::kFileIoError;
+            skip_commands |= (strcmp(process_name, "fdperf") == 0);
+            skip_commands |= (strcmp(process_name, "chrome") == 0);
+            skip_commands |= (strcmp(process_name, "surfaceflinger") == 0);
+            skip_commands |= ((char *)process_name)[0] == 'X';
+            delete[] process_name;
+            break;
+        }
         case RD_NONE:
         case RD_TEST:
-        case RD_CMD:
         case RD_CONTEXT:
         case RD_CMDSTREAM:
         case RD_PARAM:
@@ -1540,7 +1557,8 @@ bool CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_a
 //--------------------------------------------------------------------------------------------------
 bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
                                            uint32_t    block_size,
-                                           bool        create_new_submit)
+                                           bool        create_new_submit,
+                                           bool        skip_commands)
 {
     uint64_t gpu_addr;
     uint32_t size_in_dwords;
@@ -1550,7 +1568,7 @@ bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
     IndirectBufferInfo ib_info;
     ib_info.m_va_addr = gpu_addr;
     ib_info.m_size_in_dwords = size_in_dwords;
-    ib_info.m_skip = false;
+    ib_info.m_skip = skip_commands;
     if (create_new_submit)
     {
         std::vector<IndirectBufferInfo> ibs;

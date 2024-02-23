@@ -1056,7 +1056,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     uint64_t  cur_gpu_addr = UINT64_MAX;
     uint32_t  cur_size = UINT32_MAX;
     bool      is_new_submit = false;
-    bool      skip_commands = true;
+    bool      skip_commands = false;
     while (capture_file.read((char *)&block_info, sizeof(block_info)) > 0)
     {
         // Read and discard any trailing 0xffffffff padding from previous block

@@ -2547,7 +2547,15 @@ void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager &mem
             {
                 T        value;
                 uint64_t addr = ext_src_addr + ((i + j) * sizeof(T));
-                DIVE_VERIFY(mem_manager.CopyMemory(&value, submit_index, addr, sizeof(T)));
+
+                // For some reason, some captures refer to memory not backed by memory blocks
+                // Let's not treat it as an error, since cffdump handles this gracefully as well
+                if (!mem_manager.CopyMemory(&value, submit_index, addr, sizeof(T)))
+                {
+                    DIVE_LOG("Indirect constant buffer at 0x%p with no backing memory!",
+                             ext_src_addr);
+                    return;
+                }
                 OutputStream<T>::SetupFormat(string_stream);
                 string_stream << value << " ";
             }

@@ -399,7 +399,8 @@ private:
     bool LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_addr, uint32_t size);
     bool LoadCmdStreamBlockAdreno(FileReader &capture_file,
                                   uint32_t    block_size,
-                                  bool        create_new_submit);
+                                  bool        create_new_submit,
+                                  bool        skip_commands);
 
     void Finalize(const CaptureDataHeader &data_header);
 

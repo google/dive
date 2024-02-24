@@ -821,7 +821,7 @@ const RegInfo *GetRegInfo(uint32_t reg)
 {
     auto it = std::find_if(g_sRegInfo.begin(),
                            g_sRegInfo.end(),
-                           [&](const std::pair<uint32_t, RegInfo> &v) {
+                           [&](const auto& v) {
                                const uint32_t reg_offset_v = v.first >> kGPUVariantsBits;
 
                                const uint32_t shift_bits = 32 - kGPUVariantsBits;

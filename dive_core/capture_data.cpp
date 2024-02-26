@@ -270,13 +270,26 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
             }
             else
             {
-                if (memory_block.m_va_addr != prev_addr || memory_block.m_data_size != prev_size)
+                // Check if it's a completely new block
+                if (memory_block.m_va_addr >= (prev_addr + prev_size))
                     temp_memory_blocks.push_back(memory_block);
                 else
                 {
-                    // Replace previous memory block with the more updated current version
-                    delete[] temp_memory_blocks.back().m_data_ptr;
-                    temp_memory_blocks.back() = m_memory_blocks[i];
+                    // It's EITHER a new block or it has the same address as the previous block
+                    // (i.e. whole or partial overwrite)
+                    DIVE_ASSERT(memory_block.m_va_addr == prev_addr);
+
+                    // Use whichever one is bigger and get rid of the smaller one
+                    if (memory_block.m_data_size > temp_memory_blocks.back().m_data_size)
+                    {
+                        // Replace previous memory block with current one
+                        delete[] temp_memory_blocks.back().m_data_ptr;
+                        temp_memory_blocks.back() = m_memory_blocks[i];
+                    }
+                    else
+                    {
+                        delete[] m_memory_blocks[i].m_data_ptr;
+                    }
                 }
             }
             prev_addr = memory_block.m_va_addr;

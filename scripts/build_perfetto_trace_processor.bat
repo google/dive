@@ -21,7 +21,11 @@ set INSTALL_DIR=%PROJECT_ROOT%\prebuild\perfetto\windows
 set BUILD_DIR= %PROJECT_ROOT%\build\perfetto_trace_processor
 set startTime=%time%
 md %BUILD_DIR%
+md %BUILD_DIR%\\debug
+md %BUILD_DIR%\\release
 md %INSTALL_DIR%
+md %INSTALL_DIR%\\debug
+md %INSTALL_DIR%\\release
 echo "BUILD_DIR: " %BUILD_DIR%
 echo "INSTALL_DIR: " %INSTALL_DIR%
 echo "PERFETTO_SRC: " %PERFETTO_SRC%
@@ -29,14 +33,26 @@ pushd %PERFETTO_SRC%
 
 where python
 python %PERFETTO_SRC%\\tools\\install-build-deps
-python %PERFETTO_SRC%\\tools\\gn clean %BUILD_DIR%\\release
-python %PERFETTO_SRC%\\tools\\gn gen %BUILD_DIR%\\release --args="is_debug = false enable_perfetto_trace_processor=true enable_perfetto_trace_processor_json=true enable_perfetto_trace_processor_linenoise=true enable_perfetto_trace_processor_sqlite=true enable_perfetto_trace_processor_percentile=true use_custom_libcxx = false custom_libcxx_is_static = false is_hermetic_clang=false is_system_compiler=true is_clang=false skip_buildtools_check=true extra_cflags=\"/wd4146 /wd4369\""
 
-python %PERFETTO_SRC%\\tools\\ninja -C %BUILD_DIR%\\release src/trace_processor:trace_processor
-cp %BUILD_DIR%\\release\\trace_processor.lib %INSTALL_DIR%
-pushd %INSTALL_DIR%
+REM For Debug Build
+python %PERFETTO_SRC%\\tools\\gn clean %BUILD_DIR%\\debug
+python %PERFETTO_SRC%\\tools\\gn gen %BUILD_DIR%\\debug --args="is_debug = true enable_perfetto_trace_processor=true enable_perfetto_trace_processor_json=true enable_perfetto_trace_processor_linenoise=true enable_perfetto_trace_processor_sqlite=true enable_perfetto_trace_processor_percentile=true use_custom_libcxx = false custom_libcxx_is_static = false is_hermetic_clang=false is_system_compiler=true is_clang=false skip_buildtools_check=true extra_cflags=\"/wd4146 /wd4369 /MDd\""
+python %PERFETTO_SRC%\\tools\\ninja -C %BUILD_DIR%\\debug src/trace_processor:trace_processor
+cp %BUILD_DIR%\\debug\\trace_processor.lib %INSTALL_DIR%\\debug
+pushd %INSTALL_DIR%\\debug
 tar -zcvf trace_processor.lib.tar.gz trace_processor.lib
 popd
+
+REM For Release Build
+python %PERFETTO_SRC%\\tools\\gn clean %BUILD_DIR%\\release
+python %PERFETTO_SRC%\\tools\\gn gen %BUILD_DIR%\\release --args="is_debug = false enable_perfetto_trace_processor=true enable_perfetto_trace_processor_json=true enable_perfetto_trace_processor_linenoise=true enable_perfetto_trace_processor_sqlite=true enable_perfetto_trace_processor_percentile=true use_custom_libcxx = false custom_libcxx_is_static = false is_hermetic_clang=false is_system_compiler=true is_clang=false skip_buildtools_check=true extra_cflags=\"/wd4146 /wd4369 /MD\""
+python %PERFETTO_SRC%\\tools\\ninja -C %BUILD_DIR%\\release src/trace_processor:trace_processor
+cp %BUILD_DIR%\\release\\trace_processor.lib %INSTALL_DIR%\\release
+pushd %INSTALL_DIR%\\release
+tar -zcvf trace_processor.lib.tar.gz trace_processor.lib
+popd
+
+
 cp %BUILD_DIR%\\release\\gen\\build_config\\perfetto_build_flags.h %INSTALL_DIR%\
 popd
 

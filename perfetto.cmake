@@ -16,10 +16,7 @@
 
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
-#TODO(b/323860315): Windows build is not supported for now
-if (NOT WIN32)
-    set(DIVE_ENABLE_PERFETTO ON)
-endif()
+set(DIVE_ENABLE_PERFETTO ON)
 
 # Build Perfetto SDK
 if(DIVE_ENABLE_PERFETTO)
@@ -29,24 +26,33 @@ if(DIVE_ENABLE_PERFETTO)
     include_directories(${PERFETTO_ROOT}/sdk)
     add_library(perfetto STATIC ${PERFETTO_ROOT}/sdk/perfetto.cc)
 if (WIN32)
-#  TODO(b/323860315): support import trace_processor on Windows. Currently Ninja generated lib can not be linked
-#        correctly on Windows.
+    # The perfetto library contains many symbols, so it needs the big object
+    # format.
+    target_compile_options(perfetto PRIVATE "/bigobj")
+    # Disable legacy features in windows.h.
+    add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 
-# The perfetto library contains many symbols, so it needs the big object
-# format.
-#target_compile_options(perfetto PRIVATE "/bigobj")
-# Disable legacy features in windows.h.
-#add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+    add_library(trace_processor STATIC IMPORTED)
+    message("Decompress trace_processor.lib for Debug Build")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/debug/trace_processor.lib.tar.gz
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/debug
+        )
+    message("Decompress trace_processor.lib for Release Build")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/release/trace_processor.lib.tar.gz 
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/release
+        )
+    set_property(TARGET trace_processor PROPERTY
+                    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/release/trace_processor.lib")
 
-#   add_library(trace_processor STATIC IMPORTED)
-#   execute_process(
-#     COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/trace_processor.lib.tar.gz
-#     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows
-#     )
-#   set_property(TARGET trace_processor PROPERTY
-#                  IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/trace_processor.lib")
-#   set(PERFETTO_BUILD_HEADER_DIR ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/)
-    set(PEFFETTO_TRACE_READER_LIB "")
+    set_target_properties(trace_processor PROPERTIES
+                    IMPORTED_LOCATION_DEBUG "${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/debug/trace_processor.lib"
+                    IMPORTED_LOCATION_RELEASE "${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/release/trace_processor.lib"
+    )
+    set(PERFETTO_BUILD_HEADER_DIR ${CMAKE_SOURCE_DIR}/prebuild/perfetto/windows/)
+    add_subdirectory(perfetto_trace)
+    set(PEFFETTO_TRACE_READER_LIB "perfetto_trace_reader")
 else()
     add_library(trace_processor STATIC IMPORTED)
     execute_process(

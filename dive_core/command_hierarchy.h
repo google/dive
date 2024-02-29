@@ -240,7 +240,7 @@ private:
         kTopologyTypeCount
     };
 
-    static const uint8_t kMaxNumIbsBits = 4;
+    static const uint8_t kMaxNumIbsBits = 6;
     static_assert((1 << kMaxNumIbsBits) >= EmulatePM4::kMaxNumIbsPerSubmit, "Not enough bits!");
 
     union AuxInfo
@@ -256,7 +256,7 @@ private:
             uint32_t m_ib_type : 8;  // IbType
             uint32_t m_ib_index : kMaxNumIbsBits;
             uint32_t m_fully_captured : 1;
-            uint32_t : 19;
+            uint32_t : 17;
             uint32_t m_size_in_dwords;
         } ib_node;
 

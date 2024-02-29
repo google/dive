@@ -33,7 +33,7 @@ jobs:
 
   # Build the code
   build_Windows_Debug:
-    runs-on: windows-2019
+    runs-on: windows-2022
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -51,14 +51,14 @@ jobs:
           python3 -m pip install mako
       - name: Build the UI
         run: |
-          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 16 2019" -A x64 ..
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 ..
           cmake --build ./ --config Debug
       - name: Run tests
         run: |
           cd build; ctest --output-on-failure -C Debug
   # Build the code
   build_Windows_Release:
-    runs-on: windows-2019
+    runs-on: windows-2022
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -76,7 +76,7 @@ jobs:
           python3 -m pip install mako
       - name: Build the UI
         run: |
-          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 16 2019" -A x64 ..
+          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 ..
           cmake --build ./ --config Release
       - name: Run tests
         run: |

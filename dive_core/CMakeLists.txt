@@ -214,6 +214,7 @@ include_directories(${LibArchive_INCLUDE_DIRS}
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union
+  # 4127: conditional expression is constant
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201 /wd4127)
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE

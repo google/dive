@@ -855,6 +855,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     }
 
     // Cache packets to be shown on event nodes
+    // Only show top-level packet nodes, and not ones that are children of CP_SET_DRAW_STATE or
+    // CP_INDIRECT_BUFFER packets (i.e. when IB level > 2)
+    if (m_cur_ib_level <= 2)
     {
         // Cache all packets added (will cache until encounter next event/IB)
         m_packets.Add(opcode, va_addr, packet_node_index);

@@ -367,7 +367,15 @@ uint64_t alloc_gpuaddr(uint32_t size)
 /*****************************************************************************/
 static void install_fd(const char *path, int fd)
 {
-	assert(fd < ARRAY_SIZE(file_table));
+	// GOOGLE: Replace the original assert(fd < ARRAY_SIZE(file_table)); with following return
+	// This is to fix a crash while preloading libwrap.so from com.android.systemui 
+	// which calls ioctl(fd, SYNC_IOC_MERGE, &data) where the fd is larger than 1024
+	if (fd >= ARRAY_SIZE(file_table))
+	{
+		printf("\t\tWARNING: fd is larger than or equal to the ARRAY_SIZE(file_table), skip install_fd!\n");
+        return;
+	}
+	
 	if (!strcmp(path, "/dev/kgsl-3d0")) {
 #ifdef FAKE
 		assert(wrap_gpu_id() && wrap_gmem_size());

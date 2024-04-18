@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <dlfcn.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <cstring>
@@ -278,6 +279,26 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroySession(XrSession session)
     return XrResult::XR_ERROR_HANDLE_INVALID;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL
+ApiDiveLayerXrInitializeLoaderKHR(const XrLoaderInitInfoBaseHeaderKHR *loaderInitInfo)
+{
+    void *loaderHandle = dlopen("libopenxr_loader.so", RTLD_NOW);
+    if (loaderHandle == nullptr)
+    {
+        LOGE("failed dlopen libopenxr_loader.so.\n");
+        return XrResult::XR_ERROR_HANDLE_INVALID;
+    }
+
+    PFN_xrInitializeLoaderKHR pfnInitLoader = (PFN_xrInitializeLoaderKHR)
+    dlsym(loaderHandle, "xrInitializeLoaderKHR");
+    if (pfnInitLoader == nullptr)
+    {
+        LOGE("Failed to get function pointer of xrInitializeLoaderKHR.\n");
+        return XrResult::XR_ERROR_HANDLE_INVALID;
+    }
+    return pfnInitLoader(loaderInitInfo);
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance          instance,
                                                                  const char         *name,
                                                                  PFN_xrVoidFunction *function)
@@ -306,6 +327,11 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance     
     else if (func_name == "xrEndFrame")
     {
         *function = reinterpret_cast<PFN_xrVoidFunction>(ApiDiveLayerXrEndFrame);
+        return XR_SUCCESS;
+    }
+    else if (func_name == "xrInitializeLoaderKHR")
+    {
+        *function = reinterpret_cast<PFN_xrVoidFunction>(ApiDiveLayerXrInitializeLoaderKHR);
         return XR_SUCCESS;
     }
 

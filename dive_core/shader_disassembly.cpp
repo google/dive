@@ -17,6 +17,7 @@
 #include "shader_disassembly.h"
 #include <iostream>
 #include "dive_core/common/common.h"
+#include "pm4_info.h"
 
 #ifndef _MSC_VER
 extern "C"
@@ -43,7 +44,6 @@ bool Disassemble(const uint8_t*                             shader_memory,
 #ifndef _MSC_VER
 std::string DisassembleA3XX(const uint8_t*       data,
                             size_t               max_size,
-                            uint32_t             chip,
                             struct shader_stats* stats,
                             enum debug_t         debug)
 {
@@ -56,7 +56,7 @@ std::string DisassembleA3XX(const uint8_t*       data,
                                max_size / sizeof(uint32_t),
                                0,
                                disasm_file,
-                               chip * 100,
+                               GetGPUID(),
                                stats);
     ((void)(res));  // avoid unused variable
     DIVE_ASSERT(res != -1);
@@ -72,11 +72,8 @@ std::string DisassembleA3XX(const uint8_t*       data,
 void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, ILog* log_ptr)
 {
 #ifndef _MSC_VER
-    // TODO(bjoeris): this should come from the file instead of hard-coded.
-    uint32_t chip = 0x43050b00;
-
     struct shader_stats stats;
-    std::string         disasm = DisassembleA3XX(data, max_size, chip, &stats, PRINT_RAW);
+    std::string         disasm = DisassembleA3XX(data, max_size, &stats, PRINT_RAW);
     std::istringstream  disasm_istr(disasm);
     unsigned            opc_cat = 0;
     unsigned            n = 0;
@@ -108,7 +105,7 @@ void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, I
         m_instructions_raw[n] = (static_cast<uint64_t>(dword1) << 32) | dword0;
     }
     m_gpr_count = (stats.fullreg + 3) / 4;
-    m_listing = DisassembleA3XX(data, max_size, chip, &stats, PRINT_STATS);
+    m_listing = DisassembleA3XX(data, max_size, &stats, PRINT_STATS);
 #endif
 }
 

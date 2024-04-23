@@ -1782,16 +1782,18 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
 {
     // This version of AppendRegNodes takes in a raw buffer consisting of register offset + value
     // pairs
-    DIVE_ASSERT(dword_count % 2 == 0);
-    for (uint32_t i = 0; i < dword_count; i += 2)
+    uint32_t dword = 0;
+    while (dword < dword_count)
     {
-        struct
+        struct RegPair
         {
             uint32_t m_reg_offset;
             uint32_t m_reg_value;
-        } reg_pair;
-        uint64_t pair_addr = va_addr + i * sizeof(uint32_t);
+        };
+        RegPair  reg_pair;
+        uint64_t pair_addr = va_addr + dword * sizeof(uint32_t);
         DIVE_VERIFY(mem_manager.CopyMemory(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
+        dword += 2;
 
         const RegInfo *reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
 
@@ -1801,13 +1803,28 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         if (reg_info_ptr == nullptr)
             reg_info_ptr = &temp;
 
-        DIVE_ASSERT(!reg_info_ptr->m_is_64_bit);
+        uint64_t reg_value = reg_pair.m_reg_value;
+        if (reg_info_ptr->m_is_64_bit)
+        {
+            RegPair  new_reg_pair;
+            uint64_t new_pair_addr = va_addr + dword * sizeof(uint32_t);
+            DIVE_VERIFY(mem_manager.CopyMemory(&new_reg_pair,
+                                               submit_index,
+                                               new_pair_addr,
+                                               sizeof(new_reg_pair)));
+
+            // Sometimes the upper 32-bits are not set
+            // Probably because they're 0s and there's no need to set it
+            if (new_reg_pair.m_reg_offset == reg_pair.m_reg_offset + 1)
+            {
+                dword += 2;
+                reg_value |= ((uint64_t)new_reg_pair.m_reg_value) << 32;
+            }
+        }
 
         // Create the register node, as well as all its children nodes that describe the various
         // fields set in the single 32-bit register
-        uint64_t reg_node_index = AddRegisterNode(reg_pair.m_reg_offset,
-                                                  reg_pair.m_reg_value,
-                                                  reg_info_ptr);
+        uint64_t reg_node_index = AddRegisterNode(reg_pair.m_reg_offset, reg_value, reg_info_ptr);
 
         // Add it as child to packet node
         AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);

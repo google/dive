@@ -565,6 +565,10 @@ static void log_cmdaddr(int device_fd, uint64_t gpuaddr, uint32_t sizedwords)
 	rd_write_section(device_fd, RD_CMDSTREAM_ADDR, sect, sizeof(sect));
 }
 
+// GOOGLE: Need this mutex to make sure only 1 thread can dump bos 
+// This is required since we assume RD_GPUADDR is always followed by RD_BUFFER_CONTENTS
+static pthread_mutex_t bo_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static void dump_bos(int fd)
 {
 	// GOOGLE: Dump BOs only when capturing flag is enabled.
@@ -574,7 +578,8 @@ static void dump_bos(int fd)
 
 	PROLOG(mmap);
 	PROLOG(munmap);
-
+	// GOOGLE: lock the bo mutex
+	pthread_mutex_lock(&bo_lock);
 	struct buffer *buf;
 	struct list *buffers_of_interest = wrap_get_buffers_of_interest(fd);
 	assert(buffers_of_interest);
@@ -607,6 +612,8 @@ static void dump_bos(int fd)
 			buf->hostptr = NULL;
 		}
 	}
+	// GOOGLE: unlock the bo mutex
+	pthread_mutex_unlock(&bo_lock);
 }
 
 static void dump_ib_prep(int device_fd)

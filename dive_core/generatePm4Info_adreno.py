@@ -140,6 +140,7 @@ const char       *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name);
 void              SetGPUID(uint32_t gpu_id);
+uint32_t          GetGPUID();
 GPUVariantType    GetGPUVariantType();
 bool              IsFieldEnabled(const RegField *field);
 """)
@@ -164,6 +165,7 @@ static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
 static std::vector<std::unordered_map<uint32_t, const char*>> g_sEnumReflection;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
+static uint32_t g_sGPU_id = 0;
 
 std::string GetGPUStr(GPUVariantType variant)
 {
@@ -921,14 +923,21 @@ const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name)
 
 void SetGPUID(uint32_t gpu_id)
 {
-    if((gpu_id >= 2) && (gpu_id <= 7))
+    g_sGPU_id = gpu_id;
+    uint32_t gpu_series = gpu_id / 100;
+    if((gpu_series >= 2) && (gpu_series <= 7))
     {
-        g_sGPU_variant = static_cast<GPUVariantType>(1 << (gpu_id - 2));
+        g_sGPU_variant = static_cast<GPUVariantType>(1 << (gpu_series - 2));
     }
     else
     {
         g_sGPU_variant = kGPUVariantNone;
     }
+}
+
+uint32_t GetGPUID()
+{
+    return g_sGPU_id;
 }
 
 GPUVariantType GetGPUVariantType()

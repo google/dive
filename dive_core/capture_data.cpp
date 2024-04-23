@@ -1137,19 +1137,26 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             DIVE_ASSERT(block_info.m_data_size == 4);
             uint32_t gpu_id = 0;
             capture_file.read(reinterpret_cast<char *>(&gpu_id), block_info.m_data_size);
-            SetGPUID(gpu_id / 100);
+            SetGPUID(gpu_id);
         }
         break;
         case RD_CHIP_ID:
         {
-            DIVE_ASSERT(block_info.m_data_size == 8);
-            fd_dev_id dev_id;
-            capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id), block_info.m_data_size);
-            auto info = fd_dev_info(&dev_id);
-            // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid values
-            if (info != nullptr)
+            // If it wasn't set already by a RD_GPU_ID
+            if (GetGPUID() == 0)
             {
-                SetGPUID(info->chip);
+                DIVE_ASSERT(block_info.m_data_size == 8);
+                fd_dev_id dev_id;
+                capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id),
+                                  block_info.m_data_size);
+                dev_id.gpu_id = 0;
+                auto info = fd_dev_info(&dev_id);
+                // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid
+                // values
+                if (info != nullptr)
+                {
+                    SetGPUID(info->chip * 100);
+                }
             }
         }
         break;

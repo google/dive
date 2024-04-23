@@ -280,7 +280,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
                     DIVE_ASSERT(memory_block.m_va_addr == prev_addr);
 
                     // Use whichever one is bigger and get rid of the smaller one
-                    if (memory_block.m_data_size > temp_memory_blocks.back().m_data_size)
+                    if (memory_block.m_data_size >= temp_memory_blocks.back().m_data_size)
                     {
                         // Replace previous memory block with current one
                         delete[] temp_memory_blocks.back().m_data_ptr;

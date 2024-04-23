@@ -1143,7 +1143,8 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
         case RD_CHIP_ID:
         {
             // If it wasn't set already by a RD_GPU_ID
-            if (GetGPUID() == 0)
+            // Or if it was an invalid gpu_id, which leads to a kGPUVariantNone
+            if ((GetGPUID() == 0) || (GetGPUVariantType() == kGPUVariantNone))
             {
                 DIVE_ASSERT(block_info.m_data_size == 8);
                 fd_dev_id dev_id;

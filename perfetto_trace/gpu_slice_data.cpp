@@ -74,7 +74,10 @@ std::vector<int64_t> GpuSliceDataParser::ParseSubmissionIds(int64_t start_ts, in
         assert(value.type == ptp::SqlValue::Type::kLong);
         submission_ids.push_back(value.AsLong());
     }
-    assert(!submission_ids.empty());
+
+    // TODO(wangra): Disable this assert for now since GLES applicaitons do not have vkQueueSubmit,
+    // and there is no event for glFlush
+    // assert(!submission_ids.empty());
 
     return submission_ids;
 }

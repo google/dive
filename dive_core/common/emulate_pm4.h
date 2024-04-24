@@ -214,7 +214,7 @@ public:
         kTotalIbLevels
     };
 
-    static const uint32_t kMaxPendingIbs = 100;
+    static const uint32_t kMaxPendingIbs = 150;
     EmulatePM4();
 
     // Not sure what the upper bound is. 64 seems reasonably big.

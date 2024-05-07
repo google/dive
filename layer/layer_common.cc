@@ -20,6 +20,9 @@ limitations under the License.
 #include <cstdlib>
 #include <cstring>
 
+#include "capture_service/log.h"
+#include "capture_service/server.h"
+
 namespace DiveLayer
 {
 
@@ -48,4 +51,30 @@ bool IsLibwrapLoaded()
 #endif
     return loaded;
 }
+
+ServerRunner::ServerRunner()
+{
+    is_libwrap_loaded = IsLibwrapLoaded();
+    LOGI("libwrap loaded: %d", is_libwrap_loaded);
+    if (is_libwrap_loaded)
+    {
+        server_thread = std::thread(Dive::server_main);
+    }
+}
+
+ServerRunner::~ServerRunner()
+{
+    if (is_libwrap_loaded && server_thread.joinable())
+    {
+        LOGI("Wait for server thread to join");
+        server_thread.join();
+    }
+}
+
+ServerRunner &GetServerRunner()
+{
+    static ServerRunner runner;
+    return runner;
+}
+
 }  // namespace DiveLayer

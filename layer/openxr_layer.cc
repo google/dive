@@ -20,11 +20,9 @@ limitations under the License.
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <unordered_map>
 
 #include "capture_service/log.h"
-#include "capture_service/server.h"
 #include "capture_service/trace_mgr.h"
 #include "layer_common.h"
 #include "loader_interfaces.h"
@@ -52,25 +50,11 @@ struct XrInstanceData
 {
     XrInstance               instance;
     XrGeneratedDispatchTable dispatch_table;
-    bool                     is_libwrap_loaded;
-    std::thread              server_thread;
+    ServerRunner            &server;
 
-    XrInstanceData()
+    XrInstanceData() :
+        server(GetServerRunner())
     {
-        is_libwrap_loaded = IsLibwrapLoaded();
-        LOGI("libwrap loaded: %d", is_libwrap_loaded);
-        if (is_libwrap_loaded)
-        {
-            server_thread = std::thread(Dive::server_main);
-        }
-    }
-    ~XrInstanceData()
-    {
-        if (is_libwrap_loaded && server_thread.joinable())
-        {
-            LOGI("Wait for server thread to join");
-            server_thread.join();
-        }
     }
 };
 
@@ -286,6 +270,7 @@ ApiDiveLayerXrInitializeLoaderKHR(const XrLoaderInitInfoBaseHeaderKHR *loaderIni
     // It is unclear why we can skip calling XrInitializeLoaderKHR from the loader, need to
     // investigate (it is possible that the negociation happens before the XrInitializeLoaderKHR is
     // call in system ui)
+    LOGD("ApiDiveLayerXrInitializeLoaderKHR");
     return XrResult::XR_SUCCESS;
 }
 

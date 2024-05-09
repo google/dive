@@ -214,12 +214,13 @@ public:
         kTotalIbLevels
     };
 
-    static const uint32_t kMaxPendingIbs = 100;
+    static const uint32_t kMaxPendingIbs = 150;
     EmulatePM4();
 
-    // Emulate a submit
-    static const uint32_t kMaxNumIbsPerSubmit = 16;
+    // Not sure what the upper bound is. 64 seems reasonably big.
+    static const uint32_t kMaxNumIbsPerSubmit = 64;
 
+    // Emulate a submit
     bool ExecuteSubmit(IEmulateCallbacks        &callbacks,
                        const IMemoryManager     &mem_manager,
                        uint32_t                  submit_index,
@@ -306,6 +307,12 @@ private:
     bool AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &callbacks) const;
 
     uint32_t CalcParity(uint32_t val);
+
+    // Only used by CP_START_BIN/CP_END_BIN
+    mutable uint64_t m_cp_start_bin_address = UINT64_MAX;
+    mutable uint64_t m_prefix_start_address = UINT64_MAX;
+    mutable uint32_t m_prefix_block_dword_size = 0;
+    mutable uint32_t m_prefix_block_count = 0;
 };
 
 //--------------------------------------------------------------------------------------------------

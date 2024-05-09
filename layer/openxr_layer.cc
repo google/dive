@@ -20,11 +20,9 @@ limitations under the License.
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <unordered_map>
 
 #include "capture_service/log.h"
-#include "capture_service/server.h"
 #include "capture_service/trace_mgr.h"
 #include "layer_common.h"
 #include "loader_interfaces.h"
@@ -52,25 +50,11 @@ struct XrInstanceData
 {
     XrInstance               instance;
     XrGeneratedDispatchTable dispatch_table;
-    bool                     is_libwrap_loaded;
-    std::thread              server_thread;
+    ServerRunner            &server;
 
-    XrInstanceData()
+    XrInstanceData() :
+        server(GetServerRunner())
     {
-        is_libwrap_loaded = IsLibwrapLoaded();
-        LOGI("libwrap loaded: %d", is_libwrap_loaded);
-        if (is_libwrap_loaded)
-        {
-            server_thread = std::thread(Dive::server_main);
-        }
-    }
-    ~XrInstanceData()
-    {
-        if (is_libwrap_loaded && server_thread.joinable())
-        {
-            LOGI("Wait for server thread to join");
-            server_thread.join();
-        }
     }
 };
 
@@ -278,6 +262,18 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroySession(XrSession session)
     return XrResult::XR_ERROR_HANDLE_INVALID;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL
+ApiDiveLayerXrInitializeLoaderKHR(const XrLoaderInitInfoBaseHeaderKHR *loaderInitInfo)
+{
+    // TODO(wangra): this is a hack fix for systemui
+    // SystemUI statically link openxr loader, so we cannot get the func address from the loader
+    // It is unclear why we can skip calling XrInitializeLoaderKHR from the loader, need to
+    // investigate (it is possible that the negociation happens before the XrInitializeLoaderKHR is
+    // call in system ui)
+    LOGD("ApiDiveLayerXrInitializeLoaderKHR");
+    return XrResult::XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance          instance,
                                                                  const char         *name,
                                                                  PFN_xrVoidFunction *function)
@@ -306,6 +302,11 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance     
     else if (func_name == "xrEndFrame")
     {
         *function = reinterpret_cast<PFN_xrVoidFunction>(ApiDiveLayerXrEndFrame);
+        return XR_SUCCESS;
+    }
+    else if (func_name == "xrInitializeLoaderKHR")
+    {
+        *function = reinterpret_cast<PFN_xrVoidFunction>(ApiDiveLayerXrInitializeLoaderKHR);
         return XR_SUCCESS;
     }
 

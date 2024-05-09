@@ -240,7 +240,7 @@ private:
         kTopologyTypeCount
     };
 
-    static const uint8_t kMaxNumIbsBits = 4;
+    static const uint8_t kMaxNumIbsBits = 6;
     static_assert((1 << kMaxNumIbsBits) >= EmulatePM4::kMaxNumIbsPerSubmit, "Not enough bits!");
 
     union AuxInfo
@@ -256,7 +256,7 @@ private:
             uint32_t m_ib_type : 8;  // IbType
             uint32_t m_ib_index : kMaxNumIbsBits;
             uint32_t m_fully_captured : 1;
-            uint32_t : 19;
+            uint32_t : 17;
             uint32_t m_size_in_dwords;
         } ib_node;
 
@@ -539,16 +539,14 @@ private:
     const CaptureData *m_capture_data_ptr = nullptr;
 
     // Parsing State
-    std::vector<uint64_t> m_marker_stack;  // Current marker begin/end stack
     std::vector<uint64_t>
     m_cmd_begin_packet_node_indices;  // Potential packets node for vkBeginCommandBuffer
     std::vector<uint64_t>
     m_cmd_begin_event_node_indices;  // Potential event node for vkBeginCommandBuffer
-    static constexpr uint64_t kInvalidRenderMarkerIndex = static_cast<uint64_t>(-1);
+    static constexpr uint64_t kInvalidRenderMarkerIndex = UINT64_MAX;
     uint64_t m_render_marker_index = kInvalidRenderMarkerIndex;  // Current render marker index,
                                                                  // there is no nested render
                                                                  // marker, so no need to use stack
-
     uint64_t              m_last_user_push_parent_node = UINT64_MAX;
     std::vector<uint64_t> m_vulkan_cmd_stack;  // Command buffer levels, first level is primary and
                                                // second level secondary command buffer
@@ -556,9 +554,8 @@ private:
     m_node_parent_info;  // Node parent index table, used to find which events need to be moved for
                          // VkBeginCommandBuffer.
 
-    std::vector<uint64_t> m_internal_marker_stack;  // Current internal marker begin/end stack
-    std::vector<uint64_t> m_ib_stack;               // Tracks current IB stack
-    std::vector<uint64_t> m_renderpass_stack;       // render pass marker begin/end stack
+    std::vector<uint64_t> m_ib_stack;          // Tracks current IB stack
+    std::vector<uint64_t> m_renderpass_stack;  // render pass marker begin/end stack
 
     // Cache the most recent cp_set_draw_state node, to append IBs to later
     SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs] = {};

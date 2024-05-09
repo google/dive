@@ -117,7 +117,8 @@ AndroidApplication::AndroidApplication(AndroidDevice  &dev,
     m_dev(dev),
     m_package(std::move(package)),
     m_type(type),
-    m_started(false)
+    m_started(false),
+    m_is_debuggable(false)
 {
 }
 

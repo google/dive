@@ -140,6 +140,7 @@ const char       *GetEnumString(uint32_t enum_handle, uint32_t val);
 const PacketInfo *GetPacketInfo(uint32_t op_code);
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name);
 void              SetGPUID(uint32_t gpu_id);
+uint32_t          GetGPUID();
 GPUVariantType    GetGPUVariantType();
 bool              IsFieldEnabled(const RegField *field);
 """)
@@ -154,22 +155,17 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
 #include <cstring>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "dive_core/common/common.h"
 
-static std::map<uint32_t, const char*> g_sOpCodeToString;
-static std::map<uint32_t, RegInfo> g_sRegInfo;
-struct cmp_str
-{
-    bool operator()(const std::string& a, const std::string& b) const
-    {
-        return std::strcmp(a.c_str(), b.c_str()) < 0;
-    }
-};
-static std::map<std::string, uint32_t, cmp_str> g_sRegNameToIndex;
-static std::vector<std::map<uint32_t, const char*>> g_sEnumReflection;
+static std::unordered_map<uint32_t, const char*> g_sOpCodeToString;
+static std::unordered_map<uint32_t, RegInfo> g_sRegInfo;
+static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
+static std::vector<std::unordered_map<uint32_t, const char*>> g_sEnumReflection;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
+static uint32_t g_sGPU_id = 0;
 
 std::string GetGPUStr(GPUVariantType variant)
 {
@@ -264,38 +260,7 @@ class RegAttributes():
   radix = 0
 
 # ---------------------------------------------------------------------------------------
-def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, attributes: RegAttributes):
-    is_64_string = "0"
-    if attributes.is_64 is True:
-      is_64_string = "1"
-
-    # if a 'type' attrib is available, then check for a custom bitset
-    enum_handle = "UINT8_MAX"
-    if attributes.type:
-      # if it isn't one of the standard types, then it must be a custom bitset or an enum
-      if not isBuiltInType(attributes.type):
-        bitfields = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+attributes.type+'"]')
-
-        # Not found in the A6XX domain. Some of the bitsets are defined in the root.
-        if bitfields is None:
-          bitfields = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+attributes.type+'"]')
-
-        # It's not a bitset. Let's sanity check that it's a top-level enum!
-        if bitfields is None:
-          bitfields = []  # Create an empty list instead of a "None" object
-          enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+attributes.type+'"]')
-          if enum is None:
-            raise Exception("Not able to find bitset/enum " + attributes.type + " for register " + attributes.name)
-          # Now that we know it's an enum, let's get the enum_handle for it!
-          if attributes.type not in enum_index_dict:
-            raise Exception("Enumeration %s not found!" % attributes.type)
-          if enum_index_dict[attributes.type] > 256:
-            raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[attributes.type])
-          enum_handle = str(enum_index_dict[attributes.type])
-
-    variants_bitfield = GetGPUVariantsBitField(attributes.variants)
-    pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, variants_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
-
+def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
     # Iterate through optional bitfields
     for bitfield in attributes.bitfields:
       if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
@@ -352,7 +317,51 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_ind
           mask,
           name
         ))
-    pm4_info_file.write("} };\n")
+
+# ---------------------------------------------------------------------------------------
+def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, attributes: RegAttributes):
+    is_64_string = "0"
+    if attributes.is_64 is True:
+      is_64_string = "1"
+
+    # if a 'type' attrib is available, then check for a custom bitset
+    enum_handle = "UINT8_MAX"
+    if attributes.type:
+      # if it isn't one of the standard types, then it must be a custom bitset or an enum
+      if not isBuiltInType(attributes.type):
+        bitfields = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+attributes.type+'"]')
+
+        # Not found in the A6XX domain. Some of the bitsets are defined in the root.
+        if bitfields is None:
+          bitfields = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+attributes.type+'"]')
+
+        # It's not a bitset. Let's sanity check that it's a top-level enum!
+        if bitfields is None:
+          bitfields = []  # Create an empty list instead of a "None" object
+          enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+attributes.type+'"]')
+          if enum is None:
+            raise Exception("Not able to find bitset/enum " + attributes.type + " for register " + attributes.name)
+          # Now that we know it's an enum, let's get the enum_handle for it!
+          if attributes.type not in enum_index_dict:
+            raise Exception("Enumeration %s not found!" % attributes.type)
+          if enum_index_dict[attributes.type] > 256:
+            raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[attributes.type])
+          enum_handle = str(enum_index_dict[attributes.type])
+
+    variants_bitfield = GetGPUVariantsBitField(attributes.variants)
+    if (variants_bitfield != 0):
+        # kGPUVariantsBits has 6 bits 
+        for i in range(6): 
+            cur_variant_bitfield = (1<<i)
+            if cur_variant_bitfield & variants_bitfield:
+                pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+                AppendBitfield(pm4_info_file, enum_index_dict, attributes)
+                pm4_info_file.write("} };\n")
+    else:
+        pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits)] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+        AppendBitfield(pm4_info_file, enum_index_dict, attributes)
+        pm4_info_file.write("} };\n")  
+    
 
 # ---------------------------------------------------------------------------------------
 def getBitWidth(reg):
@@ -825,25 +834,19 @@ const char *GetOpCodeString(uint32_t op_code)
 
 const RegInfo *GetRegInfo(uint32_t reg)
 {
-    auto it = std::find_if(g_sRegInfo.begin(),
-                           g_sRegInfo.end(),
-                           [&](const std::pair<uint32_t, RegInfo> &v) {
-                               const uint32_t reg_offset_v = v.first >> kGPUVariantsBits;
-
-                               const uint32_t shift_bits = 32 - kGPUVariantsBits;
-                               const uint32_t gpu_variants_mask_v = v.first << shift_bits >>
-                                                                    shift_bits;
-                               const bool same_offset = (reg == reg_offset_v);
-                               // Either the gpu variants is not explicit declared (which means all
-                               // gpus should support this) or the mask bits should match current
-                               // variant
-                               const bool match_gpu = ((gpu_variants_mask_v == 0) ||
-                                                       (g_sGPU_variant & gpu_variants_mask_v) != 0);
-
-                               return (same_offset && match_gpu);
-                           });
+    // check without variant as key
+    uint32_t key = reg << kGPUVariantsBits;
+    auto it = g_sRegInfo.find(key);
     if (it == g_sRegInfo.end())
-        return nullptr;
+    {
+        // check with variant as key
+        key |= g_sGPU_variant;
+        it = g_sRegInfo.find(key);
+        if (it == g_sRegInfo.end())
+        {
+            return nullptr;
+        }
+    }
     return &it->second;
 }
 
@@ -893,7 +896,7 @@ const char *GetEnumString(uint32_t enum_handle, uint32_t val)
 {
     if (g_sEnumReflection.size() <= enum_handle)
         return nullptr;
-    const std::map<uint32_t, const char*> &val_to_str_map = g_sEnumReflection[enum_handle];
+    const std::unordered_map<uint32_t, const char*> &val_to_str_map = g_sEnumReflection[enum_handle];
     if (val_to_str_map.find(val) == val_to_str_map.end())
         return nullptr;
     return val_to_str_map.find(val)->second;
@@ -920,14 +923,21 @@ const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name)
 
 void SetGPUID(uint32_t gpu_id)
 {
-    if((gpu_id >= 2) && (gpu_id <= 7))
+    g_sGPU_id = gpu_id;
+    uint32_t gpu_series = gpu_id / 100;
+    if((gpu_series >= 2) && (gpu_series <= 7))
     {
-        g_sGPU_variant = static_cast<GPUVariantType>(1 << (gpu_id - 2));
+        g_sGPU_variant = static_cast<GPUVariantType>(1 << (gpu_series - 2));
     }
     else
     {
         g_sGPU_variant = kGPUVariantNone;
     }
+}
+
+uint32_t GetGPUID()
+{
+    return g_sGPU_id;
 }
 
 GPUVariantType GetGPUVariantType()

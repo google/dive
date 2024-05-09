@@ -270,13 +270,26 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
             }
             else
             {
-                if (memory_block.m_va_addr != prev_addr || memory_block.m_data_size != prev_size)
+                // Check if it's a completely new block
+                if (memory_block.m_va_addr >= (prev_addr + prev_size))
                     temp_memory_blocks.push_back(memory_block);
                 else
                 {
-                    // Replace previous memory block with the more updated current version
-                    delete[] temp_memory_blocks.back().m_data_ptr;
-                    temp_memory_blocks.back() = m_memory_blocks[i];
+                    // It's EITHER a new block or it has the same address as the previous block
+                    // (i.e. whole or partial overwrite)
+                    DIVE_ASSERT(memory_block.m_va_addr == prev_addr);
+
+                    // Use whichever one is bigger and get rid of the smaller one
+                    if (memory_block.m_data_size >= temp_memory_blocks.back().m_data_size)
+                    {
+                        // Replace previous memory block with current one
+                        delete[] temp_memory_blocks.back().m_data_ptr;
+                        temp_memory_blocks.back() = m_memory_blocks[i];
+                    }
+                    else
+                    {
+                        delete[] m_memory_blocks[i].m_data_ptr;
+                    }
                 }
             }
             prev_addr = memory_block.m_va_addr;
@@ -865,7 +878,7 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
         auto perfetto_trace_path = std::filesystem::path(file_name_ + ".perfetto");
         if (std::filesystem::exists(perfetto_trace_path))
         {
-            CaptureData::LoadResult res = LoadPerfettoFile(perfetto_trace_path.c_str());
+            CaptureData::LoadResult res = LoadPerfettoFile(perfetto_trace_path.string().c_str());
             if (res != CaptureData::LoadResult::kSuccess)
             {
                 return res;
@@ -1046,10 +1059,6 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
 
     struct BlockInfo
     {
-        // The first 2 dwords are set to 0xffffffff
-        uint32_t m_max_uint32_1;
-        uint32_t m_max_uint32_2;
-
         uint32_t m_block_type;
 
         // The number of bytes that follow this header.
@@ -1060,10 +1069,15 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     uint64_t  cur_gpu_addr = UINT64_MAX;
     uint32_t  cur_size = UINT32_MAX;
     bool      is_new_submit = false;
+    bool      skip_commands = false;
     while (capture_file.read((char *)&block_info, sizeof(block_info)) > 0)
     {
-        if (block_info.m_max_uint32_1 != 0xffffffff || block_info.m_max_uint32_2 != 0xffffffff)
-            return LoadResult::kCorruptData;
+        // Read and discard any trailing 0xffffffff padding from previous block
+        while (block_info.m_block_type == 0xffffffff && block_info.m_data_size == 0xffffffff)
+        {
+            if (capture_file.read((char *)&block_info, sizeof(block_info)) <= 0)
+                return LoadResult::kCorruptData;
+        }
 
         switch (block_info.m_block_type)
         {
@@ -1076,7 +1090,10 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             is_new_submit = true;
             break;
         case RD_CMDSTREAM_ADDR:
-            if (!LoadCmdStreamBlockAdreno(capture_file, block_info.m_data_size, is_new_submit))
+            if (!LoadCmdStreamBlockAdreno(capture_file,
+                                          block_info.m_data_size,
+                                          is_new_submit,
+                                          skip_commands))
                 return LoadResult::kFileIoError;
             is_new_submit = false;
             break;
@@ -1087,9 +1104,22 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             if (!LoadMemoryBlockAdreno(capture_file, cur_gpu_addr, cur_size))
                 return LoadResult::kFileIoError;
             break;
+        case RD_CMD:
+        {
+            // Skip parsing commands from system processes
+            skip_commands = false;
+            char *process_name = new char[block_info.m_data_size];
+            if (!capture_file.read((char *)process_name, block_info.m_data_size))
+                return LoadResult::kFileIoError;
+            skip_commands |= (strcmp(process_name, "fdperf") == 0);
+            skip_commands |= (strcmp(process_name, "chrome") == 0);
+            skip_commands |= (strcmp(process_name, "surfaceflinger") == 0);
+            skip_commands |= ((char *)process_name)[0] == 'X';
+            delete[] process_name;
+            break;
+        }
         case RD_NONE:
         case RD_TEST:
-        case RD_CMD:
         case RD_CONTEXT:
         case RD_CMDSTREAM:
         case RD_PARAM:
@@ -1107,19 +1137,27 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             DIVE_ASSERT(block_info.m_data_size == 4);
             uint32_t gpu_id = 0;
             capture_file.read(reinterpret_cast<char *>(&gpu_id), block_info.m_data_size);
-            SetGPUID(gpu_id / 100);
+            SetGPUID(gpu_id);
         }
         break;
         case RD_CHIP_ID:
         {
-            DIVE_ASSERT(block_info.m_data_size == 8);
-            fd_dev_id dev_id;
-            capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id), block_info.m_data_size);
-            auto info = fd_dev_info(&dev_id);
-            // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid values
-            if (info != nullptr)
+            // If it wasn't set already by a RD_GPU_ID
+            // Or if it was an invalid gpu_id, which leads to a kGPUVariantNone
+            if ((GetGPUID() == 0) || (GetGPUVariantType() == kGPUVariantNone))
             {
-                SetGPUID(info->chip);
+                DIVE_ASSERT(block_info.m_data_size == 8);
+                fd_dev_id dev_id;
+                capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id),
+                                  block_info.m_data_size);
+                dev_id.gpu_id = 0;
+                auto info = fd_dev_info(&dev_id);
+                // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid
+                // values
+                if (info != nullptr)
+                {
+                    SetGPUID(info->chip * 100);
+                }
             }
         }
         break;
@@ -1540,7 +1578,8 @@ bool CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_a
 //--------------------------------------------------------------------------------------------------
 bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
                                            uint32_t    block_size,
-                                           bool        create_new_submit)
+                                           bool        create_new_submit,
+                                           bool        skip_commands)
 {
     uint64_t gpu_addr;
     uint32_t size_in_dwords;
@@ -1550,7 +1589,7 @@ bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
     IndirectBufferInfo ib_info;
     ib_info.m_va_addr = gpu_addr;
     ib_info.m_size_in_dwords = size_in_dwords;
-    ib_info.m_skip = false;
+    ib_info.m_skip = skip_commands;
     if (create_new_submit)
     {
         std::vector<IndirectBufferInfo> ibs;

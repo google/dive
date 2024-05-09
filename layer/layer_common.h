@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include <cstdint>
+#include <thread>
 
 namespace DiveLayer
 {
@@ -27,5 +28,18 @@ inline uintptr_t DataKey(const void *object)
 }
 
 bool IsLibwrapLoaded();
+
+class ServerRunner
+{
+public:
+    ServerRunner();
+    ~ServerRunner();
+
+private:
+    bool        is_libwrap_loaded;
+    std::thread server_thread;
+};
+
+ServerRunner &GetServerRunner();
 
 }  // namespace DiveLayer

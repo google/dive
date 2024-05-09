@@ -63,5 +63,8 @@ extern void SetCaptureName(const char* name, const char* frame_num)
 	if(frame_num) {
 		setenv("TESTNUM", frame_num, 1);
 	}
+	// Cap dump size per buffer as 128K.
+	// TODO(renfeng): find out doc where states the max size of command stream.
+	setenv("WRAP_BUF_LEN_CAP", "131072", 1);
 }
 

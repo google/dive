@@ -410,71 +410,67 @@ private:
 
     uint32_t GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords);
 
-    std::string GetEventString(const IMemoryManager &mem_manager,
-                               uint32_t              submit_index,
-                               uint64_t              va_addr,
-                               uint32_t              opcode);
-    void        AppendRegNodes(const IMemoryManager &mem_manager,
-                               uint32_t              submit_index,
-                               uint64_t              va_addr,
-                               Pm4Type4Header        header,
-                               uint64_t              packet_node_index);
-    void        AppendRegNodes(const IMemoryManager &mem_manager,
-                               uint32_t              submit_index,
-                               uint64_t              va_addr,
-                               uint32_t              dword_count,
-                               uint64_t              packet_node_index);
-    void        AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
-                                         uint32_t                     submit_index,
-                                         uint64_t                     va_addr,
-                                         const PM4_PFP_TYPE_3_HEADER &header,
-                                         uint64_t                     packet_node_index);
-    void        AppendIBFieldNodes(const char                  *suffix,
-                                   const IMemoryManager        &mem_manager,
-                                   uint32_t                     submit_index,
-                                   uint64_t                     va_addr,
-                                   bool                         is_ce_packet,
-                                   const PM4_PFP_TYPE_3_HEADER &header,
-                                   uint64_t                     packet_node_index);
-    void        AppendLoadRegNodes(const IMemoryManager        &mem_manager,
-                                   uint32_t                     submit_index,
-                                   uint64_t                     va_addr,
-                                   uint32_t                     reg_space_start,
-                                   const PM4_PFP_TYPE_3_HEADER &header,
-                                   uint64_t                     packet_node_index);
-    void        AppendLoadRegIndexNodes(const IMemoryManager        &mem_manager,
-                                        uint32_t                     submit_index,
-                                        uint64_t                     va_addr,
-                                        uint32_t                     reg_space_start,
-                                        const PM4_PFP_TYPE_3_HEADER &header,
-                                        uint64_t                     packet_node_index);
-    void        AppendEventWriteFieldNodes(const IMemoryManager        &mem_manager,
-                                           uint32_t                     submit_index,
-                                           uint64_t                     va_addr,
-                                           const PM4_PFP_TYPE_3_HEADER &header,
-                                           const PacketInfo            *packet_info_ptr,
-                                           uint64_t                     packet_node_index);
-    void        AppendPacketFieldNodes(const IMemoryManager &mem_manager,
-                                       uint32_t              submit_index,
-                                       uint64_t              va_addr,
-                                       uint32_t              dword_count,
-                                       bool                  append_extra_dwords,
-                                       const PacketInfo     *packet_info_ptr,
-                                       uint64_t              packet_node_index,
-                                       const char           *prefix = "");
-    void        AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager,
-                                             uint32_t              submit_index,
-                                             uint64_t              va_addr,
-                                             uint64_t              packet_node_index);
-    void        AppendMemRegNodes(const IMemoryManager &mem_manager,
-                                  uint32_t              submit_index,
-                                  uint64_t              va_addr,
-                                  uint64_t              packet_node_index);
-    void        CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
-                                           uint32_t              submit_index,
-                                           uint64_t              va_addr,
-                                           uint64_t              set_draw_state_node_index,
-                                           uint32_t              header);
+    void AppendRegNodes(const IMemoryManager &mem_manager,
+                        uint32_t              submit_index,
+                        uint64_t              va_addr,
+                        Pm4Type4Header        header,
+                        uint64_t              packet_node_index);
+    void AppendRegNodes(const IMemoryManager &mem_manager,
+                        uint32_t              submit_index,
+                        uint64_t              va_addr,
+                        uint32_t              dword_count,
+                        uint64_t              packet_node_index);
+    void AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
+                                  uint32_t                     submit_index,
+                                  uint64_t                     va_addr,
+                                  const PM4_PFP_TYPE_3_HEADER &header,
+                                  uint64_t                     packet_node_index);
+    void AppendIBFieldNodes(const char                  *suffix,
+                            const IMemoryManager        &mem_manager,
+                            uint32_t                     submit_index,
+                            uint64_t                     va_addr,
+                            bool                         is_ce_packet,
+                            const PM4_PFP_TYPE_3_HEADER &header,
+                            uint64_t                     packet_node_index);
+    void AppendLoadRegNodes(const IMemoryManager        &mem_manager,
+                            uint32_t                     submit_index,
+                            uint64_t                     va_addr,
+                            uint32_t                     reg_space_start,
+                            const PM4_PFP_TYPE_3_HEADER &header,
+                            uint64_t                     packet_node_index);
+    void AppendLoadRegIndexNodes(const IMemoryManager        &mem_manager,
+                                 uint32_t                     submit_index,
+                                 uint64_t                     va_addr,
+                                 uint32_t                     reg_space_start,
+                                 const PM4_PFP_TYPE_3_HEADER &header,
+                                 uint64_t                     packet_node_index);
+    void AppendEventWriteFieldNodes(const IMemoryManager        &mem_manager,
+                                    uint32_t                     submit_index,
+                                    uint64_t                     va_addr,
+                                    const PM4_PFP_TYPE_3_HEADER &header,
+                                    const PacketInfo            *packet_info_ptr,
+                                    uint64_t                     packet_node_index);
+    void AppendPacketFieldNodes(const IMemoryManager &mem_manager,
+                                uint32_t              submit_index,
+                                uint64_t              va_addr,
+                                uint32_t              dword_count,
+                                bool                  append_extra_dwords,
+                                const PacketInfo     *packet_info_ptr,
+                                uint64_t              packet_node_index,
+                                const char           *prefix = "");
+    void AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager,
+                                      uint32_t              submit_index,
+                                      uint64_t              va_addr,
+                                      uint64_t              packet_node_index);
+    void AppendMemRegNodes(const IMemoryManager &mem_manager,
+                           uint32_t              submit_index,
+                           uint64_t              va_addr,
+                           uint64_t              packet_node_index);
+    void CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
+                                    uint32_t              submit_index,
+                                    uint64_t              va_addr,
+                                    uint64_t              set_draw_state_node_index,
+                                    uint32_t              header);
 
     uint64_t AddNode(NodeType                  type,
                      const std::string        &desc,
@@ -583,6 +579,15 @@ private:
     ILog *m_log_ptr = nullptr;
 
     EmulateStateTracker &m_state_tracker;
+};
+
+class Util
+{
+public:
+    static std::string GetEventString(const IMemoryManager &mem_manager,
+                                      uint32_t              submit_index,
+                                      uint64_t              va_addr,
+                                      uint32_t              opcode);
 };
 
 }  // namespace Dive

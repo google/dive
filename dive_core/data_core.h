@@ -66,6 +66,9 @@ public:
     // Parse the capture to generate info that describes the capture
     bool ParseCaptureData();
 
+    // Validate LRZ, the per drawcall result will be output to a file
+    bool ValidateLRZ(const std::string &output_file_name);
+
     // Get the capture data (includes access to raw command buffers and memory blocks)
     const CaptureData &GetCaptureData() const;
     CaptureData       &GetMutableCaptureData();
@@ -171,6 +174,44 @@ private:
     // reflection
     friend class SRDCallbacks;
 #endif
+};
+
+//--------------------------------------------------------------------------------------------------
+// validate LRZ from the capture
+class LRZValidator : public IEmulateCallbacks
+{
+public:
+    LRZValidator(EmulateStateTracker &state_tracker, std::ofstream &output_file);
+    ~LRZValidator();
+
+    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+
+    const EmulateStateTracker &GetStateTracker() const { return m_state_tracker; }
+
+    // Callbacks
+    virtual bool OnIbStart(uint32_t                  submit_index,
+                           uint32_t                  ib_index,
+                           const IndirectBufferInfo &ib_info,
+                           IbType                    type) override;
+
+    virtual bool OnIbEnd(uint32_t                  submit_index,
+                         uint32_t                  ib_index,
+                         const IndirectBufferInfo &ib_info) override;
+
+    virtual bool OnPacket(const IMemoryManager &mem_manager,
+                          uint32_t              submit_index,
+                          uint32_t              ib_index,
+                          uint64_t              va_addr,
+                          Pm4Type               type,
+                          uint32_t              header) override;
+
+private:
+    EmulateStateTracker &m_state_tracker;
+    std::ofstream       &m_output_file;
+    // In the tiled mode, we skip all drawcalls in the tiled rendering passes, only keep the ones in
+    // the binning pass
+    bool m_skip_drawcalls = false;
 };
 
 }  // namespace Dive

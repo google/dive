@@ -49,15 +49,9 @@ CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseCaptureData()
+bool DataCore::CreateCommandHierarchy()
 {
-    if (m_progress_tracker)
-    {
-        m_progress_tracker->sendMessage("Processing command buffers...");
-    }
-
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
-
     // Command hierarchy tree creation
     CommandHierarchyCreator cmd_hier_creator(*state_tracker);
     if (!cmd_hier_creator.CreateTrees(&m_capture_metadata.m_command_hierarchy,
@@ -67,10 +61,36 @@ bool DataCore::ParseCaptureData()
     {
         return false;
     }
+    return true;
+}
 
-    CaptureMetadataCreator metadata_creator(m_capture_metadata, *state_tracker);
+//--------------------------------------------------------------------------------------------------
+bool DataCore::CreateMetaData()
+{
+    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+    CaptureMetadataCreator               metadata_creator(m_capture_metadata, *state_tracker);
     if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
                                          m_capture_data.GetMemoryManager()))
+    {
+        return false;
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool DataCore::ParseCaptureData()
+{
+    if (m_progress_tracker)
+    {
+        m_progress_tracker->sendMessage("Processing command buffers...");
+    }
+
+    if (!CreateCommandHierarchy())
+    {
+        return false;
+    }
+
+    if (!CreateMetaData())
     {
         return false;
     }
@@ -119,6 +139,7 @@ CaptureMetadataCreator::~CaptureMetadataCreator() {}
 void CaptureMetadataCreator::OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info)
 {
     m_state_tracker.Reset();
+    m_current_render_mode = RenderModeType::kUnknown;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -159,6 +180,54 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
 
     Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
 
+    if (type7_header->opcode == CP_SET_MARKER)
+    {
+        PM4_CP_SET_MARKER packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
+        DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
+        a6xx_marker marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);
+
+        // TODO(wangra): find a way to remove the duplicatation in CommandHierarchyCreator::OnPacket
+        switch (marker)
+        {
+            // This is emitted at the begining of the render pass if tiled rendering mode is
+            // disabled
+        case RM6_BYPASS:
+            m_current_render_mode = RenderModeType::kDirect;
+            break;
+            // This is emitted at the begining of the binning pass, although the binning pass
+            // could be missing even in tiled rendering mode
+        case RM6_BINNING:
+            m_current_render_mode = RenderModeType::kBinning;
+            break;
+            // This is emitted at the begining of the tiled rendering pass
+        case RM6_GMEM:
+            m_current_render_mode = RenderModeType::kTiled;
+            break;
+            // This is emitted at the end of the tiled rendering pass
+        case RM6_ENDVIS:
+            // should be paired with RM6_GMEM only if RM6_BINNING exist, end of tiled mode
+            m_current_render_mode = RenderModeType::kUnknown;
+            break;
+            // This is emitted at the begining of the resolve pass
+        case RM6_RESOLVE:
+            m_current_render_mode = RenderModeType::kResolve;
+            break;
+            // This is emitted for each dispatch
+        case RM6_COMPUTE: m_current_render_mode = RenderModeType::kDispatch; break;
+        // This seems to be the end of Resolve Pass
+        case RM6_YIELD:
+            // should be paired with RM6_RESOLVE, end of resolve pass
+            m_current_render_mode = RenderModeType::kUnknown;
+            break;
+        case RM6_BLIT2DSCALE:
+        case RM6_IB1LIST_START:
+        case RM6_IB1LIST_END:
+        default: m_current_render_mode = RenderModeType::kUnknown; break;
+        }
+    }
+
     if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
     {
         // Add a new event to the EventInfo metadata array
@@ -179,13 +248,22 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
 
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();
 
+        event_info.m_render_mode = m_current_render_mode;
+        event_info.m_str = Util::GetEventString(mem_manager,
+                                                submit_index,
+                                                va_addr,
+                                                type7_header->opcode);
+
         m_capture_metadata.m_event_info.push_back(event_info);
 
         // Parse and add the shader(s) info to the metadata
         if (event_info.m_type == EventInfo::EventType::kDraw ||
             event_info.m_type == EventInfo::EventType::kDispatch)
         {
-            FillEventStateInfo(it);
+            if (event_info.m_type == EventInfo::EventType::kDraw)
+            {
+                FillEventStateInfo(it);
+            }
 
             if (!HandleShaders(mem_manager, submit_index, type7_header->opcode))
                 return false;

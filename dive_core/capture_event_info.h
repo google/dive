@@ -51,6 +51,16 @@ struct ShaderReference
     uint32_t    m_enable_mask;
 };
 
+enum class RenderModeType
+{
+    kDirect,
+    kBinning,
+    kTiled,
+    kResolve,
+    kDispatch,
+    kUnknown
+};
+
 //--------------------------------------------------------------------------------------------------
 struct EventInfo
 {
@@ -78,7 +88,8 @@ struct EventInfo
     };
     EventType m_type;
 
-    // Texture, Buffer indices
+    RenderModeType m_render_mode = RenderModeType::kUnknown;
+    std::string    m_str;
 };
 
 //--------------------------------------------------------------------------------------------------

@@ -367,7 +367,8 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
 absl::Status AndroidDevice::RetrieveTraceFile(const std::string &trace_file_path,
                                               const std::string &save_path)
 {
-    return Adb().Run(absl::StrFormat("pull %s %s", trace_file_path, save_path));
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", trace_file_path, save_path)));
+    return Adb().Run(absl::StrFormat("shell rm %s", trace_file_path));
 }
 
 }  // namespace Dive

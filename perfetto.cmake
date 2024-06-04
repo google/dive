@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
-set(DIVE_ENABLE_PERFETTO ON)
+set(DIVE_ENABLE_PERFETTO OFF)
 
 # Build Perfetto SDK
 if(DIVE_ENABLE_PERFETTO)

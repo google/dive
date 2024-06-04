@@ -822,7 +822,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     // When it shows up in production driver captures, the IB addr and size values are all
     // garbage. Not sure what it's used for at this point.
     if (type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE)
-        DIVE_LOG("Packet ignored: CP_COND_INDIRECT_BUFFER_PFE\n");
+        DIVE_DEBUG_LOG("Packet ignored: CP_COND_INDIRECT_BUFFER_PFE\n");
 
     // Deal with calls and chains
     if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||

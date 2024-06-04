@@ -94,6 +94,10 @@ if(NOT ANDROID)
         add_subdirectory(cli)
     endif()
 
+    if (EXISTS "${CMAKE_SOURCE_DIR}/lrz_validator/CMakeLists.txt")
+        add_subdirectory(lrz_validator)
+    endif()
+
     if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT DIVE_NO_DISASSEMBLY)
         add_subdirectory(ui)
     endif()

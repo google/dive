@@ -881,10 +881,10 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
         // Draw/Dispatch/Blit
         {
-            std::string draw_dispatch_node_string = GetEventString(mem_manager,
-                                                                   submit_index,
-                                                                   va_addr,
-                                                                   opcode);
+            std::string draw_dispatch_node_string = Util::GetEventString(mem_manager,
+                                                                         submit_index,
+                                                                         va_addr,
+                                                                         opcode);
             uint32_t    event_id = m_num_events++;
 
             CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
@@ -1046,6 +1046,7 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     m_cur_ib_packet_node_index = UINT64_MAX;
     m_ib_stack.clear();
     m_render_marker_index = kInvalidRenderMarkerIndex;
+    m_state_tracker.Reset();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1496,61 +1497,6 @@ void CommandHierarchyCreator::ParseVulkanCallMarker(char    *marker_ptr,
     return;
 }
 
-static const std::string ConvertPrimTypeToStr(pc_di_primtype pt)
-{
-    std::string s;
-    switch (pt)
-    {
-    case DI_PT_NONE: s = "NONE"; break;
-    case DI_PT_POINTLIST_PSIZE: s = "POINTLIST_PSIZE"; break;
-    case DI_PT_LINELIST: s = "LINELIST"; break;
-    case DI_PT_LINESTRIP: s = "LINESTRIP"; break;
-    case DI_PT_TRILIST: s = "TRIANGLELIST"; break;
-    case DI_PT_TRIFAN: s = "TRIANGLE_FAN"; break;
-    case DI_PT_TRISTRIP: s = "TRIANGLESTRIP"; break;
-    case DI_PT_LINELOOP: s = "LINELOOP"; break;
-    case DI_PT_RECTLIST: s = "RECTLIST"; break;
-    case DI_PT_POINTLIST: s = "POINTLIST"; break;
-    case DI_PT_LINE_ADJ: s = "LINE_ADJ"; break;
-    case DI_PT_LINESTRIP_ADJ: s = "LINESTRIP_ADJ"; break;
-    case DI_PT_TRI_ADJ: s = "TRI_ADJ"; break;
-    case DI_PT_TRISTRIP_ADJ: s = "TRISTRIP_ADJ"; break;
-    case DI_PT_PATCHES0: s = "PATCHES0"; break;
-    case DI_PT_PATCHES1: s = "PATCHES1"; break;
-    case DI_PT_PATCHES2: s = "PATCHES2"; break;
-    case DI_PT_PATCHES3: s = "PATCHES3"; break;
-    case DI_PT_PATCHES4: s = "PATCHES4"; break;
-    case DI_PT_PATCHES5: s = "PATCHES5"; break;
-    case DI_PT_PATCHES6: s = "PATCHES6"; break;
-    case DI_PT_PATCHES7: s = "PATCHES7"; break;
-    case DI_PT_PATCHES8: s = "PATCHES8"; break;
-    case DI_PT_PATCHES9: s = "PATCHES9"; break;
-    case DI_PT_PATCHES10: s = "PATCHES10"; break;
-    case DI_PT_PATCHES11: s = "PATCHES11"; break;
-    case DI_PT_PATCHES12: s = "PATCHES12"; break;
-    case DI_PT_PATCHES13: s = "PATCHES13"; break;
-    case DI_PT_PATCHES14: s = "PATCHES14"; break;
-    case DI_PT_PATCHES15: s = "PATCHES15"; break;
-    case DI_PT_PATCHES16: s = "PATCHES16"; break;
-    case DI_PT_PATCHES17: s = "PATCHES17"; break;
-    case DI_PT_PATCHES18: s = "PATCHES18"; break;
-    case DI_PT_PATCHES19: s = "PATCHES19"; break;
-    case DI_PT_PATCHES20: s = "PATCHES20"; break;
-    case DI_PT_PATCHES21: s = "PATCHES21"; break;
-    case DI_PT_PATCHES22: s = "PATCHES22"; break;
-    case DI_PT_PATCHES23: s = "PATCHES23"; break;
-    case DI_PT_PATCHES24: s = "PATCHES24"; break;
-    case DI_PT_PATCHES25: s = "PATCHES25"; break;
-    case DI_PT_PATCHES26: s = "PATCHES26"; break;
-    case DI_PT_PATCHES27: s = "PATCHES27"; break;
-    case DI_PT_PATCHES28: s = "PATCHES28"; break;
-    case DI_PT_PATCHES29: s = "PATCHES29"; break;
-    case DI_PT_PATCHES30: s = "PATCHES30"; break;
-    case DI_PT_PATCHES31: s = "PATCHES31"; break;
-    }
-    return s;
-}
-
 // TODO(wangra): do not output following properties for now since this will make the text too
 // long maybe move this to state tracking tab
 // static const std::string ConvertSrcSelToStr(pc_di_src_sel pt)
@@ -1609,10 +1555,10 @@ std::string OutputVgtDrawInitiator(VgtDrawInitiatorField packet)
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_manager,
-                                                    uint32_t              submit_index,
-                                                    uint64_t              va_addr,
-                                                    uint32_t              opcode)
+std::string Util::GetEventString(const IMemoryManager &mem_manager,
+                                 uint32_t              submit_index,
+                                 uint64_t              va_addr,
+                                 uint32_t              opcode)
 {
     std::ostringstream string_stream;
     DIVE_ASSERT(IsDrawDispatchEventOpcode(opcode) ||
@@ -1622,35 +1568,27 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
     {
         PM4_CP_DRAW_INDX packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ","
-                      << "IndexBase:" << packet.bitfields3.INDX_BASE << ","
-                      << "IndexSize:" << packet.bitfields4.INDX_SIZE << ","
-                      << "VizQuery:" << packet.bitfields0.VIZ_QUERY << ")";
+        string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDX)
     {
         PM4_CP_DRAW_INDX packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ","
-                      << "VizQuery:" << packet.bitfields0.VIZ_QUERY << ")";
+        string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDX_OFFSET)
     {
         PM4_CP_DRAW_INDX_OFFSET packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndexOffset(" << OutputVgtDrawInitiator(packet)
+        string_stream << "DrawIndexOffset("
                       << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
-                      << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
-                      << "FirstIndex:" << packet.bitfields3.FIRST_INDX << ","
-                      << "IndexBase:" << packet.bitfields4.INDX_BASE << ","
-                      << "IndexSize:" << packet.bitfields5.INDX_SIZE << ","
-                      << "MaxIndices:" << packet.bitfields6.MAX_INDICES << ")";
+                      << "NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDIRECT)
     {
         PM4_CP_DRAW_INDIRECT packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndirect(" << OutputVgtDrawInitiator(packet)
+        string_stream << "DrawIndirect("
                       << "IndirectLo:" << std::hex << "0x" << packet.bitfields1.INDIRECT_LO << ","
                       << "IndirectHi:"
                       << "0x" << packet.bitfields2.INDIRECT_HI << std::dec << ")";
@@ -1659,7 +1597,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
     {
         PM4_CP_DRAW_INDX_INDIRECT packet;
         DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)))
-        string_stream << "DrawIndexIndirect(" << OutputVgtDrawInitiator(packet)
+        string_stream << "DrawIndexIndirect("
                       << "IndexBaseLo:" << std::hex << "0x" << packet.bitfields1.INDX_BASE_LO << ","
                       << "IndexBaseHi:"
                       << "0x" << packet.bitfields2.INDX_BASE_HI << std::dec << ","
@@ -1675,7 +1613,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         mem_manager.CopyMemory(&base_packet, submit_index, va_addr, sizeof(base_packet)));
         if (base_packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
         {
-            string_stream << "DrawIndirectMulti(" << OutputVgtDrawInitiator(base_packet)
+            string_stream << "DrawIndirectMulti("
                           << "DrawCount:" << base_packet.DRAW_COUNT << ","
                           << "Indirect:" << std::hex << "0x" << base_packet.INDIRECT << std::dec
                           << ","
@@ -1686,7 +1624,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
-            string_stream << "DrawIndirectMultiIndexed(" << OutputVgtDrawInitiator(base_packet)
+            string_stream << "DrawIndirectMultiIndexed("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
                           << "MaxIndices:" << packet.MAX_INDICES << ","
@@ -1698,7 +1636,7 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
-            string_stream << "DrawIndirectMultiIndirect(" << OutputVgtDrawInitiator(base_packet)
+            string_stream << "DrawIndirectMultiIndirect("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
                           << "IndirectCount:" << packet.INDIRECT_COUNT << ","
@@ -1710,7 +1648,6 @@ std::string CommandHierarchyCreator::GetEventString(const IMemoryManager &mem_ma
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
             DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirectIndexed("
-                          << OutputVgtDrawInitiator(base_packet)
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
                           << "MaxIndices:" << packet.MAX_INDICES << ","

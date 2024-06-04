@@ -66,6 +66,9 @@ public:
     // Parse the capture to generate info that describes the capture
     bool ParseCaptureData();
 
+    // Create meta data from the captured data
+    bool CreateMetaData();
+
     // Get the capture data (includes access to raw command buffers and memory blocks)
     const CaptureData &GetCaptureData() const;
     CaptureData       &GetMutableCaptureData();
@@ -77,6 +80,8 @@ public:
     const CaptureMetadata &GetCaptureMetadata() const;
 
 private:
+    // Create command hierarchy from the captured data
+    bool CreateCommandHierarchy();
     // The relatively raw captured data (memory & submit blocks)
     CaptureData m_capture_data;
 
@@ -164,6 +169,7 @@ private:
 
     CaptureMetadata     &m_capture_metadata;
     EmulateStateTracker &m_state_tracker;
+    RenderModeType       m_current_render_mode = RenderModeType::kUnknown;
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
     // SRDCallbacks is a friend class, since it is essentially doing part of

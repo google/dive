@@ -124,16 +124,16 @@ You can find out the device serial by run `adb devices` or by `./dive_client_cli
 Examples:
  - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
  ```
- ./dive_client_cli --device  9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --capture_path "~/captures"
+ ./dive_client_cli --device  9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --trigger_capture_after 5 --download_path "/path/to/save/captures"
  ```
 
  - Install the dependencies on device and start the package
  ```
- ./dive_client_cli --device  9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --capture_path "~/captures"
+ ./dive_client_cli --device  9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
  ```
 Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
 
-The capture files will be saved at the path specified with the `--capture_path` option or the current directory if this option not specified. 
+The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
 
 #### Cleanup
 

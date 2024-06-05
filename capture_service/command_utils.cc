@@ -18,11 +18,14 @@ limitations under the License.
 
 #include <cstdio>
 #include <cstring>
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
 #include "log.h"
+
+ABSL_FLAG(bool, force_output, false, "whether force to print out the command and its output.");
 
 namespace Dive
 {
@@ -32,6 +35,7 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
     std::string err_msg;
     std::string cmd_str = command + " 2>&1";  // Get both stdout and stderr;
     FILE       *pipe = popen(cmd_str.c_str(), "r");
+    bool        log_output = !quiet || absl::GetFlag(FLAGS_force_output);
     if (!pipe)
     {
         err_msg = "Popen call failed\n";
@@ -44,9 +48,9 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
     {
         output += std::string(buf);
     }
-    if (!quiet)
+    if (log_output)
     {
-        LOGD("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
+        LOGI("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
     }
     output = absl::StripAsciiWhitespace(output);
     int ret = pclose(pipe);
@@ -57,7 +61,7 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
                                   command,
                                   ret,
                                   output);
-        if (!quiet)
+        if (log_output)
         {
             LOGE("%s", err_msg.c_str());
         }

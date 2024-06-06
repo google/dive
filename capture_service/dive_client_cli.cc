@@ -18,6 +18,7 @@ limitations under the License.
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <system_error>
 #include <thread>
 
 #include "absl/flags/flag.h"
@@ -100,17 +101,24 @@ ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
 ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli application to run");
 ABSL_FLAG(std::string, vulkan_command_args, "", "the arguments for vulkan cli application to run");
-
 ABSL_FLAG(std::string,
           type,
           "openxr",
           "application type: \n\t`openxr` for OpenXR applications(apk) \n\t `vulkan` for Vulkan "
           "applications(apk)"
           "\n\t`vulkan_cli` for command line Vulkan application.");
-ABSL_FLAG(std::string,
-          capture_path,
-          ".",
-          "specify the full path to save the capture, default to current directory");
+ABSL_FLAG(
+std::string,
+download_path,
+".",
+"specify the full path to download the capture on the host, default to current directory.");
+
+ABSL_FLAG(
+int,
+trigger_capture_after,
+5,
+"specify how long in seconds the capture be triggered after the application starts when running "
+"with the `capture` command. If not specified, it will be triggered after 5 seconds.");
 
 void print_usage()
 {
@@ -231,7 +239,7 @@ bool run_package(Dive::DeviceManager& mgr,
 bool trigger_capture(Dive::DeviceManager& mgr)
 {
     std::string target_str = absl::GetFlag(FLAGS_target);
-    std::string capture_path = absl::GetFlag(FLAGS_capture_path);
+    std::string download_path = absl::GetFlag(FLAGS_download_path);
     std::string input;
 
     Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
@@ -248,11 +256,20 @@ bool trigger_capture(Dive::DeviceManager& mgr)
         std::cout << "Failed to trigger capture: " << trace_file_path.status() << std::endl;
 
     std::filesystem::path p(*trace_file_path);
-    std::filesystem::path target(capture_path);
-    target /= p.filename();
-    auto ret = mgr.GetDevice()->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    std::filesystem::path target_download_path(download_path);
+    if (!std::filesystem::exists(target_download_path))
+    {
+        std::error_code ec;
+        if (!std::filesystem::create_directories(target_download_path, ec))
+        {
+            std::cout << "error create directory: " << ec << std::endl;
+        }
+    }
+    target_download_path /= p.filename();
+    auto ret = mgr.GetDevice()->RetrieveTraceFile(*trace_file_path,
+                                                  target_download_path.generic_string());
     if (ret.ok())
-        std::cout << "Capture saved at " << target << std::endl;
+        std::cout << "Capture saved at " << target_download_path << std::endl;
     else
         std::cout << "Failed to retrieve capture file" << std::endl;
 
@@ -268,7 +285,9 @@ bool run_and_capture(Dive::DeviceManager& mgr,
 
     std::string target_str = absl::GetFlag(FLAGS_target);
     run_package(mgr, app_type, package, command, command_args);
-    std::this_thread::sleep_for(5000ms);
+    int time_to_wait_in_seconds = absl::GetFlag(FLAGS_trigger_capture_after);
+    std::cout << "wait for " << time_to_wait_in_seconds << " seconds" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(time_to_wait_in_seconds));
     trigger_capture(mgr);
 
     std::cout << "Press Enter to exit" << std::endl;

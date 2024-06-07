@@ -75,6 +75,9 @@ uint64_t Topology::GetNumNodes() const
     DIVE_ASSERT(m_node_children.size() == m_node_shared_children.size());
     DIVE_ASSERT(m_node_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_children.size() == m_node_child_index.size());
+    DIVE_ASSERT(m_node_children.size() == m_start_shared_child.size());
+    DIVE_ASSERT(m_node_children.size() == m_end_shared_child.size());
+    DIVE_ASSERT(m_node_children.size() == m_root_node_index.size());
     return m_node_children.size();
 }
 
@@ -105,21 +108,6 @@ uint64_t Topology::GetChildNodeIndex(uint64_t node_index, uint64_t child_index) 
     DIVE_ASSERT(child_list_index < m_children_list.size());
     return m_children_list[child_list_index];
 }
-//--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetNumSharedChildren(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_node_shared_children.size());
-    return m_node_shared_children[node_index].m_num_children;
-}
-//--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetSharedChildNodeIndex(uint64_t node_index, uint64_t child_index) const
-{
-    DIVE_ASSERT(node_index < m_node_shared_children.size());
-    DIVE_ASSERT(child_index < m_node_shared_children[node_index].m_num_children);
-    uint64_t child_list_index = m_node_shared_children[node_index].m_start_index + child_index;
-    DIVE_ASSERT(child_list_index < m_shared_children_list.size());
-    return m_shared_children_list[child_list_index];
-}
 
 //--------------------------------------------------------------------------------------------------
 uint64_t Topology::GetNextNodeIndex(uint64_t node_index) const
@@ -137,6 +125,43 @@ uint64_t Topology::GetNextNodeIndex(uint64_t node_index) const
             return GetChildNodeIndex(parent_node_index, sibling_index);
         node_index = parent_node_index;
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t Topology::GetNumSharedChildren(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_node_shared_children.size());
+    return m_node_shared_children[node_index].m_num_children;
+}
+//--------------------------------------------------------------------------------------------------
+uint64_t Topology::GetSharedChildNodeIndex(uint64_t node_index, uint64_t child_index) const
+{
+    DIVE_ASSERT(node_index < m_node_shared_children.size());
+    DIVE_ASSERT(child_index < m_node_shared_children[node_index].m_num_children);
+    uint64_t child_list_index = m_node_shared_children[node_index].m_start_index + child_index;
+    DIVE_ASSERT(child_list_index < m_shared_children_list.size());
+    return m_shared_children_list[child_list_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t Topology::GetStartSharedChildNodeIndex(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_start_shared_child.size());
+    return m_start_shared_child[node_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t Topology::GetEndSharedChildNodeIndex(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_end_shared_child.size());
+    return m_end_shared_child[node_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t Topology::GetSharedChildRootNodeIndex(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_root_node_index.size());
+    return m_root_node_index[node_index];
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -787,6 +812,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     m_ib_stack.push_back(ib_node_index);
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
+    m_new_ib_start = true;
     return true;
 }
 
@@ -798,6 +824,18 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     m_state_tracker.PopEnableMask();
     DIVE_ASSERT(!m_ib_stack.empty());
 
+    // Setup root & range of shared children that this IB encompasses
+    DIVE_ASSERT(m_ib_stack.size() == m_start_shared_child_node_index_stack.size());
+    SetStartSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
+                                    m_ib_stack.back(),
+                                    m_start_shared_child_node_index_stack.back());
+    SetEndSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
+                                  m_ib_stack.back(),
+                                  m_last_added_node_index);
+    SetSharedChildRootNodeIndex(CommandHierarchy::kSubmitTopology,
+                                m_ib_stack.back(),
+                                m_cur_submit_node_index);
+
     // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
     // because the emulator does not keep track of IBs in an internal stack. So start by
     // popping all consecutive CHAIN IBs
@@ -806,10 +844,12 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     while (!m_ib_stack.empty() && type == IbType::kChain)
     {
         m_ib_stack.pop_back();
+        m_start_shared_child_node_index_stack.pop_back();
         type = m_command_hierarchy_ptr->GetIbNodeType(m_ib_stack.back());
     }
 
     m_ib_stack.pop_back();
+    m_start_shared_child_node_index_stack.pop_back();
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     m_cur_ib_level = ib_info.m_ib_level;
@@ -837,6 +877,18 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                                false,
                                                type,
                                                header);
+    m_last_added_node_index = packet_node_index;
+    if (m_new_event_start)
+    {
+        m_new_event_start = false;
+        m_start_shared_child_node_index = packet_node_index;
+    }
+    if (m_new_ib_start)
+    {
+        m_new_ib_start = false;
+        m_start_shared_child_node_index_stack.push_back(packet_node_index);
+    }
+    DIVE_ASSERT(m_ib_stack.size() == m_start_shared_child_node_index_stack.size());
 
     uint64_t parent_index = m_shared_node_ib_parent_stack[m_cur_ib_level];
     AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
@@ -854,17 +906,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         opcode = type7_header->opcode;
     }
 
-    // Cache packets to be shown on event nodes
-    // Only show top-level packet nodes, and not ones that are children of CP_SET_DRAW_STATE or
-    // CP_INDIRECT_BUFFER packets (i.e. when IB level > 2)
-    if (m_cur_ib_level <= 2)
-    {
-        // Cache all packets added (will cache until encounter next event/IB)
-        m_packets.Add(opcode, va_addr, packet_node_index);
-
-        // Cache packets that may be part of the vkBeginCommandBuffer.
-        m_cmd_begin_packet_node_indices.push_back(packet_node_index);
-    }
+    // Cache packets that may be part of the vkBeginCommandBuffer.
+    m_cmd_begin_packet_node_indices.push_back(packet_node_index);
 
     // Cache set_draw_state packet
     if (opcode == CP_SET_DRAW_STATE)
@@ -898,19 +941,20 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         // Cache nodes that may be part of the vkBeginCommandBuffer.
         m_cmd_begin_event_node_indices.push_back(event_node_index);
 
-        // Add as children all packets that have been processed since the last event
-        // Note: Events only show up in the event topology and internal RGP topology.
-        for (uint32_t packet = 0; packet < m_packets.m_packet_node_indices.size(); ++packet)
-        {
-            uint64_t cur_node_index = m_packets.m_packet_node_indices[packet];
-            AddSharedChild(CommandHierarchy::kAllEventTopology, event_node_index, cur_node_index);
-            AddSharedChild(CommandHierarchy::kRgpTopology, event_node_index, cur_node_index);
-        }
-        m_packets.Clear();
+        // Setup root & range of shared children that this event encompasses
+        SetStartSharedChildrenNodeIndex(CommandHierarchy::kAllEventTopology,
+                                        event_node_index,
+                                        m_start_shared_child_node_index);
+        SetEndSharedChildrenNodeIndex(CommandHierarchy::kAllEventTopology,
+                                      event_node_index,
+                                      packet_node_index);
+        SetSharedChildRootNodeIndex(CommandHierarchy::kAllEventTopology,
+                                    event_node_index,
+                                    m_cur_submit_node_index);
+        m_new_event_start = true;
 
         // Add the draw_dispatch_node to the submit_node if currently not inside a marker range.
         // Otherwise append it to the marker at the top of the marker stack.
-        // Note: Events only show up in the event topology and internal RGP topology.
         AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, event_node_index);
         m_node_parent_info[CommandHierarchy::kAllEventTopology]
                           [event_node_index] = parent_node_index;
@@ -923,13 +967,6 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
               opcode == CP_SET_CTXSWITCH_IB))
     {
         m_cur_ib_packet_node_index = packet_node_index;
-
-        // m_packets contain packets added to an event node
-        // Do not show INDIRECT_BUFFER packets in an event node. A flattening of the packets is
-        // required for event nodes, otherwise it can result in a weird situation where all the
-        // draw calls are added to an INDIRECT_BUFFER, but the INDIRECT_BUFFER is added only to
-        // the first event node
-        m_packets.Pop();
     }
     else if (opcode == CP_LOAD_STATE6 || opcode == CP_LOAD_STATE6_GEOM ||
              opcode == CP_LOAD_STATE6_FRAG)
@@ -1040,11 +1077,20 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     AddChild(CommandHierarchy::kSubmitTopology, Topology::kRootNodeIndex, submit_node_index);
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, submit_node_index);
     AddChild(CommandHierarchy::kRgpTopology, Topology::kRootNodeIndex, submit_node_index);
+
+    // Set the submit node to be its own shared child root node
+    SetSharedChildRootNodeIndex(CommandHierarchy::kSubmitTopology,
+                                submit_node_index,
+                                submit_node_index);
+    SetSharedChildRootNodeIndex(CommandHierarchy::kAllEventTopology,
+                                submit_node_index,
+                                submit_node_index);
     m_cur_submit_node_index = submit_node_index;
     m_cur_ib_level = 1;
     m_shared_node_ib_parent_stack[m_cur_ib_level] = m_cur_submit_node_index;
     m_cur_ib_packet_node_index = UINT64_MAX;
     m_ib_stack.clear();
+    m_start_shared_child_node_index_stack.clear();
     m_render_marker_index = kInvalidRenderMarkerIndex;
     m_state_tracker.Reset();
 }
@@ -1063,36 +1109,6 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
                   uint8_t rhs_index = m_command_hierarchy_ptr->GetIbNodeIndex(rhs);
                   return lhs_index < rhs_index;
               });
-
-    if (!m_packets.m_packet_node_indices.empty())
-    {
-        uint64_t postamble_state_node_index;
-        if (GetChildCount(CommandHierarchy::kAllEventTopology, m_cur_submit_node_index) != 0)
-            postamble_state_node_index = AddNode(NodeType::kPostambleStateNode, "State");
-        else
-            postamble_state_node_index = AddNode(NodeType::kPostambleStateNode, "Postamble State");
-
-        // Add to postamble_state_note all packets that have been processed since the last
-        // draw/dispatch
-        for (uint32_t packet = 0; packet < m_packets.m_packet_node_indices.size(); ++packet)
-        {
-            AddSharedChild(CommandHierarchy::kAllEventTopology,
-                           postamble_state_node_index,
-                           m_packets.m_packet_node_indices[packet]);
-            AddSharedChild(CommandHierarchy::kRgpTopology,
-                           postamble_state_node_index,
-                           m_packets.m_packet_node_indices[packet]);
-        }
-        m_packets.Clear();
-
-        uint64_t parent_node_index = m_cur_submit_node_index;
-
-        // Add the postamble_state_node to the submit_node in the event topology
-        AddChild(CommandHierarchy::kAllEventTopology,
-                 parent_node_index,
-                 postamble_state_node_index);
-        AddChild(CommandHierarchy::kRgpTopology, parent_node_index, postamble_state_node_index);
-    }
 
     // Insert present node to event topology, when appropriate
     if (m_capture_data_ptr != nullptr)
@@ -1495,63 +1511,6 @@ void CommandHierarchyCreator::ParseVulkanCallMarker(char    *marker_ptr,
                                                     uint64_t packet_node_index)
 {
     return;
-}
-
-// TODO(wangra): do not output following properties for now since this will make the text too
-// long maybe move this to state tracking tab
-// static const std::string ConvertSrcSelToStr(pc_di_src_sel pt)
-//{
-//     std::string s;
-//     switch (pt)
-//     {
-//     case DI_SRC_SEL_DMA: s = "DMA"; break;
-//     case DI_SRC_SEL_IMMEDIATE: s = "Immediate"; break;
-//     case DI_SRC_SEL_AUTO_INDEX: s = "Auto Index"; break;
-//     case DI_SRC_SEL_AUTO_XFB: s = "Auto XFB"; break;
-//     default: DIVE_ASSERT(false); break;
-//     }
-//     return s;
-// }
-//
-// static const std::string ConvertVisCullModeToStr(pc_di_vis_cull_mode vcm)
-//{
-//     std::string s;
-//     switch (vcm)
-//     {
-//     case IGNORE_VISIBILITY: s = "Ignore Visibility"; break;
-//     case USE_VISIBILITY: s = "Use Visibility"; break;
-//     default: DIVE_ASSERT(false); break;
-//     }
-//     return s;
-// }
-//
-// static const std::string ConvertPatchTypeToStr(a6xx_patch_type pt)
-//{
-//     std::string s;
-//     switch (pt)
-//     {
-//     case TESS_QUADS: s = "Tessellation Quad"; break;
-//     case TESS_TRIANGLES: s = "Tessellation Triangle"; break;
-//     case TESS_ISOLINES: s = "Tessellation Isolines"; break;
-//     default: DIVE_ASSERT(false); break;
-//     }
-//     return s;
-// }
-
-template<typename VgtDrawInitiatorField>
-std::string OutputVgtDrawInitiator(VgtDrawInitiatorField packet)
-{
-    std::string s = "Primitve Type:" + ConvertPrimTypeToStr(packet.bitfields0.PRIM_TYPE) + ","
-    // TODO(wangra): do not output following properties for now since this will make the text too
-    // long maybe move this to state tracking tab
-    /* + "Source Select:" + ConvertSrcSelToStr(packet.bitfields0.SOURCE_SELECT) + "," +
-    "Visibility Cull Mode:" + ConvertVisCullModeToStr(packet.bitfields0.VIS_CULL) +
-    "," + "Patch Type:" + ConvertPatchTypeToStr(packet.bitfields0.PATCH_TYPE) +
-    "," + "GS Enabled:" + ((packet.bitfields0.GS_ENABLE != 0) ? "True" : "False") +
-    "," + "Tessellation Enabled:" +
-    ((packet.bitfields0.TESS_ENABLE != 0) ? "True" : "False") + ","*/
-    ;
-    return s;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2242,7 +2201,14 @@ uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
         DIVE_ASSERT(m_node_children[i][1].size() == node_index);
         m_node_children[i][0].resize(m_node_children[i][0].size() + 1);
         m_node_children[i][1].resize(m_node_children[i][1].size() + 1);
+
+        m_node_start_shared_child[i].resize(m_node_start_shared_child[i].size() + 1);
+        m_node_end_shared_child[i].resize(m_node_end_shared_child[i].size() + 1);
+        m_node_root_node_index[i].resize(m_node_root_node_index[i].size() + 1);
+        DIVE_ASSERT(m_node_start_shared_child[i].size() == m_node_end_shared_child[i].size());
+        DIVE_ASSERT(m_node_start_shared_child[i].size() == m_node_root_node_index[i].size());
     }
+
     return node_index;
 }
 
@@ -2275,35 +2241,30 @@ void CommandHierarchyCreator::AddSharedChild(CommandHierarchy::TopologyType type
 }
 
 //--------------------------------------------------------------------------------------------------
-// Remove all children listed in |children_node_indices|.
-void CommandHierarchyCreator::RemoveListOfChildren(
-CommandHierarchy::TopologyType type,
-uint64_t                       node_index,
-const std::vector<uint64_t>   &children_node_indices)
+void CommandHierarchyCreator::SetStartSharedChildrenNodeIndex(CommandHierarchy::TopologyType type,
+                                                              uint64_t node_index,
+                                                              uint64_t shared_child_node_index)
 {
-    if (children_node_indices.empty())
-    {
-        return;
-    }
+    DIVE_ASSERT(node_index < m_node_start_shared_child[type].size());
+    m_node_start_shared_child[type][node_index] = shared_child_node_index;
+}
 
-    auto  &vec = m_node_children[type][0][node_index];
-    size_t j = 0;
-    size_t k = 0;
-    for (size_t i = 0; i < vec.size(); i++)
-    {
-        if (j < children_node_indices.size() && vec[i] == children_node_indices[j])
-        {
-            j++;
-        }
-        else
-        {
-            vec[k++] = vec[i];
-        }
-    }
+//--------------------------------------------------------------------------------------------------
+void CommandHierarchyCreator::SetEndSharedChildrenNodeIndex(CommandHierarchy::TopologyType type,
+                                                            uint64_t node_index,
+                                                            uint64_t shared_child_node_index)
+{
+    DIVE_ASSERT(node_index < m_node_end_shared_child[type].size());
+    m_node_end_shared_child[type][node_index] = shared_child_node_index;
+}
 
-    DIVE_ASSERT(j == children_node_indices.size());
-
-    vec.erase(vec.begin() + vec.size() - children_node_indices.size(), vec.end());
+//--------------------------------------------------------------------------------------------------
+void CommandHierarchyCreator::SetSharedChildRootNodeIndex(CommandHierarchy::TopologyType type,
+                                                          uint64_t                       node_index,
+                                                          uint64_t root_node_index)
+{
+    DIVE_ASSERT(node_index < m_node_root_node_index[type].size());
+    m_node_root_node_index[type][node_index] = root_node_index;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2427,6 +2388,9 @@ void CommandHierarchyCreator::CreateTopologies()
             cur_topology.AddChildren(node_index, m_node_children[topology][0][node_index]);
             cur_topology.AddSharedChildren(node_index, m_node_children[topology][1][node_index]);
         }
+        cur_topology.m_start_shared_child = std::move(m_node_start_shared_child[topology]);
+        cur_topology.m_end_shared_child = std::move(m_node_end_shared_child[topology]);
+        cur_topology.m_root_node_index = std::move(m_node_root_node_index[topology]);
     }
 }
 

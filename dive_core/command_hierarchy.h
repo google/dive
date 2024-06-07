@@ -22,6 +22,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "capture_data.h"
@@ -83,9 +84,22 @@ public:
     // Children info
     uint64_t GetNumChildren(uint64_t node_index) const;
     uint64_t GetChildNodeIndex(uint64_t node_index, uint64_t child_index) const;
+    uint64_t GetNextNodeIndex(uint64_t node_index) const;
+
+    // Used to get list of shared children for a top level root node
+    // All children of this top level node share this alternate set of children
+    // Each non-top-level node has begin/end indices towards this set of shared children
     uint64_t GetNumSharedChildren(uint64_t node_index) const;
     uint64_t GetSharedChildNodeIndex(uint64_t node_index, uint64_t child_index) const;
-    uint64_t GetNextNodeIndex(uint64_t node_index) const;
+
+    // Indicate the being & end index of the shared children in the top-level node that belong to
+    // the given node
+    uint64_t GetStartSharedChildNodeIndex(uint64_t node_index) const;
+    uint64_t GetEndSharedChildNodeIndex(uint64_t node_index) const;
+
+    // All descendant nodes from the same root node have the same set of shared children
+    // This returns that common root top level node
+    uint64_t GetSharedChildRootNodeIndex(uint64_t node_index) const;
 
 private:
     friend class CommandHierarchy;
@@ -96,6 +110,10 @@ private:
         uint64_t m_start_index = UINT64_MAX;
         uint64_t m_num_children = 0;
     };
+
+    // List of all children for all nodes
+    std::vector<uint64_t> m_children_list;
+    std::vector<uint64_t> m_shared_children_list;
 
     // This is a per-node pointer to m_children_list
     // 2 sets of children per node
@@ -108,8 +126,11 @@ private:
     // Index of child w.r.t. to its parent
     std::vector<uint64_t> m_node_child_index;
 
-    std::vector<uint64_t> m_children_list;
-    std::vector<uint64_t> m_shared_children_list;
+    // For each non-root node, indicate where the shared children start/end are, and
+    // what the top level root node is
+    std::vector<uint64_t> m_start_shared_child;
+    std::vector<uint64_t> m_end_shared_child;
+    std::vector<uint64_t> m_root_node_index;
 
     void SetNumNodes(uint64_t num_nodes);
     void AddChildren(uint64_t node_index, const std::vector<uint64_t> &children);
@@ -187,13 +208,14 @@ public:
 
     inline size_t size() const { return m_nodes.m_node_type.size(); }
 
-    // The topologies are layed out such that children1 contain non-packet nodes
-    // and children2 contain packet nodes. The difference lies in what is in children1 arrays:
+    // The topologies are layed out such that the "normal" children contain non-packet nodes
+    // and the "shared children" contain packet nodes. The difference lies in what is in
+    // the "normal" children arrays:
     //  The Engine hierarchy contains kRootNode -> kEngineNodes -> kSubmitNodes -> kIbNodes
     //  The Submit hierarchy contains kRootNode -> kSubmitNodes -> kIbNodes
     //  The Event hierarchy contains kRootNode -> kSubmitNodes/kPresentNodes -> (EventNodes)
     //      Where (EventNodes) == kMarkerNode/kDrawDispatchDmaNode/kSyncNode/kPostambleStateNode
-    //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as children2
+    //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as shared children
     const Topology &GetEngineHierarchyTopology() const;
     const Topology &GetSubmitHierarchyTopology() const;
     const Topology &GetVulkanDrawEventHierarchyTopology() const;
@@ -480,15 +502,22 @@ private:
 
     void AppendEventNodeIndex(uint64_t node_index);
 
-    void     AddChild(CommandHierarchy::TopologyType type,
-                      uint64_t                       node_index,
-                      uint64_t                       child_node_index);
-    void     AddSharedChild(CommandHierarchy::TopologyType type,
-                            uint64_t                       node_index,
-                            uint64_t                       child_node_index);
-    void     RemoveListOfChildren(CommandHierarchy::TopologyType type,
-                                  uint64_t                       node_index,
-                                  const std::vector<uint64_t>   &children_node_indices);
+    void AddChild(CommandHierarchy::TopologyType type,
+                  uint64_t                       node_index,
+                  uint64_t                       child_node_index);
+    void AddSharedChild(CommandHierarchy::TopologyType type,
+                        uint64_t                       node_index,
+                        uint64_t                       child_node_index);
+    void SetStartSharedChildrenNodeIndex(CommandHierarchy::TopologyType type,
+                                         uint64_t                       node_index,
+                                         uint64_t                       shared_child_node_index);
+    void SetEndSharedChildrenNodeIndex(CommandHierarchy::TopologyType type,
+                                       uint64_t                       node_index,
+                                       uint64_t                       shared_child_node_index);
+    void SetSharedChildRootNodeIndex(CommandHierarchy::TopologyType type,
+                                     uint64_t                       node_index,
+                                     uint64_t                       root_node_index);
+
     uint64_t GetChildNodeIndex(CommandHierarchy::TopologyType type,
                                uint64_t                       node_index,
                                uint64_t                       child_index) const;
@@ -508,22 +537,6 @@ private:
                                   uint32_t              num_dwords,
                                   uint32_t              submit_index,
                                   uint32_t              value_count_per_row);
-
-    struct Packets
-    {
-        std::vector<uint64_t> m_packet_node_indices;  // Packets added since last event
-
-        void Add(uint32_t opcode, uint64_t addr, uint64_t packet_node_index)
-        {
-            m_packet_node_indices.push_back(packet_node_index);
-        }
-        void Clear() { m_packet_node_indices.clear(); }
-        void Pop()
-        {
-            DIVE_ASSERT(!m_packet_node_indices.empty());
-            m_packet_node_indices.pop_back();
-        }
-    };
 
     struct SetDrawStateGroupInfo
     {
@@ -558,7 +571,15 @@ private:
     uint32_t              m_group_info_size = 0;
 
     uint32_t m_num_events = 0;  // Number of events so far
-    Packets  m_packets;         // Packets added since last event
+
+    bool     m_new_event_start = true;
+    bool     m_new_ib_start = true;
+    uint64_t m_start_shared_child_node_index;  // Shared child node that begins the current event
+
+    // Same as m_start_shared_child_node_index, but used to track it specifically for stacked IBs
+    std::vector<uint64_t> m_start_shared_child_node_index_stack;
+
+    uint64_t m_last_added_node_index;
 
     uint64_t m_cur_submit_node_index = 0;     // Current submit node being processed
     uint64_t m_cur_ib_packet_node_index = 0;  // Current ib packet node being processed
@@ -569,6 +590,11 @@ private:
     // nodes, even when daisy chaining across multiple chain ib nodes. This makes the topology
     // simpler.
     bool m_flatten_chain_nodes = false;
+
+    // Range of shared children associated with each non-top-level node, per topology
+    std::vector<uint64_t> m_node_start_shared_child[CommandHierarchy::kTopologyTypeCount];
+    std::vector<uint64_t> m_node_end_shared_child[CommandHierarchy::kTopologyTypeCount];
+    std::vector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
 
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this

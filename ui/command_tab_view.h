@@ -37,7 +37,7 @@ class CommandTabView : public QFrame
 public:
     CommandTabView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent = nullptr);
 
-    void SetTopologyToView(const Dive::Topology *topology_ptr, bool show_level_column = true);
+    void SetTopologyToView(const Dive::Topology *topology_ptr);
 
     void ResetModel();
 

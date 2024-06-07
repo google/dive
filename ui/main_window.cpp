@@ -364,7 +364,7 @@ void MainWindow::ShowEventView(const Dive::CommandHierarchy &command_hierarchy,
     {
         const Dive::Topology &topology = command_hierarchy.GetRgpHierarchyTopology();
         m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology, false);
+        m_command_tab_view->SetTopologyToView(&topology);
     }
     else
 #endif
@@ -376,14 +376,14 @@ void MainWindow::ShowEventView(const Dive::CommandHierarchy &command_hierarchy,
             const Dive::Topology &topology = command_hierarchy
                                              .GetVulkanDrawEventHierarchyTopology();
             m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology, false);
+            m_command_tab_view->SetTopologyToView(&topology);
             break;
         }
         case EventMode::AllVulkanEvent:
         {
             const Dive::Topology &topology = command_hierarchy.GetVulkanEventHierarchyTopology();
             m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology, false);
+            m_command_tab_view->SetTopologyToView(&topology);
             break;
         }
 
@@ -391,7 +391,7 @@ void MainWindow::ShowEventView(const Dive::CommandHierarchy &command_hierarchy,
         {
             const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
             m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology, false);
+            m_command_tab_view->SetTopologyToView(&topology);
             break;
         }
         }

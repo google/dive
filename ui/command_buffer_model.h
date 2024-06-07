@@ -19,6 +19,7 @@ limitations under the License.
 #include <QVariant>
 
 #include <vector>
+#include "dive_core/common.h"
 
 // Forward Declarations
 namespace Dive
@@ -45,7 +46,7 @@ public:
 
     void Reset();
 
-    void SetTopologyToView(const Dive::Topology *topology_ptr, bool show_level_column);
+    void SetTopologyToView(const Dive::Topology *topology_ptr);
 
     QVariant      data(const QModelIndex &index, int role) const override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
@@ -59,16 +60,28 @@ public:
     int           rowCount(const QModelIndex &parent = QModelIndex()) const override;
     int           columnCount(const QModelIndex &parent = QModelIndex()) const override;
 
+    QModelIndex scrollToIndex() const;
+
     QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
 
 public slots:
     void OnSelectionChanged(const QModelIndex &index);
 
 private:
-    void     CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index);
+    bool CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index, bool is_cur_event);
+    void SetIsCurEvent(uint64_t node_index);
+    bool IsCurEvent(uint64_t node_index) const;
+
     uint64_t m_selected_node_index = UINT64_MAX;
-    std::map<uint64_t, QModelIndex> m_node_index_to_parent_map;
-    const Dive::CommandHierarchy   &m_command_hierarchy;
-    const Dive::Topology           *m_topology_ptr = nullptr;
-    bool                            m_show_level_column = true;
+
+    // Need a bit to indicate if it's part of same event, for both set of children
+    // Need a QModelIndex per both set of children
+    // Bit to determine if parent is a shared node or not
+    std::vector<QModelIndex> m_node_parent_list;
+    std::vector<uint8_t>     m_node_is_cur_event_bit_list;
+    QModelIndex              m_scroll_to_index;
+
+    const Dive::CommandHierarchy &m_command_hierarchy;
+    const Dive::Topology         *m_topology_ptr = nullptr;
+    bool                          m_show_level_column = true;
 };

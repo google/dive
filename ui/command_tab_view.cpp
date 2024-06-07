@@ -61,9 +61,10 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
                      SLOT(OnSearchCommandBuffer()));
 }
 
-void CommandTabView::SetTopologyToView(const Dive::Topology *topology_ptr, bool show_level_column)
+//--------------------------------------------------------------------------------------------------
+void CommandTabView::SetTopologyToView(const Dive::Topology *topology_ptr)
 {
-    m_command_buffer_model->SetTopologyToView(topology_ptr, show_level_column);
+    m_command_buffer_model->SetTopologyToView(topology_ptr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -83,6 +84,9 @@ void CommandTabView::OnSelectionChanged(const QModelIndex &index)
     // After m_command_buffer_view is filled out in CommandBufferModel::OnSelectionChanged(), expand
     // the tree
     m_command_buffer_view->expandAll();
+
+    m_command_buffer_view->scrollTo(m_command_buffer_model->scrollToIndex(),
+                                    QAbstractItemView::PositionAtBottom);
 
     // Resize columns to fit
     uint32_t column_count = (uint32_t)m_command_buffer_model->columnCount(QModelIndex());

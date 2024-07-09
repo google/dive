@@ -898,9 +898,6 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kRgpTopology, parent_index, packet_node_index);
 
-    AddSharedChild(CommandHierarchy::kEngineTopology, m_ib_stack.back(), packet_node_index);
-    AddSharedChild(CommandHierarchy::kSubmitTopology, m_ib_stack.back(), packet_node_index);
-
     uint32_t opcode = UINT32_MAX;
     if (header.type == 7)
         opcode = header.type7.opcode;

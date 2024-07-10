@@ -212,7 +212,7 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   pm4_info_file.write("\n")
   outputEnums(pm4_info_file, enum_list)
   pm4_info_file.write("\n")
-  outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict)
+  outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_dict)
   pm4_info_file.write("}\n")
   return
 
@@ -220,7 +220,7 @@ valid_opcodes = {}
 # ---------------------------------------------------------------------------------------
 def outputOpcodes(pm4_info_file, opcode_dict):
   for opcode in opcode_dict:
-    pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (opcode, opcode_dict[opcode]))
+    pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (hex(opcode), opcode_dict[opcode]))
   return
 
 # ---------------------------------------------------------------------------------------
@@ -671,7 +671,7 @@ def outputEnums(pm4_info_file, enum_list):
 
 # ---------------------------------------------------------------------------------------
 # This function adds info for PM4 packets as well as structs that have no opcodes (e.g. V#s/T#s/S#s)
-def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
+def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_dict):
   domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
 
   # Find all CP packet types so we can find out which domains are relevant
@@ -684,6 +684,15 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
     pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
     if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
       continue
+
+    # Make sure the opcode_dict is referring to the same packet name
+    # This can differ if this PM4 definition is for an older GPU
+    # These opcodes are repurposed across different generations
+    opcode = 0xffffffff
+    if pm4_type_packet is not None:
+      opcode = int(pm4_type_packet.attrib['value'],0)
+      if opcode_dict[opcode] != domain_name:
+        continue
 
     # There are 2 PM4 packet types with stripe tags, see CP_DRAW_INDIRECT_MULTI and CP_DRAW_INDX_INDIRECT for example
     # For CP_DRAW_INDX_INDIRECT type, the stripe is based on HW version, so just use the latest stripe only
@@ -769,9 +778,6 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict):
       # Sort based on offset
       reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset'],0))
 
-      opcode = 0xffffffff
-      if pm4_type_packet is not None:
-        opcode = int(pm4_type_packet.attrib['value'],0)
       pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
       pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
       outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
@@ -1005,7 +1011,7 @@ try:
       pm4_value = pm4_type_packet.attrib['value']
       # Only add ones that start with "CP_*" or "A6XX_*"
       if pm4_name.startswith("CP_") or pm4_name.startswith("A6XX_"):
-        opcode_dict[pm4_value] = pm4_name
+        opcode_dict[int(pm4_value,0)] = pm4_name
 
 
   #pm4_info_file_h.write("enum Type7Opcodes\n")

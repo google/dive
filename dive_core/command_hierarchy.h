@@ -568,6 +568,9 @@ private:
     SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs] = {};
     uint32_t              m_group_info_size = 0;
 
+    // Cache the most recent cp_start_bin, to be appended to later with prefix and common packets
+    uint64_t m_start_bin_node_index = UINT64_MAX;
+
     uint32_t m_num_events = 0;  // Number of events so far
 
     bool m_new_event_start = true;

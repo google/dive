@@ -776,6 +776,21 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
     if (ib_info.m_skip)
         ib_string_stream << ", NOT CAPTURED";
 
+    if (type == IbType::kBinPrefix || type == IbType::kBinCommon)
+    {
+        // Create a "binprefix" or "bincommon" field node and set it as the parent
+        CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
+        uint64_t bin_node_index = AddNode(NodeType::kFieldNode, ib_string_stream.str(), aux_info);
+
+        // Add it as child to packet_node
+        AddChild(CommandHierarchy::kEngineTopology, m_start_bin_node_index, bin_node_index);
+        AddChild(CommandHierarchy::kSubmitTopology, m_start_bin_node_index, bin_node_index);
+        AddChild(CommandHierarchy::kAllEventTopology, m_start_bin_node_index, bin_node_index);
+        AddChild(CommandHierarchy::kRgpTopology, m_start_bin_node_index, bin_node_index);
+
+        m_shared_node_ib_parent_stack[m_cur_ib_level] = bin_node_index;
+    }
+
     // Create the ib node
     CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::IbNode(ib_index,
                                                                            type,
@@ -974,6 +989,14 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     else if (opcode == CP_MEM_TO_REG)
     {
         AppendMemRegNodes(mem_manager, submit_index, va_addr, packet_node_index);
+    }
+    else if (opcode == CP_START_BIN)
+    {
+        m_start_bin_node_index = packet_node_index;
+    }
+    else if (opcode == CP_END_BIN)
+    {
+        m_start_bin_node_index = UINT64_MAX;
     }
     else if (opcode == CP_SET_MARKER)
     {

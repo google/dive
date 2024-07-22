@@ -352,10 +352,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
         {
             uint64_t child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, child);
             QModelIndex model_index = QModelIndex();
-            // Check parent_row against UINT64_MAX, since only the shared children of the root node
-            // should be considered
-            if (parent_row != UINT64_MAX)
-                model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+            model_index = createIndex(parent_row, 0, (void *)parent_node_index);
             DIVE_ASSERT(child_node_index < m_node_parent_list.size());
             m_node_parent_list[child_node_index] = model_index;
 
@@ -370,8 +367,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
         uint64_t    child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
                                                                             child);
         QModelIndex model_index = QModelIndex();
-        if (parent_row != UINT64_MAX)
-            model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+        model_index = createIndex(parent_row, 0, (void *)parent_node_index);
         DIVE_ASSERT(child_node_index < m_node_parent_list.size());
         m_node_parent_list[child_node_index] = model_index;
 

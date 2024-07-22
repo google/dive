@@ -570,12 +570,13 @@ private:
 
     uint32_t m_num_events = 0;  // Number of events so far
 
-    bool     m_new_event_start = true;
-    bool     m_new_ib_start = true;
-    uint64_t m_start_shared_child_node_index;  // Shared child node that begins the current event
+    bool m_new_event_start = true;
+    bool m_new_ib_start = true;
+    bool m_new_pass_start = false;
 
-    // Same as m_start_shared_child_node_index, but used to track it specifically for stacked IBs
-    std::vector<uint64_t> m_start_shared_child_node_index_stack;
+    // Stack of shared child node that begins the current ibs/pass/events
+    // Need a stack because IBs and pass/events can be stacked
+    std::vector<uint64_t> m_start_node_stack[CommandHierarchy::kTopologyTypeCount];
 
     uint64_t m_last_added_node_index;
 

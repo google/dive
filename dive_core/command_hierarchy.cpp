@@ -825,10 +825,11 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     DIVE_ASSERT(!m_ib_stack.empty());
 
     // Setup root & range of shared children that this IB encompasses
-    DIVE_ASSERT(m_ib_stack.size() == m_start_shared_child_node_index_stack.size());
+    auto &start_node_stack = m_start_node_stack[CommandHierarchy::kSubmitTopology];
+    DIVE_ASSERT(m_start_node_stack[CommandHierarchy::kSubmitTopology].size() == m_ib_stack.size());
     SetStartSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
                                     m_ib_stack.back(),
-                                    m_start_shared_child_node_index_stack.back());
+                                    start_node_stack.back());
     SetEndSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
                                   m_ib_stack.back(),
                                   m_last_added_node_index);
@@ -844,12 +845,12 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     while (!m_ib_stack.empty() && type == IbType::kChain)
     {
         m_ib_stack.pop_back();
-        m_start_shared_child_node_index_stack.pop_back();
+        start_node_stack.pop_back();
         type = m_command_hierarchy_ptr->GetIbNodeType(m_ib_stack.back());
     }
 
     m_ib_stack.pop_back();
-    m_start_shared_child_node_index_stack.pop_back();
+    start_node_stack.pop_back();
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     m_cur_ib_level = ib_info.m_ib_level;
@@ -871,18 +872,25 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
     // Create the packet node and add it as child to the current submit_node and ib_node
     uint64_t packet_node_index = AddPacketNode(mem_manager, submit_index, va_addr, false, header);
-    m_last_added_node_index = packet_node_index;
+
+    // Events are fully contained within passes. This means that the first event in a pass will
+    // have the same start packet_node_index as the pass itself
+    if (m_new_pass_start)
+    {
+        m_new_pass_start = false;
+        m_start_node_stack[CommandHierarchy::kAllEventTopology].push_back(packet_node_index);
+    }
     if (m_new_event_start)
     {
         m_new_event_start = false;
-        m_start_shared_child_node_index = packet_node_index;
+        m_start_node_stack[CommandHierarchy::kAllEventTopology].push_back(packet_node_index);
     }
     if (m_new_ib_start)
     {
         m_new_ib_start = false;
-        m_start_shared_child_node_index_stack.push_back(packet_node_index);
+        m_start_node_stack[CommandHierarchy::kSubmitTopology].push_back(packet_node_index);
     }
-    DIVE_ASSERT(m_ib_stack.size() == m_start_shared_child_node_index_stack.size());
+    DIVE_ASSERT(m_ib_stack.size() == m_start_node_stack[CommandHierarchy::kSubmitTopology].size());
 
     uint64_t parent_index = m_shared_node_ib_parent_stack[m_cur_ib_level];
     AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
@@ -935,7 +943,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         // Setup root & range of shared children that this event encompasses
         SetStartSharedChildrenNodeIndex(CommandHierarchy::kAllEventTopology,
                                         event_node_index,
-                                        m_start_shared_child_node_index);
+                                        m_start_node_stack[CommandHierarchy::kAllEventTopology]
+                                        .back());
         SetEndSharedChildrenNodeIndex(CommandHierarchy::kAllEventTopology,
                                       event_node_index,
                                       packet_node_index);
@@ -943,6 +952,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                     event_node_index,
                                     m_cur_submit_node_index);
         m_new_event_start = true;
+        m_start_node_stack[CommandHierarchy::kAllEventTopology].pop_back();
 
         // Add the draw_dispatch_node to the submit_node if currently not inside a marker range.
         // Otherwise append it to the marker at the top of the marker stack.
@@ -1019,10 +1029,38 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
         if (add_child)
         {
+            // End of previous pass
+            if (m_render_marker_index != kInvalidRenderMarkerIndex)
+            {
+                // Events are fully contained within passes. This means the topmost element of the
+                // stack is always tracking the beginning of the next event. Need to pop that now
+                // that a new pass is being started
+                m_start_node_stack[CommandHierarchy::kAllEventTopology].pop_back();
+
+                // Setup root & range of shared children that this event encompasses
+                SetStartSharedChildrenNodeIndex(CommandHierarchy::kAllEventTopology,
+                                                m_render_marker_index,
+                                                m_start_node_stack
+                                                [CommandHierarchy::kAllEventTopology]
+                                                .back());
+                SetEndSharedChildrenNodeIndex(CommandHierarchy::kAllEventTopology,
+                                              m_render_marker_index,
+                                              m_last_added_node_index);
+                SetSharedChildRootNodeIndex(CommandHierarchy::kAllEventTopology,
+                                            m_render_marker_index,
+                                            m_cur_submit_node_index);
+                m_start_node_stack[CommandHierarchy::kAllEventTopology].pop_back();
+            }
+
             m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, desc, 0);
             AddChild(CommandHierarchy::kAllEventTopology,
                      m_cur_submit_node_index,
                      m_render_marker_index);
+            m_new_pass_start = true;
+
+            // Events are fully contained within passes, so we're starting a new event
+            // upon starting a new pass
+            m_new_event_start = true;
         }
     }
 
@@ -1033,6 +1071,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                        packet_node_index);
     }
 
+    m_last_added_node_index = packet_node_index;
     return true;
 }
 
@@ -1081,9 +1120,13 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     m_shared_node_ib_parent_stack[m_cur_ib_level] = m_cur_submit_node_index;
     m_cur_ib_packet_node_index = UINT64_MAX;
     m_ib_stack.clear();
-    m_start_shared_child_node_index_stack.clear();
+    for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; i++)
+        m_start_node_stack[i].clear();
     m_render_marker_index = kInvalidRenderMarkerIndex;
     m_state_tracker.Reset();
+    m_new_event_start = true;
+    m_new_ib_start = true;
+    m_new_pass_start = false;
 }
 
 //--------------------------------------------------------------------------------------------------

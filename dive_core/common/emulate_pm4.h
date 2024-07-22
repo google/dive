@@ -50,8 +50,13 @@ struct IndirectBufferInfo
 };
 
 // clang-format off
-union Pm4Type4Header
+union Pm4Header
 {
+    struct
+    {
+        uint32_t offset_parity : 28;
+        uint32_t type : 4;
+    };
     struct
     {
         uint32_t count          : 7;
@@ -59,13 +64,8 @@ union Pm4Type4Header
         uint32_t offset         : 19;
         uint32_t offset_parity  : 1;
         uint32_t type           : 4;
-    };
-    uint32_t u32All;
-};
-
-union Pm4Type7Header
-{
-    struct
+    } type4;
+    struct Type7
     {
         uint32_t count          : 15;
         uint32_t count_parity   : 1;
@@ -73,11 +73,11 @@ union Pm4Type7Header
         uint32_t opcode_parity  : 1;
         uint32_t zeroes         : 4;
         uint32_t type           : 4;
-    };
+    } type7;
+
     uint32_t u32All;
 };
 
-enum class Pm4Type { kType2, kType4, kType7, kUnknown };
 // clang-format on
 
 //--------------------------------------------------------------------------------------------------
@@ -121,8 +121,7 @@ public:
                           uint32_t              submit_index,
                           uint32_t              ib_index,
                           uint64_t              va_addr,
-                          Pm4Type               type,
-                          uint32_t              header)
+                          Pm4Header             header)
     {
         return true;
     }
@@ -143,8 +142,7 @@ public:
                   uint32_t              submit_index,
                   uint32_t              ib_index,
                   uint64_t              va_addr,
-                  Pm4Type               type,
-                  uint32_t              header);
+                  Pm4Header             header);
 
     // Accessing state tracking info
     bool     IsUConfigStateSet(uint16_t reg) const;
@@ -245,7 +243,7 @@ private:
             IbType   m_cur_ib_type;
 
             // IB queue (for storing pending CALLs or CHAINs)
-            IbType   m_ib_queue_type;
+            IbType   m_ib_queue_type[kMaxPendingIbs];
             uint64_t m_ib_queue_addrs[kMaxPendingIbs];
             uint32_t m_ib_queue_sizes_in_dwords[kMaxPendingIbs];
             bool     m_ib_queue_skip[kMaxPendingIbs];
@@ -278,8 +276,7 @@ private:
     bool AdvanceCb(const IMemoryManager &mem_manager,
                    EmulateState         *emu_state_ptr,
                    IEmulateCallbacks    &callbacks,
-                   Pm4Type               type,
-                   uint32_t              header) const;
+                   Pm4Header             header) const;
 
     // Helper function to queue up an IB for later CALL or CHAIN
     // Use AdvanceToIB to actually jump to the 1st queued up IB
@@ -301,18 +298,12 @@ private:
                            IEmulateCallbacks    &callbacks) const;
 
     // Helper function to help with advancing emulation to next packet
-    void AdvancePacket(EmulateState *emu_state, uint32_t header) const;
+    void AdvancePacket(EmulateState *emu_state, Pm4Header header) const;
 
     // Helper function to help with advancing emulation out of IB
     bool AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &callbacks) const;
 
     uint32_t CalcParity(uint32_t val);
-
-    // Only used by CP_START_BIN/CP_END_BIN
-    mutable uint64_t m_cp_start_bin_address = UINT64_MAX;
-    mutable uint64_t m_prefix_start_address = UINT64_MAX;
-    mutable uint32_t m_prefix_block_dword_size = 0;
-    mutable uint32_t m_prefix_block_count = 0;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -320,6 +311,6 @@ bool IsDrawDispatchEventOpcode(uint32_t opcode);
 bool IsDispatchEventOpcode(uint32_t opcode);
 bool IsDrawEventOpcode(uint32_t opcode);
 
-uint32_t GetPacketSize(uint32_t header);
+uint32_t GetPacketSize(Pm4Header header);
 
 }  // namespace Dive

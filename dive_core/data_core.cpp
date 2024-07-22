@@ -169,13 +169,12 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                       uint32_t              submit_index,
                                       uint32_t              ib_index,
                                       uint64_t              va_addr,
-                                      Pm4Type               type,
-                                      uint32_t              header)
+                                      Pm4Header             header)
 {
-    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, type, header))
+    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
         return false;
 
-    if (type != Pm4Type::kType7)
+    if (header.type != 7)
         return true;
 
     Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;

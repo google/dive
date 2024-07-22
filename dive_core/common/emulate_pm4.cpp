@@ -35,16 +35,6 @@
 namespace Dive
 {
 
-union Pm4Header
-{
-    struct
-    {
-        uint32_t offset_parity : 28;
-        uint32_t type : 4;
-    };
-    uint32_t u32All;
-};
-
 // =================================================================================================
 // EmulateStateTracker
 // =================================================================================================
@@ -55,21 +45,18 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
                                    uint32_t              submit_index,
                                    uint32_t              ib_index,
                                    uint64_t              va_addr,
-                                   Pm4Type               type,
-                                   uint32_t              header)
+                                   Pm4Header             header)
 {
     // type 4 is setting register
-    if (type != Pm4Type::kType4)
+    if (header.type != 4)
         return true;
-
-    Pm4Type4Header *type4_header = (Pm4Type4Header *)&header;
 
     uint32_t offset_in_bytes = 0;
     uint32_t dword = 0;
-    while (dword < type4_header->count)
+    while (dword < header.type4.count)
     {
         uint64_t reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
-        uint32_t reg_offset = type4_header->offset + dword;
+        uint32_t reg_offset = header.type4.offset + dword;
         DIVE_ASSERT(reg_offset < kNumRegs);
         const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
 
@@ -766,17 +753,8 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
                                            cur_ib_level->m_cur_va,
                                            sizeof(Pm4Header)));
 
-        // We only care about Type 2, 4 and 7 packets
-        Pm4Type type = Pm4Type::kUnknown;
-        if (header.type == 2)  // NOP
-            type = Pm4Type::kType2;
-        else if (header.type == 4)  // Register write
-            type = Pm4Type::kType4;
-        if (header.type == 7)  // PM4 opcode
-            type = Pm4Type::kType7;
-
         // Check validity of packet
-        if (type == Pm4Type::kType4)
+        if (header.type == 4)
         {
             Pm4Type4Header *type4_header = (Pm4Type4Header *)&header;
             if (type4_header->offset_parity != CalcParity(type4_header->offset))
@@ -784,7 +762,7 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
             if (type4_header->count_parity != CalcParity(type4_header->count))
                 return false;
         }
-        else if (type == Pm4Type::kType7)
+        else if (header.type == 7)
         {
             Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
             if (type7_header->opcode_parity != CalcParity(type7_header->opcode))
@@ -799,10 +777,9 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
                                 emu_state.m_submit_index,
                                 emu_state.m_ib_index,
                                 cur_ib_level->m_cur_va,
-                                type,
-                                header.u32All))
+                                header))
             return false;
-        if (!AdvanceCb(mem_manager, &emu_state, callbacks, type, header.u32All))
+        if (!AdvanceCb(mem_manager, &emu_state, callbacks, header))
             return false;
     }  // while there are packets left in submit
     return true;
@@ -812,22 +789,18 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
 bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                            EmulateState         *emu_state_ptr,
                            IEmulateCallbacks    &callbacks,
-                           Pm4Type               type,
-                           uint32_t              header) const
+                           Pm4Header             header) const
 {
-    Pm4Type7Header type7_header;
-    type7_header.u32All = header;
-
     // Note: CP_COND_INDIRECT_BUFFER_PFE is not parsed here because it isn't used by Turnip.
     // When it shows up in production driver captures, the IB addr and size values are all
     // garbage. Not sure what it's used for at this point.
-    if (type7_header.opcode == CP_COND_INDIRECT_BUFFER_PFE)
+    if (header.type7.opcode == CP_COND_INDIRECT_BUFFER_PFE)
         DIVE_DEBUG_LOG("Packet ignored: CP_COND_INDIRECT_BUFFER_PFE\n");
 
     // Deal with calls and chains
-    if (type == Pm4Type::kType7 && (type7_header.opcode == CP_INDIRECT_BUFFER_PFE ||
-                                    type7_header.opcode == CP_INDIRECT_BUFFER_PFD ||
-                                    type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN))
+    if (header.type == 7 && (header.type7.opcode == CP_INDIRECT_BUFFER_PFE ||
+                             header.type7.opcode == CP_INDIRECT_BUFFER_PFD ||
+                             header.type7.opcode == CP_INDIRECT_BUFFER_CHAIN))
     {
 
         PM4_CP_INDIRECT_BUFFER ib_packet;
@@ -836,7 +809,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
                                            sizeof(PM4_CP_INDIRECT_BUFFER)));
         uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
-        IbType   ib_type = (type7_header.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
+        IbType   ib_type = (header.type7.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
                                                                                IbType::kCall;
         emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
         emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
@@ -849,7 +822,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
             return false;
     }
     // Parse CP_SET_CTXSWITCH_IB, since it references implicit IBs
-    else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_CTXSWITCH_IB)
+    else if (header.type == 7 && header.type7.opcode == CP_SET_CTXSWITCH_IB)
     {
         // For simplicity sake, treat CP_SET_CTXSWITCH_IB essentially as a
         // CALL (i.e. jump to the next IB level), although the hardware probably
@@ -858,7 +831,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         DIVE_VERIFY(mem_manager.CopyMemory(&packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
-                                           (type7_header.count + 1) * sizeof(uint32_t)));
+                                           (header.type7.count + 1) * sizeof(uint32_t)));
 
         // Sometimes this packet is used for purposes other than to jump to an IB. Check size.
         // Example: When TYPE is SAVE_IB
@@ -882,7 +855,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         }
     }
     // Parse CP_SET_DRAW_STATE, since it references implicit IBs
-    else if (type == Pm4Type::kType7 && type7_header.opcode == CP_SET_DRAW_STATE)
+    else if (header.type == 7 && header.type7.opcode == CP_SET_DRAW_STATE)
     {
         // For simplicity sake, treat CP_SET_DRAW_STATE essentially as multiple
         // CALLs (i.e. jump to the next IB level), although the hardware probably
@@ -891,7 +864,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         DIVE_VERIFY(mem_manager.CopyMemory(&packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
-                                           (type7_header.count + 1) * sizeof(uint32_t)));
+                                           (header.type7.count + 1) * sizeof(uint32_t)));
         uint32_t packet_size = (packet.HEADER.count * sizeof(uint32_t));
         uint32_t array_size = packet_size / sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
         DIVE_ASSERT((packet_size % sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT)) == 0);
@@ -929,7 +902,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                 return false;
         }
     }
-    else if ((type == Pm4Type::kType7) && (type7_header.opcode == CP_START_BIN))
+    else if ((header.type == 7) && (header.type7.opcode == CP_START_BIN))
     {
 
         PM4_CP_START_BIN packet;
@@ -951,40 +924,50 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // Prefix_block contains setup for each tile, like viewport/scissors with fixed block size
         // Common_block contains drawcalls and resolve
 
-        // only add the 1st prefix block here
-        // after this ib, we jump back to the Common_block
-        // once we advance to the CP_END_BIN, we add the rest ibs
-        // it is done this way since we don't know the size of the Common_block at this point
-        // packet. (BODY_DWORDS contains 0 in all test captures.)
-        if (!QueueIB(packet.PREFIX_ADDR,
-                     packet.PREFIX_DWORDS,
-                     false,
-                     IbType::kBinPrefix,
-                     emu_state_ptr))
-        {
-            return false;
-        }
+        uint64_t cp_start_common_block_va = emu_state_ptr->GetCurIb()->m_cur_va +
+                                            GetPacketSize(header) * sizeof(uint32_t);
 
-        m_cp_start_bin_address = emu_state_ptr->GetCurIb()->m_cur_va +
-                                 GetPacketSize(header) * sizeof(uint32_t);
-        m_prefix_start_address = packet.PREFIX_ADDR;
-        m_prefix_block_dword_size = packet.PREFIX_DWORDS;
-        m_prefix_block_count = packet.BIN_COUNT;
-
-        AdvancePacket(emu_state_ptr, header);
-        if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
-            return false;
-    }
-    else if ((type == Pm4Type::kType7) && (type7_header.opcode == CP_END_BIN))
-    {
-        uint32_t common_block_dword_size = static_cast<uint32_t>(
-        (emu_state_ptr->GetCurIb()->m_cur_va - m_cp_start_bin_address) / sizeof(uint32_t));
-        // starts from the 2nd one since the 1st one has been added in CP_START_BIN
-        for (uint32_t bin = 1; bin < m_prefix_block_count; ++bin)
+        // A CP_START_BIN is always paired with a CP_END_BIN within the same command buffer, at the
+        // same IB Level. So peek ahead to find where the CP_END_BIN appears so that the size of the
+        // common block can be determined. No need to emulate the contents of any intervening IBs,
+        // since we know the CP_END_BIN is at the same ib level
+        EmulateState::IbStack *cur_ib_level = &emu_state_ptr
+                                               ->m_ib_stack[emu_state_ptr->m_top_of_stack];
+        uint64_t temp_va = cur_ib_level->m_cur_va;
+        uint32_t common_block_dword_size = UINT32_MAX;
+        while (true)
         {
-            if (!QueueIB(m_prefix_start_address +
-                         bin * m_prefix_block_dword_size * sizeof(uint32_t),
-                         m_prefix_block_dword_size,
+            Pm4Header temp_header;
+            DIVE_VERIFY(mem_manager.CopyMemory(&temp_header,
+                                               emu_state_ptr->m_submit_index,
+                                               temp_va,
+                                               sizeof(Pm4Header)));
+            if (temp_header.type == 7 && temp_header.type7.opcode == CP_END_BIN)
+            {
+                uint64_t common_block_size = temp_va - cp_start_common_block_va;
+                common_block_dword_size = (uint32_t)(common_block_size / sizeof(uint32_t));
+                break;
+            }
+            uint32_t packet_size = GetPacketSize(temp_header);
+            temp_va += packet_size * sizeof(uint32_t);
+
+            // Make sure it doesn't run past the end
+            DIVE_ASSERT(temp_va < cur_ib_level->m_cur_ib_addr +
+                                  cur_ib_level->m_cur_ib_size_in_dwords * sizeof(uint32_t));
+        };
+
+        // Make sure the CP_END_BIN was found
+        DIVE_ASSERT(common_block_dword_size != UINT32_MAX);
+
+        // Skip past common section, since it will be processed as ibs in the next loop
+        cur_ib_level->m_cur_va = cp_start_common_block_va +
+                                 common_block_dword_size * sizeof(uint32_t);
+
+        // Go through each prefix+common pair
+        for (uint32_t bin = 0; bin < packet.BIN_COUNT; ++bin)
+        {
+            if (!QueueIB(packet.PREFIX_ADDR + bin * packet.PREFIX_DWORDS * sizeof(uint32_t),
+                         packet.PREFIX_DWORDS,
                          false,
                          IbType::kBinPrefix,
                          emu_state_ptr))
@@ -992,7 +975,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                 return false;
             }
 
-            if (!QueueIB(m_cp_start_bin_address,
+            if (!QueueIB(cp_start_common_block_va,
                          common_block_dword_size,
                          false,
                          IbType::kBinCommon,
@@ -1001,17 +984,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                 return false;
             }
         }
-
-        m_cp_start_bin_address = UINT64_MAX;
-        m_prefix_start_address = UINT64_MAX;
-        m_prefix_block_dword_size = 0;
-        m_prefix_block_count = 0;
-
-        AdvancePacket(emu_state_ptr, header);
         if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
             return false;
     }
-    else if ((type == Pm4Type::kType7) && (type7_header.opcode == CP_FIXED_STRIDE_DRAW_TABLE))
+    else if ((header.type == 7) && (header.type7.opcode == CP_FIXED_STRIDE_DRAW_TABLE))
     {
         // CP_FIXED_STRIDE_DRAW_TABLE only availabe at a7xx+
         // Executes an array of fixed-size command buffers where each buffer is assumed to have one
@@ -1079,7 +1055,7 @@ bool EmulatePM4::QueueIB(uint64_t      ib_addr,
     cur_ib_level->m_ib_queue_sizes_in_dwords[cur_ib_level->m_ib_queue_size] = ib_size_in_dwords;
     cur_ib_level->m_ib_queue_skip[cur_ib_level->m_ib_queue_size] = skip;
     cur_ib_level->m_ib_queue_enable_mask[cur_ib_level->m_ib_queue_size] = enable_mask;
-    cur_ib_level->m_ib_queue_type = ib_type;
+    cur_ib_level->m_ib_queue_type[cur_ib_level->m_ib_queue_size] = ib_type;
     cur_ib_level->m_ib_queue_size++;
     return true;
 }
@@ -1099,26 +1075,26 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
     // Can't advance to a queued up IB if there are no IBs queued up!
     DIVE_ASSERT(prev_ib_level->m_ib_queue_size != 0);
 
-    if (prev_ib_level->m_ib_queue_type != IbType::kChain)
+    uint32_t index = prev_ib_level->m_ib_queue_index;
+    if (prev_ib_level->m_ib_queue_type[index] != IbType::kChain)
     {
         DIVE_ASSERT(emu_state->m_top_of_stack < IbLevel::kTotalIbLevels - 1);
 
-        // If it's calling into another IB from the primary ring, then update the ib index. Note
-        // that only IBs called from primary ring as labelled as "normal" ibs
-        if (prev_ib_level->m_ib_queue_type == IbType::kNormal)
+        // If it's calling into another IB from the primary ring, then update the ib index.
+        // Note that only IBs called from primary ring as labelled as "normal" ibs
+        if (prev_ib_level->m_ib_queue_type[index] == IbType::kNormal)
             emu_state->m_ib_index = prev_ib_level->m_ib_queue_index;
 
         // Enter next IB level (CALL)
         emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack + 1);
 
-        uint32_t               index = prev_ib_level->m_ib_queue_index;
         EmulateState::IbStack *new_ib_level = emu_state->GetCurIb();
         new_ib_level->m_cur_va = prev_ib_level->m_ib_queue_addrs[index];
         new_ib_level->m_cur_ib_size_in_dwords = prev_ib_level->m_ib_queue_sizes_in_dwords[index];
         new_ib_level->m_cur_ib_skip = prev_ib_level->m_ib_queue_skip[index];
         new_ib_level->m_cur_ib_enable_mask = prev_ib_level->m_ib_queue_enable_mask[index];
         new_ib_level->m_cur_ib_addr = new_ib_level->m_cur_va;
-        new_ib_level->m_cur_ib_type = prev_ib_level->m_ib_queue_type;
+        new_ib_level->m_cur_ib_type = prev_ib_level->m_ib_queue_type[index];
         new_ib_level->m_ib_queue_index = new_ib_level->m_ib_queue_size = 0;
     }
     else
@@ -1195,7 +1171,7 @@ bool EmulatePM4::CheckAndAdvanceIB(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-void EmulatePM4::AdvancePacket(EmulateState *emu_state, uint32_t header) const
+void EmulatePM4::AdvancePacket(EmulateState *emu_state, Pm4Header header) const
 {
     uint32_t packet_size = GetPacketSize(header);
     emu_state->GetCurIb()->m_cur_va += packet_size * sizeof(uint32_t);
@@ -1265,23 +1241,17 @@ bool IsDrawEventOpcode(uint32_t opcode)
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t GetPacketSize(uint32_t header)
+uint32_t GetPacketSize(Pm4Header header)
 {
-    Pm4Header pm4_header;
-    pm4_header.u32All = header;
-
     // Assumes the packet is valid, so doesn't check the parity bits at all
-    switch (pm4_header.type)
+    switch (header.type)
     {
     case 2: return 1;
     case 4:
     {
-        Pm4Type4Header *type4_header = (Pm4Type4Header *)&pm4_header;
-        return type4_header->count + 1;
+        return header.type4.count + 1;
     }
-    case 7:
-        Pm4Type7Header *type7_header = (Pm4Type7Header *)&pm4_header;
-        return type7_header->count + 1;
+    case 7: return header.type7.count + 1;
     }
     DIVE_ASSERT(false);
     return 0;

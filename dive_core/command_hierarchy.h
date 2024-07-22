@@ -394,8 +394,7 @@ public:
                           uint32_t              submit_index,
                           uint32_t              ib_index,
                           uint64_t              va_addr,
-                          Pm4Type               type,
-                          uint32_t              header) override;
+                          Pm4Header             header) override;
 
 private:
     union Type3Ordinal2
@@ -415,8 +414,7 @@ private:
                                uint32_t              submit_index,
                                uint64_t              va_addr,
                                bool                  is_ce_packet,
-                               Pm4Type               type,
-                               uint32_t              header);
+                               Pm4Header             header);
     uint64_t     AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
     uint64_t     AddSyncEventNode(const IMemoryManager &mem_manager,
                                   uint32_t              submit_index,
@@ -435,7 +433,7 @@ private:
     void AppendRegNodes(const IMemoryManager &mem_manager,
                         uint32_t              submit_index,
                         uint64_t              va_addr,
-                        Pm4Type4Header        header,
+                        Pm4Header             header,
                         uint64_t              packet_node_index);
     void AppendRegNodes(const IMemoryManager &mem_manager,
                         uint32_t              submit_index,
@@ -492,7 +490,7 @@ private:
                                     uint32_t              submit_index,
                                     uint64_t              va_addr,
                                     uint64_t              set_draw_state_node_index,
-                                    uint32_t              header);
+                                    Pm4Header             header);
 
     uint64_t AddNode(NodeType                  type,
                      const std::string        &desc,

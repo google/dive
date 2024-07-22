@@ -146,8 +146,7 @@ public:
                           uint32_t              submit_index,
                           uint32_t              ib_index,
                           uint64_t              va_addr,
-                          Pm4Type               type,
-                          uint32_t              header) override;
+                          Pm4Header             header) override;
 
 private:
     bool HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t opcode);

@@ -861,22 +861,16 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                        uint32_t              submit_index,
                                        uint32_t              ib_index,
                                        uint64_t              va_addr,
-                                       Pm4Type               type,
-                                       uint32_t              header)
+                                       Pm4Header             header)
 {
-    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, type, header))
+    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
         return false;
     // THIS IS TEMPORARY! Only deal with typ4 & type7 packets for now
-    if ((type != Pm4Type::kType4) && (type != Pm4Type::kType7))
+    if ((header.type != 4) && (header.type != 7))
         return true;
 
     // Create the packet node and add it as child to the current submit_node and ib_node
-    uint64_t packet_node_index = AddPacketNode(mem_manager,
-                                               submit_index,
-                                               va_addr,
-                                               false,
-                                               type,
-                                               header);
+    uint64_t packet_node_index = AddPacketNode(mem_manager, submit_index, va_addr, false, header);
     m_last_added_node_index = packet_node_index;
     if (m_new_event_start)
     {
@@ -900,11 +894,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     AddSharedChild(CommandHierarchy::kSubmitTopology, m_ib_stack.back(), packet_node_index);
 
     uint32_t opcode = UINT32_MAX;
-    if (type == Pm4Type::kType7)
-    {
-        Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
-        opcode = type7_header->opcode;
-    }
+    if (header.type == 7)
+        opcode = header.type7.opcode;
 
     // Cache packets that may be part of the vkBeginCommandBuffer.
     m_cmd_begin_packet_node_indices.push_back(packet_node_index);
@@ -1156,166 +1147,57 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
                                                 uint32_t              submit_index,
                                                 uint64_t              va_addr,
                                                 bool                  is_ce_packet,
-                                                Pm4Type               type,
-                                                uint32_t              header)
+                                                Pm4Header             header)
 {
-    if (type == Pm4Type::kType7)
+    if (header.type == 7)
     {
-        Pm4Type7Header type7_header;
-        type7_header.u32All = header;
-
         std::ostringstream packet_string_stream;
-        packet_string_stream << GetOpCodeString(type7_header.opcode);
-        packet_string_stream << " 0x" << std::hex << type7_header.u32All << std::dec;
+        packet_string_stream << GetOpCodeString(header.type7.opcode);
+        packet_string_stream << " 0x" << std::hex << header.u32All << std::dec;
 
         CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
-                                                                                   type7_header
+                                                                                   header.type7
                                                                                    .opcode,
                                                                                    m_cur_ib_level);
 
         uint64_t packet_node_index = AddNode(NodeType::kPacketNode,
                                              packet_string_stream.str(),
                                              aux_info);
-        /*
-        if (type7_header.opcode == Pal::Gfx9::IT_SET_CONTEXT_REG)
-        {
-            // Note: IT_SET_CONTEXT_REG_INDEX does not appear to be used in the driver
-            uint32_t start = Pal::Gfx9::CONTEXT_SPACE_START;
-            uint32_t end = Pal::Gfx9::Gfx09_10::CONTEXT_SPACE_END;
-            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header,
-        packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_CONTEXT_REG_RMW)
-        {
-            AppendContextRegRmwNodes(mem_manager, submit_index, va_addr, header, packet_node_index);
-        }
-        else if ((type7_header.opcode == Pal::Gfx9::IT_SET_UCONFIG_REG) ||
-                (type7_header.opcode == Pal::Gfx9::IT_SET_UCONFIG_REG_INDEX))
-        {
-            uint32_t start = Pal::Gfx9::UCONFIG_SPACE_START;
-            uint32_t end = Pal::Gfx9::UCONFIG_SPACE_END;
-            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header,
-        packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_SET_CONFIG_REG)
-        {
-            uint32_t start = Pal::Gfx9::CONFIG_SPACE_START;
-            uint32_t end = Pal::Gfx9::CONFIG_SPACE_END;
-            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header,
-        packet_node_index);
-        }
-        else if ((type7_header.opcode == Pal::Gfx9::IT_SET_SH_REG) ||
-                (type7_header.opcode == Pal::Gfx9::IT_SET_SH_REG_INDEX))
-        {
-            uint32_t start = Pal::Gfx9::PERSISTENT_SPACE_START;
-            uint32_t end = Pal::Gfx9::PERSISTENT_SPACE_END;
-            AppendRegNodes(mem_manager, submit_index, va_addr, start, end, header,
-        packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_INDIRECT_BUFFER_CNST)
-        {
-            // IT_INDIRECT_BUFFER_CNST aliases IT_COND_INDIRECT_BUFFER_CNST, but have different
-            // packet formats. So need to handle them manually.
-            AppendIBFieldNodes("INDIRECT_BUFFER_CNST",
-                            mem_manager,
-                            submit_index,
-                            va_addr,
-                            is_ce_packet,
-                            header,
-                            packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_INDIRECT_BUFFER)
-        {
-            // IT_INDIRECT_BUFFER aliases IT_COND_INDIRECT_BUFFER, but have different packet
-            // formats. So need to handle them manually.
-            AppendIBFieldNodes("INDIRECT_BUFFER",
-                            mem_manager,
-                            submit_index,
-                            va_addr,
-                            is_ce_packet,
-                            header,
-                            packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_LOAD_UCONFIG_REG ||
-                type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG ||
-                type7_header.opcode == Pal::Gfx9::IT_LOAD_SH_REG)
-        {
-            uint32_t reg_space_start = Pal::Gfx9::UCONFIG_SPACE_START;
-            if (type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG)
-                reg_space_start = Pal::Gfx9::CONTEXT_SPACE_START;
-            if (type7_header.opcode == Pal::Gfx9::IT_LOAD_SH_REG)
-                reg_space_start = Pal::Gfx9::PERSISTENT_SPACE_START;
-            AppendLoadRegNodes(mem_manager,
-                            submit_index,
-                            va_addr,
-                            reg_space_start,
-                            header,
-                            packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG_INDEX ||
-                type7_header.opcode == Pal::Gfx9::IT_LOAD_SH_REG_INDEX)
-        {
-            uint32_t reg_space_start = (type7_header.opcode == Pal::Gfx9::IT_LOAD_CONTEXT_REG_INDEX)
-        ? Pal::Gfx9::CONTEXT_SPACE_START : Pal::Gfx9::PERSISTENT_SPACE_START;
-            AppendLoadRegIndexNodes(mem_manager,
-                                    submit_index,
-                                    va_addr,
-                                    reg_space_start,
-                                    header,
-                                    packet_node_index);
-        }
-        else if (type7_header.opcode == Pal::Gfx9::IT_EVENT_WRITE)
-        {
-            // Event field is special case because there are 2 or 4 DWORD variants of this packet
-            // Also, the event_type field is not enumerated in the header, so have to enumerate
-            // manually
-            const PacketInfo *packet_info_ptr = GetPacketInfo(type7_header.opcode);
-            DIVE_ASSERT(packet_info_ptr != nullptr);
-            AppendEventWriteFieldNodes(mem_manager,
-                                    submit_index,
-                                    va_addr,
-                                    header,
-                                    packet_info_ptr,
-                                    packet_node_index);
-        }
-        else
-        */
-        if (type7_header.opcode == CP_CONTEXT_REG_BUNCH)
+
+        if (header.type7.opcode == CP_CONTEXT_REG_BUNCH)
         {
             AppendRegNodes(mem_manager,
                            submit_index,
                            va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
-                           type7_header.count,
+                           header.type7.count,
                            packet_node_index);
         }
         else
         {
             // If there are missing packet fields, then output the raw DWORDS directly
             // Some packets, such as CP_LOAD_STATE6_* handle this explicitly elsewhere
-            bool append_extra_dwords = (type7_header.opcode != CP_LOAD_STATE6 &&
-                                        type7_header.opcode != CP_LOAD_STATE6_GEOM &&
-                                        type7_header.opcode != CP_LOAD_STATE6_FRAG);
+            bool append_extra_dwords = (header.type7.opcode != CP_LOAD_STATE6 &&
+                                        header.type7.opcode != CP_LOAD_STATE6_GEOM &&
+                                        header.type7.opcode != CP_LOAD_STATE6_FRAG);
 
-            const PacketInfo *packet_info_ptr = GetPacketInfo(type7_header.opcode);
+            const PacketInfo *packet_info_ptr = GetPacketInfo(header.type7.opcode);
             DIVE_ASSERT(packet_info_ptr != nullptr);
             AppendPacketFieldNodes(mem_manager,
                                    submit_index,
                                    va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
-                                   type7_header.count,
+                                   header.type7.count,
                                    append_extra_dwords,
                                    packet_info_ptr,
                                    packet_node_index);
         }
         return packet_node_index;
     }
-    else if (type == Pm4Type::kType4)
+    else if (header.type == 4)
     {
-        Pm4Type4Header type4_header;
-        type4_header.u32All = header;
 
         std::ostringstream packet_string_stream;
         packet_string_stream << "TYPE4 REGWRITE";
-        packet_string_stream << " 0x" << std::hex << type4_header.u32All << std::dec;
+        packet_string_stream << " 0x" << std::hex << header.u32All << std::dec;
 
         CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::PacketNode(va_addr,
                                                                                    UINT8_MAX,
@@ -1325,7 +1207,7 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager &mem_manage
                                              packet_string_stream.str(),
                                              aux_info);
 
-        AppendRegNodes(mem_manager, submit_index, va_addr, type4_header, packet_node_index);
+        AppendRegNodes(mem_manager, submit_index, va_addr, header, packet_node_index);
         return packet_node_index;
     }
     return UINT32_MAX;  // This is temporary. Shouldn't happen once we properly add the packet node!
@@ -1734,7 +1616,7 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
 void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
                                              uint32_t              submit_index,
                                              uint64_t              va_addr,
-                                             Pm4Type4Header        header,
+                                             Pm4Header             header,
                                              uint64_t              packet_node_index)
 {
     // This version of AppendRegNodes takes in an offset from the header, and expects a contiguous
@@ -1743,10 +1625,10 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
     // Go through each register set by this packet
     uint32_t offset_in_bytes = 0;
     uint32_t dword = 0;
-    while (dword < header.count)
+    while (dword < header.type4.count)
     {
         uint64_t       reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
-        uint32_t       reg_offset = header.offset + dword;
+        uint32_t       reg_offset = header.type4.offset + dword;
         const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
 
         RegInfo temp = {};
@@ -2147,11 +2029,9 @@ void CommandHierarchyCreator::AppendMemRegNodes(const IMemoryManager &mem_manage
 void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
                                                          uint32_t              submit_index,
                                                          uint64_t              va_addr,
-                                                         uint64_t set_draw_state_node_index,
-                                                         uint32_t header)
+                                                         uint64_t  set_draw_state_node_index,
+                                                         Pm4Header header)
 {
-    Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
-
     // Find all the children of the set_draw_state packet, which should contain array indices
     // Using any of the topologies where field nodes are added will work
     uint64_t               index = set_draw_state_node_index;
@@ -2162,10 +2042,10 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
     DIVE_VERIFY(mem_manager.CopyMemory(&packet,
                                        submit_index,
                                        va_addr,
-                                       (type7_header->count + 1) * sizeof(uint32_t)));
+                                       (header.type7.count + 1) * sizeof(uint32_t)));
 
     // Sanity check: The # of children should match the array size
-    uint32_t total_size_bytes = (type7_header->count * sizeof(uint32_t));
+    uint32_t total_size_bytes = (header.type7.count * sizeof(uint32_t));
     uint32_t per_element_size = sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
     uint32_t array_size = total_size_bytes / per_element_size;
     DIVE_ASSERT(total_size_bytes % per_element_size == 0);

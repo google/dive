@@ -90,7 +90,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     }
 
     uint64_t node_index = (uint64_t)(index.internalPointer());
-    if (role == Qt::ForegroundRole && IsCurEvent(node_index))
+    if (role == Qt::ForegroundRole && IsSelected(node_index))
         return QColor(255, 128, 128);
 
     if (role != Qt::DisplayRole)
@@ -260,8 +260,8 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
     // The bit lists are 1-bit per node, but they're arrays of uint8_ts, so round up
     size_t bit_list_size = (m_command_hierarchy.size() + 7) / 8;
     m_node_parent_list.resize(m_command_hierarchy.size());
-    m_node_is_cur_event_bit_list.clear();
-    m_node_is_cur_event_bit_list.resize(bit_list_size);
+    m_node_is_selected_bit_list.clear();
+    m_node_is_selected_bit_list.resize(bit_list_size);
     CreateNodeToParentMap(UINT64_MAX, root_node_index, false);
 
     // Determine the scroll-to position
@@ -278,8 +278,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
         // The row has to account for both
         if (child_node_index == end_node_index)
         {
-            uint64_t row = m_topology_ptr->GetNumChildren(parent_node_index) + child;
-            m_scroll_to_index = createIndex(row, 0, (void *)end_node_index);
+            m_scroll_to_index = createIndex(child, 0, (void *)end_node_index);
 
             // If the shared node has fields, then the last field should be the scroll-to position
             // instead
@@ -287,7 +286,12 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
             {
                 uint32_t i = m_topology_ptr->GetNumChildren(end_node_index) - 1;
                 uint64_t last_node_index = m_topology_ptr->GetChildNodeIndex(end_node_index, i);
-                m_scroll_to_index = createIndex(i, 0, (void *)last_node_index);
+                // There are cases where scrolling to the last field is not the right thing to do
+                // For example, sometimes passes end at CP_START_BIN packets, and the next pass
+                // will begin somewhere within the children of CP_START_BIN. So scrolling to the
+                // bottom of the CP_START_BIN is not appropriate in this case
+                if (IsSelected(last_node_index))
+                    m_scroll_to_index = createIndex(i, 0, (void *)last_node_index);
             }
         }
     }
@@ -330,11 +334,11 @@ QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QV
 //--------------------------------------------------------------------------------------------------
 bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
                                                uint64_t parent_node_index,
-                                               bool     is_parent_cur_event)
+                                               bool     is_parent_part_of_selected)
 {
-    bool is_cur_event = is_parent_cur_event;
-    if (is_parent_cur_event)
-        SetIsCurEvent(parent_node_index);
+    bool is_selected = is_parent_part_of_selected;
+    if (is_parent_part_of_selected)
+        SetIsSelected(parent_node_index);
 
     // Because shared (i.e. packet) nodes can have multiple parents, a map is created to match
     // those packets to the parent as seen during a specific traversal
@@ -342,6 +346,16 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
 
     uint64_t start_node_index = m_topology_ptr->GetStartSharedChildNodeIndex(m_selected_node_index);
     uint64_t end_node_index = m_topology_ptr->GetEndSharedChildNodeIndex(m_selected_node_index);
+    if (is_parent_part_of_selected && (parent_node_index == end_node_index))
+    {
+        if (m_command_hierarchy.GetNodeType(parent_node_index) == Dive::NodeType::kPacketNode)
+        {
+            uint8_t opcode = m_command_hierarchy.GetPacketNodeOpcode(parent_node_index);
+            if (opcode == CP_START_BIN || opcode == CP_INDIRECT_BUFFER_PFE ||
+                opcode == CP_INDIRECT_BUFFER_PFD || opcode == CP_INDIRECT_BUFFER_CHAIN)
+                is_selected = false;
+        }
+    }
 
     // To keep things simple, also include non-shared nodes in this mapping
     // This way the parent() function will be a simple lookup regardless of packet type
@@ -356,7 +370,11 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
             DIVE_ASSERT(child_node_index < m_node_parent_list.size());
             m_node_parent_list[child_node_index] = model_index;
 
-            CreateNodeToParentMap(child, child_node_index, is_cur_event);
+            // if is_selected==true, and return value is false, then that means the event/pass ended
+            // in one of the children. Will no longer be part of current event/pass in the future If
+            // is_selected==false, and return value is true, then that means event/pass started in
+            // one of the children. Will continue be part of the current event/pass going forward
+            is_selected = CreateNodeToParentMap(child, child_node_index, is_selected);
         }
     }
 
@@ -371,34 +389,34 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
         DIVE_ASSERT(child_node_index < m_node_parent_list.size());
         m_node_parent_list[child_node_index] = model_index;
 
-        is_cur_event |= (child_node_index == start_node_index);
+        is_selected |= (child_node_index == start_node_index);
 
-        // if cur_event==true, and return value is false, then that means the event ended in one
-        // of the children. Will no longer be part of current event in the future
-        // If cur_event==false, and return value is true, then that means event started in one
-        // of the children. Will continue be part of the current event going forward
-        is_cur_event = CreateNodeToParentMap(child, child_node_index, is_cur_event);
+        // if is_selected==true, and return value is false, then that means the event/pass ended in
+        // one of the children. Will no longer be part of current event/pass in the future If
+        // is_selected==false, and return value is true, then that means event/pass started in one
+        // of the children. Will continue be part of the current event/pass going forward
+        is_selected = CreateNodeToParentMap(child, child_node_index, is_selected);
 
         if (child_node_index == end_node_index)
-            is_cur_event = false;
+            is_selected = false;
     }
-    return is_cur_event;
+    return is_selected;
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::SetIsCurEvent(uint64_t node_index)
+void CommandBufferModel::SetIsSelected(uint64_t node_index)
 {
     uint32_t array_index = node_index / 8;
     uint32_t bit_element = node_index % 8;
     uint8_t  mask = 0x1 << bit_element;
-    m_node_is_cur_event_bit_list[array_index] |= mask;
+    m_node_is_selected_bit_list[array_index] |= mask;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandBufferModel::IsCurEvent(uint64_t node_index) const
+bool CommandBufferModel::IsSelected(uint64_t node_index) const
 {
     uint32_t array_index = node_index / 8;
     uint32_t bit_element = node_index % 8;
     uint8_t  mask = 0x1 << bit_element;
-    return (m_node_is_cur_event_bit_list[array_index] & mask) != 0;
+    return (m_node_is_selected_bit_list[array_index] & mask) != 0;
 }

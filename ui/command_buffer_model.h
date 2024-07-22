@@ -69,8 +69,8 @@ public slots:
 
 private:
     bool CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index, bool is_cur_event);
-    void SetIsCurEvent(uint64_t node_index);
-    bool IsCurEvent(uint64_t node_index) const;
+    void SetIsSelected(uint64_t node_index);
+    bool IsSelected(uint64_t node_index) const;
 
     uint64_t m_selected_node_index = UINT64_MAX;
 
@@ -78,7 +78,7 @@ private:
     // Need a QModelIndex per both set of children
     // Bit to determine if parent is a shared node or not
     std::vector<QModelIndex> m_node_parent_list;
-    std::vector<uint8_t>     m_node_is_cur_event_bit_list;
+    std::vector<uint8_t>     m_node_is_selected_bit_list;
     QModelIndex              m_scroll_to_index;
 
     const Dive::CommandHierarchy &m_command_hierarchy;

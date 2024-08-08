@@ -113,10 +113,12 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
 
 AndroidApplication::AndroidApplication(AndroidDevice  &dev,
                                        std::string     package,
-                                       ApplicationType type) :
+                                       ApplicationType type,
+                                       std::string     command_args) :
     m_dev(dev),
     m_package(std::move(package)),
     m_type(type),
+    m_command_args(std::move(command_args)),
     m_started(false),
     m_is_debuggable(false)
 {
@@ -136,8 +138,11 @@ absl::Status AndroidApplication::ParsePackage()
 absl::Status AndroidApplication::Start()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
-    RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s/%s", m_package, m_main_activity)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s %s/%s ",
+                                                    m_command_args,
+                                                    m_package,
+                                                    m_main_activity),
+                                    false));
     m_started = IsRunning();
     return absl::OkStatus();
 }

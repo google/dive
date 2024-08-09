@@ -89,6 +89,7 @@ private slots:
     void OnDevListRefresh();
     void OnAppListRefresh();
     void OnInputCommand(const QString &);
+    void OnInputArgs(const QString &);
 
 signals:
     void TraceAvailable(const QString &);
@@ -121,6 +122,10 @@ private:
     QLabel      *m_file_label;
     QPushButton *m_open_button;
     QLineEdit   *m_cmd_input_box;
+
+    QHBoxLayout *m_args_layout;
+    QLabel      *m_args_label;
+    QLineEdit   *m_args_input_box;
 
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;

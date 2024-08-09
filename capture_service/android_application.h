@@ -37,7 +37,10 @@ class AndroidDevice;
 class AndroidApplication
 {
 public:
-    AndroidApplication(AndroidDevice &dev, std::string package, ApplicationType type);
+    AndroidApplication(AndroidDevice  &dev,
+                       std::string     package,
+                       ApplicationType type,
+                       std::string     command_args);
     virtual ~AndroidApplication() = default;
 
     virtual absl::Status Setup() = 0;
@@ -57,6 +60,7 @@ protected:
     std::string     m_package;
     ApplicationType m_type;
     std::string     m_main_activity;
+    std::string     m_command_args;
     bool            m_is_debuggable;
     bool            m_started;
 };
@@ -64,8 +68,11 @@ protected:
 class VulkanApplication : public AndroidApplication
 {
 public:
-    VulkanApplication(AndroidDevice &dev, std::string package) :
-        AndroidApplication(dev, package, ApplicationType::VULKAN_APK)
+    VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args) :
+        AndroidApplication(dev,
+                           std::move(package),
+                           ApplicationType::VULKAN_APK,
+                           std::move(command_args))
     {
         ParsePackage().IgnoreError();
     };
@@ -77,8 +84,11 @@ public:
 class OpenXRApplication : public AndroidApplication
 {
 public:
-    OpenXRApplication(AndroidDevice &dev, std::string package) :
-        AndroidApplication(dev, package, ApplicationType::OPENXR_APK)
+    OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args) :
+        AndroidApplication(dev,
+                           std::move(package),
+                           ApplicationType::OPENXR_APK,
+                           std::move(command_args))
     {
         ParsePackage().IgnoreError();
     };
@@ -91,9 +101,8 @@ class VulkanCliApplication : public AndroidApplication
 {
 public:
     VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args) :
-        AndroidApplication(dev, "", ApplicationType::VULKAN_CLI),
-        m_command(std::move(command)),
-        m_command_args(std::move(command_args))
+        AndroidApplication(dev, "", ApplicationType::VULKAN_CLI, std::move(command_args)),
+        m_command(std::move(command))
     {
     }
     virtual ~VulkanCliApplication();
@@ -105,7 +114,6 @@ public:
 
 private:
     std::string m_command;
-    std::string m_command_args;
     std::string m_pid;
 };
 

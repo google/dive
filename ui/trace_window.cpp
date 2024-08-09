@@ -107,6 +107,12 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_cmd_layout->addWidget(m_file_label);
     m_cmd_layout->addWidget(m_cmd_input_box);
 
+    m_args_layout = new QHBoxLayout();
+    m_args_label = new QLabel("Additional Args:");
+    m_args_input_box = new QLineEdit();
+    m_args_layout->addWidget(m_args_label);
+    m_args_layout->addWidget(m_args_input_box);
+
     m_capture_layout->addWidget(m_dev_label);
     m_capture_layout->addWidget(m_dev_box);
     m_capture_layout->addWidget(m_dev_refresh_button);
@@ -126,6 +132,8 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_main_layout->addLayout(m_capture_layout);
     m_main_layout->addLayout(m_cmd_layout);
     m_main_layout->addLayout(m_pkg_layout);
+    m_main_layout->addLayout(m_args_layout);
+
     m_main_layout->addLayout(m_type_layout);
 
     m_main_layout->addLayout(m_button_layout);
@@ -151,6 +159,7 @@ TraceDialog::TraceDialog(QWidget *parent)
                      this,
                      &TraceDialog::OnAppListRefresh);
     QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
+    QObject::connect(m_args_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputArgs);
 }
 
 TraceDialog::~TraceDialog()
@@ -251,6 +260,12 @@ void TraceDialog::OnInputCommand(const QString &text)
     m_app_type_box->setCurrentIndex(-1);
 }
 
+void TraceDialog::OnInputArgs(const QString &text)
+{
+    qDebug() << "Args changed to " << text;
+    m_command_args = text.toStdString();
+}
+
 bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &app_type)
 {
     if (device == nullptr)
@@ -264,31 +279,25 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
 
     absl::Status ret;
     qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
-             << ", type: " << app_type.c_str();
+             << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
     if (app_type == "OpenXR APK")
     {
-        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK);
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK, m_command_args);
     }
     else if (app_type == "Vulkan APK")
     {
-        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK);
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK, m_command_args);
     }
     else if (app_type == "Command Line Application")
     {
-        std::string full_command = m_cmd_input_box->text().toStdString();
-        if (full_command.empty())
+        m_executable = m_cmd_input_box->text().toStdString();
+        if (m_executable.empty())
         {
             std::string err_msg = "Please input a valid command to execute";
             qDebug() << err_msg.c_str();
             ShowErrorMessage(err_msg);
             return false;
         }
-        std::vector<std::string> v = absl::StrSplit(full_command, " ");
-        m_executable = v[0];
-
-        v.erase(v.begin());
-        m_command_args = absl::StrJoin(v, " ");
-
         qDebug() << "exe: " << m_executable.c_str() << " args: " << m_command_args.c_str();
         ret = device->SetupApp(m_executable, m_command_args, Dive::ApplicationType::VULKAN_CLI);
     }

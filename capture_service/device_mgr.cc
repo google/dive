@@ -200,16 +200,18 @@ absl::Status AndroidDevice::CleanupDevice()
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::SetupApp(const std::string &package, const ApplicationType type)
+absl::Status AndroidDevice::SetupApp(const std::string    &package,
+                                     const ApplicationType type,
+                                     const std::string    &command_args)
 {
     if (type == ApplicationType::VULKAN_APK)
     {
-        app = std::make_unique<VulkanApplication>(*this, package);
+        app = std::make_unique<VulkanApplication>(*this, package, command_args);
     }
 
     else if (type == ApplicationType::OPENXR_APK)
     {
-        app = std::make_unique<OpenXRApplication>(*this, package);
+        app = std::make_unique<OpenXRApplication>(*this, package, command_args);
     }
     if (app == nullptr)
     {

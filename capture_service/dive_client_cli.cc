@@ -206,11 +206,11 @@ bool run_package(Dive::DeviceManager& mgr,
 
     if (app_type == "openxr")
     {
-        ret = dev->SetupApp(package, Dive::ApplicationType::OPENXR_APK);
+        ret = dev->SetupApp(package, Dive::ApplicationType::OPENXR_APK, "");
     }
     else if (app_type == "vulkan")
     {
-        ret = dev->SetupApp(package, Dive::ApplicationType::VULKAN_APK);
+        ret = dev->SetupApp(package, Dive::ApplicationType::VULKAN_APK, "");
     }
     else if (app_type == "vulkan_cli")
     {

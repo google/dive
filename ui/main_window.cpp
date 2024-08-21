@@ -53,6 +53,8 @@
 #include "property_panel.h"
 #include "search_dialog.h"
 #include "shader_view.h"
+#include "shortcuts.h"
+#include "shortcuts_window.h"
 #include "text_file_view.h"
 #include "tree_view_combo_box.h"
 
@@ -191,10 +193,10 @@ MainWindow::MainWindow()
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
                                                   *m_event_selection);
         m_event_state_view = new EventStateView(*m_data_core);
-        m_tab_widget->addTab(m_overview_tab_view, "Overview");
+        m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
-        m_tab_widget->addTab(m_command_tab_view, "Commands");
-        m_shader_view_index = m_tab_widget->addTab(m_shader_view, "Shaders");
+        m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Commands");
+        m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
         m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
 #if defined(ENABLE_CAPTURE_BUFFERS)
         m_buffer_view = new BufferView(*m_data_core);
@@ -322,6 +324,7 @@ MainWindow::MainWindow()
     CreateActions();
     CreateMenus();
     CreateStatusBar();
+    CreateShortcuts();
     CreateToolBars();
     UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
 
@@ -695,6 +698,13 @@ void MainWindow::OnAbout()
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::OnShortcuts()
+{
+    ShortcutsDialog *shortcuts = new ShortcutsDialog();
+    shortcuts->exec();
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::closeEvent(QCloseEvent *closeEvent)
 {
     if (!m_capture_saved && !m_unsaved_capture_path.empty())
@@ -896,6 +906,11 @@ void MainWindow::CreateActions()
     m_about_action = new QAction(tr("&About Dive"), this);
     m_about_action->setStatusTip(tr("Display application version information"));
     connect(m_about_action, &QAction::triggered, this, &MainWindow::OnAbout);
+
+    // Shortcuts action
+    m_shortcuts_action = new QAction(tr("&Shortcuts"), this);
+    m_shortcuts_action->setStatusTip(tr("Display application keyboard shortcuts"));
+    connect(m_shortcuts_action, &QAction::triggered, this, &MainWindow::OnShortcuts);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -918,6 +933,7 @@ void MainWindow::CreateMenus()
 
     m_help_menu = menuBar()->addMenu(tr("&Help"));
     m_help_menu->addAction(m_about_action);
+    m_help_menu->addAction(m_shortcuts_action);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -941,6 +957,35 @@ void MainWindow::CreateToolBars()
     m_capture_button->setIcon(QIcon(":/images/capture.png"));
 
     m_file_tool_bar->addWidget(m_capture_button);
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::CreateShortcuts()
+{
+    // Search Shortcut
+    QShortcut *searchShortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), this);
+    connect(searchShortcut, &QShortcut::activated, this, &MainWindow::OnSearchTrigger);
+
+    // Overview Shortcut
+    QShortcut *overviewTabShortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
+    connect(overviewTabShortcut, &QShortcut::activated, [this]() {
+    m_tab_widget->setCurrentIndex(m_overview_view_tab_index);
+    });
+    // Commands Shortcut
+    QShortcut *commandTabShortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
+    connect(commandTabShortcut, &QShortcut::activated, [this]() {
+    m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+    });
+    // Shaders Shortcut
+    QShortcut *shaderTabShortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
+    connect(shaderTabShortcut, &QShortcut::activated, [this]() {
+    m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+    });
+    // Event State Shortcut
+    QShortcut *eventStateTabShortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
+    connect(eventStateTabShortcut, &QShortcut::activated, [this]() {
+    m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
+    });
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1054,7 +1099,7 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
     {
     case Dive::CrossRefType::kShaderAddress:
         if (m_shader_view->OnCrossReference(ref))
-            m_tab_widget->setCurrentIndex(m_shader_view_index);
+            m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
         break;
     case Dive::CrossRefType::kGFRIndex: m_command_hierarchy_view->setCurrentNode(ref.Id()); break;
     default:
@@ -1075,6 +1120,6 @@ void MainWindow::OnFileLoaded()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnSwitchToShaderTab()
 {
-    DIVE_ASSERT(m_shader_view_index >= 0);
-    m_tab_widget->setCurrentIndex(m_shader_view_index);
+    DIVE_ASSERT(m_shader_view_tab_index >= 0);
+    m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
 }

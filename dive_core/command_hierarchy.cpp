@@ -841,16 +841,28 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
 
     // Setup root & range of shared children that this IB encompasses
     auto &start_node_stack = m_start_node_stack[CommandHierarchy::kSubmitTopology];
-    DIVE_ASSERT(m_start_node_stack[CommandHierarchy::kSubmitTopology].size() == m_ib_stack.size());
-    SetStartSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
+
+    // m_new_ib_start is true here if there were no packets for this IB
+    // (e.g. ib_info.m_skip == true)
+    if (m_new_ib_start)
+    {
+        m_new_ib_start = false;
+    }
+    else
+    {
+        DIVE_ASSERT(m_start_node_stack[CommandHierarchy::kSubmitTopology].size() ==
+                    m_ib_stack.size());
+        SetStartSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
+                                        m_ib_stack.back(),
+                                        start_node_stack.back());
+        SetEndSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
+                                      m_ib_stack.back(),
+                                      m_last_added_node_index);
+        SetSharedChildRootNodeIndex(CommandHierarchy::kSubmitTopology,
                                     m_ib_stack.back(),
-                                    start_node_stack.back());
-    SetEndSharedChildrenNodeIndex(CommandHierarchy::kSubmitTopology,
-                                  m_ib_stack.back(),
-                                  m_last_added_node_index);
-    SetSharedChildRootNodeIndex(CommandHierarchy::kSubmitTopology,
-                                m_ib_stack.back(),
-                                m_cur_submit_node_index);
+                                    m_cur_submit_node_index);
+        start_node_stack.pop_back();
+    }
 
     // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
     // because the emulator does not keep track of IBs in an internal stack. So start by
@@ -865,7 +877,6 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     }
 
     m_ib_stack.pop_back();
-    start_node_stack.pop_back();
     m_cmd_begin_packet_node_indices.clear();
     m_cmd_begin_event_node_indices.clear();
     m_cur_ib_level = ib_info.m_ib_level;

@@ -966,6 +966,20 @@ void MainWindow::CreateShortcuts()
     QShortcut *searchShortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), this);
     connect(searchShortcut, &QShortcut::activated, this, &MainWindow::OnSearchTrigger);
 
+    // Commands Search Shortcut
+    QShortcut *searchCommandsShortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_SEARCH), this);
+    connect(searchCommandsShortcut, &QShortcut::activated, [this]() {
+        if (m_tab_widget->currentIndex() == m_command_view_tab_index) 
+        {
+            m_command_tab_view->OnSearchCommandBuffer();
+        }
+        else 
+        {
+            m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+            m_command_tab_view->OnSearchCommandBuffer();
+        }
+    });
+
     // Overview Shortcut
     QShortcut *overviewTabShortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
     connect(overviewTabShortcut, &QShortcut::activated, [this]() {

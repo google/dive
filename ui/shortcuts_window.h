@@ -33,9 +33,10 @@ public:
     ShortcutsDialog(QWidget *parent = 0);
 
 private:
-    QLabel*        m_shortcut_information;     // The shortcut info.
+    QLabel      *m_shortcut_information;  // The shortcut info.
     QPushButton *m_close_button;          // A button to close the dialog.
-    QHBoxLayout *m_shortcuts_layout;  // The shortcuts layout is the shortcut info arranged horizontally
-    QHBoxLayout *m_button_layout;   // The button layout is stretch + Close Button
-    QVBoxLayout *m_main_layout;     // The main layout Shortcuts + Close button arranged vertically
+    QHBoxLayout
+    *m_shortcuts_layout;  // The shortcuts layout is the shortcut info arranged horizontally
+    QHBoxLayout *m_button_layout;  // The button layout is stretch + Close Button
+    QVBoxLayout *m_main_layout;    // The main layout Shortcuts + Close button arranged vertically
 };

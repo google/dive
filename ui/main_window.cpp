@@ -906,7 +906,7 @@ void MainWindow::CreateActions()
     m_shortcuts_action = new QAction(tr("&Shortcuts"), this);
     m_shortcuts_action->setStatusTip(tr("Display application keyboard shortcuts"));
     connect(m_shortcuts_action, &QAction::triggered, this, &MainWindow::OnShortcuts);
-    
+
     // About action
     m_about_action = new QAction(tr("&About Dive"), this);
     m_about_action->setStatusTip(tr("Display application version information"));
@@ -969,11 +969,11 @@ void MainWindow::CreateShortcuts()
     // Commands Search Shortcut
     QShortcut *searchCommandsShortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_SEARCH), this);
     connect(searchCommandsShortcut, &QShortcut::activated, [this]() {
-        if (m_tab_widget->currentIndex() == m_command_view_tab_index) 
+        if (m_tab_widget->currentIndex() == m_command_view_tab_index)
         {
             m_command_tab_view->OnSearchCommandBuffer();
         }
-        else 
+        else
         {
             m_tab_widget->setCurrentIndex(m_command_view_tab_index);
             m_command_tab_view->OnSearchCommandBuffer();
@@ -983,22 +983,22 @@ void MainWindow::CreateShortcuts()
     // Overview Shortcut
     QShortcut *overviewTabShortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
     connect(overviewTabShortcut, &QShortcut::activated, [this]() {
-    m_tab_widget->setCurrentIndex(m_overview_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_overview_view_tab_index);
     });
     // Commands Shortcut
     QShortcut *commandTabShortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
     connect(commandTabShortcut, &QShortcut::activated, [this]() {
-    m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_command_view_tab_index);
     });
     // Shaders Shortcut
     QShortcut *shaderTabShortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
     connect(shaderTabShortcut, &QShortcut::activated, [this]() {
-    m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
     });
     // Event State Shortcut
     QShortcut *eventStateTabShortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
     connect(eventStateTabShortcut, &QShortcut::activated, [this]() {
-    m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
     });
 }
 

@@ -20,7 +20,6 @@
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QtWidgets>
 #include <QVBoxLayout>
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"

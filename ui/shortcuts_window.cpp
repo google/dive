@@ -14,6 +14,8 @@
  limitations under the License.
 */
 #include "shortcuts_window.h"
+#include <qfont.h>
+#include <qlabel.h>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -26,8 +28,6 @@
 #include <QSizePolicy>
 #include <QVBoxLayout>
 #include <iostream>
-#include <qfont.h>
-#include <qlabel.h>
 #include <sstream>
 #include "shortcuts.h"
 
@@ -64,16 +64,15 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
     os << SHORTCUT_EVENT_STATE_TAB << std::endl;
     os << std::endl;
     m_shortcut_information = new QLabel(os.str().c_str());
-    
+
     // Set the font for the shortcuts string
     QFont font = m_shortcut_information->font();
     font.setBold(true);
-    
-    
+
     // Shortcuts layout is shortcut Info
     m_shortcuts_layout = new QHBoxLayout;
     m_shortcuts_layout->addWidget(m_shortcut_information);
-    
+
     // Close button
     m_close_button = new QPushButton;
     m_close_button->setText("Close");

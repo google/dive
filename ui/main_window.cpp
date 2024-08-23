@@ -902,15 +902,15 @@ void MainWindow::CreateActions()
     m_capture_delay_action->setShortcut(QKeySequence("Ctrl+f5"));
     connect(m_capture_delay_action, &QAction::triggered, this, &MainWindow::OnCaptureTrigger);
 
-    // About action
-    m_about_action = new QAction(tr("&About Dive"), this);
-    m_about_action->setStatusTip(tr("Display application version information"));
-    connect(m_about_action, &QAction::triggered, this, &MainWindow::OnAbout);
-
     // Shortcuts action
     m_shortcuts_action = new QAction(tr("&Shortcuts"), this);
     m_shortcuts_action->setStatusTip(tr("Display application keyboard shortcuts"));
     connect(m_shortcuts_action, &QAction::triggered, this, &MainWindow::OnShortcuts);
+    
+    // About action
+    m_about_action = new QAction(tr("&About Dive"), this);
+    m_about_action->setStatusTip(tr("Display application version information"));
+    connect(m_about_action, &QAction::triggered, this, &MainWindow::OnAbout);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -932,8 +932,8 @@ void MainWindow::CreateMenus()
     m_capture_menu->addAction(m_capture_action);
 
     m_help_menu = menuBar()->addMenu(tr("&Help"));
-    m_help_menu->addAction(m_about_action);
     m_help_menu->addAction(m_shortcuts_action);
+    m_help_menu->addAction(m_about_action);
 }
 
 //--------------------------------------------------------------------------------------------------

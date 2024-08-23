@@ -19,6 +19,6 @@
 #define SHORTCUT_NEXT_SEARCH_RESULT "Ctrl+Shift+N"
 #define SHORTCUT_PREVIOUS_SEARCH_RESULT "Ctrl+Shift+P"
 #define SHORTCUT_OVERVIEW_TAB "Ctrl+Shift+O"
-#define SHORTCUT_COMMANDS_TAB "Ctrl+C"
+#define SHORTCUT_COMMANDS_TAB "Ctrl+Shift+C"
 #define SHORTCUT_SHADERS_TAB "Ctrl+Shift+H"
 #define SHORTCUT_EVENT_STATE_TAB "Ctrl+Shift+E"

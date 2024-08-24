@@ -18,9 +18,11 @@
 #include "QPushButton"
 #include "QShortcut"
 #include "QVBoxLayout"
+#include "shortcuts.h"
 
 //--------------------------------------------------------------------------------------------------
-SearchDialog::SearchDialog(QWidget* parent, const QString& title) : QDialog(parent)
+SearchDialog::SearchDialog(QWidget* parent, const QString& title) :
+    QDialog(parent)
 
 {
     m_input = new QLineEdit;
@@ -36,6 +38,17 @@ SearchDialog::SearchDialog(QWidget* parent, const QString& title) : QDialog(pare
     connect(m_search, SIGNAL(clicked()), this, SLOT(newSearchResults()));
     connect(m_prev, SIGNAL(clicked()), this, SLOT(prevSearchedItem()));
     connect(m_next, SIGNAL(clicked()), this, SLOT(nextSearchedItem()));
+
+    QShortcut* previousSearchItemShortcut = new QShortcut(QKeySequence(
+                                                          SHORTCUT_PREVIOUS_SEARCH_RESULT),
+                                                          this);
+    connect(previousSearchItemShortcut,
+            &QShortcut::activated,
+            this,
+            &SearchDialog::prevSearchedItem);
+
+    QShortcut* nextSearchShortcut = new QShortcut(QKeySequence(SHORTCUT_NEXT_SEARCH_RESULT), this);
+    connect(nextSearchShortcut, &QShortcut::activated, this, &SearchDialog::nextSearchedItem);
 
     QHBoxLayout* search_buttons_layout = new QHBoxLayout;
     search_buttons_layout->addWidget(m_input);

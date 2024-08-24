@@ -24,6 +24,7 @@
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "search_dialog.h"
+#include "shortcuts.h"
 
 #include "dive_core/command_hierarchy.h"
 

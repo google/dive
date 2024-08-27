@@ -51,7 +51,7 @@
 #include "hover_help_model.h"
 #include "overview_tab_view.h"
 #include "property_panel.h"
-#include "search_dialog.h"
+#include "search_bar.h"
 #include "shader_view.h"
 #include "shortcuts.h"
 #include "shortcuts_window.h"
@@ -150,6 +150,13 @@ MainWindow::MainWindow()
             text_combo_box_frame->setLayout(text_combo_box_layout);
         }
 
+        m_event_search_bar = new SearchBar(this);
+        m_event_search_bar->setObjectName("Event Search Bar");
+
+        QHBoxLayout* search_layout = new QHBoxLayout;
+        search_layout->addWidget(m_event_search_bar);
+        m_event_search_bar->hide();
+
         m_command_hierarchy_model = new CommandModel(m_data_core->GetCommandHierarchy());
         m_command_hierarchy_view = new DiveTreeView(m_data_core->GetCommandHierarchy());
         m_command_hierarchy_view->setModel(m_command_hierarchy_model);
@@ -178,6 +185,7 @@ MainWindow::MainWindow()
             expand_to_lvl_layout->addWidget(expand_to_lvl_button);
         expand_to_lvl_layout->addStretch();
 
+        left_vertical_layout->addWidget(m_event_search_bar);
         left_vertical_layout->addWidget(text_combo_box_frame);
         left_vertical_layout->addWidget(m_command_hierarchy_view);
         left_vertical_layout->addLayout(goto_draw_call_layout);
@@ -320,6 +328,13 @@ MainWindow::MainWindow()
         QObject::connect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
     }
     QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchTrigger()));
+
+
+    QObject::connect(m_event_search_bar, SIGNAL(hide_search_bar(bool)), this, SLOT(OnCommandBufferSearchBarVisibilityChange(bool)));
+
+    QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
+
+    QObject::connect(m_command_tab_view, SIGNAL(HideOtherSearchBars()), this, SLOT(OnTabViewChange()));
 
     CreateActions();
     CreateMenus();
@@ -822,30 +837,51 @@ void MainWindow::OnSaveCapture()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnSearchTrigger()
 {
-    if (m_search_dialog == nullptr)
+    if (m_event_search_bar->isVisible()) 
     {
-        m_search_dialog = new SearchDialog(this, "Events");
-        QObject::connect(m_search_dialog,
-                         SIGNAL(new_search(const QString &)),
-                         m_command_hierarchy_view,
-                         SLOT(searchNodeByText(const QString &)));
-        QObject::connect(m_search_dialog,
-                         &SearchDialog::next_search,
-                         m_command_hierarchy_view,
-                         &DiveTreeView::nextNodeInSearch);
-        QObject::connect(m_search_dialog,
-                         &SearchDialog::prev_search,
-                         m_command_hierarchy_view,
-                         &DiveTreeView::prevNodeInSearch);
+        m_event_search_bar->clearSearch();
+        m_event_search_bar->hide();
+        m_search_trigger_button->show();
+    }
+    else 
+    {
+        QObject::connect(m_event_search_bar,
+                            SIGNAL(new_search(const QString &)),
+                            m_command_hierarchy_view,
+                            SLOT(searchNodeByText(const QString &)));
+        QObject::connect(m_event_search_bar,
+                            &SearchBar::next_search,
+                            m_command_hierarchy_view,
+                            &DiveTreeView::nextNodeInSearch);
+        QObject::connect(m_event_search_bar,
+                            &SearchBar::prev_search,
+                            m_command_hierarchy_view,
+                            &DiveTreeView::prevNodeInSearch);
         QObject::connect(m_command_hierarchy_view,
-                         &DiveTreeView::updateSearch,
-                         m_search_dialog,
-                         &SearchDialog::updateSearchResults);
+                            &DiveTreeView::updateSearch,
+                            m_event_search_bar,
+                            &SearchBar::updateSearchResults);
+
+        m_search_trigger_button->hide();
+
+        m_event_search_bar->positionCurser();
+        m_event_search_bar->show();
     }
 
-    m_search_dialog->show();
-    m_search_dialog->raise();
-    m_search_dialog->activateWindow();
+    int currentIndex = m_tab_widget->currentIndex();
+    QWidget* currentTab = m_tab_widget->widget(currentIndex);
+    SearchBar* commandBufferSearchBar = currentTab->findChild<SearchBar*>("command_buffer_search_bar");
+    QPushButton* commandBufferSearchButton = currentTab->findChild<QPushButton*>("command_buffer_search_button");
+
+    if (currentIndex == m_command_view_tab_index)
+    {
+        if (!commandBufferSearchBar->isHidden())
+        {
+            commandBufferSearchBar->clearSearch();
+            commandBufferSearchBar->hide();
+        }
+        commandBufferSearchButton->show();
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -978,6 +1014,9 @@ void MainWindow::CreateShortcuts()
             m_tab_widget->setCurrentIndex(m_command_view_tab_index);
             m_command_tab_view->OnSearchCommandBuffer();
         }
+        m_event_search_bar->clearSearch();
+        m_event_search_bar->hide();
+        m_search_trigger_button->show();
     });
 
     // Overview Shortcut
@@ -1136,4 +1175,27 @@ void MainWindow::OnSwitchToShaderTab()
 {
     DIVE_ASSERT(m_shader_view_tab_index >= 0);
     m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCommandBufferSearchBarVisibilityChange(bool isHidden)
+{
+    if (isHidden)
+    {
+        m_event_search_bar->clearSearch();
+        m_search_trigger_button->show();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnTabViewChange()
+{
+    int currentIndex = m_tab_widget->currentIndex();
+    QWidget* currentTab = m_tab_widget->widget(currentIndex);
+    if (currentIndex == m_command_view_tab_index && !currentTab->findChild<SearchBar*>("command_buffer_search_bar")->isHidden())
+    {
+        m_event_search_bar->clearSearch();
+        m_event_search_bar->hide();
+        m_search_trigger_button->show();
+    }
 }

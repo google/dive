@@ -23,7 +23,7 @@ class CommandBufferModel;
 class QGroupBox;
 class QLineEdit;
 class QPushButton;
-class SearchDialog;
+class SearchBar;
 namespace Dive
 {
 class CommandHierarchy;
@@ -44,16 +44,18 @@ public:
 public slots:
     void OnSelectionChanged(const QModelIndex &index);
     void OnSearchCommandBuffer();
+    void OnSearchBarVisibilityChange(bool isHidden);
 
 signals:
     // Update property panel for node information.
     void SendNodeProperty(const QString &);
+    void HideOtherSearchBars();
 
 private:
     CommandBufferView  *m_command_buffer_view;
     CommandBufferModel *m_command_buffer_model;
     QPushButton        *m_search_trigger_button;
-    SearchDialog       *m_search_dialog = nullptr;
+    SearchBar          *m_search_bar = nullptr;
 
     const Dive::CommandHierarchy &m_command_hierarchy;
 };

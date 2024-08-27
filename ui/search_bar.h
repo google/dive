@@ -20,7 +20,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 
-class SearchBar: public QWidget
+class SearchBar : public QWidget
 {
     Q_OBJECT
 

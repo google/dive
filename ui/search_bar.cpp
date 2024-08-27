@@ -12,28 +12,29 @@
 */
 
 #include "search_bar.h"
-#include "shortcuts.h"
+#include <qwidget.h>
+#include <QDebug>
+#include <iostream>
 #include "QHBoxLayout"
 #include "QLabel"
 #include "QLineEdit"
 #include "QPushButton"
 #include "QShortcut"
 #include "QVBoxLayout"
-#include <qwidget.h>
-#include <QDebug>
-#include <iostream>
+#include "shortcuts.h"
 
 //--------------------------------------------------------------------------------------------------
-SearchBar::SearchBar(QWidget* parent) : QWidget(parent)
+SearchBar::SearchBar(QWidget* parent) :
+    QWidget(parent)
 {
-    QLabel *searchlabel = new QLabel(this);
+    QLabel* searchlabel = new QLabel(this);
     QPixmap pixmap(":/images/search.png");
     searchlabel->setPixmap(pixmap);
 
     m_input = new QLineEdit(this);
     QPalette palette = m_input->palette();
     palette.setColor(QPalette::Base, Qt::white);
-    palette.setColor(QPalette::Text, Qt::black); // Set text color to black
+    palette.setColor(QPalette::Text, Qt::black);  // Set text color to black
     m_input->setPalette(palette);
 
     m_prev = new QPushButton(this);
@@ -58,7 +59,6 @@ SearchBar::SearchBar(QWidget* parent) : QWidget(parent)
     searchBar_layout->addLayout(search_buttons_layout);
     searchBar_layout->addLayout(search_results_layout);
 
-
     connect(m_input, SIGNAL(textEdited(const QString&)), this, SLOT(resetSearchResults()));
     connect(m_input, SIGNAL(returnPressed()), this, SLOT(newSearchResults()));
     connect(m_input, SIGNAL(editingFinished()), this, SLOT(searchBarFocusOut()));
@@ -66,17 +66,20 @@ SearchBar::SearchBar(QWidget* parent) : QWidget(parent)
     connect(m_prev, SIGNAL(clicked()), this, SLOT(prevSearchedItem()));
     connect(m_next, SIGNAL(clicked()), this, SLOT(nextSearchedItem()));
 
-    QShortcut *previousSearchItemShortcut = new QShortcut(QKeySequence(SHORTCUT_PREVIOUS_SEARCH_RESULT), this);
+    QShortcut* previousSearchItemShortcut = new QShortcut(QKeySequence(
+                                                          SHORTCUT_PREVIOUS_SEARCH_RESULT),
+                                                          this);
     connect(previousSearchItemShortcut, &QShortcut::activated, this, &SearchBar::prevSearchedItem);
 
-    QShortcut *nextSearchShortcut = new QShortcut(QKeySequence(SHORTCUT_NEXT_SEARCH_RESULT), this);
+    QShortcut* nextSearchShortcut = new QShortcut(QKeySequence(SHORTCUT_NEXT_SEARCH_RESULT), this);
     connect(nextSearchShortcut, &QShortcut::activated, this, &SearchBar::nextSearchedItem);
 }
 
 //--------------------------------------------------------------------------------------------------
 void SearchBar::searchBarFocusOut()
 {
-    if (!m_input->hasFocus()) {
+    if (!m_input->hasFocus())
+    {
         if (!m_prev->hasFocus() && !m_next->hasFocus())
         {
             this->hide();

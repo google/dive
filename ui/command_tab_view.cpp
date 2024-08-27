@@ -66,8 +66,11 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
                      SIGNAL(clicked()),
                      this,
                      SLOT(OnSearchCommandBuffer()));
-    
-    QObject::connect(m_search_bar, SIGNAL(hide_search_bar(bool)), this, SLOT(OnSearchBarVisibilityChange(bool)));
+
+    QObject::connect(m_search_bar,
+                     SIGNAL(hide_search_bar(bool)),
+                     this,
+                     SLOT(OnSearchBarVisibilityChange(bool)));
 }
 
 //--------------------------------------------------------------------------------------------------

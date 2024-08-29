@@ -36,6 +36,7 @@ public slots:
     void nextSearchedItem();
     void resetSearchResults();
     void updateSearchResults(uint64_t curr_item_pos, uint64_t total_num_of_items);
+    void cancelSearch();
 
 signals:
     void new_search(const QString& search_string);
@@ -48,5 +49,6 @@ private:
     QLineEdit*   m_input = nullptr;
     QPushButton* m_prev = nullptr;
     QPushButton* m_next = nullptr;
+    QPushButton* m_cancel = nullptr;
     QLabel*      m_search_results = nullptr;
 };

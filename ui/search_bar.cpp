@@ -42,6 +42,9 @@ SearchBar::SearchBar(QWidget* parent) :
 
     m_next = new QPushButton(this);
     m_next->setIcon(QIcon(":/images/arrow_down.png"));
+    
+    m_cancel = new QPushButton(this);
+    m_cancel->setIcon(QIcon(":/images/cancel.png"));
 
     m_search_results = new QLabel(this);
     m_search_results->hide();
@@ -51,6 +54,7 @@ SearchBar::SearchBar(QWidget* parent) :
     search_buttons_layout->addWidget(m_input);
     search_buttons_layout->addWidget(m_prev);
     search_buttons_layout->addWidget(m_next);
+    search_buttons_layout->addWidget(m_cancel);
 
     QHBoxLayout* search_results_layout = new QHBoxLayout;
     search_results_layout->addWidget(m_search_results);
@@ -65,6 +69,7 @@ SearchBar::SearchBar(QWidget* parent) :
 
     connect(m_prev, SIGNAL(clicked()), this, SLOT(prevSearchedItem()));
     connect(m_next, SIGNAL(clicked()), this, SLOT(nextSearchedItem()));
+    connect(m_cancel, SIGNAL(clicked()), this, SLOT(cancelSearch()));
 
     QShortcut* previousSearchItemShortcut = new QShortcut(QKeySequence(
                                                           SHORTCUT_PREVIOUS_SEARCH_RESULT),
@@ -150,4 +155,12 @@ void SearchBar::updateSearchResults(uint64_t curr_item_pos, uint64_t total_num_o
                                   QString::number(total_num_of_items) + " matching results");
     }
     m_search_results->show();
+}
+
+//--------------------------------------------------------------------------------------------------
+void SearchBar::cancelSearch()
+{
+    clearSearch();
+    this->hide();
+    emit hide_search_bar(this->isHidden());
 }

@@ -847,25 +847,12 @@ void MainWindow::OnSearchTrigger()
         m_event_search_bar->clearSearch();
         m_event_search_bar->hide();
         m_search_trigger_button->show();
+
+        DisconnectSearchBar();
     }
     else
     {
-        QObject::connect(m_event_search_bar,
-                         SIGNAL(new_search(const QString &)),
-                         m_command_hierarchy_view,
-                         SLOT(searchNodeByText(const QString &)));
-        QObject::connect(m_event_search_bar,
-                         &SearchBar::next_search,
-                         m_command_hierarchy_view,
-                         &DiveTreeView::nextNodeInSearch);
-        QObject::connect(m_event_search_bar,
-                         &SearchBar::prev_search,
-                         m_command_hierarchy_view,
-                         &DiveTreeView::prevNodeInSearch);
-        QObject::connect(m_command_hierarchy_view,
-                         &DiveTreeView::updateSearch,
-                         m_event_search_bar,
-                         &SearchBar::updateSearchResults);
+        ConnectSearchBar();
 
         m_search_trigger_button->hide();
 
@@ -1191,6 +1178,8 @@ void MainWindow::OnCommandBufferSearchBarVisibilityChange(bool isHidden)
     {
         m_event_search_bar->clearSearch();
         m_search_trigger_button->show();
+
+        DisconnectSearchBar();
     }
 }
 
@@ -1206,4 +1195,46 @@ void MainWindow::OnTabViewChange()
         m_event_search_bar->hide();
         m_search_trigger_button->show();
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::ConnectSearchBar()
+{
+    QObject::connect(m_event_search_bar,
+                     SIGNAL(new_search(const QString &)),
+                     m_command_hierarchy_view,
+                     SLOT(searchNodeByText(const QString &)));
+    QObject::connect(m_event_search_bar,
+                     &SearchBar::next_search,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::nextNodeInSearch);
+    QObject::connect(m_event_search_bar,
+                     &SearchBar::prev_search,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::prevNodeInSearch);
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::updateSearch,
+                     m_event_search_bar,
+                     &SearchBar::updateSearchResults);
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::DisconnectSearchBar()
+{
+    QObject::disconnect(m_event_search_bar,
+                        SIGNAL(new_search(const QString &)),
+                        m_command_hierarchy_view,
+                        SLOT(searchNodeByText(const QString &)));
+    QObject::disconnect(m_event_search_bar,
+                        &SearchBar::next_search,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::nextNodeInSearch);
+    QObject::disconnect(m_event_search_bar,
+                        &SearchBar::prev_search,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::prevNodeInSearch);
+    QObject::disconnect(m_command_hierarchy_view,
+                        &DiveTreeView::updateSearch,
+                        m_event_search_bar,
+                        &SearchBar::updateSearchResults);
 }

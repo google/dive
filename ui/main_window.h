@@ -94,6 +94,8 @@ private slots:
     void OnTraceAvailable(const QString &);
     void OnCommandBufferSearchBarVisibilityChange(bool isHidden);
     void OnTabViewChange();
+    void ConnectSearchBar();
+    void DisconnectSearchBar();
 
 private:
     void    CreateActions();

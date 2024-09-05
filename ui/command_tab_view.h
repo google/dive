@@ -45,6 +45,8 @@ public slots:
     void OnSelectionChanged(const QModelIndex &index);
     void OnSearchCommandBuffer();
     void OnSearchBarVisibilityChange(bool isHidden);
+    void ConnectSearchBar();
+    void DisconnectSearchBar();
 
 signals:
     // Update property panel for node information.

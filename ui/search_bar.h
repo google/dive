@@ -45,7 +45,7 @@ signals:
     void hide_search_bar(bool isHidden);
 
 private:
-    bool         searched = false;
+    bool         m_searched = false;
     QLineEdit*   m_input = nullptr;
     QPushButton* m_prev = nullptr;
     QPushButton* m_next = nullptr;

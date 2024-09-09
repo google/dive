@@ -113,14 +113,14 @@ void SearchBar::newSearchResults()
     {
         QString searchString = m_input->text();
         emit    new_search(searchString);
-        searched = true;
+        m_searched = true;
     }
 }
 
 //--------------------------------------------------------------------------------------------------
 void SearchBar::prevSearchedItem()
 {
-    if (!m_input->text().isEmpty() && searched)
+    if (!m_input->text().isEmpty() && m_searched)
     {
         emit prev_search();
     }
@@ -129,7 +129,7 @@ void SearchBar::prevSearchedItem()
 //--------------------------------------------------------------------------------------------------
 void SearchBar::nextSearchedItem()
 {
-    if (!m_input->text().isEmpty() && searched)
+    if (!m_input->text().isEmpty() && m_searched)
     {
         emit next_search();
     }
@@ -138,7 +138,7 @@ void SearchBar::nextSearchedItem()
 //--------------------------------------------------------------------------------------------------
 void SearchBar::resetSearchResults()
 {
-    searched = false;
+    m_searched = false;
     m_search_results->setText(QString());
     m_search_results->hide();
 }

@@ -41,6 +41,7 @@
 #include "command_model.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
+#include "object_names.h"
 #include "settings.h"
 #include "trace_window.h"
 #ifndef NDEBUG
@@ -863,9 +864,9 @@ void MainWindow::OnSearchTrigger()
     int        currentIndex = m_tab_widget->currentIndex();
     QWidget   *currentTab = m_tab_widget->widget(currentIndex);
     SearchBar *commandBufferSearchBar = currentTab->findChild<SearchBar *>(
-    "command_buffer_search_bar");
+    COMMAND_BUFFER_SEARCH_BAR_NAME);
     QPushButton *commandBufferSearchButton = currentTab->findChild<QPushButton *>(
-    "command_buffer_search_button");
+    COMMAND_BUFFER_SEARCH_BUTTON_NAME);
 
     if (currentIndex == m_command_view_tab_index)
     {
@@ -1189,7 +1190,7 @@ void MainWindow::OnTabViewChange()
     int      currentIndex = m_tab_widget->currentIndex();
     QWidget *currentTab = m_tab_widget->widget(currentIndex);
     if (currentIndex == m_command_view_tab_index &&
-        !currentTab->findChild<SearchBar *>("command_buffer_search_bar")->isHidden())
+        !currentTab->findChild<SearchBar *>(COMMAND_BUFFER_SEARCH_BAR_NAME)->isHidden())
     {
         m_event_search_bar->clearSearch();
         m_event_search_bar->hide();

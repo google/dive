@@ -27,6 +27,7 @@
 #include "shortcuts.h"
 
 #include "dive_core/command_hierarchy.h"
+#include "object_names.h"
 
 // =================================================================================================
 // CommandTabView
@@ -45,7 +46,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     m_command_buffer_view->header()->moveSection(2, 1);
 
     m_search_trigger_button = new QPushButton;
-    m_search_trigger_button->setObjectName("command_buffer_search_button");
+    m_search_trigger_button->setObjectName(COMMAND_BUFFER_SEARCH_BUTTON_NAME);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
     QHBoxLayout *options_layout = new QHBoxLayout();
@@ -53,7 +54,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     options_layout->addStretch();
 
     m_search_bar = new SearchBar(this);
-    m_search_bar->setObjectName("command_buffer_search_bar");
+    m_search_bar->setObjectName(COMMAND_BUFFER_SEARCH_BAR_NAME);
     m_search_bar->hide();
 
     QVBoxLayout *main_layout = new QVBoxLayout();

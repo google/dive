@@ -864,9 +864,9 @@ void MainWindow::OnSearchTrigger()
     int        currentIndex = m_tab_widget->currentIndex();
     QWidget   *currentTab = m_tab_widget->widget(currentIndex);
     SearchBar *commandBufferSearchBar = currentTab->findChild<SearchBar *>(
-    COMMAND_BUFFER_SEARCH_BAR_NAME);
+    kCommandBufferSearchBarName);
     QPushButton *commandBufferSearchButton = currentTab->findChild<QPushButton *>(
-    COMMAND_BUFFER_SEARCH_BUTTON_NAME);
+    kCommandBufferSearchButtonName);
 
     if (currentIndex == m_command_view_tab_index)
     {
@@ -1190,7 +1190,7 @@ void MainWindow::OnTabViewChange()
     int      currentIndex = m_tab_widget->currentIndex();
     QWidget *currentTab = m_tab_widget->widget(currentIndex);
     if (currentIndex == m_command_view_tab_index &&
-        !currentTab->findChild<SearchBar *>(COMMAND_BUFFER_SEARCH_BAR_NAME)->isHidden())
+        !currentTab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
     {
         m_event_search_bar->clearSearch();
         m_event_search_bar->hide();

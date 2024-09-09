@@ -14,5 +14,7 @@
  limitations under the License.
 */
 
-#define COMMAND_BUFFER_SEARCH_BAR_NAME "command_buffer_search_bar"
-#define COMMAND_BUFFER_SEARCH_BUTTON_NAME "command_buffer_search_button"
+#include <QString>
+
+const QString kCommandBufferSearchBarName = "command_buffer_search_bar";
+const QString kCommandBufferSearchButtonName = "command_buffer_search_button";

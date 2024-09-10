@@ -23,10 +23,11 @@
 #include <QVBoxLayout>
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
-#include "search_dialog.h"
+#include "search_bar.h"
 #include "shortcuts.h"
 
 #include "dive_core/command_hierarchy.h"
+#include "object_names.h"
 
 // =================================================================================================
 // CommandTabView
@@ -45,14 +46,20 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     m_command_buffer_view->header()->moveSection(2, 1);
 
     m_search_trigger_button = new QPushButton;
+    m_search_trigger_button->setObjectName(kCommandBufferSearchButtonName);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
     QHBoxLayout *options_layout = new QHBoxLayout();
     options_layout->addWidget(m_search_trigger_button);
     options_layout->addStretch();
 
+    m_search_bar = new SearchBar(this);
+    m_search_bar->setObjectName(kCommandBufferSearchBarName);
+    m_search_bar->hide();
+
     QVBoxLayout *main_layout = new QVBoxLayout();
     main_layout->addLayout(options_layout);
+    main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_command_buffer_view);
     setLayout(main_layout);
 
@@ -60,6 +67,11 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
                      SIGNAL(clicked()),
                      this,
                      SLOT(OnSearchCommandBuffer()));
+
+    QObject::connect(m_search_bar,
+                     SIGNAL(hide_search_bar(bool)),
+                     this,
+                     SLOT(OnSearchBarVisibilityChange(bool)));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -75,6 +87,10 @@ void CommandTabView::ResetModel()
 
     // Reset search results
     m_command_buffer_view->Reset();
+    if (m_search_bar->isVisible())
+    {
+        m_search_bar->clearSearch();
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -96,35 +112,84 @@ void CommandTabView::OnSelectionChanged(const QModelIndex &index)
 
     // Reset search results
     m_command_buffer_view->Reset();
-    if (m_search_dialog != nullptr)
-        m_search_dialog->resetSearchResults();
+    if (m_search_bar->isVisible())
+    {
+        m_search_bar->clearSearch();
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::OnSearchCommandBuffer()
 {
-    if (m_search_dialog == nullptr)
+    if (m_search_bar->isVisible())
     {
-        m_search_dialog = new SearchDialog(this, "Commands");
-        QObject::connect(m_search_dialog,
-                         SIGNAL(new_search(const QString &)),
-                         m_command_buffer_view,
-                         SLOT(searchCommandBufferByText(const QString &)));
-        QObject::connect(m_search_dialog,
-                         &SearchDialog::next_search,
-                         m_command_buffer_view,
-                         &CommandBufferView::nextCommandInSearch);
-        QObject::connect(m_search_dialog,
-                         &SearchDialog::prev_search,
-                         m_command_buffer_view,
-                         &CommandBufferView::prevCommandInSearch);
-        QObject::connect(m_command_buffer_view,
-                         &CommandBufferView::updateSearch,
-                         m_search_dialog,
-                         &SearchDialog::updateSearchResults);
-    }
+        m_search_bar->clearSearch();
+        m_search_bar->hide();
+        m_search_trigger_button->show();
 
-    m_search_dialog->show();
-    m_search_dialog->raise();
-    m_search_dialog->activateWindow();
+        DisconnectSearchBar();
+    }
+    else
+    {
+        ConnectSearchBar();
+
+        m_search_trigger_button->hide();
+
+        m_search_bar->positionCurser();
+        m_search_bar->show();
+        emit HideOtherSearchBars();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandTabView::OnSearchBarVisibilityChange(bool isHidden)
+{
+    if (isHidden)
+    {
+        m_search_bar->clearSearch();
+        m_search_trigger_button->show();
+        DisconnectSearchBar();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandTabView::ConnectSearchBar()
+{
+    QObject::connect(m_search_bar,
+                     SIGNAL(new_search(const QString &)),
+                     m_command_buffer_view,
+                     SLOT(searchCommandBufferByText(const QString &)));
+    QObject::connect(m_search_bar,
+                     &SearchBar::next_search,
+                     m_command_buffer_view,
+                     &CommandBufferView::nextCommandInSearch);
+    QObject::connect(m_search_bar,
+                     &SearchBar::prev_search,
+                     m_command_buffer_view,
+                     &CommandBufferView::prevCommandInSearch);
+    QObject::connect(m_command_buffer_view,
+                     &CommandBufferView::updateSearch,
+                     m_search_bar,
+                     &SearchBar::updateSearchResults);
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandTabView::DisconnectSearchBar()
+{
+    QObject::disconnect(m_search_bar,
+                        SIGNAL(new_search(const QString &)),
+                        m_command_buffer_view,
+                        SLOT(searchCommandBufferByText(const QString &)));
+    QObject::disconnect(m_search_bar,
+                        &SearchBar::next_search,
+                        m_command_buffer_view,
+                        &CommandBufferView::nextCommandInSearch);
+    QObject::disconnect(m_search_bar,
+                        &SearchBar::prev_search,
+                        m_command_buffer_view,
+                        &CommandBufferView::prevCommandInSearch);
+    QObject::disconnect(m_command_buffer_view,
+                        &CommandBufferView::updateSearch,
+                        m_search_bar,
+                        &SearchBar::updateSearchResults);
 }

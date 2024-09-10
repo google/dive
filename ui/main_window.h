@@ -46,7 +46,7 @@ class PropertyPanel;
 class HoverHelp;
 class QItemSelection;
 class TreeViewComboBox;
-class SearchDialog;
+class SearchBar;
 class CaptureSettingView;
 class TraceDialog;
 enum class EventMode;
@@ -92,6 +92,10 @@ private slots:
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded();
     void OnTraceAvailable(const QString &);
+    void OnCommandBufferSearchBarVisibilityChange(bool isHidden);
+    void OnTabViewChange();
+    void ConnectSearchBar();
+    void DisconnectSearchBar();
 
 private:
     void    CreateActions();
@@ -145,7 +149,7 @@ private:
     DiveTreeView *m_command_hierarchy_view;
     CommandModel *m_command_hierarchy_model;
     QPushButton  *m_search_trigger_button;
-    SearchDialog *m_search_dialog = nullptr;
+    SearchBar    *m_event_search_bar = nullptr;
 
     TreeViewComboBox    *m_view_mode_combo_box;
     QPushButton         *m_prev_event_button;

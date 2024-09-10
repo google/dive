@@ -62,6 +62,11 @@ public:
 
     QModelIndex scrollToIndex() const;
 
+    void searchAddressColumn(QList<QModelIndex> &search_results,
+                             int                 row,
+                             QModelIndex         parent,
+                             QString             text) const;
+
     QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
 
 public slots:

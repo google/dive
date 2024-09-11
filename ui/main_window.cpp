@@ -1012,6 +1012,8 @@ void MainWindow::CreateShortcuts()
         m_event_search_bar->clearSearch();
         m_event_search_bar->hide();
         m_search_trigger_button->show();
+
+        DisconnectSearchBar();
     });
 
     // Overview Shortcut
@@ -1178,6 +1180,7 @@ void MainWindow::OnCommandBufferSearchBarVisibilityChange(bool isHidden)
     if (isHidden)
     {
         m_event_search_bar->clearSearch();
+        m_event_search_bar->hide();
         m_search_trigger_button->show();
 
         DisconnectSearchBar();
@@ -1195,6 +1198,11 @@ void MainWindow::OnTabViewChange()
         m_event_search_bar->clearSearch();
         m_event_search_bar->hide();
         m_search_trigger_button->show();
+        DisconnectSearchBar();
+    }
+    else if (currentIndex != m_command_view_tab_index)
+    {
+        m_command_tab_view->OnSearchBarVisibilityChange(true);
     }
 }
 

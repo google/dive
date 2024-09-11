@@ -62,11 +62,6 @@ public:
 
     QModelIndex scrollToIndex() const;
 
-    void searchAddressColumn(QList<QModelIndex> &search_results,
-                             int                 row,
-                             QModelIndex         parent,
-                             QString             text) const;
-
     QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
 
 public slots:
@@ -76,6 +71,11 @@ private:
     bool CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index, bool is_cur_event);
     void SetIsSelected(uint64_t node_index);
     bool IsSelected(uint64_t node_index) const;
+    void searchAddressColumn(QList<QModelIndex>        &search_results,
+                             int                        row,
+                             const QModelIndex         &parent,
+                             const QString             &text,
+                             const Qt::CaseSensitivity &case_sensitivity) const;
 
     uint64_t m_selected_node_index = UINT64_MAX;
 

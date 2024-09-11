@@ -300,6 +300,26 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 }
 
 //--------------------------------------------------------------------------------------------------
+void CommandBufferModel::searchAddressColumn(QList<QModelIndex>        &search_results,
+                                             int                        row,
+                                             const QModelIndex         &parent,
+                                             const QString             &text,
+                                             const Qt::CaseSensitivity &case_sensitivity) const
+{
+    QModelIndex command_buffer_address_idx = index(row, CommandBufferModel::kColumnAddress, parent);
+
+    if (!command_buffer_address_idx.isValid())
+        return;
+
+    QVariant command_buffer_address_variant = data(command_buffer_address_idx, Qt::DisplayRole);
+
+    QString command_buffer_address_variant_string = command_buffer_address_variant.toString();
+
+    if (command_buffer_address_variant_string.contains(text, case_sensitivity))
+        search_results.append(command_buffer_address_idx);
+}
+
+//--------------------------------------------------------------------------------------------------
 QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QVariant &value) const
 {
     QList<QModelIndex>  result;
@@ -319,6 +339,10 @@ QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QV
 
         if (text.isEmpty())
             text = value.toString();
+
+        // Search the address column for the text and append the index if a match is found.
+        searchAddressColumn(result, r, p, text, cs);
+
         QString t = v.toString();
         if (t.contains(text, cs))
             result.append(idx);

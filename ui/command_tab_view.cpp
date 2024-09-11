@@ -147,6 +147,7 @@ void CommandTabView::OnSearchBarVisibilityChange(bool isHidden)
     if (isHidden)
     {
         m_search_bar->clearSearch();
+        m_search_bar->hide();
         m_search_trigger_button->show();
         DisconnectSearchBar();
     }

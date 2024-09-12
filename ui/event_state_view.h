@@ -44,8 +44,8 @@ protected:
 
 private:
     std::map<std::string, std::string> m_field_desc;
-    const Dive::DataCore &             m_data_core;
-    QTreeWidget *                      m_event_state_tree;
+    const Dive::DataCore              &m_data_core;
+    QTreeWidget                       *m_event_state_tree;
 
     Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo &state,
                                                              uint32_t                    event_id);
@@ -64,6 +64,8 @@ private:
                                        Dive::EventStateInfo::ConstIterator prev_event_state_it);
     void DisplayDepthState(Dive::EventStateInfo::ConstIterator event_state_it,
                            Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void DisplayStencilState(Dive::EventStateInfo::ConstIterator event_state_it,
+                             Dive::EventStateInfo::ConstIterator prev_event_state_it);
     void DisplayColorBlendState(Dive::EventStateInfo::ConstIterator event_state_it,
                                 Dive::EventStateInfo::ConstIterator prev_event_state_it);
     void DisplayHardwareSpecificStates(Dive::EventStateInfo::ConstIterator event_state_it,

@@ -54,6 +54,16 @@
         _items.append(_item);                                                         \
     }
 
+#define ADD_FIELD_TYPE_NUMBER_HEX(_field, _num, _prev_field_set, _prev_num, _items)   \
+    {                                                                                 \
+        QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
+        _item->setText(0, QString(_field));                                           \
+        _item->setText(1, "0x" + QString::number(static_cast<uint32_t>(_num), 16));   \
+        if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
+            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
+        _items.append(_item);                                                         \
+    }
+
 #define ADD_FIELD_TYPE_BOOL(_field, _bool, _prev_field_set, _prev_bool, _items)         \
     {                                                                                   \
         QTreeWidgetItem *_item = new QTreeWidgetItem;                                   \
@@ -72,6 +82,48 @@
 #define ADD_FIELD_DESC(_field, _desc)                    \
     if (m_field_desc.find(_field) == m_field_desc.end()) \
         m_field_desc[_field] = _desc;
+
+// Has to use macro here since prev_event_state_it could be potentially invalid
+// ADD_FIELD_TYPE_STRING checks if prev_event_state_it is invalid and delays the evaluation of the
+// content from prev_event_state_it
+#define ADD_FIELD_STENCIL(_name, _cur, _pre, _is_pre_set, _items)   \
+    {                                                               \
+        ADD_FIELD_TYPE_STRING((_name + "_FailOp").c_str(),          \
+                              GetVkStencilOp(_cur.failOp),          \
+                              _is_pre_set,                          \
+                              GetVkStencilOp(_pre.failOp),          \
+                              _items)                               \
+        ADD_FIELD_TYPE_STRING((_name + "_PassOp").c_str(),          \
+                              GetVkStencilOp(_cur.passOp),          \
+                              _is_pre_set,                          \
+                              GetVkStencilOp(_pre.passOp),          \
+                              _items)                               \
+        ADD_FIELD_TYPE_STRING((_name + "_DepthFailOp").c_str(),     \
+                              GetVkStencilOp(_cur.depthFailOp),     \
+                              _is_pre_set,                          \
+                              GetVkStencilOp(_pre.depthFailOp),     \
+                              _items)                               \
+        ADD_FIELD_TYPE_STRING((_name + "_CompareOp").c_str(),       \
+                              GetVkCompareOp(_cur.compareOp),       \
+                              _is_pre_set,                          \
+                              GetVkCompareOp(_pre.compareOp),       \
+                              _items)                               \
+        ADD_FIELD_TYPE_NUMBER_HEX((_name + "_CompareMask").c_str(), \
+                                  _cur.compareMask,                 \
+                                  _is_pre_set,                      \
+                                  _pre.compareMask,                 \
+                                  _items)                           \
+        ADD_FIELD_TYPE_NUMBER_HEX((_name + "_WriteMask").c_str(),   \
+                                  _cur.writeMask,                   \
+                                  _is_pre_set,                      \
+                                  _pre.writeMask,                   \
+                                  _items)                           \
+        ADD_FIELD_TYPE_NUMBER_HEX((_name + "_Reference").c_str(),   \
+                                  _cur.reference,                   \
+                                  _is_pre_set,                      \
+                                  _pre.reference,                   \
+                                  _items)                           \
+    }
 
 // =================================================================================================
 // EventStateView
@@ -194,8 +246,9 @@ void EventStateView::DisplayEventStateInfo(Dive::EventStateInfo::ConstIterator e
     DisplayFillViewportState(event_state_it, prev_event_state_it);
     DisplayRasterizerState(event_state_it, prev_event_state_it);
     DisplayFillMultisamplingState(event_state_it, prev_event_state_it);
-    DisplayDepthState(event_state_it, prev_event_state_it);
     DisplayColorBlendState(event_state_it, prev_event_state_it);
+    DisplayDepthState(event_state_it, prev_event_state_it);
+    DisplayStencilState(event_state_it, prev_event_state_it);
 
     // Hardware-specific non-Vulkan states
     DisplayHardwareSpecificStates(event_state_it, prev_event_state_it);
@@ -625,6 +678,16 @@ void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event
     else
         ADD_FIELD_NOT_SET(event_state_it->GetDepthWriteEnabledName(), items)
 
+    // DepthCompareOp
+    if (event_state_it->IsDepthCompareOpSet())
+        ADD_FIELD_TYPE_STRING(event_state_it->GetDepthCompareOpName(),
+                              GetVkCompareOp(event_state_it->DepthCompareOp()),
+                              prev_event_state_it->IsDepthCompareOpSet(),
+                              GetVkCompareOp(prev_event_state_it->DepthCompareOp()),
+                              items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetDepthCompareOpName(), items)
+
     // DepthBoundsTestEnabled
     if (event_state_it->IsDepthBoundsTestEnabledSet())
         ADD_FIELD_TYPE_BOOL(event_state_it->GetDepthBoundsTestEnabledName(),
@@ -634,16 +697,6 @@ void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event
                             items)
     else
         ADD_FIELD_NOT_SET(event_state_it->GetDepthBoundsTestEnabledName(), items)
-
-    // StencilTestEnabled
-    if (event_state_it->IsStencilTestEnabledSet())
-        ADD_FIELD_TYPE_BOOL(event_state_it->GetStencilTestEnabledName(),
-                            event_state_it->StencilTestEnabled(),
-                            prev_event_state_it->IsStencilTestEnabledSet(),
-                            prev_event_state_it->StencilTestEnabled(),
-                            items)
-    else
-        ADD_FIELD_NOT_SET(event_state_it->GetStencilTestEnabledName(), items)
 
     // MinDepthBounds
     if (event_state_it->IsMinDepthBoundsSet())
@@ -667,6 +720,49 @@ void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event
         ADD_FIELD_NOT_SET(event_state_it->GetMaxDepthBoundsName(), items)
 
     ADD_TREE_BRANCH("Depth")
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::DisplayStencilState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                         Dive::EventStateInfo::ConstIterator prev_event_state_it)
+{
+    QList<QTreeWidgetItem *> items;
+
+    // StencilTestEnabled
+    if (event_state_it->IsStencilTestEnabledSet())
+        ADD_FIELD_TYPE_BOOL(event_state_it->GetStencilTestEnabledName(),
+                            event_state_it->StencilTestEnabled(),
+                            prev_event_state_it->IsStencilTestEnabledSet(),
+                            prev_event_state_it->StencilTestEnabled(),
+                            items)
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetStencilTestEnabledName(), items)
+
+    // Stencil Front
+    if (event_state_it->IsStencilOpStateFrontSet())
+    {
+        ADD_FIELD_STENCIL(std::string(event_state_it->GetStencilOpStateFrontName()),
+                          event_state_it->StencilOpStateFront(),
+                          prev_event_state_it->StencilOpStateFront(),
+                          prev_event_state_it->IsStencilOpStateFrontSet(),
+                          items)
+    }
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetStencilOpStateFrontName(), items)
+
+    // Stencil Back
+    if (event_state_it->IsStencilOpStateBackSet())
+    {
+        ADD_FIELD_STENCIL(std::string(event_state_it->GetStencilOpStateBackName()),
+                          event_state_it->StencilOpStateBack(),
+                          prev_event_state_it->StencilOpStateBack(),
+                          prev_event_state_it->IsStencilOpStateBackSet(),
+                          items)
+    }
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetStencilOpStateBackName(), items)
+
+    ADD_TREE_BRANCH("Stencil")
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -823,7 +919,8 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         case LRZ_DIR_INVALID: s = "Invalid"; break;
         default:
             s = "Undefined";
-            break;  // TODO(wangra): we have cases where this value is 0, same with cffdump
+            break;  // TODO(wangra): we have cases where this value is 0, same
+                    // with cffdump
         }
         return QString::fromStdString(s);
     };

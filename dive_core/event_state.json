@@ -198,24 +198,6 @@
                     "desc": "Whether depth bounds testing is enabled"
                 },
                 {
-                    "name": "StencilTestEnabled",
-                    "ty": "bool",
-                    "category": "Depth",
-                    "desc": "Whether stencil testing is enabled"
-                },
-                {
-                    "name": "StencilOpStateFront",
-                    "ty": "VkStencilOpState",
-                    "category": "Depth",
-                    "desc": "Front parameter of the stencil test"
-                },
-                {
-                    "name": "StencilOpStateBack",
-                    "ty": "VkStencilOpState",
-                    "category": "Depth",
-                    "desc": "Back parameter of the stencil test"
-                },
-                {
                     "name": "MinDepthBounds",
                     "ty": "float",
                     "category": "Depth",
@@ -226,6 +208,24 @@
                     "ty": "float",
                     "category": "Depth",
                     "desc": "Maximum depth bound used in the depth bounds test"
+                },
+                {
+                    "name": "StencilTestEnabled",
+                    "ty": "bool",
+                    "category": "Stencil",
+                    "desc": "Whether stencil testing is enabled"
+                },
+                {
+                    "name": "StencilOpStateFront",
+                    "ty": "VkStencilOpState",
+                    "category": "Stencil",
+                    "desc": "Front parameter of the stencil test"
+                },
+                {
+                    "name": "StencilOpStateBack",
+                    "ty": "VkStencilOpState",
+                    "category": "Stencil",
+                    "desc": "Back parameter of the stencil test"
                 },
                 {
                     "name": "LogicOpEnabled",

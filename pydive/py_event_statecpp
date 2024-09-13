@@ -153,6 +153,16 @@ void py_event_state(py::module &m) {
                 sizeof(numpy_type<bool>::type)}
     , reinterpret_cast<const numpy_type<bool>::type*>(self.DepthBoundsTestEnabledPtr()));
         })
+            .def("min_depth_bounds", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<float>::type>({ self.size()},         {
+                sizeof(numpy_type<float>::type)}
+    , reinterpret_cast<const numpy_type<float>::type*>(self.MinDepthBoundsPtr()));
+        })
+            .def("max_depth_bounds", [](const EventStateInfo &self) {
+            return py::array_t<numpy_type<float>::type>({ self.size()},         {
+                sizeof(numpy_type<float>::type)}
+    , reinterpret_cast<const numpy_type<float>::type*>(self.MaxDepthBoundsPtr()));
+        })
             .def("stencil_test_enabled", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
@@ -167,16 +177,6 @@ void py_event_state(py::module &m) {
             return py::array_t<numpy_type<VkStencilOpState>::type>({ self.size()},         {
                 sizeof(numpy_type<VkStencilOpState>::type)}
     , reinterpret_cast<const numpy_type<VkStencilOpState>::type*>(self.StencilOpStateBackPtr()));
-        })
-            .def("min_depth_bounds", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<float>::type>({ self.size()},         {
-                sizeof(numpy_type<float>::type)}
-    , reinterpret_cast<const numpy_type<float>::type*>(self.MinDepthBoundsPtr()));
-        })
-            .def("max_depth_bounds", [](const EventStateInfo &self) {
-            return py::array_t<numpy_type<float>::type>({ self.size()},         {
-                sizeof(numpy_type<float>::type)}
-    , reinterpret_cast<const numpy_type<float>::type*>(self.MaxDepthBoundsPtr()));
         })
             .def("logic_op_enabled", [](const EventStateInfo &self) {
             return py::array_t<numpy_type<bool>::type>({ self.size(), 8},         {
@@ -363,6 +363,12 @@ void py_event_state(py::module &m) {
                                 dict["depth_bounds_test_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
     , reinterpret_cast<const numpy_type<bool>::type*>(self.DepthBoundsTestEnabledPtr()));
+                                dict["min_depth_bounds"] = py::array_t<numpy_type<float>::type>({ self.size()},         {
+                sizeof(numpy_type<float>::type)}
+    , reinterpret_cast<const numpy_type<float>::type*>(self.MinDepthBoundsPtr()));
+                                dict["max_depth_bounds"] = py::array_t<numpy_type<float>::type>({ self.size()},         {
+                sizeof(numpy_type<float>::type)}
+    , reinterpret_cast<const numpy_type<float>::type*>(self.MaxDepthBoundsPtr()));
                                 dict["stencil_test_enabled"] = py::array_t<numpy_type<bool>::type>({ self.size()},         {
                 sizeof(numpy_type<bool>::type)}
     , reinterpret_cast<const numpy_type<bool>::type*>(self.StencilTestEnabledPtr()));
@@ -372,12 +378,6 @@ void py_event_state(py::module &m) {
                                 dict["stencil_op_state_back"] = py::array_t<numpy_type<VkStencilOpState>::type>({ self.size()},         {
                 sizeof(numpy_type<VkStencilOpState>::type)}
     , reinterpret_cast<const numpy_type<VkStencilOpState>::type*>(self.StencilOpStateBackPtr()));
-                                dict["min_depth_bounds"] = py::array_t<numpy_type<float>::type>({ self.size()},         {
-                sizeof(numpy_type<float>::type)}
-    , reinterpret_cast<const numpy_type<float>::type*>(self.MinDepthBoundsPtr()));
-                                dict["max_depth_bounds"] = py::array_t<numpy_type<float>::type>({ self.size()},         {
-                sizeof(numpy_type<float>::type)}
-    , reinterpret_cast<const numpy_type<float>::type*>(self.MaxDepthBoundsPtr()));
                                     for(uint32_t attachment=0; attachment<8; ++attachment)
                 {
                     std::ostringstream key;

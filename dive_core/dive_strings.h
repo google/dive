@@ -182,6 +182,8 @@ const char *GetVkPrimitiveTopology(VkPrimitiveTopology vk_primitive_topology);
 const char *GetVkPolygonMode(VkPolygonMode vk_polygon_mode);
 const char *GetVkCullModeFlags(VkCullModeFlags vk_cull_mode_flags);
 const char *GetVkFrontFace(VkFrontFace vk_front_face);
+const char *GetVkCompareOp(VkCompareOp vk_compare_op);
+const char *GetVkStencilOp(VkStencilOp vk_stencil_op);
 const char *GetVkSampleCountFlags(VkSampleCountFlags vk_sample_count_flag);
 const char *GetZFormat(Dive::Legacy::ZFormat z_format);
 const char *GetZOrder(Dive::Legacy::ZOrder z_order);

@@ -1989,6 +1989,78 @@ public:
     }
 
     //-----------------------------------------------
+    // REF FIELD MinDepthBounds: Minimum depth bound used in the depth bounds test
+
+    // `MinDepthBounds()` returns the value of the MinDepthBounds field of the referenced object
+    inline float MinDepthBounds() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->MinDepthBounds(m_id);
+    }
+
+    // `SetMinDepthBounds(value)` sets the MinDepthBounds field of the referenced object
+    inline const Ref& SetMinDepthBounds(float value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetMinDepthBounds(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsMinDepthBoundsSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsMinDepthBoundsSet(m_id);
+    }
+
+    inline const char* GetMinDepthBoundsName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMinDepthBoundsName();
+    }
+
+    inline const char* GetMinDepthBoundsDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMinDepthBoundsDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD MaxDepthBounds: Maximum depth bound used in the depth bounds test
+
+    // `MaxDepthBounds()` returns the value of the MaxDepthBounds field of the referenced object
+    inline float MaxDepthBounds() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->MaxDepthBounds(m_id);
+    }
+
+    // `SetMaxDepthBounds(value)` sets the MaxDepthBounds field of the referenced object
+    inline const Ref& SetMaxDepthBounds(float value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetMaxDepthBounds(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsMaxDepthBoundsSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsMaxDepthBoundsSet(m_id);
+    }
+
+    inline const char* GetMaxDepthBoundsName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMaxDepthBoundsName();
+    }
+
+    inline const char* GetMaxDepthBoundsDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMaxDepthBoundsDescription();
+    }
+
+    //-----------------------------------------------
     // REF FIELD StencilTestEnabled: Whether stencil testing is enabled
 
     // `StencilTestEnabled()` returns the value of the StencilTestEnabled field of the referenced
@@ -2097,78 +2169,6 @@ public:
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
         return m_obj_ptr->GetStencilOpStateBackDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD MinDepthBounds: Minimum depth bound used in the depth bounds test
-
-    // `MinDepthBounds()` returns the value of the MinDepthBounds field of the referenced object
-    inline float MinDepthBounds() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->MinDepthBounds(m_id);
-    }
-
-    // `SetMinDepthBounds(value)` sets the MinDepthBounds field of the referenced object
-    inline const Ref& SetMinDepthBounds(float value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetMinDepthBounds(m_id, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsMinDepthBoundsSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMinDepthBoundsSet(m_id);
-    }
-
-    inline const char* GetMinDepthBoundsName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMinDepthBoundsName();
-    }
-
-    inline const char* GetMinDepthBoundsDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMinDepthBoundsDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD MaxDepthBounds: Maximum depth bound used in the depth bounds test
-
-    // `MaxDepthBounds()` returns the value of the MaxDepthBounds field of the referenced object
-    inline float MaxDepthBounds() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->MaxDepthBounds(m_id);
-    }
-
-    // `SetMaxDepthBounds(value)` sets the MaxDepthBounds field of the referenced object
-    inline const Ref& SetMaxDepthBounds(float value) const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        m_obj_ptr->SetMaxDepthBounds(m_id, value);
-        return static_cast<const Ref&>(*this);
-    }
-
-    inline bool IsMaxDepthBoundsSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMaxDepthBoundsSet(m_id);
-    }
-
-    inline const char* GetMaxDepthBoundsName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMaxDepthBoundsName();
-    }
-
-    inline const char* GetMaxDepthBoundsDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMaxDepthBoundsDescription();
     }
 
     //-----------------------------------------------
@@ -3694,6 +3694,62 @@ public:
     }
 
     //-----------------------------------------------
+    // REF FIELD MinDepthBounds: Minimum depth bound used in the depth bounds test
+
+    // `MinDepthBounds()` returns the value of the MinDepthBounds field of the referenced object
+    inline float MinDepthBounds() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->MinDepthBounds(m_id);
+    }
+
+    inline bool IsMinDepthBoundsSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsMinDepthBoundsSet(m_id);
+    }
+
+    inline const char* GetMinDepthBoundsName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMinDepthBoundsName();
+    }
+
+    inline const char* GetMinDepthBoundsDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMinDepthBoundsDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD MaxDepthBounds: Maximum depth bound used in the depth bounds test
+
+    // `MaxDepthBounds()` returns the value of the MaxDepthBounds field of the referenced object
+    inline float MaxDepthBounds() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->MaxDepthBounds(m_id);
+    }
+
+    inline bool IsMaxDepthBoundsSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsMaxDepthBoundsSet(m_id);
+    }
+
+    inline const char* GetMaxDepthBoundsName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMaxDepthBoundsName();
+    }
+
+    inline const char* GetMaxDepthBoundsDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetMaxDepthBoundsDescription();
+    }
+
+    //-----------------------------------------------
     // REF FIELD StencilTestEnabled: Whether stencil testing is enabled
 
     // `StencilTestEnabled()` returns the value of the StencilTestEnabled field of the referenced
@@ -3778,62 +3834,6 @@ public:
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
         return m_obj_ptr->GetStencilOpStateBackDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD MinDepthBounds: Minimum depth bound used in the depth bounds test
-
-    // `MinDepthBounds()` returns the value of the MinDepthBounds field of the referenced object
-    inline float MinDepthBounds() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->MinDepthBounds(m_id);
-    }
-
-    inline bool IsMinDepthBoundsSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMinDepthBoundsSet(m_id);
-    }
-
-    inline const char* GetMinDepthBoundsName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMinDepthBoundsName();
-    }
-
-    inline const char* GetMinDepthBoundsDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMinDepthBoundsDescription();
-    }
-
-    //-----------------------------------------------
-    // REF FIELD MaxDepthBounds: Maximum depth bound used in the depth bounds test
-
-    // `MaxDepthBounds()` returns the value of the MaxDepthBounds field of the referenced object
-    inline float MaxDepthBounds() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->MaxDepthBounds(m_id);
-    }
-
-    inline bool IsMaxDepthBoundsSet() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->IsMaxDepthBoundsSet(m_id);
-    }
-
-    inline const char* GetMaxDepthBoundsName() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMaxDepthBoundsName();
-    }
-
-    inline const char* GetMaxDepthBoundsDescription() const
-    {
-        DIVE_ASSERT(m_obj_ptr != nullptr);
-        return m_obj_ptr->GetMaxDepthBoundsDescription();
     }
 
     //-----------------------------------------------
@@ -6003,6 +6003,128 @@ public:
     }
 
     //-----------------------------------------------
+    // FIELD MinDepthBounds: Minimum depth bound used in the depth bounds test
+
+    // `MinDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
+    inline const float* MinDepthBoundsPtr() const
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMinDepthBoundsOffset * m_cap);
+    }
+    inline float* MinDepthBoundsPtr()
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMinDepthBoundsOffset * m_cap);
+    }
+    // `MinDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
+    inline const float* MinDepthBoundsPtr(Id id) const
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMinDepthBoundsOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline float* MinDepthBoundsPtr(Id id)
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMinDepthBoundsOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `MinDepthBounds(id)` retuns the `MinDepthBounds` element of the object identified by `id`
+    inline float MinDepthBounds(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *MinDepthBoundsPtr(id);
+    }
+
+    // `SetMinDepthBounds(id,value)` sets the `MinDepthBounds` element of the object identified by
+    // `id`
+    inline SOA& SetMinDepthBounds(Id id, float value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *MinDepthBoundsPtr(id) = value;
+        MarkFieldSet(id, kMinDepthBoundsIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsMinDepthBoundsSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kMinDepthBoundsIndex);
+    }
+
+    inline const char* GetMinDepthBoundsName() const { return "MinDepthBounds"; }
+
+    inline const char* GetMinDepthBoundsDescription() const
+    {
+        return "Minimum depth bound used in the depth bounds test";
+    }
+
+    //-----------------------------------------------
+    // FIELD MaxDepthBounds: Maximum depth bound used in the depth bounds test
+
+    // `MaxDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
+    inline const float* MaxDepthBoundsPtr() const
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMaxDepthBoundsOffset * m_cap);
+    }
+    inline float* MaxDepthBoundsPtr()
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMaxDepthBoundsOffset * m_cap);
+    }
+    // `MaxDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
+    inline const float* MaxDepthBoundsPtr(Id id) const
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMaxDepthBoundsOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline float* MaxDepthBoundsPtr(Id id)
+    {
+        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                        kMaxDepthBoundsOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `MaxDepthBounds(id)` retuns the `MaxDepthBounds` element of the object identified by `id`
+    inline float MaxDepthBounds(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *MaxDepthBoundsPtr(id);
+    }
+
+    // `SetMaxDepthBounds(id,value)` sets the `MaxDepthBounds` element of the object identified by
+    // `id`
+    inline SOA& SetMaxDepthBounds(Id id, float value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *MaxDepthBoundsPtr(id) = value;
+        MarkFieldSet(id, kMaxDepthBoundsIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsMaxDepthBoundsSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kMaxDepthBoundsIndex);
+    }
+
+    inline const char* GetMaxDepthBoundsName() const { return "MaxDepthBounds"; }
+
+    inline const char* GetMaxDepthBoundsDescription() const
+    {
+        return "Maximum depth bound used in the depth bounds test";
+    }
+
+    //-----------------------------------------------
     // FIELD StencilTestEnabled: Whether stencil testing is enabled
 
     // `StencilTestEnabledPtr()` returns a shared pointer to an array of `size()` elements
@@ -6186,128 +6308,6 @@ public:
     inline const char* GetStencilOpStateBackDescription() const
     {
         return "Back parameter of the stencil test";
-    }
-
-    //-----------------------------------------------
-    // FIELD MinDepthBounds: Minimum depth bound used in the depth bounds test
-
-    // `MinDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
-    inline const float* MinDepthBoundsPtr() const
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMinDepthBoundsOffset * m_cap);
-    }
-    inline float* MinDepthBoundsPtr()
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMinDepthBoundsOffset * m_cap);
-    }
-    // `MinDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
-    inline const float* MinDepthBoundsPtr(Id id) const
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMinDepthBoundsOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    inline float* MinDepthBoundsPtr(Id id)
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMinDepthBoundsOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    // `MinDepthBounds(id)` retuns the `MinDepthBounds` element of the object identified by `id`
-    inline float MinDepthBounds(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *MinDepthBoundsPtr(id);
-    }
-
-    // `SetMinDepthBounds(id,value)` sets the `MinDepthBounds` element of the object identified by
-    // `id`
-    inline SOA& SetMinDepthBounds(Id id, float value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *MinDepthBoundsPtr(id) = value;
-        MarkFieldSet(id, kMinDepthBoundsIndex);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsMinDepthBoundsSet(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kMinDepthBoundsIndex);
-    }
-
-    inline const char* GetMinDepthBoundsName() const { return "MinDepthBounds"; }
-
-    inline const char* GetMinDepthBoundsDescription() const
-    {
-        return "Minimum depth bound used in the depth bounds test";
-    }
-
-    //-----------------------------------------------
-    // FIELD MaxDepthBounds: Maximum depth bound used in the depth bounds test
-
-    // `MaxDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
-    inline const float* MaxDepthBoundsPtr() const
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMaxDepthBoundsOffset * m_cap);
-    }
-    inline float* MaxDepthBoundsPtr()
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMaxDepthBoundsOffset * m_cap);
-    }
-    // `MaxDepthBoundsPtr()` returns a shared pointer to an array of `size()` elements
-    inline const float* MaxDepthBoundsPtr(Id id) const
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMaxDepthBoundsOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    inline float* MaxDepthBoundsPtr(Id id)
-    {
-        return reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
-                                        kMaxDepthBoundsOffset * m_cap) +
-               static_cast<typename Id::basic_type>(id)
-
-        ;
-    }
-    // `MaxDepthBounds(id)` retuns the `MaxDepthBounds` element of the object identified by `id`
-    inline float MaxDepthBounds(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return *MaxDepthBoundsPtr(id);
-    }
-
-    // `SetMaxDepthBounds(id,value)` sets the `MaxDepthBounds` element of the object identified by
-    // `id`
-    inline SOA& SetMaxDepthBounds(Id id, float value)
-    {
-        DIVE_ASSERT(IsValidId(id));
-        *MaxDepthBoundsPtr(id) = value;
-        MarkFieldSet(id, kMaxDepthBoundsIndex);
-        return static_cast<SOA&>(*this);
-    }
-
-    inline bool IsMaxDepthBoundsSet(Id id) const
-    {
-        DIVE_ASSERT(IsValidId(id));
-        return IsFieldSet(id, kMaxDepthBoundsIndex);
-    }
-
-    inline const char* GetMaxDepthBoundsName() const { return "MaxDepthBounds"; }
-
-    inline const char* GetMaxDepthBoundsDescription() const
-    {
-        return "Maximum depth bound used in the depth bounds test";
     }
 
     //-----------------------------------------------
@@ -7843,6 +7843,24 @@ protected:
 #define PARTIAL_SIZE_EventStateInfo kDepthBoundsTestEnabledOffset + kDepthBoundsTestEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
 #define PARTIAL_INDEX_EventStateInfo kDepthBoundsTestEnabledIndex + 1
+    static_assert(alignof(float) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kMinDepthBoundsIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kMinDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kMinDepthBoundsSize = sizeof(float);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kMinDepthBoundsOffset + kMinDepthBoundsSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kMinDepthBoundsIndex + 1
+    static_assert(alignof(float) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kMaxDepthBoundsIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kMaxDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kMaxDepthBoundsSize = sizeof(float);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kMaxDepthBoundsOffset + kMaxDepthBoundsSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kMaxDepthBoundsIndex + 1
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kStencilTestEnabledIndex = PARTIAL_INDEX_EventStateInfo;
@@ -7870,24 +7888,6 @@ protected:
 #define PARTIAL_SIZE_EventStateInfo kStencilOpStateBackOffset + kStencilOpStateBackSize
 #undef PARTIAL_INDEX_EventStateInfo
 #define PARTIAL_INDEX_EventStateInfo kStencilOpStateBackIndex + 1
-    static_assert(alignof(float) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kMinDepthBoundsIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMinDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMinDepthBoundsSize = sizeof(float);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kMinDepthBoundsOffset + kMinDepthBoundsSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kMinDepthBoundsIndex + 1
-    static_assert(alignof(float) <= kAlignment,
-                  "Field type aligment requirement cannot exceed kAlignment");
-    static constexpr uint32_t kMaxDepthBoundsIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMaxDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMaxDepthBoundsSize = sizeof(float);
-#undef PARTIAL_SIZE_EventStateInfo
-#define PARTIAL_SIZE_EventStateInfo kMaxDepthBoundsOffset + kMaxDepthBoundsSize
-#undef PARTIAL_INDEX_EventStateInfo
-#define PARTIAL_INDEX_EventStateInfo kMaxDepthBoundsIndex + 1
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLogicOpEnabledIndex = PARTIAL_INDEX_EventStateInfo;
@@ -8138,11 +8138,11 @@ protected:
     bool*                                DBG_depth_write_enabled;
     VkCompareOp*                         DBG_depth_compare_op;
     bool*                                DBG_depth_bounds_test_enabled;
+    float*                               DBG_min_depth_bounds;
+    float*                               DBG_max_depth_bounds;
     bool*                                DBG_stencil_test_enabled;
     VkStencilOpState*                    DBG_stencil_op_state_front;
     VkStencilOpState*                    DBG_stencil_op_state_back;
-    float*                               DBG_min_depth_bounds;
-    float*                               DBG_max_depth_bounds;
     bool*                                DBG_logic_op_enabled;
     VkLogicOp*                           DBG_logic_op;
     VkPipelineColorBlendAttachmentState* DBG_attachment;

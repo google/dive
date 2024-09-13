@@ -77,11 +77,11 @@ typename EventStateInfo::Id::basic_type new_cap)
     auto old_depth_write_enabled_ptr = DepthWriteEnabledPtr();
     auto old_depth_compare_op_ptr = DepthCompareOpPtr();
     auto old_depth_bounds_test_enabled_ptr = DepthBoundsTestEnabledPtr();
+    auto old_min_depth_bounds_ptr = MinDepthBoundsPtr();
+    auto old_max_depth_bounds_ptr = MaxDepthBoundsPtr();
     auto old_stencil_test_enabled_ptr = StencilTestEnabledPtr();
     auto old_stencil_op_state_front_ptr = StencilOpStateFrontPtr();
     auto old_stencil_op_state_back_ptr = StencilOpStateBackPtr();
-    auto old_min_depth_bounds_ptr = MinDepthBoundsPtr();
-    auto old_max_depth_bounds_ptr = MaxDepthBoundsPtr();
     auto old_logic_op_enabled_ptr = LogicOpEnabledPtr();
     auto old_logic_op_ptr = LogicOpPtr();
     auto old_attachment_ptr = AttachmentPtr();
@@ -189,6 +189,12 @@ typename EventStateInfo::Id::basic_type new_cap)
     memcpy(DepthBoundsTestEnabledPtr(),
            old_depth_bounds_test_enabled_ptr,
            kDepthBoundsTestEnabledSize * m_size);
+    static_assert(std::is_trivially_copyable<float>::value,
+                  "Field type must be trivially copyable");
+    memcpy(MinDepthBoundsPtr(), old_min_depth_bounds_ptr, kMinDepthBoundsSize * m_size);
+    static_assert(std::is_trivially_copyable<float>::value,
+                  "Field type must be trivially copyable");
+    memcpy(MaxDepthBoundsPtr(), old_max_depth_bounds_ptr, kMaxDepthBoundsSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(StencilTestEnabledPtr(), old_stencil_test_enabled_ptr, kStencilTestEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<VkStencilOpState>::value,
@@ -201,12 +207,6 @@ typename EventStateInfo::Id::basic_type new_cap)
     memcpy(StencilOpStateBackPtr(),
            old_stencil_op_state_back_ptr,
            kStencilOpStateBackSize * m_size);
-    static_assert(std::is_trivially_copyable<float>::value,
-                  "Field type must be trivially copyable");
-    memcpy(MinDepthBoundsPtr(), old_min_depth_bounds_ptr, kMinDepthBoundsSize * m_size);
-    static_assert(std::is_trivially_copyable<float>::value,
-                  "Field type must be trivially copyable");
-    memcpy(MaxDepthBoundsPtr(), old_max_depth_bounds_ptr, kMaxDepthBoundsSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(LogicOpEnabledPtr(), old_logic_op_enabled_ptr, kLogicOpEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<VkLogicOp>::value,
@@ -292,11 +292,11 @@ typename EventStateInfo::Id::basic_type new_cap)
     DBG_depth_write_enabled = DepthWriteEnabledPtr();
     DBG_depth_compare_op = DepthCompareOpPtr();
     DBG_depth_bounds_test_enabled = DepthBoundsTestEnabledPtr();
+    DBG_min_depth_bounds = MinDepthBoundsPtr();
+    DBG_max_depth_bounds = MaxDepthBoundsPtr();
     DBG_stencil_test_enabled = StencilTestEnabledPtr();
     DBG_stencil_op_state_front = StencilOpStateFrontPtr();
     DBG_stencil_op_state_back = StencilOpStateBackPtr();
-    DBG_min_depth_bounds = MinDepthBoundsPtr();
-    DBG_max_depth_bounds = MaxDepthBoundsPtr();
     DBG_logic_op_enabled = LogicOpEnabledPtr();
     DBG_logic_op = LogicOpPtr();
     DBG_attachment = AttachmentPtr();
@@ -367,21 +367,20 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     new (DepthWriteEnabledPtr(Id(m_size))) bool();
     new (DepthCompareOpPtr(Id(m_size))) VkCompareOp();
     new (DepthBoundsTestEnabledPtr(Id(m_size))) bool();
+    new (MinDepthBoundsPtr(Id(m_size))) float();
+    new (MaxDepthBoundsPtr(Id(m_size))) float();
     new (StencilTestEnabledPtr(Id(m_size))) bool();
     new (StencilOpStateFrontPtr(Id(m_size))) VkStencilOpState();
     new (StencilOpStateBackPtr(Id(m_size))) VkStencilOpState();
-    new (MinDepthBoundsPtr(Id(m_size))) float();
-    new (MaxDepthBoundsPtr(Id(m_size))) float();
-    constexpr uint32_t kAttachmentCount = 8;
-    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
     {
         new (LogicOpEnabledPtr(Id(m_size), attachment)) bool();
     }
-    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
     {
         new (LogicOpPtr(Id(m_size), attachment)) VkLogicOp();
     }
-    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
     {
         new (AttachmentPtr(Id(m_size), attachment)) VkPipelineColorBlendAttachmentState();
     }
@@ -401,11 +400,11 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     new (ThreadSizePtr(Id(m_size))) a6xx_threadsize();
     new (EnableAllHelperLanesPtr(Id(m_size))) bool();
     new (EnablePartialHelperLanesPtr(Id(m_size))) bool();
-    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
     {
         new (UBWCEnabledPtr(Id(m_size), attachment)) bool();
     }
-    for (uint32_t attachment = 0; attachment < kAttachmentCount; ++attachment)
+    for (uint32_t attachment = 0; attachment < 8; ++attachment)
     {
         new (UBWCLosslessEnabledPtr(Id(m_size), attachment)) bool();
     }
@@ -452,11 +451,11 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetDepthWriteEnabled(other_obj.DepthWriteEnabled(other_id));
     SetDepthCompareOp(other_obj.DepthCompareOp(other_id));
     SetDepthBoundsTestEnabled(other_obj.DepthBoundsTestEnabled(other_id));
+    SetMinDepthBounds(other_obj.MinDepthBounds(other_id));
+    SetMaxDepthBounds(other_obj.MaxDepthBounds(other_id));
     SetStencilTestEnabled(other_obj.StencilTestEnabled(other_id));
     SetStencilOpStateFront(other_obj.StencilOpStateFront(other_id));
     SetStencilOpStateBack(other_obj.StencilOpStateBack(other_id));
-    SetMinDepthBounds(other_obj.MinDepthBounds(other_id));
-    SetMaxDepthBounds(other_obj.MaxDepthBounds(other_id));
     memcpy(m_obj_ptr->LogicOpEnabledPtr(m_id),
            other_obj.LogicOpEnabledPtr(other_id),
            EventStateInfo::kLogicOpEnabledSize);
@@ -625,6 +624,16 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         other.SetDepthBoundsTestEnabled(val);
     }
     {
+        auto val = MinDepthBounds();
+        SetMinDepthBounds(other.MinDepthBounds());
+        other.SetMinDepthBounds(val);
+    }
+    {
+        auto val = MaxDepthBounds();
+        SetMaxDepthBounds(other.MaxDepthBounds());
+        other.SetMaxDepthBounds(val);
+    }
+    {
         auto val = StencilTestEnabled();
         SetStencilTestEnabled(other.StencilTestEnabled());
         other.SetStencilTestEnabled(val);
@@ -638,16 +647,6 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         auto val = StencilOpStateBack();
         SetStencilOpStateBack(other.StencilOpStateBack());
         other.SetStencilOpStateBack(val);
-    }
-    {
-        auto val = MinDepthBounds();
-        SetMinDepthBounds(other.MinDepthBounds());
-        other.SetMinDepthBounds(val);
-    }
-    {
-        auto val = MaxDepthBounds();
-        SetMaxDepthBounds(other.MaxDepthBounds());
-        other.SetMaxDepthBounds(val);
     }
     {
         bool  val[EventStateInfo::kLogicOpEnabledArrayCount];

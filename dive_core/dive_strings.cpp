@@ -511,6 +511,40 @@ const char *GetVkFrontFace(VkFrontFace vk_front_face)
     return nullptr;
 }
 
+const char *GetVkCompareOp(VkCompareOp vk_compare_op)
+{
+    switch (vk_compare_op)
+    {
+    case VK_COMPARE_OP_NEVER: return "VK_COMPARE_OP_NEVER";
+    case VK_COMPARE_OP_LESS: return "VK_COMPARE_OP_LESS";
+    case VK_COMPARE_OP_EQUAL: return "VK_COMPARE_OP_EQUAL";
+    case VK_COMPARE_OP_LESS_OR_EQUAL: return "VK_COMPARE_OP_LESS_OR_EQUAL";
+    case VK_COMPARE_OP_GREATER: return "VK_COMPARE_OP_GREATER";
+    case VK_COMPARE_OP_NOT_EQUAL: return "VK_COMPARE_OP_NOT_EQUAL";
+    case VK_COMPARE_OP_GREATER_OR_EQUAL: return "VK_COMPARE_OP_GREATER_OR_EQUAL";
+    case VK_COMPARE_OP_ALWAYS: return "VK_COMPARE_OP_ALWAYS";
+    case VK_COMPARE_OP_MAX_ENUM: return "VK_COMPARE_OP_MAX_ENUM";
+    }
+    return nullptr;
+}
+
+const char *GetVkStencilOp(VkStencilOp vk_stencil_op)
+{
+    switch (vk_stencil_op)
+    {
+    case VK_STENCIL_OP_KEEP: return "VK_STENCIL_OP_KEEP";
+    case VK_STENCIL_OP_ZERO: return "VK_STENCIL_OP_ZERO";
+    case VK_STENCIL_OP_REPLACE: return "VK_STENCIL_OP_REPLACE";
+    case VK_STENCIL_OP_INCREMENT_AND_CLAMP: return "VK_STENCIL_OP_INCREMENT_AND_CLAMP";
+    case VK_STENCIL_OP_DECREMENT_AND_CLAMP: return "VK_STENCIL_OP_DECREMENT_AND_CLAMP";
+    case VK_STENCIL_OP_INVERT: return "VK_STENCIL_OP_INVERT";
+    case VK_STENCIL_OP_INCREMENT_AND_WRAP: return "VK_STENCIL_OP_INCREMENT_AND_WRAP";
+    case VK_STENCIL_OP_DECREMENT_AND_WRAP: return "VK_STENCIL_OP_DECREMENT_AND_WRAP";
+    case VK_STENCIL_OP_MAX_ENUM: return "VK_STENCIL_OP_MAX_ENUM";
+    }
+    return nullptr;
+}
+
 const char *GetVkSampleCountFlags(VkSampleCountFlags vk_sample_count_flag)
 {
     switch (vk_sample_count_flag)

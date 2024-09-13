@@ -226,6 +226,22 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
+            <Synthetic Name="MinDepthBounds" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="MaxDepthBounds" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
             <Synthetic Name="StencilTestEnabled" >
                 <Expand>
                     <ArrayItems>
@@ -247,22 +263,6 @@
                     <ArrayItems>
                             <Size>m_size</Size>
                         <ValuePointer>((VkStencilOpState*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_cap))</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="MinDepthBounds" >
-                <Expand>
-                    <ArrayItems>
-                            <Size>m_size</Size>
-                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_cap))</ValuePointer>
-                    </ArrayItems>
-                </Expand>
-            </Synthetic>
-            <Synthetic Name="MaxDepthBounds" >
-                <Expand>
-                    <ArrayItems>
-                            <Size>m_size</Size>
-                        <ValuePointer>((float*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_cap))</ValuePointer>
                     </ArrayItems>
                 </Expand>
             </Synthetic>
@@ -531,6 +531,12 @@
             <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
             <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
@@ -539,12 +545,6 @@
             </Item>
             <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
             <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
@@ -742,6 +742,12 @@
             <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
             <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
@@ -750,12 +756,6 @@
             </Item>
             <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
             <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
@@ -953,6 +953,12 @@
             <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
             <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
@@ -961,12 +967,6 @@
             </Item>
             <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
             <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>
@@ -1164,6 +1164,12 @@
             <Item Name="DepthBoundsTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kDepthBoundsTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
             <Item Name="StencilTestEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilTestEnabledOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
@@ -1172,12 +1178,6 @@
             </Item>
             <Item Name="StencilOpStateBack" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((VkStencilOpState*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kStencilOpStateBackOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MinDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMinDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
-            </Item>
-            <Item Name="MaxDepthBounds" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
-                    ((float*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kMaxDepthBoundsOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
             <Synthetic Name="LogicOpEnabled" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                 <Expand>

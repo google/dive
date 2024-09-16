@@ -70,12 +70,13 @@ public:
 
     struct PackageListOptions
     {
-        bool with_system_package;
+        bool all;
         bool debuggable_only;
+        bool non_debuggable_only;
     };
 
-    absl::StatusOr<std::vector<std::string>> ListPackage(PackageListOptions option = { 0,
-                                                                                       1 }) const;
+    absl::StatusOr<std::vector<std::string>> ListPackage(PackageListOptions option = { 1,
+                                                                                       0, 0}) const;
     std::string                              GetDeviceDisplayName() const;
     absl::Status                             SetupApp(const std::string    &package,
                                                       const ApplicationType type,

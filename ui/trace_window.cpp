@@ -33,11 +33,14 @@
 #include <QVBoxLayout>
 #include <cstdint>
 #include <filesystem>
+#include <qboxlayout.h>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+#include "capture_service/android_application.h"
 #include "capture_service/client.h"
 #include "capture_service/device_mgr.h"
 
@@ -73,7 +76,14 @@ TraceDialog::TraceDialog(QWidget *parent)
 
     m_dev_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_refresh_button = new QPushButton("&Refresh", this);
+    m_pkg_filter_button = new QPushButton(this);
+    m_pkg_filter        = new PackageFilter(this);
+    m_pkg_filter_button->setIcon(QIcon(":/images/filter.png"));
     m_pkg_refresh_button->setDisabled(true);
+    m_pkg_filter_button->setDisabled(true);
+    m_pkg_filter_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_pkg_filter->hide();
+    m_pkg_list_options = {1, 0, 0};
 
     m_main_layout = new QVBoxLayout();
 
@@ -126,10 +136,17 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_capture_layout->addWidget(m_dev_box);
     m_capture_layout->addWidget(m_dev_refresh_button);
 
+    m_pkg_filter_layout = new QHBoxLayout();
+    m_pkg_filter_label = new QLabel("Package Filters:");
+    m_pkg_filter_label->hide();
+    m_pkg_filter_layout->addWidget(m_pkg_filter_label);
+    m_pkg_filter_layout->addWidget(m_pkg_filter);
+
     m_pkg_layout = new QHBoxLayout();
     m_pkg_layout->addWidget(m_pkg_label);
     m_pkg_layout->addWidget(m_pkg_box);
     m_pkg_layout->addWidget(m_pkg_refresh_button);
+    m_pkg_layout->addWidget(m_pkg_filter_button);
 
     m_type_layout = new QHBoxLayout();
     m_type_layout->addWidget(m_app_type_label);
@@ -140,6 +157,7 @@ TraceDialog::TraceDialog(QWidget *parent)
 
     m_main_layout->addLayout(m_capture_layout);
     m_main_layout->addLayout(m_cmd_layout);
+    m_main_layout->addLayout(m_pkg_filter_layout);
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_args_layout);
 
@@ -171,8 +189,13 @@ TraceDialog::TraceDialog(QWidget *parent)
                      &QPushButton::clicked,
                      this,
                      &TraceDialog::OnAppListRefresh);
+    QObject::connect(m_pkg_filter_button,
+                     &QPushButton::clicked,
+                     this,
+                     &TraceDialog::OnPackageListFilter);
     QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
     QObject::connect(m_args_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputArgs);
+    QObject::connect(m_pkg_filter, &PackageFilter::filtersApplied, this, &TraceDialog::OnPackageListFilterApplied);
 }
 
 TraceDialog::~TraceDialog()
@@ -580,7 +603,7 @@ void TraceDialog::UpdatePackageList()
         return;
     }
 
-    auto ret = device->ListPackage();
+    auto ret = device->ListPackage(m_pkg_list_options);
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to list package for device ",
@@ -603,4 +626,34 @@ void TraceDialog::UpdatePackageList()
     }
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_refresh_button->setDisabled(false);
+    m_pkg_filter_button->setDisabled(false);
+}
+
+void TraceDialog::OnPackageListFilter()
+{
+    if (m_pkg_filter->isHidden())
+    {
+        m_pkg_filter_label->show();
+        m_pkg_filter->show();
+    }
+    else
+    {
+        m_pkg_filter_label->hide();
+        m_pkg_filter->hide();
+    }
+}
+
+void TraceDialog::OnPackageListFilterApplied(QSet<QString> filters)
+{
+    if (filters.contains("All"))
+    {
+        m_pkg_list_options = {1, 0, 0};
+    }
+    else
+    {
+        m_pkg_list_options = {0, filters.contains("Debuggable"), filters.contains("Non-Debuggable")};
+    }
+    UpdatePackageList();
+    m_pkg_filter_label->hide();
+    m_pkg_filter->hide();
 }

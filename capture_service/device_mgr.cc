@@ -85,7 +85,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 {
     std::vector<std::string> package_list;
     std::string              cmd = "shell pm list packages";
-    if (!option.with_system_package)
+    if (!option.all && !option.non_debuggable_only)
     {
         cmd += " -3";
     }
@@ -96,7 +96,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         return result.status();
     }
     output = *result;
-
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
     for (const auto &line : lines)
     {
@@ -104,6 +103,13 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         if (fields.size() == 2 && fields[0] == "package")
         {
             std::string package(absl::StripAsciiWhitespace(fields[1]));
+
+            if (option.all)
+            {
+                package_list.push_back(package);
+                continue;
+            }
+
             if (option.debuggable_only)
             {
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
@@ -113,12 +119,25 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                 }
                 output = *result;
                 // TODO: find out more reliable way to find if app is debuggable.
-                if (!absl::StrContains(output, "DEBUGGABLE"))
+                if (absl::StrContains(output, "DEBUGGABLE"))
                 {
-                    continue;
+                    package_list.push_back(package);
                 }
             }
-            package_list.push_back(package);
+            
+            if (option.non_debuggable_only)
+            {
+                result = Adb().RunAndGetResult("shell dumpsys package " + package);
+                if (!result.ok())
+                {
+                    return result.status();
+                }
+                output = *result;
+                if (!absl::StrContains(output, "DEBUGGABLE"))
+                {
+                    package_list.push_back(package);;
+                }
+            }
         }
     }
     std::sort(package_list.begin(), package_list.end());

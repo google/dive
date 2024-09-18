@@ -29,6 +29,8 @@
 #include <QSortFilterProxyModel>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QSortFilterProxyModel>
+#include <QCompleter>
 #include <QThread>
 #include <QVBoxLayout>
 #include <cstdint>

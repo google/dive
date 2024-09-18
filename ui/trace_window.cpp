@@ -16,6 +16,7 @@
 
 #include "trace_window.h"
 
+#include <qboxlayout.h>
 #include <QComboBox>
 #include <QCompleter>
 #include <QDebug>
@@ -33,7 +34,6 @@
 #include <QVBoxLayout>
 #include <cstdint>
 #include <filesystem>
-#include <qboxlayout.h>
 #include <string>
 
 #include "absl/status/status.h"
@@ -77,13 +77,13 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_dev_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_filter_button = new QPushButton(this);
-    m_pkg_filter        = new PackageFilter(this);
+    m_pkg_filter = new PackageFilter(this);
     m_pkg_filter_button->setIcon(QIcon(":/images/filter.png"));
     m_pkg_refresh_button->setDisabled(true);
     m_pkg_filter_button->setDisabled(true);
     m_pkg_filter_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_pkg_filter->hide();
-    m_pkg_list_options = {1, 0, 0};
+    m_pkg_list_options = { 1, 0, 0 };
 
     m_main_layout = new QVBoxLayout();
 
@@ -195,7 +195,10 @@ TraceDialog::TraceDialog(QWidget *parent)
                      &TraceDialog::OnPackageListFilter);
     QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
     QObject::connect(m_args_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputArgs);
-    QObject::connect(m_pkg_filter, &PackageFilter::filtersApplied, this, &TraceDialog::OnPackageListFilterApplied);
+    QObject::connect(m_pkg_filter,
+                     &PackageFilter::filtersApplied,
+                     this,
+                     &TraceDialog::OnPackageListFilterApplied);
 }
 
 TraceDialog::~TraceDialog()
@@ -647,11 +650,13 @@ void TraceDialog::OnPackageListFilterApplied(QSet<QString> filters)
 {
     if (filters.contains("All"))
     {
-        m_pkg_list_options = {1, 0, 0};
+        m_pkg_list_options = { 1, 0, 0 };
     }
     else
     {
-        m_pkg_list_options = {0, filters.contains("Debuggable"), filters.contains("Non-Debuggable")};
+        m_pkg_list_options = { 0,
+                               filters.contains("Debuggable"),
+                               filters.contains("Non-Debuggable") };
     }
     UpdatePackageList();
     m_pkg_filter_label->hide();

@@ -124,7 +124,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                     package_list.push_back(package);
                 }
             }
-            
+
             if (option.non_debuggable_only)
             {
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
@@ -135,7 +135,8 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                 output = *result;
                 if (!absl::StrContains(output, "DEBUGGABLE"))
                 {
-                    package_list.push_back(package);;
+                    package_list.push_back(package);
+                    ;
                 }
             }
         }

@@ -106,15 +106,15 @@ private:
     QComboBox          *m_dev_box;
     QPushButton        *m_dev_refresh_button;
 
-    QHBoxLayout        *m_pkg_filter_layout;
-    QLabel             *m_pkg_filter_label;
-    PackageFilter      *m_pkg_filter;
-    QHBoxLayout        *m_pkg_layout;
-    QLabel             *m_pkg_label;
-    QStandardItemModel *m_pkg_model;
-    QComboBox          *m_pkg_box;
-    QPushButton        *m_pkg_refresh_button;
-    QPushButton        *m_pkg_filter_button;
+    QHBoxLayout                            *m_pkg_filter_layout;
+    QLabel                                 *m_pkg_filter_label;
+    PackageFilter                          *m_pkg_filter;
+    QHBoxLayout                            *m_pkg_layout;
+    QLabel                                 *m_pkg_label;
+    QStandardItemModel                     *m_pkg_model;
+    QComboBox                              *m_pkg_box;
+    QPushButton                            *m_pkg_refresh_button;
+    QPushButton                            *m_pkg_filter_button;
     Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
 
     QHBoxLayout        *m_type_layout;

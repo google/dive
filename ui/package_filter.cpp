@@ -12,15 +12,15 @@
 */
 
 #include "package_filter.h"
-#include "QHBoxLayout"
-#include "QCheckBox"
-#include <QLabel>
-#include "QPushButton"
-#include "QVBoxLayout"
 #include <qevent.h>
 #include <qnamespace.h>
+#include <QLabel>
 #include <iostream>
 #include <string>
+#include "QCheckBox"
+#include "QHBoxLayout"
+#include "QPushButton"
+#include "QVBoxLayout"
 
 //--------------------------------------------------------------------------------------------------
 PackageFilter::PackageFilter(QWidget* parent) :
@@ -51,7 +51,8 @@ PackageFilter::PackageFilter(QWidget* parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::selectAllEventsFilter(int state) {
+void PackageFilter::selectAllEventsFilter(int state)
+{
     if (state == Qt::Checked)
     {
         m_non_debuggable_filter->setCheckState(Qt::Unchecked);
@@ -61,21 +62,23 @@ void PackageFilter::selectAllEventsFilter(int state) {
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::selectFilter(int state) {
+void PackageFilter::selectFilter(int state)
+{
     if (state == Qt::Checked)
     {
         m_all_filter->setCheckState(Qt::Unchecked);
-        auto iterator = std::find_if(m_filters.begin(), m_filters.end(), 
-                              [](const QCheckBox* checkBox) { 
-                                  return checkBox->text() == "All"; 
-                              });
+        auto iterator = std::find_if(m_filters.begin(),
+                                     m_filters.end(),
+                                     [](const QCheckBox* checkBox) {
+                                         return checkBox->text() == "All";
+                                     });
         if (iterator != m_filters.end())
         {
             m_filters.erase(iterator);
         }
         m_filters.insert(qobject_cast<QCheckBox*>(sender()));
-        
-        if(m_filters.size() == (kTotalFilterCount - 1))
+
+        if (m_filters.size() == (kTotalFilterCount - 1))
         {
             m_all_filter->setCheckState(Qt::Checked);
         }
@@ -87,19 +90,21 @@ void PackageFilter::selectFilter(int state) {
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::applyFilters() {
+void PackageFilter::applyFilters()
+{
     m_active_filters.clear();
-    
+
     if (m_filters.empty())
     {
         m_all_filter->setCheckState(Qt::Checked);
         m_active_filters.insert(m_all_filter);
-        emit filtersApplied({m_all_filter->text()});
+        emit filtersApplied({ m_all_filter->text() });
     }
-    else 
+    else
     {
         QSet<QString> applied_filter_texts;
-        for (QCheckBox* selectedCheckBox : m_filters) {
+        for (QCheckBox* selectedCheckBox : m_filters)
+        {
             if (selectedCheckBox->text() == "All")
             {
                 m_active_filters.clear();
@@ -118,22 +123,26 @@ void PackageFilter::applyFilters() {
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::onReject() {
+void PackageFilter::onReject()
+{
     close();
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::closeEvent(QCloseEvent *event) 
+void PackageFilter::closeEvent(QCloseEvent* event)
 {
     // Iterate over the copy of filters
     auto unappliedFilters = m_filters;
-    for (QCheckBox* checkBox : unappliedFilters) {
+    for (QCheckBox* checkBox : unappliedFilters)
+    {
         checkBox->setCheckState(m_active_filters.count(checkBox) ? Qt::Checked : Qt::Unchecked);
     }
 
     // Ensure all checkboxes in m_active_filters are checked
-    for (QCheckBox* checkBox : m_active_filters) {
-        if (!checkBox->isChecked()) {
+    for (QCheckBox* checkBox : m_active_filters)
+    {
+        if (!checkBox->isChecked())
+        {
             checkBox->setCheckState(Qt::Checked);
         }
     }

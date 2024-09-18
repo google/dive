@@ -76,7 +76,8 @@ public:
     };
 
     absl::StatusOr<std::vector<std::string>> ListPackage(PackageListOptions option = { 1,
-                                                                                       0, 0}) const;
+                                                                                       0,
+                                                                                       0 }) const;
     std::string                              GetDeviceDisplayName() const;
     absl::Status                             SetupApp(const std::string    &package,
                                                       const ApplicationType type,

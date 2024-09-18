@@ -11,8 +11,8 @@
  limitations under the License.
 */
 
-#include <QDialog>
 #include <qevent.h>
+#include <QDialog>
 #include <unordered_set>
 
 #pragma once
@@ -27,7 +27,7 @@ class PackageFilter : public QWidget
     Q_OBJECT
 
 public:
-    PackageFilter(QWidget* parent = nullptr);
+    PackageFilter(QWidget *parent = nullptr);
 
 public slots:
     void selectAllEventsFilter(int state);
@@ -42,13 +42,13 @@ signals:
     void filtersApplied(QSet<QString> filters);
 
 private:
-    const std::size_t    kTotalFilterCount = 3;
-    QCheckBox   *m_all_filter = nullptr;
-    QCheckBox   *m_non_debuggable_filter = nullptr;
-    QCheckBox   *m_debuggable_filter = nullptr;
-    QPushButton *m_apply = nullptr;
-    
-    std::unordered_set<QCheckBox*> m_active_filters;
-    std::unordered_set<QCheckBox*> m_filters;
-    bool m_applied;
+    const std::size_t kTotalFilterCount = 3;
+    QCheckBox        *m_all_filter = nullptr;
+    QCheckBox        *m_non_debuggable_filter = nullptr;
+    QCheckBox        *m_debuggable_filter = nullptr;
+    QPushButton      *m_apply = nullptr;
+
+    std::unordered_set<QCheckBox *> m_active_filters;
+    std::unordered_set<QCheckBox *> m_filters;
+    bool                            m_applied;
 };

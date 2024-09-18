@@ -17,6 +17,7 @@
 #include "trace_window.h"
 
 #include <QComboBox>
+#include <QCompleter>
 #include <QDebug>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -25,10 +26,9 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QSizePolicy>
+#include <QSortFilterProxyModel>
 #include <QStandardItem>
 #include <QStandardItemModel>
-#include <QSortFilterProxyModel>
-#include <QCompleter>
 #include <QThread>
 #include <QVBoxLayout>
 #include <cstdint>
@@ -99,10 +99,10 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_pkg_box->setSizeAdjustPolicy(
     QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
     m_pkg_box->setEditable(true);
-    QSortFilterProxyModel* filterModel = new QSortFilterProxyModel(m_pkg_box);
+    QSortFilterProxyModel *filterModel = new QSortFilterProxyModel(m_pkg_box);
     filterModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     filterModel->setSourceModel(m_pkg_box->model());
-    QCompleter* completer = new QCompleter(filterModel, m_pkg_box);
+    QCompleter *completer = new QCompleter(filterModel, m_pkg_box);
     completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     m_pkg_box->setCompleter(completer);
 
@@ -156,7 +156,10 @@ TraceDialog::TraceDialog(QWidget *parent)
                      SIGNAL(currentIndexChanged(const QString &)),
                      this,
                      SLOT(OnPackageSelected(const QString &)));
-    QObject::connect(m_pkg_box->lineEdit(), &QLineEdit::textEdited, filterModel, &QSortFilterProxyModel::setFilterFixedString);
+    QObject::connect(m_pkg_box->lineEdit(),
+                     &QLineEdit::textEdited,
+                     filterModel,
+                     &QSortFilterProxyModel::setFilterFixedString);
     QObject::connect(m_run_button, &QPushButton::clicked, this, &TraceDialog::OnStartClicked);
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
 

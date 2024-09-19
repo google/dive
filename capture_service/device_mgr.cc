@@ -85,7 +85,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 {
     std::vector<std::string> package_list;
     std::string              cmd = "shell pm list packages";
-    if (!option.all && !option.non_debuggable_only)
+    if (option != PackageListOptions::kAll && option != PackageListOptions::kNonDebuggableOnly)
     {
         cmd += " -3";
     }
@@ -104,13 +104,13 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         {
             std::string package(absl::StripAsciiWhitespace(fields[1]));
 
-            if (option.all)
+            if (option == PackageListOptions::kAll)
             {
                 package_list.push_back(package);
                 continue;
             }
 
-            if (option.debuggable_only)
+            if (option == PackageListOptions::kDebuggableOnly)
             {
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
                 if (!result.ok())
@@ -125,7 +125,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                 }
             }
 
-            if (option.non_debuggable_only)
+            if (option == PackageListOptions::kNonDebuggableOnly)
             {
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
                 if (!result.ok())
@@ -136,7 +136,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                 if (!absl::StrContains(output, "DEBUGGABLE"))
                 {
                     package_list.push_back(package);
-                    ;
                 }
             }
         }

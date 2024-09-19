@@ -83,7 +83,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_pkg_filter_button->setDisabled(true);
     m_pkg_filter_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_pkg_filter->hide();
-    m_pkg_list_options = { 1, 0, 0 };
+    m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kAll;
 
     m_main_layout = new QVBoxLayout();
 
@@ -650,13 +650,15 @@ void TraceDialog::OnPackageListFilterApplied(QSet<QString> filters)
 {
     if (filters.contains("All"))
     {
-        m_pkg_list_options = { 1, 0, 0 };
+        m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kAll;
     }
-    else
+    else if (filters.contains("Debuggable"))
     {
-        m_pkg_list_options = { 0,
-                               filters.contains("Debuggable"),
-                               filters.contains("Non-Debuggable") };
+        m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
+    }
+    else if (filters.contains("Non-Debuggable"))
+    {
+        m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kNonDebuggableOnly;
     }
     UpdatePackageList();
     m_pkg_filter_label->hide();

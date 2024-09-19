@@ -68,23 +68,22 @@ public:
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
 
-    struct PackageListOptions
+    enum class PackageListOptions
     {
-        bool all;
-        bool debuggable_only;
-        bool non_debuggable_only;
+        kAll,
+        kDebuggableOnly,
+        kNonDebuggableOnly,
     };
 
-    absl::StatusOr<std::vector<std::string>> ListPackage(PackageListOptions option = { 1,
-                                                                                       0,
-                                                                                       0 }) const;
-    std::string                              GetDeviceDisplayName() const;
-    absl::Status                             SetupApp(const std::string    &package,
-                                                      const ApplicationType type,
-                                                      const std::string    &command_args);
-    absl::Status                             SetupApp(const std::string    &binary,
-                                                      const std::string    &args,
-                                                      const ApplicationType type);
+    absl::StatusOr<std::vector<std::string>> ListPackage(
+    PackageListOptions option = PackageListOptions::kAll) const;
+    std::string  GetDeviceDisplayName() const;
+    absl::Status SetupApp(const std::string    &package,
+                          const ApplicationType type,
+                          const std::string    &command_args);
+    absl::Status SetupApp(const std::string    &binary,
+                          const std::string    &args,
+                          const ApplicationType type);
 
     absl::Status      CleanupAPP();
     absl::Status      StartApp();

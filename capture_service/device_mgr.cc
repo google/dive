@@ -103,15 +103,10 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         if (fields.size() == 2 && fields[0] == "package")
         {
             std::string package(absl::StripAsciiWhitespace(fields[1]));
-
-            if (option == PackageListOptions::kAll)
+            switch (option)
             {
-                package_list.push_back(package);
-                continue;
-            }
-
-            if (option == PackageListOptions::kDebuggableOnly)
-            {
+            case PackageListOptions::kAll: package_list.push_back(package); continue;
+            case PackageListOptions::kDebuggableOnly:
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
                 if (!result.ok())
                 {
@@ -123,10 +118,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                 {
                     package_list.push_back(package);
                 }
-            }
-
-            if (option == PackageListOptions::kNonDebuggableOnly)
-            {
+            case PackageListOptions::kNonDebuggableOnly:
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
                 if (!result.ok())
                 {

@@ -131,6 +131,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                     package_list.push_back(package);
                 }
                 break;
+            default: assert("Error, unknown package list option.");
             }
         }
     }

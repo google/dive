@@ -19,6 +19,7 @@ limitations under the License.
 #include <filesystem>
 #include <memory>
 
+#include "../dive_core/common/common.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -131,7 +132,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                     package_list.push_back(package);
                 }
                 break;
-            default: assert(false); break;  // Unknown Package List Option.
+            default: DIVE_ASSERT(false); break;  // Unknown Package List Option.
             }
         }
     }

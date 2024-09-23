@@ -19,6 +19,7 @@ limitations under the License.
 #include <filesystem>
 #include <memory>
 
+#include "../dive_core/common/common.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -85,7 +86,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 {
     std::vector<std::string> package_list;
     std::string              cmd = "shell pm list packages";
-    if (!option.with_system_package)
+    if (option != PackageListOptions::kAll && option != PackageListOptions::kNonDebuggableOnly)
     {
         cmd += " -3";
     }
@@ -96,7 +97,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         return result.status();
     }
     output = *result;
-
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
     for (const auto &line : lines)
     {
@@ -104,8 +104,10 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         if (fields.size() == 2 && fields[0] == "package")
         {
             std::string package(absl::StripAsciiWhitespace(fields[1]));
-            if (option.debuggable_only)
+            switch (option)
             {
+            case PackageListOptions::kAll: package_list.push_back(package); break;
+            case PackageListOptions::kDebuggableOnly:
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
                 if (!result.ok())
                 {
@@ -113,12 +115,25 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                 }
                 output = *result;
                 // TODO: find out more reliable way to find if app is debuggable.
+                if (absl::StrContains(output, "DEBUGGABLE"))
+                {
+                    package_list.push_back(package);
+                }
+                break;
+            case PackageListOptions::kNonDebuggableOnly:
+                result = Adb().RunAndGetResult("shell dumpsys package " + package);
+                if (!result.ok())
+                {
+                    return result.status();
+                }
+                output = *result;
                 if (!absl::StrContains(output, "DEBUGGABLE"))
                 {
-                    continue;
+                    package_list.push_back(package);
                 }
+                break;
+            default: DIVE_ASSERT(false); break;  // Unknown Package List Option.
             }
-            package_list.push_back(package);
         }
     }
     std::sort(package_list.begin(), package_list.end());

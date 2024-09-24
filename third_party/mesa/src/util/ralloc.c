@@ -50,7 +50,13 @@
  */
 struct ralloc_header
 {
-   alignas(HEADER_ALIGN)
+#if defined(__GNUC__)
+    alignas(HEADER_ALIGN) 
+#elif defined(_MSC_VER)
+    __declspec(align(HEADER_ALIGN))
+#else
+#error "Unsupported compiler"
+#endif
 
 #ifndef NDEBUG
    /* A canary value used to determine whether a pointer is ralloc'd. */
@@ -578,7 +584,13 @@ typedef struct
  * allocated using a freelist backed by a simple linear allocator.
  */
 typedef struct gc_slab {
-   alignas(HEADER_ALIGN)
+#if defined(__GNUC__)
+    alignas(HEADER_ALIGN) 
+#elif defined(_MSC_VER)
+    __declspec(align(HEADER_ALIGN))
+#else
+#error "Unsupported compiler"
+#endif
 
    gc_ctx *ctx;
 
@@ -961,7 +973,13 @@ gc_sweep_end(gc_ctx *ctx)
 
 struct linear_ctx {
 
-   alignas(HEADER_ALIGN)
+#if defined(__GNUC__)
+    alignas(HEADER_ALIGN) 
+#elif defined(_MSC_VER)
+    __declspec(align(HEADER_ALIGN))
+#else
+#error "Unsupported compiler"
+#endif
 
 #ifndef NDEBUG
    unsigned magic;   /* for debugging */
@@ -975,7 +993,13 @@ typedef struct linear_ctx linear_ctx;
 
 #ifndef NDEBUG
 struct linear_node_canary {
-   alignas(HEADER_ALIGN)
+#if defined(__GNUC__)
+    alignas(HEADER_ALIGN) 
+#elif defined(_MSC_VER)
+    __declspec(align(HEADER_ALIGN))
+#else
+#error "Unsupported compiler"
+#endif
    unsigned magic;
    unsigned offset;  /* points to the first unused byte in *this* buffer */
 };

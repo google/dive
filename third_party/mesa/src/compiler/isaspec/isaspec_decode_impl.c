@@ -184,7 +184,31 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 	int ret;
 
 	va_start(args, fmt);
-	ret = vasprintf(&buffer, fmt, args);
+#ifdef _MSC_VER
+	// MSVC doesn't have vasprintf, so we need a workaround
+    size_t buffer_size = 1024; // Initial buffer size
+    buffer = (char *)malloc(buffer_size);
+    if (buffer == NULL) {
+        va_end(args);
+        // Handle allocation error
+        return;
+    }
+
+    while ((ret = vsnprintf_s(buffer, buffer_size, _TRUNCATE, fmt, args)) == -1 || ret == (int)buffer_size - 1) {
+        // Buffer too small, try again with a larger buffer
+        buffer_size *= 2;
+        char *new_buffer = (char *)realloc(buffer, buffer_size);
+        if (new_buffer == NULL) {
+            va_end(args);
+            free(buffer); // Free the old buffer
+            // Handle allocation error
+            return;
+        }
+        buffer = new_buffer;
+    }
+#else
+    ret = vasprintf(&buffer, fmt, args);
+#endif
 	va_end(args);
 
 	if (ret != -1) {
@@ -193,6 +217,7 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 		for (size_t i = 0; i < len; i++) {
 			const char c = buffer[i];
 
+			assert(state->out != NULL);
 			fputc(c, state->out);
 			state->line_column++;
 
@@ -224,7 +249,27 @@ decode_error(struct decode_state *state, const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	vasprintf(&state->errors[state->num_errors++], fmt, ap);
+#ifdef _MSC_VER
+    va_list ap_copy;
+    va_copy(ap_copy, ap);
+    int len = _vscprintf(fmt, ap_copy);
+    va_end(ap_copy);
+
+    if (len == -1) {
+        va_end(ap);
+        return;
+    }
+
+    state->errors[state->num_errors] = (char *)malloc(len + 1);
+    if (!state->errors[state->num_errors]) {
+        va_end(ap);
+        return;
+    }
+
+    _vsprintf_p(state->errors[state->num_errors++], len + 1, fmt, ap);
+#else
+    vasprintf(&state->errors[state->num_errors++], fmt, ap);
+#endif
 	va_end(ap);
 }
 
@@ -265,7 +310,11 @@ pop_expr(struct decode_state *state)
 static struct decode_scope *
 push_scope(struct decode_state *state, const struct isa_bitset *bitset, bitmask_t val)
 {
-	struct decode_scope *scope = rzalloc_size(state, sizeof(*scope));
+#ifdef _MSC_VER
+    struct decode_scope *scope = calloc(1, sizeof(*scope)); 
+#else
+    struct decode_scope *scope = rzalloc_size(state, sizeof(*scope));
+#endif
 
 	BITSET_COPY(scope->val.bitset, val.bitset);
 	scope->bitset = bitset;
@@ -283,7 +332,11 @@ pop_scope(struct decode_scope *scope)
 	assert(scope->state->scope == scope);  /* must be top of stack */
 
 	scope->state->scope = scope->parent;
-	ralloc_free(scope);
+#ifdef _MSC_VER
+    free(scope);
+#else
+    ralloc_free(scope);
+#endif
 }
 
 /**
@@ -733,12 +786,21 @@ display(struct decode_scope *scope)
 				e++;
 			}
 
-			char *field_name = strndup(p, e-p);
-			display_field(scope, field_name);
-			free(field_name);
+#ifdef _MSC_VER
+            char *field_name = (char *)malloc(e - p + 1); 
+            strncpy(field_name, p, e - p);
+            field_name[e - p] = '\0'; 
+            display_field(scope, field_name);
+            free(field_name);
+#else
+            char *field_name = strndup(p, e - p);
+            display_field(scope, field_name);
+            free(field_name);
+#endif
 
 			p = e;
 		} else {
+			assert(scope->state->print.out != NULL);
 			fputc(*p, scope->state->print.out);
 			scope->state->print.line_column++;
 		}
@@ -824,7 +886,7 @@ disasm(struct decode_state *state, void *bin, int sz)
 		}
 
 		struct decode_scope *scope = push_scope(state, b, instr);
-
+		assert(scope->state->print.out != NULL);
 		display(scope);
 		if (flush_errors(state)) {
 			errors++;
@@ -913,9 +975,17 @@ decode_bitset(void *out, struct decode_scope *scope)
 				e++;
 			}
 
-			char *field_name = strndup(p, e-p);
-			decode_field(out, scope, field_name);
-			free(field_name);
+#ifdef _MSC_VER
+            char *field_name = (char *)malloc(e - p + 1);
+            strncpy(field_name, p, e - p);
+            field_name[e - p] = '\0';
+            decode_field(out, scope, field_name);
+            free(field_name);
+#else
+            char *field_name = strndup(p, e - p);
+            decode_field(out, scope, field_name);
+            free(field_name);
+#endif
 
 			p = e;
 		}
@@ -976,18 +1046,32 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 	if (!options)
 		options = &default_options;
 
-	state = rzalloc_size(NULL, sizeof(*state));
+#ifdef _MSC_VER
+    state = calloc(1, sizeof(*state));
+#else
+    state = rzalloc_size(NULL, sizeof(*state));
+#endif
 	state->options = options;
 	state->num_instr = sz / (BITMASK_WORDS * sizeof(BITSET_WORD));
 
 	if (state->options->branch_labels) {
-		state->branch_targets = rzalloc_size(state,
+#ifdef _MSC_VER
+        state->branch_targets = calloc(BITSET_WORDS(state->num_instr), sizeof(BITSET_WORD));
+        state->call_targets = calloc(BITSET_WORDS(state->num_instr), sizeof(BITSET_WORD));
+#else
+        state->branch_targets = rzalloc_size(state,
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
 		state->call_targets = rzalloc_size(state,
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
+#endif
 
 		/* Do a pre-pass to find all the branch targets: */
+#ifdef _MSC_VER
+		state->print.out = fopen("NUL", "w");
+#else
 		state->print.out = fopen("/dev/null", "w");
+#endif
+		assert(state->print.out != NULL);
 		state->options = &default_options;   /* skip hooks for prepass */
 		disasm(state, bin, sz);
 		fclose(state->print.out);
@@ -999,9 +1083,12 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 		 * state.
 		 */
 		if (options->entrypoint_count) {
-			struct isa_entrypoint *entrypoints =
-				ralloc_array(state, struct isa_entrypoint,
-					     options->entrypoint_count);
+			struct isa_entrypoint *entrypoints;
+#ifdef _MSC_VER
+            entrypoints = malloc(options->entrypoint_count * sizeof(struct isa_entrypoint));
+#else
+            entrypoints = ralloc_array(state, struct isa_entrypoint, options->entrypoint_count);
+#endif
 			memcpy(entrypoints, options->entrypoints,
 			       options->entrypoint_count * sizeof(*entrypoints));
 			qsort(entrypoints, options->entrypoint_count,
@@ -1014,8 +1101,11 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 	state->print.out = out;
 
 	disasm(state, bin, sz);
-
-	ralloc_free(state);
+#ifdef _MSC_VER
+    free(state);
+#else
+    ralloc_free(state);
+#endif
 }
 
 bool
@@ -1030,6 +1120,10 @@ isa_decode(void *out, void *bin, const struct isa_decode_options *options)
 		return false;
 	}
 
-	ralloc_free(state);
+#ifdef _MSC_VER
+    free(state);
+#else
+    ralloc_free(state);
+#endif
 	return result;
 }

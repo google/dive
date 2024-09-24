@@ -143,12 +143,17 @@ ${expr.get_c_name()}(struct decode_scope *scope)
 static void decode_${bitset.get_c_name()}_gen_${bitset.gen_min}_${df.get_c_name()}(void *out, struct decode_scope *scope, uint64_t val);
 %   endfor
 static const struct isa_field_decode decode_${bitset.get_c_name()}_gen_${bitset.gen_min}_fields[] = {
-%   for df in s.decode_fields(bitset):
-    {
+<%
+    print(f"Generated decode functions name: {bitset.get_c_name()}") 
+%>
+%  if len(list(s.decode_fields(bitset))) > 0:
+%    for df in s.decode_fields(bitset):
         .name = "${df.name}",
         .decode = decode_${bitset.get_c_name()}_gen_${bitset.gen_min}_${df.get_c_name()},
-    },
-%   endfor
+%    endfor
+%  else: 
+    { 0 },
+%  endif
 };
 static void decode_${bitset.get_c_name()}_gen_${bitset.gen_min}(void *out, struct decode_scope *scope);
 %endfor
@@ -194,35 +199,41 @@ static const struct isa_case ${case.get_c_name()}_gen_${bitset.gen_min} = {
 %   if case.display is not None:
        .display  = "${case.display}",
 %   endif
-       .num_fields = ${len(case.fields)},
-       .fields   = {
-%   for field_name, field in case.fields.items():
-          { .name = "${field_name}", .low = ${field.low}, .high = ${field.high},
-%      if field.expr is not None:
+.num_fields = ${len(case.fields)},
+.fields     = 
+% if len(case.fields) > 0:
+    {
+    % for field_name, field in case.fields.items():
+        { .name = "${field_name}", .low = ${field.low}, .high = ${field.high},
+        % if field.expr is not None:
             .expr = &${isa.expressions[field.expr].get_c_name()},
-%      endif
-%      if field.display is not None:
+        % endif
+        % if field.display is not None:
             .display = "${field.display}",
-%      endif
+        % endif
             .type = ${field.get_c_typename()},
-%      if field.get_c_typename() == 'TYPE_BITSET':
+        % if field.get_c_typename() == 'TYPE_BITSET':
             .bitsets = ${isa.roots[field.type].get_c_name()},
-%         if len(field.params) > 0:
-            .params = &${case.get_c_name()}_gen_${bitset.gen_min}_${field.get_c_name()},
-%         endif
-%      endif
-%      if field.get_c_typename() == 'TYPE_ENUM':
+            % if len(field.params) > 0:
+            .params = &${case.get_c_name()}_gen_${bitset.gen_min}_${field.get_c_name()}, 
+
+            % endif
+        % endif
+        % if field.get_c_typename() == 'TYPE_ENUM':
             .enums = &${isa.enums[field.type].get_c_name()},
-%      endif
-%      if field.get_c_typename() == 'TYPE_ASSERT':
+        % endif
+        % if field.get_c_typename() == 'TYPE_ASSERT':
             .val.bitset = { ${', '.join(isa.split_bits(field.val, 32))} },
-%      endif
-%      if field.get_c_typename() == 'TYPE_BRANCH' or field.get_c_typename() == 'TYPE_ABSBRANCH':
+        % endif
+        % if field.get_c_typename() == 'TYPE_BRANCH' or field.get_c_typename() == 'TYPE_ABSBRANCH':
             .call = ${str(field.call).lower()},
-%      endif
-          },
-%   endfor
-       },
+        % endif
+        },
+    % endfor
+    }
+% else:
+    { 0 },
+% endif
 };
 %   endfor
 static const struct isa_bitset bitset_${bitset.get_c_name()}_gen_${bitset.gen_min} = {

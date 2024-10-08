@@ -185,12 +185,11 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 
 	va_start(args, fmt);
 #ifdef _MSC_VER
-	// MSVC doesn't have vasprintf, so we need a workaround
-    size_t buffer_size = 1024; // Initial buffer size
+    size_t buffer_size = 1024; 
     buffer = (char *)malloc(buffer_size);
     if (buffer == NULL) {
         va_end(args);
-        // Handle allocation error
+        fprintf(stderr, "Error: Memory allocation failed in isa_print\n"); // Error handling
         return;
     }
 
@@ -201,7 +200,6 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
         if (new_buffer == NULL) {
             va_end(args);
             free(buffer); // Free the old buffer
-            // Handle allocation error
             return;
         }
         buffer = new_buffer;
@@ -217,7 +215,6 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 		for (size_t i = 0; i < len; i++) {
 			const char c = buffer[i];
 
-			assert(state->out != NULL);
 			fputc(c, state->out);
 			state->line_column++;
 
@@ -266,7 +263,7 @@ decode_error(struct decode_state *state, const char *fmt, ...)
         return;
     }
 
-    _vsprintf_p(state->errors[state->num_errors++], len + 1, fmt, ap);
+    _vsprintf_p(state->errors[state->num_errors++], len , fmt, ap);
 #else
     vasprintf(&state->errors[state->num_errors++], fmt, ap);
 #endif
@@ -310,11 +307,7 @@ pop_expr(struct decode_state *state)
 static struct decode_scope *
 push_scope(struct decode_state *state, const struct isa_bitset *bitset, bitmask_t val)
 {
-#ifdef _MSC_VER
-    struct decode_scope *scope = calloc(1, sizeof(*scope)); 
-#else
-    struct decode_scope *scope = rzalloc_size(state, sizeof(*scope));
-#endif
+	struct decode_scope *scope = rzalloc_size(state, sizeof(*scope));
 
 	BITSET_COPY(scope->val.bitset, val.bitset);
 	scope->bitset = bitset;
@@ -332,11 +325,7 @@ pop_scope(struct decode_scope *scope)
 	assert(scope->state->scope == scope);  /* must be top of stack */
 
 	scope->state->scope = scope->parent;
-#ifdef _MSC_VER
-    free(scope);
-#else
-    ralloc_free(scope);
-#endif
+	ralloc_free(scope);
 }
 
 /**
@@ -673,6 +662,7 @@ display_field(struct decode_scope *scope, const char *field_name)
 			.num = val,
 		});
 	}
+	
 
 	unsigned width = 1 + field->high - field->low;
 
@@ -790,17 +780,14 @@ display(struct decode_scope *scope)
             char *field_name = (char *)malloc(e - p + 1); 
             strncpy(field_name, p, e - p);
             field_name[e - p] = '\0'; 
-            display_field(scope, field_name);
-            free(field_name);
 #else
             char *field_name = strndup(p, e - p);
-            display_field(scope, field_name);
-            free(field_name);
 #endif
+			display_field(scope, field_name);
+			free(field_name);
 
 			p = e;
 		} else {
-			assert(scope->state->print.out != NULL);
 			fputc(*p, scope->state->print.out);
 			scope->state->print.line_column++;
 		}
@@ -886,7 +873,7 @@ disasm(struct decode_state *state, void *bin, int sz)
 		}
 
 		struct decode_scope *scope = push_scope(state, b, instr);
-		assert(scope->state->print.out != NULL);
+
 		display(scope);
 		if (flush_errors(state)) {
 			errors++;
@@ -1046,24 +1033,15 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 	if (!options)
 		options = &default_options;
 
-#ifdef _MSC_VER
-    state = calloc(1, sizeof(*state));
-#else
-    state = rzalloc_size(NULL, sizeof(*state));
-#endif
+	state = rzalloc_size(NULL, sizeof(*state));
 	state->options = options;
 	state->num_instr = sz / (BITMASK_WORDS * sizeof(BITSET_WORD));
 
 	if (state->options->branch_labels) {
-#ifdef _MSC_VER
-        state->branch_targets = calloc(BITSET_WORDS(state->num_instr), sizeof(BITSET_WORD));
-        state->call_targets = calloc(BITSET_WORDS(state->num_instr), sizeof(BITSET_WORD));
-#else
-        state->branch_targets = rzalloc_size(state,
+		state->branch_targets = rzalloc_size(state,
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
 		state->call_targets = rzalloc_size(state,
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
-#endif
 
 		/* Do a pre-pass to find all the branch targets: */
 #ifdef _MSC_VER
@@ -1071,7 +1049,6 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 #else
 		state->print.out = fopen("/dev/null", "w");
 #endif
-		assert(state->print.out != NULL);
 		state->options = &default_options;   /* skip hooks for prepass */
 		disasm(state, bin, sz);
 		fclose(state->print.out);
@@ -1101,11 +1078,8 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 	state->print.out = out;
 
 	disasm(state, bin, sz);
-#ifdef _MSC_VER
-    free(state);
-#else
-    ralloc_free(state);
-#endif
+
+	ralloc_free(state);
 }
 
 bool
@@ -1120,10 +1094,6 @@ isa_decode(void *out, void *bin, const struct isa_decode_options *options)
 		return false;
 	}
 
-#ifdef _MSC_VER
-    free(state);
-#else
-    ralloc_free(state);
-#endif
+	ralloc_free(state);
 	return result;
 }

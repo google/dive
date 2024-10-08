@@ -48,10 +48,14 @@ std::string DisassembleA3XX(const uint8_t*       data,
                             enum debug_t         debug)
 {
     disasm_a3xx_set_debug(debug);
+
 #ifdef _MSC_VER
-    FILE*   disasm_file;
+    FILE*   disasm_file = NULL;
     errno_t err = tmpfile_s(&disasm_file);
-    DIVE_ASSERT(err == 0);
+    if (err != 0)
+    {
+        DIVE_ASSERT(err == 0);
+    }
     DIVE_ASSERT(disasm_file != NULL);
 #else
     char*  disasm_buf = nullptr;

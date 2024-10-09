@@ -88,28 +88,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_main_layout = new QVBoxLayout();
 
     m_devices = Dive::GetDeviceManager().ListDevice();
-    if (m_devices.size() == 0)
-    {
-        QStandardItem *item = new QStandardItem("No devices found");
-        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        m_dev_model->appendRow(item);
-        m_dev_box->setCurrentIndex(0);
-    }
-    else
-    {
-        for (size_t i = 0; i < m_devices.size(); i++)
-        {
-            if (i == 0)
-            {
-                QStandardItem *item = new QStandardItem("Please select a device");
-                item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-                m_dev_model->appendRow(item);
-                m_dev_box->setCurrentIndex(0);
-            }
-            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
-            m_dev_model->appendRow(item);
-        }
-    }
+    UpdateDeviceList(false);
     for (const auto &ty : kAppTypes)
     {
         QStandardItem *item = new QStandardItem(ty.c_str());
@@ -232,11 +211,11 @@ void ShowErrorMessage(const std::string &err_msg)
     return;
 }
 
-void TraceDialog::UpdateDeviceList()
+void TraceDialog::UpdateDeviceList(bool isInitialized)
 {
     auto cur_list = Dive::GetDeviceManager().ListDevice();
     qDebug() << "m_dev_box->currentIndex() " << m_dev_box->currentIndex();
-    if (cur_list == m_devices)
+    if (cur_list == m_devices && isInitialized)
     {
         qDebug() << "No changes from the list of the connected devices. ";
         return;
@@ -245,7 +224,7 @@ void TraceDialog::UpdateDeviceList()
     m_devices = cur_list;
     m_dev_model->clear();
 
-    if (m_devices.size() == 0)
+    if (m_devices.empty())
     {
         QStandardItem *item = new QStandardItem("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
@@ -625,7 +604,7 @@ void TraceWorker::run()
 
 void TraceDialog::OnDevListRefresh()
 {
-    UpdateDeviceList();
+    UpdateDeviceList(true);
 }
 
 void TraceDialog::OnAppListRefresh()

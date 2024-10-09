@@ -601,7 +601,7 @@ util_sign_extend(uint64_t val, unsigned width)
 }
 
 static inline void*
-util_memcpy_cpu_to_le32(void * restrict dest, const void * restrict src, size_t n)
+util_memcpy_cpu_to_le32(void * dest, const void * src, size_t n)
 {
 #if UTIL_ARCH_BIG_ENDIAN
    size_t i, e;

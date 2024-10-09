@@ -28,6 +28,9 @@
 #include "util/macros.h"
 #include "util/u_call_once.h"
 #include "u_atomic.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #if UTIL_FUTEX_SUPPORTED
 #if defined(HAVE_VALGRIND) && !defined(NDEBUG)
@@ -110,10 +113,17 @@ simple_mtx_lock(simple_mtx_t *mtx)
    if (__builtin_expect(c != 0, 0)) {
       if (c != 2)
          c = p_atomic_xchg(&mtx->val, 2);
-      while (c != 0) {
-         futex_wait(&mtx->val, 2, NULL);
-         c = p_atomic_xchg(&mtx->val, 2);
-      }
+#ifdef _WIN32
+        while (c != 0) {
+            WaitForSingleObject(mtx->val, 2);
+            c = p_atomic_xchg(&mtx->val, 2);
+        }
+#else
+        while (c != 0) {
+            futex_wait(&mtx->val, 2, NULL);
+            c = p_atomic_xchg(&mtx->val, 2);
+        }
+#endif
    }
 
    HG(ANNOTATE_RWLOCK_ACQUIRED(mtx, 1));
@@ -132,7 +142,11 @@ simple_mtx_unlock(simple_mtx_t *mtx)
 
    if (__builtin_expect(c != 1, 0)) {
       mtx->val = 0;
-      futex_wake(&mtx->val, 1);
+#ifdef _WIN32
+        SetEvent(mtx->val);
+#else
+        futex_wake(&mtx->val, 1);
+#endif
    }
 }
 

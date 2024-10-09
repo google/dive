@@ -184,7 +184,29 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 	int ret;
 
 	va_start(args, fmt);
-	ret = vasprintf(&buffer, fmt, args);
+#ifdef _MSC_VER
+    size_t buffer_size = 1024; 
+    buffer = (char *)malloc(buffer_size);
+    if (buffer == NULL) {
+        va_end(args);
+        fprintf(stderr, "Error: Memory allocation failed in isa_print\n"); // Error handling
+        return;
+    }
+
+    while ((ret = vsnprintf_s(buffer, buffer_size, _TRUNCATE, fmt, args)) == -1 || ret == (int)buffer_size - 1) {
+        // Buffer too small, try again with a larger buffer
+        buffer_size *= 2;
+        char *new_buffer = (char *)realloc(buffer, buffer_size);
+        if (new_buffer == NULL) {
+            va_end(args);
+            free(buffer); // Free the old buffer
+            return;
+        }
+        buffer = new_buffer;
+    }
+#else
+    ret = vasprintf(&buffer, fmt, args);
+#endif
 	va_end(args);
 
 	if (ret != -1) {
@@ -224,7 +246,27 @@ decode_error(struct decode_state *state, const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	vasprintf(&state->errors[state->num_errors++], fmt, ap);
+#ifdef _MSC_VER
+    va_list ap_copy;
+    va_copy(ap_copy, ap);
+    int len = _vscprintf(fmt, ap_copy);
+    va_end(ap_copy);
+
+    if (len == -1) {
+        va_end(ap);
+        return;
+    }
+
+    state->errors[state->num_errors] = (char *)malloc(len + 1);
+    if (!state->errors[state->num_errors]) {
+        va_end(ap);
+        return;
+    }
+
+    _vsprintf_p(state->errors[state->num_errors++], len , fmt, ap);
+#else
+    vasprintf(&state->errors[state->num_errors++], fmt, ap);
+#endif
 	va_end(ap);
 }
 
@@ -620,6 +662,7 @@ display_field(struct decode_scope *scope, const char *field_name)
 			.num = val,
 		});
 	}
+	
 
 	unsigned width = 1 + field->high - field->low;
 
@@ -733,7 +776,13 @@ display(struct decode_scope *scope)
 				e++;
 			}
 
-			char *field_name = strndup(p, e-p);
+#ifdef _MSC_VER
+            char *field_name = (char *)malloc(e - p + 1); 
+            strncpy(field_name, p, e - p);
+            field_name[e - p] = '\0'; 
+#else
+            char *field_name = strndup(p, e - p);
+#endif
 			display_field(scope, field_name);
 			free(field_name);
 
@@ -913,9 +962,17 @@ decode_bitset(void *out, struct decode_scope *scope)
 				e++;
 			}
 
-			char *field_name = strndup(p, e-p);
-			decode_field(out, scope, field_name);
-			free(field_name);
+#ifdef _MSC_VER
+            char *field_name = (char *)malloc(e - p + 1);
+            strncpy(field_name, p, e - p);
+            field_name[e - p] = '\0';
+            decode_field(out, scope, field_name);
+            free(field_name);
+#else
+            char *field_name = strndup(p, e - p);
+            decode_field(out, scope, field_name);
+            free(field_name);
+#endif
 
 			p = e;
 		}
@@ -987,7 +1044,11 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
 
 		/* Do a pre-pass to find all the branch targets: */
+#ifdef _MSC_VER
+		state->print.out = fopen("NUL", "w");
+#else
 		state->print.out = fopen("/dev/null", "w");
+#endif
 		state->options = &default_options;   /* skip hooks for prepass */
 		disasm(state, bin, sz);
 		fclose(state->print.out);
@@ -999,9 +1060,12 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 		 * state.
 		 */
 		if (options->entrypoint_count) {
-			struct isa_entrypoint *entrypoints =
-				ralloc_array(state, struct isa_entrypoint,
-					     options->entrypoint_count);
+			struct isa_entrypoint *entrypoints;
+#ifdef _MSC_VER
+            entrypoints = malloc(options->entrypoint_count * sizeof(struct isa_entrypoint));
+#else
+            entrypoints = ralloc_array(state, struct isa_entrypoint, options->entrypoint_count);
+#endif
 			memcpy(entrypoints, options->entrypoints,
 			       options->entrypoint_count * sizeof(*entrypoints));
 			qsort(entrypoints, options->entrypoint_count,

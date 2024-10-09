@@ -88,18 +88,14 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_main_layout = new QVBoxLayout();
 
     m_devices = Dive::GetDeviceManager().ListDevice();
-    for (size_t i = 0; i < m_devices.size(); i++)
-    {
-        QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
-        m_dev_model->appendRow(item);
-    }
+    UpdateDeviceList(false);
     for (const auto &ty : kAppTypes)
     {
         QStandardItem *item = new QStandardItem(ty.c_str());
         m_app_type_model->appendRow(item);
     }
     m_dev_box->setModel(m_dev_model);
-    m_dev_box->setCurrentIndex(-1);
+    m_dev_box->setCurrentIndex(0);
     m_dev_box->setCurrentText("Please select a device");
 
     m_pkg_box->setModel(m_pkg_model);
@@ -215,11 +211,11 @@ void ShowErrorMessage(const std::string &err_msg)
     return;
 }
 
-void TraceDialog::UpdateDeviceList()
+void TraceDialog::UpdateDeviceList(bool isInitialized)
 {
     auto cur_list = Dive::GetDeviceManager().ListDevice();
     qDebug() << "m_dev_box->currentIndex() " << m_dev_box->currentIndex();
-    if (cur_list == m_devices)
+    if (cur_list == m_devices && isInitialized)
     {
         qDebug() << "No changes from the list of the connected devices. ";
         return;
@@ -228,26 +224,44 @@ void TraceDialog::UpdateDeviceList()
     m_devices = cur_list;
     m_dev_model->clear();
 
-    for (size_t i = 0; i < m_devices.size(); i++)
+    if (m_devices.empty())
     {
-        QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+        QStandardItem *item = new QStandardItem("No devices found");
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         m_dev_model->appendRow(item);
-        // Keep the original selected devices as selected.
-        if (m_cur_dev == m_devices[i].m_serial)
+        m_dev_box->setCurrentIndex(0);
+    }
+    else
+    {
+        for (size_t i = 0; i < m_devices.size(); i++)
         {
-            m_dev_box->setCurrentIndex(static_cast<int>(i));
+            if (i == 0)
+            {
+                QStandardItem *item = new QStandardItem("Please select a device");
+                item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+                m_dev_model->appendRow(item);
+                m_dev_box->setCurrentIndex(0);
+            }
+
+            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+            m_dev_model->appendRow(item);
+            // Keep the original selected devices as selected.
+            if (m_cur_dev == m_devices[i].m_serial)
+            {
+                m_dev_box->setCurrentIndex(static_cast<int>(i));
+            }
         }
     }
 }
 
 void TraceDialog::OnDeviceSelected(const QString &s)
 {
-    if (s.isEmpty() || m_dev_box->currentIndex() == -1)
+    if (s.isEmpty() || m_dev_box->currentIndex() == 0)
     {
         qDebug() << "No devices selected";
         return;
     }
-    int dev_index = m_dev_box->currentIndex();
+    int dev_index = m_dev_box->currentIndex() - 1;
     assert(static_cast<size_t>(dev_index) < m_devices.size());
 
     qDebug() << "Device selected: " << m_cur_dev.c_str() << ", index " << dev_index
@@ -590,7 +604,7 @@ void TraceWorker::run()
 
 void TraceDialog::OnDevListRefresh()
 {
-    UpdateDeviceList();
+    UpdateDeviceList(true);
 }
 
 void TraceDialog::OnAppListRefresh()

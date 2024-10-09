@@ -77,7 +77,7 @@ class TraceDialog : public QDialog
 public:
     TraceDialog(QWidget *parent = 0);
     ~TraceDialog();
-    void UpdateDeviceList();
+    void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
 

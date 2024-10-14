@@ -24,6 +24,7 @@
 #ifndef INSTR_A3XX_H_
 #define INSTR_A3XX_H_
 
+// GOOGLE: A pragma pack directive is needed to pack a structure in Windows.
 #if defined(__GNUC__)
 #define PACKED __attribute__((__packed__))
 #elif defined(_MSC_VER)
@@ -40,6 +41,7 @@
 #include <stdio.h>
 
 /* clang-format off */
+// GOOGLE: The __attribute__ is not recognized in Windows.
 #if defined(__GNUC__)
 void ir3_assert_handler(const char *expr, const char *file, int line,
                          const char *func) __attribute__((weak)) __attribute__((__noreturn__));

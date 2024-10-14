@@ -167,6 +167,7 @@ int thrd_create(thrd_t *, thrd_start_t, void *);
 thrd_t thrd_current(void);
 int thrd_detach(thrd_t);
 int thrd_equal(thrd_t, thrd_t);
+// GOOGLE: Windows keyword for no return are different.
 #if defined(__cplusplus)
 [[ noreturn ]] void thrd_exit(int);
 #  elif defined(_MSC_VER)

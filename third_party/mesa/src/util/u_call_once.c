@@ -11,6 +11,7 @@ struct util_call_once_context_t
    util_call_once_data_func func;
 };
 
+// GOOGLE: GCC and MSVC differ in how they declare thread-local variables.
 #if defined(__GNUC__)
 static thread_local struct util_call_once_context_t call_once_context;
 #elif defined(_MSC_VER)

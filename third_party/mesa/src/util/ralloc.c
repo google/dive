@@ -50,6 +50,7 @@
  */
 struct ralloc_header
 {
+// GOOGLE: Use __declspec when using Windows.
 #if defined(__GNUC__)
     alignas(HEADER_ALIGN) 
 #elif defined(_MSC_VER)
@@ -584,6 +585,7 @@ typedef struct
  * allocated using a freelist backed by a simple linear allocator.
  */
 typedef struct gc_slab {
+// GOOGLE: Use __declspec when using Windows.
 #if defined(__GNUC__)
     alignas(HEADER_ALIGN) 
 #elif defined(_MSC_VER)
@@ -973,6 +975,7 @@ gc_sweep_end(gc_ctx *ctx)
 
 struct linear_ctx {
 
+// GOOGLE: Use __declspec when using Windows.
 #if defined(__GNUC__)
     alignas(HEADER_ALIGN) 
 #elif defined(_MSC_VER)
@@ -993,6 +996,7 @@ typedef struct linear_ctx linear_ctx;
 
 #ifndef NDEBUG
 struct linear_node_canary {
+// GOOGLE: Use __declspec when using Windows.
 #if defined(__GNUC__)
     alignas(HEADER_ALIGN) 
 #elif defined(_MSC_VER)

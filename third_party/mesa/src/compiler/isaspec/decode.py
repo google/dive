@@ -143,9 +143,7 @@ ${expr.get_c_name()}(struct decode_scope *scope)
 static void decode_${bitset.get_c_name()}_gen_${bitset.gen_min}_${df.get_c_name()}(void *out, struct decode_scope *scope, uint64_t val);
 %   endfor
 static const struct isa_field_decode decode_${bitset.get_c_name()}_gen_${bitset.gen_min}_fields[] = {
-<%
-    print(f"Generated decode functions name: {bitset.get_c_name()}") 
-%>
+## GOOGLE: Zero size arrays are not allowed in MSVC
 %  if len(list(s.decode_fields(bitset))) > 0:
 %    for df in s.decode_fields(bitset):
         .name = "${df.name}",
@@ -201,6 +199,7 @@ static const struct isa_case ${case.get_c_name()}_gen_${bitset.gen_min} = {
 %   endif
 .num_fields = ${len(case.fields)},
 .fields     = 
+## GOOGLE: Zero size arrays are not allowed in MSVC
 % if len(case.fields) > 0:
     {
     % for field_name, field in case.fields.items():

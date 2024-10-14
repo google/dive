@@ -184,6 +184,7 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 	int ret;
 
 	va_start(args, fmt);
+// GOOGLE: vasprintf is not directly available in Windows.
 #ifdef _MSC_VER
     size_t buffer_size = 1024; 
     buffer = (char *)malloc(buffer_size);
@@ -246,6 +247,7 @@ decode_error(struct decode_state *state, const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
+// GOOGLE: vasprintf is not directly available in Windows.
 #ifdef _MSC_VER
     va_list ap_copy;
     va_copy(ap_copy, ap);
@@ -662,7 +664,6 @@ display_field(struct decode_scope *scope, const char *field_name)
 			.num = val,
 		});
 	}
-	
 
 	unsigned width = 1 + field->high - field->low;
 
@@ -775,7 +776,7 @@ display(struct decode_scope *scope)
 			while (*e != '}') {
 				e++;
 			}
-
+// GOOGLE: strndup is not directly available in MSVC.
 #ifdef _MSC_VER
             char *field_name = (char *)malloc(e - p + 1); 
             strncpy(field_name, p, e - p);
@@ -961,7 +962,7 @@ decode_bitset(void *out, struct decode_scope *scope)
 			while (*e != '}') {
 				e++;
 			}
-
+// GOOGLE: strndup is not directly available in Windows.
 #ifdef _MSC_VER
             char *field_name = (char *)malloc(e - p + 1);
             strncpy(field_name, p, e - p);
@@ -1044,6 +1045,7 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
 
 		/* Do a pre-pass to find all the branch targets: */
+// GOOGLE: Windows uses NUL as the name for a null device.
 #ifdef _MSC_VER
 		state->print.out = fopen("NUL", "w");
 #else
@@ -1060,12 +1062,9 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 		 * state.
 		 */
 		if (options->entrypoint_count) {
-			struct isa_entrypoint *entrypoints;
-#ifdef _MSC_VER
-            entrypoints = malloc(options->entrypoint_count * sizeof(struct isa_entrypoint));
-#else
-            entrypoints = ralloc_array(state, struct isa_entrypoint, options->entrypoint_count);
-#endif
+			struct isa_entrypoint *entrypoints =
+				ralloc_array(state, struct isa_entrypoint,
+					     options->entrypoint_count);
 			memcpy(entrypoints, options->entrypoints,
 			       options->entrypoint_count * sizeof(*entrypoints));
 			qsort(entrypoints, options->entrypoint_count,

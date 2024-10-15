@@ -35,6 +35,10 @@
 
 #include "util/bitset.h"
 #include "util/compiler.h"
+// GOOGLE: Includes function implementations that compile with MSVC.
+#ifdef _MSC_VER
+#include "util/google_dive_ext.h"
+#endif
 #include "util/half_float.h"
 #include "util/hash_table.h"
 #include "util/ralloc.h"
@@ -184,30 +188,7 @@ isa_print(struct isa_print_state *state, const char *fmt, ...)
 	int ret;
 
 	va_start(args, fmt);
-// GOOGLE: vasprintf is not directly available in Windows.
-#ifdef _MSC_VER
-    size_t buffer_size = 1024; 
-    buffer = (char *)malloc(buffer_size);
-    if (buffer == NULL) {
-        va_end(args);
-        fprintf(stderr, "Error: Memory allocation failed in isa_print\n"); // Error handling
-        return;
-    }
-
-    while ((ret = vsnprintf_s(buffer, buffer_size, _TRUNCATE, fmt, args)) == -1 || ret == (int)buffer_size - 1) {
-        // Buffer too small, try again with a larger buffer
-        buffer_size *= 2;
-        char *new_buffer = (char *)realloc(buffer, buffer_size);
-        if (new_buffer == NULL) {
-            va_end(args);
-            free(buffer); // Free the old buffer
-            return;
-        }
-        buffer = new_buffer;
-    }
-#else
-    ret = vasprintf(&buffer, fmt, args);
-#endif
+	ret = vasprintf(&buffer, fmt, args);
 	va_end(args);
 
 	if (ret != -1) {
@@ -247,28 +228,7 @@ decode_error(struct decode_state *state, const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-// GOOGLE: vasprintf is not directly available in Windows.
-#ifdef _MSC_VER
-    va_list ap_copy;
-    va_copy(ap_copy, ap);
-    int len = _vscprintf(fmt, ap_copy);
-    va_end(ap_copy);
-
-    if (len == -1) {
-        va_end(ap);
-        return;
-    }
-
-    state->errors[state->num_errors] = (char *)malloc(len + 1);
-    if (!state->errors[state->num_errors]) {
-        va_end(ap);
-        return;
-    }
-
-    _vsprintf_p(state->errors[state->num_errors++], len , fmt, ap);
-#else
-    vasprintf(&state->errors[state->num_errors++], fmt, ap);
-#endif
+	vasprintf(&state->errors[state->num_errors++], fmt, ap);
 	va_end(ap);
 }
 
@@ -776,14 +736,8 @@ display(struct decode_scope *scope)
 			while (*e != '}') {
 				e++;
 			}
-// GOOGLE: strndup is not directly available in MSVC.
-#ifdef _MSC_VER
-            char *field_name = (char *)malloc(e - p + 1); 
-            strncpy(field_name, p, e - p);
-            field_name[e - p] = '\0'; 
-#else
-            char *field_name = strndup(p, e - p);
-#endif
+
+			char *field_name = strndup(p, e - p);
 			display_field(scope, field_name);
 			free(field_name);
 
@@ -962,18 +916,9 @@ decode_bitset(void *out, struct decode_scope *scope)
 			while (*e != '}') {
 				e++;
 			}
-// GOOGLE: strndup is not directly available in Windows.
-#ifdef _MSC_VER
-            char *field_name = (char *)malloc(e - p + 1);
-            strncpy(field_name, p, e - p);
-            field_name[e - p] = '\0';
-            decode_field(out, scope, field_name);
-            free(field_name);
-#else
-            char *field_name = strndup(p, e - p);
-            decode_field(out, scope, field_name);
-            free(field_name);
-#endif
+			char *field_name = strndup(p, e - p);
+			decode_field(out, scope, field_name);
+			free(field_name);
 
 			p = e;
 		}

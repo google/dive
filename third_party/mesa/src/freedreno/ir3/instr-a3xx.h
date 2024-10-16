@@ -24,16 +24,7 @@
 #ifndef INSTR_A3XX_H_
 #define INSTR_A3XX_H_
 
-// GOOGLE: A pragma pack directive is needed to pack a structure in Windows.
-#if defined(__GNUC__)
 #define PACKED __attribute__((__packed__))
-#elif defined(_MSC_VER)
-#define PACKED 
-#pragma pack(push, 1)
-#pragma pack(pop)
-#else
-#error "Unsupported compiler" 
-#endif
 
 #include <assert.h>
 #include <stdbool.h>

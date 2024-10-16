@@ -737,7 +737,7 @@ display(struct decode_scope *scope)
 				e++;
 			}
 
-			char *field_name = strndup(p, e - p);
+			char *field_name = strndup(p, e-p);
 			display_field(scope, field_name);
 			free(field_name);
 
@@ -916,7 +916,8 @@ decode_bitset(void *out, struct decode_scope *scope)
 			while (*e != '}') {
 				e++;
 			}
-			char *field_name = strndup(p, e - p);
+
+			char *field_name = strndup(p, e-p);
 			decode_field(out, scope, field_name);
 			free(field_name);
 

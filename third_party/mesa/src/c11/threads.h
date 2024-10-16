@@ -167,12 +167,14 @@ int thrd_create(thrd_t *, thrd_start_t, void *);
 thrd_t thrd_current(void);
 int thrd_detach(thrd_t);
 int thrd_equal(thrd_t, thrd_t);
+// GOOGLE: Windows keyword for no return are different.
 #if defined(__cplusplus)
-[[ noreturn ]]
+[[ noreturn ]] void thrd_exit(int);
+#  elif defined(_MSC_VER)
+__declspec(noreturn) void thrd_exit(int);
 #else
-_Noreturn
+_Noreturn void thrd_exit(int);
 #endif
-void thrd_exit(int);
 int thrd_join(thrd_t, int *);
 int thrd_sleep(const struct timespec *, struct timespec *);
 void thrd_yield(void);

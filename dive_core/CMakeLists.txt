@@ -157,7 +157,6 @@ add_library(freedreno_ir3 STATIC
     "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/hash_table.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/log.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_file.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_misc.c"
@@ -185,6 +184,7 @@ if(MSVC)
 target_compile_definitions(freedreno_ir3 PRIVATE
     -DHAVE_STRUCT_TIMESPEC
 )
+target_sources(freedreno_ir3 PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c")
 else()
 target_compile_definitions(freedreno_ir3 PRIVATE
     -DHAVE_ENDIAN_H

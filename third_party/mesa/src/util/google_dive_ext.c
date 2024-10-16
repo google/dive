@@ -50,3 +50,13 @@ int vasprintf(char **strp, const char *fmt, va_list ap)
 
     return vsnprintf(*strp, len + 1, fmt, ap);
 }
+
+int futex_wait(uint32_t *addr, int32_t value, const struct timespec *timeout)
+{
+   return WaitForSingleObject(addr, value);
+}
+
+int futex_wake(uint32_t *addr, int count)
+{
+    return SetEvent(addr);
+}

@@ -19,13 +19,23 @@
 
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+/**
+ * The following functions are not directly 
+ * available in Windows, so these implementations
+ * are used when compiling with MSVC.
+ */
 char *strndup(const char *s, size_t n);
 int vasprintf(char **strp, const char *fmt, va_list ap);
+int futex_wait(uint32_t *addr, int32_t value, const struct timespec *timeout);
+int futex_wake(uint32_t *addr, int count);
+
 
 #ifdef __cplusplus
 } /* extern C */

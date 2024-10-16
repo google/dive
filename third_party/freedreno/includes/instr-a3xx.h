@@ -757,6 +757,7 @@ typedef union PACKED {
 	};
 } instr_t;
 
+// GOOGLE: Restores the original packing alignment after pragma pack has been used in Windows.
 #if defined(_MSC_VER)
 #    pragma pack(pop)
 #endif

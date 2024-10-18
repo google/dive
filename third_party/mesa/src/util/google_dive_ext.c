@@ -14,6 +14,7 @@
  limitations under the License.
 */
 
+#ifdef _MSC_VER
 #include "google_dive_ext.h"
 
 char *strndup(const char *s, size_t n)
@@ -60,3 +61,5 @@ int futex_wake(uint32_t *addr, int count)
 {
     return SetEvent(addr);
 }
+
+#endif /* _MSC_VER*/

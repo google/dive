@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#ifdef _MSC_VER
+
 #ifndef _GOOGLE_DIVE_EXT_H
 #define _GOOGLE_DIVE_EXT_H
 
@@ -42,3 +44,5 @@ int futex_wake(uint32_t *addr, int count);
 #endif
 
 #endif /* _GOOGLE_DIVE_EXT_H*/
+
+#endif /* _MSC_VER*/

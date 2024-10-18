@@ -19,12 +19,14 @@
 #include "dive_core/common/common.h"
 #include "pm4_info.h"
 
-#ifndef _MSC_VER
+#ifdef _MSC_VER
+#    include <stdio.h>
+#    include <stdlib.h>
+#endif
 extern "C"
 {
-#    include "third_party/mesa/src/freedreno/common/disasm.h"
+#include "third_party/mesa/src/freedreno/common/disasm.h"
 }
-#endif
 
 namespace Dive
 {
@@ -40,8 +42,6 @@ bool Disassemble(const uint8_t*                             shader_memory,
     return false;
 }
 
-// TODO(b/309801805): Shader disassembly is disabled on windows due to compiler errors.
-#ifndef _MSC_VER
 std::string DisassembleA3XX(const uint8_t*       data,
                             size_t               max_size,
                             struct shader_stats* stats,
@@ -49,29 +49,52 @@ std::string DisassembleA3XX(const uint8_t*       data,
 {
     disasm_a3xx_set_debug(debug);
 
+#ifdef _MSC_VER
+    FILE*   disasm_file = NULL;
+    errno_t err = tmpfile_s(&disasm_file);
+    if (err != 0)
+    {
+        DIVE_ASSERT(err == 0);
+    }
+    DIVE_ASSERT(disasm_file != NULL);
+#else
     char*  disasm_buf = nullptr;
     size_t disasm_buf_size = 0;
     FILE*  disasm_file = open_memstream(&disasm_buf, &disasm_buf_size);
+#endif
+
+    size_t code_size = max_size / sizeof(uint32_t);
     int    res = disasm_a3xx_stat(reinterpret_cast<uint32_t*>(const_cast<uint8_t*>(data)),
-                               max_size / sizeof(uint32_t),
+                               static_cast<int>(code_size),
                                0,
                                disasm_file,
                                GetGPUID(),
                                stats);
     ((void)(res));  // avoid unused variable
     DIVE_ASSERT(res != -1);
+#ifdef _MSC_VER
+    rewind(disasm_file);
+    std::string disasm_output;
+    char        buffer[1024];
+    size_t      bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), disasm_file)) > 0)
+    {
+        disasm_output.append(buffer, bytes_read);
+    }
+    fclose(disasm_file);
+    return disasm_output;
+#else
     fflush(disasm_file);
     disasm_buf[disasm_buf_size] = '\0';
     std::string disasm(disasm_buf);
     fclose(disasm_file);
     free(disasm_buf);
     return disasm;
-}
 #endif
+}
 
 void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, ILog* log_ptr)
 {
-#ifndef _MSC_VER
     struct shader_stats stats;
     std::string         disasm = DisassembleA3XX(data, max_size, &stats, PRINT_RAW);
     std::istringstream  disasm_istr(disasm);
@@ -82,6 +105,16 @@ void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, I
     int                 prefix_len = 0;
     for (std::string line; std::getline(disasm_istr, line);)
     {
+#ifdef _MSC_VER
+        sscanf_s(line.c_str(),
+                 " :%d:%04d:%04d[%08xx_%08xx] %n",
+                 &opc_cat,
+                 &n,
+                 &cycles,
+                 &dword1,
+                 &dword0,
+                 &prefix_len);
+#else
         sscanf(line.c_str(),
                " :%d:%04d:%04d[%08xx_%08xx] %n",
                &opc_cat,
@@ -90,6 +123,7 @@ void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, I
                &dword1,
                &dword0,
                &prefix_len);
+#endif
         std::string instr(&line[prefix_len]);
         if (n >= m_instructions_text.size())
         {
@@ -106,7 +140,6 @@ void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, I
     }
     m_gpr_count = (stats.fullreg + 3) / 4;
     m_listing = DisassembleA3XX(data, max_size, &stats, PRINT_STATS);
-#endif
 }
 
 }  // namespace Dive

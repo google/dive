@@ -32,8 +32,16 @@
 #include <stdio.h>
 
 /* clang-format off */
+// GOOGLE: The __attribute__ is not recognized in Windows.
+#if defined(__GNUC__)
 void ir3_assert_handler(const char *expr, const char *file, int line,
-                        const char *func) __attribute__((weak)) __attribute__((__noreturn__));
+                         const char *func) __attribute__((weak)) __attribute__((__noreturn__));
+#elif defined(_MSC_VER)
+__declspec(noreturn) void __cdecl ir3_assert_handler(const char *expr, const char *file, int line,
+                         const char *func); 
+#else
+#error "Unsupported compiler"
+#endif
 /* clang-format on */
 
 /* A wrapper for assert() that allows overriding handling of a failed

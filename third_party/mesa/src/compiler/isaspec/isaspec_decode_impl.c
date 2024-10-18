@@ -35,6 +35,10 @@
 
 #include "util/bitset.h"
 #include "util/compiler.h"
+// GOOGLE: Includes function implementations that compile with MSVC.
+#ifdef _MSC_VER
+#include "util/google_dive_ext.h"
+#endif
 #include "util/half_float.h"
 #include "util/hash_table.h"
 #include "util/ralloc.h"
@@ -987,7 +991,12 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
 
 		/* Do a pre-pass to find all the branch targets: */
+// GOOGLE: Windows uses NUL as the name for a null device.
+#ifdef _MSC_VER
+		state->print.out = fopen("NUL", "w");
+#else
 		state->print.out = fopen("/dev/null", "w");
+#endif
 		state->options = &default_options;   /* skip hooks for prepass */
 		disasm(state, bin, sz);
 		fclose(state->print.out);

@@ -24,7 +24,16 @@
 #ifndef INSTR_A3XX_H_
 #define INSTR_A3XX_H_
 
+// GOOGLE: A pragma pack directive is needed to pack a structure in Windows.
+#if defined(__GNUC__)
 #define PACKED __attribute__((__packed__))
+#elif defined(_MSC_VER)
+#    define PACKED
+#    pragma pack(push, 1)
+#else
+#    error "Unsupported compiler"
+#endif
+
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -747,6 +756,11 @@ typedef union PACKED {
 		uint32_t opc_cat  : 3;
 	};
 } instr_t;
+
+// GOOGLE: Restores the original packing alignment after pragma pack has been used in Windows.
+#if defined(_MSC_VER)
+#    pragma pack(pop)
+#endif
 
 static inline uint32_t instr_repeat(instr_t *instr)
 {

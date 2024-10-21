@@ -140,10 +140,7 @@ add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
 
 
-if (MSVC)
-  # freedreno_ir3 build is currently disabled on MSVC
-else()
-  add_custom_command(
+add_custom_command(
       OUTPUT ${FREEDRENO_IR3_ISA_SRC_FILE} ${FREEDRENO_IR3_ISA_HDR_FILE}
       COMMAND ${Python3_EXECUTABLE} ${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py
                     "--xml"
@@ -153,9 +150,9 @@ else()
       DEPENDS "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py"
               "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
       VERBATIM
-  )
+)
 
-  add_library(freedreno_ir3 STATIC
+add_library(freedreno_ir3 STATIC
     ${FREEDRENO_IR3_ISA_SRC_FILE}
     "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
@@ -170,9 +167,9 @@ else()
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_debug.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_printf.c"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_process.c"
-  )
+)
 
-  target_include_directories(freedreno_ir3 PRIVATE
+target_include_directories(freedreno_ir3 PRIVATE
     "${THIRDPARTY_DIRECTORY}/mesa/include"
     "${THIRDPARTY_DIRECTORY}/mesa/src"
     "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
@@ -181,17 +178,25 @@ else()
     "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common"
     "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa"
     "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
-  )
-  target_compile_definitions(freedreno_ir3 PRIVATE
+)
+
+if(MSVC)
+target_compile_definitions(freedreno_ir3 PRIVATE
+    -DHAVE_STRUCT_TIMESPEC
+)
+target_sources(freedreno_ir3 PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c")
+else()
+target_compile_definitions(freedreno_ir3 PRIVATE
     -DHAVE_ENDIAN_H
     -DHAVE_FUNC_ATTRIBUTE_PACKED
     -DHAVE_STRUCT_TIMESPEC
     -DHAVE_PTHREAD
-  )
-  target_compile_options(freedreno_ir3 PRIVATE -fPIC)
-  add_dependencies(${PROJECT_NAME} freedreno_ir3)
-  target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
+)
 endif()
+
+target_compile_options(freedreno_ir3 PRIVATE -fPIC)
+add_dependencies(${PROJECT_NAME} freedreno_ir3)
+target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
 
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")

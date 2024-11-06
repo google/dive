@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include "adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
+#include "dive_core/stl_replacement.h"
 #include "gpudefs.h"
 
 namespace Dive
@@ -96,7 +97,7 @@ static constexpr uint32_t kShaderEnableBitCount = 3;
 class IEmulateCallbacks
 {
 public:
-    bool ProcessSubmits(const std::vector<SubmitInfo> &submits, const IMemoryManager &mem_manager);
+    bool ProcessSubmits(const DiveVector<SubmitInfo> &submits, const IMemoryManager &mem_manager);
 
     // Callback on an IB start. Also called for all call/chain IBs
     // A return value of false indicates to the emulator to skip parsing this IB
@@ -190,7 +191,7 @@ private:
     uint32_t                m_reg[kShaderEnableBitCount][kNumRegs];
     uint8_t                 m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1];
     uint32_t                m_enable_mask = (1u << kShaderEnableBitCount) - 1;
-    std::vector<uint32_t>   m_enable_mask_stack;
+    DiveVector<uint32_t>    m_enable_mask_stack;
 };
 
 //--------------------------------------------------------------------------------------------------

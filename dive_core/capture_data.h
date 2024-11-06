@@ -19,7 +19,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
 #include "archive.h"
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
@@ -54,22 +53,22 @@ public:
                                                      uint64_t size) const;
 
     // Add memory allocation info. The 'type' parameter indicates which array to add it to
-    void AddMemoryAllocations(uint32_t                            submit_index,
-                              MemoryAllocationsDataHeader::Type   type,
-                              std::vector<MemoryAllocationData> &&allocations);
+    void AddMemoryAllocations(uint32_t                           submit_index,
+                              MemoryAllocationsDataHeader::Type  type,
+                              DiveVector<MemoryAllocationData> &&allocations);
 
 private:
     struct SubmitAllocations
     {
-        uint32_t                          m_submit_index;
-        std::vector<MemoryAllocationData> m_allocations;
+        uint32_t                         m_submit_index;
+        DiveVector<MemoryAllocationData> m_allocations;
     };
 
     // Allocations done by the driver, for resources like load-sh buffers, shader binaries, etc
-    std::vector<MemoryAllocationData> m_internal_allocs;
+    DiveVector<MemoryAllocationData> m_internal_allocs;
 
     // Allocations done by the application via vkAllocateMemory
-    std::vector<MemoryAllocationData> m_global_allocs;
+    DiveVector<MemoryAllocationData> m_global_allocs;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -94,9 +93,9 @@ public:
     void AddMemoryBlock(uint32_t submit_index, uint64_t va_addr, MemoryData &&data);
 
     // Add memory allocation info to internal MemoryAllocationInfo object
-    void AddMemoryAllocations(uint32_t                            submit_index,
-                              MemoryAllocationsDataHeader::Type   type,
-                              std::vector<MemoryAllocationData> &&allocations);
+    void AddMemoryAllocations(uint32_t                           submit_index,
+                              MemoryAllocationsDataHeader::Type  type,
+                              DiveVector<MemoryAllocationData> &&allocations);
 
     // Finalize load. After this, no memory block should be added!
     // same_submit_copy_only - If set, then CopyMemory() will only copy from memory blocks used in
@@ -137,7 +136,7 @@ private:
     mutable const MemoryBlock *m_last_used_block_ptr = nullptr;
 
     // Memory blocks containing all the captured memory data
-    std::vector<MemoryBlock> m_memory_blocks;
+    DiveVector<MemoryBlock> m_memory_blocks;
 
     // All the captured memory allocation info
     MemoryAllocationInfo m_memory_allocations;
@@ -151,11 +150,11 @@ private:
 class SubmitInfo
 {
 public:
-    SubmitInfo(EngineType                        engine_type,
-               QueueType                         queue_type,
-               uint8_t                           engine_index,
-               bool                              is_dummy_submit,
-               std::vector<IndirectBufferInfo> &&ibs);
+    SubmitInfo(EngineType                       engine_type,
+               QueueType                        queue_type,
+               uint8_t                          engine_index,
+               bool                             is_dummy_submit,
+               DiveVector<IndirectBufferInfo> &&ibs);
     EngineType                GetEngineType() const;
     QueueType                 GetQueueType() const;
     uint8_t                   GetEngineIndex() const;
@@ -166,11 +165,11 @@ public:
     void                      AppendIb(const IndirectBufferInfo &ib);
 
 private:
-    EngineType                      m_engine_type;
-    QueueType                       m_queue_type;
-    uint8_t                         m_engine_index;
-    bool                            m_is_dummy_submit;
-    std::vector<IndirectBufferInfo> m_ibs;
+    EngineType                     m_engine_type;
+    QueueType                      m_queue_type;
+    uint8_t                        m_engine_index;
+    bool                           m_is_dummy_submit;
+    DiveVector<IndirectBufferInfo> m_ibs;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -253,16 +252,16 @@ private:
 class TextInfo
 {
 public:
-    TextInfo(std::string name, uint64_t size, std::vector<char> &&data);
+    TextInfo(std::string name, uint64_t size, DiveVector<char> &&data);
 
     const std::string &GetName() const;
     uint64_t           GetSize() const;
     const char        *GetText() const;
 
 private:
-    std::string       m_name;
-    uint64_t          m_size;
-    std::vector<char> m_text;
+    std::string      m_name;
+    uint64_t         m_size;
+    DiveVector<char> m_text;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -270,34 +269,34 @@ private:
 class WaveStateInfo
 {
 public:
-    WaveStateInfo(const Dive::WaveState  &state,
-                  std::vector<uint32_t> &&sgprs,
-                  std::vector<uint32_t> &&vgprs,
-                  std::vector<uint32_t> &&ttmps);
+    WaveStateInfo(const Dive::WaveState &state,
+                  DiveVector<uint32_t> &&sgprs,
+                  DiveVector<uint32_t> &&vgprs,
+                  DiveVector<uint32_t> &&ttmps);
 
-    const Dive::WaveState       &GetState() const;
-    const std::vector<uint32_t> &GetSGPRs() const;
-    const std::vector<uint32_t> &GetVGPRs() const;
-    const std::vector<uint32_t> &GetTTMPs() const;
+    const Dive::WaveState      &GetState() const;
+    const DiveVector<uint32_t> &GetSGPRs() const;
+    const DiveVector<uint32_t> &GetVGPRs() const;
+    const DiveVector<uint32_t> &GetTTMPs() const;
 
 private:
-    Dive::WaveState       m_state;
-    std::vector<uint32_t> m_sgprs;
-    std::vector<uint32_t> m_vgprs;
-    std::vector<uint32_t> m_ttmps;
+    Dive::WaveState      m_state;
+    DiveVector<uint32_t> m_sgprs;
+    DiveVector<uint32_t> m_vgprs;
+    DiveVector<uint32_t> m_ttmps;
 };
 
 //--------------------------------------------------------------------------------------------------
 class WaveInfo
 {
 public:
-    explicit WaveInfo(std::vector<WaveStateInfo> &&waves);
+    explicit WaveInfo(DiveVector<WaveStateInfo> &&waves);
     WaveInfo(){};
 
-    const std::vector<WaveStateInfo> &GetWaves() const;
+    const DiveVector<WaveStateInfo> &GetWaves() const;
 
 private:
-    std::vector<WaveStateInfo> m_waves;
+    DiveVector<WaveStateInfo> m_waves;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -362,7 +361,7 @@ public:
     {
         return m_vulkan_metadata_header;
     }
-    const std::vector<SubmitInfo> &GetSubmits() const;
+    const DiveVector<SubmitInfo> &GetSubmits() const;
 
     CaptureData &operator=(CaptureData &&) = default;
 
@@ -405,10 +404,10 @@ private:
     void Finalize(const CaptureDataHeader &data_header);
 
     CaptureDataHeader::CaptureType m_capture_type;
-    std::vector<SubmitInfo>        m_submits;
-    std::vector<PresentInfo>       m_presents;  // More than 1 if multi-frame capture
-    std::vector<RingInfo>          m_rings;
-    std::vector<TextInfo>          m_text;
+    DiveVector<SubmitInfo>         m_submits;
+    DiveVector<PresentInfo>        m_presents;  // More than 1 if multi-frame capture
+    DiveVector<RingInfo>           m_rings;
+    DiveVector<TextInfo>           m_text;
     WaveInfo                       m_waves;
     RegisterInfo                   m_registers;
     VulkanMetadataBlockHeader      m_vulkan_metadata_header;

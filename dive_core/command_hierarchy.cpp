@@ -174,7 +174,7 @@ void Topology::SetNumNodes(uint64_t num_nodes)
 }
 
 //--------------------------------------------------------------------------------------------------
-void Topology::AddChildren(uint64_t node_index, const std::vector<uint64_t> &children)
+void Topology::AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children)
 {
     DIVE_ASSERT(m_node_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_children.size() == m_node_child_index.size());
@@ -204,7 +204,7 @@ void Topology::AddChildren(uint64_t node_index, const std::vector<uint64_t> &chi
 }
 
 //--------------------------------------------------------------------------------------------------
-void Topology::AddSharedChildren(uint64_t node_index, const std::vector<uint64_t> &children)
+void Topology::AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children)
 {
     DIVE_ASSERT(m_node_shared_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_shared_children.size() == m_node_child_index.size());
@@ -278,7 +278,7 @@ const char *CommandHierarchy::GetNodeDesc(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<uint8_t> &CommandHierarchy::GetMetadata(uint64_t node_index) const
+const DiveVector<uint8_t> &CommandHierarchy::GetMetadata(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_metadata.size());
     return m_nodes.m_metadata[node_index];
@@ -432,8 +432,8 @@ uint64_t CommandHierarchy::AddNode(NodeType           type,
 //--------------------------------------------------------------------------------------------------
 size_t CommandHierarchy::GetEventIndex(uint64_t node_index) const
 {
-    const std::vector<uint64_t> &indices = m_nodes.m_event_node_indices;
-    auto                         it = std::lower_bound(indices.begin(), indices.end(), node_index);
+    const DiveVector<uint64_t> &indices = m_nodes.m_event_node_indices;
+    auto                        it = std::lower_bound(indices.begin(), indices.end(), node_index);
     if (it == indices.end() || *it != node_index)
     {
         return 0;
@@ -458,7 +458,7 @@ uint64_t CommandHierarchy::Nodes::AddNode(NodeType           type,
     m_description.push_back(desc);
     m_aux_info.push_back(aux_info);
 
-    std::vector<uint8_t> temp(metadata_size);
+    DiveVector<uint8_t> temp(metadata_size);
     if (metadata_ptr != nullptr)
         memcpy(&temp[0], metadata_ptr, metadata_size);
     m_metadata.push_back(std::move(temp));
@@ -576,7 +576,7 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy  *command_hierarchy_p
     DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
 
     // Add each engine type to the frame_node
-    std::vector<uint64_t> engine_nodes;
+    DiveVector<uint64_t> engine_nodes;
     for (uint32_t engine_type = 0; engine_type < (uint32_t)EngineType::kCount; ++engine_type)
     {
         uint64_t node_index = AddNode(NodeType::kEngineNode, kEngineTypeStrings[engine_type], 0);
@@ -666,7 +666,7 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
 
     // Add each engine type to the frame_node
-    std::vector<uint64_t> engine_nodes;
+    DiveVector<uint64_t> engine_nodes;
     {
         uint64_t node_index = AddNode(NodeType::kEngineNode,
                                       kEngineTypeStrings[(uint32_t)engine_type],
@@ -681,12 +681,12 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     ib_info.m_va_addr = 0x0;
     ib_info.m_size_in_dwords = size_in_dwords;
     ib_info.m_skip = false;
-    std::vector<IndirectBufferInfo> ib_array;
+    DiveVector<IndirectBufferInfo> ib_array;
     ib_array.push_back(ib_info);
     const Dive::SubmitInfo submit_info(engine_type, queue_type, 0, false, std::move(ib_array));
 
-    std::vector<SubmitInfo> submits{ submit_info };
-    TempMemoryManager       mem_manager(command_dwords, size_in_dwords);
+    DiveVector<SubmitInfo> submits{ submit_info };
+    TempMemoryManager      mem_manager(command_dwords, size_in_dwords);
     if (!ProcessSubmits(submits, mem_manager))
     {
         return false;
@@ -1165,8 +1165,8 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
 {
     // For the submit topology, the IBs are inserted in emulation order, and are not necessarily in
     // ib-index order. Sort them here so they appear in order of ib-index.
-    std::vector<uint64_t> &submit_children = m_node_children[CommandHierarchy::kSubmitTopology][0]
-                                                            [m_cur_submit_node_index];
+    DiveVector<uint64_t> &submit_children = m_node_children[CommandHierarchy::kSubmitTopology][0]
+                                                           [m_cur_submit_node_index];
     std::sort(submit_children.begin(),
               submit_children.end(),
               [&](uint64_t lhs, uint64_t rhs) -> bool {
@@ -2108,8 +2108,8 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
 {
     // Find all the children of the set_draw_state packet, which should contain array indices
     // Using any of the topologies where field nodes are added will work
-    uint64_t               index = set_draw_state_node_index;
-    std::vector<uint64_t> &children = m_node_children[CommandHierarchy::kSubmitTopology][0][index];
+    uint64_t              index = set_draw_state_node_index;
+    DiveVector<uint64_t> &children = m_node_children[CommandHierarchy::kSubmitTopology][0][index];
 
     // Obtain the address of each of the children group IBs
     PM4_CP_SET_DRAW_STATE packet;
@@ -2274,7 +2274,7 @@ void CommandHierarchyCreator::CreateTopologies()
             continue;
 
         // Go through primary children of a particular node, and only add non-ignored nodes
-        const std::vector<uint64_t> &children = m_node_children[src_topology][0][node_index];
+        const DiveVector<uint64_t> &children = m_node_children[src_topology][0][node_index];
         for (size_t child = 0; child < children.size(); ++child)
         {
             if (!FilterOut(children[child]))
@@ -2282,7 +2282,7 @@ void CommandHierarchyCreator::CreateTopologies()
         }
 
         // Shared children should remain the same
-        const std::vector<uint64_t> &shared = m_node_children[src_topology][1][node_index];
+        const DiveVector<uint64_t> &shared = m_node_children[src_topology][1][node_index];
         m_node_children[CommandHierarchy::kVulkanCallTopology][1][node_index] = shared;
     }
 
@@ -2301,14 +2301,15 @@ void CommandHierarchyCreator::CreateTopologies()
             continue;
 
         // Go through primary children of a particular node, and only add non-ignored nodes
-        const std::vector<uint64_t> &children = m_node_children[src_topology][0][node_index];
-        std::vector<uint64_t>        acc_shared;
+        const DiveVector<uint64_t> &children = m_node_children[src_topology][0][node_index];
+        DiveVector<uint64_t>        acc_shared;
         for (size_t child = 0; child < children.size(); ++child)
         {
             // Accumulate shared packets from the child node
-            uint64_t                     child_index = children[child];
-            const std::vector<uint64_t> &shared = m_node_children[src_topology][1][child_index];
-            acc_shared.insert(acc_shared.end(), shared.begin(), shared.end());
+            uint64_t                    child_index = children[child];
+            const DiveVector<uint64_t> &shared = m_node_children[src_topology][1][child_index];
+            for (uint32_t i = 0; i < shared.size(); ++i)
+                acc_shared.push_back(shared[i]);
             if (!IsVulkanNonEventNode(child_index))
             {
                 // If it isn't a Vulkan Event node or a Vulkan Non-Event node (ie. a non-Vulkan

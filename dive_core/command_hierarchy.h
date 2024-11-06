@@ -22,7 +22,6 @@
 #pragma once
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "capture_data.h"
@@ -30,6 +29,7 @@
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
+#include "dive_core/stl_replacement.h"
 
 // Forward declarations
 struct PacketInfo;
@@ -112,29 +112,29 @@ private:
     };
 
     // List of all children for all nodes
-    std::vector<uint64_t> m_children_list;
-    std::vector<uint64_t> m_shared_children_list;
+    DiveVector<uint64_t> m_children_list;
+    DiveVector<uint64_t> m_shared_children_list;
 
     // This is a per-node pointer to m_children_list
     // 2 sets of children per node
-    std::vector<ChildrenInfo> m_node_children;
-    std::vector<ChildrenInfo> m_node_shared_children;
+    DiveVector<ChildrenInfo> m_node_children;
+    DiveVector<ChildrenInfo> m_node_shared_children;
 
     // Index of parent
-    std::vector<uint64_t> m_node_parent;
+    DiveVector<uint64_t> m_node_parent;
 
     // Index of child w.r.t. to its parent
-    std::vector<uint64_t> m_node_child_index;
+    DiveVector<uint64_t> m_node_child_index;
 
     // For each non-root node, indicate where the shared children start/end are, and
     // what the top level root node is
-    std::vector<uint64_t> m_start_shared_child;
-    std::vector<uint64_t> m_end_shared_child;
-    std::vector<uint64_t> m_root_node_index;
+    DiveVector<uint64_t> m_start_shared_child;
+    DiveVector<uint64_t> m_end_shared_child;
+    DiveVector<uint64_t> m_root_node_index;
 
     void SetNumNodes(uint64_t num_nodes);
-    void AddChildren(uint64_t node_index, const std::vector<uint64_t> &children);
-    void AddSharedChildren(uint64_t node_index, const std::vector<uint64_t> &children);
+    void AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
+    void AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ public:
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
 
-    const std::vector<uint8_t> &GetMetadata(uint64_t node_index) const;
+    const DiveVector<uint8_t> &GetMetadata(uint64_t node_index) const;
 
     Dive::EngineType GetSubmitNodeEngineType(uint64_t node_index) const;
     uint32_t         GetSubmitNodeIndex(uint64_t node_index) const;
@@ -333,13 +333,13 @@ private:
     // Arranged in structure-of-arrays for better locality
     struct Nodes
     {
-        std::vector<NodeType>    m_node_type;
-        std::vector<std::string> m_description;
-        std::vector<AuxInfo>     m_aux_info;
-        std::vector<uint64_t>    m_event_node_indices;
+        DiveVector<NodeType>    m_node_type;
+        DiveVector<std::string> m_description;
+        DiveVector<AuxInfo>     m_aux_info;
+        DiveVector<uint64_t>    m_event_node_indices;
 
         // Used mostly to cache Vulkan argument metadata for Vulkan marker nodes
-        std::vector<std::vector<uint8_t>> m_metadata;
+        DiveVector<DiveVector<uint8_t>> m_metadata;
 
         uint64_t AddNode(NodeType           type,
                          const std::string &desc,
@@ -546,23 +546,23 @@ private:
     const CaptureData *m_capture_data_ptr = nullptr;
 
     // Parsing State
-    std::vector<uint64_t>
+    DiveVector<uint64_t>
     m_cmd_begin_packet_node_indices;  // Potential packets node for vkBeginCommandBuffer
-    std::vector<uint64_t>
+    DiveVector<uint64_t>
     m_cmd_begin_event_node_indices;  // Potential event node for vkBeginCommandBuffer
     static constexpr uint64_t kInvalidRenderMarkerIndex = UINT64_MAX;
     uint64_t m_render_marker_index = kInvalidRenderMarkerIndex;  // Current render marker index,
                                                                  // there is no nested render
                                                                  // marker, so no need to use stack
-    uint64_t              m_last_user_push_parent_node = UINT64_MAX;
-    std::vector<uint64_t> m_vulkan_cmd_stack;  // Command buffer levels, first level is primary and
-                                               // second level secondary command buffer
+    uint64_t             m_last_user_push_parent_node = UINT64_MAX;
+    DiveVector<uint64_t> m_vulkan_cmd_stack;  // Command buffer levels, first level is primary and
+                                              // second level secondary command buffer
     std::unordered_map<int, std::unordered_map<uint64_t, uint64_t>>
     m_node_parent_info;  // Node parent index table, used to find which events need to be moved for
                          // VkBeginCommandBuffer.
 
-    std::vector<uint64_t> m_ib_stack;          // Tracks current IB stack
-    std::vector<uint64_t> m_renderpass_stack;  // render pass marker begin/end stack
+    DiveVector<uint64_t> m_ib_stack;          // Tracks current IB stack
+    DiveVector<uint64_t> m_renderpass_stack;  // render pass marker begin/end stack
 
     // Cache the most recent cp_set_draw_state node, to append IBs to later
     SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs] = {};
@@ -579,7 +579,7 @@ private:
 
     // Stack of shared child node that begins the current ibs/pass/events
     // Need a stack because IBs and pass/events can be stacked
-    std::vector<uint64_t> m_start_node_stack[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_start_node_stack[CommandHierarchy::kTopologyTypeCount];
 
     uint64_t m_last_added_node_index;
 
@@ -594,15 +594,15 @@ private:
     bool m_flatten_chain_nodes = false;
 
     // Range of shared children associated with each non-top-level node, per topology
-    std::vector<uint64_t> m_node_start_shared_child[CommandHierarchy::kTopologyTypeCount];
-    std::vector<uint64_t> m_node_end_shared_child[CommandHierarchy::kTopologyTypeCount];
-    std::vector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_start_shared_child[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_end_shared_child[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
 
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
-    std::vector<std::vector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
+    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
 
     ILog *m_log_ptr = nullptr;
 

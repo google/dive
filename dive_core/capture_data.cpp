@@ -173,9 +173,9 @@ const MemoryAllocationData *MemoryAllocationInfo::FindGlobalAllocation(uint64_t 
 }
 
 //--------------------------------------------------------------------------------------------------
-void MemoryAllocationInfo::AddMemoryAllocations(uint32_t                            submit_index,
-                                                MemoryAllocationsDataHeader::Type   type,
-                                                std::vector<MemoryAllocationData> &&allocations)
+void MemoryAllocationInfo::AddMemoryAllocations(uint32_t                           submit_index,
+                                                MemoryAllocationsDataHeader::Type  type,
+                                                DiveVector<MemoryAllocationData> &&allocations)
 {
     // There can only be 1 single internal and global allocation set, but there can
     // potentially be a submission allocation set *per* submit
@@ -218,9 +218,9 @@ void MemoryManager::AddMemoryBlock(uint32_t submit_index, uint64_t va_addr, Memo
 }
 
 //--------------------------------------------------------------------------------------------------
-void MemoryManager::AddMemoryAllocations(uint32_t                            submit_index,
-                                         MemoryAllocationsDataHeader::Type   type,
-                                         std::vector<MemoryAllocationData> &&allocations)
+void MemoryManager::AddMemoryAllocations(uint32_t                           submit_index,
+                                         MemoryAllocationsDataHeader::Type  type,
+                                         DiveVector<MemoryAllocationData> &&allocations)
 {
     m_memory_allocations.AddMemoryAllocations(submit_index, type, std::move(allocations));
 }
@@ -254,7 +254,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
     // *later* buffers have a more up-to-date view of memory
     if (m_same_submit_only)
     {
-        std::vector<MemoryBlock> temp_memory_blocks;
+        DiveVector<MemoryBlock> temp_memory_blocks;
 
         uint64_t prev_addr = 0;
         uint64_t prev_submit = 0;
@@ -515,11 +515,11 @@ bool MemoryManager::IsValid(uint32_t submit_index, uint64_t addr, uint64_t size)
 // =================================================================================================
 // SubmitInfo
 // =================================================================================================
-SubmitInfo::SubmitInfo(EngineType                        engine_type,
-                       QueueType                         queue_type,
-                       uint8_t                           engine_index,
-                       bool                              is_dummy_submit,
-                       std::vector<IndirectBufferInfo> &&ibs)
+SubmitInfo::SubmitInfo(EngineType                       engine_type,
+                       QueueType                        queue_type,
+                       uint8_t                          engine_index,
+                       bool                             is_dummy_submit,
+                       DiveVector<IndirectBufferInfo> &&ibs)
 {
     m_engine_type = engine_type;
     m_queue_type = queue_type;
@@ -748,7 +748,7 @@ uint64_t RingInfo::GetSignaledFenceAddress() const
 // =================================================================================================
 // TextInfo
 // =================================================================================================
-TextInfo::TextInfo(std::string name, uint64_t size, std::vector<char> &&text)
+TextInfo::TextInfo(std::string name, uint64_t size, DiveVector<char> &&text)
 {
     m_name = std::move(name);
     m_size = size;
@@ -776,10 +776,10 @@ const char *TextInfo::GetText() const
 // =================================================================================================
 // WaveInfo
 // =================================================================================================
-WaveStateInfo::WaveStateInfo(const Dive::WaveState  &state,
-                             std::vector<uint32_t> &&sgprs,
-                             std::vector<uint32_t> &&vgprs,
-                             std::vector<uint32_t> &&ttmps)
+WaveStateInfo::WaveStateInfo(const Dive::WaveState &state,
+                             DiveVector<uint32_t> &&sgprs,
+                             DiveVector<uint32_t> &&vgprs,
+                             DiveVector<uint32_t> &&ttmps)
 {
     m_state = state;
     m_sgprs = sgprs;
@@ -794,19 +794,19 @@ const Dive::WaveState &WaveStateInfo::GetState() const
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<uint32_t> &WaveStateInfo::GetSGPRs() const
+const DiveVector<uint32_t> &WaveStateInfo::GetSGPRs() const
 {
     return m_sgprs;
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<uint32_t> &WaveStateInfo::GetVGPRs() const
+const DiveVector<uint32_t> &WaveStateInfo::GetVGPRs() const
 {
     return m_vgprs;
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<uint32_t> &WaveStateInfo::GetTTMPs() const
+const DiveVector<uint32_t> &WaveStateInfo::GetTTMPs() const
 {
     return m_ttmps;
 }
@@ -814,13 +814,13 @@ const std::vector<uint32_t> &WaveStateInfo::GetTTMPs() const
 // =================================================================================================
 // WaveInfo
 // =================================================================================================
-WaveInfo::WaveInfo(std::vector<WaveStateInfo> &&waves)
+WaveInfo::WaveInfo(DiveVector<WaveStateInfo> &&waves)
 {
     m_waves = waves;
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<WaveStateInfo> &WaveInfo::GetWaves() const
+const DiveVector<WaveStateInfo> &WaveInfo::GetWaves() const
 {
     return m_waves;
 }
@@ -1128,7 +1128,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
         case RD_VERT_SHADER:
         case RD_FRAG_SHADER:
         {
-            std::vector<char> buf(block_info.m_data_size);
+            DiveVector<char> buf(block_info.m_data_size);
             capture_file.read(buf.data(), block_info.m_data_size);
             break;
         }
@@ -1192,7 +1192,7 @@ const SubmitInfo &CaptureData::GetSubmitInfo(uint32_t submit_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<SubmitInfo> &CaptureData::GetSubmits() const
+const DiveVector<SubmitInfo> &CaptureData::GetSubmits() const
 {
     return m_submits;
 }
@@ -1306,7 +1306,7 @@ bool CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
         return false;
 
     // Load the allocations
-    std::vector<MemoryAllocationData> allocations;
+    DiveVector<MemoryAllocationData> allocations;
     allocations.resize(memory_allocations_header.m_num_allocations);
     uint32_t size = memory_allocations_header.m_num_allocations * sizeof(MemoryAllocationData);
     if (!capture_file.read((char *)&allocations[0], size))
@@ -1329,7 +1329,7 @@ bool CaptureData::LoadSubmitBlock(std::istream &capture_file)
         return false;
 
     // Load the ib info
-    std::vector<IndirectBufferInfo> ibs;
+    DiveVector<IndirectBufferInfo> ibs;
     for (uint32_t ib = 0; ib < submit_data_header.m_num_ibs; ++ib)
     {
         IndirectBufferData ib_data;
@@ -1418,7 +1418,7 @@ bool CaptureData::LoadTextBlock(std::istream &capture_file)
     if (!std::getline(capture_file, name, '\0'))
         return false;
 
-    std::vector<char> data;
+    DiveVector<char> data;
     data.resize(text_header.m_size_in_bytes);
 
     if (!capture_file.read((char *)data.data(), data.size()))
@@ -1441,7 +1441,7 @@ bool CaptureData::LoadWaveStateBlock(std::istream            &capture_file,
     if (!capture_file.read((char *)&wave_header, sizeof(wave_header)))
         return false;
 
-    std::vector<WaveStateInfo> waves;
+    DiveVector<WaveStateInfo> waves;
     if (wave_header.m_num_waves > kMaxNumWavesPerBlock)
         return false;
     for (uint32_t i = 0; i < wave_header.m_num_waves; ++i)
@@ -1456,14 +1456,14 @@ bool CaptureData::LoadWaveStateBlock(std::istream            &capture_file,
         {
             return false;
         }
-        std::vector<uint32_t> sgprs(state.num_sgprs);
+        DiveVector<uint32_t> sgprs(state.num_sgprs);
         if (sgprs.size() > 0)
         {
             if (!capture_file.read((char *)sgprs.data(), state.num_sgprs * sizeof(uint32_t)))
                 return false;
         }
 
-        std::vector<uint32_t> vgprs(state.num_vgprs);
+        DiveVector<uint32_t> vgprs(state.num_vgprs);
         if (vgprs.size() > 0)
         {
             if (!capture_file.read((char *)vgprs.data(), state.num_vgprs * sizeof(uint32_t)))
@@ -1481,7 +1481,7 @@ bool CaptureData::LoadWaveStateBlock(std::istream            &capture_file,
             has_temps = false;
         }
 
-        std::vector<uint32_t> ttmps;
+        DiveVector<uint32_t> ttmps;
         if (has_temps)
         {
             ttmps.resize(16);
@@ -1592,7 +1592,7 @@ bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
     ib_info.m_skip = skip_commands;
     if (create_new_submit)
     {
-        std::vector<IndirectBufferInfo> ibs;
+        DiveVector<IndirectBufferInfo> ibs;
         ibs.push_back(ib_info);
 
         SubmitInfo submit_info(EngineType::kUniversal,

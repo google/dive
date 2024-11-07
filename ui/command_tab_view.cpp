@@ -98,9 +98,11 @@ void CommandTabView::OnSelectionChanged(const QModelIndex &index)
 {
     m_command_buffer_model->OnSelectionChanged(index);
 
-    // After m_command_buffer_view is filled out in CommandBufferModel::OnSelectionChanged(), expand
-    // the tree
-    m_command_buffer_view->expandAll();
+    // After m_command_buffer_view is filled out in CommandBufferModel::OnSelectionChanged(), do NOT
+    // expandAll. For huge trees (e.g. 20+ million nodes), it needs to traverse all expanded nodes
+    // to figure out how to setup scrollbar. So the more collapsed it is, the less it has to
+    // traverse
+    // m_command_buffer_view->expandAll();
 
     m_command_buffer_view->scrollTo(m_command_buffer_model->scrollToIndex(),
                                     QAbstractItemView::PositionAtBottom);

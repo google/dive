@@ -85,6 +85,10 @@ include(perfetto.cmake)
 
 add_subdirectory(capture_service)
 add_subdirectory(layer)
+option(INCLUDE_GFXR "Include gfxr in the build" ON)
+if(INCLUDE_GFXR)
+    add_subdirectory(third_party/gfxreconstruct)
+endif()
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)

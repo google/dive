@@ -383,9 +383,10 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
 
     // To keep things simple, also include non-shared nodes in this mapping
     // This way the parent() function will be a simple lookup regardless of packet type
+    uint64_t num_children = 0;
     if (parent_row != UINT64_MAX)
     {
-        uint64_t num_children = m_topology_ptr->GetNumChildren(parent_node_index);
+        num_children = m_topology_ptr->GetNumChildren(parent_node_index);
         for (uint64_t child = 0; child < num_children; ++child)
         {
             uint64_t child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, child);
@@ -403,8 +404,8 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
     }
 
     // Now for the shared nodes...
-    uint64_t num_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
-    for (uint64_t child = 0; child < num_children; ++child)
+    uint64_t num_shared_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
+    for (uint64_t child = 0; child < num_shared_children; ++child)
     {
         uint64_t    child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
                                                                             child);
@@ -419,7 +420,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
         // one of the children. Will no longer be part of current event/pass in the future If
         // is_selected==false, and return value is true, then that means event/pass started in one
         // of the children. Will continue be part of the current event/pass going forward
-        is_selected = CreateNodeToParentMap(child, child_node_index, is_selected);
+        is_selected = CreateNodeToParentMap(num_children + child, child_node_index, is_selected);
 
         if (child_node_index == end_node_index)
             is_selected = false;

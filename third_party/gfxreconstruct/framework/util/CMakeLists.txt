@@ -127,6 +127,17 @@ target_include_directories(gfxrecon_util
                            PUBLIC
                                ${CMAKE_CURRENT_SOURCE_DIR}/..
                                $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
+
+if(MACOS)
+target_include_directories(gfxrecon_util
+                           PUBLIC
+                               ${CMAKE_CURRENT_SOURCE_DIR}/../../external/precompiled/macos/include)
+else()
+target_include_directories(gfxrecon_util
+                           PUBLIC
+                               ${CMAKE_CURRENT_SOURCE_DIR}/../../external/precompiled/linux/include)
+endif()
+
 target_link_libraries(gfxrecon_util platform_specific vulkan_registry spirv_registry spirv-reflect-static nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 target_link_libraries(gfxrecon_util $<$<BOOL:${WIN32}>:version.lib>)
 

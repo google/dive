@@ -28,6 +28,10 @@
 
 add_executable(gfxrecon-replay "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-replay PRIVATE /wd4244)
+endif()
+
 target_sources(gfxrecon-replay
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/../tool_settings.h

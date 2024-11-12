@@ -28,6 +28,10 @@
 
 add_library(gfxrecon_encode STATIC "")
 
+if(MSVC)
+    target_compile_options(gfxrecon_encode PRIVATE /wd4267 /wd4244)
+endif()
+
 target_sources(gfxrecon_encode
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/api_capture_manager.h

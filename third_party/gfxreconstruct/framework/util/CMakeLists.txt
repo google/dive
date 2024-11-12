@@ -28,6 +28,10 @@
 
 add_library(gfxrecon_util STATIC "")
 
+if(MSVC)
+    target_compile_options(gfxrecon_util PRIVATE /wd4996 /wd4267 /wd4334)
+endif()
+
 target_sources(gfxrecon_util
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/argument_parser.h

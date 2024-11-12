@@ -27,6 +27,10 @@
 
 add_library(gfxrecon_graphics STATIC "")
 
+if(MSVC)
+    target_compile_options(gfxrecon_graphics PRIVATE /wd4996 /wd4267 /wd4244)
+endif()
+
 target_sources(gfxrecon_graphics
                PRIVATE
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_gpu_va_map.h>

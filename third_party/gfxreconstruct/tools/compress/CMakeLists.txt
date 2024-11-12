@@ -28,6 +28,10 @@
 
 add_executable(gfxrecon-compress "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-compress PRIVATE /wd4244)
+endif()
+
 target_sources(gfxrecon-compress
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp

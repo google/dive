@@ -28,6 +28,10 @@
 
 add_executable(gfxrecon-info "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-info PRIVATE /wd4244)
+endif()
+
 target_sources(gfxrecon-info
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp

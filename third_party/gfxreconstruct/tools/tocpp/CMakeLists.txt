@@ -1,5 +1,9 @@
 add_executable(gfxrecon-tocpp "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-tocpp PRIVATE /wd4244)
+endif()
+
 target_sources(gfxrecon-tocpp
                PRIVATE
                    main.cpp

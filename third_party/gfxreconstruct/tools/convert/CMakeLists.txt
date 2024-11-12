@@ -27,6 +27,7 @@ add_executable(gfxrecon-convert "")
 
 if(MSVC)
     target_compile_options(gfxrecon-convert PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-convert psapi.lib)
 endif()
 
 target_sources(gfxrecon-convert

@@ -30,6 +30,7 @@ add_executable(gfxrecon-info "")
 
 if(MSVC)
     target_compile_options(gfxrecon-info PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-info psapi.lib)
 endif()
 
 target_sources(gfxrecon-info

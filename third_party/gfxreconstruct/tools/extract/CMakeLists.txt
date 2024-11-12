@@ -30,6 +30,8 @@ add_executable(gfxrecon-extract "")
 
 if(MSVC)
     target_compile_options(gfxrecon-extract PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-extract psapi.lib)
+
 endif()
 
 target_sources(gfxrecon-extract

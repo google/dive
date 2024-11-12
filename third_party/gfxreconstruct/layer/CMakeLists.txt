@@ -63,6 +63,10 @@ target_include_directories(VkLayer_gfxreconstruct
 
 target_link_libraries(VkLayer_gfxreconstruct gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific)
 
+if(MSVC)
+    target_link_libraries(VkLayer_gfxreconstruct psapi.lib)
+endif()
+
 common_build_directives(VkLayer_gfxreconstruct)
 
 # The json output file needs Unix "/" separators or Windows "\" separators

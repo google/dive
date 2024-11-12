@@ -36,6 +36,11 @@ target_sources(dxgi PRIVATE
                 ${CMAKE_CURRENT_LIST_DIR}/dxgi.def)
 target_include_directories(dxgi PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
 target_link_libraries(dxgi gfxrecon_encode gfxrecon_util ${LINK_DXGI_OUTPUT})
+
+if(MSVC)
+    target_link_libraries(dxgi psapi.lib)
+endif()
+
 common_build_directives(dxgi)
 add_custom_command(TARGET dxgi PRE_BUILD
                     COMMAND lib /def:${CMAKE_CURRENT_LIST_DIR}/dxgi_ms.def /out:${LINK_DXGI_OUTPUT} /machine:${LINK_ARCH}

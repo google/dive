@@ -42,6 +42,11 @@ target_include_directories(d3d12
                                 $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 
 target_link_libraries(d3d12 gfxrecon_encode gfxrecon_util ${LINK_D3D12_OUTPUT})
+
+if(MSVC)
+    target_link_libraries(d3d12 psapi.lib)
+endif()
+
 common_build_directives(d3d12)
 add_custom_command(TARGET d3d12 PRE_BUILD
                     COMMAND lib /def:${CMAKE_CURRENT_LIST_DIR}/d3d12_ms.def /out:${LINK_D3D12_OUTPUT} /machine:${LINK_ARCH}

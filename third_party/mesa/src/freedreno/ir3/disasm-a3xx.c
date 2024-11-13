@@ -578,7 +578,8 @@ disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
    struct isa_decode_options decode_options = {
       .gpu_id = gpu_id,
       .show_errors = true,
-      .max_errors = 5,
+      // GOOGLE: bump this value from 5 to 50 to show the full shaders
+      .max_errors = 50,
       .branch_labels = true,
       .field_cb = disasm_field_cb,
       .pre_instr_cb = disasm_instr_cb,

@@ -420,13 +420,13 @@ SyncInfo CommandHierarchy::GetSyncNodeSyncInfo(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t CommandHierarchy::AddNode(NodeType           type,
-                                   const std::string &desc,
-                                   AuxInfo            aux_info,
-                                   char              *metadata_ptr,
-                                   uint32_t           metadata_size)
+uint64_t CommandHierarchy::AddNode(NodeType      type,
+                                   std::string &&desc,
+                                   AuxInfo       aux_info,
+                                   char         *metadata_ptr,
+                                   uint32_t      metadata_size)
 {
-    return m_nodes.AddNode(type, desc, aux_info, metadata_ptr, metadata_size);
+    return m_nodes.AddNode(type, std::move(desc), aux_info, metadata_ptr, metadata_size);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -444,18 +444,18 @@ size_t CommandHierarchy::GetEventIndex(uint64_t node_index) const
 // =================================================================================================
 // CommandHierarchy::Nodes
 // =================================================================================================
-uint64_t CommandHierarchy::Nodes::AddNode(NodeType           type,
-                                          const std::string &desc,
-                                          AuxInfo            aux_info,
-                                          char              *metadata_ptr,
-                                          uint32_t           metadata_size)
+uint64_t CommandHierarchy::Nodes::AddNode(NodeType      type,
+                                          std::string &&desc,
+                                          AuxInfo       aux_info,
+                                          char         *metadata_ptr,
+                                          uint32_t      metadata_size)
 {
     DIVE_ASSERT(m_node_type.size() == m_description.size());
     DIVE_ASSERT(m_node_type.size() == m_aux_info.size());
     DIVE_ASSERT(m_node_type.size() == m_metadata.size());
 
     m_node_type.push_back(type);
-    m_description.push_back(desc);
+    m_description.push_back(std::move(desc));
     m_aux_info.push_back(aux_info);
 
     DiveVector<uint8_t> temp(metadata_size);
@@ -954,7 +954,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
             CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
             uint64_t draw_dispatch_node_index = AddNode(NodeType::kDrawDispatchBlitNode,
-                                                        draw_dispatch_node_string,
+                                                        std::move(draw_dispatch_node_string),
                                                         aux_info);
             AppendEventNodeIndex(draw_dispatch_node_index);
             event_node_index = draw_dispatch_node_index;
@@ -1083,7 +1083,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                 m_start_node_stack[CommandHierarchy::kAllEventTopology].pop_back();
             }
 
-            m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, desc, 0);
+            m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, std::move(desc), 0);
             AddChild(CommandHierarchy::kAllEventTopology,
                      m_cur_submit_node_index,
                      m_render_marker_index);
@@ -2139,13 +2139,13 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
 
 //--------------------------------------------------------------------------------------------------
 uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
-                                          const std::string        &desc,
+                                          std::string             &&desc,
                                           CommandHierarchy::AuxInfo aux_info,
                                           char                     *metadata_ptr,
                                           uint32_t                  metadata_size)
 {
     uint64_t node_index = m_command_hierarchy_ptr->AddNode(type,
-                                                           desc,
+                                                           std::move(desc),
                                                            aux_info,
                                                            metadata_ptr,
                                                            metadata_size);

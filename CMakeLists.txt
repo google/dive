@@ -85,10 +85,7 @@ include(perfetto.cmake)
 
 add_subdirectory(capture_service)
 add_subdirectory(layer)
-option(INCLUDE_GFXR "Include gfxr in the build" ON)
-if(INCLUDE_GFXR)
-    add_subdirectory(third_party/gfxreconstruct)
-endif()
+
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)
@@ -105,6 +102,35 @@ if(NOT ANDROID)
     if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT DIVE_NO_DISASSEMBLY)
         add_subdirectory(ui)
     endif()
+    
+    add_subdirectory(third_party/gfxreconstruct)
+else()
+
+    set(ENV{JAVA_HOME} "/usr/lib/jvm/java-17-openjdk-amd64")
+
+    execute_process(
+        COMMAND ./gradlew assembleDebug
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+    )
+
+    execute_process(
+        COMMAND ./gradlew assembleRelease
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+    )
+
+    file(ARCHIVE_EXTRACT
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
+    DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/layer"
+    )
+
+    file(ARCHIVE_EXTRACT
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-release.aar"
+    DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/layer"
+    )
+    
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug)
+    
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release)
 endif()
 
 option(DIVE_UNIT_TESTS, "Build unit tests for dive")

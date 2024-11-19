@@ -66,7 +66,11 @@ Vector<Type>::Vector(uint64_t size) :
 }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> Vector<Type>::Vector(std::initializer_list<Type> a)
+template<class Type>
+Vector<Type>::Vector(std::initializer_list<Type> a) :
+    m_buffer(nullptr),
+    m_reserved(0),
+    m_size(0)
 {
     reserve(a.size());
     std::copy(a.begin(), a.end(), m_buffer);
@@ -95,6 +99,21 @@ template<class Type> Vector<Type> &Vector<Type>::operator=(const Vector<Type> &a
         reserve(a.m_size);
         m_size = a.m_size;
         std::copy(a.m_buffer, a.m_buffer + a.m_size, m_buffer);
+    }
+    return *this;
+}
+
+//--------------------------------------------------------------------------------------------------
+template<class Type> Vector<Type> &Vector<Type>::operator=(Vector<Type> &&a)
+{
+    if (&a != this)
+    {
+        m_buffer = a.m_buffer;
+        m_reserved = a.m_reserved;
+        m_size = a.m_size;
+        a.m_buffer = nullptr;
+        a.m_reserved = 0;
+        a.m_size = 0;
     }
     return *this;
 }

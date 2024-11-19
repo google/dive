@@ -35,6 +35,7 @@ public:
     ~Vector();
     Type         &operator[](uint64_t i) const;
     Vector<Type> &operator=(const Vector<Type> &a);
+    Vector<Type> &operator=(Vector<Type> &&a);
     Type         *data() const;
     Type         &front() const;
     Type         &back() const;

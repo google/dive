@@ -30,6 +30,12 @@ jobs:
 
     - name: Run lint script
       run: ./scripts/clangformat.sh
+    
+    - name: Set up Java 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
   # Build the code
   build_Windows_Debug:

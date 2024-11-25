@@ -30,7 +30,7 @@ jobs:
 
     - name: Run lint script
       run: ./scripts/clangformat.sh
-    
+
     - name: Set up Java 17
       uses: actions/setup-java@v3
       with:

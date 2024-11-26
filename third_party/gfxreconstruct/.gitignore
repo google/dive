@@ -1,0 +1,14 @@
+build*/
+dbuild*/
+Debug/
+Release/
+__pycache__/
+.vs/
+.vscode/
+*.db
+*.pyc
+*.rdbg
+._*
+.cache
+.DS_Store
+external/wayland-protocols/

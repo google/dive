@@ -1,0 +1,8 @@
+LIBRARY d3d12_capture
+EXPORTS
+InitializeDxgiCapture
+InitializeD3D12Capture
+InitializeAgsCapture
+ReleaseDxgiCapture
+ReleaseD3D12Capture
+ReleaseAgsCapture

@@ -233,6 +233,21 @@ void AndroidApplication::gfxrEnabled(bool enable)
     kGfxrEnabled = enable;
 }
 
+absl::Status AndroidApplication::createGfxrDirectory(const std::string directory)
+{
+    std::string directory_creation_cmd = absl::StrFormat("shell test -d %s", directory);
+
+    absl::Status directory_exists = m_dev.Adb().Run(directory_creation_cmd);
+
+    if (!directory_exists.ok())
+    {
+            RETURN_IF_ERROR(m_dev.Adb().Run(
+            absl::StrFormat("shell mkdir %s", directory)));
+    }
+
+    return absl::OkStatus();
+}
+
 absl::Status AndroidApplication::gfxrSetup()
 {
     RETURN_IF_ERROR(
@@ -260,25 +275,10 @@ absl::Status AndroidApplication::gfxrSetup()
         std::string capture_file_location = "/sdcard/Download/gfxr_captures/" + m_gfxr_capture_file_directory + "/" + m_package + ".gfxr";
 
         std::string gfxr_captures_directory = "/sdcard/Download/gfxr_captures";
+        RETURN_IF_ERROR(createGfxrDirectory(gfxr_captures_directory));
+        
         std::string gfxr_capture_directory = "/sdcard/Download/gfxr_captures/" + m_gfxr_capture_file_directory;
-
-        std::string gfxr_captures_directory_creation_cmd = absl::StrFormat("shell test -d %s", gfxr_captures_directory);
-        std::string gfxr_capture_directory_creation_cmd = absl::StrFormat("shell test -d %s", gfxr_capture_directory);
-
-        absl::Status gfxr_captures_directory_exists = m_dev.Adb().Run(gfxr_captures_directory_creation_cmd);
-        absl::Status gfxr_capture_directory_exists = m_dev.Adb().Run(gfxr_capture_directory_creation_cmd);
-
-        if (!gfxr_captures_directory_exists.ok())
-        {
-            RETURN_IF_ERROR(m_dev.Adb().Run(
-            absl::StrFormat("shell mkdir %s", gfxr_captures_directory)));
-        }
-
-        if (!gfxr_capture_directory_exists.ok())
-        {
-            RETURN_IF_ERROR(m_dev.Adb().Run(
-            absl::StrFormat("shell mkdir %s", gfxr_capture_directory)));
-        }
+        RETURN_IF_ERROR(createGfxrDirectory(gfxr_capture_directory));
 
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
 

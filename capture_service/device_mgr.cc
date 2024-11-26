@@ -261,6 +261,10 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
         app->setFrames(gfxr_capture_frames);
         app->gfxrEnabled(true);
     }
+    else
+    {
+        app->gfxrEnabled(false);
+    }
     return app->Setup();
 }
 

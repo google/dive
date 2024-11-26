@@ -55,6 +55,7 @@ public:
     void setArchitecture(const std::string& architecture) {m_device_architecture = architecture;};
     void setFrames(const std::string& frames) {m_gfxr_capture_frames = frames;};
     void setGfxrCaptureFileDirectory(const std::string& capture_file_directory) {m_gfxr_capture_file_directory = capture_file_directory;};
+    absl::Status createGfxrDirectory(const std::string   command_args);
     absl::Status gfxrSetup();
 
 

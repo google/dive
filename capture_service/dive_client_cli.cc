@@ -127,7 +127,7 @@ device_architecture,
 "specify the device architecture to capture with gfxr. If not specified, the default is x86.");
 ABSL_FLAG(
 std::string,
-gfxr_capture_file_name,
+gfxr_capture_file_dir,
 "gfxr_capture",
 "specify the name of the directory for the gfxr capture. If not specified, the default file name is gfxr_capture.");
 ABSL_FLAG(
@@ -401,7 +401,7 @@ int main(int argc, char** argv)
     std::string vulkan_command_args = absl::GetFlag(FLAGS_vulkan_command_args);
     std::string app_type = absl::GetFlag(FLAGS_type);
     std::string device_architecture = absl::GetFlag(FLAGS_device_architecture);
-    std::string gfxr_capture_file_name = absl::GetFlag(FLAGS_gfxr_capture_file_name);
+    std::string gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir);
     std::string frame_range = absl::GetFlag(FLAGS_frame_range);
     int frame = absl::GetFlag(FLAGS_frame);
 
@@ -437,7 +437,7 @@ int main(int argc, char** argv)
             break;
         }
 
-        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, device_architecture, gfxr_capture_file_name, gfxr_frame_range, true);
+        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, device_architecture, gfxr_capture_file_dir, gfxr_frame_range, true);
         break;
     }
     case Command::kListDevice:
@@ -453,7 +453,7 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", 0, false))
+        if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", "", false))
         {
             process_input(mgr);
         }
@@ -463,7 +463,7 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", 0, false);
+        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", "", false);
         break;
     }
     case Command::kCleanup:

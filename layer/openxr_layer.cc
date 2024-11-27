@@ -50,18 +50,18 @@ struct XrInstanceData
 {
     XrInstance               instance;
     XrGeneratedDispatchTable dispatch_table;
-    ServerRunner            &server;
-
-    XrInstanceData() :
-        server(GetServerRunner())
-    {
-    }
 };
 
 struct XrSessionData
 {
     XrSession                session;
     XrGeneratedDispatchTable dispatch_table;
+    ServerRunner            &server;
+
+    XrSessionData() :
+        server(GetServerRunner())
+    {
+    }
 };
 
 static thread_local XrInstanceData *last_used_xr_instance_data = nullptr;

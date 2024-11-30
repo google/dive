@@ -28,6 +28,10 @@
 
 add_library(gfxrecon_application STATIC "")
 
+if(MSVC)
+    target_compile_options(gfxrecon_application PRIVATE /wd4244 /wd4018)
+endif()
+
 target_sources(gfxrecon_application
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/application.h

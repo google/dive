@@ -28,6 +28,11 @@
 
 add_executable(gfxrecon-replay "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-replay PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-replay psapi.lib)
+endif()
+
 target_sources(gfxrecon-replay
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/../tool_settings.h
@@ -35,7 +40,7 @@ target_sources(gfxrecon-replay
                     ${CMAKE_CURRENT_LIST_DIR}/desktop_main.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/parse_dump_resources_cli.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/../platform_debug_helper.cpp
-                    $<$<BOOL:WIN32>:${CMAKE_SOURCE_DIR}/version.rc>
+                    $<$<BOOL:WIN32>:${CMAKE_CURRENT_SOURCE_DIR}/../../version.rc>
 )
 
 target_include_directories(gfxrecon-replay PUBLIC ${CMAKE_BINARY_DIR})
@@ -71,8 +76,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(gfxrecon-replay Threads::Threads)
 
 common_build_directives(gfxrecon-replay)
-
-include(${CMAKE_SOURCE_DIR}/cmake/AgilitySDK.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/InstallDXC.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/AgilitySDK.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/InstallDXC.cmake)
 
 install(TARGETS gfxrecon-replay RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

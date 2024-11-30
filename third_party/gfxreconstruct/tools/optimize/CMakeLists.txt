@@ -28,6 +28,11 @@
 
 add_executable(gfxrecon-optimize "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-optimize PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-optimize psapi.lib)
+endif()
+
 target_sources(gfxrecon-optimize
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp
@@ -42,7 +47,7 @@ target_sources(gfxrecon-optimize
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.cpp>
                    ${CMAKE_CURRENT_LIST_DIR}/../platform_debug_helper.cpp
-                   $<$<BOOL:WIN32>:${CMAKE_SOURCE_DIR}/version.rc>
+                   $<$<BOOL:WIN32>:${CMAKE_CURRENT_SOURCE_DIR}/../../version.rc>
               )
 
 if (MSVC)
@@ -70,7 +75,7 @@ target_link_libraries(gfxrecon-optimize
 
 common_build_directives(gfxrecon-optimize)
 
-include(${CMAKE_SOURCE_DIR}/cmake/AgilitySDK.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/InstallDXC.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/AgilitySDK.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/InstallDXC.cmake)
 
 install(TARGETS gfxrecon-optimize RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

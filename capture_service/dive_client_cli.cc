@@ -125,21 +125,21 @@ std::string,
 device_architecture,
 "x86",
 "specify the device architecture to capture with gfxr. If not specified, the default is x86.");
-ABSL_FLAG(
-std::string,
-gfxr_capture_file_dir,
-"gfxr_capture",
-"specify the name of the directory for the gfxr capture. If not specified, the default file name is gfxr_capture.");
-ABSL_FLAG(
-int,
-frame,
--1,
-"specify which frame to capture with gfxr. If not specified, the default is -1.");
+ABSL_FLAG(std::string,
+          gfxr_capture_file_dir,
+          "gfxr_capture",
+          "specify the name of the directory for the gfxr capture. If not specified, the default "
+          "file name is gfxr_capture.");
+ABSL_FLAG(int,
+          frame,
+          -1,
+          "specify which frame to capture with gfxr. If not specified, the default is -1.");
 ABSL_FLAG(
 std::string,
 frame_range,
 "",
-"specify the range of frames to capture with gfxr. If not specified, the default is frame "".");
+"specify the range of frames to capture with gfxr. If not specified, the default is frame "
+".");
 
 ABSL_FLAG(
 int,
@@ -212,7 +212,7 @@ bool run_package(Dive::DeviceManager& mgr,
                  const std::string&   device_architecture,
                  const std::string&   gfxr_capture_directory,
                  const std::string&   gfxr_capture_frames,
-                 bool isGfxrCapture)
+                 bool                 isGfxrCapture)
 {
     std::string serial = absl::GetFlag(FLAGS_device);
 
@@ -239,11 +239,21 @@ bool run_package(Dive::DeviceManager& mgr,
 
     if (app_type == "openxr")
     {
-        ret = dev->SetupApp(package, Dive::ApplicationType::OPENXR_APK, "", device_architecture, gfxr_capture_directory, gfxr_capture_frames);
+        ret = dev->SetupApp(package,
+                            Dive::ApplicationType::OPENXR_APK,
+                            "",
+                            device_architecture,
+                            gfxr_capture_directory,
+                            gfxr_capture_frames);
     }
     else if (app_type == "vulkan")
     {
-        ret = dev->SetupApp(package, Dive::ApplicationType::VULKAN_APK, "", device_architecture, gfxr_capture_directory, gfxr_capture_frames);
+        ret = dev->SetupApp(package,
+                            Dive::ApplicationType::VULKAN_APK,
+                            "",
+                            device_architecture,
+                            gfxr_capture_directory,
+                            gfxr_capture_frames);
     }
     else if (app_type == "vulkan_cli")
     {
@@ -317,23 +327,31 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                      const std::string&   device_architecture,
                      const std::string&   gfxr_capture_directory,
                      const std::string&   gfxr_capture_frames,
-                     const bool isGfxrCapture)
+                     const bool           isGfxrCapture)
 {
 
     std::string target_str = absl::GetFlag(FLAGS_target);
-    run_package(mgr, app_type, package, command, command_args, device_architecture, gfxr_capture_directory, gfxr_capture_frames, isGfxrCapture);
+    run_package(mgr,
+                app_type,
+                package,
+                command,
+                command_args,
+                device_architecture,
+                gfxr_capture_directory,
+                gfxr_capture_frames,
+                isGfxrCapture);
     int time_to_wait_in_seconds = absl::GetFlag(FLAGS_trigger_capture_after);
     std::cout << "wait for " << time_to_wait_in_seconds << " seconds" << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(time_to_wait_in_seconds));
 
-    if(isGfxrCapture)
+    if (isGfxrCapture)
     {
-        std::cout << "GFXR Capture file saved in the directory " << "/sdcard/Download/gfxr_captures/" << gfxr_capture_directory << std::endl;
+        std::cout << "GFXR Capture file saved in the directory "
+                  << "/sdcard/Download/gfxr_captures/" << gfxr_capture_directory << std::endl;
     }
     else
     {
         trigger_capture(mgr);
-
     }
 
     std::cout << "Press Enter to exit" << std::endl;
@@ -403,7 +421,7 @@ int main(int argc, char** argv)
     std::string device_architecture = absl::GetFlag(FLAGS_device_architecture);
     std::string gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir);
     std::string frame_range = absl::GetFlag(FLAGS_frame_range);
-    int frame = absl::GetFlag(FLAGS_frame);
+    int         frame = absl::GetFlag(FLAGS_frame);
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
@@ -420,7 +438,9 @@ int main(int argc, char** argv)
         std::string gfxr_frame_range;
         if (frame != -1 && frame_range != "")
         {
-            std::cout << "Please specify either a single frame or a range of frames to capture with GFXR not both." << std::endl;
+            std::cout << "Please specify either a single frame or a range of frames to capture "
+                         "with GFXR not both."
+                      << std::endl;
             break;
         }
         else if (frame != -1)
@@ -433,11 +453,21 @@ int main(int argc, char** argv)
         }
         else
         {
-            std::cout << "Please specify either a single frame or a range of frames to capture with GFXR." << std::endl;
+            std::cout
+            << "Please specify either a single frame or a range of frames to capture with GFXR."
+            << std::endl;
             break;
         }
 
-        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, device_architecture, gfxr_capture_file_dir, gfxr_frame_range, true);
+        run_and_capture(mgr,
+                        app_type,
+                        package,
+                        vulkan_command,
+                        vulkan_command_args,
+                        device_architecture,
+                        gfxr_capture_file_dir,
+                        gfxr_frame_range,
+                        true);
         break;
     }
     case Command::kListDevice:
@@ -453,7 +483,15 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", "", false))
+        if (run_package(mgr,
+                        app_type,
+                        package,
+                        vulkan_command,
+                        vulkan_command_args,
+                        "",
+                        "",
+                        "",
+                        false))
         {
             process_input(mgr);
         }
@@ -463,7 +501,15 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", "", false);
+        run_and_capture(mgr,
+                        app_type,
+                        package,
+                        vulkan_command,
+                        vulkan_command_args,
+                        "",
+                        "",
+                        "",
+                        false);
         break;
     }
     case Command::kCleanup:

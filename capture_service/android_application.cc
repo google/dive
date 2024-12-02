@@ -241,8 +241,7 @@ absl::Status AndroidApplication::createGfxrDirectory(const std::string directory
 
     if (!directory_exists.ok())
     {
-            RETURN_IF_ERROR(m_dev.Adb().Run(
-            absl::StrFormat("shell mkdir %s", directory)));
+        RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir %s", directory)));
     }
 
     return absl::OkStatus();
@@ -250,42 +249,47 @@ absl::Status AndroidApplication::createGfxrDirectory(const std::string directory
 
 absl::Status AndroidApplication::gfxrSetup()
 {
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("push %s %s",
+                    ResolveAndroidLibPath(kVkGfxrLayerLibName, m_device_architecture)
+                    .generic_string(),
+                    kTargetPath)));
+
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell run-as %s cp %s/%s .", m_package, kTargetPath, kVkGfxrLayerLibName)));
+
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("push %s %s",
-                              ResolveAndroidLibPath(kVkGfxrLayerLibName, m_device_architecture).generic_string(),
-                              kTargetPath)));
-        
-        RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell run-as %s cp %s/%s .", m_package, kTargetPath, kVkGfxrLayerLibName)));
+    m_dev.Adb().Run(absl::StrFormat("shell run-as %s ls %s", m_package, kVkGfxrLayerLibName)));
 
-        RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell run-as %s ls %s", m_package, kVkGfxrLayerLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
 
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
 
-        RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell settings put global gpu_debug_layers %s", kVkGfxrLayerName)));
 
-        RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layers %s", kVkGfxrLayerName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
 
-        RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
+    std::string capture_file_location = "/sdcard/Download/gfxr_captures/" +
+                                        m_gfxr_capture_file_directory + "/" + m_package + ".gfxr";
 
-        std::string capture_file_location = "/sdcard/Download/gfxr_captures/" + m_gfxr_capture_file_directory + "/" + m_package + ".gfxr";
+    std::string gfxr_captures_directory = "/sdcard/Download/gfxr_captures";
+    RETURN_IF_ERROR(createGfxrDirectory(gfxr_captures_directory));
 
-        std::string gfxr_captures_directory = "/sdcard/Download/gfxr_captures";
-        RETURN_IF_ERROR(createGfxrDirectory(gfxr_captures_directory));
-        
-        std::string gfxr_capture_directory = "/sdcard/Download/gfxr_captures/" + m_gfxr_capture_file_directory;
-        RETURN_IF_ERROR(createGfxrDirectory(gfxr_capture_directory));
+    std::string gfxr_capture_directory = "/sdcard/Download/gfxr_captures/" +
+                                         m_gfxr_capture_file_directory;
+    RETURN_IF_ERROR(createGfxrDirectory(gfxr_capture_directory));
 
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
 
-        std::string capture_frames_command = "shell setprop debug.gfxrecon.capture_frames " + m_gfxr_capture_frames;
-        RETURN_IF_ERROR(m_dev.Adb().Run(capture_frames_command));
-        LOGD("GFXR capture setup for %s done\n", m_package.c_str());
-        return absl::OkStatus();
+    std::string capture_frames_command = "shell setprop debug.gfxrecon.capture_frames " +
+                                         m_gfxr_capture_frames;
+    RETURN_IF_ERROR(m_dev.Adb().Run(capture_frames_command));
+    LOGD("GFXR capture setup for %s done\n", m_package.c_str());
+    return absl::OkStatus();
 }
 
 absl::Status OpenXRApplication::Setup()

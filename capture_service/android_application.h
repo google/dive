@@ -51,13 +51,15 @@ public:
     bool                 IsDebuggable() const { return m_is_debuggable; }
     bool                 IsStarted() const { return m_started; }
     virtual bool         IsRunning() const;
-    void gfxrEnabled(bool enable);
-    void setArchitecture(const std::string& architecture) {m_device_architecture = architecture;};
-    void setFrames(const std::string& frames) {m_gfxr_capture_frames = frames;};
-    void setGfxrCaptureFileDirectory(const std::string& capture_file_directory) {m_gfxr_capture_file_directory = capture_file_directory;};
-    absl::Status createGfxrDirectory(const std::string   command_args);
+    void                 gfxrEnabled(bool enable);
+    void setArchitecture(const std::string &architecture) { m_device_architecture = architecture; };
+    void setFrames(const std::string &frames) { m_gfxr_capture_frames = frames; };
+    void setGfxrCaptureFileDirectory(const std::string &capture_file_directory)
+    {
+        m_gfxr_capture_file_directory = capture_file_directory;
+    };
+    absl::Status createGfxrDirectory(const std::string command_args);
     absl::Status gfxrSetup();
-
 
 protected:
     absl::Status ParsePackage();
@@ -74,7 +76,7 @@ protected:
     bool            m_is_debuggable;
     bool            m_started;
 
-    bool            kGfxrEnabled;
+    bool kGfxrEnabled;
 };
 
 class VulkanApplication : public AndroidApplication

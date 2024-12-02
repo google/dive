@@ -67,7 +67,7 @@ public:
     absl::Status Init();
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
-    void enableGfxr(bool enableGfxr);
+    void         enableGfxr(bool enableGfxr);
 
     enum class PackageListOptions
     {
@@ -105,7 +105,7 @@ private:
     AdbSession                          m_adb;
     DeviceState                         m_original_state;
     std::unique_ptr<AndroidApplication> app;
-    bool kGfxrEnabled;
+    bool                                kGfxrEnabled;
 };
 
 class DeviceManager
@@ -125,7 +125,8 @@ private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name, const std::string &device_architecture);
+std::filesystem::path ResolveAndroidLibPath(const std::string &name,
+                                            const std::string &device_architecture);
 
 DeviceManager &GetDeviceManager();
 }  // namespace Dive

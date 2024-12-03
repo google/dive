@@ -31,12 +31,6 @@ jobs:
     - name: Run lint script
       run: ./scripts/clangformat.sh
 
-    - name: Set up Java 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-
   # Build the code
   build_Windows_Debug:
     runs-on: windows-2022
@@ -138,6 +132,12 @@ jobs:
   build_Android:
     runs-on: ubuntu-22.04
     steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v3
+        id: setup-java
+        with:
+          java-version: '17'
+          distribution: 'temurin'
       - name: Check out code
         uses: actions/checkout@v3
         with:
@@ -172,3 +172,4 @@ jobs:
           ninja
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}

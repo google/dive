@@ -27,6 +27,7 @@ limitations under the License.
 #include "absl/flags/usage.h"
 #include "android_application.h"
 #include "client.h"
+#include "constants.h"
 #include "device_mgr.h"
 
 using namespace std::chrono_literals;
@@ -309,13 +310,38 @@ bool trigger_capture(Dive::DeviceManager& mgr)
         }
     }
     target_download_path /= p.filename();
-    auto ret = mgr.GetDevice()->RetrieveTraceFile(*trace_file_path,
-                                                  target_download_path.generic_string());
+    auto ret = mgr.GetDevice()->RetrieveTrace(*trace_file_path,
+                                              target_download_path.generic_string(),
+                                              false);
     if (ret.ok())
         std::cout << "Capture saved at " << target_download_path << std::endl;
     else
         std::cout << "Failed to retrieve capture file" << std::endl;
 
+    return ret.ok();
+}
+
+bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
+{
+    std::string           target_str = absl::GetFlag(FLAGS_target);
+    std::string           download_path = absl::GetFlag(FLAGS_download_path);
+    std::filesystem::path target_download_path(download_path);
+    if (!std::filesystem::exists(target_download_path))
+    {
+        std::error_code ec;
+        if (!std::filesystem::create_directories(target_download_path, ec))
+        {
+            std::cout << "error creating directory: " << ec << std::endl;
+        }
+    }
+    std::string capture_directory = Dive::kGfxrCaptureDirectory + gfxr_capture_directory;
+    auto        ret = mgr.GetDevice()->RetrieveTrace(capture_directory,
+                                              target_download_path.generic_string(),
+                                              true);
+    if (ret.ok())
+        std::cout << "GFXR capture directory saved at " << target_download_path << std::endl;
+    else
+        std::cout << "Failed to retrieve capture directory" << std::endl;
     return ret.ok();
 }
 
@@ -346,8 +372,7 @@ bool run_and_capture(Dive::DeviceManager& mgr,
 
     if (isGfxrCapture)
     {
-        std::cout << "GFXR Capture file saved in the directory "
-                  << "/sdcard/Download/gfxr_captures/" << gfxr_capture_directory << std::endl;
+        retrieve_gfxr_capture(mgr, gfxr_capture_directory);
     }
     else
     {

@@ -563,7 +563,7 @@ void TraceWorker::run()
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
-    auto r = device->RetrieveTraceFile(*trace_file_path, target.generic_string());
+    auto r = device->RetrieveTrace(*trace_file_path, target.generic_string(), false);
     progress_bar_worker->terminate();
     m_progress_bar->setValue(100);
     if (r.ok())
@@ -581,7 +581,7 @@ void TraceWorker::run()
     std::string on_device_path = *trace_file_path;
     on_device_path += ".perfetto";
     std::string download_path = target.generic_string() + ".perfetto";
-    r = device->RetrieveTraceFile(on_device_path, download_path);
+    r = device->RetrieveTrace(on_device_path, download_path, false);
     if (r.ok())
     {
         qDebug() << "Capture saved at " << download_path.c_str();

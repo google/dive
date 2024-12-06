@@ -264,11 +264,11 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
         app->setArchitecture(device_architecture);
         app->setGfxrCaptureFileDirectory(gfxr_capture_directory);
         app->setFrames(gfxr_capture_frames);
-        app->gfxrEnabled(true);
+        app->setGfxrEnabled(true);
     }
     else
     {
-        app->gfxrEnabled(false);
+        app->setGfxrEnabled(false);
     }
     return app->Setup();
 }

@@ -228,21 +228,15 @@ absl::Status VulkanApplication::Cleanup()
     return absl::OkStatus();
 }
 
-void AndroidApplication::gfxrEnabled(bool enable)
+void AndroidApplication::setGfxrEnabled(bool enable)
 {
     kGfxrEnabled = enable;
 }
 
 absl::Status AndroidApplication::createGfxrDirectory(const std::string directory)
 {
-    std::string directory_creation_cmd = absl::StrFormat("shell test -d %s", directory);
 
-    absl::Status directory_exists = m_dev.Adb().Run(directory_creation_cmd);
-
-    if (!directory_exists.ok())
-    {
-        RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir %s", directory)));
-    }
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", directory)));
 
     return absl::OkStatus();
 }

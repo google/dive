@@ -51,7 +51,7 @@ public:
     bool                 IsDebuggable() const { return m_is_debuggable; }
     bool                 IsStarted() const { return m_started; }
     virtual bool         IsRunning() const;
-    void                 gfxrEnabled(bool enable);
+    void                 setGfxrEnabled(bool enable);
     void setArchitecture(const std::string &architecture) { m_device_architecture = architecture; };
     void setFrames(const std::string &frames) { m_gfxr_capture_frames = frames; };
     void setGfxrCaptureFileDirectory(const std::string &capture_file_directory)

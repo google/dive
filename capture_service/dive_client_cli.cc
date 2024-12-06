@@ -125,7 +125,7 @@ ABSL_FLAG(
 std::string,
 device_architecture,
 "x86",
-"specify the device architecture to capture with gfxr. If not specified, the default is x86.");
+"specify the device architecture to capture with gfxr (arm64-v8, armeabi-v7a, x86, or x86_64). If not specified, the default is x86.");
 ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
           "gfxr_capture",
@@ -213,7 +213,7 @@ bool run_package(Dive::DeviceManager& mgr,
                  const std::string&   device_architecture,
                  const std::string&   gfxr_capture_directory,
                  const std::string&   gfxr_capture_frames,
-                 bool                 isGfxrCapture)
+                 bool                 is_gfxr_capture)
 {
     std::string serial = absl::GetFlag(FLAGS_device);
 
@@ -230,7 +230,7 @@ bool run_package(Dive::DeviceManager& mgr,
         return false;
     }
     auto dev = *dev_ret;
-    dev->enableGfxr(isGfxrCapture);
+    dev->EnableGfxr(is_gfxr_capture);
     auto ret = dev->SetupDevice();
     if (!ret.ok())
     {
@@ -353,7 +353,7 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                      const std::string&   device_architecture,
                      const std::string&   gfxr_capture_directory,
                      const std::string&   gfxr_capture_frames,
-                     const bool           isGfxrCapture)
+                     const bool           is_gfxr_capture)
 {
 
     std::string target_str = absl::GetFlag(FLAGS_target);
@@ -365,12 +365,12 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                 device_architecture,
                 gfxr_capture_directory,
                 gfxr_capture_frames,
-                isGfxrCapture);
+                is_gfxr_capture);
     int time_to_wait_in_seconds = absl::GetFlag(FLAGS_trigger_capture_after);
     std::cout << "wait for " << time_to_wait_in_seconds << " seconds" << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(time_to_wait_in_seconds));
 
-    if (isGfxrCapture)
+    if (is_gfxr_capture)
     {
         retrieve_gfxr_capture(mgr, gfxr_capture_directory);
     }

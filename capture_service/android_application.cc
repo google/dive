@@ -228,7 +228,7 @@ absl::Status VulkanApplication::Cleanup()
     return absl::OkStatus();
 }
 
-void AndroidApplication::setGfxrEnabled(bool enable)
+void AndroidApplication::SetGfxrEnabled(bool enable)
 {
     kGfxrEnabled = enable;
 }

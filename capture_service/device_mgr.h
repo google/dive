@@ -67,7 +67,7 @@ public:
     absl::Status Init();
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
-    void         enableGfxr(bool enableGfxr);
+    void         EnableGfxr(bool enable_gfxr);
 
     enum class PackageListOptions
     {
@@ -95,18 +95,18 @@ public:
     const AdbSession &Adb() const { return m_adb; }
     AdbSession       &Adb() { return m_adb; }
 
-    AndroidApplication *GetCurrentApplication() { return app.get(); }
+    AndroidApplication *GetCurrentApplication() { return m_app.get(); }
     absl::Status        RetrieveTrace(const std::string &trace_file_path,
                                       const std::string &save_path,
-                                      const bool         isGfxrCapture);
+                                      const bool         is_gfxr_capture);
 
 private:
     const std::string                   m_serial;
     DeviceInfo                          m_dev_info;
     AdbSession                          m_adb;
     DeviceState                         m_original_state;
-    std::unique_ptr<AndroidApplication> app;
-    bool                                kGfxrEnabled;
+    std::unique_ptr<AndroidApplication> m_app;
+    bool                                m_gfxr_enabled;
 };
 
 class DeviceManager

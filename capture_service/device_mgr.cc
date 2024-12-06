@@ -178,7 +178,7 @@ absl::Status AndroidDevice::SetupDevice()
     RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
     RETURN_IF_ERROR(Adb().Run("shell getenforce"));
 
-    if (!kGfxrEnabled)
+    if (!m_gfxr_enabled)
     {
         RETURN_IF_ERROR(
         Adb().Run(absl::StrFormat("push %s %s",
@@ -216,7 +216,7 @@ absl::Status AndroidDevice::CleanupDevice()
         RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
     }
 
-    if (kGfxrEnabled)
+    if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(
         Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName), true));
@@ -248,29 +248,29 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
 {
     if (type == ApplicationType::VULKAN_APK)
     {
-        app = std::make_unique<VulkanApplication>(*this, package, command_args);
+        m_app = std::make_unique<VulkanApplication>(*this, package, command_args);
     }
 
     else if (type == ApplicationType::OPENXR_APK)
     {
-        app = std::make_unique<OpenXRApplication>(*this, package, command_args);
+        m_app = std::make_unique<OpenXRApplication>(*this, package, command_args);
     }
-    if (app == nullptr)
+    if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for AndroidApplication");
     }
-    if (kGfxrEnabled)
+    if (m_gfxr_enabled)
     {
-        app->setArchitecture(device_architecture);
-        app->setGfxrCaptureFileDirectory(gfxr_capture_directory);
-        app->setFrames(gfxr_capture_frames);
-        app->setGfxrEnabled(true);
+        m_app->SetArchitecture(device_architecture);
+        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
+        m_app->SetFrames(gfxr_capture_frames);
+        m_app->SetGfxrEnabled(true);
     }
     else
     {
-        app->setGfxrEnabled(false);
+        m_app->SetGfxrEnabled(false);
     }
-    return app->Setup();
+    return m_app->Setup();
 }
 
 absl::Status AndroidDevice::SetupApp(const std::string    &command,
@@ -278,36 +278,36 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
                                      const ApplicationType type)
 {
     assert(type == ApplicationType::VULKAN_CLI);
-    app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
+    m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
 
-    if (app == nullptr)
+    if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
     }
 
-    return app->Setup();
+    return m_app->Setup();
 }
 
 absl::Status AndroidDevice::CleanupAPP()
 {
-    app = nullptr;
+    m_app = nullptr;
     return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::StartApp()
 {
-    if (app)
+    if (m_app)
     {
-        return app->Start();
+        return m_app->Start();
     }
     return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::StopApp()
 {
-    if (app)
+    if (m_app)
     {
-        return app->Stop();
+        return m_app->Stop();
     }
     return absl::OkStatus();
 }
@@ -433,9 +433,9 @@ absl::Status AndroidDevice::RetrieveTrace(const std::string &trace_path,
     return Adb().Run(absl::StrFormat("shell rm %s", trace_path));
 }
 
-void AndroidDevice::enableGfxr(bool enableGfxr)
+void AndroidDevice::EnableGfxr(bool enable_gfxr)
 {
-    kGfxrEnabled = enableGfxr;
+    m_gfxr_enabled = enable_gfxr;
 }
 
 }  // namespace Dive

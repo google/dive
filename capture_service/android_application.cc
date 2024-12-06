@@ -185,9 +185,9 @@ absl::Status VulkanApplication::Setup()
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     Stop().IgnoreError();
-    if (kGfxrEnabled)
+    if (m_gfxr_enabled)
     {
-        RETURN_IF_ERROR(gfxrSetup());
+        RETURN_IF_ERROR(GfxrSetup());
     }
     else
     {
@@ -230,10 +230,10 @@ absl::Status VulkanApplication::Cleanup()
 
 void AndroidApplication::SetGfxrEnabled(bool enable)
 {
-    kGfxrEnabled = enable;
+    m_gfxr_enabled = enable;
 }
 
-absl::Status AndroidApplication::createGfxrDirectory(const std::string directory)
+absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory)
 {
 
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", directory)));
@@ -241,7 +241,7 @@ absl::Status AndroidApplication::createGfxrDirectory(const std::string directory
     return absl::OkStatus();
 }
 
-absl::Status AndroidApplication::gfxrSetup()
+absl::Status AndroidApplication::GfxrSetup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run(
     absl::StrFormat("push %s %s",
@@ -270,7 +270,7 @@ absl::Status AndroidApplication::gfxrSetup()
                                         "/" + m_package + ".gfxr";
 
     std::string gfxr_capture_directory = kGfxrCaptureDirectory + m_gfxr_capture_file_directory;
-    RETURN_IF_ERROR(createGfxrDirectory(gfxr_capture_directory));
+    RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(
     m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
@@ -288,9 +288,9 @@ absl::Status OpenXRApplication::Setup()
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
-    if (kGfxrEnabled)
+    if (m_gfxr_enabled)
     {
-        RETURN_IF_ERROR(gfxrSetup());
+        RETURN_IF_ERROR(GfxrSetup());
     }
     else
     {

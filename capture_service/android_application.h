@@ -58,8 +58,8 @@ public:
     {
         m_gfxr_capture_file_directory = capture_file_directory;
     };
-    absl::Status createGfxrDirectory(const std::string command_args);
-    absl::Status gfxrSetup();
+    absl::Status CreateGfxrDirectory(const std::string command_args);
+    absl::Status GfxrSetup();
 
 protected:
     absl::Status ParsePackage();
@@ -77,7 +77,7 @@ protected:
     bool        m_is_debuggable;
     bool        m_started;
 
-    bool kGfxrEnabled;
+    bool m_gfxr_enabled;
 };
 
 class VulkanApplication : public AndroidApplication

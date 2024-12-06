@@ -135,12 +135,11 @@ ABSL_FLAG(int,
           frame,
           -1,
           "specify which frame to capture with gfxr. If not specified, the default is -1.");
-ABSL_FLAG(
-std::string,
-frame_range,
-"",
-"specify the range of frames to capture with gfxr. If not specified, the default is frame "
-".");
+ABSL_FLAG(std::string,
+          frame_range,
+          "",
+          "specify the range of frames to capture with gfxr. If not specified, the default is an "
+          "empty string.");
 
 ABSL_FLAG(
 int,

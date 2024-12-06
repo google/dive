@@ -121,11 +121,11 @@ download_path,
 ".",
 "specify the full path to download the capture on the host, default to current directory.");
 
-ABSL_FLAG(
-std::string,
-device_architecture,
-"x86",
-"specify the device architecture to capture with gfxr (arm64-v8, armeabi-v7a, x86, or x86_64). If not specified, the default is x86.");
+ABSL_FLAG(std::string,
+          device_architecture,
+          "x86",
+          "specify the device architecture to capture with gfxr (arm64-v8, armeabi-v7a, x86, or "
+          "x86_64). If not specified, the default is x86.");
 ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
           "gfxr_capture",

@@ -71,11 +71,11 @@ protected:
     std::string     m_main_activity;
     std::string     m_command_args;
     // Available architectures are arm64-v8, armeabi-v7a, x86, and x86_64.
-    std::string     m_device_architecture;
-    std::string     m_gfxr_capture_file_directory;
-    std::string     m_gfxr_capture_frames;
-    bool            m_is_debuggable;
-    bool            m_started;
+    std::string m_device_architecture;
+    std::string m_gfxr_capture_file_directory;
+    std::string m_gfxr_capture_frames;
+    bool        m_is_debuggable;
+    bool        m_started;
 
     bool kGfxrEnabled;
 };

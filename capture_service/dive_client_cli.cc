@@ -314,8 +314,7 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     }
     target_download_path /= p.filename();
     auto ret = mgr.GetDevice()->RetrieveTrace(*trace_file_path,
-                                              target_download_path.generic_string(),
-                                              false);
+                                              target_download_path.generic_string());
     if (ret.ok())
         std::cout << "Capture saved at " << target_download_path << std::endl;
     else
@@ -339,8 +338,7 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
     }
     std::string capture_directory = Dive::kGfxrCaptureDirectory + gfxr_capture_directory;
     auto        ret = mgr.GetDevice()->RetrieveTrace(capture_directory,
-                                              target_download_path.generic_string(),
-                                              true);
+                                              target_download_path.generic_string());
     if (ret.ok())
         std::cout << "GFXR capture directory saved at " << target_download_path << std::endl;
     else

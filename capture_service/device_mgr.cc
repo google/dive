@@ -422,15 +422,10 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
 }
 
 absl::Status AndroidDevice::RetrieveTrace(const std::string &trace_path,
-                                          const std::string &save_path,
-                                          const bool         isGfxrCapture)
+                                          const std::string &save_path)
 {
     RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", trace_path, save_path)));
-    if (isGfxrCapture)
-    {
-        return Adb().Run(absl::StrFormat("shell rm -rf %s", trace_path));
-    }
-    return Adb().Run(absl::StrFormat("shell rm %s", trace_path));
+    return Adb().Run(absl::StrFormat("shell rm -rf %s", trace_path));
 }
 
 void AndroidDevice::EnableGfxr(bool enable_gfxr)

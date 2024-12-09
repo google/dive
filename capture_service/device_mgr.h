@@ -96,9 +96,7 @@ public:
     AdbSession       &Adb() { return m_adb; }
 
     AndroidApplication *GetCurrentApplication() { return m_app.get(); }
-    absl::Status        RetrieveTrace(const std::string &trace_file_path,
-                                      const std::string &save_path,
-                                      const bool         is_gfxr_capture);
+    absl::Status RetrieveTrace(const std::string &trace_file_path, const std::string &save_path);
 
 private:
     const std::string                   m_serial;

@@ -51,6 +51,15 @@ public:
     bool                 IsDebuggable() const { return m_is_debuggable; }
     bool                 IsStarted() const { return m_started; }
     virtual bool         IsRunning() const;
+    void                 SetGfxrEnabled(bool enable);
+    void SetArchitecture(const std::string &architecture) { m_device_architecture = architecture; };
+    void SetFrames(const std::string &frames) { m_gfxr_capture_frames = frames; };
+    void SetGfxrCaptureFileDirectory(const std::string &capture_file_directory)
+    {
+        m_gfxr_capture_file_directory = capture_file_directory;
+    };
+    absl::Status CreateGfxrDirectory(const std::string command_args);
+    absl::Status GfxrSetup();
 
 protected:
     absl::Status ParsePackage();
@@ -61,8 +70,14 @@ protected:
     ApplicationType m_type;
     std::string     m_main_activity;
     std::string     m_command_args;
-    bool            m_is_debuggable;
-    bool            m_started;
+    // Available architectures are arm64-v8, armeabi-v7a, x86, and x86_64.
+    std::string m_device_architecture;
+    std::string m_gfxr_capture_file_directory;
+    std::string m_gfxr_capture_frames;
+    bool        m_is_debuggable;
+    bool        m_started;
+
+    bool m_gfxr_enabled;
 };
 
 class VulkanApplication : public AndroidApplication

@@ -67,6 +67,7 @@ public:
     absl::Status Init();
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
+    void         EnableGfxr(bool enable_gfxr);
 
     enum class PackageListOptions
     {
@@ -80,7 +81,10 @@ public:
     std::string  GetDeviceDisplayName() const;
     absl::Status SetupApp(const std::string    &package,
                           const ApplicationType type,
-                          const std::string    &command_args);
+                          const std::string    &command_args,
+                          const std::string    &device_architecture,
+                          const std::string    &gfxr_capture_file_name,
+                          const std::string    &gfxr_capture_frames);
     absl::Status SetupApp(const std::string    &binary,
                           const std::string    &args,
                           const ApplicationType type);
@@ -91,16 +95,16 @@ public:
     const AdbSession &Adb() const { return m_adb; }
     AdbSession       &Adb() { return m_adb; }
 
-    AndroidApplication *GetCurrentApplication() { return app.get(); }
-    absl::Status        RetrieveTraceFile(const std::string &trace_file_path,
-                                          const std::string &save_path);
+    AndroidApplication *GetCurrentApplication() { return m_app.get(); }
+    absl::Status RetrieveTrace(const std::string &trace_file_path, const std::string &save_path);
 
 private:
     const std::string                   m_serial;
     DeviceInfo                          m_dev_info;
     AdbSession                          m_adb;
     DeviceState                         m_original_state;
-    std::unique_ptr<AndroidApplication> app;
+    std::unique_ptr<AndroidApplication> m_app;
+    bool                                m_gfxr_enabled;
 };
 
 class DeviceManager
@@ -120,7 +124,8 @@ private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name);
+std::filesystem::path ResolveAndroidLibPath(const std::string &name,
+                                            const std::string &device_architecture);
 
 DeviceManager &GetDeviceManager();
 }  // namespace Dive

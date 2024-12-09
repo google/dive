@@ -140,7 +140,8 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     return package_list;
 }
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name)
+std::filesystem::path ResolveAndroidLibPath(const std::string &name,
+                                            const std::string &device_architecture)
 {
     LOGD("cwd: %s\n", std::filesystem::current_path().c_str());
     std::vector<std::filesystem::path> search_paths{ std::filesystem::path{ "./install" },
@@ -148,7 +149,15 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name)
                                                      "../../build_android/Release/bin" },
                                                      std::filesystem::path{ "../../install" },
                                                      std::filesystem::path{ "./" } };
-    std::filesystem::path              lib_path{ name };
+
+    if (device_architecture != "")
+    {
+        search_paths.push_back(std::filesystem::path{
+        "../build_android/Release/third_party/gfxreconstruct/android/layer/jni/" +
+        device_architecture });
+    }
+
+    std::filesystem::path lib_path{ name };
 
     for (const auto &p : search_paths)
     {
@@ -169,18 +178,23 @@ absl::Status AndroidDevice::SetupDevice()
     RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
     RETURN_IF_ERROR(Adb().Run("shell getenforce"));
 
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("push %s %s",
-                                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
-                                              kTargetPath)));
-    RETURN_IF_ERROR(
-    Adb().Run(absl::StrFormat("push %s %s",
-                              ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
-                              kTargetPath)));
-    RETURN_IF_ERROR(
-    Adb().Run(absl::StrFormat("push %s %s",
-                              ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
-                              kTargetPath)));
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort)));
+    if (!m_gfxr_enabled)
+    {
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("push %s %s",
+                                  ResolveAndroidLibPath(kWrapLibName, "").generic_string(),
+                                  kTargetPath)));
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("push %s %s",
+                                  ResolveAndroidLibPath(kVkLayerLibName, "").generic_string(),
+                                  kTargetPath)));
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("push %s %s",
+                                  ResolveAndroidLibPath(kXrLayerLibName, "").generic_string(),
+                                  kTargetPath)));
+        RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort)));
+    }
+
 #if defined(DIVE_ENABLE_PERFETTO)
     RETURN_IF_ERROR(Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 1"));
 #endif
@@ -202,12 +216,22 @@ absl::Status AndroidDevice::CleanupDevice()
         RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
     }
 
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
-    RETURN_IF_ERROR(
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
-    RETURN_IF_ERROR(
-    Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
+    if (m_gfxr_enabled)
+    {
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName), true));
+    }
+    else
+    {
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
+        RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
+    }
+
     LOGD("Cleanup device %s done\n", m_serial.c_str());
 #if defined(DIVE_ENABLE_PERFETTO)
     RETURN_IF_ERROR(Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 0"));
@@ -217,22 +241,36 @@ absl::Status AndroidDevice::CleanupDevice()
 
 absl::Status AndroidDevice::SetupApp(const std::string    &package,
                                      const ApplicationType type,
-                                     const std::string    &command_args)
+                                     const std::string    &command_args,
+                                     const std::string    &device_architecture,
+                                     const std::string    &gfxr_capture_directory,
+                                     const std::string    &gfxr_capture_frames)
 {
     if (type == ApplicationType::VULKAN_APK)
     {
-        app = std::make_unique<VulkanApplication>(*this, package, command_args);
+        m_app = std::make_unique<VulkanApplication>(*this, package, command_args);
     }
 
     else if (type == ApplicationType::OPENXR_APK)
     {
-        app = std::make_unique<OpenXRApplication>(*this, package, command_args);
+        m_app = std::make_unique<OpenXRApplication>(*this, package, command_args);
     }
-    if (app == nullptr)
+    if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for AndroidApplication");
     }
-    return app->Setup();
+    if (m_gfxr_enabled)
+    {
+        m_app->SetArchitecture(device_architecture);
+        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
+        m_app->SetFrames(gfxr_capture_frames);
+        m_app->SetGfxrEnabled(true);
+    }
+    else
+    {
+        m_app->SetGfxrEnabled(false);
+    }
+    return m_app->Setup();
 }
 
 absl::Status AndroidDevice::SetupApp(const std::string    &command,
@@ -240,36 +278,36 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
                                      const ApplicationType type)
 {
     assert(type == ApplicationType::VULKAN_CLI);
-    app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
+    m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
 
-    if (app == nullptr)
+    if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
     }
 
-    return app->Setup();
+    return m_app->Setup();
 }
 
 absl::Status AndroidDevice::CleanupAPP()
 {
-    app = nullptr;
+    m_app = nullptr;
     return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::StartApp()
 {
-    if (app)
+    if (m_app)
     {
-        return app->Start();
+        return m_app->Start();
     }
     return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::StopApp()
 {
-    if (app)
+    if (m_app)
     {
-        return app->Stop();
+        return m_app->Stop();
     }
     return absl::OkStatus();
 }
@@ -364,6 +402,8 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
+    RETURN_IF_ERROR(
+    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName), true));
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath), true));
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
 
@@ -381,11 +421,16 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::RetrieveTraceFile(const std::string &trace_file_path,
-                                              const std::string &save_path)
+absl::Status AndroidDevice::RetrieveTrace(const std::string &trace_path,
+                                          const std::string &save_path)
 {
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", trace_file_path, save_path)));
-    return Adb().Run(absl::StrFormat("shell rm %s", trace_file_path));
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", trace_path, save_path)));
+    return Adb().Run(absl::StrFormat("shell rm -rf %s", trace_path));
+}
+
+void AndroidDevice::EnableGfxr(bool enable_gfxr)
+{
+    m_gfxr_enabled = enable_gfxr;
 }
 
 }  // namespace Dive

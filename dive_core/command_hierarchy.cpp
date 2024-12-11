@@ -229,11 +229,6 @@ CommandHierarchy::CommandHierarchy() {}
 CommandHierarchy::~CommandHierarchy() {}
 
 //--------------------------------------------------------------------------------------------------
-const Topology &CommandHierarchy::GetEngineHierarchyTopology() const
-{
-    return m_topology[kEngineTopology];
-}
-//--------------------------------------------------------------------------------------------------
 const Topology &CommandHierarchy::GetSubmitHierarchyTopology() const
 {
     return m_topology[kSubmitTopology];
@@ -257,11 +252,6 @@ const Topology &CommandHierarchy::GetAllEventHierarchyTopology() const
     return m_topology[kAllEventTopology];
 }
 
-//--------------------------------------------------------------------------------------------------
-const Topology &CommandHierarchy::GetRgpHierarchyTopology() const
-{
-    return m_topology[kRgpTopology];
-}
 
 //--------------------------------------------------------------------------------------------------
 NodeType CommandHierarchy::GetNodeType(uint64_t node_index) const
@@ -603,14 +593,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
     uint64_t root_node_index = AddNode(NodeType::kRootNode, "", 0);
     DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
 
-    // Add each engine type to the frame_node
-    DiveVector<uint64_t> engine_nodes;
-    for (uint32_t engine_type = 0; engine_type < (uint32_t)EngineType::kCount; ++engine_type)
-    {
-        uint64_t node_index = AddNode(NodeType::kEngineNode, kEngineTypeStrings[engine_type], 0);
-        AddChild(CommandHierarchy::kEngineTopology, Topology::kRootNodeIndex, node_index);
-    }
-
     m_num_events = 0;
     m_flatten_chain_nodes = flatten_chain_nodes;
 
@@ -693,15 +675,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     // Add a dummy root node for easier management
     uint64_t root_node_index = AddNode(NodeType::kRootNode, "", 0);
     DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
-
-    // Add each engine type to the frame_node
-    DiveVector<uint64_t> engine_nodes;
-    {
-        uint64_t node_index = AddNode(NodeType::kEngineNode,
-                                      kEngineTypeStrings[(uint32_t)engine_type],
-                                      0);
-        AddChild(CommandHierarchy::kEngineTopology, Topology::kRootNodeIndex, node_index);
-    }
 
     m_num_events = 0;
     m_flatten_chain_nodes = false;
@@ -812,10 +785,8 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
         uint64_t node_index = AddNode(NodeType::kFieldNode, ib_string_stream.str(), aux_info);
 
         // Add it as child to packet_node
-        AddChild(CommandHierarchy::kEngineTopology, m_start_bin_node_index, node_index);
         AddChild(CommandHierarchy::kSubmitTopology, m_start_bin_node_index, node_index);
         AddChild(CommandHierarchy::kAllEventTopology, m_start_bin_node_index, node_index);
-        AddChild(CommandHierarchy::kRgpTopology, m_start_bin_node_index, node_index);
 
         m_shared_node_ib_parent_stack[m_cur_ib_level] = node_index;
     }
@@ -826,10 +797,8 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
         uint64_t node_index = AddNode(NodeType::kFieldNode, ib_string_stream.str(), aux_info);
 
         // Add it as child to packet_node
-        AddChild(CommandHierarchy::kEngineTopology, m_draw_table_node_index, node_index);
         AddChild(CommandHierarchy::kSubmitTopology, m_draw_table_node_index, node_index);
         AddChild(CommandHierarchy::kAllEventTopology, m_draw_table_node_index, node_index);
-        AddChild(CommandHierarchy::kRgpTopology, m_draw_table_node_index, node_index);
 
         m_shared_node_ib_parent_stack[m_cur_ib_level] = node_index;
     }
@@ -864,7 +833,6 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
         }
     }
 
-    AddChild(CommandHierarchy::kEngineTopology, parent_node_index, ib_node_index);
     AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, ib_node_index);
 
     m_ib_stack.push_back(ib_node_index);
@@ -955,10 +923,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     DIVE_ASSERT(m_ib_stack.size() == m_start_node_stack[CommandHierarchy::kSubmitTopology].size());
 
     uint64_t parent_index = m_shared_node_ib_parent_stack[m_cur_ib_level];
-    AddSharedChild(CommandHierarchy::kEngineTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kSubmitTopology, parent_index, packet_node_index);
     AddSharedChild(CommandHierarchy::kAllEventTopology, parent_index, packet_node_index);
-    AddSharedChild(CommandHierarchy::kRgpTopology, parent_index, packet_node_index);
 
     uint32_t opcode = UINT32_MAX;
     if (header.type == 7)
@@ -1018,9 +984,6 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, event_node_index);
         m_node_parent_info[CommandHierarchy::kAllEventTopology]
                           [event_node_index] = parent_node_index;
-
-        AddChild(CommandHierarchy::kRgpTopology, parent_node_index, event_node_index);
-        m_node_parent_info[CommandHierarchy::kRgpTopology][event_node_index] = parent_node_index;
     }
     else if ((opcode == CP_INDIRECT_BUFFER_PFE || opcode == CP_INDIRECT_BUFFER_PFD ||
               opcode == CP_INDIRECT_BUFFER_CHAIN || opcode == CP_COND_INDIRECT_BUFFER_PFE ||
@@ -1170,16 +1133,9 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
                                          submit_string_stream.str(),
                                          aux_info);
 
-    // Add submit node as child to the appropriate engine node
-    uint64_t engine_node_index = GetChildNodeIndex(CommandHierarchy::kEngineTopology,
-                                                   Topology::kRootNodeIndex,
-                                                   engine_index);
-    AddChild(CommandHierarchy::kEngineTopology, engine_node_index, submit_node_index);
-
-    // Add submit node to the other topologies as children to the root node
+    // Add submit node to the topologies as children to the root node
     AddChild(CommandHierarchy::kSubmitTopology, Topology::kRootNodeIndex, submit_node_index);
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, submit_node_index);
-    AddChild(CommandHierarchy::kRgpTopology, Topology::kRootNodeIndex, submit_node_index);
 
     // Set the submit node to be its own shared child root node
     SetSharedChildRootNodeIndex(CommandHierarchy::kSubmitTopology,
@@ -1252,7 +1208,6 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
             AddChild(CommandHierarchy::kAllEventTopology,
                      Topology::kRootNodeIndex,
                      present_node_index);
-            AddChild(CommandHierarchy::kRgpTopology, Topology::kRootNodeIndex, present_node_index);
         }
     }
 }
@@ -1461,10 +1416,8 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
                                             aux_info);
 
         // Add it as child to reg_node
-        AddChild(CommandHierarchy::kEngineTopology, reg_node_index, field_node_index);
         AddChild(CommandHierarchy::kSubmitTopology, reg_node_index, field_node_index);
         AddChild(CommandHierarchy::kAllEventTopology, reg_node_index, field_node_index);
-        AddChild(CommandHierarchy::kRgpTopology, reg_node_index, field_node_index);
     }
     return reg_node_index;
 }
@@ -1720,10 +1673,8 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         uint64_t reg_node_index = AddRegisterNode(reg_pair.m_reg_offset, reg_value, reg_info_ptr);
 
         // Add it as child to packet node
-        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
         AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, reg_node_index);
         AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
-        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
     }
 }
 
@@ -1764,10 +1715,8 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         uint64_t reg_node_index = AddRegisterNode(reg_offset, reg_value, reg_info_ptr);
 
         // Add it as child to packet node
-        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
         AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, reg_node_index);
         AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
-        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
 
         dword++;
         if (reg_info_ptr->m_is_64_bit)
@@ -1863,10 +1812,8 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
                                                 aux_info);
 
             // Add it as child to packet_node
-            AddChild(CommandHierarchy::kEngineTopology, packet_node_index, array_node_index);
             AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, array_node_index);
             AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, array_node_index);
-            AddChild(CommandHierarchy::kRgpTopology, packet_node_index, array_node_index);
             parent_node_index = array_node_index;
         }
 
@@ -1916,10 +1863,8 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
                                                 aux_info);
 
             // Add it as child to packet_node
-            AddChild(CommandHierarchy::kEngineTopology, parent_node_index, field_node_index);
             AddChild(CommandHierarchy::kSubmitTopology, parent_node_index, field_node_index);
             AddChild(CommandHierarchy::kAllEventTopology, parent_node_index, field_node_index);
-            AddChild(CommandHierarchy::kRgpTopology, parent_node_index, field_node_index);
         }
 
         if (packet_end_early)
@@ -1951,10 +1896,8 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
                                                     aux_info);
 
                 // Add it as child to packet_node
-                AddChild(CommandHierarchy::kEngineTopology, packet_node_index, field_node_index);
                 AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, field_node_index);
                 AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, field_node_index);
-                AddChild(CommandHierarchy::kRgpTopology, packet_node_index, field_node_index);
             }
         }
     }
@@ -2124,10 +2067,8 @@ void CommandHierarchyCreator::AppendMemRegNodes(const IMemoryManager &mem_manage
     reg_string_stream << "Base Register: " << reg_info_ptr->m_name;
     CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
     uint64_t reg_node_index = AddNode(NodeType::kRegNode, reg_string_stream.str(), aux_info);
-    AddChild(CommandHierarchy::kEngineTopology, packet_node_index, reg_node_index);
     AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, reg_node_index);
     AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
-    AddChild(CommandHierarchy::kRgpTopology, packet_node_index, reg_node_index);
 
     // Add memory data values
     uint64_t ext_src_addr = ((uint64_t)packet.bitfields2.SRC_HI << 32) |
@@ -2528,10 +2469,8 @@ void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager &mem
         // Add it as child to packet_node
         CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::RegFieldNode(false);
         uint64_t const_node_index = AddNode(NodeType::kFieldNode, string_stream.str(), aux_info);
-        AddChild(CommandHierarchy::kEngineTopology, packet_node_index, const_node_index);
         AddChild(CommandHierarchy::kSubmitTopology, packet_node_index, const_node_index);
         AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, const_node_index);
-        AddChild(CommandHierarchy::kRgpTopology, packet_node_index, const_node_index);
     }
 }
 }  // namespace Dive

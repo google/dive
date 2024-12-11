@@ -217,12 +217,10 @@ public:
     //  The Event hierarchy contains kRootNode -> kSubmitNodes/kPresentNodes -> (EventNodes)
     //      Where (EventNodes) == kMarkerNode/kDrawDispatchDmaNode/kSyncNode/kPostambleStateNode
     //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as shared children
-    const Topology &GetEngineHierarchyTopology() const;
     const Topology &GetSubmitHierarchyTopology() const;
     const Topology &GetVulkanDrawEventHierarchyTopology() const;
     const Topology &GetVulkanEventHierarchyTopology() const;
     const Topology &GetAllEventHierarchyTopology() const;
-    const Topology &GetRgpHierarchyTopology() const;
 
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
@@ -254,12 +252,10 @@ private:
 
     enum TopologyType
     {
-        kEngineTopology,
         kSubmitTopology,
         kVulkanEventTopology,
         kVulkanCallTopology,
         kAllEventTopology,
-        kRgpTopology,
         kTopologyTypeCount
     };
 

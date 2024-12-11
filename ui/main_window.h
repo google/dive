@@ -159,10 +159,6 @@ private:
     QPushButton         *m_next_event_button;
     QList<QPushButton *> m_expand_to_lvl_buttons;
 
-#ifndef NDEBUG
-    QCheckBox *m_show_marker_checkbox;
-#endif
-
     // Right pane
     QTabWidget      *m_tab_widget;
     CommandTabView  *m_command_tab_view;

@@ -59,9 +59,9 @@
 #include "text_file_view.h"
 #include "tree_view_combo_box.h"
 
-static const int   kViewModeStringCount = 3;
+static const int   kViewModeStringCount = 2;
 static const int   kEventViewModeStringCount = 3;
-static const char *kViewModeStrings[kViewModeStringCount] = { "Engine", "Submit", "Events" };
+static const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
 static const char *kEventViewModeStrings[kEventViewModeStringCount] = {
     "Vulkan Events",
     "All Vulkan Calls",
@@ -121,7 +121,7 @@ MainWindow::MainWindow()
                 combo_box_model->appendRow(item);
             }
 
-            QModelIndex    event_item_index = combo_box_model->index(2, 0, QModelIndex());
+            QModelIndex    event_item_index = combo_box_model->index(1, 0, QModelIndex());
             QStandardItem *event_item = combo_box_model->itemFromIndex(event_item_index);
             event_item->setSelectable(false);
             for (int i = 0; i < kEventViewModeStringCount; i++)
@@ -135,14 +135,9 @@ MainWindow::MainWindow()
             m_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
             m_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
 
-#ifndef NDEBUG
-            m_show_marker_checkbox = new QCheckBox("Show RGP Markers");
-#endif
             text_combo_box_layout->addWidget(combo_box_label);
             text_combo_box_layout->addWidget(m_view_mode_combo_box, 1);
-#ifndef NDEBUG
-            text_combo_box_layout->addWidget(m_show_marker_checkbox);
-#endif
+
             m_search_trigger_button = new QPushButton;
             m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
             text_combo_box_layout->addWidget(m_search_trigger_button);
@@ -249,12 +244,6 @@ MainWindow::MainWindow()
                      SIGNAL(textHighlighted(const QString &)),
                      this,
                      SLOT(OnCommandViewModeComboBoxHover(const QString &)));
-#ifndef NDEBUG
-    QObject::connect(m_show_marker_checkbox,
-                     SIGNAL(stateChanged(int)),
-                     this,
-                     SLOT(OnCheckboxStateChanged(int)));
-#endif
     QObject::connect(m_command_hierarchy_view->selectionModel(),
                      SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                      m_command_tab_view,
@@ -383,43 +372,30 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 void MainWindow::ShowEventView(const Dive::CommandHierarchy &command_hierarchy,
                                EventMode                     event_mode)
 {
-#ifndef NDEBUG
-    m_show_marker_checkbox->show();
-    if (m_show_marker_checkbox->isChecked())
+    switch (event_mode)
     {
-        const Dive::Topology &topology = command_hierarchy.GetRgpHierarchyTopology();
+    case EventMode::VulkanDrawEvent:
+    {
+        const Dive::Topology &topology = command_hierarchy.GetVulkanDrawEventHierarchyTopology();
         m_command_hierarchy_model->SetTopologyToView(&topology);
         m_command_tab_view->SetTopologyToView(&topology);
+        break;
     }
-    else
-#endif
+    case EventMode::AllVulkanEvent:
     {
-        switch (event_mode)
-        {
-        case EventMode::VulkanDrawEvent:
-        {
-            const Dive::Topology &topology = command_hierarchy
-                                             .GetVulkanDrawEventHierarchyTopology();
-            m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology);
-            break;
-        }
-        case EventMode::AllVulkanEvent:
-        {
-            const Dive::Topology &topology = command_hierarchy.GetVulkanEventHierarchyTopology();
-            m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology);
-            break;
-        }
+        const Dive::Topology &topology = command_hierarchy.GetVulkanEventHierarchyTopology();
+        m_command_hierarchy_model->SetTopologyToView(&topology);
+        m_command_tab_view->SetTopologyToView(&topology);
+        break;
+    }
 
-        case EventMode::AllEvent:
-        {
-            const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
-            m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology);
-            break;
-        }
-        }
+    case EventMode::AllEvent:
+    {
+        const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
+        m_command_hierarchy_model->SetTopologyToView(&topology);
+        m_command_tab_view->SetTopologyToView(&topology);
+        break;
+    }
     }
 }
 
@@ -428,23 +404,11 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
 {
     m_command_hierarchy_view->header()->reset();
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
-    if (view_mode == tr(kViewModeStrings[0]))  // Engine
-    {
-        const Dive::Topology &topology = command_hierarchy.GetEngineHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
-#ifndef NDEBUG
-        m_show_marker_checkbox->hide();
-#endif
-    }
-    else if (view_mode == tr(kViewModeStrings[1]))  // Submit
+    if (view_mode == tr(kViewModeStrings[0]))  // Submit
     {
         const Dive::Topology &topology = command_hierarchy.GetSubmitHierarchyTopology();
         m_command_hierarchy_model->SetTopologyToView(&topology);
         m_command_tab_view->SetTopologyToView(&topology);
-#ifndef NDEBUG
-        m_show_marker_checkbox->hide();
-#endif
     }
     else if (view_mode == tr(kEventViewModeStrings[0]))  // Vulkan Events
     {
@@ -570,9 +534,9 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     if (!m_data_core->GetCommandHierarchy().HasVulkanMarkers())
     {
         // Switch to All Vulkan Calls + GPU Events view
-        QModelIndex event_item_index = m_view_mode_combo_box->model()->index(2, 0, QModelIndex());
+        QModelIndex event_item_index = m_view_mode_combo_box->model()->index(1, 0, QModelIndex());
         QModelIndex all_vulkan_calls_item_index = m_view_mode_combo_box->model()
-                                                  ->index(2, 0, event_item_index);
+                                                  ->index(1, 0, event_item_index);
         m_view_mode_combo_box->setRootModelIndex(all_vulkan_calls_item_index.parent());
         m_view_mode_combo_box->setCurrentIndex(all_vulkan_calls_item_index.row());
         OnCommandViewModeChange(tr(kEventViewModeStrings[2]));

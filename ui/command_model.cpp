@@ -122,8 +122,7 @@ QVariant CommandModel::headerData(int section, Qt::Orientation orientation, int 
         if (section == 1 &&
             (m_topology_ptr == &m_command_hierarchy.GetVulkanDrawEventHierarchyTopology() ||
              m_topology_ptr == &m_command_hierarchy.GetVulkanEventHierarchyTopology() ||
-             m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology() ||
-             m_topology_ptr == &m_command_hierarchy.GetRgpHierarchyTopology()))
+             m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology()))
         {
             return QString(tr("Event"));
         }
@@ -192,8 +191,7 @@ int CommandModel::columnCount(const QModelIndex &parent) const
 {
     if (m_topology_ptr == &m_command_hierarchy.GetVulkanDrawEventHierarchyTopology() ||
         m_topology_ptr == &m_command_hierarchy.GetVulkanEventHierarchyTopology() ||
-        m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology() ||
-        m_topology_ptr == &m_command_hierarchy.GetRgpHierarchyTopology())
+        m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology())
         return 2;
     return 1;
 }

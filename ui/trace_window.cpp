@@ -336,12 +336,12 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     if (app_type == "OpenXR APK")
     {
         ret = device
-              ->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK, m_command_args, "", "", 0);
+              ->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK, m_command_args, "", "", "");
     }
     else if (app_type == "Vulkan APK")
     {
         ret = device
-              ->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK, m_command_args, "", "", 0);
+              ->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK, m_command_args, "", "", "");
     }
     else if (app_type == "Command Line Application")
     {

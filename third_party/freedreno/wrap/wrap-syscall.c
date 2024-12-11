@@ -1337,8 +1337,7 @@ static void kgsl_ioclt_gpuobj_import_pre(int fd,
 		struct kgsl_gpuobj_import *param)
 {
 	if (param->type == KGSL_USER_MEM_TYPE_DMABUF) {
-		struct kgsl_gpuobj_import_dma_buf *import_dmabuf;
-		import_dmabuf->fd = param->priv;
+		struct kgsl_gpuobj_import_dma_buf *import_dmabuf = (struct kgsl_gpuobj_import_dma_buf *)param->priv;
 
 		printf("\t\tdmabuf_fd:\t%u\n", import_dmabuf->fd);
 	}

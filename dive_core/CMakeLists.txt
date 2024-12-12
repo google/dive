@@ -107,6 +107,10 @@ add_custom_command(
 )
 add_custom_target(freedreno_devices_header ALL DEPENDS ${FREEDRENO_DEVICES_HDR_FILE})
 
+if(MSVC)
+    set_target_properties(freedreno_devices_header PROPERTIES FOLDER "freedreno")
+endif()
+
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
@@ -185,6 +189,7 @@ target_compile_definitions(freedreno_ir3 PRIVATE
     -DHAVE_STRUCT_TIMESPEC
 )
 target_sources(freedreno_ir3 PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c")
+set_target_properties(freedreno_ir3 PROPERTIES FOLDER "freedreno")
 else()
 target_compile_definitions(freedreno_ir3 PRIVATE
     -DHAVE_ENDIAN_H

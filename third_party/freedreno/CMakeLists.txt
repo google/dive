@@ -47,6 +47,11 @@ set_target_properties(${target_name}
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
+
+if(MSVC)
+    set_target_properties(${target_name} PROPERTIES FOLDER "freedreno")
+endif()
+
 add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-strip"  --strip-unneeded 
             "${CMAKE_BINARY_DIR}/bin/lib${target_name}.so"

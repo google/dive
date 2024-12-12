@@ -28,6 +28,10 @@
 
 add_library(gfxrecon_format STATIC "")
 
+if(MSVC)
+    set_target_properties(gfxrecon_format PROPERTIES FOLDER "gfxreconstruct")
+endif()
+
 target_sources(gfxrecon_format
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/api_call_id.h

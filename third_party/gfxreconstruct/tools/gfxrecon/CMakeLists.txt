@@ -1,5 +1,9 @@
 add_custom_target(gfxrecon.py ALL)
 
+if(MSVC)
+    set_target_properties(gfxrecon.py PROPERTIES FOLDER "gfxreconstruct")
+endif()
+
 add_custom_command(TARGET gfxrecon.py
                    DEPENDS ${CMAKE_SOURCE_SOURCE_DIR}/gfxrecon.py
                    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/gfxrecon.py ${CMAKE_CURRENT_BINARY_DIR}/gfxrecon.py)

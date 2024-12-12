@@ -39,6 +39,7 @@ target_link_libraries(dxgi gfxrecon_encode gfxrecon_util ${LINK_DXGI_OUTPUT})
 
 if(MSVC)
     target_link_libraries(dxgi psapi.lib)
+    set_target_properties(dxgi PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
 common_build_directives(dxgi)

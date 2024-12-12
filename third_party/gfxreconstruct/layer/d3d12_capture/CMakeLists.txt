@@ -42,6 +42,7 @@ target_link_libraries(d3d12_capture gfxrecon_encode gfxrecon_format gfxrecon_uti
 
 if(MSVC)
     target_link_libraries(d3d12_capture psapi.lib)
+    set_target_properties(d3d12_capture PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
 common_build_directives(d3d12_capture)

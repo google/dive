@@ -3,6 +3,7 @@ add_executable(gfxrecon-tocpp "")
 if(MSVC)
     target_compile_options(gfxrecon-tocpp PRIVATE /wd4244)
     target_link_libraries(gfxrecon-tocpp psapi.lib)
+    set_target_properties(gfxrecon-tocpp PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
 target_sources(gfxrecon-tocpp

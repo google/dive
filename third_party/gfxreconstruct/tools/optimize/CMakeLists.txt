@@ -28,6 +28,12 @@
 
 add_executable(gfxrecon-optimize "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-optimize PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-optimize psapi.lib)
+    set_target_properties(gfxrecon-optimize PROPERTIES FOLDER "gfxreconstruct")
+endif()
+
 target_sources(gfxrecon-optimize
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp

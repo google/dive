@@ -36,6 +36,12 @@ target_include_directories(ags_capture PUBLIC
                            ${CMAKE_BINARY_DIR} 
                            ${PROJECT_SOURCE_DIR})
 target_link_libraries(ags_capture gfxrecon_util ${LINK_AGS_OUTPUT})
+
+if(MSVC)
+    target_link_libraries(ags_capture psapi.lib)
+    set_target_properties(ags_capture PROPERTIES FOLDER "gfxreconstruct")
+endif()
+
 add_custom_command(TARGET ags_capture PRE_BUILD
                     COMMAND lib /def:${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def /out:${LINK_AGS_OUTPUT} /machine:${LINK_ARCH}
                     DEPENDS ${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def)

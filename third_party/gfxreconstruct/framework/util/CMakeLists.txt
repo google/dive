@@ -28,6 +28,11 @@
 
 add_library(gfxrecon_util STATIC "")
 
+if(MSVC)
+    target_compile_options(gfxrecon_util PRIVATE /wd4996 /wd4267 /wd4334)
+    set_target_properties(gfxrecon_util PROPERTIES FOLDER "gfxreconstruct")
+endif()
+
 target_sources(gfxrecon_util
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/alignment_utils.h

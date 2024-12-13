@@ -28,6 +28,11 @@
 
 add_library(gfxrecon_application STATIC "")
 
+if(MSVC)
+    target_compile_options(gfxrecon_application PRIVATE /wd4244 /wd4018)
+    set_target_properties(gfxrecon_application PROPERTIES FOLDER "gfxreconstruct")
+endif()
+
 target_sources(gfxrecon_application
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/application.h

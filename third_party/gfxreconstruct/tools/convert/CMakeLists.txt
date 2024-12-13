@@ -25,6 +25,12 @@
 ###############################################################################
 add_executable(gfxrecon-convert "")
 
+if(MSVC)
+    target_compile_options(gfxrecon-convert PRIVATE /wd4244)
+    target_link_libraries(gfxrecon-convert psapi.lib)
+    set_target_properties(gfxrecon-convert PROPERTIES FOLDER "gfxreconstruct") 
+endif()
+
 target_sources(gfxrecon-convert
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/../tool_settings.h

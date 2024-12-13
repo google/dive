@@ -30,6 +30,7 @@ add_executable(gfxrecon-compress "")
 
 if(MSVC)
     target_compile_options(gfxrecon-compress PRIVATE /wd4244)
+    set_target_properties(gfxrecon-compress PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
 target_sources(gfxrecon-compress

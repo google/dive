@@ -39,6 +39,7 @@ target_link_libraries(ags_capture gfxrecon_util ${LINK_AGS_OUTPUT})
 
 if(MSVC)
     target_link_libraries(ags_capture psapi.lib)
+    set_target_properties(ags_capture PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
 add_custom_command(TARGET ags_capture PRE_BUILD

@@ -30,6 +30,7 @@ add_library(gfxrecon_decode STATIC "")
 
 if(MSVC)
     target_compile_options(gfxrecon_decode PRIVATE /wd4996 /wd4267 /wd4244 /wd4018 /wd4101)
+    set_target_properties(gfxrecon_decode PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
 target_sources(gfxrecon_decode

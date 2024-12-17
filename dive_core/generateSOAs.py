@@ -89,7 +89,7 @@ it->SetThreadY(7);
 
 def clang_format(path: str) -> None:
     """
-    Run clang-format-7 on C++ source file given by the path
+    Run clang-format on C++ source file given by the path
     """
     if 'CLANG_FORMAT' in os.environ:
         clang_format_path = os.environ['CLANG_FORMAT']

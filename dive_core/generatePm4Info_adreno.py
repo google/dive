@@ -1033,10 +1033,10 @@ try:
   pm4_info_file_h.close();
 
   # lint
-  print("formatting " + "clang-format-7 -i -style=file " + sys.argv[2] + ".h")
-  os.system("clang-format-7 -i -style=file " + sys.argv[2] + ".h")
-  print("formatting " + "clang-format-7 -i -style=file " + sys.argv[2] + ".cpp")
-  os.system("clang-format-7 -i -style=file  " + sys.argv[2] + ".cpp")
+  print("formatting " + "clang-format -i -style=file " + sys.argv[2] + ".h")
+  os.system("clang-format -i -style=file " + sys.argv[2] + ".h")
+  print("formatting " + "clang-format -i -style=file " + sys.argv[2] + ".cpp")
+  os.system("clang-format -i -style=file  " + sys.argv[2] + ".cpp")
 
 except IOError as e:
     errno, strerror = e.args

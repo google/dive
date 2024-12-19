@@ -71,7 +71,7 @@ signals:
     void FileLoaded();
 
 public slots:
-    void OnCapture(bool is_capture_delayed = false);
+    void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
     void OnSwitchToShaderTab();
 
 private slots:
@@ -79,6 +79,7 @@ private slots:
     void OnCommandViewModeComboBoxHover(const QString &);
     void OnSelectionChanged(const QModelIndex &index);
     void OnOpenFile();
+    void OnGFXRCapture();
     void OnNormalCapture();
     void OnCaptureTrigger();
     void OnExpandToLevel();
@@ -119,6 +120,8 @@ private:
     QAction     *m_save_as_action;
     QAction     *m_exit_action;
     QMenu       *m_capture_menu;
+    QAction     *m_gfxr_capture_action;
+    QAction     *m_pm4_capture_action;
     QAction     *m_capture_action;
     QAction     *m_capture_delay_action;
     QAction     *m_capture_setting_action;

@@ -14,6 +14,7 @@
  limitations under the License.
 */
 
+#include <qspinbox.h>
 #include <QDialog>
 #include <QThread>
 #include <cstdint>
@@ -33,6 +34,8 @@ class QComboBox;
 class QStandardItemModel;
 class QProgressDialog;
 class QLineEdit;
+class QSpinBox;
+class QCheckBox;
 
 class TraceWorker : public QThread
 {
@@ -80,6 +83,9 @@ public:
     void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
+    void ShowGfxrFields();
+    void HideGfxrFields();
+    void UseGfxrCapture(bool enable);
 
 private slots:
     void OnDeviceSelected(const QString &);
@@ -93,12 +99,21 @@ private slots:
     void OnInputArgs(const QString &);
     void OnPackageListFilter();
     void OnPackageListFilterApplied(QSet<QString> filters);
+    void OnGfxrCaptureFrameTypeSelection(int state);
+    void OnGfxrCaptureClicked();
+    void OnGfxrRetrieveClicked();
 
 signals:
     void TraceAvailable(const QString &);
 
 private:
     bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
+    void RetrieveGfxrCapture(Dive::AndroidDevice *device);
+
+    const QString kStart_Application = "&Start Application";
+    const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
+    const QString kStop_Gfxr_Runtime_Capture = "&Stop GFXR Capture";
+    const QString kRetrieve_Gfxr_Capture = "&Retrieve GFXR Capture";
 
     QHBoxLayout        *m_capture_layout;
     QLabel             *m_dev_label;
@@ -124,6 +139,8 @@ private:
 
     QPushButton *m_capture_button;
     QPushButton *m_run_button;
+    QPushButton *m_gfxr_capture_button;
+    QPushButton *m_gfxr_retrieve_button;
     QHBoxLayout *m_button_layout;
 
     QHBoxLayout *m_cmd_layout;
@@ -135,6 +152,26 @@ private:
     QLabel      *m_args_label;
     QLineEdit   *m_args_input_box;
 
+    QHBoxLayout *m_gfxr_capture_file_directory_layout;
+    QLabel      *m_gfxr_capture_file_directory_label;
+    QLineEdit   *m_gfxr_capture_file_directory_input_box;
+
+    QHBoxLayout *m_gfxr_capture_file_local_directory_layout;
+    QLabel      *m_gfxr_capture_file_local_directory_label;
+    QLineEdit   *m_gfxr_capture_file_local_directory_input_box;
+
+    QHBoxLayout *m_frame_type_layout;
+    QCheckBox   *m_single_frame_checkbox;
+    QCheckBox   *m_frame_range_checkbox;
+    QCheckBox   *m_run_time_checkbox;
+
+    QHBoxLayout *m_frames_layout;
+    QLabel      *m_frame_num_label;
+    QLabel      *m_frame_range_label;
+    QSpinBox    *m_frame_num_spin_box;
+    QSpinBox    *m_frame_range_min_spin_box;
+    QSpinBox    *m_frame_range_max_spin_box;
+
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;
     std::string                   m_cur_dev;
@@ -142,4 +179,5 @@ private:
     std::string                   m_cur_pkg;
     std::string                   m_executable;
     std::string                   m_command_args;
+    bool                          m_gfxr_capture;
 };

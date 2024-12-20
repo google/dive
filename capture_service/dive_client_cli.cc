@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 #include <filesystem>
+#include <future>
 #include <iostream>
 #include <ostream>
 #include <string>
@@ -144,6 +145,12 @@ ABSL_FLAG(std::string,
           "empty string. If this default value is used ("
           "), the expectation is that a specific frame number will be provided. If neither are "
           "specified, the capture process will halt.");
+ABSL_FLAG(
+bool,
+gfxr_runtime_capture,
+false,
+"specify whether or not to use the runtime capture option for GFXR. With this option enable the "
+"application starts and the gfxr capture must be trigger by () and stopped with ().");
 
 ABSL_FLAG(
 int,
@@ -323,11 +330,95 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     return ret.ok();
 }
 
+void trigger_gfxr_capture(Dive::DeviceManager& mgr,
+                          const std::string&   package,
+                          const std::string&   gfxr_capture_frames)
+{
+    if (gfxr_capture_frames == Dive::kGfxrRuntimeCapture)
+    {
+        std::cout << "Press key g+enter to trigger a capture followed by g+enter to stop the "
+                     "capture. Press any other key+enter to stop the application.\n";
+
+        std::string  input;
+        bool         is_capturing = false;
+        absl::Status ret;
+        while (std::getline(std::cin, input))
+        {
+            if (input == "g")
+            {
+                if (is_capturing)
+                {
+                    std::cout << "Stopping capture..." << std::endl;
+                    ret = mgr.GetDevice()->Adb().Run(
+                    "shell setprop debug.gfxrecon.capture_android_trigger false");
+                    if (!ret.ok())
+                    {
+                        std::cout << "There was an error stopping the gfxr runtime capture."
+                                  << std::endl;
+                    }
+                    is_capturing = false;
+                }
+                else
+                {
+                    std::cout << "Starting capture..." << std::endl;
+                    ret = mgr.GetDevice()->Adb().Run(
+                    "shell setprop debug.gfxrecon.capture_android_trigger true");
+                    if (!ret.ok())
+                    {
+                        std::cout << "There was an error starting the gfxr runtime capture."
+                                  << std::endl;
+                    }
+                    is_capturing = true;
+                }
+            }
+            else
+            {
+                if (is_capturing)
+                {
+                    std::cout << "GFXR capture in progress, please stop the capture before "
+                                 "stopping the application."
+                              << std::endl;
+                }
+                else
+                {
+                    std::cout << "Exiting..." << std::endl;
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        std::cout
+        << "The application will stop once the specified frame or frame range has been captured."
+        << std::endl;
+        std::cout << "Starting capture..." << std::endl;
+        std::string command = "shell pidof " + package;
+
+        auto future = std::async(std::launch::async, [&mgr, command]() {
+            absl::Status result = absl::OkStatus();
+            while (result == absl::OkStatus())
+            {
+                result = mgr.GetDevice()->Adb().Run(command);
+                if (!result.ok())
+                {
+                    std::cout << "Exiting..." << std::endl;
+                    break;
+                }
+            }
+        });
+
+        future.wait();
+    }
+}
+
 bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
     std::string           target_str = absl::GetFlag(FLAGS_target);
     std::string           download_path = absl::GetFlag(FLAGS_download_path);
     std::filesystem::path target_download_path(download_path);
+
+    std::cout << "Retrieving capture..." << std::endl;
     if (!std::filesystem::exists(target_download_path))
     {
         std::error_code ec;
@@ -367,24 +458,26 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                 gfxr_capture_directory,
                 gfxr_capture_frames,
                 is_gfxr_capture);
-    int time_to_wait_in_seconds = absl::GetFlag(FLAGS_trigger_capture_after);
-    std::cout << "wait for " << time_to_wait_in_seconds << " seconds" << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(time_to_wait_in_seconds));
 
     if (is_gfxr_capture)
     {
+        trigger_gfxr_capture(mgr, package, gfxr_capture_frames);
         retrieve_gfxr_capture(mgr, gfxr_capture_directory);
     }
     else
     {
-        trigger_capture(mgr);
-    }
+        int time_to_wait_in_seconds = absl::GetFlag(FLAGS_trigger_capture_after);
+        std::cout << "wait for " << time_to_wait_in_seconds << " seconds" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(time_to_wait_in_seconds));
 
-    std::cout << "Press Enter to exit" << std::endl;
-    std::string input;
-    if (std::getline(std::cin, input))
-    {
-        std::cout << "Exiting..." << std::endl;
+        trigger_capture(mgr);
+
+        std::cout << "Press Enter to exit" << std::endl;
+        std::string input;
+        if (std::getline(std::cin, input))
+        {
+            std::cout << "Exiting..." << std::endl;
+        }
     }
 
     return true;
@@ -448,6 +541,7 @@ int main(int argc, char** argv)
     std::string gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir);
     std::string frame_range = absl::GetFlag(FLAGS_frame_range);
     int         frame = absl::GetFlag(FLAGS_frame);
+    bool        gfxr_runtime_capture = absl::GetFlag(FLAGS_gfxr_runtime_capture);
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
@@ -462,7 +556,11 @@ int main(int argc, char** argv)
     case Command::kGfxrCapture:
     {
         std::string gfxr_frame_range;
-        if (frame != -1 && frame_range != "")
+        if (gfxr_runtime_capture)
+        {
+            gfxr_frame_range = Dive::kGfxrRuntimeCapture;
+        }
+        else if (frame != -1 && frame_range != "")
         {
             std::cout << "Please specify either a single frame or a range of frames to capture "
                          "with GFXR not both."
@@ -479,9 +577,9 @@ int main(int argc, char** argv)
         }
         else
         {
-            std::cout
-            << "Please specify either a single frame or a range of frames to capture with GFXR."
-            << std::endl;
+            std::cout << "Please specify either a single frame, a range of frames, or a runtime "
+                         "capture to begin capturing with GFXR."
+                      << std::endl;
             break;
         }
 

@@ -138,10 +138,10 @@ absl::Status AndroidApplication::ParsePackage()
 absl::Status AndroidApplication::Start()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s %s/%s ",
-                                                    m_command_args,
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W  %s/%s  %s",
                                                     m_package,
-                                                    m_main_activity),
+                                                    m_main_activity,
+                                                    m_command_args),
                                     false));
     m_started = IsRunning();
     return absl::OkStatus();

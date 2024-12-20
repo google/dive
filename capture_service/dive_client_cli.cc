@@ -473,7 +473,7 @@ bool run_and_capture(Dive::DeviceManager& mgr,
 
         trigger_capture(mgr);
 
-        std::cout << "Press Enter to exit" << std::endl;
+        std::cout << "Press other key+enter to exit" << std::endl;
         std::string input;
         if (std::getline(std::cin, input))
         {
@@ -507,7 +507,7 @@ bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& packag
 
 bool process_input(Dive::DeviceManager& mgr)
 {
-    std::cout << "Press key t+enter to trigger a capture. \nPress any other key + enter to exit.";
+    std::cout << "Press key t+enter to trigger a capture. \nPress any other key+enter to exit.";
 
     std::string input;
     while (std::getline(std::cin, input))
@@ -521,7 +521,7 @@ bool process_input(Dive::DeviceManager& mgr)
         {
             break;
         }
-        std::cout << "Press key t+enter to trigger a capture. \nPress enter to exit.";
+        std::cout << "Press key t+enter to trigger a capture. \nPress other key+enter to exit.";
     }
 
     return true;

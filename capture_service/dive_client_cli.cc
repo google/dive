@@ -150,7 +150,8 @@ bool,
 gfxr_runtime_capture,
 false,
 "specify whether or not to use the runtime capture option for GFXR. With this option enable the "
-"application starts and the gfxr capture must be trigger by () and stopped with ().");
+"application starts and the gfxr capture must be triggered by g+enter and stopped with a "
+"subsequent g+enter.");
 
 ABSL_FLAG(
 int,

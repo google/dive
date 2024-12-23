@@ -52,11 +52,20 @@ CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 bool DataCore::CreateCommandHierarchy()
 {
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+
+    // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
+    // This is an educated guess that each PM4 packet results in x number of associated
+    // field/register nodes. Overguessing means more memory used during creation. Underguessing
+    // means more allocations. For big captures, this is easily in the multi-millions, so
+    // pre-reserving the space is a signficiant performance win
+    uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
+
     // Command hierarchy tree creation
     CommandHierarchyCreator cmd_hier_creator(*state_tracker);
     if (!cmd_hier_creator.CreateTrees(&m_capture_metadata.m_command_hierarchy,
                                       m_capture_data,
                                       true,
+                                      reserve_size,
                                       m_log_ptr))
     {
         return false;
@@ -85,12 +94,12 @@ bool DataCore::ParseCaptureData()
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (!CreateCommandHierarchy())
+    if (!CreateMetaData())
     {
         return false;
     }
 
-    if (!CreateMetaData())
+    if (!CreateCommandHierarchy())
     {
         return false;
     }
@@ -130,6 +139,7 @@ CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata     &capture_meta
     m_state_tracker(state_tracker)
 {
     m_state_tracker.Reset();
+    m_capture_metadata.m_num_pm4_packets = 0;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -171,6 +181,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                       uint64_t              va_addr,
                                       Pm4Header             header)
 {
+    m_capture_metadata.m_num_pm4_packets++;
     if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
         return false;
 

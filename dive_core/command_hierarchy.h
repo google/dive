@@ -20,6 +20,7 @@
 // =====================================================================================================================
 
 #pragma once
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -368,10 +369,13 @@ public:
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
-    bool CreateTrees(CommandHierarchy  *command_hierarchy_ptr,
-                     const CaptureData &capture_data,
-                     bool               flatten_chain_nodes,
-                     ILog              *log_ptr);
+    // Optional: Passing a reserve_size will allow the creator to pre-reserve the memory needed and
+    // potentially speed up the creation
+    bool CreateTrees(CommandHierarchy       *command_hierarchy_ptr,
+                     const CaptureData      &capture_data,
+                     bool                    flatten_chain_nodes,
+                     std::optional<uint64_t> reserve_size,
+                     ILog                   *log_ptr);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
     bool CreateTrees(CommandHierarchy *command_hierarchy_ptr,

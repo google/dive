@@ -538,7 +538,7 @@ bool ParseCapture(const char                              *filename,
     command_hierarchy = std::make_unique<Dive::CommandHierarchy>();
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
     Dive::CommandHierarchyCreator        creator(*state_tracker);
-    if (!creator.CreateTrees(command_hierarchy.get(), *capture_data, true, &log))
+    if (!creator.CreateTrees(command_hierarchy.get(), *capture_data, true, std::nullopt, &log))
     {
         command_hierarchy.reset();
         std::cerr << "Error parsing capture!" << std::endl;
@@ -562,7 +562,8 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
     std::unique_ptr<Dive::CommandHierarchy>    command_hierarchy_ptr(new Dive::CommandHierarchy());
     std::unique_ptr<Dive::EmulateStateTracker> state_tracker(new EmulateStateTracker);
     Dive::CommandHierarchyCreator              creator(*state_tracker);
-    if (!creator.CreateTrees(command_hierarchy_ptr.get(), *capture_data_ptr, true, &log))
+    if (!creator
+         .CreateTrees(command_hierarchy_ptr.get(), *capture_data_ptr, true, std::nullopt, &log))
     {
         std::cerr << "Error parsing capture!" << std::endl;
         return EXIT_FAILURE;

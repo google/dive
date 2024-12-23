@@ -46,6 +46,9 @@ struct CaptureMetadata
     // Register state tracking for each event
     // This is separated from EventInfo to take advantage of code-gen
     EventStateInfo m_event_state;
+
+    // Information about the submits in this capture
+    uint64_t m_num_pm4_packets;
 };
 
 //--------------------------------------------------------------------------------------------------

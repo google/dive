@@ -17,13 +17,17 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "dive_core/common/common.h"
 #include "log.h"
 
 namespace Dive
 {
+class IMemoryManager;
+
 class ShaderInstruction
 {
 public:
@@ -54,25 +58,51 @@ private:
 class Disassembly
 {
 public:
-    void Init(const uint8_t* data, uint64_t address, size_t max_size, ILog* log = nullptr);
+    Disassembly(const IMemoryManager& mem_manager,
+                uint32_t              submit_index,
+                uint64_t              address,
+                ILog*                 log = nullptr);
 
-    std::string GetListing() const { return m_listing; }
-    // ShaderInstruction GetInstruction(int32_t index) const { return m_instructions[index]; };
-    size_t             GetNumInstructions() const { return m_instructions_text.size(); }
+    std::string        GetListing() const { return GetData().m_listing; }
+    uint64_t           GetShaderAddr() const { return m_address; }
+    size_t             GetNumInstructions() const { return GetData().m_instructions_text.size(); }
     const std::string& GetInstructionText(uint32_t index) const
     {
-        return m_instructions_text[index];
+        return GetData().m_instructions_text[index];
     }
-    uint64_t GetInstructionRaw(uint32_t index) const { return m_instructions_raw[index]; }
-    uint64_t GetShaderSize() const { return sizeof(uint64_t) * m_instructions_text.size(); }
-    uint32_t GetGPRCount() const { return m_gpr_count; }
+    uint64_t GetInstructionRaw(uint32_t index) const { return GetData().m_instructions_raw[index]; }
+    uint64_t GetShaderSize() const
+    {
+        return sizeof(uint64_t) * GetData().m_instructions_text.size();
+    }
+    uint32_t GetGPRCount() const { return GetData().m_gpr_count; }
 
 private:
-    std::string m_listing;
-    // std::vector<ShaderInstruction> m_instructions;
-    std::vector<std::string> m_instructions_text;
-    std::vector<uint64_t>    m_instructions_raw;
-    uint32_t                 m_gpr_count;
+    struct DisassembledData
+    {
+        std::string              m_listing;
+        std::vector<std::string> m_instructions_text;
+        std::vector<uint64_t>    m_instructions_raw;
+        uint32_t                 m_gpr_count;
+    };
+
+    void Disassemble();
+
+    const DisassembledData& GetData() const
+    {
+        if (!m_disassembled_data)
+        {
+            const_cast<Disassembly*>(this)->Disassemble();
+        }
+        return *m_disassembled_data;
+    }
+
+    const IMemoryManager& m_mem_manager;
+    uint32_t              m_submit_index;
+    uint64_t              m_address;
+    ILog*                 m_log;
+
+    std::optional<DisassembledData> m_disassembled_data = std::nullopt;
 };
 
 bool Disassemble(const uint8_t*                             shader_memory,

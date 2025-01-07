@@ -16,7 +16,7 @@
 
 #include "shader_disassembly.h"
 #include <iostream>
-#include "dive_core/common/common.h"
+#include "dive_core/common/memory_manager_base.h"
 #include "pm4_info.h"
 
 #ifdef _MSC_VER
@@ -31,6 +31,7 @@ extern "C"
 namespace Dive
 {
 
+//--------------------------------------------------------------------------------------------------
 bool Disassemble(const uint8_t*                             shader_memory,
                  uint64_t                                   shader_address,
                  size_t                                     shader_max_size,
@@ -42,6 +43,7 @@ bool Disassemble(const uint8_t*                             shader_memory,
     return false;
 }
 
+//--------------------------------------------------------------------------------------------------
 std::string DisassembleA3XX(const uint8_t*       data,
                             size_t               max_size,
                             struct shader_stats* stats,
@@ -93,53 +95,77 @@ std::string DisassembleA3XX(const uint8_t*       data,
 #endif
 }
 
-void Disassembly::Init(const uint8_t* data, uint64_t address, size_t max_size, ILog* log_ptr)
+//--------------------------------------------------------------------------------------------------
+Disassembly::Disassembly(const IMemoryManager& mem_manager,
+                         uint32_t              submit_index,
+                         uint64_t              address,
+                         ILog*                 log) :
+    m_mem_manager(mem_manager),
+    m_submit_index(submit_index),
+    m_address(address),
+    m_log(log)
 {
-    struct shader_stats stats;
-    std::string         disasm = DisassembleA3XX(data, max_size, &stats, PRINT_RAW);
-    std::istringstream  disasm_istr(disasm);
-    unsigned            opc_cat = 0;
-    unsigned            n = 0;
-    unsigned            cycles = 0;
-    uint32_t            dword0 = 0, dword1 = 0;
-    int                 prefix_len = 0;
-    for (std::string line; std::getline(disasm_istr, line);)
-    {
-#ifdef _MSC_VER
-        sscanf_s(line.c_str(),
-                 " :%d:%04d:%04d[%08xx_%08xx] %n",
-                 &opc_cat,
-                 &n,
-                 &cycles,
-                 &dword1,
-                 &dword0,
-                 &prefix_len);
-#else
-        sscanf(line.c_str(),
-               " :%d:%04d:%04d[%08xx_%08xx] %n",
-               &opc_cat,
-               &n,
-               &cycles,
-               &dword1,
-               &dword0,
-               &prefix_len);
-#endif
-        std::string instr(&line[prefix_len]);
-        if (n >= m_instructions_text.size())
-        {
-            m_instructions_text.resize(n + 1);
-            m_instructions_raw.resize(n + 1);
-        }
-        if (m_instructions_text[n].size() > 0)
-        {
-            m_instructions_text[n] += "\n";
-        }
-        m_instructions_text[n] += instr;
+}
 
-        m_instructions_raw[n] = (static_cast<uint64_t>(dword1) << 32) | dword0;
+//--------------------------------------------------------------------------------------------------
+void Disassembly::Disassemble()
+{
+    if (!m_disassembled_data)
+    {
+        DisassembledData disassembled_data;
+        uint64_t         max_size = m_mem_manager.GetMaxContiguousSize(m_submit_index, m_address);
+        uint8_t*         data_ptr = new uint8_t[max_size];
+        DIVE_VERIFY(m_mem_manager.CopyMemory(data_ptr, m_submit_index, m_address, max_size));
+
+        struct shader_stats stats;
+        std::string         disasm = DisassembleA3XX(data_ptr, max_size, &stats, PRINT_RAW);
+        std::istringstream  disasm_istr(disasm);
+        unsigned            opc_cat = 0;
+        unsigned            n = 0;
+        unsigned            cycles = 0;
+        uint32_t            dword0 = 0, dword1 = 0;
+        int                 prefix_len = 0;
+        for (std::string line; std::getline(disasm_istr, line);)
+        {
+#ifdef _MSC_VER
+            sscanf_s(line.c_str(),
+                     " :%d:%04d:%04d[%08xx_%08xx] %n",
+                     &opc_cat,
+                     &n,
+                     &cycles,
+                     &dword1,
+                     &dword0,
+                     &prefix_len);
+#else
+            sscanf(line.c_str(),
+                   " :%d:%04d:%04d[%08xx_%08xx] %n",
+                   &opc_cat,
+                   &n,
+                   &cycles,
+                   &dword1,
+                   &dword0,
+                   &prefix_len);
+#endif
+            std::string instr(&line[prefix_len]);
+            if (n >= disassembled_data.m_instructions_text.size())
+            {
+                disassembled_data.m_instructions_text.resize(n + 1);
+                disassembled_data.m_instructions_raw.resize(n + 1);
+            }
+            if (disassembled_data.m_instructions_text[n].size() > 0)
+            {
+                disassembled_data.m_instructions_text[n] += "\n";
+            }
+            disassembled_data.m_instructions_text[n] += instr;
+
+            disassembled_data.m_instructions_raw[n] = (static_cast<uint64_t>(dword1) << 32) |
+                                                      dword0;
+        }
+        disassembled_data.m_gpr_count = (stats.fullreg + 3) / 4;
+        disassembled_data.m_listing = DisassembleA3XX(data_ptr, max_size, &stats, PRINT_STATS);
+        delete[] data_ptr;
+        m_disassembled_data = disassembled_data;
     }
-    m_gpr_count = (stats.fullreg + 3) / 4;
-    m_listing = DisassembleA3XX(data, max_size, &stats, PRINT_STATS);
 }
 
 }  // namespace Dive

@@ -338,22 +338,11 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
                 {
                     // We haven't seen this shader address before, so we need to create the shader
                     // info.
-                    uint64_t max_size = mem_manager.GetMaxContiguousSize(submit_index, addr);
-                    uint8_t *data_ptr = new uint8_t[max_size];
-                    DIVE_VERIFY(mem_manager.CopyMemory(data_ptr, submit_index, addr, max_size));
-
-                    ShaderInfo shader_info;
-                    shader_info.m_addr = addr;
-                    shader_info.m_disassembly.Init(data_ptr,
-                                                   shader_info.m_addr,
-                                                   max_size,
-                                                   &cur_event_info.m_metadata_log);
-                    delete[] data_ptr;
-
-                    // Can only get the actual size after parsing the shader
-                    shader_info.m_size = shader_info.m_disassembly.GetShaderSize();
-
-                    uint32_t shader_index = (uint32_t)m_capture_metadata.m_shaders.size();
+                    uint32_t    shader_index = (uint32_t)m_capture_metadata.m_shaders.size();
+                    Disassembly shader_info(mem_manager,
+                                            submit_index,
+                                            addr,
+                                            &cur_event_info.m_metadata_log);
                     m_capture_metadata.m_shaders.push_back(shader_info);
                     m_shader_addrs.insert(std::make_pair(addr, shader_index));
 

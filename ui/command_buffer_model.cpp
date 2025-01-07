@@ -264,34 +264,38 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
     m_node_is_selected_bit_list.resize(bit_list_size);
     CreateNodeToParentMap(UINT64_MAX, root_node_index, false);
 
-    // Determine the scroll-to position
-    m_scroll_to_index = QModelIndex();
-    uint64_t end_node_index = m_topology_ptr->GetEndSharedChildNodeIndex(m_selected_node_index);
-    uint64_t parent_node_index = (uint64_t)(m_node_parent_list[end_node_index].internalPointer());
-    uint64_t num_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
-    for (uint64_t child = 0; child < num_children; ++child)
+    // Determine the scroll-to position if not at a root node
+    if (m_selected_node_index != root_node_index)
     {
-        uint64_t child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
-                                                                            child);
-        // Cache the row index for the specific end node
-        // Recall a parent has normal children + shared children (e.g. normal fields + packets)
-        // The row has to account for both
-        if (child_node_index == end_node_index)
+        m_scroll_to_index = QModelIndex();
+        uint64_t end_node_index = m_topology_ptr->GetEndSharedChildNodeIndex(m_selected_node_index);
+        uint64_t parent_node_index = (uint64_t)(m_node_parent_list[end_node_index]
+                                                .internalPointer());
+        uint64_t num_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
+        for (uint64_t child = 0; child < num_children; ++child)
         {
-            m_scroll_to_index = createIndex(child, 0, (void *)end_node_index);
-
-            // If the shared node has fields, then the last field should be the scroll-to position
-            // instead
-            if (m_topology_ptr->GetNumChildren(end_node_index) > 0)
+            uint64_t child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
+                                                                                child);
+            // Cache the row index for the specific end node
+            // Recall a parent has normal children + shared children (e.g. normal fields + packets)
+            // The row has to account for both
+            if (child_node_index == end_node_index)
             {
-                uint32_t i = m_topology_ptr->GetNumChildren(end_node_index) - 1;
-                uint64_t last_node_index = m_topology_ptr->GetChildNodeIndex(end_node_index, i);
-                // There are cases where scrolling to the last field is not the right thing to do
-                // For example, sometimes passes end at CP_START_BIN packets, and the next pass
-                // will begin somewhere within the children of CP_START_BIN. So scrolling to the
-                // bottom of the CP_START_BIN is not appropriate in this case
-                if (IsSelected(last_node_index))
-                    m_scroll_to_index = createIndex(i, 0, (void *)last_node_index);
+                m_scroll_to_index = createIndex(child, 0, (void *)end_node_index);
+
+                // If the shared node has fields, then the last field should be the scroll-to
+                // position instead
+                if (m_topology_ptr->GetNumChildren(end_node_index) > 0)
+                {
+                    uint32_t i = m_topology_ptr->GetNumChildren(end_node_index) - 1;
+                    uint64_t last_node_index = m_topology_ptr->GetChildNodeIndex(end_node_index, i);
+                    // There are cases where scrolling to the last field is not the right thing to
+                    // do For example, sometimes passes end at CP_START_BIN packets, and the next
+                    // pass will begin somewhere within the children of CP_START_BIN. So scrolling
+                    // to the bottom of the CP_START_BIN is not appropriate in this case
+                    if (IsSelected(last_node_index))
+                        m_scroll_to_index = createIndex(i, 0, (void *)last_node_index);
+                }
             }
         }
     }

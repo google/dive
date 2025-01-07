@@ -35,7 +35,7 @@ struct CaptureMetadata
     CommandHierarchy m_command_hierarchy;
 
     // Information about each shader in the capture
-    std::vector<ShaderInfo> m_shaders;
+    std::vector<Disassembly> m_shaders;
 
     // Information about each buffer in the capture
     std::vector<BufferInfo> m_buffers;

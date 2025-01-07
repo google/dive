@@ -43,12 +43,16 @@ public:
 signals:
     // void ShaderSelected();
 
+protected:
+    virtual void paintEvent(QPaintEvent *) override;
+
 private slots:
     void OnEventSelected(uint64_t node_index);
     void OnShaderSelectionChanged();
 
 private:
     const Dive::DataCore &m_data_core;
-    ShaderTextView *      m_shader_code_text;
-    QTreeWidget *         m_shader_list;
+    uint64_t              m_node_index;
+    ShaderTextView       *m_shader_code_text;
+    QTreeWidget          *m_shader_list;
 };

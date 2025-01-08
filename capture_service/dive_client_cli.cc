@@ -358,6 +358,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                                   << std::endl;
                     }
                     is_capturing = false;
+                    std::cout << "Capture stopped." << std::endl;
                 }
                 else
                 {
@@ -370,6 +371,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                                   << std::endl;
                     }
                     is_capturing = true;
+                    std::cout << "Capture started." << std::endl;
                 }
             }
             else
@@ -400,6 +402,8 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
             absl::Status result = absl::OkStatus();
             while (result == absl::OkStatus())
             {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::cout << "Looping..." << std::endl;
                 result = mgr.GetDevice()->Adb().Run(command);
                 if (!result.ok())
                 {

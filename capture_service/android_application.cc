@@ -275,9 +275,21 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(
     m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
 
-    std::string capture_frames_command = "shell setprop debug.gfxrecon.capture_frames " +
-                                         m_gfxr_capture_frames;
-    RETURN_IF_ERROR(m_dev.Adb().Run(capture_frames_command));
+    if (m_gfxr_capture_frames == Dive::kGfxrRuntimeCapture)
+    {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_frames 0"));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.quit_after_capture_frames false"));
+    }
+    else
+    {
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.quit_after_capture_frames true"));
+        std::string capture_frames_command = "shell setprop debug.gfxrecon.capture_frames " +
+                                             m_gfxr_capture_frames;
+        RETURN_IF_ERROR(m_dev.Adb().Run(capture_frames_command));
+    }
+
     LOGD("GFXR capture setup for %s done\n", m_package.c_str());
     return absl::OkStatus();
 }

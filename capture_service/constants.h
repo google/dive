@@ -28,6 +28,7 @@ inline constexpr char kXrLayerName[] = "XR_APILAYER_dive";
 inline constexpr char kTargetPath[] = "/data/local/tmp";
 inline constexpr char kGfxrTargetPath[] = "/data/data/";
 inline constexpr char kGfxrCaptureDirectory[] = "/sdcard/Download/";
+inline constexpr char kGfxrRuntimeCapture[] = "gfxr_runtime_capture";
 inline constexpr char kManifestFileName[] = "XrApiLayer_dive.json";
 inline constexpr char kManifestFilePath[] = "/system/etc/openxr/1/api_layers/implicit.d/";
 inline constexpr char kVulkanGlobalPath[] = "/data/local/debug/vulkan";

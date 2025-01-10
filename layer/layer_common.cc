@@ -14,6 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#ifdef _WIN32
+#    include <windows.h>
+#else
+#    include <dlfcn.h>
+#endif
+
 #include "layer_common.h"
 
 #include <cstdio>
@@ -58,7 +64,7 @@ ServerRunner::ServerRunner()
     LOGI("libwrap loaded: %d", is_libwrap_loaded);
     if (is_libwrap_loaded)
     {
-        server_thread = std::thread(Dive::server_main);
+        server_thread = std::thread(Dive::ServerMain);
     }
 }
 
@@ -66,6 +72,7 @@ ServerRunner::~ServerRunner()
 {
     if (is_libwrap_loaded && server_thread.joinable())
     {
+        Dive::StopServer();
         LOGI("Wait for server thread to join");
         server_thread.join();
     }
@@ -78,3 +85,40 @@ ServerRunner &GetServerRunner()
 }
 
 }  // namespace DiveLayer
+
+void PreventLibraryUnload()
+{
+#ifdef _WIN32
+    HMODULE module = nullptr;
+    GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                      reinterpret_cast<LPCSTR>(&PreventLibraryUnload),
+                      &module);
+#else
+    Dl_info info;
+    if (dladdr(reinterpret_cast<void *>(&PreventLibraryUnload), &info))
+    {
+        dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL | RTLD_NODELETE);
+    }
+#endif
+}
+
+#ifdef _WIN32
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    if (fdwReason == DLL_PROCESS_ATTACH)
+    {
+        [[maybe_unused]] auto &server = DiveLayer::GetServerRunner();
+        PreventLibraryUnload();
+    }
+    return TRUE;
+}
+#else
+extern "C"
+{
+    __attribute__((constructor)) void InitializeLibrary()
+    {
+        [[maybe_unused]] auto &server = DiveLayer::GetServerRunner();
+        PreventLibraryUnload();
+    }
+}
+#endif

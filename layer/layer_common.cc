@@ -77,4 +77,20 @@ ServerRunner &GetServerRunner()
     return runner;
 }
 
+Server::Server()
+{
+    server_thread = std::thread(Dive::server_main);
+}
+
+void Server::StopServer()
+{
+    Dive::StopServer();
+    if (server_thread.joinable())
+    {
+        server_thread.join();
+    }
+}
+
+Server server;
+
 }  // namespace DiveLayer

@@ -43,12 +43,6 @@ struct InstanceData
 {
     VkInstance            instance;
     InstanceDispatchTable dispatch_table;
-    ServerRunner         &server;
-
-    InstanceData() :
-        server(GetServerRunner())
-    {
-    }
 };
 
 struct DeviceData
@@ -515,6 +509,10 @@ extern "C"
             return (PFN_vkVoidFunction)&DiveInterceptEnumerateInstanceExtensionProperties;
         if (0 == strcmp(func, "vkCreateInstance"))
             return (PFN_vkVoidFunction)&DiveInterceptCreateInstance;
+        if (0 == strcmp(func, "vkDestroyInstance"))
+        {
+            LOGI("vkDestroyInstance");
+        }
         if (inst == VK_NULL_HANDLE)
             return NULL;
 

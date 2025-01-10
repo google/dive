@@ -64,7 +64,8 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_dev_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
     m_app_type_label = new QLabel(tr("Application Type:"));
-    m_gfxr_capture_file_on_device_directory_label = new QLabel(tr("On Device GFXR Capture File Directory Name:"));
+    m_gfxr_capture_file_on_device_directory_label = new QLabel(
+    tr("On Device GFXR Capture File Directory Name:"));
     m_gfxr_capture_file_local_directory_label = new QLabel(tr("Local GFXR Capture Save Location:"));
     m_frame_num_label = new QLabel(tr("Frame number:"));
     m_frame_range_label = new QLabel(tr("Frame range:"));

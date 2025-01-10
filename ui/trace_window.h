@@ -153,7 +153,7 @@ private:
     QLineEdit   *m_args_input_box;
 
     QHBoxLayout *m_gfxr_capture_file_directory_layout;
-    QLabel      *m_gfxr_capture_file_directory_label;
+    QLabel      *m_gfxr_capture_file_on_device_directory_label;
     QLineEdit   *m_gfxr_capture_file_directory_input_box;
 
     QHBoxLayout *m_gfxr_capture_file_local_directory_layout;

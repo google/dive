@@ -15,12 +15,13 @@ git submodule update --init --recursive
  - gRPC [dependencies](https://github.com/grpc/grpc/blob/master/BUILDING.md#pre-requisites)
  - Android NDK (currently we are using 25.2.9519653). Set the `ANDROID_NDK_HOME` environment variable.
   ```
-    export ANDROID_NDK_HOME=~/andriod_sdk/ndk/25.2.9519653
+    export ANDROID_NDK_HOME=~/android_sdk/ndk/25.2.9519653
   ``` 
  - Mako Templates for Python: can be installed with following commandline
   ```
     pip install Mako
   ```
+ - gfxreconstruct [dependencies](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#android-development-requirements), if targetting Android
 
 ### Building Dive host tool on Linux
 ```
@@ -97,7 +98,14 @@ And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run
 scripts\build_android.bat
 ```
 
-It will build both debug and release version of the libraries under `build_android` folder.
+It will build both debug and release version of the libraries under `build_android` folder. It will also build gfxreconstruct binaries under `third_party/gfxreconstruct/android` and copy them to under `build_android`.
+
+Troubleshooting tips:
+- Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
+- Delete build folders for a clean build
+  - `third_party/gfxreconstruct/android/layer/build`
+  - `third_party/gfxreconstruct/android/tools/replay/build`
+  - `build_android`
 
 ### CLI Tool for capture and cleanup
 #### Capture with command line tool for Android applications

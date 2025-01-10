@@ -80,7 +80,7 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
-option(DIVE_ENABLE_PERFETTO, "Enalbe functionality to get perfetto trace." OFF)
+option(DIVE_ENABLE_PERFETTO, "Enable functionality to get perfetto trace." OFF)
 include(perfetto.cmake)
 
 add_subdirectory(capture_service)
@@ -104,30 +104,33 @@ if(NOT ANDROID)
 
     add_subdirectory(third_party/gfxreconstruct)
 else()
+    if(NOT CMAKE_HOST_WIN32)
+        message(CHECK_START "Build gfxr for android")
+        execute_process(
+            COMMAND ./gradlew assembleDebug
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+        )
 
-    execute_process(
-        COMMAND ./gradlew assembleDebug
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
-    )
+        execute_process(
+            COMMAND ./gradlew assembleRelease
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+        )
 
-    execute_process(
-        COMMAND ./gradlew assembleRelease
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
-    )
+        file(ARCHIVE_EXTRACT
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
+        DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/layer"
+        )
 
-    file(ARCHIVE_EXTRACT
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
-    DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/layer"
-    )
+        file(ARCHIVE_EXTRACT
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-release.aar"
+        DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/layer"
+        )
 
-    file(ARCHIVE_EXTRACT
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-release.aar"
-    DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/layer"
-    )
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug)
 
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug)
-
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release)
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release)
+        message(CHECK_PASS "successful")
+    endif()
 endif()
 
 option(DIVE_UNIT_TESTS, "Build unit tests for dive")

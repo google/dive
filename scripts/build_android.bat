@@ -17,15 +17,18 @@
 set PROJECT_ROOT=%~dp0\..
 set BUILD_TYPE=Debug Release
 set SRC_DIR=%PROJECT_ROOT%
+set GFXR_ROOT_DIR=%PROJECT_ROOT%\\third_party\\gfxreconstruct\\android
 set startTime=%time%
 
 (for %%b in (%BUILD_TYPE%) do (
     setlocal enabledelayedexpansion
-    echo %%b
+    echo.
+    echo %%b : Building dive android layer
     set build=%%b
     set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
-    echo "BUILD_DIR: " !BUILD_DIR!
+    echo BUILD_DIR: !BUILD_DIR!
     md !BUILD_DIR!
+
     pushd !BUILD_DIR!
     cmake  -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
         -G "Ninja"^
@@ -45,6 +48,44 @@ set startTime=%time%
     cmake --build . --config=!build! -j
     if "%%b" == "Release" cmake --install .
     popd
+))
+
+pushd !GFXR_ROOT_DIR!
+(for %%b in (%BUILD_TYPE%) do (
+    setlocal enabledelayedexpansion
+    echo.
+    echo %%b : Building gfxr android layer
+    set build=%%b
+    
+    echo GFXR_ROOT_DIR: !GFXR_ROOT_DIR!
+    call gradlew assemble!build!
+))
+popd
+
+
+(for %%b in (%BUILD_TYPE%) do (
+    setlocal enabledelayedexpansion
+    if "%%b" == "Release" set build_lowercase=release
+    if "%%b" == "Debug" set build_lowercase=debug
+    echo.
+    echo %%b : Moving gfxr files
+    set build=%%b
+    set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
+
+    set GFXR_BUILD_DIR=!BUILD_DIR!\\third_party\\gfxreconstruct\\android
+    if not exist !GFXR_BUILD_DIR! md !GFXR_BUILD_DIR!
+
+    echo Extracting gfxr android layer into build_android
+    set GFXR_LAYER_SRC=!GFXR_ROOT_DIR!\\layer\\build\\outputs\\aar\\layer-!build_lowercase!.aar
+    set GFXR_LAYER_DST=!GFXR_BUILD_DIR!\\layer
+    if not exist !GFXR_LAYER_DST! md !GFXR_LAYER_DST!
+    tar -xf !GFXR_LAYER_SRC! -C !GFXR_LAYER_DST!
+
+    echo Copying gfxr android replay into build_android
+    set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
+    set GFXR_REPLAY_DST=!GFXR_BUILD_DIR!\\tools\\replay
+    if not exist !GFXR_REPLAY_DST! md !GFXR_REPLAY_DST!
+    copy !GFXR_REPLAY_SRC! !GFXR_REPLAY_DST!
 ))
 
 echo Start Time: %startTime%

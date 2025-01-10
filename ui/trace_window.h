@@ -179,5 +179,5 @@ private:
     std::string                   m_cur_pkg;
     std::string                   m_executable;
     std::string                   m_command_args;
-    bool                          m_gfxr_capture;
+    bool                          m_gfxr_capture = false;
 };

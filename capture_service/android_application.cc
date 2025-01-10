@@ -182,6 +182,8 @@ VulkanApplication::~VulkanApplication()
 absl::Status VulkanApplication::Setup()
 {
     LOGD("Setup Vulkan application: %s\n", m_package.c_str());
+    RETURN_IF_ERROR(HasInternetPermission());
+    RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     Stop().IgnoreError();
@@ -294,9 +296,36 @@ absl::Status AndroidApplication::GfxrSetup()
     return absl::OkStatus();
 }
 
+absl::Status AndroidApplication::HasInternetPermission()
+{
+    const std::string cmd = absl::
+    StrFormat("shell dumpsys package %s | grep 'android.permission.INTERNET: granted=true'",
+              m_package);
+    auto res = m_dev.Adb().RunAndGetResult(cmd);
+    if (!res.ok())
+    {
+        return res.status();
+    }
+    if ((*res).empty())
+    {
+        return absl::Status(absl::StatusCode::kUnknown,
+                            "The android.permission.INTERNET permission wasn't granted. Add it to "
+                            "your AndroidManifest.xml file");
+    }
+    return absl::OkStatus();
+}
+
+absl::Status AndroidApplication::GrantAllFilesAccess()
+{
+    return m_dev.Adb().Run(
+    absl::StrFormat("shell appops set --uid %s MANAGE_EXTERNAL_STORAGE allow", m_package));
+}
+
 absl::Status OpenXRApplication::Setup()
 {
     LOGD("OpenXRApplication %s Setup\n", m_package.c_str());
+    RETURN_IF_ERROR(HasInternetPermission());
+    RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
@@ -357,6 +386,8 @@ VulkanCliApplication::~VulkanCliApplication()
 // the global path.
 absl::Status VulkanCliApplication::Setup()
 {
+    RETURN_IF_ERROR(HasInternetPermission());
+    RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));

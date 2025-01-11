@@ -17,9 +17,13 @@
 #include "trace_window.h"
 
 #include <qboxlayout.h>
+#include <qspinbox.h>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
+#include <QCoreApplication>
 #include <QDebug>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -42,6 +46,7 @@
 #include "absl/strings/str_split.h"
 #include "capture_service/android_application.h"
 #include "capture_service/client.h"
+#include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
 
 namespace
@@ -59,6 +64,11 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_dev_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
     m_app_type_label = new QLabel(tr("Application Type:"));
+    m_gfxr_capture_file_on_device_directory_label = new QLabel(
+    tr("On Device GFXR Capture File Directory Name:"));
+    m_gfxr_capture_file_local_directory_label = new QLabel(tr("Local GFXR Capture Save Location:"));
+    m_frame_num_label = new QLabel(tr("Frame number:"));
+    m_frame_range_label = new QLabel(tr("Frame range:"));
 
     m_dev_model = new QStandardItemModel();
     m_pkg_model = new QStandardItemModel();
@@ -68,11 +78,36 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_pkg_box = new QComboBox();
     m_app_type_box = new QComboBox();
 
+    m_frame_num_spin_box = new QSpinBox();
+    m_frame_num_spin_box->setMinimum(1);
+    m_frame_num_spin_box->setMaximum(std::numeric_limits<int>::max());
+    m_frame_num_spin_box->setValue(1);
+
+    m_frame_range_min_spin_box = new QSpinBox();
+    m_frame_range_min_spin_box->setMinimum(1);
+    m_frame_range_min_spin_box->setMaximum(std::numeric_limits<int>::max());
+    m_frame_range_min_spin_box->setValue(1);
+
+    m_frame_range_max_spin_box = new QSpinBox();
+    m_frame_range_max_spin_box->setMinimum(2);
+    m_frame_range_max_spin_box->setMaximum(std::numeric_limits<int>::max());
+    m_frame_range_max_spin_box->setValue(2);
+
+    m_single_frame_checkbox = new QCheckBox("Capture Single Frame");
+    m_frame_range_checkbox = new QCheckBox("Capture Frame Range");
+    m_run_time_checkbox = new QCheckBox("Capture During Runtime");
+
     m_button_layout = new QHBoxLayout();
-    m_run_button = new QPushButton("&Start Application", this);
+    m_run_button = new QPushButton(kStart_Application, this);
     m_run_button->setEnabled(false);
     m_capture_button = new QPushButton("&Trace", this);
     m_capture_button->setEnabled(false);
+    m_gfxr_capture_button = new QPushButton(kStart_Gfxr_Runtime_Capture, this);
+    m_gfxr_capture_button->setEnabled(false);
+    m_gfxr_capture_button->hide();
+    m_gfxr_retrieve_button = new QPushButton(kRetrieve_Gfxr_Capture, this);
+    m_gfxr_retrieve_button->setEnabled(false);
+    m_gfxr_retrieve_button->hide();
 
     m_dev_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_refresh_button = new QPushButton("&Refresh", this);
@@ -148,14 +183,63 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_type_layout->addWidget(m_app_type_label);
     m_type_layout->addWidget(m_app_type_box);
 
+    m_gfxr_capture_file_directory_layout = new QHBoxLayout();
+    m_gfxr_capture_file_directory_input_box = new QLineEdit();
+    m_gfxr_capture_file_directory_input_box->setPlaceholderText(
+    "Input a name for the capture directory");
+    m_gfxr_capture_file_directory_layout->addWidget(m_gfxr_capture_file_on_device_directory_label);
+    m_gfxr_capture_file_directory_layout->addWidget(m_gfxr_capture_file_directory_input_box);
+    m_gfxr_capture_file_on_device_directory_label->hide();
+    m_gfxr_capture_file_directory_input_box->hide();
+
+    m_gfxr_capture_file_local_directory_layout = new QHBoxLayout();
+    m_gfxr_capture_file_local_directory_input_box = new QLineEdit();
+    m_gfxr_capture_file_local_directory_input_box->setPlaceholderText(
+    "Input the location to save the directory to");
+    m_gfxr_capture_file_local_directory_layout->addWidget(
+    m_gfxr_capture_file_local_directory_label);
+    m_gfxr_capture_file_local_directory_layout->addWidget(
+    m_gfxr_capture_file_local_directory_input_box);
+    m_gfxr_capture_file_local_directory_label->hide();
+    m_gfxr_capture_file_local_directory_input_box->hide();
+
+    m_frame_type_layout = new QHBoxLayout();
+    m_frame_type_layout->addWidget(m_single_frame_checkbox);
+    m_single_frame_checkbox->setCheckState(Qt::Unchecked);
+    m_single_frame_checkbox->hide();
+    m_frame_type_layout->addWidget(m_frame_range_checkbox);
+    m_frame_range_checkbox->setCheckState(Qt::Unchecked);
+    m_frame_range_checkbox->hide();
+    m_frame_type_layout->addWidget(m_run_time_checkbox);
+    m_run_time_checkbox->setCheckState(Qt::Checked);
+    m_run_time_checkbox->hide();
+
+    m_frames_layout = new QHBoxLayout();
+    m_frames_layout->addWidget(m_frame_num_label);
+    m_frames_layout->addWidget(m_frame_num_spin_box);
+    m_frame_num_label->hide();
+    m_frame_num_spin_box->hide();
+    m_frames_layout->addWidget(m_frame_range_label);
+    m_frames_layout->addWidget(m_frame_range_min_spin_box);
+    m_frames_layout->addWidget(m_frame_range_max_spin_box);
+    m_frame_range_label->hide();
+    m_frame_range_min_spin_box->hide();
+    m_frame_range_max_spin_box->hide();
+
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
+    m_button_layout->addWidget(m_gfxr_capture_button);
+    m_button_layout->addWidget(m_gfxr_retrieve_button);
 
     m_main_layout->addLayout(m_capture_layout);
     m_main_layout->addLayout(m_cmd_layout);
     m_main_layout->addLayout(m_pkg_filter_layout);
     m_main_layout->addLayout(m_pkg_layout);
+    m_main_layout->addLayout(m_gfxr_capture_file_directory_layout);
+    m_main_layout->addLayout(m_gfxr_capture_file_local_directory_layout);
     m_main_layout->addLayout(m_args_layout);
+    m_main_layout->addLayout(m_frame_type_layout);
+    m_main_layout->addLayout(m_frames_layout);
 
     m_main_layout->addLayout(m_type_layout);
 
@@ -176,6 +260,14 @@ TraceDialog::TraceDialog(QWidget *parent)
                      &QSortFilterProxyModel::setFilterFixedString);
     QObject::connect(m_run_button, &QPushButton::clicked, this, &TraceDialog::OnStartClicked);
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
+    QObject::connect(m_gfxr_capture_button,
+                     &QPushButton::clicked,
+                     this,
+                     &TraceDialog::OnGfxrCaptureClicked);
+    QObject::connect(m_gfxr_retrieve_button,
+                     &QPushButton::clicked,
+                     this,
+                     &TraceDialog::OnGfxrRetrieveClicked);
 
     QObject::connect(m_dev_refresh_button,
                      &QPushButton::clicked,
@@ -195,6 +287,18 @@ TraceDialog::TraceDialog(QWidget *parent)
                      &PackageFilter::filtersApplied,
                      this,
                      &TraceDialog::OnPackageListFilterApplied);
+    QObject::connect(m_single_frame_checkbox,
+                     &QCheckBox::stateChanged,
+                     this,
+                     &TraceDialog::OnGfxrCaptureFrameTypeSelection);
+    QObject::connect(m_frame_range_checkbox,
+                     &QCheckBox::stateChanged,
+                     this,
+                     &TraceDialog::OnGfxrCaptureFrameTypeSelection);
+    QObject::connect(m_run_time_checkbox,
+                     &QCheckBox::stateChanged,
+                     this,
+                     &TraceDialog::OnGfxrCaptureFrameTypeSelection);
 }
 
 TraceDialog::~TraceDialog()
@@ -333,15 +437,57 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     absl::Status ret;
     qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
              << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
+
+    std::string gfxr_capture_frames = "";
+    std::string device_architecture = "";
+    if (m_gfxr_capture)
+    {
+        auto retrieve_device_architecture = device->Adb()
+                                            .RunAndGetResult("shell getprop ro.product.cpu.abi",
+                                                             true);
+        device_architecture = retrieve_device_architecture.value_or("");
+
+        if (m_single_frame_checkbox->isChecked())
+        {
+            gfxr_capture_frames = std::to_string(m_frame_num_spin_box->value());
+            m_run_button->setText(kStart_Application);
+        }
+        else if (m_frame_range_checkbox->isChecked())
+        {
+            gfxr_capture_frames = std::to_string(m_frame_range_min_spin_box->value()) + "-" +
+                                  std::to_string(m_frame_range_max_spin_box->value());
+            m_run_button->setText(kStart_Application);
+        }
+        else
+        {
+            gfxr_capture_frames = Dive::kGfxrRuntimeCapture;
+            m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
+            m_gfxr_capture_button->setEnabled(true);
+        }
+
+        if (m_gfxr_capture_file_directory_input_box->text() == "")
+        {
+            m_gfxr_capture_file_directory_input_box->setText("gfxr_capture");
+        }
+    }
+
     if (app_type == "OpenXR APK")
     {
-        ret = device
-              ->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK, m_command_args, "", "", "");
+        ret = device->SetupApp(m_cur_pkg,
+                               Dive::ApplicationType::OPENXR_APK,
+                               m_command_args,
+                               device_architecture,
+                               m_gfxr_capture_file_directory_input_box->text().toStdString(),
+                               gfxr_capture_frames);
     }
     else if (app_type == "Vulkan APK")
     {
-        ret = device
-              ->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK, m_command_args, "", "", "");
+        ret = device->SetupApp(m_cur_pkg,
+                               Dive::ApplicationType::VULKAN_APK,
+                               m_command_args,
+                               device_architecture,
+                               m_gfxr_capture_file_directory_input_box->text().toStdString(),
+                               gfxr_capture_frames);
     }
     else if (app_type == "Command Line Application")
     {
@@ -392,8 +538,19 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     if (cur_app)
     {
         m_run_button->setDisabled(false);
-        m_run_button->setText("&Stop");
-        m_capture_button->setEnabled(true);
+        if (m_gfxr_capture)
+        {
+            if (gfxr_capture_frames == Dive::kGfxrRuntimeCapture)
+            {
+                m_run_button->setText("&Stop Application");
+                m_gfxr_capture_button->setEnabled(true);
+            }
+        }
+        else
+        {
+            m_run_button->setText("&Stop");
+            m_capture_button->setEnabled(true);
+        }
     }
     return true;
 }
@@ -410,6 +567,7 @@ void TraceDialog::OnStartClicked()
         ShowErrorMessage(err_msg);
         return;
     }
+    device->EnableGfxr(m_gfxr_capture);
     absl::Status ret = device->SetupDevice();
     if (!ret.ok())
     {
@@ -426,20 +584,54 @@ void TraceDialog::OnStartClicked()
     }
     std::string ty_str = kAppTypes[ty];
 
-    if (m_run_button->text() == QString("&Start Application"))
+    if (m_run_button->text() == QString(kStart_Application))
     {
+        if (m_gfxr_capture)
+        {
+            if (m_single_frame_checkbox->isChecked() || m_frame_range_checkbox->isChecked())
+            {
+                m_gfxr_retrieve_button->setEnabled(true);
+            }
+
+            std::string
+            err_msg = "Do not stop the application for single frame or frame range captures. The "
+                      "application will quit once the capture is complete. Premature termination "
+                      "may affect the resulting capture file.";
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+        }
+
         if (!StartPackage(device, ty_str))
         {
             m_run_button->setDisabled(false);
-            m_run_button->setText("&Start Application");
+            m_run_button->setText(kStart_Application);
         }
     }
     else
     {
         qDebug() << "Stop package " << m_cur_pkg.c_str();
+
+        if (m_gfxr_capture)
+        {
+            if (m_gfxr_capture_button->text() == kStop_Gfxr_Runtime_Capture &&
+                m_gfxr_capture_button->isEnabled())
+            {
+                std::string err_msg = "Failed to stop application. Gfxr capture in process. Please "
+                                      "stop the capture before stopping the application.";
+                qDebug() << err_msg.c_str();
+                ShowErrorMessage(err_msg);
+                return;
+            }
+
+            m_gfxr_capture_button->setEnabled(false);
+        }
+        else
+        {
+            m_capture_button->setEnabled(false);
+        }
+
         device->StopApp().IgnoreError();
-        m_run_button->setText("&Start Application");
-        m_capture_button->setEnabled(false);
+        m_run_button->setText(kStart_Application);
     }
 }
 
@@ -679,4 +871,169 @@ void TraceDialog::OnPackageListFilterApplied(QSet<QString> filters)
     UpdatePackageList();
     m_pkg_filter_label->hide();
     m_pkg_filter->hide();
+}
+
+void TraceDialog::OnGfxrCaptureFrameTypeSelection(int state)
+{
+    QCheckBox *senderCheckbox = qobject_cast<QCheckBox *>(sender());
+    if (state == Qt::Checked)
+    {
+        if (senderCheckbox == m_single_frame_checkbox)
+        {
+            m_frame_range_checkbox->setCheckState(Qt::Unchecked);
+            m_run_time_checkbox->setCheckState(Qt::Unchecked);
+            m_frame_num_label->show();
+            m_frame_num_spin_box->show();
+            m_frame_range_label->hide();
+            m_frame_range_min_spin_box->hide();
+            m_frame_range_max_spin_box->hide();
+        }
+        else if (senderCheckbox == m_frame_range_checkbox)
+        {
+            m_single_frame_checkbox->setCheckState(Qt::Unchecked);
+            m_run_time_checkbox->setCheckState(Qt::Unchecked);
+            m_frame_range_label->show();
+            m_frame_range_min_spin_box->show();
+            m_frame_range_max_spin_box->show();
+            m_frame_num_label->hide();
+            m_frame_num_spin_box->hide();
+        }
+        else
+        {
+            m_single_frame_checkbox->setCheckState(Qt::Unchecked);
+            m_frame_range_checkbox->setCheckState(Qt::Unchecked);
+            m_frame_range_label->hide();
+            m_frame_range_min_spin_box->hide();
+            m_frame_range_max_spin_box->hide();
+            m_frame_num_label->hide();
+            m_frame_num_spin_box->hide();
+        }
+    }
+    else
+    {
+        if (!m_single_frame_checkbox->isChecked() && !m_frame_range_checkbox->isChecked() &&
+            !m_run_time_checkbox->isChecked())
+        {
+            senderCheckbox->setChecked(true);
+        }
+    }
+}
+
+void TraceDialog::ShowGfxrFields()
+{
+    m_single_frame_checkbox->show();
+    m_frame_range_checkbox->show();
+    m_run_time_checkbox->show();
+    m_args_label->hide();
+    m_args_input_box->hide();
+    m_capture_button->hide();
+    m_gfxr_capture_button->show();
+    m_gfxr_retrieve_button->show();
+    m_gfxr_capture_file_on_device_directory_label->show();
+    m_gfxr_capture_file_directory_input_box->show();
+    m_gfxr_capture_file_local_directory_label->show();
+    m_gfxr_capture_file_local_directory_input_box->show();
+}
+
+void TraceDialog::HideGfxrFields()
+{
+    m_args_label->show();
+    m_args_input_box->show();
+    m_capture_button->show();
+    m_gfxr_capture_button->hide();
+    m_gfxr_retrieve_button->hide();
+    m_gfxr_capture_file_on_device_directory_label->hide();
+    m_gfxr_capture_file_directory_input_box->hide();
+    m_gfxr_capture_file_local_directory_label->hide();
+    m_gfxr_capture_file_local_directory_input_box->hide();
+    m_single_frame_checkbox->hide();
+    m_frame_range_checkbox->hide();
+    m_run_time_checkbox->hide();
+    m_frame_num_label->hide();
+    m_frame_num_spin_box->hide();
+    m_frame_range_label->hide();
+    m_frame_range_min_spin_box->hide();
+    m_frame_range_max_spin_box->hide();
+}
+
+void TraceDialog::UseGfxrCapture(bool enable)
+{
+    if (enable)
+    {
+        ShowGfxrFields();
+    }
+    else
+    {
+        HideGfxrFields();
+    }
+
+    m_gfxr_capture = enable;
+}
+
+void TraceDialog::RetrieveGfxrCapture(Dive::AndroidDevice *device)
+{
+    std::string message = "Retrieving GFXR capture from device and saving locally...";
+    qDebug() << message.c_str();
+    ShowErrorMessage(message);
+
+    if (m_gfxr_capture_file_local_directory_input_box->text() == "")
+    {
+        m_gfxr_capture_file_local_directory_input_box->setText(".");
+    }
+
+    std::string capture_directory = Dive::kGfxrCaptureDirectory +
+                                    m_gfxr_capture_file_directory_input_box->text().toStdString();
+    auto r = device
+             ->RetrieveTrace(capture_directory,
+                             m_gfxr_capture_file_local_directory_input_box->text().toStdString());
+
+    message = "GFXR capture retrieved from device and saved locally!";
+    qDebug() << message.c_str();
+    ShowErrorMessage(message);
+}
+
+void TraceDialog::OnGfxrCaptureClicked()
+{
+    auto         device = Dive::GetDeviceManager().GetDevice();
+    absl::Status ret;
+    if (m_gfxr_capture_button->text() == kStop_Gfxr_Runtime_Capture)
+    {
+        ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false");
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to stop runtime gfxr capture ",
+                                               m_cur_pkg,
+                                               " error: ",
+                                               ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return;
+        }
+
+        m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
+        m_gfxr_retrieve_button->setEnabled(true);
+    }
+    else if (m_gfxr_capture_button->text() == kStart_Gfxr_Runtime_Capture)
+    {
+        ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger true");
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to start runtime gfxr capture ",
+                                               m_cur_pkg,
+                                               " error: ",
+                                               ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return;
+        }
+        m_gfxr_capture_button->setText(kStop_Gfxr_Runtime_Capture);
+    }
+}
+
+void TraceDialog::OnGfxrRetrieveClicked()
+{
+    auto device = Dive::GetDeviceManager().GetDevice();
+    RetrieveGfxrCapture(device);
+    m_gfxr_retrieve_button->setEnabled(false);
+    m_gfxr_capture_button->setEnabled(false);
 }

@@ -34,7 +34,7 @@ if [ $# -ne 0 ]; then
 fi
 echo "Building all the following types: $BUILD_TYPE"
 
-for build in "${BUILD_TYPE[@]}"
+for build in "${BUILD_TYPE}"
 do
     BUILD_DIR=${BUILD_DIR_ROOT}/${build}
     mkdir -p ${BUILD_DIR}

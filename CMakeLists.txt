@@ -112,7 +112,7 @@ else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")
         execute_process(
-            COMMAND ./gradlew assemble${CMAKE_BUILD_TYPE}
+            COMMAND ./gradlew assemble${CMAKE_BUILD_TYPE} --console=verbose
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
             COMMAND_ERROR_IS_FATAL ANY
         )

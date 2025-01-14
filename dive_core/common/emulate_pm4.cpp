@@ -1186,7 +1186,7 @@ bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &call
     emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack - 1);
 
     IndirectBufferInfo ib_info;
-    ib_info.m_va_addr = cur_ib_level->m_cur_va;
+    ib_info.m_va_addr = cur_ib_level->m_cur_ib_addr;
     ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
     ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
     ib_info.m_skip = cur_ib_level->m_cur_ib_skip;

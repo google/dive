@@ -26,6 +26,11 @@ if(MSVC)
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_BUILD_TYPE_LOWERCASE "release")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
+endif()
 
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
@@ -107,28 +112,23 @@ else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")
         execute_process(
-            COMMAND ./gradlew assembleDebug
+            COMMAND ./gradlew assemble${CMAKE_BUILD_TYPE} --console=verbose
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+            COMMAND_ERROR_IS_FATAL ANY
         )
+        message(CHECK_PASS "successful")
 
-        execute_process(
-            COMMAND ./gradlew assembleRelease
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+        message(CHECK_START "Move gfxr files")
+        file(
+            ARCHIVE_EXTRACT
+            INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
+            DESTINATION "${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/layer"
         )
-
-        file(ARCHIVE_EXTRACT
-        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
-        DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/layer"
+        file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay)
+        file(
+            COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/. 
+            DESTINATION ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay
         )
-
-        file(ARCHIVE_EXTRACT
-        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-release.aar"
-        DESTINATION "${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/layer"
-        )
-
-        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Debug/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug)
-
-        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release DESTINATION ${CMAKE_SOURCE_DIR}/build_android/Release/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/release)
         message(CHECK_PASS "successful")
     endif()
 endif()

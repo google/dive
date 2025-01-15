@@ -13,14 +13,26 @@
 :: limitations under the License.
 
 @echo off
-
+setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
 set BUILD_TYPE=Debug Release
 set SRC_DIR=%PROJECT_ROOT%
 set GFXR_ROOT_DIR=%PROJECT_ROOT%\\third_party\\gfxreconstruct\\android
 set startTime=%time%
 
-(for %%b in (%BUILD_TYPE%) do (
+if "%~1"=="" goto parsingdone
+if "%1"=="Debug" set BUILD_TYPE=%1
+if "%1"=="Release" set BUILD_TYPE=%1
+if not !BUILD_TYPE!==%1 (
+    echo Invalid parameter passed for BUILD_TYPE: %1
+    echo Valid options: 'Debug', 'Release'
+    echo To build all types, do not pass a parameter.
+    exit /b 1
+)
+:parsingdone
+echo Building all the following types: !BUILD_TYPE!
+
+(for %%b in (!BUILD_TYPE!) do (
     setlocal enabledelayedexpansion
     echo.
     echo %%b : Building dive android layer
@@ -51,19 +63,18 @@ set startTime=%time%
 ))
 
 pushd !GFXR_ROOT_DIR!
-(for %%b in (%BUILD_TYPE%) do (
+(for %%b in (!BUILD_TYPE!) do (
     setlocal enabledelayedexpansion
     echo.
     echo %%b : Building gfxr android layer
     set build=%%b
     
     echo GFXR_ROOT_DIR: !GFXR_ROOT_DIR!
-    call gradlew assemble!build!
+    call gradlew assemble!build! --console=verbose
 ))
 popd
 
-
-(for %%b in (%BUILD_TYPE%) do (
+(for %%b in (!BUILD_TYPE!) do (
     setlocal enabledelayedexpansion
     if "%%b" == "Release" set build_lowercase=release
     if "%%b" == "Debug" set build_lowercase=debug
@@ -78,14 +89,20 @@ popd
     echo Extracting gfxr android layer into build_android
     set GFXR_LAYER_SRC=!GFXR_ROOT_DIR!\\layer\\build\\outputs\\aar\\layer-!build_lowercase!.aar
     set GFXR_LAYER_DST=!GFXR_BUILD_DIR!\\layer
-    if not exist !GFXR_LAYER_DST! md !GFXR_LAYER_DST!
+    if exist !GFXR_LAYER_DST! rm -rf !GFXR_LAYER_DST!
+    if not !ERRORLEVEL!==0 exit /b 1
+    md !GFXR_LAYER_DST!
+    if not !ERRORLEVEL!==0 exit /b 1
     tar -xf !GFXR_LAYER_SRC! -C !GFXR_LAYER_DST!
+    if not !ERRORLEVEL!==0 exit /b 1
 
     echo Copying gfxr android replay into build_android
     set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
     set GFXR_REPLAY_DST=!GFXR_BUILD_DIR!\\tools\\replay
-    if not exist !GFXR_REPLAY_DST! md !GFXR_REPLAY_DST!
-    copy !GFXR_REPLAY_SRC! !GFXR_REPLAY_DST!
+    if exist !GFXR_REPLAY_DST! rm -rf !GFXR_REPLAY_DST!
+    if not !ERRORLEVEL!==0 exit /b 1
+    xcopy /i !GFXR_REPLAY_SRC! !GFXR_REPLAY_DST!
+    if not !ERRORLEVEL!==0 exit /b 1
 ))
 
 echo Start Time: %startTime%

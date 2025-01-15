@@ -19,9 +19,22 @@ PROJECT_ROOT="${PROJECT_ROOT%/*}/.."
 readonly PROJECT_ROOT="$(readlink -f ${PROJECT_ROOT})"
 readonly BUILD_DIR_ROOT=${PROJECT_ROOT}/build_android
 readonly SRC_DIR=${PROJECT_ROOT}
-readonly BUILD_TYPE=(Debug Release)
+BUILD_TYPE=(Debug Release)
+readonly START_TIME=`date +%r`
 
-for build in "${BUILD_TYPE[@]}"
+if [ $# -ne 0 ]; then
+    if [ "$1" = "Debug" ] || [ "$1" = "Release" ]; then
+        BUILD_TYPE=$1
+    else
+        echo "Invalid parameter passed for BUILD_TYPE: $1"
+        echo "Valid options: 'Debug', 'Release'"
+        echo "To build all types, do not pass a parameter."
+        exit 1
+    fi
+fi
+echo "Building all the following types: $BUILD_TYPE"
+
+for build in "${BUILD_TYPE}"
 do
     BUILD_DIR=${BUILD_DIR_ROOT}/${build}
     mkdir -p ${BUILD_DIR}
@@ -51,3 +64,6 @@ do
     fi
     popd
 done
+
+echo "Start Time:" ${START_TIME}
+echo "Finish Time:" `date +%r`

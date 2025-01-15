@@ -90,15 +90,17 @@ Run the script
 
 On Linux, run: 
 ```
-./scripts/build_android.sh
+./scripts/build_android.sh Debug
 ```
 And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run 
 
 ```
-scripts\build_android.bat
+scripts\build_android.bat Debug
 ```
 
-It will build both debug and release version of the libraries under `build_android` folder. It will also build gfxreconstruct binaries under `third_party/gfxreconstruct/android` and copy them to under `build_android`.
+It will build the debug version of the libraries under `build_android` folder. To build release version, replace parameter with `Release`. To build both versions, do not pass a parameter.
+
+It will also trigger gradle to rebuild gfxreconstruct binaries under `third_party/gfxreconstruct/android/...` and copy them to under `build_android`.
 
 Troubleshooting tips:
 - Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
@@ -106,6 +108,7 @@ Troubleshooting tips:
   - `third_party/gfxreconstruct/android/layer/build`
   - `third_party/gfxreconstruct/android/tools/replay/build`
   - `build_android`
+- If incremental builds are slow, try building only one version (Debug or Release) and not both
 
 ### CLI Tool for capture and cleanup
 #### Capture with command line tool for Android applications

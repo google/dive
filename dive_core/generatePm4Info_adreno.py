@@ -158,9 +158,11 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
 #include <unordered_map>
 #include <vector>
 #include "dive_core/common/common.h"
+#include "dive_core/stl_replacement.h"
 
 static std::unordered_map<uint32_t, const char*> g_sOpCodeToString;
-static std::unordered_map<uint32_t, RegInfo> g_sRegInfo;
+static std::unordered_map<uint32_t, RegInfo> g_sRegInfoVariant;
+static DiveVector<RegInfo> g_sRegInfo;
 static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
 static std::vector<std::unordered_map<uint32_t, const char*>> g_sEnumReflection;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
@@ -354,11 +356,11 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_ind
         for i in range(6): 
             cur_variant_bitfield = (1<<i)
             if cur_variant_bitfield & variants_bitfield:
-                pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+                pm4_info_file.write("    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
                 AppendBitfield(pm4_info_file, enum_index_dict, attributes)
                 pm4_info_file.write("} };\n")
     else:
-        pm4_info_file.write("    g_sRegInfo[(0x%x << kGPUVariantsBits)] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+        pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
         AppendBitfield(pm4_info_file, enum_index_dict, attributes)
         pm4_info_file.write("} };\n")  
     
@@ -390,6 +392,14 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
     if is_reg_32 or is_reg_64:
       regs.append(element)
+
+  # Determine highest register offset
+  max_offset = 0
+  for reg in regs:
+    offset = int(reg.attrib['offset'],0)
+    if offset > max_offset:
+      max_offset = offset
+  pm4_info_file.write("    g_sRegInfo.resize(0x%x);\n" % (max_offset+1))
 
   # Parse through registers
   for reg in regs:
@@ -801,31 +811,39 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
   # Append _A?XX to the name if there is any variant
   # This is to handle the cases where the regsiters have the same name
   # but different offset for different variants, like PC_POLYGON_MODE
-  pm4_info_file.write("\tfor (auto &reg : g_sRegInfo)\n")
-  pm4_info_file.write("\t{\n")
-  pm4_info_file.write("\t\tconst std::string& name = reg.second.m_name;\n")
-  pm4_info_file.write("\t\tconst uint32_t shift_bits = 32 - kGPUVariantsBits;\n")
-  pm4_info_file.write("\t\tuint32_t gpu_variants = reg.first << shift_bits >> shift_bits;\n")
-  pm4_info_file.write("\t\tuint32_t reg_offset = reg.first >> kGPUVariantsBits;\n")
-  pm4_info_file.write("\t\tif (gpu_variants != 0)\n")
-  pm4_info_file.write("\t\t{\n")
-  pm4_info_file.write("\t\t\tuint32_t bit_offset = 0;\n")
-  pm4_info_file.write("\t\t\twhile(gpu_variants != 0)\n")
-  pm4_info_file.write("\t\t\t{ \n")
-  pm4_info_file.write("\t\t\t\tif ((gpu_variants & 0x1) != 0)\n")
-  pm4_info_file.write("\t\t\t\t{\n")
-  pm4_info_file.write("\t\t\t\t\tconst std::string name_with_variant = name + \"_\" + GetGPUStr(static_cast<GPUVariantType>(1 << (bit_offset)));\n")
-  pm4_info_file.write("\t\t\t\t\tg_sRegNameToIndex[name_with_variant] = reg_offset;\n")
-  pm4_info_file.write("\t\t\t\t}\n")
-  pm4_info_file.write("\t\t\t\tgpu_variants = gpu_variants>>1;\n")
-  pm4_info_file.write("\t\t\t\t++bit_offset;\n")
-  pm4_info_file.write("\t\t\t}\n")
-  pm4_info_file.write("\t\t}\n")
-  pm4_info_file.write("\t\telse\n")
-  pm4_info_file.write("\t\t{\n")
-  pm4_info_file.write("\t\t\tg_sRegNameToIndex[name] = reg_offset;\n")
-  pm4_info_file.write("\t\t}\n")
-  pm4_info_file.write("\t}\n")
+  pm4_info_file.writelines("""
+  for (uint64_t i = 0; i < g_sRegInfo.size(); ++i)
+  {
+    if (g_sRegInfo[i].m_name != nullptr)
+    {
+      g_sRegNameToIndex[g_sRegInfo[i].m_name] = (uint32_t)i;
+    }
+  }
+	for (auto &reg : g_sRegInfoVariant)
+	{
+		const std::string& name = reg.second.m_name;
+		const uint32_t shift_bits = 32 - kGPUVariantsBits;
+		uint32_t gpu_variants = reg.first << shift_bits >> shift_bits;
+		uint32_t reg_offset = reg.first >> kGPUVariantsBits;
+		if (gpu_variants != 0)
+		{
+			uint32_t bit_offset = 0;
+			while(gpu_variants != 0)
+			{
+				if ((gpu_variants & 0x1) != 0)
+				{
+					const std::string name_with_variant = name + "_" + GetGPUStr(static_cast<GPUVariantType>(1 << (bit_offset)));
+					g_sRegNameToIndex[name_with_variant] = reg_offset;
+				}
+				gpu_variants = gpu_variants>>1;
+				++bit_offset;
+			}
+		}
+		else
+		{
+			g_sRegNameToIndex[name] = reg_offset;
+		}
+	}\n""")
 
 # ---------------------------------------------------------------------------------------
 
@@ -841,19 +859,18 @@ const char *GetOpCodeString(uint32_t op_code)
 const RegInfo *GetRegInfo(uint32_t reg)
 {
     // check without variant as key
-    uint32_t key = reg << kGPUVariantsBits;
-    auto it = g_sRegInfo.find(key);
-    if (it == g_sRegInfo.end())
+    if (g_sRegInfo[reg].m_name == nullptr)
     {
         // check with variant as key
-        key |= g_sGPU_variant;
-        it = g_sRegInfo.find(key);
-        if (it == g_sRegInfo.end())
+        uint32_t key = (reg << kGPUVariantsBits) | g_sGPU_variant;
+        auto it = g_sRegInfoVariant.find(key);
+        if (it == g_sRegInfoVariant.end())
         {
             return nullptr;
         }
+        return &it->second;
     }
-    return &it->second;
+    return &g_sRegInfo[reg];
 }
 
 const RegInfo *GetRegByName(const char *name)

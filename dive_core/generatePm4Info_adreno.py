@@ -165,7 +165,8 @@ static std::unordered_map<uint32_t, RegInfo> g_sRegInfoVariant;
 static DiveVector<RegInfo> g_sRegInfo;
 static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
 static std::vector<std::unordered_map<uint32_t, const char*>> g_sEnumReflection;
-static std::multimap<uint32_t, PacketInfo> g_sPacketInfo;
+static DiveVector<PacketInfo> g_sPacketInfo;
+static std::multimap<uint32_t, PacketInfo> g_sPacketInfoMultiple;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
 static uint32_t g_sGPU_id = 0;
 
@@ -687,6 +688,29 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
   # Find all CP packet types so we can find out which domains are relevant
   pm4_type_packets = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="adreno_pm4_type3_packets"]')
 
+  # Get highest opcode value to properly resize() the vector
+  highest_opcode = 0
+  for domain in domains:
+    domain_name = domain.attrib['name']
+
+    # Check if it is a domain describing a PM4 packet
+    pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
+    if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
+      continue
+
+    opcode = 0
+    if pm4_type_packet is not None:
+      opcode = int(pm4_type_packet.attrib['value'],0)
+      if opcode_dict[opcode] != domain_name:
+        continue
+
+    if highest_opcode < opcode:
+      highest_opcode = opcode
+
+  pm4_info_file.write("    g_sPacketInfo.resize(0x%x);\n" % (highest_opcode+1))
+
+  ############################################################################
+  packet_type_instances = {}
   for domain in domains:
     domain_name = domain.attrib['name']
 
@@ -698,7 +722,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     # Make sure the opcode_dict is referring to the same packet name
     # This can differ if this PM4 definition is for an older GPU
     # These opcodes are repurposed across different generations
-    opcode = 0xffffffff
+    opcode = 0
     if pm4_type_packet is not None:
       opcode = int(pm4_type_packet.attrib['value'],0)
       if opcode_dict[opcode] != domain_name:
@@ -788,10 +812,18 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       # Sort based on offset
       reg_list = sorted(reg_list, key=lambda x: int(x.attrib['offset'],0))
 
-      pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
-      pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
-      outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
-      pm4_info_file.write(" } }));\n")
+      # Keep track of instance #. Only the 1st instance belongs in the vector. The rest are in the multimap.
+      if opcode not in packet_type_instances:
+        packet_type_instances[opcode] = 1
+        pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
+        outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
+        pm4_info_file.write(" } };\n")
+      else:
+        packet_type_instances[opcode] += 1
+        pm4_info_file.write("    g_sPacketInfoMultiple.insert(std::pair<uint32_t, PacketInfo>(")
+        pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
+        outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
+        pm4_info_file.write(" } }));\n")
 
   # Not all pm4 packets are described via a "domain". These are usually packets (such as CP_WAIT_FOR_IDLE) which
   # have no fields. In that case, add a corresponding g_sPacketInfo entry with no fields
@@ -803,9 +835,8 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     domain = registers_et_root.find('{http://nouveau.freedesktop.org/}domain[@name="'+packet_name+'"]')
     if domain is None:
       opcode = int(pm4_type_packet_value.attrib['value'],0)
-      pm4_info_file.write("    g_sPacketInfo.insert(std::pair<uint32_t, PacketInfo>(")
-      pm4_info_file.write("0x%x, { \"%s\", 0, UINT8_MAX, {" % (opcode, packet_name))
-      pm4_info_file.write(" } }));\n")
+      pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", 0, UINT8_MAX, {" % (opcode, packet_name))
+      pm4_info_file.write(" } };\n")
   pm4_info_file.write("\n")
 
   # Append _A?XX to the name if there is any variant
@@ -927,16 +958,18 @@ const char *GetEnumString(uint32_t enum_handle, uint32_t val)
 
 const PacketInfo *GetPacketInfo(uint32_t op_code)
 {
-    if (g_sPacketInfo.find(op_code) == g_sPacketInfo.end())
+    if (g_sPacketInfo[op_code].m_name == nullptr)
         return nullptr;
-    return &g_sPacketInfo.find(op_code)->second;
+    return &g_sPacketInfo[op_code];
 }
 
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name)
 {
-    if (g_sPacketInfo.find(op_code) == g_sPacketInfo.end())
+    if (g_sPacketInfo[op_code].m_name == nullptr)
         return nullptr;
-    auto ret_pair = g_sPacketInfo.equal_range(op_code);
+    if (strcmp(g_sPacketInfo[op_code].m_name, name) == 0)
+        return &g_sPacketInfo[op_code];
+    auto ret_pair = g_sPacketInfoMultiple.equal_range(op_code);
     for (auto it  = ret_pair.first; it != ret_pair.second; ++it) {
         if (strcmp(it->second.m_name, name) == 0)
             return &it->second;

@@ -60,6 +60,8 @@ public:
     };
     absl::Status CreateGfxrDirectory(const std::string command_args);
     absl::Status GfxrSetup();
+    absl::Status HasInternetPermission();
+    absl::Status GrantAllFilesAccess();
 
 protected:
     absl::Status ParsePackage();

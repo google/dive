@@ -2025,7 +2025,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         for (uint32_t i = 0; i < packet.bitfields0.NUM_UNIT; ++i)
         {
             uint64_t          addr = ext_src_addr + i * sharp_struct_size;
-            const PacketInfo *packet_info_ptr = GetPacketInfo(0xffffffff, sharp_struct_name);
+            const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);
             DIVE_ASSERT(packet_info_ptr != nullptr);
             std::ostringstream prefix_stream;
             prefix_stream << "  [" << i << "] ";

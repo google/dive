@@ -42,4 +42,13 @@ private:
 
 ServerRunner &GetServerRunner();
 
+struct Server
+{
+    std::thread server_thread;
+    Server();
+    void StopServer();
+};
+
+extern Server server;
+
 }  // namespace DiveLayer

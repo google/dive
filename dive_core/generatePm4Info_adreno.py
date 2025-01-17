@@ -56,9 +56,9 @@ enum ValueType
     kFixed,     // signed fixed-point numbers
     kUFixed,    // unsigned fixed-point numbers
     kAddress,   // 64bit address (bo_write = false)
-    kWaddress,  // 64bit address (bo_write = true) 
+    kWaddress,  // 64bit address (bo_write = true)
     kHex,       // hex representation of numbers
-    kRegID,     // register id 
+    kRegID,     // register id
     kOther
 };
 
@@ -269,7 +269,7 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
       if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
         continue
 
-      name = bitfield.attrib['name'] 
+      name = bitfield.attrib['name']
 
       enum_handle = "UINT8_MAX"
       bitfield_type = "other"
@@ -353,8 +353,8 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_ind
 
     variants_bitfield = GetGPUVariantsBitField(attributes.variants)
     if (variants_bitfield != 0):
-        # kGPUVariantsBits has 6 bits 
-        for i in range(6): 
+        # kGPUVariantsBits has 6 bits
+        for i in range(6):
             cur_variant_bitfield = (1<<i)
             if cur_variant_bitfield & variants_bitfield:
                 pm4_info_file.write("    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
@@ -363,8 +363,8 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_ind
     else:
         pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
         AppendBitfield(pm4_info_file, enum_index_dict, attributes)
-        pm4_info_file.write("} };\n")  
-    
+        pm4_info_file.write("} };\n")
+
 
 # ---------------------------------------------------------------------------------------
 def getBitWidth(reg):
@@ -431,7 +431,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     reg_attributes.shr = shr
     reg_attributes.bit_width = bit_width
     reg_attributes.radix = radix
-    
+
     outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, reg_attributes)
 
   # Iterate and output the arrays as a sequence of reg32s with an index as a suffix
@@ -604,7 +604,7 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       field_attributes.shift = shift
       field_attributes.shr = shr
       field_attributes.mask = mask
-      
+
       if is_reg_32:
         field_attributes.name = field_name
         field_attributes.dword_count = dword_count

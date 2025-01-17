@@ -15,6 +15,7 @@
 */
 
 #pragma once
+#include <initializer_list>
 
 // Provides a replacement of some STL containers. The reason for this is that Windows DEBUG versions
 // of STL libraries are notoriously slow (multiple orders-of-magnitude slower than RELEASE), so a

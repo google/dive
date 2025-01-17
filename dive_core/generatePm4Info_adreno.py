@@ -45,7 +45,7 @@ def outputH(pm4_info_file):
 
 #include <stdint.h>
 #include <string.h>
-#include <vector>
+#include "dive_core/stl_replacement.h"
 
 enum ValueType
 {
@@ -106,7 +106,7 @@ struct RegInfo
     uint32_t    m_bit_width : 6; // high - low, range [0, 63]
     uint32_t    m_radix : 5; // only used when the type is ufixed/fixed, range [0, 31]
     uint32_t : 3;
-    std::vector<RegField> m_fields;
+    DiveVector<RegField> m_fields;
 };
 
 struct PacketField
@@ -127,7 +127,7 @@ struct PacketInfo
     uint32_t    m_max_array_size : 8;
     uint32_t    m_stripe_variant : 8;  // Which variant of the packet this is
     uint32_t : 16;
-    std::vector<PacketField> m_fields;
+    DiveVector<PacketField> m_fields;
 };
 
 void              Pm4InfoInit();
@@ -158,13 +158,12 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
 #include <unordered_map>
 #include <vector>
 #include "dive_core/common/common.h"
-#include "dive_core/stl_replacement.h"
 
-static std::unordered_map<uint32_t, const char*> g_sOpCodeToString;
+static DiveVector<const char*> g_sOpCodeToString;
 static std::unordered_map<uint32_t, RegInfo> g_sRegInfoVariant;
 static DiveVector<RegInfo> g_sRegInfo;
 static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
-static std::vector<std::unordered_map<uint32_t, const char*>> g_sEnumReflection;
+static DiveVector<DiveVector<const char*>> g_sEnumReflection;
 static DiveVector<PacketInfo> g_sPacketInfo;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfoMultiple;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
@@ -222,6 +221,10 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
 valid_opcodes = {}
 # ---------------------------------------------------------------------------------------
 def outputOpcodes(pm4_info_file, opcode_dict):
+  # Find max opcode first
+  max_opcode = max(opcode_dict)
+
+  pm4_info_file.write("    g_sOpCodeToString.resize(0x%x);\n" % (max_opcode+1))
   for opcode in opcode_dict:
     pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (hex(opcode), opcode_dict[opcode]))
   return
@@ -398,8 +401,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
   max_offset = 0
   for reg in regs:
     offset = int(reg.attrib['offset'],0)
-    if offset > max_offset:
-      max_offset = offset
+    max_offset = max(max_offset, offset)
   pm4_info_file.write("    g_sRegInfo.resize(0x%x);\n" % (max_offset+1))
 
   # Parse through registers
@@ -534,14 +536,18 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
       if 'value' in field.attrib:
         enum_value = int(field.attrib['value'], 0)
 
-        # enum_list is an array of {string, dict()}, where the key of the dict() is
-        # the integer enum_value
-        # Note: It's possible to have multiple enum fields with the same value, for different
-        # variants. These fields are listed in order of hw variants, with later entries covering
-        # more recent hw. Since we are only interested in the latest hardware, we can just
-        # override the earlier value name and use the newer name for the field
-        index = enum_index_dict[enum_name]
-        enum_list[index][1][enum_value] = enum_value_name
+
+        # RegField::m_enum_handle is 8-bit. So any enum that exceeds this (e.g. adreno_pm4_packet_type)
+        # are not actually used
+        if (enum_value < 256):
+          # enum_list is an array of {string, dict()}, where the key of the dict() is
+          # the integer enum_value
+          # Note: It's possible to have multiple enum fields with the same value, for different
+          # variants. These fields are listed in order of hw variants, with later entries covering
+          # more recent hw. Since we are only interested in the latest hardware, we can just
+          # override the earlier value name and use the newer name for the field
+          index = enum_index_dict[enum_name]
+          enum_list[index][1][enum_value] = enum_value_name
 
 class FieldAttributes():
   name = ""
@@ -671,14 +677,16 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
 
 # ---------------------------------------------------------------------------------------
 def outputEnums(pm4_info_file, enum_list):
+  pm4_info_file.write("    g_sEnumReflection.resize(%d);\n" % (len(enum_list)+1));
   # Output enum_list to file
   for idx, enum_info in enumerate(enum_list):
     # enum_list is an array of {string, dict()}, where the key of the dict() is
     # the integer enum_value
-    pm4_info_file.write("    g_sEnumReflection.push_back({")
-    for enum_value, enum_value_string in sorted(enum_info[1].items()):
-      pm4_info_file.write(" { %d, \"%s\" }," % (enum_value, enum_value_string))
-    pm4_info_file.write(" }); // %s (%d)\n" % (enum_info[0], idx))
+    enum_sorted_items = sorted(enum_info[1].items())
+    max_enum_value = enum_sorted_items[-1][0]
+    pm4_info_file.write("    g_sEnumReflection[%d].resize(%d, nullptr); // %s\n" % (idx, max_enum_value+1, enum_info[0]));
+    for enum_value, enum_value_string in enum_sorted_items:
+      pm4_info_file.write("    g_sEnumReflection[%d][%d] = \"%s\";\n" % (idx, enum_value, enum_value_string));
 
 # ---------------------------------------------------------------------------------------
 # This function adds info for PM4 packets as well as structs that have no opcodes (e.g. V#s/T#s/S#s)
@@ -882,9 +890,7 @@ def outputFunctionsCpp(pm4_info_file):
   pm4_info_file.writelines("""
 const char *GetOpCodeString(uint32_t op_code)
 {
-    if (g_sOpCodeToString.find(op_code) == g_sOpCodeToString.end())
-        return nullptr;
-    return g_sOpCodeToString.find(op_code)->second;
+    return g_sOpCodeToString[op_code];
 }
 
 const RegInfo *GetRegInfo(uint32_t reg)
@@ -919,7 +925,7 @@ const RegField *GetRegFieldByName(const char *name, const RegInfo *info)
     if (info == nullptr)
         return nullptr;
 
-    const std::vector<RegField> &field = info->m_fields;
+    const DiveVector<RegField> &field = info->m_fields;
     auto i = std::find_if(field.begin(), field.end(), [&](const RegField& f) {
         return strcmp(name, f.m_name) == 0;
     });
@@ -950,10 +956,9 @@ const char *GetEnumString(uint32_t enum_handle, uint32_t val)
 {
     if (g_sEnumReflection.size() <= enum_handle)
         return nullptr;
-    const std::unordered_map<uint32_t, const char*> &val_to_str_map = g_sEnumReflection[enum_handle];
-    if (val_to_str_map.find(val) == val_to_str_map.end())
+    if (g_sEnumReflection[enum_handle].size() <= val)
         return nullptr;
-    return val_to_str_map.find(val)->second;
+    return g_sEnumReflection[enum_handle][val];
 }
 
 const PacketInfo *GetPacketInfo(uint32_t op_code)

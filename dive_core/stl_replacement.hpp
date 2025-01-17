@@ -13,6 +13,9 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include <algorithm>
+#include "common/common.h"
+
 namespace Dive
 {
 
@@ -73,6 +76,7 @@ Vector<Type>::Vector(std::initializer_list<Type> a) :
     m_size(0)
 {
     reserve(a.size());
+    m_size = a.size();
     std::copy(a.begin(), a.end(), m_buffer);
 }
 

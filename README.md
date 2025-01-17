@@ -112,24 +112,15 @@ Troubleshooting tips:
 
 ### CLI Tool for capture and cleanup
 #### Capture with command line tool for Android applications
-Currently the command line tool supports capture OpenXR and Vulkan applications on Android. To Get a capture, please refer to the above sections to checkout the code and build the Android libraries. In addition to that, you'll need to build and install the CLI tool.
+The command-line tool currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
 
-On Linux, run: 
-```
-./scripts/build_android.sh
-```
+To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux). You can then use `ninja install` to install the CLI tool under the `install` folder.
 
-```
-mkdir build
-cd build
-cmake -GNinja ..
-ninja
-ninja install
-```
+To build the CLI tool on Windows, see [Building Dive host tool on Windows](#building-dive-host-tool-on-windows).
 
-And the libraries and CLI will be installed under the `install` folder.
+To build the Android libraries, see [Building Android Libraries](#building-android-libraries).
+
 Run `./dive_client_cli  --help` for help.
-
 You can find out the device serial by run `adb devices` or by `./dive_client_cli --command list_device`
 
 Examples:

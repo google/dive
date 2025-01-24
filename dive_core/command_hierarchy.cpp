@@ -458,10 +458,14 @@ uint64_t CommandHierarchy::Nodes::AddNode(NodeType      type,
     m_description.push_back(std::move(desc));
     m_aux_info.push_back(aux_info);
 
-    DiveVector<uint8_t> temp(metadata_size);
     if (metadata_ptr != nullptr)
+    {
+        DiveVector<uint8_t> temp(metadata_size);
         memcpy(&temp[0], metadata_ptr, metadata_size);
-    m_metadata.push_back(std::move(temp));
+        m_metadata.push_back(std::move(temp));
+    }
+    else
+        m_metadata.resize(m_metadata.size() + 1);
 
     return m_node_type.size() - 1;
 }
@@ -572,6 +576,29 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
     // Clear/Reset internal data structures, just in case
     *m_command_hierarchy_ptr = CommandHierarchy();
 
+    // Optional: Reserve the internal vectors based on passed-in value. Overguessing means more
+    // memory used during creation, and potentially more memory used while the capture is loaded.
+    // Underguessing means more allocations. For big captures, this is easily in the multi-millions,
+    // so pre-reserving the space is a signficiant performance win
+    if (reserve_size.has_value())
+    {
+        for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
+        {
+            m_node_start_shared_child[topology].reserve(*reserve_size);
+            m_node_end_shared_child[topology].reserve(*reserve_size);
+            m_node_root_node_index[topology].reserve(*reserve_size);
+
+            m_node_children[topology][0].reserve(*reserve_size);
+            m_node_children[topology][1].reserve(*reserve_size);
+
+            m_command_hierarchy_ptr->m_nodes.m_node_type.reserve(*reserve_size);
+            m_command_hierarchy_ptr->m_nodes.m_description.reserve(*reserve_size);
+            m_command_hierarchy_ptr->m_nodes.m_aux_info.reserve(*reserve_size);
+            m_command_hierarchy_ptr->m_nodes.m_event_node_indices.reserve(*reserve_size);
+            m_command_hierarchy_ptr->m_nodes.m_metadata.reserve(*reserve_size);
+        }
+    }
+
     // Add a dummy root node for easier management
     uint64_t root_node_index = AddNode(NodeType::kRootNode, "", 0);
     DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
@@ -587,22 +614,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
     m_num_events = 0;
     m_flatten_chain_nodes = flatten_chain_nodes;
 
-    // Optional: Reserve the internal vectors based on passed-in value. Overguessing means more
-    // memory used during creation. Underguessing means more allocations. For big captures, this is
-    // easily in the multi-millions, so pre-reserving the space is a signficiant performance win
-    if (reserve_size.has_value())
-    {
-        for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
-        {
-            m_node_start_shared_child[topology].reserve(*reserve_size);
-            m_node_end_shared_child[topology].reserve(*reserve_size);
-            m_node_root_node_index[topology].reserve(*reserve_size);
-
-            m_node_children[topology][0].reserve(*reserve_size);
-            m_node_children[topology][1].reserve(*reserve_size);
-        }
-    }
-
     if (!ProcessSubmits(capture_data.GetSubmits(), capture_data.GetMemoryManager()))
     {
         return false;
@@ -610,6 +621,7 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
 
     // Convert the info in m_node_children into CommandHierarchy's topologies
     CreateTopologies();
+
     return true;
 }
 

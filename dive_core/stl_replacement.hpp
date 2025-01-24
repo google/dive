@@ -169,7 +169,11 @@ template<class Type> void Vector<Type>::push_back(const Type &a)
 //--------------------------------------------------------------------------------------------------
 template<class Type> void Vector<Type>::push_back(Type &&a)
 {
-    emplace_back(std::move(a));
+    reserve(m_size + 1);
+
+    // Construct the element in place
+    new (&m_buffer[m_size]) Type(std::move(a));
+    ++m_size;
 }
 
 //--------------------------------------------------------------------------------------------------

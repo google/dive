@@ -43,12 +43,6 @@ struct InstanceData
 {
     VkInstance            instance;
     InstanceDispatchTable dispatch_table;
-    ServerRunner         &server;
-
-    InstanceData() :
-        server(GetServerRunner())
-    {
-    }
 };
 
 struct DeviceData

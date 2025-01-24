@@ -132,8 +132,10 @@ grpc::Status DiveServiceImpl::DownloadFile(grpc::ServerContext             *cont
     return grpc::Status::OK;
 }
 
-void RunServer(uint16_t port)
+std::unique_ptr<grpc::Server> g_server;
+void                          RunServer(uint16_t port)
 {
+    LOGI("port is %d\n", port);
     std::string     server_address = absl::StrFormat("0.0.0.0:%d", port);
     DiveServiceImpl service;
 
@@ -142,12 +144,23 @@ void RunServer(uint16_t port)
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 
     builder.RegisterService(&service);
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    g_server = builder.BuildAndStart();
     LOGI("Server listening on %s", server_address.c_str());
-    server->Wait();
+    g_server->Wait();
 }
 
-int server_main()
+void StopServer()
+{
+    if (g_server)
+    {
+        g_server->Shutdown();
+        // g_server->Wait();
+        g_server = nullptr;
+    }
+    LOGE("exit g_server->Wait()");
+}
+
+int ServerMain()
 {
     RunServer(absl::GetFlag(FLAGS_port));
     return 0;

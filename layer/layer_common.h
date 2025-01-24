@@ -40,6 +40,10 @@ private:
     std::thread server_thread;
 };
 
+
 ServerRunner &GetServerRunner();
 
 }  // namespace DiveLayer
+
+void StartServer();
+void StopServer();

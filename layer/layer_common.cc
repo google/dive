@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "layer_common.h"
 
+#include <dlfcn.h>
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -58,7 +60,7 @@ ServerRunner::ServerRunner()
     LOGI("libwrap loaded: %d", is_libwrap_loaded);
     if (is_libwrap_loaded)
     {
-        server_thread = std::thread(Dive::server_main);
+        server_thread = std::thread(Dive::ServerMain);
     }
 }
 
@@ -66,6 +68,7 @@ ServerRunner::~ServerRunner()
 {
     if (is_libwrap_loaded && server_thread.joinable())
     {
+        Dive::StopServer();
         LOGI("Wait for server thread to join");
         server_thread.join();
     }
@@ -78,3 +81,45 @@ ServerRunner &GetServerRunner()
 }
 
 }  // namespace DiveLayer
+
+struct init
+{
+    init()
+    {
+        LOGD("DEBUG In init() \n");
+        g_server_thread = std::thread(Dive::ServerMain);
+    }
+    std::thread g_server_thread;
+};
+
+extern "C"
+{
+    __attribute__((constructor)) void _layer_keep_alive_func__();
+}
+
+class keep_alive_struct
+{
+public:
+    keep_alive_struct();
+};
+keep_alive_struct::keep_alive_struct()
+{
+    Dl_info info;
+
+    static struct init do_init;
+    (void)do_init;
+    // Prevent lib beeing unloaded.
+    if (dladdr((void *)&_layer_keep_alive_func__, &info))
+    {
+        dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL | RTLD_NODELETE);
+    }
+}
+extern "C"
+{
+
+    void _layer_keep_alive_func__()
+    {
+        keep_alive_struct d;
+        (void)d;
+    }
+}

@@ -17,6 +17,6 @@ limitations under the License.
 #include "server.h"
 
 int main(int argc, char **argv) {
-    Dive::server_main();
+    Dive::ServerMain();
     return 0;
 }

@@ -56,12 +56,6 @@ struct XrSessionData
 {
     XrSession                session;
     XrGeneratedDispatchTable dispatch_table;
-    ServerRunner            &server;
-
-    XrSessionData() :
-        server(GetServerRunner())
-    {
-    }
 };
 
 static thread_local XrInstanceData *last_used_xr_instance_data = nullptr;
@@ -190,7 +184,6 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroyInstance(XrInstance instance
 
     LOGD("ApiDiveLayerXrDestroyInstance\n");
     XrResult result = XR_SUCCESS;
-
     auto sess_data = GetXrInstanceLayerData(DataKey(instance));
     if (sess_data)
     {

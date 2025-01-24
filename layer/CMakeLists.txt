@@ -30,7 +30,6 @@ set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_android.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
 )
 

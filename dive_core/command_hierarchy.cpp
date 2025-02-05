@@ -33,39 +33,6 @@
 
 namespace Dive
 {
-// =================================================================================================
-// Helper Functions
-// =================================================================================================
-enum class TcCacheOp
-{
-    kNop = 0,    // Do nothing.
-    kWbInvL1L2,  // Flush TCC data and invalidate all TCP and TCC data
-    kWbInvL2Nc,  // Flush and invalidate all TCC data that used the non-coherent MTYPE.
-    kWbL2Nc,     // Flush all TCC data that used the non-coherent MTYPE.
-    kWbL2Wc,     // Flush all TCC data that used the write-combined MTYPE.
-    kInvL2Nc,    // Invalidate all TCC data that used the non-coherent MTYPE.
-    kInvL2Md,    // Invalidate the TCC's read-only metadata cache.
-    kInvL1,      // Invalidate all TCP data.
-    kInvL1Vol,   // Invalidate all volatile TCP data.
-    kCount
-};
-const char *TcCacheOpStrings[] = {
-    nullptr,      // kNop
-    "wbInvL1L2",  // kWbInvL1L2
-    "wbInvL2",    // kWbInvL2Nc
-    "wbL2",       // kWbL2Nc
-    "wbL2Wc",     // kWbL2Wc (Not used)
-    "invL2",      // kInvL2Nc
-    "invL2Md",    // kInvL2Md
-    "invL1",      // kInvL1
-    "invL1Vol",   // kInvL1Vol (Not used)
-};
-TcCacheOp GetCacheOp(uint32_t cp_coher_cntl)
-{
-    return TcCacheOp::kNop;
-}
-
-static const std::string kRenderPassName = "RenderPass";
 
 // =================================================================================================
 // Topology
@@ -235,23 +202,10 @@ const Topology &CommandHierarchy::GetSubmitHierarchyTopology() const
 }
 
 //--------------------------------------------------------------------------------------------------
-const Topology &CommandHierarchy::GetVulkanDrawEventHierarchyTopology() const
-{
-    return m_topology[kVulkanEventTopology];
-}
-
-//--------------------------------------------------------------------------------------------------
-const Topology &CommandHierarchy::GetVulkanEventHierarchyTopology() const
-{
-    return m_topology[kVulkanCallTopology];
-}
-
-//--------------------------------------------------------------------------------------------------
 const Topology &CommandHierarchy::GetAllEventHierarchyTopology() const
 {
     return m_topology[kAllEventTopology];
 }
-
 
 //--------------------------------------------------------------------------------------------------
 NodeType CommandHierarchy::GetNodeType(uint64_t node_index) const
@@ -265,13 +219,6 @@ const char *CommandHierarchy::GetNodeDesc(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_description.size());
     return m_nodes.m_description[node_index].c_str();
-}
-
-//--------------------------------------------------------------------------------------------------
-const DiveVector<uint8_t> &CommandHierarchy::GetMetadata(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_nodes.m_metadata.size());
-    return m_nodes.m_metadata[node_index];
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -410,13 +357,9 @@ SyncInfo CommandHierarchy::GetSyncNodeSyncInfo(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t CommandHierarchy::AddNode(NodeType      type,
-                                   std::string &&desc,
-                                   AuxInfo       aux_info,
-                                   char         *metadata_ptr,
-                                   uint32_t      metadata_size)
+uint64_t CommandHierarchy::AddNode(NodeType type, std::string &&desc, AuxInfo aux_info)
 {
-    return m_nodes.AddNode(type, std::move(desc), aux_info, metadata_ptr, metadata_size);
+    return m_nodes.AddNode(type, std::move(desc), aux_info);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -434,29 +377,14 @@ size_t CommandHierarchy::GetEventIndex(uint64_t node_index) const
 // =================================================================================================
 // CommandHierarchy::Nodes
 // =================================================================================================
-uint64_t CommandHierarchy::Nodes::AddNode(NodeType      type,
-                                          std::string &&desc,
-                                          AuxInfo       aux_info,
-                                          char         *metadata_ptr,
-                                          uint32_t      metadata_size)
+uint64_t CommandHierarchy::Nodes::AddNode(NodeType type, std::string &&desc, AuxInfo aux_info)
 {
     DIVE_ASSERT(m_node_type.size() == m_description.size());
     DIVE_ASSERT(m_node_type.size() == m_aux_info.size());
-    DIVE_ASSERT(m_node_type.size() == m_metadata.size());
 
     m_node_type.push_back(type);
     m_description.push_back(std::move(desc));
     m_aux_info.push_back(aux_info);
-
-    if (metadata_ptr != nullptr)
-    {
-        DiveVector<uint8_t> temp(metadata_size);
-        memcpy(&temp[0], metadata_ptr, metadata_size);
-        m_metadata.push_back(std::move(temp));
-    }
-    else
-        m_metadata.resize(m_metadata.size() + 1);
-
     return m_node_type.size() - 1;
 }
 
@@ -585,7 +513,6 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
             m_command_hierarchy_ptr->m_nodes.m_description.reserve(*reserve_size);
             m_command_hierarchy_ptr->m_nodes.m_aux_info.reserve(*reserve_size);
             m_command_hierarchy_ptr->m_nodes.m_event_node_indices.reserve(*reserve_size);
-            m_command_hierarchy_ptr->m_nodes.m_metadata.reserve(*reserve_size);
         }
     }
 
@@ -1455,15 +1382,6 @@ bool CommandHierarchyCreator::IsBeginDebugMarkerNode(uint64_t node_index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandHierarchyCreator::ParseVulkanCallMarker(char    *marker_ptr,
-                                                    uint32_t marker_size,
-                                                    uint64_t submit_node_index,
-                                                    uint64_t packet_node_index)
-{
-    return;
-}
-
-//--------------------------------------------------------------------------------------------------
 std::string Util::GetEventString(const IMemoryManager &mem_manager,
                                  uint32_t              submit_index,
                                  uint64_t              va_addr,
@@ -2122,15 +2040,9 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
 //--------------------------------------------------------------------------------------------------
 uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
                                           std::string             &&desc,
-                                          CommandHierarchy::AuxInfo aux_info,
-                                          char                     *metadata_ptr,
-                                          uint32_t                  metadata_size)
+                                          CommandHierarchy::AuxInfo aux_info)
 {
-    uint64_t node_index = m_command_hierarchy_ptr->AddNode(type,
-                                                           std::move(desc),
-                                                           aux_info,
-                                                           metadata_ptr,
-                                                           metadata_size);
+    uint64_t node_index = m_command_hierarchy_ptr->AddNode(type, std::move(desc), aux_info);
     for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; ++i)
     {
         DIVE_ASSERT(m_node_children[i][0].size() == node_index);
@@ -2227,127 +2139,10 @@ void CommandHierarchyCreator::CreateTopologies()
     uint64_t total_num_children[CommandHierarchy::kTopologyTypeCount] = {};
     uint64_t total_num_shared_children[CommandHierarchy::kTopologyTypeCount] = {};
 
-    // A kVulkanCallTopology is a kAllEventTopology without the following:
-    //  kDrawDispatchDmaNode, kSyncNode, kPostambleStateNode, kMarkerNode-kBarrier
-    auto FilterOut = [&](size_t node_index) {
-        NodeType type = m_command_hierarchy_ptr->GetNodeType(node_index);
-        // Filter out all these node types
-        if (type == NodeType::kDrawDispatchBlitNode || type == NodeType::kSyncNode ||
-            type == NodeType::kPostambleStateNode)
-            return true;
-        // Also filter out kMarkerNode-kBarrier nodes
-        if (type == NodeType::kMarkerNode)
-        {
-            auto marker_type = m_command_hierarchy_ptr->GetMarkerNodeType(node_index);
-            if (marker_type == CommandHierarchy::MarkerType::kBarrier)
-                return true;
-        }
-        return false;
-    };
-    CommandHierarchy::TopologyType src_topology = CommandHierarchy::kAllEventTopology;
-    CommandHierarchy::TopologyType dst_topology = CommandHierarchy::kVulkanCallTopology;
-    size_t                         num_nodes = m_node_children[src_topology][0].size();
-    DIVE_ASSERT(num_nodes == m_node_children[src_topology][1].size());
-    for (size_t node_index = 0; node_index < num_nodes; ++node_index)
-    {
-        // Ensure topology was not previously filled-in
-        DIVE_ASSERT(m_node_children[dst_topology][0][node_index].empty());
-        DIVE_ASSERT(m_node_children[dst_topology][1][node_index].empty());
-
-        // Ignore all these node types
-        if (FilterOut(node_index))
-            continue;
-
-        // Go through primary children of a particular node, and only add non-ignored nodes
-        const DiveVector<uint64_t> &children = m_node_children[src_topology][0][node_index];
-
-        // Optionally pre-reserve the maximum size for performance reasons
-        // This may result in slightly more memory being used
-        m_node_children[dst_topology][0][node_index].reserve(children.size());
-
-        for (size_t child = 0; child < children.size(); ++child)
-        {
-            if (!FilterOut(children[child]))
-                AddChild(dst_topology, node_index, children[child]);
-        }
-
-        // Shared children should remain the same
-        const DiveVector<uint64_t> &shared = m_node_children[src_topology][1][node_index];
-        m_node_children[CommandHierarchy::kVulkanCallTopology][1][node_index] = shared;
-
-        // Cache # of children
-        total_num_children[src_topology] += m_node_children[src_topology][0][node_index].size();
-        total_num_shared_children[src_topology] += m_node_children[src_topology][1][node_index]
-                                                   .size();
-        total_num_children[dst_topology] += m_node_children[dst_topology][0][node_index].size();
-        total_num_shared_children[dst_topology] += m_node_children[dst_topology][1][node_index]
-                                                   .size();
-    }
-
-    // A kVulkanEventTopology is a kVulkanCallTopology without non-Event Vulkan kMarkerNodes.
-    // The shared-children of the non-Event Vulkan kMarkerNodes will be inherited by the "next"
-    // Vulkan kMarkerNode encountered
-    src_topology = CommandHierarchy::kVulkanCallTopology;
-    dst_topology = CommandHierarchy::kVulkanEventTopology;
-    num_nodes = m_node_children[src_topology][0].size();
-    DIVE_ASSERT(num_nodes == m_node_children[src_topology][1].size());
-
-    for (size_t node_index = 0; node_index < num_nodes; ++node_index)
-    {
-        // Skip over all Vulkan non-Event nodes
-        if (IsVulkanNonEventNode(node_index))
-            continue;
-
-        // Go through primary children of a particular node, and only add non-ignored nodes
-        const DiveVector<uint64_t> &children = m_node_children[src_topology][0][node_index];
-
-        // Optionally pre-reserve the maximum size for performance reasons
-        // This may result in slightly more memory being used
-        m_node_children[dst_topology][0][node_index].reserve(children.size());
-
-        DiveVector<uint64_t> acc_shared;
-        for (size_t child = 0; child < children.size(); ++child)
-        {
-            // Accumulate shared packets from the child node
-            uint64_t                    child_index = children[child];
-            const DiveVector<uint64_t> &shared = m_node_children[src_topology][1][child_index];
-            if (!IsVulkanNonEventNode(child_index))
-            {
-                // If it isn't a Vulkan Event node or a Vulkan Non-Event node (ie. a non-Vulkan
-                // node, such as a normal marker node, a submit node, etc), then don't
-                // accumulate shared nodes. For example, the beginning of a submit sometimes has
-                // a vkCmdBegin followed by a debug-marker. The PM4 contents of the vkCmdBegin
-                // is thrown away, since it isn't part of the debug-marker.
-                if (IsVulkanEventNode(child_index))
-                {
-                    for (uint32_t i = 0; i < shared.size(); ++i)
-                        acc_shared.push_back(shared[i]);
-                }
-
-                AddChild(dst_topology, node_index, child_index);
-
-                if (acc_shared.empty())
-                    m_node_children[dst_topology][1][child_index] = shared;
-                else
-                    m_node_children[dst_topology][1][child_index] = std::move(acc_shared);
-                acc_shared.resize(0);
-            }
-            else
-            {
-                for (uint32_t i = 0; i < shared.size(); ++i)
-                    acc_shared.push_back(shared[i]);
-            }
-        }
-        // Cache # of children
-        total_num_children[dst_topology] += m_node_children[dst_topology][0][node_index].size();
-        total_num_shared_children[dst_topology] += m_node_children[dst_topology][1][node_index]
-                                                   .size();
-    }
-
     // Convert the m_node_children temporary structure into CommandHierarchy's topologies
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
-        num_nodes = m_node_children[topology][0].size();
+        size_t    num_nodes = m_node_children[topology][0].size();
         Topology &cur_topology = m_command_hierarchy_ptr->m_topology[topology];
         cur_topology.SetNumNodes(num_nodes);
 
@@ -2393,31 +2188,12 @@ bool CommandHierarchyCreator::EventNodeHelper(uint64_t                      node
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::IsVulkanEventNode(uint64_t node_index) const
-{
-    auto fp = std::bind(&CommandHierarchyCreator::IsVulkanEvent, this, std::placeholders::_1);
-    return EventNodeHelper(node_index, fp);
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::IsVulkanNonEventNode(uint64_t node_index) const
-{
-    auto fp = std::bind(&CommandHierarchyCreator::IsNonVulkanEvent, this, std::placeholders::_1);
-    return EventNodeHelper(node_index, fp);
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::IsVulkanEvent(uint32_t cmd_id) const
-{
-    return false;
-}
-
-//--------------------------------------------------------------------------------------------------
 template<typename T> struct OutputStream
 {
     static void SetupFormat(std::ostringstream &stream) {}
 };
 
+//--------------------------------------------------------------------------------------------------
 template<> struct OutputStream<float>
 {
     static void SetupFormat(std::ostringstream &stream)
@@ -2426,6 +2202,7 @@ template<> struct OutputStream<float>
     }
 };
 
+//--------------------------------------------------------------------------------------------------
 template<> struct OutputStream<uint32_t>
 {
     static void SetupFormat(std::ostringstream &stream)

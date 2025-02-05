@@ -60,13 +60,9 @@
 #include "tree_view_combo_box.h"
 
 static const int   kViewModeStringCount = 2;
-static const int   kEventViewModeStringCount = 3;
+static const int   kEventViewModeStringCount = 1;
 static const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
-static const char *kEventViewModeStrings[kEventViewModeStringCount] = {
-    "Vulkan Events",
-    "All Vulkan Calls",
-    "All Vulkan Calls + GPU Events"
-};
+static const char *kEventViewModeStrings[kEventViewModeStringCount] = { "GPU Events" };
 
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {
@@ -82,9 +78,7 @@ void SetTabAvailable(QTabWidget *widget, int index, bool available)
 
 enum class EventMode
 {
-    VulkanDrawEvent = 0,
-    AllVulkanEvent,
-    AllEvent,
+    AllEvent = 0
 };
 
 // =================================================================================================
@@ -369,37 +363,6 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::ShowEventView(const Dive::CommandHierarchy &command_hierarchy,
-                               EventMode                     event_mode)
-{
-    switch (event_mode)
-    {
-    case EventMode::VulkanDrawEvent:
-    {
-        const Dive::Topology &topology = command_hierarchy.GetVulkanDrawEventHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
-        break;
-    }
-    case EventMode::AllVulkanEvent:
-    {
-        const Dive::Topology &topology = command_hierarchy.GetVulkanEventHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
-        break;
-    }
-
-    case EventMode::AllEvent:
-    {
-        const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
-        break;
-    }
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
 void MainWindow::OnCommandViewModeChange(const QString &view_mode)
 {
     m_command_hierarchy_view->header()->reset();
@@ -410,9 +373,11 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
         m_command_hierarchy_model->SetTopologyToView(&topology);
         m_command_tab_view->SetTopologyToView(&topology);
     }
-    else if (view_mode == tr(kEventViewModeStrings[0]))  // Vulkan Events
+    else  // All Vulkan Calls + GPU Events
     {
-        ShowEventView(command_hierarchy, EventMode::VulkanDrawEvent);
+        const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
+        m_command_hierarchy_model->SetTopologyToView(&topology);
+        m_command_tab_view->SetTopologyToView(&topology);
 
         // Put EventID column to the left of the tree. This forces the expand/collapse icon to be
         // part of the 2nd column (originally 1st)
@@ -421,24 +386,6 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
             m_prev_command_view_mode == tr(kViewModeStrings[1]))
             m_command_hierarchy_view->header()->moveSection(1, 0);
     }
-    else if (view_mode == tr(kEventViewModeStrings[1]))  // All Vulkan Calls
-    {
-        ShowEventView(command_hierarchy, EventMode::AllVulkanEvent);
-        if (m_prev_command_view_mode.isEmpty() ||
-            m_prev_command_view_mode == tr(kViewModeStrings[0]) ||
-            m_prev_command_view_mode == tr(kViewModeStrings[1]))
-            m_command_hierarchy_view->header()->moveSection(1, 0);
-    }
-    else if (view_mode == tr(kEventViewModeStrings[2]))  // All Vulkan Calls + GPU Events
-    {
-        ShowEventView(command_hierarchy, EventMode::AllEvent);
-        if (m_prev_command_view_mode.isEmpty() ||
-            m_prev_command_view_mode == tr(kViewModeStrings[0]) ||
-            m_prev_command_view_mode == tr(kViewModeStrings[1]))
-            m_command_hierarchy_view->header()->moveSection(1, 0);
-    }
-    else
-        DIVE_ASSERT(false);  // Sanity check
 
     m_prev_command_view_mode = view_mode;
     ExpandResizeHierarchyView();
@@ -454,11 +401,7 @@ void MainWindow::OnCommandViewModeComboBoxHover(const QString &view_mode)
         m_hover_help->SetCurItem(HoverHelp::Item::kEngineView);
     else if (view_mode == tr(kViewModeStrings[1]))  // Submit
         m_hover_help->SetCurItem(HoverHelp::Item::kSubmitView);
-    else if (view_mode == tr(kEventViewModeStrings[0]))  // Vulkan Events
-        m_hover_help->SetCurItem(HoverHelp::Item::kVulkanEventsView);
-    else if (view_mode == tr(kEventViewModeStrings[1]))  // All Vulkan Calls
-        m_hover_help->SetCurItem(HoverHelp::Item::kAllVulkanCallsView);
-    else if (view_mode == tr(kEventViewModeStrings[2]))  // All Vulkan Calls + GPU Events
+    else if (view_mode == tr(kEventViewModeStrings[0]))  // GPU Events
         m_hover_help->SetCurItem(HoverHelp::Item::kAllVulkanCallsGpuEventsView);
 }
 
@@ -478,15 +421,6 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     {
         emit EventSelected(UINT64_MAX);
     }
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnCheckboxStateChanged(int state)
-{
-    m_command_hierarchy_view->header()->reset();
-    const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
-    ShowEventView(command_hierarchy, EventMode::VulkanDrawEvent);
-    ExpandResizeHierarchyView();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -531,26 +465,16 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
         return false;
     }
 
-    if (!m_data_core->GetCommandHierarchy().HasVulkanMarkers())
     {
-        // Switch to All Vulkan Calls + GPU Events view
+        // Switch to GPU Events view
         QModelIndex event_item_index = m_view_mode_combo_box->model()->index(1, 0, QModelIndex());
-        QModelIndex all_vulkan_calls_item_index = m_view_mode_combo_box->model()
-                                                  ->index(1, 0, event_item_index);
-        m_view_mode_combo_box->setRootModelIndex(all_vulkan_calls_item_index.parent());
-        m_view_mode_combo_box->setCurrentIndex(all_vulkan_calls_item_index.row());
-        OnCommandViewModeChange(tr(kEventViewModeStrings[2]));
-        // TODO (b/185579518): disable the dropdown list for vulkan events.
-    }
-    else
-    {
-        // Switch to Vulkan Events view
-        QModelIndex event_item_index = m_view_mode_combo_box->model()->index(2, 0, QModelIndex());
-        QModelIndex vulkan_event_item_index = m_view_mode_combo_box->model()
-                                              ->index(0, 0, event_item_index);
-        m_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
-        m_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
+        QModelIndex gpu_events_item_index = m_view_mode_combo_box->model()->index(0,
+                                                                                  0,
+                                                                                  event_item_index);
+        m_view_mode_combo_box->setRootModelIndex(gpu_events_item_index.parent());
+        m_view_mode_combo_box->setCurrentIndex(gpu_events_item_index.row());
         OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
+        // TODO (b/185579518): disable the dropdown list for vulkan events.
     }
     m_command_hierarchy_model->EndResetModel();
 

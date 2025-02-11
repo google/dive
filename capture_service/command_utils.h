@@ -45,7 +45,7 @@ template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> res
 #define STATUS_MACROS_CONCAT_NAME(x, y) STATUS_MACROS_CONCAT_NAME_INNER(x, y)
 
 #define ASSIGN_OR_RETURN_IMPL(status, lhs, rexpr)         \
-    absl::Status status = DoAssignOrReturn(lhs, (rexpr)); \
+    absl::Status status = Dive::DoAssignOrReturn(lhs, (rexpr)); \
     if (!status.ok())                                     \
         return status;
 

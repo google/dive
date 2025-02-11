@@ -99,7 +99,6 @@ private slots:
     void OnInputArgs(const QString &);
     void OnPackageListFilter();
     void OnPackageListFilterApplied(QSet<QString> filters);
-    void OnGfxrCaptureFrameTypeSelection(int state);
     void OnGfxrCaptureClicked();
     void OnGfxrRetrieveClicked();
 
@@ -159,18 +158,6 @@ private:
     QHBoxLayout *m_gfxr_capture_file_local_directory_layout;
     QLabel      *m_gfxr_capture_file_local_directory_label;
     QLineEdit   *m_gfxr_capture_file_local_directory_input_box;
-
-    QHBoxLayout *m_frame_type_layout;
-    QCheckBox   *m_single_frame_checkbox;
-    QCheckBox   *m_frame_range_checkbox;
-    QCheckBox   *m_run_time_checkbox;
-
-    QHBoxLayout *m_frames_layout;
-    QLabel      *m_frame_num_label;
-    QLabel      *m_frame_range_label;
-    QSpinBox    *m_frame_num_spin_box;
-    QSpinBox    *m_frame_range_min_spin_box;
-    QSpinBox    *m_frame_range_max_spin_box;
 
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;

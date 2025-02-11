@@ -182,7 +182,6 @@ VulkanApplication::~VulkanApplication()
 absl::Status VulkanApplication::Setup()
 {
     LOGD("Setup Vulkan application: %s\n", m_package.c_str());
-    RETURN_IF_ERROR(HasInternetPermission());
     RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
@@ -324,7 +323,6 @@ absl::Status AndroidApplication::GrantAllFilesAccess()
 absl::Status OpenXRApplication::Setup()
 {
     LOGD("OpenXRApplication %s Setup\n", m_package.c_str());
-    RETURN_IF_ERROR(HasInternetPermission());
     RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
@@ -386,7 +384,6 @@ VulkanCliApplication::~VulkanCliApplication()
 // the global path.
 absl::Status VulkanCliApplication::Setup()
 {
-    RETURN_IF_ERROR(HasInternetPermission());
     RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));

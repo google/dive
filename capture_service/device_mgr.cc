@@ -192,7 +192,8 @@ absl::Status AndroidDevice::SetupDevice()
         Adb().Run(absl::StrFormat("push %s %s",
                                   ResolveAndroidLibPath(kXrLayerLibName, "").generic_string(),
                                   kTargetPath)));
-        RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward tcp:%d tcp:%d", kPort, kPort)));
+        RETURN_IF_ERROR(
+        Adb().Run(absl::StrFormat("forward tcp:%d localabstract:dive_%d", kPort, kPort)));
     }
 
 #if defined(DIVE_ENABLE_PERFETTO)

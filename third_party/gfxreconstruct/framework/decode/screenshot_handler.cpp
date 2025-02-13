@@ -25,6 +25,7 @@
 #include "util/logging.h"
 #include "util/platform.h"
 #include "decode/decoder_util.h"
+#include "generated/generated_vulkan_enum_to_string.h"
 
 #include <limits>
 
@@ -41,7 +42,6 @@ inline void WriteImageFile(const std::string&     filename,
                            util::ScreenshotFormat file_format,
                            uint32_t               width,
                            uint32_t               height,
-                           uint64_t               size,
                            void*                  data)
 {
     switch (file_format)
@@ -50,14 +50,14 @@ inline void WriteImageFile(const std::string&     filename,
             GFXRECON_LOG_ERROR("Screenshot format invalid!  Expected BMP or PNG, falling back to BMP.");
             // Intentional fall-through
         case util::ScreenshotFormat::kBmp:
-            if (!util::imagewriter::WriteBmpImage(filename + ".bmp", width, height, size, data))
+            if (!util::imagewriter::WriteBmpImage(filename + ".bmp", width, height, data))
             {
                 GFXRECON_LOG_ERROR("Screenshot could not be created: failed to write BMP file %s", filename.c_str());
             }
             break;
 #ifdef GFXRECON_ENABLE_PNG_SCREENSHOT
         case util::ScreenshotFormat::kPng:
-            if (!util::imagewriter::WritePngImage(filename + ".png", width, height, size, data))
+            if (!util::imagewriter::WritePngImage(filename + ".png", width, height, data))
             {
                 GFXRECON_LOG_ERROR("Screenshot could not be created: failed to write PNG file %s", filename.c_str());
             }
@@ -347,6 +347,11 @@ void ScreenshotHandler::WriteImage(const std::string&                      filen
                 // Make sure any pending work is finished, as we are not waiting on any semaphores from previous
                 // submissions.
                 result = device_table->DeviceWaitIdle(device);
+                if (result != VK_SUCCESS)
+                {
+                    GFXRECON_LOG_ERROR("ScreenshotHandler: DeviceWaitIdle failed with %s",
+                                       util::ToString(result).c_str());
+                }
 
                 if (result == VK_SUCCESS)
                 {
@@ -360,11 +365,22 @@ void ScreenshotHandler::WriteImage(const std::string&                      filen
                     submit_info.pSignalSemaphores    = nullptr;
 
                     result = device_table->QueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
+                    if (result != VK_SUCCESS)
+                    {
+                        GFXRECON_LOG_ERROR("ScreenshotHandler: Queue submission %sfailed with %s",
+                                           (copy_resource.convert_image != VK_NULL_HANDLE ? "(blit path) " : ""),
+                                           util::ToString(result).c_str());
+                    }
                 }
 
                 if (result == VK_SUCCESS)
                 {
                     result = device_table->QueueWaitIdle(queue);
+                    if (result != VK_SUCCESS)
+                    {
+                        GFXRECON_LOG_ERROR("ScreenshotHandler: Queue wait failed with %s",
+                                           util::ToString(result).c_str());
+                    }
                 }
 
                 if (result == VK_SUCCESS)
@@ -392,7 +408,6 @@ void ScreenshotHandler::WriteImage(const std::string&                      filen
                                        screenshot_format_,
                                        copy_width,
                                        copy_height,
-                                       copy_resource.buffer_size,
                                        data);
 
                         allocator->UnmapResourceMemoryDirect(copy_resource.buffer_data);
@@ -522,25 +537,6 @@ VkDeviceSize ScreenshotHandler::GetCopyBufferSize(VkDevice                      
     return memory_requirements.size;
 }
 
-uint32_t ScreenshotHandler::GetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memory_properties,
-                                               uint32_t                                type_bits,
-                                               VkMemoryPropertyFlags                   property_flags) const
-{
-    uint32_t memory_type_index = std::numeric_limits<uint32_t>::max();
-
-    for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
-    {
-        if ((type_bits & (1 << i)) &&
-            ((memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags))
-        {
-            memory_type_index = i;
-            break;
-        }
-    }
-
-    return memory_type_index;
-}
-
 VkResult ScreenshotHandler::CreateCopyResource(VkDevice                                device,
                                                const encode::VulkanDeviceTable*        device_table,
                                                const VkPhysicalDeviceMemoryProperties& memory_properties,
@@ -580,17 +576,17 @@ VkResult ScreenshotHandler::CreateCopyResource(VkDevice                         
         device_table->GetBufferMemoryRequirements(device, copy_resource->buffer, &memory_requirements);
 
         uint32_t memory_type_index =
-            GetMemoryTypeIndex(memory_properties,
-                               memory_requirements.memoryTypeBits,
-                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+            graphics::GetMemoryTypeIndex(memory_properties,
+                                         memory_requirements.memoryTypeBits,
+                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
         if (memory_type_index == std::numeric_limits<uint32_t>::max())
         {
             /* fallback to coherent */
-            memory_type_index =
-                GetMemoryTypeIndex(memory_properties,
-                                   memory_requirements.memoryTypeBits,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            memory_type_index = graphics::GetMemoryTypeIndex(memory_properties,
+                                                             memory_requirements.memoryTypeBits,
+                                                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         }
 
         assert(memory_type_index != std::numeric_limits<uint32_t>::max());
@@ -643,9 +639,8 @@ VkResult ScreenshotHandler::CreateCopyResource(VkDevice                         
             VkMemoryRequirements memory_requirements;
             device_table->GetImageMemoryRequirements(device, copy_resource->convert_image, &memory_requirements);
 
-            uint32_t memory_type_index = GetMemoryTypeIndex(
+            uint32_t memory_type_index = graphics::GetMemoryTypeIndex(
                 memory_properties, memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
             assert(memory_type_index != std::numeric_limits<uint32_t>::max());
 
             VkMemoryAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };

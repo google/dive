@@ -1958,14 +1958,276 @@ void VulkanReplayDumpResources::Process_vkCmdSetPrimitiveRestartEnable(
     }
 }
 
+void VulkanReplayDumpResources::Process_vkCmdSetLineStipple(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdSetLineStipple                     func,
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    lineStippleFactor,
+    uint16_t                                    lineStipplePattern)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, lineStippleFactor, lineStipplePattern);
+            }
+        }
 
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, lineStippleFactor, lineStipplePattern);
+        }
+    }
+}
 
+void VulkanReplayDumpResources::Process_vkCmdBindIndexBuffer2(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBindIndexBuffer2                   func,
+    VkCommandBuffer                             commandBuffer,
+    VkBuffer                                    buffer,
+    VkDeviceSize                                offset,
+    VkDeviceSize                                size,
+    VkIndexType                                 indexType)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, buffer, offset, size, indexType);
+            }
+        }
 
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, buffer, offset, size, indexType);
+        }
+    }
+}
 
+void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSet(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdPushDescriptorSet                  func,
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    VkPipelineLayout                            layout,
+    uint32_t                                    set,
+    uint32_t                                    descriptorWriteCount,
+    const VkWriteDescriptorSet*                 pDescriptorWrites)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pipelineBindPoint, layout, set, descriptorWriteCount, pDescriptorWrites);
+            }
+        }
 
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pipelineBindPoint, layout, set, descriptorWriteCount, pDescriptorWrites);
+        }
+    }
+}
 
+void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSetWithTemplate(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdPushDescriptorSetWithTemplate      func,
+    VkCommandBuffer                             commandBuffer,
+    VkDescriptorUpdateTemplate                  descriptorUpdateTemplate,
+    VkPipelineLayout                            layout,
+    uint32_t                                    set,
+    const void*                                 pData)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, descriptorUpdateTemplate, layout, set, pData);
+            }
+        }
 
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, descriptorUpdateTemplate, layout, set, pData);
+        }
+    }
+}
 
+void VulkanReplayDumpResources::Process_vkCmdSetRenderingAttachmentLocations(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdSetRenderingAttachmentLocations    func,
+    VkCommandBuffer                             commandBuffer,
+    const VkRenderingAttachmentLocationInfo*    pLocationInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pLocationInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pLocationInfo);
+        }
+    }
+}
+
+void VulkanReplayDumpResources::Process_vkCmdSetRenderingInputAttachmentIndices(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdSetRenderingInputAttachmentIndices func,
+    VkCommandBuffer                             commandBuffer,
+    const VkRenderingInputAttachmentIndexInfo*  pInputAttachmentIndexInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pInputAttachmentIndexInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pInputAttachmentIndexInfo);
+        }
+    }
+}
+
+void VulkanReplayDumpResources::Process_vkCmdBindDescriptorSets2(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdBindDescriptorSets2                func,
+    VkCommandBuffer                             commandBuffer,
+    const VkBindDescriptorSetsInfo*             pBindDescriptorSetsInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pBindDescriptorSetsInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pBindDescriptorSetsInfo);
+        }
+    }
+}
+
+void VulkanReplayDumpResources::Process_vkCmdPushConstants2(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdPushConstants2                     func,
+    VkCommandBuffer                             commandBuffer,
+    const VkPushConstantsInfo*                  pPushConstantsInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pPushConstantsInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pPushConstantsInfo);
+        }
+    }
+}
+
+void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSet2(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdPushDescriptorSet2                 func,
+    VkCommandBuffer                             commandBuffer,
+    const VkPushDescriptorSetInfo*              pPushDescriptorSetInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pPushDescriptorSetInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pPushDescriptorSetInfo);
+        }
+    }
+}
+
+void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSetWithTemplate2(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdPushDescriptorSetWithTemplate2     func,
+    VkCommandBuffer                             commandBuffer,
+    const VkPushDescriptorSetWithTemplateInfo*  pPushDescriptorSetWithTemplateInfo)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, pPushDescriptorSetWithTemplateInfo);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, pPushDescriptorSetWithTemplateInfo);
+        }
+    }
+}
 
 void VulkanReplayDumpResources::Process_vkCmdBeginVideoCodingKHR(
     const ApiCallInfo&                          call_info,
@@ -2094,7 +2356,6 @@ void VulkanReplayDumpResources::Process_vkCmdEndRenderingKHR(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdSetDeviceMaskKHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetDeviceMaskKHR                   func,
@@ -2151,14 +2412,6 @@ void VulkanReplayDumpResources::Process_vkCmdDispatchBaseKHR(
         }
     }
 }
-
-
-
-
-
-
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSetKHR(
     const ApiCallInfo&                          call_info,
@@ -2219,7 +2472,6 @@ void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSetWithTemplateKHR(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdBeginRenderPass2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdBeginRenderPass2KHR                func,
@@ -2258,17 +2510,6 @@ void VulkanReplayDumpResources::Process_vkCmdEndRenderPass2KHR(
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
 void VulkanReplayDumpResources::Process_vkCmdDrawIndirectCountKHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdDrawIndirectCountKHR               func,
@@ -2303,7 +2544,6 @@ void VulkanReplayDumpResources::Process_vkCmdDrawIndexedIndirectCountKHR(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdSetFragmentShadingRateKHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetFragmentShadingRateKHR          func,
@@ -2335,7 +2575,7 @@ void VulkanReplayDumpResources::Process_vkCmdSetRenderingAttachmentLocationsKHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetRenderingAttachmentLocationsKHR func,
     VkCommandBuffer                             commandBuffer,
-    const VkRenderingAttachmentLocationInfoKHR* pLocationInfo)
+    const VkRenderingAttachmentLocationInfo*    pLocationInfo)
 {
     if (IsRecording(commandBuffer))
     {
@@ -2361,7 +2601,7 @@ void VulkanReplayDumpResources::Process_vkCmdSetRenderingInputAttachmentIndicesK
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetRenderingInputAttachmentIndicesKHR func,
     VkCommandBuffer                             commandBuffer,
-    const VkRenderingInputAttachmentIndexInfoKHR* pInputAttachmentIndexInfo)
+    const VkRenderingInputAttachmentIndexInfo*  pInputAttachmentIndexInfo)
 {
     if (IsRecording(commandBuffer))
     {
@@ -2382,11 +2622,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetRenderingInputAttachmentIndicesK
         }
     }
 }
-
-
-
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdEncodeVideoKHR(
     const ApiCallInfo&                          call_info,
@@ -2546,35 +2781,6 @@ void VulkanReplayDumpResources::Process_vkCmdWriteTimestamp2KHR(
         if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
         {
              func(dispatch_rays_command_buffer, stage, queryPool, query);
-        }
-    }
-}
-
-void VulkanReplayDumpResources::Process_vkCmdWriteBufferMarker2AMD(
-    const ApiCallInfo&                          call_info,
-    PFN_vkCmdWriteBufferMarker2AMD              func,
-    VkCommandBuffer                             commandBuffer,
-    VkPipelineStageFlags2                       stage,
-    VkBuffer                                    dstBuffer,
-    VkDeviceSize                                dstOffset,
-    uint32_t                                    marker)
-{
-    if (IsRecording(commandBuffer))
-    {
-        CommandBufferIterator first, last;
-        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
-        if (found)
-        {
-            for (CommandBufferIterator it = first; it < last; ++it)
-            {
-                 func(*it, stage, dstBuffer, dstOffset, marker);
-            }
-        }
-
-        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
-        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
-        {
-             func(dispatch_rays_command_buffer, stage, dstBuffer, dstOffset, marker);
         }
     }
 }
@@ -2747,7 +2953,6 @@ void VulkanReplayDumpResources::Process_vkCmdTraceRaysIndirect2KHR(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdBindIndexBuffer2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdBindIndexBuffer2KHR                func,
@@ -2762,8 +2967,6 @@ void VulkanReplayDumpResources::Process_vkCmdBindIndexBuffer2KHR(
         OverrideCmdBindIndexBuffer2KHR(call_info, func, commandBuffer, buffer, offset, size, indexType);
     }
 }
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdSetLineStippleKHR(
     const ApiCallInfo&                          call_info,
@@ -2792,12 +2995,11 @@ void VulkanReplayDumpResources::Process_vkCmdSetLineStippleKHR(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdBindDescriptorSets2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdBindDescriptorSets2KHR             func,
     VkCommandBuffer                             commandBuffer,
-    const VkBindDescriptorSetsInfoKHR*          pBindDescriptorSetsInfo)
+    const VkBindDescriptorSetsInfo*             pBindDescriptorSetsInfo)
 {
     if (IsRecording(commandBuffer))
     {
@@ -2823,7 +3025,7 @@ void VulkanReplayDumpResources::Process_vkCmdPushConstants2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdPushConstants2KHR                  func,
     VkCommandBuffer                             commandBuffer,
-    const VkPushConstantsInfoKHR*               pPushConstantsInfo)
+    const VkPushConstantsInfo*                  pPushConstantsInfo)
 {
     if (IsRecording(commandBuffer))
     {
@@ -2849,7 +3051,7 @@ void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSet2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdPushDescriptorSet2KHR              func,
     VkCommandBuffer                             commandBuffer,
-    const VkPushDescriptorSetInfoKHR*           pPushDescriptorSetInfo)
+    const VkPushDescriptorSetInfo*              pPushDescriptorSetInfo)
 {
     if (IsRecording(commandBuffer))
     {
@@ -2875,7 +3077,7 @@ void VulkanReplayDumpResources::Process_vkCmdPushDescriptorSetWithTemplate2KHR(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdPushDescriptorSetWithTemplate2KHR  func,
     VkCommandBuffer                             commandBuffer,
-    const VkPushDescriptorSetWithTemplateInfoKHR* pPushDescriptorSetWithTemplateInfo)
+    const VkPushDescriptorSetWithTemplateInfo*  pPushDescriptorSetWithTemplateInfo)
 {
     if (IsRecording(commandBuffer))
     {
@@ -2948,8 +3150,6 @@ void VulkanReplayDumpResources::Process_vkCmdBindDescriptorBufferEmbeddedSampler
         }
     }
 }
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdDebugMarkerBeginEXT(
     const ApiCallInfo&                          call_info,
@@ -3204,7 +3404,6 @@ void VulkanReplayDumpResources::Process_vkCmdDrawIndirectByteCountEXT(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdDrawIndirectCountAMD(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdDrawIndirectCountAMD               func,
@@ -3266,11 +3465,6 @@ void VulkanReplayDumpResources::Process_vkCmdDrawIndexedIndirectCountAMD(
         }
     }
 }
-
-
-
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdBeginConditionalRenderingEXT(
     const ApiCallInfo&                          call_info,
@@ -3350,11 +3544,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetViewportWScalingNV(
         }
     }
 }
-
-
-
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdSetDiscardRectangleEXT(
     const ApiCallInfo&                          call_info,
@@ -3436,9 +3625,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetDiscardRectangleModeEXT(
     }
 }
 
-
-
-
 void VulkanReplayDumpResources::Process_vkCmdBeginDebugUtilsLabelEXT(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdBeginDebugUtilsLabelEXT            func,
@@ -3516,7 +3702,6 @@ void VulkanReplayDumpResources::Process_vkCmdInsertDebugUtilsLabelEXT(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdSetSampleLocationsEXT(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetSampleLocationsEXT              func,
@@ -3542,8 +3727,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetSampleLocationsEXT(
         }
     }
 }
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdBindShadingRateImageNV(
     const ApiCallInfo&                          call_info,
@@ -3758,7 +3941,6 @@ void VulkanReplayDumpResources::Process_vkCmdWriteAccelerationStructuresProperti
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdWriteBufferMarkerAMD(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdWriteBufferMarkerAMD               func,
@@ -3788,6 +3970,34 @@ void VulkanReplayDumpResources::Process_vkCmdWriteBufferMarkerAMD(
     }
 }
 
+void VulkanReplayDumpResources::Process_vkCmdWriteBufferMarker2AMD(
+    const ApiCallInfo&                          call_info,
+    PFN_vkCmdWriteBufferMarker2AMD              func,
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineStageFlags2                       stage,
+    VkBuffer                                    dstBuffer,
+    VkDeviceSize                                dstOffset,
+    uint32_t                                    marker)
+{
+    if (IsRecording(commandBuffer))
+    {
+        CommandBufferIterator first, last;
+        bool found = GetDrawCallActiveCommandBuffers(commandBuffer, first, last);
+        if (found)
+        {
+            for (CommandBufferIterator it = first; it < last; ++it)
+            {
+                 func(*it, stage, dstBuffer, dstOffset, marker);
+            }
+        }
+
+        VkCommandBuffer dispatch_rays_command_buffer = GetDispatchRaysCommandBuffer(commandBuffer);
+        if (dispatch_rays_command_buffer != VK_NULL_HANDLE)
+        {
+             func(dispatch_rays_command_buffer, stage, dstBuffer, dstOffset, marker);
+        }
+    }
+}
 
 void VulkanReplayDumpResources::Process_vkCmdDrawMeshTasksNV(
     const ApiCallInfo&                          call_info,
@@ -4039,15 +4249,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetPerformanceOverrideINTEL(
     }
 }
 
-
-
-
-
-
-
-
-
-
 void VulkanReplayDumpResources::Process_vkCmdSetLineStippleEXT(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetLineStippleEXT                  func,
@@ -4074,7 +4275,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetLineStippleEXT(
         }
     }
 }
-
 
 void VulkanReplayDumpResources::Process_vkCmdSetCullModeEXT(
     const ApiCallInfo&                          call_info,
@@ -4399,8 +4599,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetStencilOpEXT(
     }
 }
 
-
-
 void VulkanReplayDumpResources::Process_vkCmdPreprocessGeneratedCommandsNV(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdPreprocessGeneratedCommandsNV      func,
@@ -4508,8 +4706,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetDepthBias2EXT(
     }
 }
 
-
-
 void VulkanReplayDumpResources::Process_vkCmdSetFragmentShadingRateEnumNV(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetFragmentShadingRateEnumNV       func,
@@ -4537,9 +4733,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetFragmentShadingRateEnumNV(
     }
 }
 
-
-
-
 void VulkanReplayDumpResources::Process_vkCmdSetVertexInputEXT(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdSetVertexInputEXT                  func,
@@ -4554,8 +4747,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetVertexInputEXT(
         OverrideCmdSetVertexInputEXT(call_info, func, commandBuffer, vertexBindingDescriptionCount, pVertexBindingDescriptions, vertexAttributeDescriptionCount, pVertexAttributeDescriptions);
     }
 }
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdBindInvocationMaskHUAWEI(
     const ApiCallInfo&                          call_info,
@@ -4583,7 +4774,6 @@ void VulkanReplayDumpResources::Process_vkCmdBindInvocationMaskHUAWEI(
         }
     }
 }
-
 
 void VulkanReplayDumpResources::Process_vkCmdSetPatchControlPointsEXT(
     const ApiCallInfo&                          call_info,
@@ -4714,7 +4904,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetPrimitiveRestartEnableEXT(
         }
     }
 }
-
 
 void VulkanReplayDumpResources::Process_vkCmdSetColorWriteEnableEXT(
     const ApiCallInfo&                          call_info,
@@ -4993,8 +5182,6 @@ void VulkanReplayDumpResources::Process_vkCmdDrawClusterIndirectHUAWEI(
         }
     }
 }
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdUpdatePipelineIndirectBufferNV(
     const ApiCallInfo&                          call_info,
@@ -5841,7 +6028,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetCoverageReductionModeNV(
     }
 }
 
-
 void VulkanReplayDumpResources::Process_vkCmdOpticalFlowExecuteNV(
     const ApiCallInfo&                          call_info,
     PFN_vkCmdOpticalFlowExecuteNV               func,
@@ -5868,7 +6054,6 @@ void VulkanReplayDumpResources::Process_vkCmdOpticalFlowExecuteNV(
         }
     }
 }
-
 
 void VulkanReplayDumpResources::Process_vkCmdBindShadersEXT(
     const ApiCallInfo&                          call_info,
@@ -5924,8 +6109,6 @@ void VulkanReplayDumpResources::Process_vkCmdSetDepthClampRangeEXT(
         }
     }
 }
-
-
 
 void VulkanReplayDumpResources::Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
     const ApiCallInfo&                          call_info,

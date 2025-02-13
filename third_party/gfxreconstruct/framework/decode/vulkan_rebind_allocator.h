@@ -42,7 +42,7 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
   public:
     VulkanRebindAllocator();
 
-    virtual ~VulkanRebindAllocator() override;
+    ~VulkanRebindAllocator() override = default;
 
     virtual VkResult Initialize(uint32_t                                api_version,
                                 VkInstance                              instance,
@@ -173,6 +173,14 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
     virtual VkResult InvalidateMappedMemoryRanges(uint32_t                   memory_range_count,
                                                   const VkMappedMemoryRange* memory_ranges,
                                                   const MemoryData*          allocator_datas) override;
+
+    virtual VkResult SetDebugUtilsObjectNameEXT(VkDevice                       device,
+                                                VkDebugUtilsObjectNameInfoEXT* name_info,
+                                                uintptr_t                      allocator_data) override;
+
+    virtual VkResult SetDebugUtilsObjectTagEXT(VkDevice                      device,
+                                               VkDebugUtilsObjectTagInfoEXT* tag_info,
+                                               uintptr_t                     allocator_data) override;
 
     virtual VkResult
     WriteMappedMemoryRange(MemoryData allocator_data, uint64_t offset, uint64_t size, const uint8_t* data) override;
@@ -340,6 +348,10 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint32_t         height{ 0 };
         bool             uses_extensions{ false };
 
+        std::string          debug_utils_name;
+        std::vector<uint8_t> debug_utils_tag;
+        uint64_t             debug_utils_tag_name;
+
         // Image layouts for performing mapped memory writes to linear images with different capture/replay memory
         // alignments.
         std::vector<SubresourceLayouts> layouts;
@@ -351,10 +363,16 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
         uint32_t                                         original_index{ std::numeric_limits<uint32_t>::max() };
         bool                                             is_mapped{ false };
         VkDeviceSize                                     mapped_offset{ 0 };
+        AHardwareBuffer*                                          ahb{ nullptr };
+        VkDeviceMemory                                            ahb_memory{ VK_NULL_HANDLE };
         std::unique_ptr<uint8_t[]>                       original_content;
         std::unordered_map<VkBuffer, ResourceAllocInfo*> original_buffers;
         std::unordered_map<VkImage, ResourceAllocInfo*>  original_images;
         std::unordered_map<VkVideoSessionKHR, ResourceAllocInfo*> original_sessions;
+
+        std::string          debug_utils_name;
+        std::vector<uint8_t> debug_utils_tag;
+        uint64_t             debug_utils_tag_name;
     };
 
   private:
@@ -426,6 +444,8 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                               VkMemoryPropertyFlags*                  bind_memory_properties,
                               const VkPhysicalDeviceMemoryProperties& device_memory_properties);
 
+    VkResult AllocateAHBMemory(MemoryAllocInfo* memory_alloc_info, const VkImage image);
+
     VkResult BindImageMemory(VkImage                                 image,
                              VkDeviceMemory                          memory,
                              VkDeviceSize                            memory_offset,
@@ -434,18 +454,27 @@ class VulkanRebindAllocator : public VulkanResourceAllocator
                              VkMemoryPropertyFlags*                  bind_memory_properties,
                              const VkPhysicalDeviceMemoryProperties& device_memory_properties);
 
+    void SetBindingDebugUtilsNameAndTag(const MemoryAllocInfo*   memory_alloc_info,
+                                        const ResourceAllocInfo* resource_alloc_info,
+                                        VkDeviceMemory           device_memory,
+                                        VkObjectType             resource_type,
+                                        uint64_t                 resource_handle);
+
   private:
-    VkDevice                         device_;
+    VkDevice                         device_ = VK_NULL_HANDLE;
     VmaAllocator                     allocator_;
     Functions                        functions_;
     VmaVulkanFunctions               vma_functions_;
     VkPhysicalDeviceType             capture_device_type_;
     VkPhysicalDeviceMemoryProperties capture_memory_properties_;
     VkPhysicalDeviceMemoryProperties replay_memory_properties_;
-    VkCommandBuffer                  cmd_buffer_;
-    VkCommandPool                    cmd_pool_;
-    VkQueue                          staging_queue_;
-    uint32_t                         staging_queue_family_;
+    VkCommandBuffer                  cmd_buffer_    = VK_NULL_HANDLE;
+    VkCommandPool                    cmd_pool_      = VK_NULL_HANDLE;
+    VkQueue                          staging_queue_ = VK_NULL_HANDLE;
+    uint32_t                         staging_queue_family_{};
+
+    //! define a general minimum alignment for buffers
+    uint32_t min_buffer_alignment_ = 128;
 };
 
 GFXRECON_END_NAMESPACE(decode)

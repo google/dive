@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright (c) 2018-2020,2023 LunarG, Inc.
+# Copyright (c) 2018-2020,2023-2025 LunarG, Inc.
 # Copyright (c) 2018-2023 Advanced Micro Devices, Inc. All rights reserved
 # All rights reserved
 #
@@ -35,6 +35,7 @@ endif()
 
 target_sources(gfxrecon_util
                PRIVATE
+                    ${CMAKE_CURRENT_LIST_DIR}/alignment_utils.h
                     ${CMAKE_CURRENT_LIST_DIR}/argument_parser.h
                     ${CMAKE_CURRENT_LIST_DIR}/argument_parser.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/buffer_writer.h
@@ -105,8 +106,8 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/strings.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/to_string.h
                     ${CMAKE_CURRENT_LIST_DIR}/to_string.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/options.h
-                    ${CMAKE_CURRENT_LIST_DIR}/options.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/thread_data.h
+                    ${CMAKE_CURRENT_LIST_DIR}/thread_data.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/custom_common_to_string.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_common_to_string.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_enum_to_string.h

@@ -23,36 +23,16 @@
 #ifndef GFXRECONSTRUCT_UTIL_LINEAR_HASHMAP_H
 #define GFXRECONSTRUCT_UTIL_LINEAR_HASHMAP_H
 
+#include "util/alignment_utils.h"
 #include "util/defines.h"
 #include "util/hash.h"
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
-
-inline constexpr bool is_pow_2(uint64_t v)
-{
-    return !(v & (v - 1));
-}
-
-inline constexpr uint64_t next_pow_2(uint64_t v)
-{
-    if (is_pow_2(v))
-    {
-        return v;
-    }
-    v--;
-    v |= v >> 1U;
-    v |= v >> 2U;
-    v |= v >> 4U;
-    v |= v >> 8U;
-    v |= v >> 16U;
-    v |= v >> 32U;
-    v++;
-    return v;
-}
 
 /**
  * @brief   linear_hashmap is a hashmap using open addressing with linear probing.
@@ -75,7 +55,7 @@ class linear_hashmap
 
     linear_hashmap()                      = default;
     linear_hashmap(const linear_hashmap&) = delete;
-    linear_hashmap(linear_hashmap& other) : linear_hashmap() { swap(*this, other); };
+    linear_hashmap(linear_hashmap&& other) noexcept : linear_hashmap() { swap(*this, other); };
     linear_hashmap& operator=(linear_hashmap other)
     {
         swap(*this, other);
@@ -83,7 +63,7 @@ class linear_hashmap
     }
 
     explicit linear_hashmap(uint64_t min_capacity) :
-        m_capacity(next_pow_2(min_capacity)), m_storage(std::make_unique<storage_item_t[]>(m_capacity))
+        m_capacity(util::next_pow_2(min_capacity)), m_storage(std::make_unique<storage_item_t[]>(m_capacity))
     {
         clear();
     }

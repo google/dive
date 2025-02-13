@@ -306,6 +306,7 @@ option values.
 | Capture Specific Frames                        | debug.gfxrecon.capture_frames                                 | STRING  | Specify one or more comma-separated frame ranges to capture.  Each range will be written to its own file.  A frame range can be specified as a single value, to specify a single frame to capture, or as two hyphenated values, to specify the first and last frame to capture.  Frame ranges should be specified in ascending order and cannot overlap. Note that frame numbering is 1-based (i.e. the first frame is frame 1).  Example: `200,301-305` will create two capture files, one containing a single frame and one containing five frames.  Default is: Empty string (all frames are captured).                                                                                                                                                                                                                                                                                                                                                                  |
 | Quit after capturing frame ranges              | debug.gfxrecon.quit_after_capture_frames                      | BOOL    | Setting it to `true` will force the application to terminate once all frame ranges specified by `debug.gfxrecon.capture_frames` have been captured. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Capture trigger for Android                    | debug.gfxrecon.capture_android_trigger                        | BOOL    | Set during runtime to `true` to start capturing and to `false` to stop. If not set at all then it is disabled (non-trimmed capture). Default is not set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Capture Trigger Frames                         | debug.gfxrecon.capture_trigger_frames                         | STRING  | Specify a limit on the number of frames to be captured via trim trigger. Example: `1` will capture exactly one frame when the trimming is triggered. Default is: Empty string (no limit) |
 | Use asset file                                 | debug.gfxrecon.capture_use_asset_file                         | BOOL    | When set to `true` assets (images, buffers and descriptors) will be stored separately into an asset file instead of the capture file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Dump asset file                                 | debug.gfxrecon.capture_android_dump_assets                   | BOOL    | Setting this triggers a dump of all assets into the asset file. Since android options cannot be set by the layer, dumping is done whenever this option switches between from `false` to `true` or from `true` to `false`. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Capture File Compression Type                  | debug.gfxrecon.capture_compression_type                       | STRING  | Compression format to use with the capture file.  Valid values are: `LZ4`, `ZLIB`, `ZSTD`, and `NONE`. Default is: `LZ4`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -725,6 +726,7 @@ usage: gfxrecon.py replay [-h] [--push-file LOCAL_FILE] [--version] [--pause-fra
                           [--dump-resources-dump-raw-images]
                           [--dump-resources-dump-all-image-subresources]
                           [--pbi-all] [--pbis <index1,index2>]
+                          [--quit-after-frame]
                           [file]
 
 Launch the replay tool.
@@ -919,10 +921,31 @@ optional arguments:
               Enables dumping of all image sub resources (mip map levels and array layers)
   --dump-resources-dump-raw-images
               When enabled all image resources will be dumped verbatim as raw bin files.
+  --dump-resources-dump-separate-alpha
+              When enabled alpha channel of dumped images will be dumped in a separate file.
   --pbi-all
               Print all block information.
   --pbis <index1,index2>
               Print block information between block index1 and block index2.
+  --save-pipeline-cache DEVICE_FILE
+                        If set, produces pipeline caches at replay time instead
+                        of using the one saved at capture time and save those
+                        caches in DEVICE_FILE.
+                        (forwarded to replay tool)
+  --load-pipeline-cache DEVICE_FILE
+                        If set, loads data created by the
+                        `--save-pipeline-cache` option in DEVICE_FILE
+                        and uses it to create the pipelines instead of the
+                        pipeline caches saved at capture time.
+                        (forwarded to replay tool)
+  --add-new-pipeline-caches
+                        If set, allows gfxreconstruct to create new
+                        vkPipelineCache objects when it encounters a pipeline
+                        created without cache. This option can be used in
+                        coordination with `--save-pipeline-cache` and
+                        `--load-pipeline-cache`. (forwarded to replay tool)
+  --quit-after-frame
+              Specify a frame after which replay will terminate.
 ```
 
 The command will force-stop an active replay process before starting the replay

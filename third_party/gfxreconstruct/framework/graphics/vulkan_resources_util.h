@@ -52,7 +52,7 @@ class VulkanResourcesUtil
                         const encode::VulkanInstanceTable&      instance_table,
                         const VkPhysicalDeviceMemoryProperties& memory_properties) :
         device_(device),
-        physical_device_(physical_device), device_table_(device_table), instance_table_(instance_table),
+        device_table_(device_table), physical_device_(physical_device), instance_table_(instance_table),
         memory_properties_(memory_properties), queue_family_index_(UINT32_MAX), command_pool_(VK_NULL_HANDLE),
         command_buffer_(VK_NULL_HANDLE)
     {
@@ -110,6 +110,8 @@ class VulkanResourcesUtil
                                           VkSampleCountFlags     samples,
                                           VkImageLayout          layout,
                                           uint32_t               queue_family_index,
+                                          bool                   external_format,
+                                          VkDeviceSize           size,
                                           VkImageAspectFlagBits  aspect,
                                           std::vector<uint8_t>&  data,
                                           std::vector<uint64_t>& subresource_offsets,

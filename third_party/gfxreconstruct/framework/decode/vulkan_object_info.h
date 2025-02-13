@@ -62,28 +62,29 @@ enum InstanceArrayIndices : uint32_t
 
 enum PhysicalDeviceArrayIndices : uint32_t
 {
-    kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties                          = 0,
-    kPhysicalDeviceArrayGetPhysicalDeviceSparseImageFormatProperties                    = 1,
-    kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties2                         = 2,
-    kPhysicalDeviceArrayGetPhysicalDeviceSparseImageFormatProperties2                   = 3,
-    kPhysicalDeviceArrayGetPhysicalDeviceDisplayPropertiesKHR                           = 4,
-    kPhysicalDeviceArrayGetPhysicalDeviceDisplayPlanePropertiesKHR                      = 5,
-    kPhysicalDeviceArrayGetDisplayPlaneSupportedDisplaysKHR                             = 6,
-    kPhysicalDeviceArrayGetPhysicalDeviceSurfaceFormats2KHR                             = 7,
-    kPhysicalDeviceArrayGetPhysicalDeviceDisplayProperties2KHR                          = 8,
-    kPhysicalDeviceArrayGetPhysicalDeviceDisplayPlaneProperties2KHR                     = 9,
-    kPhysicalDeviceArrayGetPhysicalDeviceCalibrateableTimeDomainsEXT                    = 10,
-    kPhysicalDeviceArrayGetPhysicalDeviceCooperativeMatrixPropertiesNV                  = 11,
-    kPhysicalDeviceArrayGetPhysicalDeviceSupportedFramebufferMixedSamplesCombinationsNV = 12,
-    kPhysicalDeviceArrayGetPhysicalDeviceSurfacePresentModes2EXT                        = 13,
-    kPhysicalDeviceArrayEnumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR   = 14,
-    kPhysicalDeviceArrayGetPhysicalDeviceToolProperties                                 = 15,
-    kPhysicalDeviceArrayGetPhysicalDeviceFragmentShadingRatesKHR                        = 16,
-    kFramebufferArrayGetFramebufferTilePropertiesQCOM                                   = 17,
-    kPhysicalDeviceArrayGetPhysicalDeviceOpticalFlowImageFormatsNV                      = 18,
-    kPhysicalDeviceArrayGetPhysicalDeviceVideoFormatPropertiesKHR                       = 19,
-    kVideoSessionKHRArrayGetVideoSessionMemoryRequirementsKHR                           = 20,
-    kShaderEXTArrayGetShaderBinaryDataEXT                                               = 21,
+    kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties                           = 0,
+    kPhysicalDeviceArrayGetPhysicalDeviceSparseImageFormatProperties                     = 1,
+    kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties2                          = 2,
+    kPhysicalDeviceArrayGetPhysicalDeviceSparseImageFormatProperties2                    = 3,
+    kPhysicalDeviceArrayGetPhysicalDeviceDisplayPropertiesKHR                            = 4,
+    kPhysicalDeviceArrayGetPhysicalDeviceDisplayPlanePropertiesKHR                       = 5,
+    kPhysicalDeviceArrayGetDisplayPlaneSupportedDisplaysKHR                              = 6,
+    kPhysicalDeviceArrayGetPhysicalDeviceSurfaceFormats2KHR                              = 7,
+    kPhysicalDeviceArrayGetPhysicalDeviceDisplayProperties2KHR                           = 8,
+    kPhysicalDeviceArrayGetPhysicalDeviceDisplayPlaneProperties2KHR                      = 9,
+    kPhysicalDeviceArrayGetPhysicalDeviceCalibrateableTimeDomainsEXT                     = 10,
+    kPhysicalDeviceArrayGetPhysicalDeviceCooperativeMatrixPropertiesNV                   = 11,
+    kPhysicalDeviceArrayGetPhysicalDeviceSupportedFramebufferMixedSamplesCombinationsNV  = 12,
+    kPhysicalDeviceArrayGetPhysicalDeviceSurfacePresentModes2EXT                         = 13,
+    kPhysicalDeviceArrayEnumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR    = 14,
+    kPhysicalDeviceArrayGetPhysicalDeviceToolProperties                                  = 15,
+    kPhysicalDeviceArrayGetPhysicalDeviceFragmentShadingRatesKHR                         = 16,
+    kFramebufferArrayGetFramebufferTilePropertiesQCOM                                    = 17,
+    kPhysicalDeviceArrayGetPhysicalDeviceOpticalFlowImageFormatsNV                       = 18,
+    kPhysicalDeviceArrayGetPhysicalDeviceVideoFormatPropertiesKHR                        = 19,
+    kVideoSessionKHRArrayGetVideoSessionMemoryRequirementsKHR                            = 20,
+    kShaderEXTArrayGetShaderBinaryDataEXT                                                = 21,
+    kPhysicalDeviceArrayGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV = 22,
 
     // Aliases for extensions functions that were promoted to core.
     kPhysicalDeviceArrayGetPhysicalDeviceQueueFamilyProperties2KHR =
@@ -165,7 +166,8 @@ struct VulkanReplayDeviceInfo
     std::optional<VkPhysicalDeviceMemoryProperties> memory_properties;
 
     // extensions
-    std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR> raytracing_properties;
+    std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR>    raytracing_properties;
+    std::optional<VkPhysicalDeviceAccelerationStructurePropertiesKHR> acceleration_structure_properties;
 };
 
 template <typename T>
@@ -280,11 +282,8 @@ struct VulkanPhysicalDeviceInfo : public VulkanObjectInfo<VkPhysicalDevice>
     std::string                      capture_device_name;
     VkPhysicalDeviceMemoryProperties capture_memory_properties{};
 
-    // capture raytracing shader-binding-table properties
-    // extracted from VkPhysicalDeviceRayTracingPipelinePropertiesKHR
-    uint32_t shaderGroupHandleSize      = 0;
-    uint32_t shaderGroupBaseAlignment   = 0;
-    uint32_t shaderGroupHandleAlignment = 0;
+    // capture raytracing (shader-binding-table) properties
+    std::optional<VkPhysicalDeviceRayTracingPipelinePropertiesKHR> capture_raytracing_properties = {};
 
     // Closest matching replay device.
     VulkanReplayDeviceInfo* replay_device_info{ nullptr };
@@ -398,6 +397,7 @@ struct VulkanImageInfo : public VulkanObjectInfo<VkImage>
     VkImageUsageFlags     usage{ 0 };
     VkImageType           type{};
     VkFormat              format{};
+    bool                  external_format{ false };
     VkExtent3D            extent{ 0, 0, 0 };
     VkImageTiling         tiling{};
     VkSampleCountFlagBits sample_count{};
@@ -408,6 +408,8 @@ struct VulkanImageInfo : public VulkanObjectInfo<VkImage>
 
     VkImageLayout current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
     VkImageLayout intermediate_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
+
+    VkDeviceSize size{ 0 };
 };
 
 struct VulkanPipelineCacheData
@@ -433,8 +435,10 @@ struct VulkanShaderModuleInfo : public VulkanObjectInfo<VkShaderModule>
     // by the dump resources feature
     struct ShaderDescriptorInfo
     {
-        ShaderDescriptorInfo(VkDescriptorType type, bool readonly, uint32_t accessed, uint32_t count, bool is_array) :
-            type(type), readonly(readonly), accessed(accessed), count(count), is_array(is_array)
+        ShaderDescriptorInfo(
+            VkDescriptorType _type, bool _readonly, uint32_t _accessed, uint32_t _count, bool _is_array) :
+            type(_type),
+            readonly(_readonly), accessed(_accessed), count(_count), is_array(_is_array)
         {}
 
         ShaderDescriptorInfo(const ShaderDescriptorInfo& other)            = default;
@@ -619,10 +623,13 @@ struct VulkanShaderEXTInfo : VulkanObjectInfoAsync<VkShaderEXT>
 
 struct VulkanCommandBufferInfo : public VulkanPoolObjectInfo<VkCommandBuffer>
 {
-    bool                                                is_frame_boundary{ false };
-    std::vector<format::HandleId>                       frame_buffer_ids;
-    std::unordered_map<format::HandleId, VkImageLayout> image_layout_barriers;
-    format::HandleId                                    bound_pipeline_id = format::kNullHandleId;
+    bool                                                      is_frame_boundary{ false };
+    std::vector<format::HandleId>                             frame_buffer_ids;
+    std::unordered_map<format::HandleId, VkImageLayout>       image_layout_barriers;
+    std::unordered_map<VkPipelineBindPoint, format::HandleId> bound_pipelines;
+    std::vector<uint8_t>                                      push_constant_data;
+    VkShaderStageFlags                                        push_constant_stage_flags     = 0;
+    VkPipelineLayout                                          push_constant_pipeline_layout = VK_NULL_HANDLE;
 };
 
 struct VulkanRenderPassInfo : public VulkanObjectInfo<VkRenderPass>
@@ -649,7 +656,7 @@ struct VulkanRenderPassInfo : public VulkanObjectInfo<VkRenderPass>
     std::vector<VkSubpassDependency> dependencies;
 
     // Multiview info
-    bool has_multiview;
+    bool has_multiview{ false };
 
     struct
     {
@@ -704,6 +711,11 @@ struct VulkanAccelerationStructureKHRInfo : public VulkanObjectInfo<VkAccelerati
 {
     VkDeviceAddress capture_address = 0;
     VkDeviceAddress replay_address  = 0;
+
+    VkAccelerationStructureTypeKHR type = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+
+    //! associated buffer
+    VkBuffer buffer = VK_NULL_HANDLE;
 };
 
 //

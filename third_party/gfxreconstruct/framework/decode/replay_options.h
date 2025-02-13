@@ -47,6 +47,7 @@ struct ReplayOptions
     bool                         create_dummy_allocations{ false };
     bool                         omit_null_hardware_buffers{ false };
     bool                         quit_after_measurement_frame_range{ false };
+    bool                         quit_after_frame{ false };
     bool                         flush_measurement_frame_range{ false };
     bool                         flush_inside_measurement_range{ false };
     bool                         force_windowed{ false };
@@ -70,6 +71,7 @@ struct ReplayOptions
     int32_t                      num_pipeline_creation_jobs{ 0 };
     std::string                  asset_file_path;
     std::string                  dump_resources_output_dir;
+    bool                         dump_resources_before{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)

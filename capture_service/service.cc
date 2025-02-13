@@ -152,7 +152,10 @@ void StopServer()
 void RunServer(uint16_t port)
 {
     LOGI("port is %d\n", port);
-    std::string     server_address = absl::StrFormat("0.0.0.0:%d", port);
+    // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
+    // It avoids the need to grant INTERNET permission to the target application.
+    // Also, no file-based permissions apply since it is in an abstract namespace.
+    std::string     server_address = absl::StrFormat("unix-abstract:dive_%d", port);
     DiveServiceImpl service;
 
     grpc::EnableDefaultHealthCheckService(true);

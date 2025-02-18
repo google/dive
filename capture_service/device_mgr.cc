@@ -46,7 +46,8 @@ std::string DeviceInfo::GetDisplayName() const
 
 AndroidDevice::AndroidDevice(const std::string &serial) :
     m_serial(serial),
-    m_adb(serial)
+    m_adb(serial),
+    m_port(kFirstPort)
 {
 }
 
@@ -173,6 +174,24 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name,
     return lib_path;
 }
 
+absl::Status AndroidDevice::ForwardFirstAvailablePort()
+{
+    for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
+    {
+        auto res = Adb().RunAndGetResult(
+        absl::StrFormat("forward tcp:%d localabstract:%s", p, kUnixAbstractPath));
+        if (res.ok())
+        {
+            m_port = p;
+            return absl::OkStatus();
+        }
+    }
+    return absl::Status(absl::StatusCode::kUnknown,
+                        absl::StrFormat("Failed to forward available port between %d and %d",
+                                        kFirstPort,
+                                        kFirstPort + kPortRange));
+}
+
 absl::Status AndroidDevice::SetupDevice()
 {
     RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
@@ -192,8 +211,7 @@ absl::Status AndroidDevice::SetupDevice()
         Adb().Run(absl::StrFormat("push %s %s",
                                   ResolveAndroidLibPath(kXrLayerLibName, "").generic_string(),
                                   kTargetPath)));
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("forward tcp:%d localabstract:dive_%d", kPort, kPort)));
+        RETURN_IF_ERROR(ForwardFirstAvailablePort());
     }
 
 #if defined(DIVE_ENABLE_PERFETTO)
@@ -230,7 +248,7 @@ absl::Status AndroidDevice::CleanupDevice()
         Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
         RETURN_IF_ERROR(
         Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
-        RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
+        RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", Port()), true));
     }
 
     LOGD("Cleanup device %s done\n", m_serial.c_str());
@@ -406,7 +424,7 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
     RETURN_IF_ERROR(
     adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName), true));
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath), true));
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", kPort), true));
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", GetDevice()->Port()), true));
 
     RETURN_IF_ERROR(adb.Run("shell settings delete global enable_gpu_debug_layers"));
     RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_app"));

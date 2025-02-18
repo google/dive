@@ -105,7 +105,6 @@ ABSL_FLAG(Command,
           command,
           Command::kNone,
           "list of actions: \n\tlist_device \n\tlist_package \n\trun \n\tcapture");
-ABSL_FLAG(std::string, target, "localhost:19999", "Server address");
 ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
 ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli application to run");
@@ -293,7 +292,7 @@ bool run_package(Dive::DeviceManager& mgr,
 
 bool trigger_capture(Dive::DeviceManager& mgr)
 {
-    std::string target_str = absl::GetFlag(FLAGS_target);
+    std::string target_str = absl::StrFormat("localhost:%d", mgr.GetDevice()->Port());
     std::string download_path = absl::GetFlag(FLAGS_download_path);
     std::string input;
 
@@ -419,7 +418,6 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
 
 bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
-    std::string           target_str = absl::GetFlag(FLAGS_target);
     std::string           download_path = absl::GetFlag(FLAGS_download_path);
     std::filesystem::path target_download_path(download_path);
 
@@ -453,7 +451,6 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                      const bool           is_gfxr_capture)
 {
 
-    std::string target_str = absl::GetFlag(FLAGS_target);
     run_package(mgr,
                 app_type,
                 package,
@@ -535,7 +532,6 @@ int main(int argc, char** argv)
 {
     absl::SetProgramUsageMessage("Run app with --help for more details");
     absl::ParseCommandLine(argc, argv);
-    std::string target_str = absl::GetFlag(FLAGS_target);
     Command     cmd = absl::GetFlag(FLAGS_command);
     std::string serial = absl::GetFlag(FLAGS_device);
     std::string package = absl::GetFlag(FLAGS_package);

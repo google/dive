@@ -32,6 +32,10 @@ inline constexpr char kGfxrRuntimeCapture[] = "gfxr_runtime_capture";
 inline constexpr char kManifestFileName[] = "XrApiLayer_dive.json";
 inline constexpr char kManifestFilePath[] = "/system/etc/openxr/1/api_layers/implicit.d/";
 inline constexpr char kVulkanGlobalPath[] = "/data/local/debug/vulkan";
-inline constexpr int  kPort = 19999;
 inline constexpr int  kDownLoadFileChunkSize = 4096;
+inline constexpr char kUnixAbstractPath[] = "dive_abstract";
+inline constexpr int
+kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)
+inline constexpr int
+kPortRange = 7;  // A small range of ports should be enough to find an available one
 }  // namespace Dive

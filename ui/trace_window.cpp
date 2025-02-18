@@ -678,8 +678,6 @@ void ProgressBarWorker::run()
 
 void TraceWorker::run()
 {
-    const std::string server_str = "localhost:19999";
-
     auto device = Dive::GetDeviceManager().GetDevice();
     if (device == nullptr)
     {
@@ -694,6 +692,7 @@ void TraceWorker::run()
         ShowErrorMessage(err_msg);
         return;
     }
+    const std::string server_str = absl::StrFormat("localhost:%d", device->Port());
 
     Dive::DiveClient client(grpc::CreateChannel(server_str, grpc::InsecureChannelCredentials()));
     absl::StatusOr<std::string> reply = client.TestConnection();

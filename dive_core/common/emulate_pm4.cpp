@@ -48,38 +48,75 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
                                    uint64_t              va_addr,
                                    Pm4Header             header)
 {
-    // type 4 is setting register
-    if (header.type != 4)
-        return true;
-
-    uint32_t offset_in_bytes = 0;
-    uint32_t dword = 0;
-    while (dword < header.type4.count)
+    if (header.type == 7 && header.type7.opcode == CP_CONTEXT_REG_BUNCH)
     {
-        uint64_t reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
-        uint32_t reg_offset = header.type4.offset + dword;
-        DIVE_ASSERT(reg_offset < kNumRegs);
-        const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
-
-        constexpr size_t dword_in_bytes = sizeof(uint32_t);
-        uint32_t         size_in_dwords = 1;
-        if (reg_info_ptr != nullptr)
+        uint32_t dword = 0;
+        while (dword < header.type7.count)
         {
-            if (reg_info_ptr->m_is_64_bit)
-                size_in_dwords = 2;
-        }
-        offset_in_bytes += size_in_dwords * dword_in_bytes;
-        for (uint32_t i = 0; i < size_in_dwords; ++i)
-        {
-            uint32_t reg_value = 0;
-            DIVE_VERIFY(mem_manager.CopyMemory(&reg_value,
-                                               submit_index,
-                                               reg_va_addr + i * dword_in_bytes,
-                                               dword_in_bytes));
-            SetReg(reg_offset + i, reg_value);
-        }
+            struct RegPair
+            {
+                uint32_t m_reg_offset;
+                uint32_t m_reg_value;
+            };
+            RegPair  reg_pair;
+            uint64_t pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
+            DIVE_VERIFY(
+            mem_manager.CopyMemory(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
+            dword += 2;
+            SetReg(reg_pair.m_reg_offset, reg_pair.m_reg_value);
 
-        dword += size_in_dwords;
+            const RegInfo *reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
+            if (reg_info_ptr && reg_info_ptr->m_is_64_bit)
+            {
+                RegPair  new_reg_pair;
+                uint64_t new_pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
+                DIVE_VERIFY(mem_manager.CopyMemory(&new_reg_pair,
+                                                   submit_index,
+                                                   new_pair_addr,
+                                                   sizeof(new_reg_pair)));
+
+                // Sometimes the upper 32-bits are not set
+                // Probably because they're 0s and there's no need to set it
+                if (new_reg_pair.m_reg_offset == reg_pair.m_reg_offset + 1)
+                {
+                    dword += 2;
+                    SetReg(new_reg_pair.m_reg_offset, new_reg_pair.m_reg_value);
+                }
+            }
+        }
+    }
+    // type 4 is setting register
+    else if (header.type == 4)
+    {
+        uint32_t offset_in_bytes = 0;
+        uint32_t dword = 0;
+        while (dword < header.type4.count)
+        {
+            uint64_t reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
+            uint32_t reg_offset = header.type4.offset + dword;
+            DIVE_ASSERT(reg_offset < kNumRegs);
+            const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
+
+            constexpr size_t dword_in_bytes = sizeof(uint32_t);
+            uint32_t         size_in_dwords = 1;
+            if (reg_info_ptr != nullptr)
+            {
+                if (reg_info_ptr->m_is_64_bit)
+                    size_in_dwords = 2;
+            }
+            offset_in_bytes += size_in_dwords * dword_in_bytes;
+            for (uint32_t i = 0; i < size_in_dwords; ++i)
+            {
+                uint32_t reg_value = 0;
+                DIVE_VERIFY(mem_manager.CopyMemory(&reg_value,
+                                                   submit_index,
+                                                   reg_va_addr + i * dword_in_bytes,
+                                                   dword_in_bytes));
+                SetReg(reg_offset + i, reg_value);
+            }
+
+            dword += size_in_dwords;
+        }
     }
 
     return true;

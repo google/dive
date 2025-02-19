@@ -31,8 +31,6 @@ limitations under the License.
 #include "log.h"
 #include "trace_mgr.h"
 
-ABSL_FLAG(uint16_t, port, 19999, "Server port for the service");
-
 namespace Dive
 {
 
@@ -149,15 +147,13 @@ void StopServer()
     }
 }
 
-void RunServer(uint16_t port)
+void RunServer()
 {
-    LOGI("port is %d\n", port);
     // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
     // It avoids the need to grant INTERNET permission to the target application.
     // Also, no file-based permissions apply since it is in an abstract namespace.
-    std::string     server_address = absl::StrFormat("unix-abstract:dive_%d", port);
+    std::string     server_address = absl::StrFormat("unix-abstract:%s", kUnixAbstractPath);
     DiveServiceImpl service;
-
     grpc::EnableDefaultHealthCheckService(true);
     grpc::ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
@@ -171,7 +167,7 @@ void RunServer(uint16_t port)
 
 int ServerMain()
 {
-    RunServer(absl::GetFlag(FLAGS_port));
+    RunServer();
     return 0;
 }
 

@@ -78,13 +78,12 @@ struct VulkanReplayOptions : public ReplayOptions
     std::vector<std::vector<std::vector<uint64_t>>> RenderPass_Indices;
     std::vector<std::vector<uint64_t>>              Dispatch_Indices;
     std::vector<std::vector<uint64_t>>              TraceRays_Indices;
-    std::unordered_set<uint64_t>                    QueueSubmit_Indices;
+    std::vector<uint64_t>                           QueueSubmit_Indices;
     std::string                                     dump_resources;
     util::ScreenshotFormat                          dump_resources_image_format{ util::ScreenshotFormat::kBmp };
 
     // Flag to quickly check whether the feature is enabled or not
     bool  dumping_resources{ false };
-    bool  dump_resources_before{ false };
     bool  dump_resources_dump_depth{ false };
     int   dump_resources_color_attachment_index{ kUnspecifiedColorAttachment };
     float dump_resources_scale{ 1.0f };
@@ -93,8 +92,13 @@ struct VulkanReplayOptions : public ReplayOptions
     bool  dump_resources_dump_immutable_resources{ false };
     bool  dump_resources_dump_all_image_subresources{ false };
     bool  dump_resources_dump_raw_images{ false };
+    bool  dump_resources_dump_separate_alpha{ false };
 
     bool preload_measurement_range{ false };
+
+    std::string load_pipeline_cache_filename;
+    std::string save_pipeline_cache_filename;
+    bool        add_new_pipeline_caches;
 };
 
 GFXRECON_END_NAMESPACE(decode)

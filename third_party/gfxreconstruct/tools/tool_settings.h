@@ -104,6 +104,7 @@ const char kOutput[]                             = "--output";
 const char kMeasurementRangeArgument[]           = "--measurement-frame-range";
 const char kMeasurementFileArgument[]            = "--measurement-file";
 const char kQuitAfterMeasurementRangeOption[]    = "--quit-after-measurement-range";
+const char kQuitAfterFrameArgument[]             = "--quit-after-frame";
 const char kFlushMeasurementRangeOption[]        = "--flush-measurement-range";
 const char kFlushInsideMeasurementRangeOption[]  = "--flush-inside-measurement-range";
 const char kSwapchainOption[]                    = "--swapchain";
@@ -124,6 +125,9 @@ const char kPrintBlockInfoAllOption[]             = "--pbi-all";
 const char kPrintBlockInfosArgument[]             = "--pbis";
 const char kNumPipelineCreationJobs[]             = "--pipeline-creation-jobs";
 const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range";
+const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
+const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
+const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
@@ -142,6 +146,7 @@ const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-outpu
 const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
 const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
+const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
 
 enum class WsiPlatform
 {
@@ -695,6 +700,25 @@ GetScreenshotRanges(const gfxrecon::util::ArgumentParser& arg_parser)
     return ranges;
 }
 
+static bool GetQuitAfterFrame(const gfxrecon::util::ArgumentParser& arg_parser, uint32_t& quit_frame)
+{
+    const std::string& value = arg_parser.GetArgumentValue(kQuitAfterFrameArgument);
+    if (!value.empty())
+    {
+        if (std::count_if(value.begin(), value.end(), ::isdigit) != value.length())
+        {
+            GFXRECON_LOG_WARNING("Ignoring invalid quit after frame \"%s\", which contains non-numeric values",
+                                 value.c_str());
+            return false;
+        }
+
+        quit_frame = std::stoi(value);
+        return true;
+    }
+
+    return false;
+}
+
 static bool
 GetMeasurementFrameRange(const gfxrecon::util::ArgumentParser& arg_parser, uint32_t& start_frame, uint32_t& end_frame)
 {
@@ -936,6 +960,11 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
         options.override_gpu_index = std::stoi(override_gpu);
     }
 
+    if (arg_parser.IsArgumentSet(kQuitAfterFrameArgument))
+    {
+        options.quit_after_frame = true;
+    }
+
     IsForceWindowed(options, arg_parser);
     SetWindowOrigin(options, arg_parser);
 }
@@ -1099,13 +1128,18 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         arg_parser.IsOptionSet(kDumpResourcesDumpImmutableResources);
     replay_options.dump_resources_dump_all_image_subresources =
         arg_parser.IsOptionSet(kDumpResourcesDumpImageSubresources);
-    replay_options.dump_resources_dump_raw_images = arg_parser.IsOptionSet(kDumpResourcesDumpRawImages);
+    replay_options.dump_resources_dump_raw_images     = arg_parser.IsOptionSet(kDumpResourcesDumpRawImages);
+    replay_options.dump_resources_dump_separate_alpha = arg_parser.IsOptionSet(kDumpResourcesDumpSeparateAlpha);
 
     std::string dr_color_att_idx = arg_parser.GetArgumentValue(kDumpResourcesColorAttIdxArg);
     if (!dr_color_att_idx.empty())
     {
         replay_options.dump_resources_color_attachment_index = std::stoi(dr_color_att_idx);
     }
+
+    replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
+    replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
+    replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
 
     return replay_options;
 }
@@ -1159,6 +1193,7 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
     }
 
     replay_options.dump_resources_output_dir = GetDumpResourcesDir(arg_parser);
+    replay_options.dump_resources_before     = arg_parser.IsOptionSet(kDumpResourcesBeforeDrawOption);
 
     const std::string& memory_usage = arg_parser.GetArgumentValue(kBatchingMemoryUsageArgument);
     if (!memory_usage.empty())

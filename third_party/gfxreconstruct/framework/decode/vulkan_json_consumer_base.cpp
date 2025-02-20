@@ -23,6 +23,8 @@
 #include "decode/vulkan_json_consumer_base.h"
 #include "decode/custom_vulkan_struct_to_json.h"
 
+#include "generated/generated_vulkan_enum_to_json.h"
+
 #include "util/json_util.h"
 #include "util/platform.h"
 #include "util/file_path.h"
@@ -66,6 +68,23 @@ std::string VulkanExportJsonConsumerBase::GenerateFilename(const std::string& fi
 bool VulkanExportJsonConsumerBase::WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data)
 {
     return writer_->WriteBinaryFile(filename, data_size, data);
+}
+
+void VulkanExportJsonConsumerBase::ProcessSetDeviceMemoryPropertiesCommand(
+    format::HandleId                             physical_device_id,
+    const std::vector<format::DeviceMemoryType>& memory_types,
+    const std::vector<format::DeviceMemoryHeap>& memory_heaps)
+{
+    const JsonOptions& json_options = GetJsonOptions();
+
+    writer_->SetCurrentBlockIndex(block_index_);
+    auto& jdata = writer_->WriteMetaCommandStart("SetDeviceMemoryPropertiesCommand");
+
+    HandleToJson(jdata["physical_device_id"], physical_device_id, json_options);
+    FieldToJson(jdata["memory_types"], memory_types, json_options);
+    FieldToJson(jdata["memory_heaps"], memory_heaps, json_options);
+
+    WriteBlockEnd();
 }
 
 void VulkanExportJsonConsumerBase::Process_vkCmdBuildAccelerationStructuresIndirectKHR(
@@ -250,16 +269,15 @@ void VulkanExportJsonConsumerBase::Process_vkCmdPushDescriptorSetWithTemplateKHR
 }
 
 void VulkanExportJsonConsumerBase::Process_vkCmdPushDescriptorSetWithTemplate2KHR(
-    const ApiCallInfo&                                                    call_info,
-    format::HandleId                                                      commandBuffer,
-    StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* pPushDescriptorSetWithTemplateInfo)
+    const ApiCallInfo&                                                 call_info,
+    format::HandleId                                                   commandBuffer,
+    StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo)
 {
     const JsonOptions& json_options = GetJsonOptions();
 
     auto& function = WriteApiCallStart(call_info, "vkCmdPushDescriptorSetWithTemplate2KHR");
     auto& args     = function[NameArgs()];
-    const StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>* info =
-        pPushDescriptorSetWithTemplateInfo;
+    const StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* info = pPushDescriptorSetWithTemplateInfo;
 
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pPushDescriptorSetWithTemplateInfo"], info, json_options);

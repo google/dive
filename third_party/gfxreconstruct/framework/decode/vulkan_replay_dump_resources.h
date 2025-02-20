@@ -32,7 +32,6 @@
 #include "decode/vulkan_replay_dump_resources_draw_calls.h"
 #include "decode/vulkan_replay_dump_resources_compute_ray_tracing.h"
 #include "generated/generated_vulkan_dispatch_table.h"
-#include "decode/vulkan_replay_dump_resources_json.h"
 #include "format/format.h"
 #include "util/defines.h"
 #include "vulkan/vulkan_core.h"
@@ -317,6 +316,8 @@ class VulkanReplayDumpResourcesBase
                                    uint32_t                                                          createInfoCount,
                                    HandlePointerDecoder<VkPipeline>*                                 pPipelines);
 
+    void DumpResourcesSetFatalErrorHandler(std::function<void(const char*)> handler);
+
   private:
     bool UpdateRecordingStatus(VkCommandBuffer original_command_buffer);
 
@@ -340,19 +341,25 @@ class VulkanReplayDumpResourcesBase
     // Mapping between the original VkCommandBuffer handle and BeginCommandBuffer index
     std::unordered_map<VkCommandBuffer, uint64_t> cmd_buf_begin_map_;
 
-    std::unordered_set<uint64_t> QueueSubmit_indices_;
+    std::vector<uint64_t> QueueSubmit_indices_;
 
     // One per BeginCommandBuffer index
     std::unordered_map<uint64_t, DrawCallsDumpingContext>         draw_call_contexts;
     std::unordered_map<uint64_t, DispatchTraceRaysDumpingContext> dispatch_ray_contexts;
 
-    bool                          recording_;
-    bool                          dump_resources_before_;
-    CommonObjectInfoTable*        object_info_table_;
-    VulkanReplayDumpResourcesJson dump_json_;
-    bool                          output_json_per_command;
+    bool                   recording_;
+    bool                   dump_resources_before_;
+    CommonObjectInfoTable* object_info_table_;
+    bool                   output_json_per_command;
+
+    std::unique_ptr<DefaultVulkanDumpResourcesDelegate> default_delegate_;
+    VulkanDumpResourcesDelegate*                        user_delegate_;
+    VulkanDumpResourcesDelegate*                        active_delegate_;
 
     std::string capture_filename;
+
+    std::function<void(const char*)> fatal_error_handler_;
+    void                             RaiseFatalError(const char* message) const;
 };
 
 GFXRECON_END_NAMESPACE(gfxrecon)

@@ -220,6 +220,23 @@ reset. The signal used one of the real time signals, the first in the range
 `userfaultfd` is less efficient performance wise than `page_guard` but
 should be fast enough for real-world applications and games.
 
+##### Disabling Debug Breaks Triggered by the GFXReconstruct Layer
+
+When running an application in a debugger with the layer enabled, the
+access violations triggered by the layer's memory tracking behavior may
+cause the debugger to break. For example, on macOS using LLDB, these
+debug breaks may be disabled with the following command:
+
+```text
+process handle SIGSEGV -n true -p true -s false
+```
+
+The equivalent command for GDB is:
+
+```text
+handle SIGSEGV nostop noprint
+```
+
 ### Capture Options
 
 The GFXReconstruct layer supports several options, which may be enabled
@@ -771,6 +788,10 @@ Optional arguments:
               Enables dumping of resources that are used as inputs in the commands requested for dumping.
   --dump-resources-dump-all-image-subresources
               Enables dumping of all image sub resources (mip map levels and array layers).
+  --dump-resources-dump-raw-images
+              When enabled all image resources will be dumped verbatim as raw bin files.
+  --dump-resources-dump-separate-alpha
+              When enabled alpha channel of dumped images will be dumped in a separate file.
   --pbi-all
               Print all block information.
   --pbis <index1,index2>
@@ -779,7 +800,20 @@ Optional arguments:
               Specify the number of asynchronous pipeline-creation jobs as integer.
               If <num_jobs> is negative it will be added to the number of cpu-cores, e.g. -1 -> num_cores - 1.
               Default: 0 (do not use asynchronous operations)
-
+  --save-pipeline-cache <cache-file>
+                        If set, produces pipeline caches at replay time instead of using
+                        the one saved at capture time and save those caches in <cache-file>.
+  --load-pipeline-cache <cache-file>
+                        If set, loads data created by the `--save-pipeline-cache`
+                        option in <cache-file> and uses it to create the pipelines instead
+                        of the pipeline caches saved at capture time.
+  --add-new-pipeline-caches
+                        If set, allows gfxreconstruct to create new vkPipelineCache objects
+                        when it encounters a pipeline created without cache. This option can
+                        be used in coordination with `--save-pipeline-cache` and
+                        `--load-pipeline-cache`.
+  --quit-after-frame
+              Specify a frame after which replay will terminate.
 ```
 
 ### Key Controls

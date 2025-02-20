@@ -171,6 +171,26 @@ void UnwrapStructHandles(VkRenderingInfo* value, HandleUnwrapMemory* unwrap_memo
 
 void UnwrapStructHandles(VkDeviceImageMemoryRequirements* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkMemoryMapInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkMemoryUnmapInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkDeviceImageSubresourceInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkBindDescriptorSetsInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkPushConstantsInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkPushDescriptorSetInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkCopyMemoryToImageInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkCopyImageToMemoryInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkCopyImageToImageInfo* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkHostImageLayoutTransitionInfo* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkSwapchainCreateInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPresentInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
@@ -200,10 +220,6 @@ void UnwrapStructHandles(VkVideoSessionParametersCreateInfoKHR* value, HandleUnw
 void UnwrapStructHandles(VkVideoBeginCodingInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkVideoDecodeInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkRenderingFragmentShadingRateAttachmentInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkRenderingFragmentDensityMapAttachmentInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkMemoryGetWin32HandleInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -237,21 +253,17 @@ void UnwrapStructHandles(VkDisplayModeProperties2KHR* value, HandleUnwrapMemory*
 
 void UnwrapStructHandles(VkDisplayPlaneInfo2KHR* value, HandleUnwrapMemory* unwrap_memory);
 
+void UnwrapStructHandles(VkRenderingFragmentShadingRateAttachmentInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
+
 void UnwrapStructHandles(VkPipelineInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPipelineExecutableInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkMemoryMapInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkMemoryUnmapInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPipelineLibraryCreateInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkVideoEncodeInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkVideoEncodeSessionParametersGetInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkDeviceImageSubresourceInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkPipelineBinaryCreateInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -265,15 +277,11 @@ void UnwrapStructHandles(VkPipelineBinaryHandlesInfoKHR* value, HandleUnwrapMemo
 
 void UnwrapStructHandles(VkVideoInlineQueryInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkBindDescriptorSetsInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkPushConstantsInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkPushDescriptorSetInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
-
 void UnwrapStructHandles(VkSetDescriptorBufferOffsetsInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkBindDescriptorBufferEmbeddedSamplersInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+
+void UnwrapStructHandles(VkVideoEncodeQuantizationMapInfoKHR* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkDebugMarkerObjectNameInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -315,13 +323,7 @@ void UnwrapStructHandles(VkWriteDescriptorSetAccelerationStructureNV* value, Han
 
 void UnwrapStructHandles(VkAccelerationStructureMemoryRequirementsInfoNV* value, HandleUnwrapMemory* unwrap_memory);
 
-void UnwrapStructHandles(VkCopyMemoryToImageInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkCopyImageToMemoryInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkCopyImageToImageInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
-
-void UnwrapStructHandles(VkHostImageLayoutTransitionInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
+void UnwrapStructHandles(VkRenderingFragmentDensityMapAttachmentInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
 void UnwrapStructHandles(VkSwapchainPresentFenceInfoEXT* value, HandleUnwrapMemory* unwrap_memory);
 
@@ -415,6 +417,34 @@ VkBaseInStructure* CopyPNextStruct(const VkBaseInStructure* base, HandleUnwrapMe
 
 const void* UnwrapPNextStructHandles(const void* value, HandleUnwrapMemory* unwrap_memory);
 
+template <typename ParentWrapper, typename CoParentWrapper, typename T>
+void CreateWrappedStructArrayHandles(typename ParentWrapper::HandleType parent, typename CoParentWrapper::HandleType co_parent, T* value, size_t len, PFN_GetHandleId get_id);
+
+template <typename T>
+T* MakeUnwrapStructs(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
+{
+    assert((values != nullptr) && (len > 0) && (unwrap_memory != nullptr));
+
+    const uint8_t* bytes     = reinterpret_cast<const uint8_t*>(values);
+    size_t         num_bytes = len * sizeof(T);
+
+    return reinterpret_cast<T*>(unwrap_memory->GetFilledBuffer(bytes, num_bytes));
+}
+
+template <typename T>
+const T* UnwrapStructPtrHandles(const T* value, HandleUnwrapMemory* unwrap_memory)
+{
+    T* unwrapped_struct = nullptr;
+
+    if (value != nullptr)
+    {
+        unwrapped_struct = MakeUnwrapStructs(value, 1, unwrap_memory);
+        UnwrapStructHandles(unwrapped_struct, unwrap_memory);
+    }
+
+    return unwrapped_struct;
+}
+
 template <typename ParentWrapper, typename CoParentWrapper>
 void CreateWrappedStructHandles(typename ParentWrapper::HandleType parent, typename CoParentWrapper::HandleType co_parent, VkPhysicalDeviceGroupProperties* value, PFN_GetHandleId get_id)
 {
@@ -500,32 +530,7 @@ void CreateWrappedStructArrayHandles(typename ParentWrapper::HandleType parent, 
 }
 
 template <typename T>
-T* MakeUnwrapStructs(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
-{
-    assert((values != nullptr) && (len > 0) && (unwrap_memory != nullptr));
-
-    const uint8_t* bytes     = reinterpret_cast<const uint8_t*>(values);
-    size_t         num_bytes = len * sizeof(T);
-
-    return reinterpret_cast<T*>(unwrap_memory->GetFilledBuffer(bytes, num_bytes));
-}
-
-template <typename T>
-const T* UnwrapStructPtrHandles(const T* value, HandleUnwrapMemory* unwrap_memory)
-{
-    T* unwrapped_struct = nullptr;
-
-    if (value != nullptr)
-    {
-        unwrapped_struct = MakeUnwrapStructs(value, 1, unwrap_memory);
-        UnwrapStructHandles(unwrapped_struct, unwrap_memory);
-    }
-
-    return unwrapped_struct;
-}
-
-template <typename T>
-const T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
+const  T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
 {
     if ((values != nullptr) && (len > 0))
     {
@@ -534,6 +539,25 @@ const T* UnwrapStructArrayHandles(const T* values, size_t len, HandleUnwrapMemor
         for (size_t i = 0; i < len; ++i)
         {
             UnwrapStructHandles(&unwrapped_structs[i], unwrap_memory);
+        }
+
+        return unwrapped_structs;
+    }
+
+    // Leave the original memory in place when the pointer is not null, but size is zero.
+    return values;
+}
+
+template <typename T>
+T* UnwrapStructPtrArrayHandles(T* values, size_t len, HandleUnwrapMemory* unwrap_memory)
+{
+    if ((values != nullptr) && (len > 0))
+    {
+        auto unwrapped_structs = MakeUnwrapStructs(values, len, unwrap_memory);
+
+        for (size_t i = 0; i < len; ++i)
+        {
+            UnwrapStructHandles(unwrapped_structs[i], unwrap_memory);
         }
 
         return unwrapped_structs;

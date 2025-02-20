@@ -37,13 +37,13 @@ set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" "${CMAKE_CURRENT_SOURCE_DIR}/external/cmake-modules")
 
+
 # Version info
 set(GFXRECONSTRUCT_PROJECT_VERSION_MAJOR 1)
 set(GFXRECONSTRUCT_PROJECT_VERSION_MINOR 0)
 set(GFXRECONSTRUCT_PROJECT_VERSION_PATCH 5)
 
 set(GFXRECON_PROJECT_VERSION_SHA1 "unknown-build-source")
-
 
 option(BUILD_STATIC "Build static binaries for HPC clusters (will not build the tracer library)" OFF)
 
@@ -127,6 +127,8 @@ if(${GFXRECON_ENABLE_RELEASE_ASSERTS})
 endif()
 
 option(GFXRECON_TOCPP_SUPPORT "Build ToCpp export tool as part of GFXReconstruct builds." TRUE)
+
+option(GFXRECON_INCLUDE_TEST_APPS "Build and install test apps" OFF)
 
 if(MSVC)
 
@@ -360,7 +362,7 @@ add_subdirectory(external/SPIRV-Reflect EXCLUDE_FROM_ALL)
 
 if (${RUN_TESTS})
     add_library(catch2 INTERFACE)
-    target_include_directories(catch2 INTERFACE external)
+    target_include_directories(catch2 SYSTEM INTERFACE external)
 endif()
 
 add_subdirectory(external/nlohmann)
@@ -369,6 +371,10 @@ if(NOT BUILD_STATIC)
     add_subdirectory(layer)
 endif()
 add_subdirectory(tools)
+
+if(GFXRECON_INCLUDE_TEST_APPS)
+add_subdirectory(test)
+endif()
 
 if (${RUN_TESTS})
     add_test_package_file(${CMAKE_CURRENT_LIST_DIR}/scripts/build.py)

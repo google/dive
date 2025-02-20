@@ -77,9 +77,20 @@ VulkanResourceInitializer::~VulkanResourceInitializer()
         resource_allocator_->FreeMemoryDirect(staging_memory_, nullptr, staging_memory_data_);
     }
 
-    device_table_->DestroySampler(device_, draw_sampler_, nullptr);
-    device_table_->DestroyDescriptorPool(device_, draw_pool_, nullptr);
-    device_table_->DestroyDescriptorSetLayout(device_, draw_set_layout_, nullptr);
+    if (draw_sampler_ != VK_NULL_HANDLE)
+    {
+        device_table_->DestroySampler(device_, draw_sampler_, nullptr);
+    }
+
+    if (draw_pool_ != VK_NULL_HANDLE)
+    {
+        device_table_->DestroyDescriptorPool(device_, draw_pool_, nullptr);
+    }
+
+    if (draw_set_layout_ != VK_NULL_HANDLE)
+    {
+        device_table_->DestroyDescriptorSetLayout(device_, draw_set_layout_, nullptr);
+    }
 }
 
 VkResult VulkanResourceInitializer::LoadData(VkDeviceSize                          size,
@@ -1337,7 +1348,6 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                         VkImageViewCreateInfo view_info         = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
                         view_info.pNext                         = nullptr;
                         view_info.flags                         = 0;
-                        view_info.image                         = staging_image;
                         view_info.viewType                      = VK_IMAGE_VIEW_TYPE_2D;
                         view_info.format                        = format;
                         view_info.components.r                  = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -1355,6 +1365,7 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                             VkImageView   destination_view = VK_NULL_HANDLE;
                             VkImageView   staging_view     = VK_NULL_HANDLE;
 
+                            view_info.image                           = staging_image;
                             view_info.subresourceRange.baseArrayLayer = layer;
 
                             result = device_table_->CreateImageView(device_, &view_info, nullptr, &staging_view);

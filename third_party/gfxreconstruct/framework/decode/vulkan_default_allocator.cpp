@@ -488,6 +488,22 @@ VkResult VulkanDefaultAllocator::InvalidateMappedMemoryRanges(uint32_t          
     return functions_.invalidate_memory_ranges(device_, memory_range_count, memory_ranges);
 }
 
+VkResult VulkanDefaultAllocator::SetDebugUtilsObjectNameEXT(VkDevice                       device,
+                                                            VkDebugUtilsObjectNameInfoEXT* name_info,
+                                                            uintptr_t                      allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocator_data);
+    return functions_.set_debug_utils_object_name(device, name_info);
+}
+
+VkResult VulkanDefaultAllocator::SetDebugUtilsObjectTagEXT(VkDevice                      device,
+                                                           VkDebugUtilsObjectTagInfoEXT* tag_info,
+                                                           uintptr_t                     allocator_data)
+{
+    GFXRECON_UNREFERENCED_PARAMETER(allocator_data);
+    return functions_.set_debug_utils_object_tag(device, tag_info);
+}
+
 VkResult VulkanDefaultAllocator::WriteMappedMemoryRange(MemoryData     allocator_data,
                                                         uint64_t       offset,
                                                         uint64_t       size,
@@ -645,7 +661,7 @@ void VulkanDefaultAllocator::ReportBindIncompatibility(const VkMemoryRequirement
             auto     memory_alloc_info = reinterpret_cast<MemoryAllocInfo*>(allocator_memory_data);
             uint32_t memory_type_index = memory_alloc_info->memory_type_index;
 
-            if ((requirements[i].memoryTypeBits & (1 << memory_type_index)) != 0)
+            if ((requirements[i].memoryTypeBits & (1 << memory_type_index)) == 0)
             {
                 GFXRECON_LOG_FATAL(
                     "Resource memory bind failed: resource is not compatible with the specified memory type.");

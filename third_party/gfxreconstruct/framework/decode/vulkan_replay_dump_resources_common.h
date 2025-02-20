@@ -58,13 +58,10 @@ static bool IsInsideRange(const std::vector<T>& vec, T value)
 
 PipelineBindPoints VkPipelineBindPointToPipelineBindPoint(VkPipelineBindPoint bind_point);
 
-bool IsFormatAstcCompressed(VkFormat format);
-
 enum DumpedImageFormat
 {
     kFormatBMP,
     KFormatPNG,
-    KFormatAstc,
     KFormatRaw
 };
 
@@ -101,10 +98,11 @@ VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
 
 uint32_t VkIndexTypeToBytes(VkIndexType type);
 
-uint32_t FindGreatestVertexIndex(const std::vector<uint8_t>& index_data,
-                                 uint32_t                    index_count,
-                                 uint32_t                    first_index,
-                                 VkIndexType                 type);
+std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data,
+                                                      uint32_t                    index_count,
+                                                      uint32_t                    first_index,
+                                                      int32_t                     vertex_offset,
+                                                      VkIndexType                 type);
 
 VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
                          const VulkanDeviceInfo*            device_info,
@@ -117,8 +115,8 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
                          util::ScreenshotFormat             image_file_format,
                          bool                               dump_all_subresources = false,
                          bool                               dump_image_raw        = false,
-                         VkImageLayout                      layout                = VK_IMAGE_LAYOUT_MAX_ENUM,
-                         const VkExtent3D*                  extent_p              = nullptr);
+                         bool                               dump_separate_alpha   = false,
+                         VkImageLayout                      layout                = VK_IMAGE_LAYOUT_MAX_ENUM);
 
 bool CheckDescriptorCompatibility(VkDescriptorType desc_type_a, VkDescriptorType desc_type_b);
 
@@ -139,6 +137,31 @@ VkResult CreateVkBuffer(VkDeviceSize                            size,
                         VkDeviceMemory*                         new_memory);
 
 void GetFormatAspects(VkFormat format, std::vector<VkImageAspectFlagBits>& aspects);
+
+class VulkanDumpResourcesDelegate;
+class DefaultVulkanDumpResourcesDelegate;
+
+enum class DumpResourceType : uint32_t
+{
+    kUnknown,
+    kRtv,
+    kDsv,
+    kVertex,
+    kIndex,
+    kImageDescriptor,
+    kBufferDescriptor,
+    kInlineUniformBufferDescriptor,
+    kDrawCallInfo,
+    kDispatchInfo,
+    kTraceRaysIndex,
+    kDispatchTraceRaysImage,
+    kDispatchTraceRaysBuffer,
+    kDispatchTraceRaysImageDescriptor,
+    kDispatchTraceRaysBufferDescriptor,
+    kDispatchTraceRaysInlineUniformBufferDescriptor,
+};
+
+#define DEPTH_ATTACHMENT ~0
 
 GFXRECON_END_NAMESPACE(gfxrecon)
 GFXRECON_END_NAMESPACE(decode)

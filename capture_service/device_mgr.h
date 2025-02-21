@@ -65,6 +65,7 @@ public:
     AndroidDevice(const AndroidDevice &) = delete;
 
     absl::Status Init();
+    absl::Status ForwardFirstAvailablePort();
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
     void         EnableGfxr(bool enable_gfxr);
@@ -94,6 +95,7 @@ public:
     absl::Status      StopApp();
     const AdbSession &Adb() const { return m_adb; }
     AdbSession       &Adb() { return m_adb; }
+    int               Port() const { return m_port; }
 
     AndroidApplication *GetCurrentApplication() { return m_app.get(); }
     absl::Status RetrieveTrace(const std::string &trace_file_path, const std::string &save_path);
@@ -105,6 +107,7 @@ private:
     DeviceState                         m_original_state;
     std::unique_ptr<AndroidApplication> m_app;
     bool                                m_gfxr_enabled;
+    int                                 m_port;
 };
 
 class DeviceManager

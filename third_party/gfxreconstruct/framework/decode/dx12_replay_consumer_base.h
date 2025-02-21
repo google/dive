@@ -1,6 +1,6 @@
 /*
 ** Copyright (c) 2021-2022 LunarG, Inc.
-** Copyright (c) 2021-2024 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -136,6 +136,46 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         }
     }
 
+    // This method is used by custom commands for IDXGIAdapter::GetDesc, IDXGIAdapter1::GetDesc1,
+    // IDXGIAdapter2::GetDesc2, and IDXGIAdapter4::GetDesc3.
+    template <class T>
+    void PostCall_IDXGIAdapter_GetDesc(const ApiCallInfo&       call_info,
+                                       DxObjectInfo*            object_info,
+                                       HRESULT                  capture_return_value,
+                                       HRESULT                  replay_return_value,
+                                       StructPointerDecoder<T>* desc)
+    {
+        GFXRECON_UNREFERENCED_PARAMETER(call_info);
+        GFXRECON_UNREFERENCED_PARAMETER(object_info);
+
+        if (SUCCEEDED(capture_return_value) && SUCCEEDED(replay_return_value))
+        {
+            auto capture_desc = desc->GetPointer();
+            auto replay_desc  = desc->GetOutputPointer();
+
+            GFXRECON_ASSERT((capture_desc != nullptr) && (replay_desc != nullptr));
+
+            AddAdapterLuid(capture_desc->AdapterLuid, replay_desc->AdapterLuid);
+        }
+    }
+
+    void PostCall_IDXGIFactory2_GetSharedResourceAdapterLuid(const ApiCallInfo&                  call_info,
+                                                             DxObjectInfo*                       object_info,
+                                                             HRESULT                             capture_return_value,
+                                                             HRESULT                             replay_return_value,
+                                                             uint64_t                            hResource,
+                                                             StructPointerDecoder<Decoded_LUID>* pLuid);
+
+    void PostCall_ID3D12Device_GetAdapterLuid(const ApiCallInfo&  call_info,
+                                              DxObjectInfo*       object_info,
+                                              const Decoded_LUID& capture_return_value,
+                                              const LUID&         replay_return_value);
+
+    void PostCall_ApiCall_ID3D12SwapChainAssistant_GetLUID(const ApiCallInfo&  call_info,
+                                                           DxObjectInfo*       object_info,
+                                                           const Decoded_LUID& capture_return_value,
+                                                           const LUID&         replay_return_value);
+
     void
     PreCall_ID3D12GraphicsCommandList_ResourceBarrier(const ApiCallInfo&                                    call_info,
                                                       DxObjectInfo*                                         object_info,
@@ -241,6 +281,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     void SetDumpTarget(TrackDumpDrawCall& track_dump_target);
 
     IDXGIAdapter* GetAdapter();
+
+    graphics::dx12::ActiveAdapterMap& GetAdaptersMap() { return adapters_; }
 
   protected:
     void MapGpuDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE& handle);
@@ -360,6 +402,12 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                                   DxObjectInfo*                           restrict_to_output_info,
                                                   HandlePointerDecoder<IDXGISwapChain1*>* swapchain);
 
+    HRESULT OverrideEnumAdapterByLuid(DxObjectInfo*                replay_object_info,
+                                      HRESULT                      original_result,
+                                      Decoded_LUID                 adapter_luid,
+                                      Decoded_GUID                 riid,
+                                      HandlePointerDecoder<void*>* adapter);
+
     HRESULT
     OverrideCreateDXGIFactory2(HRESULT                      original_result,
                                UINT                         flags,
@@ -409,7 +457,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
                                  D3D12_RENDER_PASS_FLAGS                                             Flags);
 
     template <typename T>
-    void SetResourceSamplerFeedbackMipRegion(D3D12_RESOURCE_DESC1& desc_dest, T* desc_src){};
+    void SetResourceSamplerFeedbackMipRegion(D3D12_RESOURCE_DESC1& desc_dest, T* desc_src) {};
 
     template <>
     void SetResourceSamplerFeedbackMipRegion(D3D12_RESOURCE_DESC1& desc_dest, D3D12_RESOURCE_DESC1* desc_src)
@@ -1002,6 +1050,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void DetectAdapters();
 
+    void AddAdapterLuid(const LUID& capture_luid, const LUID& replay_luid);
+
+    LUID GetAdapterLuid(const LUID& capture_luid);
+
     void RaiseFatalError(const char* message) const;
 
     HRESULT
@@ -1093,6 +1145,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     std::unordered_map<uint64_t, MappedMemoryEntry>       mapped_memory_;
     std::unordered_map<uint64_t, void*>                   heap_allocations_;
     std::unordered_map<uint64_t, HANDLE>                  event_objects_;
+    std::unordered_map<uint64_t, LUID>                    adapter_luid_map_;
     std::function<void(const char*)>                      fatal_error_handler_;
     Dx12DescriptorMap                                     descriptor_map_;
     graphics::Dx12GpuVaMap                                gpu_va_map_;

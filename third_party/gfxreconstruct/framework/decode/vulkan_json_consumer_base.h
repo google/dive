@@ -52,6 +52,11 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer
 
     bool IsValid() const { return writer_ && writer_->IsValid(); }
 
+    virtual void
+    ProcessSetDeviceMemoryPropertiesCommand(format::HandleId                             physical_device_id,
+                                            const std::vector<format::DeviceMemoryType>& memory_types,
+                                            const std::vector<format::DeviceMemoryHeap>& memory_heaps) override;
+
     void Process_vkCmdBuildAccelerationStructuresIndirectKHR(
         const ApiCallInfo&                                                         call_info,
         format::HandleId                                                           commandBuffer,
@@ -126,11 +131,10 @@ class VulkanExportJsonConsumerBase : public VulkanConsumer
                                                                uint32_t           set,
                                                                DescriptorUpdateTemplateDecoder* pData) override;
 
-    virtual void
-    Process_vkCmdPushDescriptorSetWithTemplate2KHR(const ApiCallInfo& call_info,
-                                                   format::HandleId   commandBuffer,
-                                                   StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfoKHR>*
-                                                       pPushDescriptorSetWithTemplateInfo) override;
+    virtual void Process_vkCmdPushDescriptorSetWithTemplate2KHR(
+        const ApiCallInfo&                                                 call_info,
+        format::HandleId                                                   commandBuffer,
+        StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo) override;
 
     const util::JsonOptions& GetJsonOptions() const { return writer_->GetOptions(); }
 

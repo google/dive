@@ -28,6 +28,7 @@
 #include "util/defines.h"
 #include "util/output_stream.h"
 #include "util/platform.h"
+#include "util/thread_data.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -66,7 +67,6 @@ class FileOutputStream : public OutputStream
     FileOutputStream& operator=(const FileOutputStream&) = delete;
     FILE*             file_;
     bool              own_file_;
-    const std::string filename;
 };
 
 class FileNoLockOutputStream : public FileOutputStream

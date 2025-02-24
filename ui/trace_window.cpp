@@ -744,27 +744,19 @@ void GfxrCaptureWorker::SetGfxrCapturePath(const std::string &capture_path)
 
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
 {
-    std::string command = "shell du -sb " + m_capture_path;
-    std::string output;
-    ASSIGN_OR_RETURN(output, device->Adb().RunAndGetResult(command));
+    std::string                 command = "shell du -sb " + m_capture_path;
+    absl::StatusOr<std::string> output = device->Adb().RunAndGetResult(command);
 
-    std::stringstream ss(output);
+    if (!output.ok())
+    {
+        std::cout << "Error checking directory size: " << output.status().message() << std::endl;
+    }
+
+    std::stringstream ss(output->c_str());
     int64_t           size;
     ss >> size;
 
-    try
-    {
-        return size;
-    }
-    catch (const std::invalid_argument &e)
-    {
-        throw std::invalid_argument("Invalid argument: Cannot convert string to int64_t");
-    }
-    catch (const std::out_of_range &e)
-    {
-        throw std::out_of_range(
-        "Out of range: String represents a value outside the range of int64_t");
-    }
+    return size;
 }
 
 void GfxrCaptureWorker::run()

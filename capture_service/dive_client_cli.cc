@@ -312,12 +312,14 @@ absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
 {
     std::string capture_directory = Dive::kGfxrCaptureDirectory + gfxr_capture_directory;
     std::string command = "shell lsof " + capture_directory;
-    std::string output;
+    absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 
-    ASSIGN_OR_RETURN(output, mgr.GetDevice()->Adb().RunAndGetResult(command));
+    if (!output.ok())
+    {
+        std::cout << "Error checking directory: " << output.status().message() << std::endl;
+    }
 
-    // Check if the output contains only the header
-    std::stringstream ss(output);
+    std::stringstream ss(output->c_str());
     std::string       line;
     int               line_count = 0;
     while (std::getline(ss, line))

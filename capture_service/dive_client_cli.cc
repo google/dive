@@ -307,109 +307,122 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     return ret.ok();
 }
 
-absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr, const std::string&   gfxr_capture_directory) {
+absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
+                                       const std::string&   gfxr_capture_directory)
+{
     std::string capture_directory = Dive::kGfxrCaptureDirectory + gfxr_capture_directory;
     std::string command = "shell lsof " + capture_directory;
-    std::string output; 
+    std::string output;
 
     ASSIGN_OR_RETURN(output, mgr.GetDevice()->Adb().RunAndGetResult(command));
 
     // Check if the output contains only the header
     std::stringstream ss(output);
-    std::string line;
-    int line_count = 0;
-    while (std::getline(ss, line)) {
+    std::string       line;
+    int               line_count = 0;
+    while (std::getline(ss, line))
+    {
         line_count++;
     }
 
-    return line_count <= 1 ? absl::OkStatus() : absl::InternalError("Capture file operation in progress.");
+    return line_count <= 1 ? absl::OkStatus() :
+                             absl::InternalError("Capture file operation in progress.");
 }
 
 void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                           const std::string&   package,
                           const std::string&   gfxr_capture_directory)
 {
-        std::cout << "Press key g+enter to trigger a capture and g+enter to stop the capture. Press any other key+enter to stop the application. Note that this may impact your capture file if the capture has not been completed. \n";
+    std::cout << "Press key g+enter to trigger a capture and g+enter to stop the capture. Press "
+                 "any other key+enter to stop the application. Note that this may impact your "
+                 "capture file if the capture has not been completed. \n";
 
-        std::string  input;
-        bool         is_capturing = false;
-        absl::Status ret;
-        while (std::getline(std::cin, input))
+    std::string  input;
+    bool         is_capturing = false;
+    absl::Status ret;
+    while (std::getline(std::cin, input))
+    {
+        if (input == "g")
         {
-            if (input == "g")
+            if (is_capturing)
             {
-                if (is_capturing)
+                ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
+                while (!ret.ok())
                 {
-                    ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
-                    while (!ret.ok())
-                    {
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-                        std::cout << "GFXR capture in progress, please wait for current capture to complete before starting another." << std::endl; 
-                    }
-                    ret = mgr.GetDevice()->Adb().Run(
-                    "shell setprop debug.gfxrecon.capture_android_trigger false");
-                    if (!ret.ok())
-                    {
-                        std::cout << "There was an error stopping the gfxr runtime capture."
-                                  << std::endl;
-                        return;
-                    }
-                    is_capturing = false;
-                    std::cout << "Capture complete." << std::endl;
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    std::cout << "GFXR capture in progress, please wait for current capture to "
+                                 "complete before starting another."
+                              << std::endl;
                 }
-                else
+                ret = mgr.GetDevice()->Adb().Run(
+                "shell setprop debug.gfxrecon.capture_android_trigger false");
+                if (!ret.ok())
                 {
-                    ret = mgr.GetDevice()->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger_frames 1");
-                    if (!ret.ok())
-                    {
-                        std::cout << "There was an error setting the number of frames for the gfxr runtime capture."
-                                    << std::endl;
-                        std::cout << ret.message()
-                                    << std::endl;
-                        return;
-                    }
-
-                    ret = mgr.GetDevice()->Adb().Run(
-                    "shell setprop debug.gfxrecon.capture_android_trigger true");
-                    if (!ret.ok())
-                    {
-                        std::cout << "There was an error starting the gfxr runtime capture."
-                                  << std::endl;
-                        return;
-                    }
-                    is_capturing = true;
-                    std::cout << "Capture started." << std::endl;
+                    std::cout << "There was an error stopping the gfxr runtime capture."
+                              << std::endl;
+                    return;
                 }
+                is_capturing = false;
+                std::cout << "Capture complete." << std::endl;
             }
             else
             {
-                if (is_capturing)
+                ret = mgr.GetDevice()->Adb().Run(
+                "shell setprop debug.gfxrecon.capture_android_trigger_frames 1");
+                if (!ret.ok())
                 {
-                    std::cout << "GFXR capture in progress, please wait for capture to complete before stopping the application." << std::endl;
-                    ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
-                    while (!ret.ok())
-                    {
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-                        std::cout << "GFXR capture in progress, please wait for capture to complete before stopping the application." << std::endl;
-                    }
-                    ret = mgr.GetDevice()->Adb().Run(
-                    "shell setprop debug.gfxrecon.capture_android_trigger false");
-                    if (!ret.ok())
-                    {
-                        std::cout << "There was an error stopping the gfxr runtime capture."
-                                  << std::endl;
-                        return;
-                    }
-                    is_capturing = false;
-                    std::cout << "Capture complete." << std::endl;
+                    std::cout << "There was an error setting the number of frames for the gfxr "
+                                 "runtime capture."
+                              << std::endl;
+                    std::cout << ret.message() << std::endl;
+                    return;
                 }
-                else
+
+                ret = mgr.GetDevice()->Adb().Run(
+                "shell setprop debug.gfxrecon.capture_android_trigger true");
+                if (!ret.ok())
                 {
-                    std::cout << "Exiting..." << std::endl;
-                    break;
+                    std::cout << "There was an error starting the gfxr runtime capture."
+                              << std::endl;
+                    return;
                 }
+                is_capturing = true;
+                std::cout << "Capture started." << std::endl;
             }
         }
+        else
+        {
+            if (is_capturing)
+            {
+                std::cout << "GFXR capture in progress, please wait for capture to complete before "
+                             "stopping the application."
+                          << std::endl;
+                ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
+                while (!ret.ok())
+                {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    std::cout << "GFXR capture in progress, please wait for capture to complete "
+                                 "before stopping the application."
+                              << std::endl;
+                }
+                ret = mgr.GetDevice()->Adb().Run(
+                "shell setprop debug.gfxrecon.capture_android_trigger false");
+                if (!ret.ok())
+                {
+                    std::cout << "There was an error stopping the gfxr runtime capture."
+                              << std::endl;
+                    return;
+                }
+                is_capturing = false;
+                std::cout << "Capture complete." << std::endl;
+            }
+            else
+            {
+                std::cout << "Exiting..." << std::endl;
+                break;
+            }
+        }
+    }
 }
 
 bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
@@ -570,14 +583,7 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        if (run_package(mgr,
-                        app_type,
-                        package,
-                        vulkan_command,
-                        vulkan_command_args,
-                        "",
-                        "",
-                        false))
+        if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false))
         {
             process_input(mgr);
         }
@@ -587,14 +593,7 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        run_and_capture(mgr,
-                        app_type,
-                        package,
-                        vulkan_command,
-                        vulkan_command_args,
-                        "",
-                        "",
-                        false);
+        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false);
         break;
     }
     case Command::kCleanup:

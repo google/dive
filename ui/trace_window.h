@@ -52,7 +52,6 @@ signals:
 
 private:
     QProgressDialog *m_progress_bar;
-
 };
 
 class GfxrCaptureWorker : public QThread
@@ -65,14 +64,14 @@ public:
         m_progress_bar(pd)
     {
     }
-    void SetGfxrCapturePath(const std::string &capture_path);
+    void                    SetGfxrCapturePath(const std::string &capture_path);
     absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
 signals:
     void GfxrCaptureAvailable(const QString &);
 
 private:
     QProgressDialog *m_progress_bar;
-    std::string     m_capture_path;
+    std::string      m_capture_path;
 };
 
 class ProgressBarWorker : public QThread
@@ -81,7 +80,10 @@ class ProgressBarWorker : public QThread
     void run() override;
 
 public:
-    ProgressBarWorker(QProgressDialog *pd, const std::string &path, int64_t size, const bool is_gfxr_capture) :
+    ProgressBarWorker(QProgressDialog   *pd,
+                      const std::string &path,
+                      int64_t            size,
+                      const bool         is_gfxr_capture) :
         m_progress_bar(pd),
         m_capture_name(path),
         m_capture_size(size),

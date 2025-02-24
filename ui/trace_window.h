@@ -52,6 +52,27 @@ signals:
 
 private:
     QProgressDialog *m_progress_bar;
+
+};
+
+class GfxrCaptureWorker : public QThread
+{
+    Q_OBJECT
+    void run() override;
+
+public:
+    GfxrCaptureWorker(QProgressDialog *pd) :
+        m_progress_bar(pd)
+    {
+    }
+    void SetGfxrCapturePath(const std::string &capture_path);
+    absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
+signals:
+    void GfxrCaptureAvailable(const QString &);
+
+private:
+    QProgressDialog *m_progress_bar;
+    std::string     m_capture_path;
 };
 
 class ProgressBarWorker : public QThread
@@ -60,17 +81,19 @@ class ProgressBarWorker : public QThread
     void run() override;
 
 public:
-    ProgressBarWorker(QProgressDialog *pd, const std::string &path, int64_t size) :
+    ProgressBarWorker(QProgressDialog *pd, const std::string &path, int64_t size, const bool is_gfxr_capture) :
         m_progress_bar(pd),
-        m_file_name(path),
-        m_file_size(size)
+        m_capture_name(path),
+        m_capture_size(size),
+        m_gfxr_capture(is_gfxr_capture)
     {
     }
 
 private:
     QProgressDialog *m_progress_bar;
-    std::string      m_file_name;
-    int64_t          m_file_size;
+    std::string      m_capture_name;
+    int64_t          m_capture_size;
+    bool             m_gfxr_capture;
 };
 
 class TraceDialog : public QDialog
@@ -93,6 +116,7 @@ private slots:
     void OnStartClicked();
     void OnTraceClicked();
     void OnTraceAvailable(const QString &);
+    void OnGFXRCaptureAvailable(const QString &);
     void OnDevListRefresh();
     void OnAppListRefresh();
     void OnInputCommand(const QString &);
@@ -107,7 +131,7 @@ signals:
 
 private:
     bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
-    void RetrieveGfxrCapture(Dive::AndroidDevice *device);
+    void RetrieveGfxrCapture(Dive::AndroidDevice *device, const std::string &capture_directory);
 
     const QString kStart_Application = "&Start Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";

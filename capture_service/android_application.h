@@ -53,7 +53,6 @@ public:
     virtual bool         IsRunning() const;
     void                 SetGfxrEnabled(bool enable);
     void SetArchitecture(const std::string &architecture) { m_device_architecture = architecture; };
-    void SetFrames(const std::string &frames) { m_gfxr_capture_frames = frames; };
     void SetGfxrCaptureFileDirectory(const std::string &capture_file_directory)
     {
         m_gfxr_capture_file_directory = capture_file_directory;
@@ -75,7 +74,6 @@ protected:
     // Available architectures are arm64-v8, armeabi-v7a, x86, and x86_64.
     std::string m_device_architecture;
     std::string m_gfxr_capture_file_directory;
-    std::string m_gfxr_capture_frames;
     bool        m_is_debuggable;
     bool        m_started;
 

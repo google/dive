@@ -25,12 +25,10 @@ limitations under the License.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <thread>
 
 #include "capture_service/log.h"
 #include "capture_service/server.h"
-
-namespace DiveLayer
-{
 
 bool IsLibwrapLoaded()
 {
@@ -58,33 +56,28 @@ bool IsLibwrapLoaded()
     return loaded;
 }
 
-ServerRunner::ServerRunner()
+struct InitServer
 {
-    is_libwrap_loaded = IsLibwrapLoaded();
-    LOGI("libwrap loaded: %d", is_libwrap_loaded);
-    if (is_libwrap_loaded)
+    InitServer()
     {
-        server_thread = std::thread(Dive::ServerMain);
+        is_libwrap_loaded = IsLibwrapLoaded();
+        LOGI("libwrap loaded: %d", is_libwrap_loaded);
+        if (is_libwrap_loaded)
+        {
+            server_thread = std::thread(Dive::ServerMain);
+        }
     }
-}
-
-ServerRunner::~ServerRunner()
-{
-    if (is_libwrap_loaded && server_thread.joinable())
+    ~InitServer()
     {
-        Dive::StopServer();
-        LOGI("Wait for server thread to join");
-        server_thread.join();
+        if (is_libwrap_loaded && server_thread.joinable())
+        {
+            LOGI("Wait for server thread to join");
+            server_thread.join();
+        }
     }
-}
-
-ServerRunner &GetServerRunner()
-{
-    static ServerRunner runner;
-    return runner;
-}
-
-}  // namespace DiveLayer
+    bool        is_libwrap_loaded;
+    std::thread server_thread;
+};
 
 void PreventLibraryUnload()
 {
@@ -107,7 +100,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     if (fdwReason == DLL_PROCESS_ATTACH)
     {
-        [[maybe_unused]] auto &server = DiveLayer::GetServerRunner();
+        [[maybe_unused]] static struct InitServer init_server;
         PreventLibraryUnload();
     }
     return TRUE;
@@ -117,7 +110,7 @@ extern "C"
 {
     __attribute__((constructor)) void InitializeLibrary()
     {
-        [[maybe_unused]] auto &server = DiveLayer::GetServerRunner();
+        [[maybe_unused]] static struct InitServer init_server;
         PreventLibraryUnload();
     }
 }

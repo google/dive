@@ -310,7 +310,7 @@ bool trigger_capture(Dive::DeviceManager& mgr)
 absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
                                        const std::string&   gfxr_capture_directory)
 {
-    std::string capture_directory = Dive::kGfxrCaptureDirectory + gfxr_capture_directory;
+    std::string capture_directory = Dive::kDeviceCaptureDirectory + gfxr_capture_directory;
     std::string command = "shell lsof " + capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 
@@ -369,17 +369,6 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
             }
             else
             {
-                ret = mgr.GetDevice()->Adb().Run(
-                "shell setprop debug.gfxrecon.capture_android_trigger_frames 1");
-                if (!ret.ok())
-                {
-                    std::cout << "There was an error setting the number of frames for the gfxr "
-                                 "runtime capture."
-                              << std::endl;
-                    std::cout << ret.message() << std::endl;
-                    return;
-                }
-
                 ret = mgr.GetDevice()->Adb().Run(
                 "shell setprop debug.gfxrecon.capture_android_trigger true");
                 if (!ret.ok())
@@ -441,8 +430,8 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
             std::cout << "error creating directory: " << ec << std::endl;
         }
     }
-    std::string capture_directory = Dive::kGfxrCaptureDirectory + gfxr_capture_directory;
-    auto        ret = mgr.GetDevice()->RetrieveTrace(capture_directory,
+    std::string capture_file_directory = Dive::kDeviceCaptureDirectory + gfxr_capture_directory;
+    auto        ret = mgr.GetDevice()->RetrieveTrace(capture_file_directory,
                                               target_download_path.generic_string());
     if (ret.ok())
         std::cout << "GFXR capture directory saved at " << target_download_path << std::endl;

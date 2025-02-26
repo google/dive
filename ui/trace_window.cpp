@@ -962,7 +962,6 @@ void TraceDialog::OnGfxrCaptureClicked()
     else if (m_gfxr_capture_button->text() == kStart_Gfxr_Runtime_Capture)
     {
         ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger true");
-        ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger_frames 1");
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to start runtime gfxr capture ",
@@ -994,8 +993,9 @@ void TraceDialog::OnGfxrRetrieveClicked()
         m_gfxr_capture_file_local_directory_input_box->setText(".");
     }
 
-    std::string capture_directory = Dive::kGfxrCaptureDirectory +
-                                    m_gfxr_capture_file_directory_input_box->text().toStdString();
+    std::string capture_file_directory = Dive::kDeviceCaptureDirectory +
+                                         m_gfxr_capture_file_directory_input_box->text()
+                                         .toStdString();
 
     QProgressDialog *progress_bar = new QProgressDialog("Downloading GFXR Capture ... ",
                                                         nullptr,
@@ -1008,7 +1008,7 @@ void TraceDialog::OnGfxrRetrieveClicked()
     progress_bar->setAutoClose(true);
 
     GfxrCaptureWorker *workerThread = new GfxrCaptureWorker(progress_bar);
-    workerThread->SetGfxrCapturePath(capture_directory);
+    workerThread->SetGfxrCapturePath(capture_file_directory);
 
     connect(workerThread,
             &GfxrCaptureWorker::GfxrCaptureAvailable,

@@ -267,29 +267,16 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run(
     absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
 
-    std::string capture_file_location = kGfxrCaptureDirectory + m_gfxr_capture_file_directory +
+    std::string capture_file_location = kDeviceCaptureDirectory + m_gfxr_capture_file_directory +
                                         "/" + m_package + ".gfxr";
 
-    std::string gfxr_capture_directory = kGfxrCaptureDirectory + m_gfxr_capture_file_directory;
+    std::string gfxr_capture_directory = kDeviceCaptureDirectory + m_gfxr_capture_file_directory;
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(
     m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
 
-    if (m_gfxr_capture_frames == Dive::kGfxrRuntimeCapture)
-    {
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_frames 0"));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.quit_after_capture_frames false"));
-    }
-    else
-    {
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.quit_after_capture_frames true"));
-        std::string capture_frames_command = "shell setprop debug.gfxrecon.capture_frames " +
-                                             m_gfxr_capture_frames;
-        RETURN_IF_ERROR(m_dev.Adb().Run(capture_frames_command));
-    }
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
 
     LOGD("GFXR capture setup for %s done\n", m_package.c_str());
     return absl::OkStatus();

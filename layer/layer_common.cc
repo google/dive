@@ -86,6 +86,12 @@ ServerRunner &GetServerRunner()
 
 }  // namespace DiveLayer
 
+struct init
+{
+    init() { server_thread = std::thread(Dive::ServerMain); }
+    std::thread server_thread;
+};
+
 void PreventLibraryUnload()
 {
 #ifdef _WIN32
@@ -117,7 +123,9 @@ extern "C"
 {
     __attribute__((constructor)) void InitializeLibrary()
     {
-        [[maybe_unused]] auto &server = DiveLayer::GetServerRunner();
+        static struct init do_init;
+        (void)do_init;
+        // [[maybe_unused]] auto &server = DiveLayer::GetServerRunner();
         PreventLibraryUnload();
     }
 }

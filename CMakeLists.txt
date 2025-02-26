@@ -107,30 +107,30 @@ if(NOT ANDROID)
         add_subdirectory(ui)
     endif()
 
-    add_subdirectory(third_party/gfxreconstruct)
+    # add_subdirectory(third_party/gfxreconstruct)
 else()
-    if(NOT CMAKE_HOST_WIN32)
-        message(CHECK_START "Build gfxr for android")
-        execute_process(
-            COMMAND ./gradlew assemble${CMAKE_BUILD_TYPE} --console=verbose
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
-            COMMAND_ERROR_IS_FATAL ANY
-        )
-        message(CHECK_PASS "successful")
+    # if(NOT CMAKE_HOST_WIN32)
+    #     message(CHECK_START "Build gfxr for android")
+    #     execute_process(
+    #         COMMAND ./gradlew assemble${CMAKE_BUILD_TYPE} --console=verbose
+    #         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
+    #         COMMAND_ERROR_IS_FATAL ANY
+    #     )
+    #     message(CHECK_PASS "successful")
 
-        message(CHECK_START "Move gfxr files")
-        file(
-            ARCHIVE_EXTRACT
-            INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
-            DESTINATION "${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/layer"
-        )
-        file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay)
-        file(
-            COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/. 
-            DESTINATION ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay
-        )
-        message(CHECK_PASS "successful")
-    endif()
+    #     message(CHECK_START "Move gfxr files")
+    #     file(
+    #         ARCHIVE_EXTRACT
+    #         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
+    #         DESTINATION "${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/layer"
+    #     )
+    #     file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay)
+    #     file(
+    #         COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/. 
+    #         DESTINATION ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay
+    #     )
+    #     message(CHECK_PASS "successful")
+    # endif()
 endif()
 
 option(DIVE_UNIT_TESTS, "Build unit tests for dive")

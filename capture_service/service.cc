@@ -130,23 +130,6 @@ grpc::Status DiveServiceImpl::DownloadFile(grpc::ServerContext             *cont
     return grpc::Status::OK;
 }
 
-std::unique_ptr<grpc::Server> &GetServer()
-{
-    static std::unique_ptr<grpc::Server> server = nullptr;
-    return server;
-}
-
-void StopServer()
-{
-    auto &server = GetServer();
-    if (server)
-    {
-        LOGI("StopServer at service.cc");
-        server->Shutdown();
-        server = nullptr;
-    }
-}
-
 void RunServer()
 {
     // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
@@ -159,8 +142,7 @@ void RunServer()
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 
     builder.RegisterService(&service);
-    auto &server = GetServer();
-    server = builder.BuildAndStart();
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
     LOGI("Server listening on %s", server_address.c_str());
     server->Wait();
 }

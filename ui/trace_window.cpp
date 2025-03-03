@@ -535,7 +535,21 @@ void TraceDialog::OnStartClicked()
             m_capture_button->setEnabled(false);
         }
 
-        device->StopApp().IgnoreError();
+        ret = device->StopApp();
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to stop application: ", ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+        }
+
+        ret = device->GetCurrentApplication()->Cleanup();
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to cleanup application: ", ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+        }
         m_run_button->setText(kStart_Application);
     }
 }

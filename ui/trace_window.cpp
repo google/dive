@@ -536,6 +536,14 @@ void TraceDialog::OnStartClicked()
         }
 
         device->StopApp().IgnoreError();
+
+        ret = device->GetCurrentApplication()->Cleanup();
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to cleanup application: ", ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+        }
         m_run_button->setText(kStart_Application);
     }
 }

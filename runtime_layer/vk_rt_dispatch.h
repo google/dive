@@ -34,6 +34,7 @@ struct DeviceDispatchTable
 {
     PFN_vkGetDeviceProcAddr pfn_get_device_proc_addr = nullptr;
     PFN_vkQueuePresentKHR   QueuePresentKHR = nullptr;
+    PFN_vkCreateImage       CreateImage = nullptr;
 };
 
 void InitInstanceDispatchTable(VkInstance                instance,

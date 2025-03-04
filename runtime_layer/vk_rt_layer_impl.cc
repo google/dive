@@ -37,4 +37,22 @@ VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
     return ret;
 }
 
+VkResult CreateImage(PFN_vkCreateImage            pfn,
+                     VkDevice                     device,
+                     const VkImageCreateInfo*     pCreateInfo,
+                     const VkAllocationCallbacks* pAllocator,
+                     VkImage*                     pImage)
+{
+    // Remove VK_IMAGE_CREATE_FRAGMENT_DENSITY_MAP_OFFSET_BIT_QCOM flag 
+    if ((pCreateInfo->flags & VK_IMAGE_CREATE_FRAGMENT_DENSITY_MAP_OFFSET_BIT_QCOM) != 0)
+    {
+        //LOGI("Image %p CreateImage has the density map offset flag! \n", pImage);
+        const_cast<VkImageCreateInfo*> (pCreateInfo)
+        ->flags &= ~VK_IMAGE_CREATE_FRAGMENT_DENSITY_MAP_OFFSET_BIT_QCOM;
+    }
+
+    VkResult ret = pfn(device, pCreateInfo, pAllocator, pImage);
+    return ret;
+}
+
 }  // namespace DiveLayer

@@ -163,6 +163,19 @@ VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPr
     return QueuePresentKHR(pfn, queue, pPresentInfo);
 }
 
+VkResult DiveInterceptCreateImage(VkDevice                     device,
+                                      const VkImageCreateInfo     *pCreateInfo,
+                                      const VkAllocationCallbacks *pAllocator,
+                                      VkImage                     *pImage)
+{
+    PFN_vkCreateImage pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+
+    pfn = layer_data->dispatch_table.CreateImage;
+    return CreateImage(pfn, device, pCreateInfo, pAllocator, pImage);
+}
+
 // Create instance needs a special implementation for layer
 VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
                                      const VkAllocationCallbacks *pAllocator,
@@ -497,6 +510,8 @@ extern "C"
             return (PFN_vkVoidFunction)&DiveInterceptCreateDevice;
         if (0 == strcmp(func, "vkQueuePresentKHR"))
             return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
+        if (0 == strcmp(func, "vkCreateImage"))
+            return (PFN_vkVoidFunction)DiveInterceptCreateImage;
         auto layer_data = GetDeviceLayerData(DataKey(dev));
         return layer_data->dispatch_table.pfn_get_device_proc_addr(dev, func);
     }

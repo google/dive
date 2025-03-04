@@ -215,7 +215,9 @@ Usage:
                         [--dump-resources <submit-index,command-index,draw-call-index>]
                         [--dump-resources-before-draw]
                         [--dump-resources-dir <dir>]
-                        [--pbi-all] [--pbis <index1,index2>] <file>
+                        [--dump-resources-modifiable-state-only ]
+                        [--pbi-all] [--pbis <index1,index2>]
+                        <file>
 
 Required arguments:
   <file>                Path to the capture file to replay.
@@ -290,6 +292,9 @@ Optional arguments:
   --dx12-override-object-names
                         Generates unique names for all ID3D12Objects and assigns each object the generated
                         name.  This is intended to assist replay debugging.
+  --dx12-ags-inject-markers
+                        Label each API calls as block index of the trace
+                        Radeon GPU Detective could dump the label for debugging.
   --batching-memory-usage <pct>
                         Limits the max amount of additional memory that can be used to batch resource data
                         uploads during trim state load. Batching resource data uploads may reduce the number
@@ -308,6 +313,8 @@ Optional arguments:
                         argument, also dump resources before the draw call.
   --dump-resources-dir <dir>
                         Directory to write dump resources output files. Default is the current working directory.
+  --dump-resources-modifiable-state-only
+                        Only dump resources that are in a modifiable state set by D3D12 ResourceBarrier
 ```
 
 

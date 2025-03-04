@@ -466,6 +466,10 @@ void VulkanStateTracker::TrackAccelerationStructureBuildCommand(
                     to_extract.push_back(geometry->geometry.instances.data.deviceAddress);
                     break;
                 }
+                case VK_GEOMETRY_TYPE_SPHERES_NV:
+                case VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV:
+                    GFXRECON_LOG_WARNING("Geometry type not supported at " __FILE__ ", line: %d.", __LINE__);
+                    break;
                 case VK_GEOMETRY_TYPE_MAX_ENUM_KHR:
                     break;
             }
@@ -2065,7 +2069,7 @@ void gfxrecon::encode::VulkanStateTracker::DestroyState(vulkan_wrappers::BufferW
     if (wrapper->bind_memory_id != format::kNullHandleId)
     {
         vulkan_wrappers::DeviceMemoryWrapper* mem_wrapper =
-            state_table_.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
+            state_table_.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
 
         if (mem_wrapper != nullptr)
         {
@@ -2125,7 +2129,7 @@ void VulkanStateTracker::DestroyState(vulkan_wrappers::ImageWrapper* wrapper)
     if (wrapper->bind_memory_id != format::kNullHandleId)
     {
         vulkan_wrappers::DeviceMemoryWrapper* mem_wrapper =
-            state_table_.GetDeviceMemoryWrapper(wrapper->bind_memory_id);
+            state_table_.GetVulkanDeviceMemoryWrapper(wrapper->bind_memory_id);
 
         if (mem_wrapper != nullptr)
         {
@@ -2879,7 +2883,7 @@ void VulkanStateTracker::TrackMappedAssetsWrites(format::HandleId memory_id)
 
         const util::PageStatusTracker& page_status = entry.second.status_tracker;
 
-        vulkan_wrappers::DeviceMemoryWrapper* dev_mem_wrapper = state_table_.GetDeviceMemoryWrapper(entry.first);
+        vulkan_wrappers::DeviceMemoryWrapper* dev_mem_wrapper = state_table_.GetVulkanDeviceMemoryWrapper(entry.first);
         assert(dev_mem_wrapper != nullptr);
 
         dev_mem_wrapper->asset_map_lock.lock();

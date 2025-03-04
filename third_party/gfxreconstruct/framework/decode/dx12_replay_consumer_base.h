@@ -42,6 +42,10 @@
 #include "graphics/dx12_util.h"
 #include "application/application.h"
 
+#ifdef GFXRECON_AGS_SUPPORT
+#include "graphics/dx12_ags_marker_injector.h"
+#endif
+
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
@@ -63,6 +67,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     {
         gfxrecon::util::filepath::CheckReplayerName(info_record.AppName);
     }
+
+#ifdef GFXRECON_AGS_SUPPORT
+    void SetAgsMarkerInjector(AGSContext* ags_context = nullptr);
+#endif
 
     void SetFatalErrorHandler(std::function<void(const char*)> handler) { fatal_error_handler_ = handler; }
 
@@ -348,6 +356,75 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         if (options_.override_object_names)
         {
             SetObjectName(p_id, pp_object, call_id);
+        }
+    }
+
+    template <typename T>
+    void AddObjects(
+        const format::HandleId* p_ids, size_t ids_len, T** pp_objects, size_t objects_len, format::ApiCallId call_id)
+    {
+        if ((p_ids != nullptr) && (pp_objects != nullptr))
+        {
+            size_t len = objects_len;
+            if (ids_len < objects_len)
+            {
+                len = ids_len;
+
+                // More objects were retrieved at replay than were retrieved at capture. The additional objects do not
+                // have IDs and cannot be added to the object table. Release the objects to avoid leaking.
+                for (auto i = ids_len; i < objects_len; ++i)
+                {
+                    reinterpret_cast<IUnknown*>(pp_objects[i])->Release();
+                }
+            }
+
+            for (size_t i = 0; i < len; ++i)
+            {
+                object_mapping::AddObject(&p_ids[i], &pp_objects[i], &object_info_table_);
+
+                if (options_.override_object_names)
+                {
+                    SetObjectName(&p_ids[i], &pp_objects[i], call_id);
+                }
+            }
+        }
+    }
+
+    template <typename T>
+    void AddObjects(const format::HandleId* p_ids,
+                    size_t                  ids_len,
+                    T**                     pp_objects,
+                    size_t                  objects_len,
+                    std::vector<T>&&        initial_infos,
+                    format::ApiCallId       call_id)
+    {
+        if ((p_ids != nullptr) && (pp_objects != nullptr))
+        {
+            size_t len = objects_len;
+            if (ids_len < objects_len)
+            {
+                len = ids_len;
+
+                // More objects were retrieved at replay than were retrieved at capture. The additional objects do not
+                // have IDs and cannot be added to the object table. Release the objects to avoid leaking.
+                for (auto i = ids_len; i < objects_len; ++i)
+                {
+                    reinterpret_cast<IUnknown*>(pp_objects[i])->Release();
+                }
+            }
+
+            assert(len <= initial_infos.size());
+
+            for (size_t i = 0; i < len; ++i)
+            {
+                auto info_iter = std::next(initial_infos.begin(), i);
+                object_mapping::AddObject(&p_ids[i], &pp_objects[i], std::move(*info_iter), &object_info_table_);
+
+                if (options_.override_object_names)
+                {
+                    SetObjectName(&p_ids[i], &pp_objects[i], call_id);
+                }
+            }
         }
     }
 
@@ -1170,6 +1247,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     std::unique_ptr<ScreenshotHandlerBase>                screenshot_handler_;
     std::unordered_map<ID3D12Resource*, ResourceInitInfo> resource_init_infos_;
     uint64_t                                              frame_end_marker_count_;
+
+#ifdef GFXRECON_AGS_SUPPORT
+    graphics::Dx12AgsMarkerInjector* ags_marker_injector_{ nullptr };
+#endif
 };
 
 GFXRECON_END_NAMESPACE(decode)

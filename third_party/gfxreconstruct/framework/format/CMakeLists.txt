@@ -28,6 +28,7 @@
 
 add_library(gfxrecon_format STATIC "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     set_target_properties(gfxrecon_format PROPERTIES FOLDER "gfxreconstruct")
 endif()

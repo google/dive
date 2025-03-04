@@ -21,11 +21,12 @@
 # IN THE SOFTWARE.
 
 import sys
-from base_generator import BaseGenerator, BaseGeneratorOptions, write
+from vulkan_base_generator import VulkanBaseGenerator, VulkanBaseGeneratorOptions, write
+from khronos_json_consumer_body_generator import KhronosExportJsonConsumerBodyGenerator
 from reformat_code import format_cpp_code, indent_cpp_code, remove_trailing_newlines
 
 
-class VulkanExportJsonConsumerBodyGeneratorOptions(BaseGeneratorOptions):
+class VulkanExportJsonConsumerBodyGeneratorOptions(VulkanBaseGeneratorOptions, KhronosExportJsonConsumerBodyGenerator):
     """Options for generating a C++ class for Vulkan capture file to JSON file generation."""
 
     def __init__(
@@ -39,7 +40,7 @@ class VulkanExportJsonConsumerBodyGeneratorOptions(BaseGeneratorOptions):
         protect_feature=True,
         extra_headers=[]
     ):
-        BaseGeneratorOptions.__init__(
+        VulkanBaseGeneratorOptions.__init__(
             self,
             blacklists,
             platform_types,
@@ -51,9 +52,16 @@ class VulkanExportJsonConsumerBodyGeneratorOptions(BaseGeneratorOptions):
             extra_headers=extra_headers
         )
 
+        self.begin_end_file_data.specific_headers.extend((
+            'util/defines.h',
+            'generated/generated_vulkan_json_consumer.h',
+            'decode/custom_vulkan_struct_to_json.h',
+        ))
+        self.begin_end_file_data.namespaces.extend(('gfxrecon', 'decode'))
 
-class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
-    """VulkanExportJsonConsumerBodyGenerator - subclass of BaseGenerator.
+
+class VulkanExportJsonConsumerBodyGenerator(VulkanBaseGenerator, KhronosExportJsonConsumerBodyGenerator):
+    """VulkanExportJsonConsumerBodyGenerator - subclass of VulkanBaseGenerator.
     Generates C++ member definitions for the VulkanExportJsonConsumer class responsible for
     generating a textfile containing decoded Vulkan API call parameter data.
     Generate a C++ class for Vulkan capture file to JSON file generation.
@@ -62,7 +70,7 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
     def __init__(
         self, err_file=sys.stderr, warn_file=sys.stderr, diag_file=sys.stdout
     ):
-        BaseGenerator.__init__(
+        VulkanBaseGenerator.__init__(
             self,
             err_file=err_file,
             warn_file=warn_file,
@@ -93,30 +101,6 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
             "vkQueueSubmit2KHR",
             }
 
-
-        self.flagsType = dict()
-        self.flagsTypeAlias = dict()
-        self.flagEnumBitsType = dict()
-
-    def beginFile(self, gen_opts):
-        """Method override."""
-        BaseGenerator.beginFile(self, gen_opts)
-
-        includes = format_cpp_code('''
-            #include "util/defines.h"
-            #include "generated/generated_vulkan_json_consumer.h"
-            #include "decode/custom_vulkan_struct_to_json.h"
-        ''')
-        write(includes, file=self.outFile)
-        self.write_includes_of_common_api_headers(gen_opts)
-        namespace = remove_trailing_newlines(indent_cpp_code('''
-            GFXRECON_BEGIN_NAMESPACE(gfxrecon)
-            GFXRECON_BEGIN_NAMESPACE(decode)
-
-            using util::JsonOptions;
-        '''))
-        write(namespace, file=self.outFile)
-
     def endFile(self):
         """Method override."""
         # TODO: Each code generator is passed a blacklist like framework\generated\vulkan_generators\blacklists.json
@@ -125,16 +109,10 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
         if 'vkCreateRayTracingPipelinesKHR' in self.APICALL_BLACKLIST:
             self.APICALL_BLACKLIST.remove('vkCreateRayTracingPipelinesKHR')
 
-        self.generate_json_content()
-
-        body = format_cpp_code('''
-            GFXRECON_END_NAMESPACE(decode)
-            GFXRECON_END_NAMESPACE(gfxrecon)
-        ''')
-        write(body, file=self.outFile)
+        KhronosExportJsonConsumerBodyGenerator.generate_json_content(self)
 
         # Finish processing in superclass
-        BaseGenerator.endFile(self)
+        VulkanBaseGenerator.endFile(self)
 
     def need_feature_generation(self):
         """Indicates that the current feature has C++ code to generate."""
@@ -142,44 +120,32 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
             return True
         return False
 
-    def generate_json_content(self):
-        """Performs C++ code generation for the feature."""
-
-
-        for cmd in self.get_all_filtered_cmd_names():
-            if not cmd in self.customImplementationRequired:
-                info = self.all_cmd_params[cmd]
-                return_type = info[0]
-                values = info[2]
-
-                cmddef = '\n'
-                cmddef += self.make_consumer_func_decl(
-                    return_type, 'VulkanExportJsonConsumer::Process_' + cmd, values
-                ) + '\n'
-                cmddef += format_cpp_code('''
-                    {{
-                        nlohmann::ordered_json& jdata = WriteApiCallStart(call_info, "{0}");
-                        const JsonOptions& json_options = GetJsonOptions();
-                    '''.format(cmd)
-                )
-                cmddef += '\n'
-                cmddef += self.make_consumer_func_body(
-                    return_type, cmd, values
-                )
-                cmddef += format_cpp_code('''
-                        WriteBlockEnd();
-                    }
-                ''', 1)
-                write(cmddef, file=self.outFile)
-
     def is_command_buffer_cmd(self, command):
         if 'vkCmd' in command:
             return True
         return False
 
+    def skip_generating_command_json(self, command):
+        """Method override"""
+        return command in self.customImplementationRequired
+
+    def decode_as_handle(self, value):
+        """Method override
+        Indicates that the given type should be decoded as a handle."""
+        return (
+            (
+                self.is_handle_like(value.base_type)
+                or value.name in self.formatAsHandle
+            )
+        )
+
+    def decode_as_hex(self, value):
+        """Method override"""
+        return value.base_type in self.formatAsHex
+
     # yapf: disable
     def make_consumer_func_body(self, return_type, name, values):
-        """Return VulkanExportJsonConsumer class member function definition."""
+        """Return class member function definition."""
         body = ''
 
         if name in self.queueSubmit:
@@ -187,59 +153,6 @@ class VulkanExportJsonConsumerBodyGenerator(BaseGenerator):
         elif self.is_command_buffer_cmd(name):
             body += '    FieldToJson(jdata[NameCommandIndex()], GetCommandBufferRecordIndex(commandBuffer), json_options);\n'
 
-        # Handle function return value
-        if return_type in self.formatAsHex:
-            body += '    FieldToJsonAsHex(jdata[NameReturn()], returnValue, json_options);\n'
-        elif 'VkBool32' == return_type:
-            # Output as JSON boolean type true/false without quotes:
-            body += '            Bool32ToJson(jdata[NameReturn()], returnValue, json_options);\n'
-        elif self.is_handle(return_type):
-            body += '    HandleToJson(jdata[NameReturn()], returnValue, json_options);\n'
-        # Enums, ints, etc. handled by default and static dispatch based on C++ type:
-        elif not 'void' in return_type:
-            body += '    FieldToJson(jdata[NameReturn()], returnValue, json_options);\n'
-
-        if len(values) > 0:
-            body += '    auto& args = jdata[NameArgs()];\n'
-            # Handle function arguments
-            for value in values:
-                flagsEnumType = value.base_type
-
-                # Default to letting the right function overload to be resolved based on argument types,
-                # including enums, strings ints, floats etc.:
-                # Note there are overloads for scalars and pointers/arrays.
-                to_json = 'FieldToJson(args["{0}"], {0}, json_options)'
-
-                # Special cases:
-                if 'VkBool32' == value.base_type:
-                    to_json = 'Bool32ToJson(args["{0}"], {0}, json_options)'
-                elif value.name == 'ppData' or (value.base_type in self.formatAsHex):
-                    to_json = 'FieldToJsonAsHex(args["{0}"], {0}, json_options)'
-                elif self.is_handle(value.base_type) or value.name in self.formatAsHandle:
-                    to_json = 'HandleToJson(args["{0}"], {0}, json_options)'
-                elif self.is_flags(value.base_type):
-                    if value.base_type in self.flagsTypeAlias:
-                            flagsEnumType = self.flagsTypeAlias[value.base_type]
-                    if not (value.is_pointer or value.is_array):
-                        to_json = 'FieldToJson({2}_t(), args["{0}"], {0}, json_options)'
-                    else:
-                        # Default to outputting as the raw type but warn:
-                        print("Missing conversion of pointers to", flagsEnumType, "in", name,  file=sys.stderr)
-
-                to_json = to_json.format(value.name, value.base_type, flagsEnumType)
-                body += '        {0};\n'.format(to_json)
+        body += KhronosExportJsonConsumerBodyGenerator.make_consumer_func_body(self, return_type, name, values)
         return body
     # yapf: enable
-
-    def genType(self, typeinfo, name, alias):
-        super().genType(typeinfo, name, alias)
-        if self.is_flags(name):
-            if alias is None:
-                self.flagsType[name] = self.flags_types[name]
-                bittype = typeinfo.elem.get('requires')
-                if bittype is None:
-                    bittype = typeinfo.elem.get('bitvalues')
-                if bittype is not None:
-                    self.flagEnumBitsType[bittype] = name
-            else:
-                self.flagsTypeAlias[name] = alias

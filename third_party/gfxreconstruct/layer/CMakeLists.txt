@@ -45,6 +45,7 @@ endif()
 
 add_library(VkLayer_gfxreconstruct SHARED "")
 
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(VkLayer_gfxreconstruct
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/dll_main.cpp
@@ -56,6 +57,7 @@ target_sources(VkLayer_gfxreconstruct
                    $<$<BOOL:WIN32>:${CMAKE_CURRENT_SOURCE_DIR}/../version.rc>
               )
 
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_include_directories(VkLayer_gfxreconstruct
                            PUBLIC
                                ${CMAKE_BINARY_DIR}
@@ -63,6 +65,7 @@ target_include_directories(VkLayer_gfxreconstruct
 
 target_link_libraries(VkLayer_gfxreconstruct gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific)
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_link_libraries(VkLayer_gfxreconstruct psapi.lib)
     set_target_properties(VkLayer_gfxreconstruct PROPERTIES FOLDER "gfxreconstruct")
@@ -83,6 +86,7 @@ GENERATE_LAYER_JSON_FILE(VkLayer_gfxreconstruct_json
         $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/VkLayer_gfxreconstruct.json
         )
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     set_target_properties(VkLayer_gfxreconstruct_json PROPERTIES FOLDER "gfxreconstruct")
 endif()

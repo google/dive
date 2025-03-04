@@ -33,8 +33,7 @@ VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
                          VkQueue                 queue,
                          const VkPresentInfoKHR* pPresentInfo)
 {
-    VkResult ret = pfn(queue, pPresentInfo);
-    return ret;
+    return pfn(queue, pPresentInfo);
 }
 
 VkResult CreateImage(PFN_vkCreateImage            pfn,
@@ -51,8 +50,7 @@ VkResult CreateImage(PFN_vkCreateImage            pfn,
         ->flags &= ~VK_IMAGE_CREATE_FRAGMENT_DENSITY_MAP_OFFSET_BIT_QCOM;
     }
 
-    VkResult ret = pfn(device, pCreateInfo, pAllocator, pImage);
-    return ret;
+    return pfn(device, pCreateInfo, pAllocator, pImage);
 }
 
 }  // namespace DiveLayer

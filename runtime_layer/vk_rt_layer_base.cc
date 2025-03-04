@@ -164,9 +164,9 @@ VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPr
 }
 
 VkResult DiveInterceptCreateImage(VkDevice                     device,
-                                      const VkImageCreateInfo     *pCreateInfo,
-                                      const VkAllocationCallbacks *pAllocator,
-                                      VkImage                     *pImage)
+                                  const VkImageCreateInfo     *pCreateInfo,
+                                  const VkAllocationCallbacks *pAllocator,
+                                  VkImage                     *pImage)
 {
     PFN_vkCreateImage pfn = nullptr;
 

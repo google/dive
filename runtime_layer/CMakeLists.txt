@@ -22,11 +22,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(target_name VkLayer_rt_dive)
 
 set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"
+                "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.h"
 )
 
 set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_base.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_android.cc"
 )

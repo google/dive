@@ -145,22 +145,3 @@ The command line tool will clean up the device and application automatically at 
 ./dive_client_cli --command cleanup --package de.saschawillems.vulkanBloom --device 9A221FFAZ004TL
 ```
 This will remove all the libraries installed and the settings that had been setup by Dive for the package.
-
-### Updating Dive's gfxreconstruct subtree
-
-1. Create a branch to contain the merge
-2. Add the remote: 
-```
-git remote add -f gfxreconstruct-remote https://github.com/LunarG/gfxreconstruct.git
-```
-3. Run the merge command: 
-```
-git merge -s subtree --squash -X subtree=third_party/gfxreconstruct --allow-unrelated-histories --no-commit gfxreconstruct-remote/dev
-```
-4. Resolve the conflicts that arise and ensure dive-specific changes are included. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE:
-5. Stage the files.
-6. Create the commit: 
-```
-git add third_party/gfxreconstruct, git commit -m "Import gfxreconstruct updates"
-```
-7. Create a pull request for the updates.

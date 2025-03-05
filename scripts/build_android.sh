@@ -59,9 +59,9 @@ do
         ${SRC_DIR} || exit 1
 
     cmake --build . --config=${build} -j || exit 1
-    if [ ${build} == "Release" ]; then
-        cmake --install . || exit 1
-    fi
+
+    cmake --install . || exit 1
+
     popd
 done
 

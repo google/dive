@@ -58,7 +58,7 @@ echo Building all the following types: !BUILD_TYPE!
         %SRC_DIR%
 
     cmake --build . --config=!build! -j
-    if "%%b" == "Release" cmake --install .
+    cmake --install .
     popd
 ))
 
@@ -102,6 +102,14 @@ popd
     if exist !GFXR_REPLAY_DST! rm -rf !GFXR_REPLAY_DST!
     if not !ERRORLEVEL!==0 exit /b 1
     xcopy /i !GFXR_REPLAY_SRC! !GFXR_REPLAY_DST!
+    if not !ERRORLEVEL!==0 exit /b 1
+
+    set DIVE_INSTALL_DIR=%PROJECT_ROOT%\\install
+    xcopy /i !GFXR_REPLAY_DST!\\replay-*.apk !DIVE_INSTALL_DIR!
+    pushd !DIVE_INSTALL_DIR!
+    if exist gfxr-replay.apk rm gfxr-replay.apk
+    ren replay-*.apk gfxr-replay.apk
+    popd
     if not !ERRORLEVEL!==0 exit /b 1
 ))
 

@@ -122,6 +122,9 @@ public:
     AndroidDevice                  *GetDevice() const { return m_device.get(); }
     absl::Status                    Cleanup(const std::string &serial, const std::string &package);
 
+    absl::Status DeployReplayApk(const std::string &serial);
+    absl::Status RunReplayApk(const std::string &capture_path, const std::string &replay_args);
+
 private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };

@@ -414,16 +414,22 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("python %s install-apk %s -s %s", recon_py_path, replay_apk_path, serial);
+    std::string cmd = absl::StrFormat("python %s install-apk %s -s %s",
+                                      recon_py_path,
+                                      replay_apk_path,
+                                      serial);
     absl::StatusOr<std::string> res = RunCommand(cmd);
-    if (!res.ok()) {
+    if (!res.ok())
+    {
         LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", replay_apk_path.c_str());
         return res.status();
     }
 
-    cmd = absl::StrFormat("adb shell appops set %s MANAGE_EXTERNAL_STORAGE allow", kGfxrReplayAppName);
+    cmd = absl::StrFormat("adb shell appops set %s MANAGE_EXTERNAL_STORAGE allow",
+                          kGfxrReplayAppName);
     res = RunCommand(cmd);
-    if (!res.ok()) {
+    if (!res.ok())
+    {
         LOGD("ERROR: DeployReplayApk(): setting MANAGE_EXTERNAL_STORAGE allow\n");
         return res.status();
     }
@@ -432,15 +438,23 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayApk(const std::string &capture_path, const std::string &replay_args)
+absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
+                                         const std::string &replay_args)
 {
     LOGD("RunReplayApk(): starting\n");
 
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("python %s replay %s %s", recon_py_path, capture_path, replay_args);
+    std::string cmd = absl::StrFormat("python %s replay %s %s",
+                                      recon_py_path,
+                                      capture_path,
+                                      replay_args);
     absl::StatusOr<std::string> res = RunCommand(cmd);
-    if (!res.ok()) {
-        LOGD("ERROR: RunReplayApk(): running capture and args: %s %s\n", capture_path.c_str(), replay_args.c_str());;
+    if (!res.ok())
+    {
+        LOGD("ERROR: RunReplayApk(): running capture and args: %s %s\n",
+             capture_path.c_str(),
+             replay_args.c_str());
+        ;
         return res.status();
     }
 

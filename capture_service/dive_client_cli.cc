@@ -111,7 +111,8 @@ std::string AbslUnparseFlag(Command command)
 ABSL_FLAG(Command,
           command,
           Command::kNone,
-          "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay \n\tlist_package \n\trun \n\tcapture \n\tcleanup");
+          "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay \n\tlist_package "
+          "\n\trun \n\tcapture \n\tcleanup");
 ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
 ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli application to run");
@@ -146,13 +147,10 @@ trigger_capture_after,
 "specify how long in seconds the capture be triggered after the application starts when running "
 "with the `capture` command. If not specified, it will be triggered after 5 seconds.");
 ABSL_FLAG(std::string,
-    gfxr_replay_file_path,
-    "",
-    "specify the on-device path of the gfxr capture to replay.");
-ABSL_FLAG(std::string,
-    gfxr_replay_flags,
-    "",
-    "specify flags to pass to gfxr replay.");
+          gfxr_replay_file_path,
+          "",
+          "specify the on-device path of the gfxr capture to replay.");
+ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr replay.");
 
 void print_usage()
 {
@@ -541,11 +539,15 @@ bool process_input(Dive::DeviceManager& mgr)
     return true;
 }
 
-bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr, const std::string& device_serial, const std::string gfxr_replay_capture, const std::string gfxr_replay_flags)
+bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr,
+                                const std::string&   device_serial,
+                                const std::string    gfxr_replay_capture,
+                                const std::string    gfxr_replay_flags)
 {
     // Deploying install/gfxr-replay.apk
     absl::Status ret = mgr.DeployReplayApk(device_serial);
-    if (!ret.ok()) {
+    if (!ret.ok())
+    {
         return false;
     }
     // Running replay for on-device capture
@@ -594,7 +596,8 @@ int main(int argc, char** argv)
     }
     case Command::kGfxrReplay:
     {
-        if (gfxr_replay_file_path == "") {
+        if (gfxr_replay_file_path == "")
+        {
             std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
             break;
         }
@@ -624,7 +627,14 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        res = run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false);
+        res = run_and_capture(mgr,
+                              app_type,
+                              package,
+                              vulkan_command,
+                              vulkan_command_args,
+                              "",
+                              "",
+                              false);
         break;
     }
     case Command::kCleanup:

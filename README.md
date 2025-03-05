@@ -110,7 +110,7 @@ Troubleshooting tips:
   - `build_android`
 - If incremental builds are slow, try building only one version (Debug or Release) and not both
 
-### CLI Tool for capture and cleanup
+### CLI Tool for Android applications
 The command-line tool `dive_client_cli` currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
 
 To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux). You can then use `ninja install` to install the CLI tool under the `install` folder.
@@ -121,7 +121,9 @@ To build the Android libraries, see [Building Android Libraries](#building-andro
 
 You can find out the device serial by run `adb devices` or by `./dive_client_cli --command list_device`
 
-#### PM4 Capture with command line tool for Android applications
+Run `./dive_client_cli --help` for help.
+
+#### Standalone PM4 Capture
 
 Examples:
  - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
@@ -137,7 +139,7 @@ Then you can follow the hint output to trigger a capture by press key `t` and `e
 
 The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
 
-#### GFXR Capture with command line tool for Android applications
+#### GFXR Replay
 
 First, push the GFXR capture to the device or find the path where it is located on the device.
 

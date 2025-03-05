@@ -601,17 +601,16 @@ void ProgressBarWorker::run()
     }
     else
     {
-        while (m_capture_size && cur_size <= m_capture_size)
+        m_progress_bar->show();
+
+        while (m_capture_size && cur_size < m_capture_size)
         {
-            if (std::filesystem::exists(m_capture_name))
-            {
-                cur_size = std::filesystem::file_size(m_capture_name);
-                percent = cur_size * 100 / m_capture_size;
-                m_progress_bar->setValue(percent);
-                m_progress_bar->show();
-                std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
-                          << m_capture_size << std::endl;
-            }
+            cur_size = GetDownloadedSize();
+            percent = cur_size * 100 / m_capture_size;
+            m_progress_bar->setValue(percent);
+            std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
+                      << m_capture_size << std::endl;
+            QThread::msleep(10);  // 10 milliseconds
         }
         m_progress_bar->setValue(100);
     }
@@ -691,14 +690,18 @@ void TraceWorker::run()
             &TraceWorker::finished,
             progress_bar_worker,
             &QObject::deleteLater);
+    connect(this,
+            &TraceWorker::DownloadedSize,
+            progress_bar_worker,
+            &ProgressBarWorker::SetDownloadedSize);
 
     progress_bar_worker->start();
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
-    auto r = device->RetrieveTrace(*trace_file_path, target.generic_string());
-    progress_bar_worker->terminate();
-    m_progress_bar->setValue(100);
+
+    auto progress = [this](int64_t size) { emit DownloadedSize(size); };
+    auto r = client.DownloadFile(*trace_file_path, target.generic_string(), progress);
     if (r.ok())
         qDebug() << "Capture saved at "
                  << std::filesystem::canonical(target).generic_string().c_str();

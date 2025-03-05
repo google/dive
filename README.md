@@ -111,8 +111,7 @@ Troubleshooting tips:
 - If incremental builds are slow, try building only one version (Debug or Release) and not both
 
 ### CLI Tool for capture and cleanup
-#### Capture with command line tool for Android applications
-The command-line tool currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
+The command-line tool `dive_client_cli` currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
 
 To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux). You can then use `ninja install` to install the CLI tool under the `install` folder.
 
@@ -120,22 +119,36 @@ To build the CLI tool on Windows, see [Building Dive host tool on Windows](#buil
 
 To build the Android libraries, see [Building Android Libraries](#building-android-libraries).
 
-Run `./dive_client_cli  --help` for help.
 You can find out the device serial by run `adb devices` or by `./dive_client_cli --command list_device`
+
+#### PM4 Capture with command line tool for Android applications
 
 Examples:
  - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
  ```
- ./dive_client_cli --device  9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --trigger_capture_after 5 --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --trigger_capture_after 5 --download_path "/path/to/save/captures"
  ```
 
  - Install the dependencies on device and start the package
  ```
- ./dive_client_cli --device  9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
  ```
 Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
 
 The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
+
+#### GFXR Capture with command line tool for Android applications
+
+First, push the GFXR capture to the device or find the path where it is located on the device.
+
+If multiple Android Devices are connected, set the enviroment variable `ANDROID_SERIAL` to the device serial in preparation for the GFXR replay script.
+
+Using the `gfxr-replay` command will install the `gfxr-replay.apk` found in the `install` dir, and then replay the specified capture.
+
+Example:
+```
+./dive_client_cli --device 9A221FFAZ004TL --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr
+```
 
 #### Cleanup
 

@@ -37,6 +37,7 @@ enum class Command
 {
     kNone,
     kGfxrCapture,
+    kGfxrReplay,
     kListDevice,
     kListPackage,
     kRunPackage,
@@ -76,6 +77,11 @@ bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
         *command = Command::kGfxrCapture;
         return true;
     }
+    if (text == "gfxr_replay")
+    {
+        *command = Command::kGfxrReplay;
+        return true;
+    }
     if (text.empty())
     {
         *command = Command::kNone;
@@ -92,6 +98,7 @@ std::string AbslUnparseFlag(Command command)
     case Command::kNone: return "";
     case Command::kListDevice: return "list_device";
     case Command::kGfxrCapture: return "gfxr_capture";
+    case Command::kGfxrReplay: return "gfxr_replay";
     case Command::kListPackage: return "list_package";
     case Command::kRunPackage: return "run";
     case Command::kRunAndCapture: return "capture";
@@ -104,7 +111,7 @@ std::string AbslUnparseFlag(Command command)
 ABSL_FLAG(Command,
           command,
           Command::kNone,
-          "list of actions: \n\tlist_device \n\tlist_package \n\trun \n\tcapture");
+          "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay \n\tlist_package \n\trun \n\tcapture \n\tcleanup");
 ABSL_FLAG(std::string, device, "", "Device serial");
 ABSL_FLAG(std::string, package, "", "Package on the device");
 ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli application to run");
@@ -138,6 +145,14 @@ trigger_capture_after,
 5,
 "specify how long in seconds the capture be triggered after the application starts when running "
 "with the `capture` command. If not specified, it will be triggered after 5 seconds.");
+ABSL_FLAG(std::string,
+    gfxr_replay_file_path,
+    "",
+    "specify the on-device path of the gfxr capture to replay.");
+ABSL_FLAG(std::string,
+    gfxr_replay_flags,
+    "",
+    "specify flags to pass to gfxr replay.");
 
 void print_usage()
 {
@@ -526,6 +541,18 @@ bool process_input(Dive::DeviceManager& mgr)
     return true;
 }
 
+bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr, const std::string& device_serial, const std::string gfxr_replay_capture, const std::string gfxr_replay_flags)
+{
+    // Deploying install/gfxr-replay.apk
+    absl::Status ret = mgr.DeployReplayApk(device_serial);
+    if (!ret.ok()) {
+        return false;
+    }
+    // Running replay for on-device capture
+    ret = mgr.RunReplayApk(gfxr_replay_capture, gfxr_replay_flags);
+    return ret.ok();
+}
+
 int main(int argc, char** argv)
 {
     absl::SetProgramUsageMessage("Run app with --help for more details");
@@ -538,6 +565,8 @@ int main(int argc, char** argv)
     std::string app_type = absl::GetFlag(FLAGS_type);
     std::string device_architecture = absl::GetFlag(FLAGS_device_architecture);
     std::string gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir);
+    std::string gfxr_replay_file_path = absl::GetFlag(FLAGS_gfxr_replay_file_path);
+    std::string gfxr_replay_flags = absl::GetFlag(FLAGS_gfxr_replay_flags);
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
@@ -546,6 +575,8 @@ int main(int argc, char** argv)
         std::cout << "No device connected" << std::endl;
         return 0;
     }
+
+    bool res = false;
 
     switch (cmd)
     {
@@ -561,14 +592,23 @@ int main(int argc, char** argv)
                         true);
         break;
     }
+    case Command::kGfxrReplay:
+    {
+        if (gfxr_replay_file_path == "") {
+            std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
+            break;
+        }
+        res = deploy_and_run_gfxr_replay(mgr, serial, gfxr_replay_file_path, gfxr_replay_flags);
+        break;
+    }
     case Command::kListDevice:
     {
-        list_device(mgr);
+        res = list_device(mgr);
         break;
     }
     case Command::kListPackage:
     {
-        list_package(mgr, serial);
+        res = list_package(mgr, serial);
         break;
     }
 
@@ -576,7 +616,7 @@ int main(int argc, char** argv)
     {
         if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false))
         {
-            process_input(mgr);
+            res = process_input(mgr);
         }
 
         break;
@@ -584,18 +624,21 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false);
+        res = run_and_capture(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false);
         break;
     }
     case Command::kCleanup:
     {
-        clean_up_app_and_device(mgr, package);
+        res = clean_up_app_and_device(mgr, package);
         break;
     }
     case Command::kNone:
     {
         print_usage();
+        res = true;
         break;
     }
     }
+
+    return res ? 0 : 1;
 }

@@ -408,6 +408,46 @@ absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &s
     return m_device.get();
 }
 
+absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
+{
+    LOGD("DeployReplayApk(): starting\n");
+
+    std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
+    std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
+    std::string cmd = absl::StrFormat("python %s install-apk %s -s %s", recon_py_path, replay_apk_path, serial);
+    absl::StatusOr<std::string> res = RunCommand(cmd);
+    if (!res.ok()) {
+        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", replay_apk_path.c_str());
+        return res.status();
+    }
+
+    cmd = absl::StrFormat("adb shell appops set %s MANAGE_EXTERNAL_STORAGE allow", kGfxrReplayAppName);
+    res = RunCommand(cmd);
+    if (!res.ok()) {
+        LOGD("ERROR: DeployReplayApk(): setting MANAGE_EXTERNAL_STORAGE allow\n");
+        return res.status();
+    }
+
+    LOGD("DeployReplayApk(): completed\n");
+    return absl::OkStatus();
+}
+
+absl::Status DeviceManager::RunReplayApk(const std::string &capture_path, const std::string &replay_args)
+{
+    LOGD("RunReplayApk(): starting\n");
+
+    std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
+    std::string cmd = absl::StrFormat("python %s replay %s %s", recon_py_path, capture_path, replay_args);
+    absl::StatusOr<std::string> res = RunCommand(cmd);
+    if (!res.ok()) {
+        LOGD("ERROR: RunReplayApk(): running capture and args: %s %s\n", capture_path.c_str(), replay_args.c_str());;
+        return res.status();
+    }
+
+    LOGD("RunReplayApk(): completed\n");
+    return absl::OkStatus();
+}
+
 absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string &package)
 {
     AdbSession adb(serial);
@@ -435,6 +475,7 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
     {
         RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)));
     }
+
     return absl::OkStatus();
 }
 

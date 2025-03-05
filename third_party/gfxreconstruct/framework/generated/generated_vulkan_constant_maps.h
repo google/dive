@@ -43,6 +43,7 @@
 
 #include <unordered_map>
 #include <vector>
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -73,4 +74,4 @@ static const std::vector<const char *> kColorSpaceExtensionNames = {
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 
-#endif
+#endif // GFXRECON_GENERATED_VULKAN_CONSTANT_MAPS_H

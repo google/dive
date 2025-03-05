@@ -25,10 +25,10 @@
 
 #include "layer/trace_layer.h"
 
-#include "encode/custom_layer_func_table.h"
+#include "encode/custom_vulkan_layer_func_table.h"
 #include "encode/vulkan_capture_manager.h"
 #include "encode/vulkan_handle_wrapper_util.h"
-#include "generated/generated_layer_func_table.h"
+#include "generated/generated_vulkan_layer_func_table.h"
 #include "generated/generated_vulkan_api_call_encoders.h"
 #include "util/platform.h"
 
@@ -89,7 +89,8 @@ const char* const kUnsupportedDeviceExtensions[] = { VK_AMDX_SHADER_ENQUEUE_EXTE
                                                      VK_NV_LOW_LATENCY_2_EXTENSION_NAME,
                                                      VK_NV_MEMORY_DECOMPRESSION_EXTENSION_NAME,
                                                      VK_VALVE_DESCRIPTOR_SET_HOST_MAPPING_EXTENSION_NAME,
-                                                     VK_NV_CUDA_KERNEL_LAUNCH_EXTENSION_NAME };
+                                                     VK_NV_CUDA_KERNEL_LAUNCH_EXTENSION_NAME,
+                                                     VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME };
 
 static void RemoveExtensions(std::vector<VkExtensionProperties>& extensionProps,
                              const char* const                   screenedExtensions[],
@@ -273,7 +274,7 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance instance
     // set to the internal "loader_instance".  Detect that case and return
     if (!strcmp(pName, "vkCreateInstance"))
     {
-        return reinterpret_cast<PFN_vkVoidFunction>(encode::CreateInstance);
+        return reinterpret_cast<PFN_vkVoidFunction>(encode::vkCreateInstance);
     }
 
     bool has_implementation = false;

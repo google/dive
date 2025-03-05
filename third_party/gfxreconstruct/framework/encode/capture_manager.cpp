@@ -1269,12 +1269,9 @@ void CommonCaptureManager::WriteFileHeader(util::FileOutputStream* file_stream)
                             { option_list.data(), option_list.size() * sizeof(format::FileOptionPair) } },
                           file_stream);
 
-    // File header does not count as a block
-    assert(block_index_ > 0);
+    // File header does not count as a block when replaying
+    GFXRECON_ASSERT(block_index_ > 0);
     --block_index_;
-
-    auto thread_data          = GetThreadData();
-    thread_data->block_index_ = block_index_.load();
 }
 
 void CommonCaptureManager::BuildOptionList(const format::EnabledOptions&        enabled_options,
@@ -1505,6 +1502,9 @@ void CommonCaptureManager::WriteCreateHeapAllocationCmd(format::ApiFamilyId api_
 void CommonCaptureManager::WriteToFile(const void* data, size_t size, util::FileOutputStream* file_stream)
 {
     file_stream ? file_stream->Write(data, size) : file_stream_->Write(data, size);
+
+    // Increment block index
+    ++block_index_;
 }
 
 void CommonCaptureManager::AtExit()
@@ -1666,8 +1666,6 @@ bool CaptureFileOutputStream::Write(const void* data, size_t len)
             manager->UffdUnblockRtSignal();
         }
     }
-
-    capture_manager_->IncrementBlockIndex(1);
 
     return ret;
 }

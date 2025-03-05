@@ -1,5 +1,6 @@
 ###############################################################################
 # Copyright (c) 2021 LunarG, Inc.
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
 # All rights reserved
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,6 +28,7 @@
 
 add_library(gfxrecon_graphics STATIC "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_compile_options(gfxrecon_graphics PRIVATE /wd4996 /wd4267 /wd4244)
     set_target_properties(gfxrecon_graphics PROPERTIES FOLDER "gfxreconstruct")
@@ -62,6 +64,15 @@ target_sources(gfxrecon_graphics
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_struct_extract_handles.cpp
               )
 
+if (${GFXRECON_AGS_SUPPORT_FINAL})
+target_sources(gfxrecon_graphics
+               PRIVATE
+                    ${CMAKE_CURRENT_LIST_DIR}/dx12_ags_marker_injector.h
+                    ${CMAKE_CURRENT_LIST_DIR}/dx12_ags_marker_injector.cpp
+               )
+endif()
+
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_include_directories(gfxrecon_graphics
                            PUBLIC
                                ${CMAKE_SOURCE_DIR}/build

@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -i
 #
 # Copyright (c) 2019 Valve Corporation
-# Copyright (c) 2019-2024 LunarG, Inc.
+# Copyright (c) 2019-2025 LunarG, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -32,19 +32,6 @@ class KhronosStructHandleWrappersHeaderGenerator():
     """
 
     def write_struct_handle_wrapper_content(self):
-        """Method override."""
-        # Check for output structures, which retrieve handles that need to be wrapped.
-        for cmd in self.all_cmd_params:
-            info = self.all_cmd_params[cmd]
-            values = info[2]
-
-            for value in values:
-                if self.is_output_parameter(value) and self.is_struct(
-                    value.base_type
-                ) and (value.base_type in self.structs_with_handles
-                       ) and (value.base_type not in self.output_structs):
-                    self.output_structs.append(value.base_type)
-
         # Generate unwrap and rewrap code for input structures.
         for struct in self.get_all_filtered_struct_names():
             if (
@@ -218,7 +205,40 @@ class KhronosStructHandleWrappersHeaderGenerator():
         write('    return values;', file=self.outFile)
         write('}', file=self.outFile)
 
+    # Recursively search a structs members to see if they too belong in the
+    # output struct list.  This could be because an including struct is an
+    # output struct.
+    def process_struct_members_to_output_struct(self, value):
+        for member in self.all_struct_members[value.base_type]:
+            if (
+                self.is_struct(member.base_type)
+                and not self.is_struct_black_listed(member.base_type)
+                and (member.base_type in self.structs_with_handles)
+                and (member.base_type not in self.output_structs)
+            ):
+                self.output_structs.append(member.base_type)
+                self.process_struct_members_to_output_struct(member)
+
     def generate_create_wrapper_funcs(self):
+        # Map of Vulkan structs containing handles to a list values for handle members or struct members
+        # that contain handles (eg. VkGraphicsPipelineCreateInfo contains a VkPipelineShaderStageCreateInfo
+        # member that contains handles).
+        self.output_structs = [
+        ]  # Output structures that retrieve handles, which need to be wrapped.
+
+        # Check for output structures, which retrieve handles that need to be wrapped.
+        for cmd in self.all_cmd_params:
+            info = self.all_cmd_params[cmd]
+            values = info[2]
+
+            for value in values:
+                if self.is_output_parameter(value) and self.is_struct(
+                    value.base_type
+                ) and (value.base_type in self.structs_with_handles
+                       ) and (value.base_type not in self.output_structs):
+                    self.output_structs.append(value.base_type)
+                    self.process_struct_members_to_output_struct(value)
+
         """Generates functions that wrap struct handle members."""
         for struct in self.output_structs:
             body = 'template <typename ParentWrapper, typename CoParentWrapper>\n'
@@ -229,36 +249,49 @@ class KhronosStructHandleWrappersHeaderGenerator():
             body += '    if (value != nullptr)\n'
             body += '    {\n'
 
+            default_info = {
+                    'indent': '        ',
+                    'struct': '',
+                    'plural': '',
+                    'length': '',
+                    'coparent_wrapper': '',
+                    'coparent_arg': '',
+                    'dref_value': '&',
+                }
             for member in self.structs_with_handles[struct]:
-                wrapper_prefix = self.get_wrapper_prefix_from_type(member.base_type)
-                func_target = self.get_handle_like_func_name_modifier(member.base_type)
+                # Set up the information needed to generation the createwrapper call
+                info = { **default_info }
+                info['prefix'] = self.get_wrapper_prefix_from_type(member.base_type)
+                info['target'] = self.get_handle_like_func_name_modifier(member.base_type)
+                info['name'] = member.name
+                if not (self.is_atom(member.base_type) or self.is_opaque(member.base_type)):
+                    info['coparent_wrapper'] = ', CoParentWrapper'
+                    info['coparent_arg'] = 'co_parent, '
+
+                if member.is_array or member.is_pointer:
+                    info['dref_value'] = ''
 
                 if self.is_struct(member.base_type):
+                    info['type'] = member.base_type
+                    info['plural'] = 's'
                     if member.is_array:
-                        body += '        {}::CreateWrappedStructArray{}s<ParentWrapper, CoParentWrapper, {}>(parent, co_parent, value->{}, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, member.base_type, member.name, member.array_length
-                        )
-                    elif member.is_pointer:
-                        body += '        {}::CreateWrappedStruct{}s<ParentWrapper, CoParentWrapper>(parent, co_parent, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, member.name
-                        )
+                        info['wrapper'] = ', ' + member.base_type
+                        info['struct'] = 'StructArray'
                     else:
-                        body += '        {}::CreateWrappedStruct{}s<ParentWrapper, CoParentWrapper>(parent, co_parent, &value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, member.name
-                        )
+                        info['wrapper'] = ''
+                        info['struct'] =  'Struct'
                 else:
-                    if member.is_array:
-                        body += '        {}::CreateWrapped{}s<ParentWrapper, CoParentWrapper, {}::{}Wrapper>(parent, co_parent, value->{}, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, wrapper_prefix, member.base_type[2:], member.name, member.array_length
-                        )
-                    elif member.is_pointer:
-                        body += '        {}::CreateWrapped{}<ParentWrapper, CoParentWrapper, {}::{}Wrapper>(parent, co_parent, value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, wrapper_prefix, member.base_type[2:], member.name
-                        )
-                    else:
-                        body += '        {}::CreateWrapped{}<ParentWrapper, CoParentWrapper, {}::{}Wrapper>(parent, co_parent, &value->{}, get_id);\n'.format(
-                            wrapper_prefix, func_target, wrapper_prefix, member.base_type[2:], member.name
-                        )
+                    info['type'] = member.base_type[2:]
+                    info['wrapper'] = ', {}::{}Wrapper'.format(info['prefix'], info['type'])
+
+                if member.is_array:
+                    info['length'] = 'value->{}, '.format(member.array_length)
+                    info['plural'] = 's'
+
+                wrapper_name ='        {prefix}::CreateWrapped{struct}{target}{plural}'.format(**info)
+                wrapper_template = '<ParentWrapper{coparent_wrapper}{wrapper}>'.format(**info)
+                wrapper_args ='(parent, {coparent_arg}{dref_value}value->{name}, {length}get_id);\n'.format(**info)
+                body += wrapper_name + wrapper_template + wrapper_args
 
             body += '    }\n'
             body += '}\n'

@@ -43,6 +43,7 @@ target_include_directories(d3d12
 
 target_link_libraries(d3d12 gfxrecon_encode gfxrecon_util ${LINK_D3D12_OUTPUT})
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_link_libraries(d3d12 psapi.lib)
     set_target_properties(d3d12 PROPERTIES FOLDER "gfxreconstruct")

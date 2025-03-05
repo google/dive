@@ -28,11 +28,13 @@
 
 add_library(gfxrecon_util STATIC "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_compile_options(gfxrecon_util PRIVATE /wd4996 /wd4267 /wd4334)
     set_target_properties(gfxrecon_util PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(gfxrecon_util
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/alignment_utils.h
@@ -124,22 +126,11 @@ target_sources(gfxrecon_util
                     $<$<BOOL:${WAYLAND_FOUND}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_wayland_xdg_shell.h>
 )
 
-
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_include_directories(gfxrecon_util
                            PUBLIC
                                ${CMAKE_CURRENT_SOURCE_DIR}/..
                                $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
-
-if(MACOS)
-target_include_directories(gfxrecon_util
-                           PUBLIC
-                               ${CMAKE_CURRENT_SOURCE_DIR}/../../external/precompiled/macos/include)
-else()
-target_include_directories(gfxrecon_util
-                           PUBLIC
-                               ${CMAKE_CURRENT_SOURCE_DIR}/../../external/precompiled/linux/include)
-endif()
-
 target_link_libraries(gfxrecon_util platform_specific vulkan_registry spirv_registry spirv-reflect-static nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 target_link_libraries(gfxrecon_util $<$<BOOL:${WIN32}>:version.lib>)
 
@@ -207,6 +198,7 @@ if (TARGET ZLIB::ZLIB)
                                    $<$<BOOL:${WIN32}>:ZLIB_WINAPI>)
     target_link_libraries(gfxrecon_util ZLIB::ZLIB)
 
+    # GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
     target_include_directories(gfxrecon_util
                                SYSTEM PUBLIC
                                    ${CMAKE_CURRENT_SOURCE_DIR}/../../external/stb)
@@ -224,6 +216,7 @@ if (${RUN_TESTS})
     target_sources(gfxrecon_util_test PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/test/main.cpp
             ${CMAKE_CURRENT_LIST_DIR}/test/test_linear_hashmap.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/test/test_spirv_parsing_util.cpp
             ${CMAKE_CURRENT_LIST_DIR}/../../tools/platform_debug_helper.cpp
             $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/test/dx_pointers.h>
             $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/test/dx12_utils.cpp>

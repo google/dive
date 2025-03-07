@@ -1043,9 +1043,8 @@ bool CaptureGPUAddrMatchDescriptorHeap(const D3D12_GPU_DESCRIPTOR_HANDLE capture
     auto increment            = (*heap_info.capture_increments)[heap_info.descriptor_type];
     auto capture_gpu_addr_end = heap_info.capture_gpu_addr_begin + heap_info.descriptor_count * increment;
 
-    bool is_match = true ? (heap_info.capture_gpu_addr_begin <= capture_gpu_addr.ptr &&
-                            capture_gpu_addr.ptr <= capture_gpu_addr_end)
-                         : false;
+    bool is_match =
+        (heap_info.capture_gpu_addr_begin <= capture_gpu_addr.ptr) && (capture_gpu_addr.ptr <= capture_gpu_addr_end);
     if (is_match)
     {
         if (increment == 0)
@@ -1068,8 +1067,7 @@ bool ReplayCPUAddrMatchDescriptorHeap(const D3D12_CPU_DESCRIPTOR_HANDLE replay_c
     auto replay_cpu_addr_end = heap_info.replay_cpu_addr_begin + heap_info.descriptor_count * increment;
 
     bool is_match =
-        true ? (heap_info.replay_cpu_addr_begin <= replay_cpu_addr.ptr && replay_cpu_addr.ptr <= replay_cpu_addr_end)
-             : false;
+        (heap_info.replay_cpu_addr_begin <= replay_cpu_addr.ptr) && (replay_cpu_addr.ptr <= replay_cpu_addr_end);
     if (is_match)
     {
         if (increment == 0)
@@ -1412,7 +1410,9 @@ void Dx12DumpResources::CopyDrawCallResources(DxObjectInfo*                     
     }
     active_delegate_->WriteSingleData(json_path, "drawcall_type", drawcall_type_name);
 
-    if (drawcall_type != DumpDrawCallType::kDispatch)
+    // We're about to dump vertex and index buffers. If we are only dumping modifiable resources,
+    // skip the dump because vertex/index buffers are not modifiable resources.
+    if (!options_.dump_resources_modifiable_state_only && drawcall_type != DumpDrawCallType::kDispatch)
     {
         // vertex
         const std::vector<D3D12_VERTEX_BUFFER_VIEW>* vertex_buffer_views = nullptr;
@@ -2092,8 +2092,33 @@ void Dx12DumpResources::CopyResourceAsyncRead(graphics::dx12::ID3D12FenceComPtr 
         }
     }
 
-    // After copying task is done, write the data to disk, and free it to reduce memory use.
-    active_delegate_->DumpResource(copy_resource_data);
+    auto source_resource_object_info = get_object_info_func_(copy_resource_data->source_resource_id);
+    auto source_resource             = reinterpret_cast<ID3D12Resource*>(source_resource_object_info->object);
+    auto source_resource_extra_info  = GetExtraInfo<D3D12ResourceInfo>(source_resource_object_info);
+    std::vector<graphics::dx12::ResourceStateInfo> res_infos = source_resource_extra_info->resource_state_infos;
+
+    // Create a bool vector of modifiable subresources.
+    // We treat D3D12_RESOURCE_STATE_COMMON as modifiable because that state could be considered
+    // modifiable based on how the resource is used. Note that D3D12_RESOURCE_STATE_COMMON is 0,
+    // so we can't just check for its bit being set
+    std::vector<bool> modifiableResources;
+    bool              resourceIsModifiable = false;
+    uint32_t          subResource          = 0;
+    for (auto it = res_infos.begin(); it != res_infos.end(); it++)
+    {
+        modifiableResources.push_back((modifiableTransitionStates & it->states) ||
+                                      it->states == D3D12_RESOURCE_STATE_COMMON);
+        resourceIsModifiable |=
+            ((modifiableTransitionStates & it->states) || it->states == D3D12_RESOURCE_STATE_COMMON);
+    }
+
+    // Dump the resource if any subresource is in modifiable state or dump_resources_modifiable_state_only is not set
+    if (!options_.dump_resources_modifiable_state_only || resourceIsModifiable)
+    {
+        active_delegate_->DumpResource(copy_resource_data, modifiableResources);
+    }
+
+    // Free the resource data
     copy_resource_data->Clear();
 
     // Signal command queue to continue execution.
@@ -2368,10 +2393,10 @@ void DefaultDx12DumpResourcesDelegate::BeginDumpResources(const std::string&    
         draw_call_["execute_block_index"], track_dump_resources.target.execute_block_index, json_options_);
 }
 
-void DefaultDx12DumpResourcesDelegate::DumpResource(CopyResourceDataPtr resource_data)
+void DefaultDx12DumpResourcesDelegate::DumpResource(CopyResourceDataPtr     resource_data,
+                                                    const std::vector<bool> modifiableResources)
 {
-    auto* jdata_sub = &draw_call_;
-    WriteResource(resource_data);
+    WriteResource(resource_data, modifiableResources);
 }
 
 void DefaultDx12DumpResourcesDelegate::EndDumpResources()
@@ -2530,7 +2555,8 @@ void DefaultDx12DumpResourcesDelegate::WriteNULLBufferLocation(
     util::FieldToJson((*jdata_node)["buffer_location"], 0, json_options_);
 }
 
-void DefaultDx12DumpResourcesDelegate::WriteResource(const CopyResourceDataPtr resource_data)
+void DefaultDx12DumpResourcesDelegate::WriteResource(const CopyResourceDataPtr resource_data,
+                                                     const std::vector<bool>   modifiableResources)
 {
     if (resource_data->source_resource_id == format::kNullHandleId)
     {
@@ -2540,7 +2566,7 @@ void DefaultDx12DumpResourcesDelegate::WriteResource(const CopyResourceDataPtr r
 
     std::string prefix_file_name =
         json_options_.data_sub_dir + "_" + Dx12ResourceTypeToString(resource_data->resource_type);
-    WriteResource(*jdata_node, prefix_file_name, resource_data);
+    WriteResource(*jdata_node, prefix_file_name, resource_data, modifiableResources);
 
     if (TEST_READABLE)
     {
@@ -2550,7 +2576,8 @@ void DefaultDx12DumpResourcesDelegate::WriteResource(const CopyResourceDataPtr r
 
 void DefaultDx12DumpResourcesDelegate::WriteResource(nlohmann::ordered_json&   jdata,
                                                      const std::string&        prefix_file_name,
-                                                     const CopyResourceDataPtr resource_data)
+                                                     const CopyResourceDataPtr resource_data,
+                                                     const std::vector<bool>   modifiableResources)
 {
     if (resource_data->source_resource_id == format::kNullHandleId)
     {
@@ -2576,6 +2603,7 @@ void DefaultDx12DumpResourcesDelegate::WriteResource(nlohmann::ordered_json&   j
         util::FieldToJson(jdata_sub["index"], sub_index, json_options_);
         util::FieldToJson(jdata_sub["offset"], offset, json_options_);
         util::FieldToJson(jdata_sub["size"], size, json_options_);
+        util::Bool32ToJson(jdata_sub["modifiable"], modifiableResources[sub_index], json_options_);
 
         // Write data.
         GFXRECON_ASSERT(!resource_data->datas[sub_index].empty());

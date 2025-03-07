@@ -3,6 +3,7 @@ set(VULKAN_VERSION_MAJOR "")
 set(VULKAN_VERSION_MINOR "")
 set(VULKAN_VERSION_PATCH "")
 
+# GOOGLE: Change path to vulkan headers so that gfxr compiles in dive.
 # First, determine which header we need to grab the version information from.
 # Starting with Vulkan 1.1, we should use vulkan_core.h, but prior to that,
 # the information was in vulkan.h.
@@ -13,6 +14,7 @@ find_file (VULKAN_HEADER
 
 MESSAGE(STATUS "Vulkan Header = ${VULKAN_HEADER}")
 
+# GOOGLE: Change path to vulkan.h so that gfxr compiles in dive.
 if (EXISTS ${VULKAN_HEADER})
     set(VulkanHeaders_main_header ${VULKAN_HEADER})
 else()

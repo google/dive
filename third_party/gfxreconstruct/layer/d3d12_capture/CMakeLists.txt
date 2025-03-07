@@ -27,6 +27,7 @@
 ###############################################################################
 
 add_library(d3d12_capture SHARED "")
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(d3d12_capture PRIVATE
                 ${CMAKE_CURRENT_LIST_DIR}/dll_main.cpp
                 ${CMAKE_CURRENT_LIST_DIR}/d3d12_capture.def
@@ -40,6 +41,7 @@ target_include_directories(d3d12_capture
 
 target_link_libraries(d3d12_capture gfxrecon_encode gfxrecon_format gfxrecon_util platform_specific)
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_link_libraries(d3d12_capture psapi.lib)
     set_target_properties(d3d12_capture PROPERTIES FOLDER "gfxreconstruct")

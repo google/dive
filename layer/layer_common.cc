@@ -14,11 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifdef _WIN32
-#    include <windows.h>
-#else
-#    include <dlfcn.h>
-#endif
+#include <dlfcn.h>
 
 #include "layer_common.h"
 
@@ -81,31 +77,13 @@ struct InitServer
 
 void PreventLibraryUnload()
 {
-#ifdef _WIN32
-    HMODULE module = nullptr;
-    GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-                      reinterpret_cast<LPCSTR>(&PreventLibraryUnload),
-                      &module);
-#else
     Dl_info info;
     if (dladdr(reinterpret_cast<void *>(&PreventLibraryUnload), &info))
     {
         dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL | RTLD_NODELETE);
     }
-#endif
 }
 
-#ifdef _WIN32
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
-{
-    if (fdwReason == DLL_PROCESS_ATTACH)
-    {
-        [[maybe_unused]] static struct InitServer init_server;
-        PreventLibraryUnload();
-    }
-    return TRUE;
-}
-#else
 extern "C"
 {
     __attribute__((constructor)) void InitializeLibrary()
@@ -114,4 +92,3 @@ extern "C"
         PreventLibraryUnload();
     }
 }
-#endif

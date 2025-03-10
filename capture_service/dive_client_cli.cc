@@ -26,6 +26,7 @@ limitations under the License.
 #include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/strings/str_split.h"
 #include "android_application.h"
 #include "client.h"
 #include "constants.h"
@@ -323,8 +324,9 @@ bool trigger_capture(Dive::DeviceManager& mgr)
 absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
                                        const std::string&   gfxr_capture_directory)
 {
-    std::string capture_directory = Dive::kDeviceCaptureDirectory + gfxr_capture_directory;
-    std::string command = "shell lsof " + capture_directory;
+    std::string on_device_capture_directory = Dive::kDeviceCaptureDirectory +
+                                              gfxr_capture_directory;
+    std::string                 command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 
     if (!output.ok())
@@ -344,6 +346,81 @@ absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
                              absl::InternalError("Capture file operation in progress.");
 }
 
+bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
+{
+    std::filesystem::path download_path = absl::GetFlag(FLAGS_download_path);
+    std::filesystem::path target_download_path(download_path / gfxr_capture_directory);
+    std::filesystem::path on_device_capture_directory = Dive::kDeviceCaptureDirectory +
+                                                        gfxr_capture_directory;
+
+    std::cout << "Retrieving capture..." << std::endl;
+    // Check if the target directory already exists on the local machine.
+    if (!std::filesystem::exists(target_download_path))
+    {
+
+        std::error_code ec;
+        if (!std::filesystem::create_directories(target_download_path, ec))
+        {
+            std::cout << "Error creating directory: " << ec << std::endl;
+            return false;
+        }
+    }
+    else
+    {
+        // If the target directory already exists on the local machine, append a number to it to
+        // differentiate.
+        int                   counter = 1;
+        std::filesystem::path newDirPath;
+        while (true)
+        {
+            newDirPath = std::filesystem::path(target_download_path.generic_string() + "_" +
+                                               std::to_string(counter));
+            if (!std::filesystem::exists(newDirPath))
+            {
+                std::error_code ec;
+
+                if (!std::filesystem::create_directories(newDirPath, ec))
+                {
+                    std::cout << "Error creating directory: " << ec << std::endl;
+                    return false;
+                }
+                target_download_path = newDirPath;
+                break;
+            }
+            counter++;
+        }
+    }
+
+    // Retrieve the names of the files in the capture directory on the device.
+    std::string                 command = "shell ls " + on_device_capture_directory.string();
+    absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+
+    if (!output.ok())
+    {
+        std::cout << "Error getting capture_file name: " << output.status().message() << std::endl;
+        return false;
+    }
+
+    std::vector<std::string> file_list = absl::StrSplit(std::string(output->data()), '\n');
+
+    // Retrieve each file in the capture directory (capture file and asset file).
+    for (const auto& file : file_list)
+    {
+        std::string target_file = (target_download_path / file.data()).string();
+        std::string source_file = (on_device_capture_directory / file.data()).string();
+        auto        ret = mgr.GetDevice()->RetrieveTrace(source_file, target_file);
+
+        if (!ret.ok())
+        {
+            std::cout << "Failed to retrieve capture: " << ret.message() << std::endl;
+            return false;
+        }
+    }
+
+    std::cout << "Capture sucessfully saved at " << target_download_path << std::endl;
+    return true;
+}
+
 void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                           const std::string&   package,
                           const std::string&   gfxr_capture_directory)
@@ -351,6 +428,9 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
     std::cout << "Press key g+enter to trigger a capture and g+enter to stop the capture. Press "
                  "any other key+enter to stop the application. Note that this may impact your "
                  "capture file if the capture has not been completed. \n";
+    std::string
+    capture_complete_message = "Capture complete. Press key g+enter to trigger another capture or "
+                               "any other key+enter to stop the application.";
 
     std::string  input;
     bool         is_capturing = false;
@@ -377,13 +457,17 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                               << std::endl;
                     return;
                 }
+
+                // Retrieve the capture and asset file at the end of the capture.
+                retrieve_gfxr_capture(mgr, gfxr_capture_directory);
                 is_capturing = false;
-                std::cout << "Capture complete." << std::endl;
+                std::cout << capture_complete_message << std::endl;
             }
             else
             {
                 ret = mgr.GetDevice()->Adb().Run(
                 "shell setprop debug.gfxrecon.capture_android_trigger true");
+
                 if (!ret.ok())
                 {
                     std::cout << "There was an error starting the gfxr runtime capture."
@@ -391,7 +475,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                     return;
                 }
                 is_capturing = true;
-                std::cout << "Capture started." << std::endl;
+                std::cout << "Capture started. Press g+enter to stop the capture." << std::endl;
             }
         }
         else
@@ -417,8 +501,11 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                               << std::endl;
                     return;
                 }
+
+                // Retrieve the capture and asset file at the end of the capture.
+                retrieve_gfxr_capture(mgr, gfxr_capture_directory);
                 is_capturing = false;
-                std::cout << "Capture complete." << std::endl;
+                std::cout << capture_complete_message << std::endl;
             }
             else
             {
@@ -427,30 +514,12 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
             }
         }
     }
-}
 
-bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
-{
-    std::string           download_path = absl::GetFlag(FLAGS_download_path);
-    std::filesystem::path target_download_path(download_path);
-
-    std::cout << "Retrieving capture..." << std::endl;
-    if (!std::filesystem::exists(target_download_path))
-    {
-        std::error_code ec;
-        if (!std::filesystem::create_directories(target_download_path, ec))
-        {
-            std::cout << "error creating directory: " << ec << std::endl;
-        }
-    }
-    std::string capture_file_directory = Dive::kDeviceCaptureDirectory + gfxr_capture_directory;
-    auto        ret = mgr.GetDevice()->RetrieveTrace(capture_file_directory,
-                                              target_download_path.generic_string());
-    if (ret.ok())
-        std::cout << "GFXR capture directory saved at " << target_download_path << std::endl;
-    else
-        std::cout << "Failed to retrieve capture directory" << std::endl;
-    return ret.ok();
+    // Only delete the on device capture directory when the application is closed.
+    std::string on_device_capture_directory = Dive::kDeviceCaptureDirectory +
+                                              gfxr_capture_directory;
+    ret = mgr.GetDevice()->Adb().Run(
+    absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
 }
 
 bool run_and_capture(Dive::DeviceManager& mgr,
@@ -475,7 +544,6 @@ bool run_and_capture(Dive::DeviceManager& mgr,
     if (is_gfxr_capture)
     {
         trigger_gfxr_capture(mgr, package, gfxr_capture_directory);
-        retrieve_gfxr_capture(mgr, gfxr_capture_directory);
     }
     else
     {

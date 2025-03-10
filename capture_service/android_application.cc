@@ -278,6 +278,8 @@ absl::Status AndroidApplication::GfxrSetup()
 
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
 
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
+
     LOGD("GFXR capture setup for %s done\n", m_package.c_str());
     return absl::OkStatus();
 }

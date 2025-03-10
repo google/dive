@@ -84,9 +84,6 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_gfxr_capture_button = new QPushButton(kStart_Gfxr_Runtime_Capture, this);
     m_gfxr_capture_button->setEnabled(false);
     m_gfxr_capture_button->hide();
-    m_gfxr_retrieve_button = new QPushButton(kRetrieve_Gfxr_Capture, this);
-    m_gfxr_retrieve_button->setEnabled(false);
-    m_gfxr_retrieve_button->hide();
 
     m_dev_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_refresh_button = new QPushButton("&Refresh", this);
@@ -185,7 +182,6 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
     m_button_layout->addWidget(m_gfxr_capture_button);
-    m_button_layout->addWidget(m_gfxr_retrieve_button);
 
     m_main_layout->addLayout(m_capture_layout);
     m_main_layout->addLayout(m_cmd_layout);
@@ -218,11 +214,6 @@ TraceDialog::TraceDialog(QWidget *parent)
                      &QPushButton::clicked,
                      this,
                      &TraceDialog::OnGfxrCaptureClicked);
-    QObject::connect(m_gfxr_retrieve_button,
-                     &QPushButton::clicked,
-                     this,
-                     &TraceDialog::OnGfxrRetrieveClicked);
-
     QObject::connect(m_dev_refresh_button,
                      &QPushButton::clicked,
                      this,
@@ -528,6 +519,14 @@ void TraceDialog::OnStartClicked()
                 return;
             }
 
+            // Only delete the on device capture directory when the application is closed.
+            std::string on_device_capture_directory = Dive::kDeviceCaptureDirectory +
+                                                      m_gfxr_capture_file_directory_input_box
+                                                      ->text()
+                                                      .toStdString();
+            ret = device->Adb().Run(
+            absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
+
             m_gfxr_capture_button->setEnabled(false);
         }
         else
@@ -572,56 +571,19 @@ void ProgressBarWorker::run()
     int64_t cur_size = 0;
     int     percent = 0;
 
-    if (m_gfxr_capture)
+    m_progress_bar->show();
+
+    while (m_capture_size && cur_size < m_capture_size)
     {
-        m_progress_bar->show();
-
-        if (m_capture_size == 0)
-        {  // Handle empty directory
-            m_progress_bar->setValue(100);
-            QCoreApplication::processEvents();
-            return;
-        }
-
-        if (std::filesystem::exists(m_capture_name) &&
-            std::filesystem::is_directory(m_capture_name))
-        {
-            for (const auto &entry : std::filesystem::recursive_directory_iterator(m_capture_name))
-            {
-                if (std::filesystem::is_regular_file(entry))
-                {
-                    try
-                    {
-                        cur_size += std::filesystem::file_size(entry);
-                        percent = static_cast<int>(
-                        cur_size * 100 / m_capture_size);  // Cast to int after calculation
-                        m_progress_bar->setValue(percent);
-                        QCoreApplication::processEvents();
-                        QThread::msleep(10);  // 10 milliseconds
-                    }
-                    catch (const std::filesystem::filesystem_error &e)
-                    {
-                        std::cerr << "Error getting file size: " << e.what() << std::endl;
-                    }
-                }
-            }
-        }
+        cur_size = GetDownloadedSize();
+        percent = cur_size * 100 / m_capture_size;
+        m_progress_bar->setValue(percent);
+        std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
+                  << m_capture_size << std::endl;
+        QThread::msleep(10);  // 10 milliseconds
     }
-    else
-    {
-        m_progress_bar->show();
 
-        while (m_capture_size && cur_size < m_capture_size)
-        {
-            cur_size = GetDownloadedSize();
-            percent = cur_size * 100 / m_capture_size;
-            m_progress_bar->setValue(percent);
-            std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
-                      << m_capture_size << std::endl;
-            QThread::msleep(10);  // 10 milliseconds
-        }
-        m_progress_bar->setValue(100);
-    }
+    m_progress_bar->setValue(100);
 }
 
 void TraceWorker::run()
@@ -753,19 +715,75 @@ void GfxrCaptureWorker::SetGfxrCapturePath(const std::string &capture_path)
     m_capture_path = capture_path;
 }
 
+void GfxrCaptureWorker::SetGfxrTargetCapturePath(const std::string &target_capture_path)
+{
+    if (!std::filesystem::exists(target_capture_path))
+    {
+
+        std::error_code ec;
+        if (!std::filesystem::create_directories(target_capture_path, ec))
+        {
+            std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            return;
+        }
+
+        m_target_capture_path = target_capture_path;
+    }
+    else
+    {
+        // If the target directory already exists on the local machine, append a number to it to
+        // differentiate.
+        int                   counter = 1;
+        std::filesystem::path newDirPath;
+        while (true)
+        {
+            newDirPath = std::filesystem::path(target_capture_path + "_" + std::to_string(counter));
+            if (!std::filesystem::exists(newDirPath))
+            {
+                std::error_code ec;
+
+                if (!std::filesystem::create_directories(newDirPath, ec))
+                {
+                    std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
+                    qDebug() << err_msg.c_str();
+                    ShowErrorMessage(err_msg);
+                    return;
+                }
+                m_target_capture_path = newDirPath;
+                break;
+            }
+            counter++;
+        }
+    }
+}
+
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
 {
-    std::string                 command = "shell du -sb " + m_capture_path;
-    absl::StatusOr<std::string> output = device->Adb().RunAndGetResult(command);
+    // Retrieve the names of the files in the capture directory on the device.
+    std::string                 path = m_capture_path.string();
+    std::string                 ls_command = "shell ls " + path;
+    absl::StatusOr<std::string> ls_output = device->Adb().RunAndGetResult(ls_command);
 
-    if (!output.ok())
+    if (!ls_output.ok())
     {
-        std::cout << "Error checking directory size: " << output.status().message() << std::endl;
+        std::cout << "Error getting capture files: " << ls_output.status().message() << std::endl;
     }
 
-    std::stringstream ss(output->c_str());
-    int64_t           size;
-    ss >> size;
+    m_file_list = absl::StrSplit(std::string(ls_output->data()), '\n');
+
+    int64_t size = 0;
+
+    for (std::string file : m_file_list)
+    {
+        path = (m_capture_path / file.data()).string();
+        std::string command = "shell ls -l " + path + " | awk '{print $5}'";
+
+        absl::StatusOr<std::string> str_num = device->Adb().RunAndGetResult(command);
+
+        size += std::stoll(str_num->c_str());
+    }
 
     return size;
 }
@@ -781,10 +799,6 @@ void GfxrCaptureWorker::run()
         return;
     }
 
-    std::string           target_capture_path = ".";
-    std::filesystem::path p(m_capture_path);
-    std::filesystem::path target(target_capture_path);
-
     auto ret = getGfxrCaptureDirectorySize(device);
     if (!ret.ok())
     {
@@ -796,39 +810,57 @@ void GfxrCaptureWorker::run()
         return;
     }
 
-    int64_t file_size = *ret;
+    int64_t capture_directory_size = *ret;
 
     ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
-                                                                   target.generic_string(),
-                                                                   file_size,
+                                                                   m_target_capture_path
+                                                                   .generic_string(),
+                                                                   capture_directory_size,
                                                                    true);
     connect(progress_bar_worker,
-            &TraceWorker::finished,
+            &GfxrCaptureWorker::finished,
             progress_bar_worker,
             &QObject::deleteLater);
+
+    connect(this,
+            &GfxrCaptureWorker::DownloadedSize,
+            progress_bar_worker,
+            &ProgressBarWorker::SetDownloadedSize);
 
     progress_bar_worker->start();
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    qDebug() << "Begin to download the trace file to " << target.generic_string().c_str();
-    auto r = device->RetrieveTrace(m_capture_path, target.generic_string());
-    m_progress_bar->setValue(100);
-    progress_bar_worker->terminate();
-    if (!r.ok())
+    qDebug() << "Begin to download the trace file to "
+             << m_target_capture_path.generic_string().c_str();
+
+    int64_t size = 0;
+
+    // Retrieve each file in the capture directory (capture file and asset file).
+    for (std::string file : m_file_list)
     {
-        std::string err_msg = absl::StrCat("Failed to retrieve gfxr capture directory, error: ",
-                                           r.message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        return;
+        std::string target_file = (m_target_capture_path / file.data()).string();
+        std::string source_file = (m_capture_path / file.data()).string();
+        ret = device->RetrieveTrace(source_file, target_file);
+
+        if (!ret.ok())
+        {
+            std::cout << "Failed to retrieve gfxr capture: " << ret.status().message() << std::endl;
+            qDebug() << ret.status().message().data();
+            ShowErrorMessage(ret.status().message().data());
+            return;
+        }
+
+        size += static_cast<int64_t>(std::filesystem::file_size(target_file));
+        emit DownloadedSize(size);
     }
+
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - begin)
                                    .count();
     qDebug() << "Time used to download the gfxr capture directory is "
              << (time_used_to_load_ms / 1000.0) << " seconds.";
 
-    QString capture_saved_path(target.generic_string().c_str());
+    QString capture_saved_path(m_target_capture_path.generic_string().c_str());
     emit    GfxrCaptureAvailable(capture_saved_path);
 }
 
@@ -915,7 +947,6 @@ void TraceDialog::ShowGfxrFields()
     m_args_input_box->hide();
     m_capture_button->hide();
     m_gfxr_capture_button->show();
-    m_gfxr_retrieve_button->show();
     m_gfxr_capture_file_on_device_directory_label->show();
     m_gfxr_capture_file_directory_input_box->show();
     m_gfxr_capture_file_local_directory_label->show();
@@ -928,7 +959,6 @@ void TraceDialog::HideGfxrFields()
     m_args_input_box->show();
     m_capture_button->show();
     m_gfxr_capture_button->hide();
-    m_gfxr_retrieve_button->hide();
     m_gfxr_capture_file_on_device_directory_label->hide();
     m_gfxr_capture_file_directory_input_box->hide();
     m_gfxr_capture_file_local_directory_label->hide();
@@ -967,8 +997,11 @@ void TraceDialog::OnGfxrCaptureClicked()
             return;
         }
 
+        RetrieveGfxrCapture();
+
         m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
-        m_gfxr_retrieve_button->setEnabled(true);
+        m_gfxr_capture_button->setEnabled(true);
+        m_run_button->setEnabled(true);
     }
     else if (m_gfxr_capture_button->text() == kStart_Gfxr_Runtime_Capture)
     {
@@ -984,11 +1017,11 @@ void TraceDialog::OnGfxrCaptureClicked()
             return;
         }
         m_gfxr_capture_button->setText(kStop_Gfxr_Runtime_Capture);
-        m_gfxr_retrieve_button->setEnabled(false);
+        m_run_button->setEnabled(false);
     }
 }
 
-void TraceDialog::OnGfxrRetrieveClicked()
+void TraceDialog::RetrieveGfxrCapture()
 {
     auto device = Dive::GetDeviceManager().GetDevice();
 
@@ -998,15 +1031,20 @@ void TraceDialog::OnGfxrRetrieveClicked()
         return;
     }
 
-    std::string capture_path = ".";
     if (m_gfxr_capture_file_local_directory_input_box->text() == "")
     {
-        m_gfxr_capture_file_local_directory_input_box->setText(".");
+        m_gfxr_capture_file_local_directory_input_box->setText("./gfxr_capture");
+    }
+    else
+    {
+        std::string
+        local_gfxr_capture_directory_path = m_gfxr_capture_file_local_directory_input_box->text()
+                                            .toStdString();
     }
 
-    std::string capture_file_directory = Dive::kDeviceCaptureDirectory +
-                                         m_gfxr_capture_file_directory_input_box->text()
-                                         .toStdString();
+    std::string on_device_capture_file_directory = Dive::kDeviceCaptureDirectory +
+                                                   m_gfxr_capture_file_directory_input_box->text()
+                                                   .toStdString();
 
     QProgressDialog *progress_bar = new QProgressDialog("Downloading GFXR Capture ... ",
                                                         nullptr,
@@ -1019,7 +1057,10 @@ void TraceDialog::OnGfxrRetrieveClicked()
     progress_bar->setAutoClose(true);
 
     GfxrCaptureWorker *workerThread = new GfxrCaptureWorker(progress_bar);
-    workerThread->SetGfxrCapturePath(capture_file_directory);
+    workerThread->SetGfxrCapturePath(on_device_capture_file_directory);
+
+    workerThread->SetGfxrTargetCapturePath(
+    m_gfxr_capture_file_local_directory_input_box->text().toStdString());
 
     connect(workerThread,
             &GfxrCaptureWorker::GfxrCaptureAvailable,
@@ -1028,7 +1069,6 @@ void TraceDialog::OnGfxrRetrieveClicked()
     connect(workerThread, &TraceWorker::finished, workerThread, &QObject::deleteLater);
     workerThread->start();
 
-    m_gfxr_retrieve_button->setEnabled(false);
     m_gfxr_capture_button->setEnabled(false);
 }
 

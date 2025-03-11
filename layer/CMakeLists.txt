@@ -16,6 +16,13 @@
 
 cmake_minimum_required(VERSION 3.5)
 
+if (ANDROID)
+    message("Build diveCaptureLayer for Android.")
+else()
+    message("Not Android platform.")
+    return()
+endif()
+
 project(diveCaptureLayer)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -50,15 +57,13 @@ set(TARGET_LINK_LIBS PRIVATE
         ${_GRPC_GRPCPP}
         ${_PROTOBUF_LIBPROTOBUF})
 
-if(ANDROID)
-    add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-    list(APPEND TARGET_LINK_LIBS 
-        PRIVATE -lm
-        PRIVATE -ldl
-        PRIVATE -llog
-        PRIVATE -landroid
-        PRIVATE wrap)    
-endif()
+add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
+list(APPEND TARGET_LINK_LIBS
+    PRIVATE -lm
+    PRIVATE -ldl
+    PRIVATE -llog
+    PRIVATE -landroid
+    PRIVATE wrap)
 
 target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
 target_link_directories(${target_name} 
@@ -80,11 +85,9 @@ set_target_properties(${target_name}
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
-if(ANDROID)
-    configure_file("manifest/XrApiLayer_dive.json" "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json" COPYONLY)
-    install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
-endif()
+configure_file("manifest/XrApiLayer_dive.json" "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json" COPYONLY)
+install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 set(target_name XrApiLayer_dive)
 set(XR_LAYER_SRC_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
@@ -107,7 +110,5 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
 
-if(ANDROID)
-    install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
-endif()
+install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})

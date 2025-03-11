@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -i
 #
 # Copyright (c) 2018 Valve Corporation
-# Copyright (c) 2018-2024 LunarG, Inc.
+# Copyright (c) 2018-2025 LunarG, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -30,6 +30,10 @@ class KhronosDecoderHeaderGenerator():
     Generates C++ member declarations for the Khronos-API specific Decoder class
     responsible for decoding the appropriate Khronos API call parameter data.
     """
+
+    def skip_generating_command(self, command):
+        """ Method may be overridden. """
+        return self.is_manually_generated_cmd_name(command)
 
     def write_decoder_header_content(self):
         api_data = self.get_api_data()
@@ -71,6 +75,9 @@ class KhronosDecoderHeaderGenerator():
         write('  private:', end='', file=self.outFile)
 
         for cmd in self.get_all_filtered_cmd_names():
+            if self.skip_generating_command(cmd):
+                continue
+
             cmddef = '\n'
             cmddef += '    size_t Decode_{}(const ApiCallInfo& call_info, const uint8_t* parameter_buffer, size_t buffer_size);'.format(
                 cmd

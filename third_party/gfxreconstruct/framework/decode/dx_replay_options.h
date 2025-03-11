@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2019-2020 Valve Corporation
 ** Copyright (c) 2019-2021 LunarG, Inc.
-** Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -39,13 +39,6 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 static constexpr uint32_t kDefaultBatchingMemoryUsage = 80;
 
-struct DumpResourcesTarget
-{
-    uint32_t submit_index{ 0 };
-    uint32_t command_index{ 0 };
-    uint32_t draw_call_index{ 0 };
-};
-
 struct DxReplayOptions : public ReplayOptions
 {
     bool                 enable_d3d12{ true };
@@ -54,8 +47,7 @@ struct DxReplayOptions : public ReplayOptions
     std::vector<int32_t> AllowedDebugMessages;
     std::vector<int32_t> DeniedDebugMessages;
     bool                 override_object_names{ false };
-    bool                 enable_dump_resources{ false };
-    DumpResourcesTarget  dump_resources_target{};
+    bool                 ags_inject_markers{ false };
     int32_t              memory_usage{ kDefaultBatchingMemoryUsage };
 };
 

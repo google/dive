@@ -1,6 +1,6 @@
 ###############################################################################
 # Copyright (c) 2018-2023 LunarG, Inc.
-# Copyright (c) 2019-2023 Advanced Micro Devices, Inc.
+# Copyright (c) 2019-2025 Advanced Micro Devices, Inc.
 # All rights reserved
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,11 +28,13 @@
 
 add_library(gfxrecon_decode STATIC "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_compile_options(gfxrecon_decode PRIVATE /wd4996 /wd4267 /wd4244 /wd4018 /wd4101)
     set_target_properties(gfxrecon_decode PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(gfxrecon_decode
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/annotation_handler.h
@@ -149,7 +151,7 @@ target_sources(gfxrecon_decode
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_tracking_consumer.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_tracking_consumer.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_tracked_object_info_table.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_browse_consumer.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_pre_process_consumer.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_dump_resources.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_dump_resources.cpp>
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_decoder_base.h
@@ -188,6 +190,7 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_consumer_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_consumer_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_options.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_pre_process_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_common.h
@@ -230,6 +233,7 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_json_consumer.h
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_json_consumer.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_feature_util.cpp
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_pnext_struct_decoder.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_referenced_resource_consumer.h
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_referenced_resource_consumer.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_replay_consumer.h
@@ -241,7 +245,6 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_decoders.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_handle_mappers.h
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_handle_mappers.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_decode_pnext_struct.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_to_json.h
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_to_json.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_object_info_table_base2.h
@@ -276,6 +279,8 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/custom_ags_replay_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_ags_replay_consumer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/ags_detection_consumer.h
+                    ${CMAKE_CURRENT_LIST_DIR}/ags_gpu_cmd_wrapper.h
+                    ${CMAKE_CURRENT_LIST_DIR}/ags_gpu_cmd_wrapper.cpp
                )
 endif()
 
@@ -290,6 +295,7 @@ if (TARGET ZLIB::ZLIB)
                                    GFXRECON_ENABLE_PNG_SCREENSHOT)
 endif()
 
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 if (WIN32)
     if (CMAKE_SIZEOF_VOID_P EQUAL 8)
         target_include_directories(gfxrecon_decode

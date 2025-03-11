@@ -25,12 +25,14 @@
 ###############################################################################
 add_executable(gfxrecon-convert "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_compile_options(gfxrecon-convert PRIVATE /wd4244)
     target_link_libraries(gfxrecon-convert psapi.lib)
     set_target_properties(gfxrecon-convert PROPERTIES FOLDER "gfxreconstruct") 
 endif()
 
+# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(gfxrecon-convert
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/../tool_settings.h

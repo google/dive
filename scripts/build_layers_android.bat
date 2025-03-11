@@ -1,4 +1,4 @@
-:: Copyright 2023 Google LLC
+:: Copyright 2025 Google LLC
 ::
 :: Licensed under the Apache License, Version 2.0 (the "License");
 :: you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
 set BUILD_TYPE=Debug Release
 set SRC_DIR=%PROJECT_ROOT%
-set GFXR_ROOT_DIR=%PROJECT_ROOT%\\third_party\\gfxreconstruct\\android
 set startTime=%time%
 
 if "%~1"=="" goto parsingdone
@@ -58,59 +57,8 @@ echo Building all the following types: !BUILD_TYPE!
         %SRC_DIR%
 
     cmake --build . --config=!build! -j
-    cmake --install .
+    if "%%b" == "Release" cmake --install .
     popd
-))
-
-pushd !GFXR_ROOT_DIR!
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    echo.
-    echo %%b : Building gfxr android layer
-    set build=%%b
-    
-    echo GFXR_ROOT_DIR: !GFXR_ROOT_DIR!
-    call gradlew assemble!build! --console=verbose
-))
-popd
-
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    if "%%b" == "Release" set build_lowercase=release
-    if "%%b" == "Debug" set build_lowercase=debug
-    echo.
-    echo %%b : Moving gfxr files
-    set build=%%b
-    set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
-
-    set GFXR_BUILD_DIR=!BUILD_DIR!\\third_party\\gfxreconstruct\\android
-    if not exist !GFXR_BUILD_DIR! md !GFXR_BUILD_DIR!
-
-    echo Extracting gfxr android layer into build_android
-    set GFXR_LAYER_SRC=!GFXR_ROOT_DIR!\\layer\\build\\outputs\\aar\\layer-!build_lowercase!.aar
-    set GFXR_LAYER_DST=!GFXR_BUILD_DIR!\\layer
-    if exist !GFXR_LAYER_DST! rm -rf !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    md !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    tar -xf !GFXR_LAYER_SRC! -C !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    echo Copying gfxr android replay into build_android
-    set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
-    set GFXR_REPLAY_DST=!GFXR_BUILD_DIR!\\tools\\replay
-    if exist !GFXR_REPLAY_DST! rm -rf !GFXR_REPLAY_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    xcopy /i !GFXR_REPLAY_SRC! !GFXR_REPLAY_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    set DIVE_INSTALL_DIR=%PROJECT_ROOT%\\install
-    xcopy /i !GFXR_REPLAY_DST!\\replay-*.apk !DIVE_INSTALL_DIR!
-    pushd !DIVE_INSTALL_DIR!
-    if exist gfxr-replay.apk rm gfxr-replay.apk
-    ren replay-*.apk gfxr-replay.apk
-    popd
-    if not !ERRORLEVEL!==0 exit /b 1
 ))
 
 echo Start Time: %startTime%

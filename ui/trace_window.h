@@ -49,6 +49,7 @@ public:
     }
 signals:
     void TraceAvailable(const QString &);
+    void DownloadedSize(uint64_t size);
 
 private:
     QProgressDialog *m_progress_bar;
@@ -87,15 +88,22 @@ public:
         m_progress_bar(pd),
         m_capture_name(path),
         m_capture_size(size),
-        m_gfxr_capture(is_gfxr_capture)
+        m_gfxr_capture(is_gfxr_capture),
+        m_downloaded_size(0)
     {
     }
+
+    int64_t GetDownloadedSize() const { return m_downloaded_size; }
+
+public slots:
+    void SetDownloadedSize(uint64_t size) { m_downloaded_size = size; }
 
 private:
     QProgressDialog *m_progress_bar;
     std::string      m_capture_name;
     int64_t          m_capture_size;
     bool             m_gfxr_capture;
+    int64_t          m_downloaded_size;
 };
 
 class TraceDialog : public QDialog

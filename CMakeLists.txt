@@ -28,8 +28,10 @@ set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_BUILD_TYPE_LOWERCASE "release")
+    set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
+    set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
 endif()
 
 if(ANDROID)
@@ -90,6 +92,7 @@ include(perfetto.cmake)
 
 add_subdirectory(capture_service)
 add_subdirectory(layer)
+add_subdirectory(runtime_layer)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)
@@ -129,6 +132,10 @@ else()
             COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/. 
             DESTINATION ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay
         )
+        install(
+            FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME} 
+            DESTINATION ${CMAKE_INSTALL_PREFIX}
+            RENAME "gfxr-replay.apk")
         message(CHECK_PASS "successful")
     endif()
 endif()

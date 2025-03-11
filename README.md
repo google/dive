@@ -110,9 +110,8 @@ Troubleshooting tips:
   - `build_android`
 - If incremental builds are slow, try building only one version (Debug or Release) and not both
 
-### CLI Tool for capture and cleanup
-#### Capture with command line tool for Android applications
-The command-line tool currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
+### CLI Tool for Android applications
+The command-line tool `dive_client_cli` currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
 
 To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux). You can then use `ninja install` to install the CLI tool under the `install` folder.
 
@@ -120,22 +119,38 @@ To build the CLI tool on Windows, see [Building Dive host tool on Windows](#buil
 
 To build the Android libraries, see [Building Android Libraries](#building-android-libraries).
 
-Run `./dive_client_cli  --help` for help.
 You can find out the device serial by run `adb devices` or by `./dive_client_cli --command list_device`
+
+Run `./dive_client_cli --help` for help.
+
+#### Standalone PM4 Capture
 
 Examples:
  - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
  ```
- ./dive_client_cli --device  9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --trigger_capture_after 5 --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --trigger_capture_after 5 --download_path "/path/to/save/captures"
  ```
 
  - Install the dependencies on device and start the package
  ```
- ./dive_client_cli --device  9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
  ```
 Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
 
 The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
+
+#### GFXR Replay
+
+First, push the GFXR capture to the device or find the path where it is located on the device.
+
+If multiple Android Devices are connected, set the enviroment variable `ANDROID_SERIAL` to the device serial in preparation for the GFXR replay script.
+
+Using the `gfxr-replay` command will install the `gfxr-replay.apk` found in the `install` dir, and then replay the specified capture.
+
+Example:
+```
+./dive_client_cli --device 9A221FFAZ004TL --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr
+```
 
 #### Cleanup
 
@@ -145,3 +160,44 @@ The command line tool will clean up the device and application automatically at 
 ./dive_client_cli --command cleanup --package de.saschawillems.vulkanBloom --device 9A221FFAZ004TL
 ```
 This will remove all the libraries installed and the settings that had been setup by Dive for the package.
+
+### Updating Dive's gfxreconstruct subtree
+
+1. Create a branch to contain the merge
+2. Add the remote: 
+```
+git remote add -f gfxreconstruct-remote https://github.com/LunarG/gfxreconstruct.git
+```
+3. Run the merge command: 
+```
+git merge -s subtree --squash -X subtree=third_party/gfxreconstruct --allow-unrelated-histories --no-commit gfxreconstruct-remote/dev
+```
+4. Resolve the conflicts that arise in the following files and ensure dive-specific changes are included. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE:
+    - third_party/gfxrreconstruct/CMakeLists.txt
+    - third_party/gfxreconstruct/cmake/AgilitySDK.cmake
+    - third_party/gfxreconstruct/cmake/FindVulkanVersion.cmake
+    - third_party/gfxreconstruct/cmake/AgilitySDK.cmake
+    - third_party/gfxreconstruct/framework/decode/CMakeLists.txt
+    - third_party/gfxreconstruct/framework/encode/CMakeLists.txt
+    - third_party/gfxreconstruct/framework/format/CMakeLists.txt
+    - third_party/gfxreconstruct/framework/graphics/CMakeLists.txt
+    - third_party/gfxreconstruct/framework/util/CMakeLists.txt
+    - third_party/gfxreconstruct/layer/CMakeLists.txt
+    - third_party/gfxreconstruct/layer/ags_capture/CMakeLists.txt
+    - third_party/gfxreconstruct/layer/d3d12/CMakeLists.txt
+    - third_party/gfxreconstruct/layer/d3d12_capture/CMakeLists.txt
+    - third_party/gfxreconstruct/layer/dxgi/CMakeLists.txt
+    - third_party/gfxreconstruct/scripts/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/compress/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/convert/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/extract/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/info/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/optimize/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/replay/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/tocpp/CMakeLists.txt
+5. Stage the files.
+6. Create the commit: 
+```
+git add third_party/gfxreconstruct, git commit -m "Import gfxreconstruct updates"
+```
+7. Create a pull request for the updates.

@@ -39,6 +39,11 @@ ninja
 You can specify the build type for debug/release as well
 with `-DCMAKE_BUILD_TYPE=Debug` or `-DCMAKE_BUILD_TYPE=Release` when running cmake.
 
+Host tool:
+```
+<dive_path>/build/bin/dive_client_cli
+```
+
 ### Building Dive host tool on Windows
 To build with prebuilt gRPC libraries: 
 ```
@@ -58,6 +63,12 @@ Or run:
 cmake --build . --config Debug
 cmake --build . --config Release
 ```
+
+Host tool:
+```
+<dive_path>/build/bin/<build_type>/dive_client_cli.exe
+```
+
 #### Build without prebuilt libraries
 
 Or you can build without using the prebuilt libraries with `-DBUILD_GRPC=ON`
@@ -113,7 +124,7 @@ Troubleshooting tips:
 ### CLI Tool for Android applications
 The command-line tool `dive_client_cli` currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
 
-To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux). You can then use `ninja install` to install the CLI tool under the `install` folder.
+To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux).
 
 To build the CLI tool on Windows, see [Building Dive host tool on Windows](#building-dive-host-tool-on-windows).
 

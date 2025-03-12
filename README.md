@@ -39,6 +39,11 @@ ninja
 You can specify the build type for debug/release as well
 with `-DCMAKE_BUILD_TYPE=Debug` or `-DCMAKE_BUILD_TYPE=Release` when running cmake.
 
+Host tool:
+```
+<dive_path>/build/bin/dive_client_cli
+```
+
 ### Building Dive host tool on Windows
 To build with prebuilt gRPC libraries: 
 ```
@@ -58,6 +63,12 @@ Or run:
 cmake --build . --config Debug
 cmake --build . --config Release
 ```
+
+Host tool:
+```
+<dive_path>/build/bin/<build_type>/dive_client_cli.exe
+```
+
 #### Build without prebuilt libraries
 
 Or you can build without using the prebuilt libraries with `-DBUILD_GRPC=ON`
@@ -86,6 +97,8 @@ Currently, the gRPC binaries are prebuilt under the folder `prebuild``. In case 
 
 - Download the Android NDK (e.g. 25.2.9519653)
 - Set the environment variable `ANDROID_NDK_HOME` (e.g. export ANDROID_NDK_HOME=~/andriod_sdk/ndk/25.2.9519653)
+- On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
+
 Run the script 
 
 On Linux, run: 
@@ -98,9 +111,12 @@ And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run
 scripts\build_android.bat Debug
 ```
 
-It will build the debug version of the libraries under `build_android` folder. To build release version, replace parameter with `Release`. To build both versions, do not pass a parameter.
-
-It will also trigger gradle to rebuild gfxreconstruct binaries under `third_party/gfxreconstruct/android/...` and copy them to under `build_android`.
+This script will:
+- Build the debug version of the libraries under `build_android` folder.
+  - To build release version, replace parameter with `Release`. 
+  - To build both versions, do not pass a parameter.
+- Trigger gradle to rebuild gfxreconstruct binaries under `third_party/gfxreconstruct/android/...` and copy them to under `build_android`.
+- Place the relevant files under `install` in preparation for deployment to the Android device.
 
 Troubleshooting tips:
 - Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
@@ -113,7 +129,7 @@ Troubleshooting tips:
 ### CLI Tool for Android applications
 The command-line tool `dive_client_cli` currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
 
-To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux). You can then use `ninja install` to install the CLI tool under the `install` folder.
+To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux).
 
 To build the CLI tool on Windows, see [Building Dive host tool on Windows](#building-dive-host-tool-on-windows).
 

@@ -109,8 +109,6 @@ if(NOT ANDROID)
     if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT DIVE_NO_DISASSEMBLY)
         add_subdirectory(ui)
     endif()
-
-    add_subdirectory(third_party/gfxreconstruct)
 else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")

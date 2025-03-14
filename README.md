@@ -155,6 +155,19 @@ Then you can follow the hint output to trigger a capture by press key `t` and `e
 
 The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
 
+#### GFXR Capture
+First, ensure you know the correct architecture for the device you are attempting to capture on. This is required when intiating a GFXR capture.
+
+Examples:
+ - Install the dependencies on device, start the package, and initiate a GFXR capture.
+ ```
+ ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_capture --package com.samsung.xr.firsthand --type vulkan --device_architecture arm64-v8a --gfxr_capture_file_dir gfxr_first_hand_captures --download_path "/path/to/save/captures"
+ ```
+
+Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.
+
+The capture file directory will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
+
 #### GFXR Replay
 
 First, push the GFXR capture to the device or find the path where it is located on the device.

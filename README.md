@@ -156,7 +156,7 @@ Then you can follow the hint output to trigger a capture by press key `t` and `e
 The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
 
 #### GFXR Capture
-GFXR capturing can be triggered in the ui or in with the cli.
+GFXR capturing can be triggered in the ui or within the cli.
 
 To begin a GFXR capture in the ui, either press key `F6` or click `Capture` at the top left corner and select `GFXR Capture` from the dropdown menu.
 

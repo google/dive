@@ -156,12 +156,16 @@ Then you can follow the hint output to trigger a capture by press key `t` and `e
 The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
 
 #### GFXR Capture
-First, ensure you know the correct architecture for the device you are attempting to capture on. This is required when intiating a GFXR capture.
+GFXR capturing can be triggered in the ui or in with the cli.
+
+To begin a GFXR capture in the ui, either press key `F6` or click `Capture` at the top left corner and select `GFXR Capture` from the dropdown menu.
+
+To begin a GFXR capture with the cli, first ensure you know the correct architecture for the device you are attempting to capture on. This is required when intiating a GFXR capture.
 
 Examples:
  - Install the dependencies on device, start the package, and initiate a GFXR capture.
  ```
- ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_capture --package com.samsung.xr.firsthand --type vulkan --device_architecture arm64-v8a --gfxr_capture_file_dir gfxr_first_hand_captures --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_capture --package com.google.bigwheels.project_04_cube_xr.debug --type vulkan --device_architecture arm64-v8a --gfxr_capture_file_dir gfxr_bigwheels_capture --download_path "/path/to/save/captures"
  ```
 
 Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.

@@ -425,7 +425,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                           const std::string&   package,
                           const std::string&   gfxr_capture_directory)
 {
-    std::cout << "Press key g+enter to trigger a capture and g+enter to stop the capture. Press "
+    std::cout << "Press key g+enter to trigger a capture and g+enter to retrieve the capture. Press "
                  "any other key+enter to stop the application. Note that this may impact your "
                  "capture file if the capture has not been completed. \n";
     std::string
@@ -475,23 +475,21 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                     return;
                 }
                 is_capturing = true;
-                std::cout << "Capture started. Press g+enter to stop the capture." << std::endl;
+                std::cout << "Capture started. Press g+enter to retrieve the capture." << std::endl;
             }
         }
         else
         {
             if (is_capturing)
             {
-                std::cout << "GFXR capture in progress, please wait for capture to complete before "
-                             "stopping the application."
-                          << std::endl;
+                std::string warning_message = "GFXR capture in progress, please wait for capture to complete before stopping the application.";
+
+                std::cout << warning_message << std::endl;
                 ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
                 while (!ret.ok())
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
-                    std::cout << "GFXR capture in progress, please wait for capture to complete "
-                                 "before stopping the application."
-                              << std::endl;
+                    std::cout << warning_message << std::endl;
                 }
                 ret = mgr.GetDevice()->Adb().Run(
                 "shell setprop debug.gfxrecon.capture_android_trigger false");

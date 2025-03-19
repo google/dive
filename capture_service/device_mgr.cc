@@ -153,9 +153,10 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name,
 
     if (device_architecture != "")
     {
-        search_paths.push_back(std::filesystem::path{
-        "../build_android/Release/third_party/gfxreconstruct/android/layer/jni/" +
-        device_architecture });
+        const std::string gfxr_layer_path = "/gfxr_layer/jni/" + device_architecture;
+        search_paths.push_back(std::filesystem::path{ "./install" + gfxr_layer_path });
+        search_paths.push_back(std::filesystem::path{ "../../install" + gfxr_layer_path });
+        search_paths.push_back(std::filesystem::path{ "." + gfxr_layer_path });
     }
 
     std::filesystem::path lib_path{ name };

@@ -85,9 +85,6 @@ popd
 
     set DIVE_INSTALL_DIR=%PROJECT_ROOT%\\install
 
-    set GFXR_BUILD_DIR=!BUILD_DIR!\\third_party\\gfxreconstruct\\android
-    if not exist !GFXR_BUILD_DIR! md !GFXR_BUILD_DIR!
-
     echo Extracting gfxr android layer into the dive install directory
     set GFXR_LAYER_SRC=!GFXR_ROOT_DIR!\\layer\\build\\outputs\\aar\\layer-!build_lowercase!.aar
     set GFXR_LAYER_DST=!DIVE_INSTALL_DIR!\\gfxr_layer
@@ -98,16 +95,9 @@ popd
     tar -xf !GFXR_LAYER_SRC! -C !GFXR_LAYER_DST!
     if not !ERRORLEVEL!==0 exit /b 1
 
-    echo Copying gfxr android replay into build_android
-    set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
-    set GFXR_REPLAY_DST=!GFXR_BUILD_DIR!\\tools\\replay
-    if exist !GFXR_REPLAY_DST! rm -rf !GFXR_REPLAY_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    xcopy /i !GFXR_REPLAY_SRC! !GFXR_REPLAY_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-
     echo Copying gfxr android replay apk into the dive install directory
-    xcopy /i !GFXR_REPLAY_DST!\\replay-*.apk !DIVE_INSTALL_DIR!
+    set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
+    xcopy /i !GFXR_REPLAY_SRC!\\replay-*.apk !DIVE_INSTALL_DIR!
     pushd !DIVE_INSTALL_DIR!
     if exist gfxr-replay.apk rm gfxr-replay.apk
     ren replay-*.apk gfxr-replay.apk

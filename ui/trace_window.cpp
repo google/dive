@@ -840,13 +840,13 @@ void GfxrCaptureWorker::run()
     {
         std::string target_file = (m_target_capture_path / file.data()).string();
         std::string source_file = (m_capture_path / file.data()).string();
-        ret = device->RetrieveTrace(source_file, target_file);
+        auto retrieve_file = device->RetrieveTrace(source_file, target_file);
 
-        if (!ret.ok())
+        if (!retrieve_file.ok())
         {
             std::cout << "Failed to retrieve gfxr capture: " << ret.status().message() << std::endl;
-            qDebug() << ret.status().message().data();
-            ShowErrorMessage(ret.status().message().data());
+            qDebug() << retrieve_file.message().data();
+            ShowErrorMessage(retrieve_file.message().data());
             return;
         }
 

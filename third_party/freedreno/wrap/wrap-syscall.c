@@ -134,7 +134,7 @@ static struct {
 #ifdef FAKE
 	int is_emulated;
 #endif
-} file_table[1024];
+} file_table[2048];  // GOOGLE: increase the size for larger applications.
 
 static struct device_info * get_kgsl_info(int fd)
 {
@@ -372,7 +372,8 @@ static void install_fd(const char *path, int fd)
 	// which calls ioctl(fd, SYNC_IOC_MERGE, &data) where the fd is larger than 1024
 	if (fd >= ARRAY_SIZE(file_table))
 	{
-		printf("\t\tWARNING: fd is larger than or equal to the ARRAY_SIZE(file_table), skip install_fd!\n");
+		LOGI("\t\tWARNING: fd %d is larger than or equal to the ARRAY_SIZE(file_table) %d, skip install_fd! \n", fd, ARRAY_SIZE(file_table));
+		assert(0);
         return;
 	}
 	

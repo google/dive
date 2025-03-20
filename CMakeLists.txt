@@ -123,12 +123,7 @@ else()
         file(
             ARCHIVE_EXTRACT
             INPUT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
-            DESTINATION "${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/layer"
-        )
-        file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay)
-        file(
-            COPY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/. 
-            DESTINATION ${CMAKE_SOURCE_DIR}/build_android/${CMAKE_BUILD_TYPE}/third_party/gfxreconstruct/android/tools/replay
+            DESTINATION "${CMAKE_INSTALL_PREFIX}/gfxr_layer"
         )
         install(
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME} 

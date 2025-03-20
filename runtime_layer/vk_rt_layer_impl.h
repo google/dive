@@ -32,4 +32,18 @@ VkResult CreateImage(PFN_vkCreateImage            pfn,
                      const VkAllocationCallbacks* pAllocator,
                      VkImage*                     pImage);
 
+void CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn,
+                    VkCommandBuffer      commandBuffer,
+                    uint32_t             indexCount,
+                    uint32_t             instanceCount,
+                    uint32_t             firstIndex,
+                    int32_t              vertexOffset,
+                    uint32_t             firstInstance);
+
+VkResult BeginCommandBuffer(PFN_vkBeginCommandBuffer        pfn,
+                            VkCommandBuffer                 commandBuffer,
+                            const VkCommandBufferBeginInfo* pBeginInfo);
+
+VkResult EndCommandBuffer(PFN_vkEndCommandBuffer pfn, VkCommandBuffer commandBuffer);
+
 }  // namespace DiveLayer

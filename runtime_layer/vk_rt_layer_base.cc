@@ -176,6 +176,48 @@ VkResult DiveInterceptCreateImage(VkDevice                     device,
     return CreateImage(pfn, device, pCreateInfo, pAllocator, pImage);
 }
 
+void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer,
+                                 uint32_t        indexCount,
+                                 uint32_t        instanceCount,
+                                 uint32_t        firstIndex,
+                                 int32_t         vertexOffset,
+                                 uint32_t        firstInstance)
+{
+    PFN_vkCmdDrawIndexed pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdDrawIndexed;
+    return CmdDrawIndexed(pfn,
+                          commandBuffer,
+                          indexCount,
+                          instanceCount,
+                          firstIndex,
+                          vertexOffset,
+                          firstInstance);
+}
+
+VkResult DiveInterceptBeginCommandBuffer(VkCommandBuffer                 commandBuffer,
+                                         const VkCommandBufferBeginInfo *pBeginInfo)
+{
+    PFN_vkBeginCommandBuffer pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.BeginCommandBuffer;
+    return BeginCommandBuffer(pfn, commandBuffer, pBeginInfo);
+}
+
+VkResult DiveInterceptEndCommandBuffer(VkCommandBuffer commandBuffer)
+{
+    PFN_vkEndCommandBuffer pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.EndCommandBuffer;
+    return EndCommandBuffer(pfn, commandBuffer);
+}
+
 // Create instance needs a special implementation for layer
 VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
                                      const VkAllocationCallbacks *pAllocator,
@@ -512,6 +554,12 @@ extern "C"
             return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
         if (0 == strcmp(func, "vkCreateImage"))
             return (PFN_vkVoidFunction)DiveInterceptCreateImage;
+        if (0 == strcmp(func, "vkCmdDrawIndexed"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
+        if (0 == strcmp(func, "vkBeginCommandBuffer"))
+            return (PFN_vkVoidFunction)DiveInterceptBeginCommandBuffer;
+        if (0 == strcmp(func, "vkEndCommandBuffer"))
+            return (PFN_vkVoidFunction)DiveInterceptEndCommandBuffer;
         auto layer_data = GetDeviceLayerData(DataKey(dev));
         return layer_data->dispatch_table.pfn_get_device_proc_addr(dev, func);
     }

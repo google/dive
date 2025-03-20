@@ -425,9 +425,10 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                           const std::string&   package,
                           const std::string&   gfxr_capture_directory)
 {
-    std::cout << "Press key g+enter to trigger a capture and g+enter to retrieve the capture. Press "
-                 "any other key+enter to stop the application. Note that this may impact your "
-                 "capture file if the capture has not been completed. \n";
+    std::cout
+    << "Press key g+enter to trigger a capture and g+enter to retrieve the capture. Press "
+       "any other key+enter to stop the application. Note that this may impact your "
+       "capture file if the capture has not been completed. \n";
     std::string
     capture_complete_message = "Capture complete. Press key g+enter to trigger another capture or "
                                "any other key+enter to stop the application.";
@@ -482,7 +483,8 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
         {
             if (is_capturing)
             {
-                std::string warning_message = "GFXR capture in progress, please wait for capture to complete before stopping the application.";
+                std::string warning_message = "GFXR capture in progress, please wait for capture "
+                                              "to complete before stopping the application.";
 
                 std::cout << warning_message << std::endl;
                 ret = is_capture_directory_busy(mgr, gfxr_capture_directory);

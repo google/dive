@@ -218,19 +218,22 @@ absl::Status VulkanApplication::Cleanup()
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     if (m_gfxr_enabled)
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
         RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
         RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName), true));
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName),
+                        true));
     }
-    else 
+    else
     {
         RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName), true));
-        RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
-
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName),
+                        true));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     }
     RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_app"));
@@ -357,17 +360,20 @@ absl::Status OpenXRApplication::Cleanup()
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
     if (m_gfxr_enabled)
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
         RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
         RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName), true));
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName),
+                        true));
     }
-    else 
+    else
     {
         RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell rm -r %s", kManifestFilePath)));
-        RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     }
     LOGD("OpenXRApplication %s cleanup done.", m_package.c_str());
     return absl::OkStatus();

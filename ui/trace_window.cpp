@@ -840,7 +840,7 @@ void GfxrCaptureWorker::run()
     {
         std::string target_file = (m_target_capture_path / file.data()).string();
         std::string source_file = (m_capture_path / file.data()).string();
-        auto retrieve_file = device->RetrieveTrace(source_file, target_file);
+        auto        retrieve_file = device->RetrieveTrace(source_file, target_file);
 
         if (!retrieve_file.ok())
         {

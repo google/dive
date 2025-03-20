@@ -104,7 +104,6 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession             sess
 {
     XrResult result = XrResult::XR_ERROR_HANDLE_INVALID;
 
-    LOGD("ApiDiveLayerXrEndFrame key %lu, sess %p \n", DataKey(session), session);
     auto sess_data = GetXrSessionLayerData(DataKey(session));
     if (sess_data)
     {

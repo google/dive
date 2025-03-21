@@ -182,12 +182,15 @@ void android_main(struct android_app* app)
                                                       replay_options.block_index_from,
                                                       replay_options.block_index_to);
 
+                // GOOGLE: [single-frame-looping]
+                file_processor->SetLoopSingleFrame(replay_options.loop_single_frame, replay_options.loop_n_times);
+
                 gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
                 gfxrecon::decode::VulkanDecoder        vulkan_decoder;
 
                 RunVulkanPreProcessConsumer(filename, replay_options, vulkan_replay_consumer);
 
-                uint32_t                               start_frame, end_frame;
+                uint32_t    start_frame, end_frame;
                 bool        has_mfr = GetMeasurementFrameRange(arg_parser, start_frame, end_frame);
                 std::string measurement_file_name;
 
@@ -215,6 +218,9 @@ void android_main(struct android_app* app)
                                                      measurement_file_name,
                                                      quit_after_frame,
                                                      quit_frame);
+
+                // GOOGLE: [single-frame-looping]
+                fps_info.LoopSingleFrame(replay_options.loop_single_frame);
 
                 vulkan_replay_consumer.SetFatalErrorHandler(
                     [](const char* message) { throw std::runtime_error(message); });

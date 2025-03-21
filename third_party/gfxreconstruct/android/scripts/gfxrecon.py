@@ -145,6 +145,10 @@ def CreateReplayParser():
     parser.add_argument('--add-new-pipeline-caches', action='store_true', default=False, help='If set, allows gfxreconstruct to create new vkPipelineCache objects when it encounters a pipeline created without cache. This option can be used in coordination with `--save-pipeline-cache` and `--load-pipeline-cache`. (forwarded to replay tool)')
     parser.add_argument('--quit-after-frame', metavar='FRAME', help='Specify a frame after which replay will terminate.')
 
+    # GOOGLE: [single-frame-looping] Usage message
+    parser.add_argument('--loop-single-frame', action='store_true', default=False, help='Enables single frame looping.')
+    parser.add_argument('--loop-n-times', metavar='N', help='Only used with --loop-single-frame, specifies how many loops after which replay will terminate.')
+
     return parser
 
 def MakeExtrasString(args):
@@ -333,6 +337,14 @@ def MakeExtrasString(args):
     if args.quit_after_frame:
         arg_list.append('--quit-after-frame')
         arg_list.append('{}'.format(args.quit_after_frame))
+
+    # GOOGLE: [single-frame-looping] Translating flags
+    if args.loop_single_frame:
+        arg_list.append('--loop-single-frame')
+    
+    if args.loop_n_times:
+        arg_list.append('--loop-n-times')
+        arg_list.append('{}'.format(args.loop_n_times))
 
     if args.file:
         arg_list.append(args.file)

@@ -135,6 +135,13 @@ bool FileProcessor::OpenFile(const std::string& filename)
     return true;
 }
 
+// GOOGLE: [single-frame-looping] Set parameters
+void FileProcessor::SetLoopSingleFrame(bool loop_single_frame, uint64_t loop_n_times)
+{
+    loop_single_frame_ = loop_single_frame;
+    loop_n_times_      = loop_n_times;
+}
+
 bool FileProcessor::ProcessNextFrame()
 {
     bool success = IsFileValid();
@@ -2114,10 +2121,23 @@ bool FileProcessor::ProcessFrameMarker(const format::BlockHeader& block_header,
 
     if (success)
     {
-        // Validate frame end marker's frame number matches current_frame_number_ when capture_uses_frame_markers_ is
-        // true.
-        GFXRECON_ASSERT((marker_type != format::kEndMarker) || (!capture_uses_frame_markers_) ||
-                        (current_frame_number_ == (frame_number - first_frame_)));
+        // GOOGLE: [single-frame-looping] This check does not apply in the single frame looping case
+        if (loop_single_frame_)
+        {
+            // Validate that the --loop-single-frame flag is not being used with a multi-frame capture
+            if (frame_number != single_frame_)
+            {
+                GFXRECON_LOG_ERROR_ONCE(
+                    "Flag --loop-single-frame should be used only for replay of a single-frame capture.");
+            }
+        }
+        else
+        {
+            // Validate frame end marker's frame number matches current_frame_number_ when capture_uses_frame_markers_
+            // is true.
+            GFXRECON_ASSERT((marker_type != format::kEndMarker) || (!capture_uses_frame_markers_) ||
+                            (current_frame_number_ == (frame_number - first_frame_)));
+        }
 
         for (auto decoder : decoders_)
         {
@@ -2153,6 +2173,19 @@ bool FileProcessor::ProcessFrameMarker(const format::BlockHeader& block_header,
         ++current_frame_number_;
         ++block_index_;
         should_break = true;
+
+        // GOOGLE: [single-frame-looping] Jump back in the file to the state end marker, or terminate if the max loops
+        // have been reached
+        if (loop_single_frame_)
+        {
+            if ((loop_n_times_ > 0) && (current_frame_number_ >= loop_n_times_))
+            {
+                GFXRECON_LOG_INFO("Looped %d frames, terminating replay asap", current_frame_number_);
+                return success;
+            }
+            SeekActiveFile(state_end_marker_file_offset_, util::platform::FileSeekSet);
+            should_break = false;
+        }
     }
     return success;
 }
@@ -2174,6 +2207,18 @@ bool FileProcessor::ProcessStateMarker(const format::BlockHeader& block_header, 
             GFXRECON_LOG_INFO("Finished loading state for captured frame %" PRId64, frame_number);
             first_frame_                   = frame_number;
             loading_trimmed_capture_state_ = false;
+
+            // GOOGLE: [single-frame-looping] Store state end marker offset
+            if (loop_single_frame_)
+            {
+                auto file_entry = active_files_.find(file_stack_.back().filename);
+                assert(file_entry != active_files_.end());
+
+                state_end_marker_file_offset_ = util::platform::FileTell(file_entry->second.fd);
+                GFXRECON_LOG_INFO("Stored state end marker offset %d", state_end_marker_file_offset_);
+                single_frame_ = frame_number;
+                GFXRECON_LOG_INFO("Stored single frame number %d", single_frame_);
+            }
         }
 
         for (auto decoder : decoders_)

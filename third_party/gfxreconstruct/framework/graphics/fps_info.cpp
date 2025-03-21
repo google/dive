@@ -40,14 +40,27 @@ static double GetElapsedSeconds(uint64_t start_time, uint64_t end_time)
         util::datetime::DiffTimestamps(static_cast<int64_t>(start_time), static_cast<int64_t>(end_time)));
 }
 
-static void
-WriteFpsToConsole(const char* prefix, uint64_t start_frame, uint64_t end_frame, int64_t start_time, int64_t end_time)
+// GOOGLE: [single-frame-looping] Accept additional parameter
+static void WriteFpsToConsole(const char* prefix,
+                              uint64_t    start_frame,
+                              uint64_t    end_frame,
+                              int64_t     start_time,
+                              int64_t     end_time,
+                              bool        loop_single_frame = false)
 {
     assert(end_frame >= start_frame && end_time >= start_time);
 
     double   diff_time_sec = GetElapsedSeconds(static_cast<uint64_t>(start_time), static_cast<uint64_t>(end_time));
     uint64_t total_frames  = (end_frame - start_frame) + 1;
     double   fps           = (diff_time_sec > 0.0) ? (static_cast<double>(total_frames) / diff_time_sec) : 0.0;
+
+    // GOOGLE: [single-frame-looping] Log a meaningful replay frame range without affecting the total number of frames
+    // replayed
+    if (loop_single_frame)
+    {
+        end_frame = start_frame;
+    }
+
     GFXRECON_WRITE_CONSOLE("%s %f fps, %f seconds, %" PRIu64 " frame%s, framerange %" PRIu64 "-%" PRIu64,
                            prefix,
                            fps,
@@ -68,13 +81,12 @@ FpsInfo::FpsInfo(uint64_t               measurement_start_frame,
                  const std::string_view measurement_file_name,
                  bool                   quit_after_frame,
                  uint64_t               quit_frame) :
-    measurement_start_frame_(measurement_start_frame),
-    measurement_end_frame_(measurement_end_frame), measurement_start_time_(0), measurement_end_time_(0),
-    has_measurement_range_(has_measurement_range), quit_after_range_(quit_after_range),
-    flush_measurement_range_(flush_measurement_range), flush_inside_measurement_range_(flush_inside_measurement_range),
-    started_measurement_(false), ended_measurement_(false), frame_start_time_(0), frame_durations_(),
-    measurement_file_name_(measurement_file_name), preload_measurement_range_(preload_measurement_range),
-    quit_after_frame_(quit_after_frame), quit_frame_(quit_frame)
+    measurement_start_frame_(measurement_start_frame), measurement_end_frame_(measurement_end_frame),
+    measurement_start_time_(0), measurement_end_time_(0), has_measurement_range_(has_measurement_range),
+    quit_after_range_(quit_after_range), flush_measurement_range_(flush_measurement_range),
+    flush_inside_measurement_range_(flush_inside_measurement_range), started_measurement_(false),
+    ended_measurement_(false), frame_start_time_(0), frame_durations_(), measurement_file_name_(measurement_file_name),
+    preload_measurement_range_(preload_measurement_range), quit_after_frame_(quit_after_frame), quit_frame_(quit_frame)
 {
     if (has_measurement_range_)
     {
@@ -216,11 +228,13 @@ void FpsInfo::LogToConsole()
         GFXRECON_WRITE_CONSOLE("Total time: %f seconds",
                                GetElapsedSeconds(start_time_, static_cast<uint64_t>(measurement_end_time_)));
 
+        // GOOGLE: [single-frame-looping] Pass additional parameter
         WriteFpsToConsole("Replay FPS:",
                           static_cast<uint64_t>(replay_start_frame_),
                           measurement_end_frame_ - 1 + static_cast<uint64_t>(replay_start_frame_) - 1,
                           static_cast<int64_t>(replay_start_time_),
-                          measurement_end_time_);
+                          measurement_end_time_,
+                          loop_single_frame_);
     }
     else
     {

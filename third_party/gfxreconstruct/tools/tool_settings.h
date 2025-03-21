@@ -150,6 +150,10 @@ const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-i
 const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
 const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
 
+// GOOGLE: [single-frame-looping] Additional Parameters
+const char kLoopSingleFrame[] = "--loop-single-frame";
+const char kLoopNTimes[]      = "--loop-n-times";
+
 enum class WsiPlatform
 {
     kAuto,
@@ -887,6 +891,27 @@ static std::vector<int32_t> GetFilteredMsgs(const gfxrecon::util::ArgumentParser
     return msgs;
 }
 
+// GOOGLE: [single-frame-looping] Parse value for flag "--loop-n-times"
+static uint32_t GetLoopNTimes(const gfxrecon::util::ArgumentParser& arg_parser)
+{
+    const auto& value = arg_parser.GetArgumentValue(kLoopNTimes);
+
+    uint32_t n = 0;
+
+    if (!value.empty())
+    {
+        try
+        {
+            n = std::stoi(value);
+        }
+        catch (std::exception&)
+        {
+            GFXRECON_LOG_WARNING("Ignoring invalid '%s' value: %s", kLoopNTimes, value.c_str());
+        }
+    }
+    return n;
+}
+
 static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
                              const gfxrecon::util::ArgumentParser& arg_parser,
                              const std::string&                    filename)
@@ -1163,6 +1188,18 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
     replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
     replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
+
+    // GOOGLE: [single-frame-looping] Parse additional parameters
+    if (arg_parser.IsOptionSet(kLoopSingleFrame))
+    {
+        replay_options.loop_single_frame = true;
+    }
+    replay_options.loop_n_times = GetLoopNTimes(arg_parser);
+    if ((replay_options.loop_n_times > 0) && (!replay_options.loop_single_frame))
+    {
+        GFXRECON_LOG_FATAL("Flag '%s' must be used with '%s'. Closing the program.", kLoopNTimes, kLoopSingleFrame);
+        abort();
+    }
 
     return replay_options;
 }

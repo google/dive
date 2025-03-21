@@ -88,6 +88,9 @@ class FileProcessor
 
     bool Initialize(const std::string& filename);
 
+    // GOOGLE: [single-frame-looping] Set parameters for single frame looping
+    void SetLoopSingleFrame(bool loop_single_frame, uint64_t loop_n_times);
+
     // Returns true if there are more frames to process, false if all frames have been processed or an error has
     // occurred.  Use GetErrorState() to determine error condition.
     bool ProcessNextFrame();
@@ -171,6 +174,10 @@ class FileProcessor
     Error                    error_state_;
     uint64_t                 bytes_read_;
 
+    // GOOGLE: [single-frame-looping] Parameters for single frame looping
+    bool     loop_single_frame_;
+    uint64_t loop_n_times_;
+
     /// @brief Incremented at the end of every block successfully processed.
     uint64_t block_index_;
 
@@ -250,6 +257,10 @@ class FileProcessor
     int64_t                             block_index_to_{ 0 };
     bool                                loading_trimmed_capture_state_;
 
+    // GOOGLE: [single-frame-looping] Record info obtained from capture file
+    int64_t  state_end_marker_file_offset_{ 0 };
+    uint64_t single_frame_{ 0 };
+
     struct ActiveFiles
     {
         ActiveFiles() {}
@@ -263,9 +274,9 @@ class FileProcessor
 
     struct ActiveFileContext
     {
-        ActiveFileContext(std::string filename_) : filename(std::move(filename_)){};
+        ActiveFileContext(std::string filename_) : filename(std::move(filename_)) {};
         ActiveFileContext(std::string filename_, bool execute_till_eof_) :
-            filename(std::move(filename_)), execute_till_eof(execute_till_eof_){};
+            filename(std::move(filename_)), execute_till_eof(execute_till_eof_) {};
 
         std::string filename;
         uint32_t    remaining_commands{ 0 };

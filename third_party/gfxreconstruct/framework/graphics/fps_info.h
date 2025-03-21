@@ -59,6 +59,9 @@ class FpsInfo
     void                   ProcessStateEndMarker(uint64_t file_processor_frame);
     [[nodiscard]] uint64_t ShouldPreloadFrames(uint64_t current_frame) const;
 
+    // GOOGLE: [single-frame-looping]
+    void LoopSingleFrame(bool loop_single_frame) { loop_single_frame_ = loop_single_frame; }
+
   private:
     uint64_t start_time_{};
 
@@ -70,6 +73,9 @@ class FpsInfo
 
     int64_t  replay_start_time_;
     uint64_t replay_start_frame_;
+
+    // GOOGLE: [single-frame-looping]
+    bool loop_single_frame_;
 
     bool has_measurement_range_;
     bool quit_after_range_;

@@ -67,6 +67,8 @@ public:
     }
     void                    SetGfxrCapturePath(const std::string &capture_path);
     void                    SetGfxrTargetCapturePath(const std::string &target_capture_path);
+    bool                    areTimestampsCurrent(Dive::AndroidDevice     *device,
+                                                 std::vector<std::string> previous_timestamps);
     absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
 signals:
     void DownloadedSize(uint64_t size);
@@ -149,7 +151,7 @@ private:
 
     const QString kStart_Application = "&Start Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
-    const QString kStop_Gfxr_Runtime_Capture = "&Stop GFXR Capture";
+    const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
     QHBoxLayout        *m_capture_layout;
     QLabel             *m_dev_label;

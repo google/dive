@@ -114,7 +114,16 @@ void Disassembly::Disassemble()
     {
         DisassembledData disassembled_data;
         uint64_t         max_size = m_mem_manager.GetMaxContiguousSize(m_submit_index, m_address);
-        uint8_t*         data_ptr = new uint8_t[max_size];
+
+        // The disassembler does not early-out when it encounters an "end" instruction (at least not
+        // in its "prepass"), so passing it a too-big max_size can make the disassembly very slow!
+        // Let's set an arbitrary limit for now. The "correct" fix would be for the disassembler to
+        // early-out.
+        uint64_t kMaxSizeLimit = 64 * 1024;
+        if (max_size > kMaxSizeLimit)
+            max_size = kMaxSizeLimit;
+
+        uint8_t* data_ptr = new uint8_t[max_size];
         DIVE_VERIFY(m_mem_manager.CopyMemory(data_ptr, m_submit_index, m_address, max_size));
 
         struct shader_stats stats;

@@ -18,6 +18,12 @@ limitations under the License.
 
 #include <pthread.h>
 #include <stdlib.h>
+#include <sys/system_properties.h>
+
+
+// TODO: (renfeng) update the capture interface so that user can set this property value.
+#define PROPERTY_NAME "debug.dive.pm4.max_buffer_size"
+#define MIN_CAPTURE_BUFFER_SIZE 1*1024*1014   // 1M
 
 static pthread_mutex_t capture_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static int capture_state = 0;
@@ -55,6 +61,32 @@ void StartCapture() { SetCaptureState(1); }
 
 void StopCapture() { SetCaptureState(0); }
 
+// If PROPERTY_NAME has been set, then set the max capture buffer size, otherwise do nothing, which
+// means don't limit the buffer size.
+void SetMaxCaptureBufferSize()
+{
+    char prop_str[PROP_VALUE_MAX];
+    int  len = __system_property_get(PROPERTY_NAME, prop_str);
+
+    if (len <= 0)
+    {
+        LOGI("Property %s not set.\n", PROPERTY_NAME);
+        return;
+    }
+
+	LOGI("Value of %s: %s\n", PROPERTY_NAME, prop_str);
+
+    int buffer_size = atoi(prop_str);
+    if (buffer_size < MIN_CAPTURE_BUFFER_SIZE)
+    {
+        buffer_size = MIN_CAPTURE_BUFFER_SIZE;
+		snprintf(prop_str, PROP_VALUE_MAX, "%d", buffer_size);
+    }
+
+	LOGI("Set WRAP_BUF_LEN_CAP to %s\n", prop_str);
+    setenv("WRAP_BUF_LEN_CAP", prop_str, 1);
+}
+
 extern void SetCaptureName(const char* name, const char* frame_num) 
 {
 	if(name) {
@@ -63,8 +95,7 @@ extern void SetCaptureName(const char* name, const char* frame_num)
 	if(frame_num) {
 		setenv("TESTNUM", frame_num, 1);
 	}
-	// Cap dump size per buffer as 128K.
-	// TODO(renfeng): find out doc where states the max size of command stream.
-	setenv("WRAP_BUF_LEN_CAP", "131072", 1);
+
+	SetMaxCaptureBufferSize();
 }
 

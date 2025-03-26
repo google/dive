@@ -35,3 +35,4 @@ prebuild/grpc/Debug/lib/grpc_unsecure.lib
 prebuild/grpc/Debug/lib/libprotobufd.lib
 prebuild/grpc/Debug/lib/libprotocd.lib
 install/
+.venv/

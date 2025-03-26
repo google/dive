@@ -14,7 +14,11 @@
         android:theme="@style/AppTheme"
         android:supportsRtl="true"
         android:extractNativeLibs="true"
+        android:debuggable="true"
         android:hasCode="false">
+        <meta-data
+        android:name="wrap_sh_path"
+        android:value="wrap.sh" />
         <activity android:name="android.app.NativeActivity"
                   android:exported="true"
                   android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout"

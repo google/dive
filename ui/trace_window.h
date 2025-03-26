@@ -66,13 +66,19 @@ public:
     {
     }
     void                    SetGfxrCapturePath(const std::string &capture_path);
+    void                    SetGfxrTargetCapturePath(const std::string &target_capture_path);
+    bool                    areTimestampsCurrent(Dive::AndroidDevice     *device,
+                                                 std::vector<std::string> previous_timestamps);
     absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
 signals:
+    void DownloadedSize(uint64_t size);
     void GfxrCaptureAvailable(const QString &);
 
 private:
-    QProgressDialog *m_progress_bar;
-    std::string      m_capture_path;
+    QProgressDialog         *m_progress_bar;
+    std::filesystem::path    m_capture_path;
+    std::filesystem::path    m_target_capture_path;
+    std::vector<std::string> m_file_list;
 };
 
 class ProgressBarWorker : public QThread
@@ -119,6 +125,7 @@ public:
     void ShowGfxrFields();
     void HideGfxrFields();
     void UseGfxrCapture(bool enable);
+    void RetrieveGfxrCapture();
 
 private slots:
     void OnDeviceSelected(const QString &);
@@ -134,7 +141,6 @@ private slots:
     void OnPackageListFilter();
     void OnPackageListFilterApplied(QSet<QString> filters);
     void OnGfxrCaptureClicked();
-    void OnGfxrRetrieveClicked();
 
 signals:
     void TraceAvailable(const QString &);
@@ -145,8 +151,7 @@ private:
 
     const QString kStart_Application = "&Start Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
-    const QString kStop_Gfxr_Runtime_Capture = "&Stop GFXR Capture";
-    const QString kRetrieve_Gfxr_Capture = "&Retrieve GFXR Capture";
+    const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
     QHBoxLayout        *m_capture_layout;
     QLabel             *m_dev_label;

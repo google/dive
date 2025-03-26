@@ -41,6 +41,19 @@ android {
             path "CMakeLists.txt"
         }
     }
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+    // sourceSets {
+    //     main {
+    //         jniLibs.srcDirs = ['src/main/jniLibs/arm64-v8a']
+    //     }
+    // }
+    // packagingOptions {
+    //     pickFirst 'lib/*/wrap.sh' // Ensure only one wrap.sh is picked if there are conflicts
+    // }
 }
 
 dependencies {

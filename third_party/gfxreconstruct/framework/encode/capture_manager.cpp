@@ -1289,6 +1289,8 @@ void CommonCaptureManager::ActivateTrimming(std::shared_lock<ApiCallMutexT>& cur
         GFXRECON_ASSERT(thread_data != nullptr);
         if (use_asset_file_)
         {
+            // GOOGLE: Clears the asset file name for each trimmed capture.
+            asset_file_name_.clear();
             std::unique_ptr<util::FileOutputStream> asset_file_stream = CreateAssetFile();
             for (auto& manager : api_capture_managers_)
             {

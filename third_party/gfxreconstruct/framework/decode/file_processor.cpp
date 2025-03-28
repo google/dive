@@ -2283,5 +2283,14 @@ void FileProcessor::PrintBlockInfo() const
     }
 }
 
+// GOOGLE: [single-frame-looping] Active file tell utility
+int64_t FileProcessor::TellActiveFile()
+{
+    auto file_entry = active_files_.find(file_stack_.back().filename);
+    assert(file_entry != active_files_.end());
+
+    return util::platform::FileTell(file_entry->second.fd);
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

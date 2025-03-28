@@ -99,6 +99,10 @@ struct VulkanReplayOptions : public ReplayOptions
     std::string load_pipeline_cache_filename;
     std::string save_pipeline_cache_filename;
     bool        add_new_pipeline_caches;
+
+    // GOOGLE: [single-frame-looping]
+    bool     loop_single_frame;
+    uint64_t loop_single_frame_count;
 };
 
 GFXRECON_END_NAMESPACE(decode)

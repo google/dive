@@ -32,6 +32,14 @@ namespace Dive
             return status;                  \
     } while (0)
 
+#define SHOW_IF_ERROR(expr)                             \
+    do                                                  \
+    {                                                   \
+        const absl::Status status = (expr);             \
+        if (!status.ok())                               \
+            std::cout << status.message() << std::endl; \
+    } while (0)
+
 template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
 {
     if (result.ok())

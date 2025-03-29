@@ -467,28 +467,27 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
 {
     AdbSession adb(serial);
     // Remove installed libs and libraries on device.
-    RETURN_IF_ERROR(adb.Run("root"));
-    RETURN_IF_ERROR(adb.Run("wait-for-device"));
-    RETURN_IF_ERROR(adb.Run("remount"));
+    SHOW_IF_ERROR(adb.Run("root"));
+    SHOW_IF_ERROR(adb.Run("wait-for-device"));
+    SHOW_IF_ERROR(adb.Run("remount"));
 
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
-    RETURN_IF_ERROR(
-    adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName), true));
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath), true));
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", GetDevice()->Port()), true));
+    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName)));
+    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName)));
+    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName)));
+    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName)));
+    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath)));
+    SHOW_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", GetDevice()->Port())));
 
-    RETURN_IF_ERROR(adb.Run("shell settings delete global enable_gpu_debug_layers"));
-    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_app"));
-    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers"));
-    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layer_app"));
-    RETURN_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers_gles"));
+    SHOW_IF_ERROR(adb.Run("shell settings delete global enable_gpu_debug_layers"));
+    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_app"));
+    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers"));
+    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layer_app"));
+    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers_gles"));
 
     // If package specified, remove package related settings.
     if (!package.empty())
     {
-        RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)));
+        SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)));
     }
 
     return absl::OkStatus();

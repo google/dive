@@ -185,6 +185,13 @@ Example:
 ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr
 ```
 
+For a capture that is a single frame, it can be replayed in a loop. Omit the `--loop-single-frame-count` flag for infinite looping.
+
+Example:
+```
+./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_flags "--loop-single-frame --loop-single-frame-count 300"
+```
+
 #### Cleanup
 
 The command line tool will clean up the device and application automatically at exit. If somehow it crashed and left the device in a uncleaned state, you can run following command to clean it up

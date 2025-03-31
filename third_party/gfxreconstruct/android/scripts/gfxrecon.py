@@ -153,6 +153,10 @@ def CreateReplayParser():
     parser.add_argument('--quit-after-frame', metavar='FRAME', help='Specify a frame after which replay will terminate.')
     parser.add_argument('--screenshot-ignore-FrameBoundaryANDROID', action='store_true', default=False, help='If set, frames switced with vkFrameBoundANDROID will be ignored from the screenshot handler.')
 
+    # GOOGLE: [single-frame-looping] Usage message
+    parser.add_argument('--loop-single-frame', action='store_true', default=False, help='Enables single frame looping.')
+    parser.add_argument('--loop-single-frame-count', metavar='N', help='Only used with --loop-single-frame, specifies how many loops after which replay will terminate.')
+
     return parser
 
 def MakeExtrasString(args):
@@ -362,6 +366,13 @@ def MakeExtrasString(args):
 
     if args.screenshot_ignore_FrameBoundaryANDROID:
         arg_list.append('--screenshot-ignore-FrameBoundaryANDROID')
+    # GOOGLE: [single-frame-looping] Translating flags for the replay library
+    if args.loop_single_frame:
+        arg_list.append('--loop-single-frame')
+    
+    if args.loop_single_frame_count:
+        arg_list.append('--loop-single-frame-count')
+        arg_list.append('{}'.format(args.loop_single_frame_count))
 
     if args.file:
         arg_list.append(args.file)

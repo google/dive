@@ -26,6 +26,7 @@
 #ifndef GFXRECON_REPLAY_SETTINGS_H
 #define GFXRECON_REPLAY_SETTINGS_H
 
+// GOOGLE: [single-frame-looping] Adding flags to usage message
 const char kOptions[] =
     "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--sfa|--skip-failed-allocations,--opcd|--"
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
@@ -38,7 +39,7 @@ const char kOptions[] =
     "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
     "separate-alpha,--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,"
     "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--dump-resources-dump-unused-vertex-bindings,--"
-    "deduplicate-device,--log-timestamps";
+    "deduplicate-device,--log-timestamps,--loop-single-frame";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
@@ -48,7 +49,7 @@ const char kArguments[] =
     "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-"
     "image-format,--dump-resources-dir,"
     "--dump-resources-dump-color-attachment-index,--pbis,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-"
-    "pipeline-cache,--quit-after-frame";
+    "pipeline-cache,--quit-after-frame,--loop-single-frame-count";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -98,6 +99,10 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dump-immutable-resources]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dump-all-image-subresources]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--debug-messenger-level <level>]");
+
+    // GOOGLE: [single-frame-looping] Usage message
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--loop-single-frame] [--loop-single-frame-count <n>]");
+
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-modifiable-state-only]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--fwo <x,y> | --force-windowed-origin <x,y>]");
@@ -201,6 +206,16 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --dump-resources-dir <dir>");
     GFXRECON_WRITE_CONSOLE("          \t\tDirectory to write dump resources output files.");
     GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
+
+    // GOOGLE: [single-frame-looping] Usage message details
+    GFXRECON_WRITE_CONSOLE("  --loop-single-frame");
+    GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, replay will loop the first frame.");
+    GFXRECON_WRITE_CONSOLE("          \t\tShould only be used when the capture file is 1 frame long.");
+    GFXRECON_WRITE_CONSOLE("  --loop-single-frame-count <n>");
+    GFXRECON_WRITE_CONSOLE("          \t\t(Only used with --loop-single-frame). Specifies the number of frames");
+    GFXRECON_WRITE_CONSOLE("          \t\tto loop, after which replay will be terminated.");
+    GFXRECON_WRITE_CONSOLE("          \t\tDefault is 0 (infinite looping).");
+
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("Windows only:")

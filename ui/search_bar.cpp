@@ -21,6 +21,7 @@
 #include "QPushButton"
 #include "QShortcut"
 #include "QVBoxLayout"
+#include "dive_tree_view.h"
 #include "shortcuts.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -85,7 +86,7 @@ void SearchBar::searchBarFocusOut()
 {
     if (!m_input->hasFocus())
     {
-        if (!m_prev->hasFocus() && !m_next->hasFocus())
+        if (!m_prev->hasFocus() && !m_next->hasFocus() && !m_tree_view->hasFocus())
         {
             this->hide();
             emit hide_search_bar(this->isHidden());
@@ -163,4 +164,10 @@ void SearchBar::cancelSearch()
     clearSearch();
     this->hide();
     emit hide_search_bar(this->isHidden());
+}
+
+//--------------------------------------------------------------------------------------------------
+void SearchBar::setTreeView(DiveTreeView* tree_view)
+{
+    m_tree_view = tree_view;
 }

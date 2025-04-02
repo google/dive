@@ -1,5 +1,5 @@
 #
-# Copyright 2019 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #   set CMAKE_PREFIX_PATH=%QTDIR%;%CMAKE_PREFIX_PATH%
 #   set PATH=%QTDIR%\\bin;%PATH%                        # (Windows) To allow DLLS to be found
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive_ui)
 

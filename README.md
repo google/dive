@@ -149,7 +149,7 @@ Examples:
 
  - Install the dependencies on device and start the package
  ```
- ./dive_client_cli --device 9A221FFAZ004TL --command run --package com.google.bigwheels.project_04_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command run --package com.google.bigwheels.project_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
  ```
 Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
 
@@ -165,7 +165,7 @@ To begin a GFXR capture with the cli, first ensure you know the correct architec
 Examples:
  - Install the dependencies on device, start the package, and initiate a GFXR capture.
  ```
- ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_capture --package com.google.bigwheels.project_04_cube_xr.debug --type vulkan --device_architecture arm64-v8a --gfxr_capture_file_dir gfxr_bigwheels_capture --download_path "/path/to/save/captures"
+ ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_capture --package com.google.bigwheels.project_cube_xr.debug --type vulkan --device_architecture arm64-v8a --gfxr_capture_file_dir gfxr_bigwheels_capture --download_path "/path/to/save/captures"
  ```
 
 Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.

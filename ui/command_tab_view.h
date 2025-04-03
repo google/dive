@@ -54,6 +54,8 @@ signals:
     void HideOtherSearchBars();
 
 private:
+    void clearSearchBar();
+
     CommandBufferView  *m_command_buffer_view;
     CommandBufferModel *m_command_buffer_model;
     QPushButton        *m_search_trigger_button;

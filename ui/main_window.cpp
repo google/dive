@@ -162,6 +162,7 @@ MainWindow::MainWindow()
         m_command_hierarchy_view = new DiveTreeView(m_data_core->GetCommandHierarchy());
         m_command_hierarchy_view->setModel(m_command_hierarchy_model);
         m_command_hierarchy_view->SetDataCore(m_data_core);
+        m_event_search_bar->setTreeView(m_command_hierarchy_view);
 
         QLabel *goto_draw_call_label = new QLabel(tr("Go To:"));
         m_prev_event_button = new QPushButton("Prev Event");

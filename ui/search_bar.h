@@ -12,6 +12,7 @@
 */
 
 #include <QWidget>
+#include "dive_tree_view.h"
 
 #pragma once
 
@@ -37,6 +38,7 @@ public slots:
     void resetSearchResults();
     void updateSearchResults(uint64_t curr_item_pos, uint64_t total_num_of_items);
     void cancelSearch();
+    void setTreeView(DiveTreeView* tree_view);
 
 signals:
     void new_search(const QString& search_string);
@@ -45,10 +47,11 @@ signals:
     void hide_search_bar(bool isHidden);
 
 private:
-    bool         m_searched = false;
-    QLineEdit*   m_input = nullptr;
-    QPushButton* m_prev = nullptr;
-    QPushButton* m_next = nullptr;
-    QPushButton* m_cancel = nullptr;
-    QLabel*      m_search_results = nullptr;
+    bool          m_searched = false;
+    QLineEdit*    m_input = nullptr;
+    QPushButton*  m_prev = nullptr;
+    QPushButton*  m_next = nullptr;
+    QPushButton*  m_cancel = nullptr;
+    QLabel*       m_search_results = nullptr;
+    DiveTreeView* m_tree_view = nullptr;
 };

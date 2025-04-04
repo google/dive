@@ -582,6 +582,15 @@ bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& packag
                      "clean up package specific settings.";
     }
 
+    if (mgr.GetDevice() == nullptr)
+    {
+        if (absl::StatusOr<Dive::AndroidDevice*> device = mgr.SelectDevice(serial); !device.ok())
+        {
+            std::cout << "Failed to select device: " << device.status() << std::endl;
+            return false;
+        }
+    }
+
     return mgr.Cleanup(serial, package).ok();
 }
 

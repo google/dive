@@ -222,6 +222,7 @@ bool run_package(Dive::DeviceManager& mgr,
 
     if (serial.empty() || (package.empty() && command.empty()))
     {
+        std::cout << "Missing required options." << std::endl;
         print_usage();
         return false;
     }
@@ -283,6 +284,13 @@ bool run_package(Dive::DeviceManager& mgr,
 
 bool trigger_capture(Dive::DeviceManager& mgr)
 {
+    if (mgr.GetDevice() == nullptr)
+    {
+        std::cout << "No device selected, can't capture. Did you provide --device serial?"
+                  << std::endl;
+        return false;
+    }
+
     std::string target_str = absl::StrFormat("localhost:%d", mgr.GetDevice()->Port());
     std::string download_path = absl::GetFlag(FLAGS_download_path);
     std::string input;
@@ -531,15 +539,17 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                      const std::string&   gfxr_capture_directory,
                      const bool           is_gfxr_capture)
 {
-
-    run_package(mgr,
-                app_type,
-                package,
-                command,
-                command_args,
-                device_architecture,
-                gfxr_capture_directory,
-                is_gfxr_capture);
+    if (!run_package(mgr,
+                     app_type,
+                     package,
+                     command,
+                     command_args,
+                     device_architecture,
+                     gfxr_capture_directory,
+                     is_gfxr_capture))
+    {
+        return false;
+    }
 
     if (is_gfxr_capture)
     {

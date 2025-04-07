@@ -286,7 +286,8 @@ bool trigger_capture(Dive::DeviceManager& mgr)
 {
     if (mgr.GetDevice() == nullptr)
     {
-        std::cout << "No device selected, can't capture." << std::endl;
+        std::cout << "No device selected, can't capture. Did you provide --device serial?"
+                  << std::endl;
         return false;
     }
 

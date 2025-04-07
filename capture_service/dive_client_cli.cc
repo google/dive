@@ -531,15 +531,17 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                      const std::string&   gfxr_capture_directory,
                      const bool           is_gfxr_capture)
 {
-
-    run_package(mgr,
-                app_type,
-                package,
-                command,
-                command_args,
-                device_architecture,
-                gfxr_capture_directory,
-                is_gfxr_capture);
+    if (!run_package(mgr,
+                     app_type,
+                     package,
+                     command,
+                     command_args,
+                     device_architecture,
+                     gfxr_capture_directory,
+                     is_gfxr_capture))
+    {
+        return false;
+    }
 
     if (is_gfxr_capture)
     {

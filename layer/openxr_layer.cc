@@ -25,7 +25,7 @@ limitations under the License.
 #include "capture_service/log.h"
 #include "capture_service/trace_mgr.h"
 #include "layer_common.h"
-#include "loader_interfaces.h"
+#include "openxr/openxr_loader_negotiation.h"
 #include "xr_generated_dispatch_table.h"
 
 #if defined(__GNUC__) && __GNUC__ >= 4

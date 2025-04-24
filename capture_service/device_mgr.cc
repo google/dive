@@ -55,7 +55,7 @@ AndroidDevice::~AndroidDevice()
 {
     if (!m_serial.empty())
     {
-        CleanupDevice().IgnoreError();
+        CleanupDevice();
     }
     LOGD("AndroidDevice destroyed.\n");
 }
@@ -228,34 +228,46 @@ absl::Status AndroidDevice::CleanupDevice()
     if (enforce.find("Enforcing") != enforce.npos)
     {
         LOGD("restore Enforcing to Enforcing\n");
-        RETURN_IF_ERROR(Adb().Run("shell setenforce 1"));
+        Adb().Run("shell setenforce 1");
     }
     else if (enforce.find("Permissive") != enforce.npos)
     {
         LOGD("restore Enforcing to Permissive\n");
-        RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
+        Adb().Run("shell setenforce 0");
     }
 
-    if (m_gfxr_enabled)
-    {
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName), true));
+    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kWrapLibName));
+    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kVkLayerLibName));
+    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kXrLayerLibName));
+    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kVkGfxrLayerLibName));
+    Adb().Run(absl::StrFormat("shell rm -rf -- %s", kManifestFilePath));
+    absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
+    if (output.ok()) {
+        if (output->find(std::to_string(Port())) != std::string::npos)
+        {
+            Adb().Run(absl::StrFormat("forward --remove tcp:%d", Port()));
+        }
     }
-    else
-    {
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName), true));
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName), true));
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName), true));
-        RETURN_IF_ERROR(Adb().Run(absl::StrFormat("forward --remove tcp:%d", Port()), true));
-    }
+
+    Adb().Run("shell settings delete global enable_gpu_debug_layers");
+    Adb().Run("shell settings delete global gpu_debug_app");
+    Adb().Run("shell settings delete global gpu_debug_layers");
+    Adb().Run("shell settings delete global gpu_debug_layer_app");
+    Adb().Run("shell settings delete global gpu_debug_layers_gles");
+    
+#if defined(DIVE_ENABLE_PERFETTO)
+    Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 0");
+#endif
 
     LOGD("Cleanup device %s done\n", m_serial.c_str());
-#if defined(DIVE_ENABLE_PERFETTO)
-    RETURN_IF_ERROR(Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 0"));
-#endif
+    return absl::OkStatus();
+}
+
+absl::Status AndroidDevice::CleanupPackage(const std::string &package)
+{
+    LOGD("Cleanup package %s\n", package.c_str());
+    Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package));
+    LOGD("Cleanup package %s done\n", package.c_str());
     return absl::OkStatus();
 }
 
@@ -465,31 +477,13 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
 
 absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string &package)
 {
-    AdbSession adb(serial);
-    // Remove installed libs and libraries on device.
-    SHOW_IF_ERROR(adb.Run("root"));
-    SHOW_IF_ERROR(adb.Run("wait-for-device"));
-    SHOW_IF_ERROR(adb.Run("remount"));
-
-    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kWrapLibName)));
-    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkLayerLibName)));
-    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kXrLayerLibName)));
-    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm %s/%s", kTargetPath, kVkGfxrLayerLibName)));
-    SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell rm -r %s", kManifestFilePath)));
-    SHOW_IF_ERROR(adb.Run(absl::StrFormat("forward --remove tcp:%d", GetDevice()->Port())));
-
-    SHOW_IF_ERROR(adb.Run("shell settings delete global enable_gpu_debug_layers"));
-    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_app"));
-    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers"));
-    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layer_app"));
-    SHOW_IF_ERROR(adb.Run("shell settings delete global gpu_debug_layers_gles"));
-
     // If package specified, remove package related settings.
     if (!package.empty())
     {
-        SHOW_IF_ERROR(adb.Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)));
+        GetDevice()->CleanupPackage(package);
     }
 
+    // Removal of installed libs and libraries on device is automatically handled by AndroidDevice::CleanupDevice.
     return absl::OkStatus();
 }
 

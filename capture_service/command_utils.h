@@ -32,14 +32,6 @@ namespace Dive
             return status;                  \
     } while (0)
 
-#define SHOW_IF_ERROR(expr)                             \
-    do                                                  \
-    {                                                   \
-        const absl::Status status = (expr);             \
-        if (!status.ok())                               \
-            std::cout << status.message() << std::endl; \
-    } while (0)
-
 template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
 {
     if (result.ok())
@@ -84,7 +76,7 @@ public:
     }
 
     // Run runs the commands and returns the status of that commands.
-    inline absl::Status Run(const std::string &command, bool quiet = true) const
+    inline absl::Status Run(const std::string &command, bool quiet = false) const
     {
         return RunCommand("adb -s " + m_serial + " " + command, quiet).status();
     }
@@ -92,7 +84,7 @@ public:
     // RunAndGetResult runs the commands and returns the output of the command if it finished
     // successfully, or error status otherwise
     inline absl::StatusOr<std::string> RunAndGetResult(const std::string &command,
-                                                       bool               quiet = true) const
+                                                       bool               quiet = false) const
     {
         return RunCommand("adb -s " + m_serial + " " + command, quiet);
     }

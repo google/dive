@@ -145,24 +145,23 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
     WaitForSingleObject(pi.hProcess, INFINITE);
     int ret = 0;
     GetExitCodeProcess(pi.hProcess, (LPDWORD)&ret);
-    LOGD("result->m_ret is %d\n", ret);
     if (!quiet)
     {
-        LOGI("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
+        LOGD("> %s\n", command.c_str());
+        LOGD("%s\n", output.c_str());
     }
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    if (ret != 0 && !quiet)
+    if (ret != 0)
     {
-
         err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s \n",
                                   command.c_str(),
                                   ret,
                                   output);
 
-        LOGE("%s\n", err_msg.c_str());
-        return absl::InternalError(err_msg);
+        LOGE("ERROR: %s\n", err_msg.c_str());
+        return absl::UnknownError(err_msg);
     }
     return output;
 }

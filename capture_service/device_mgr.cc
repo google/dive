@@ -242,7 +242,8 @@ absl::Status AndroidDevice::CleanupDevice()
     Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kVkGfxrLayerLibName));
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kManifestFilePath));
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
-    if (output.ok()) {
+    if (output.ok())
+    {
         if (output->find(std::to_string(Port())) != std::string::npos)
         {
             Adb().Run(absl::StrFormat("forward --remove tcp:%d", Port()));
@@ -254,7 +255,7 @@ absl::Status AndroidDevice::CleanupDevice()
     Adb().Run("shell settings delete global gpu_debug_layers");
     Adb().Run("shell settings delete global gpu_debug_layer_app");
     Adb().Run("shell settings delete global gpu_debug_layers_gles");
-    
+
 #if defined(DIVE_ENABLE_PERFETTO)
     Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 0");
 #endif
@@ -483,7 +484,8 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
         GetDevice()->CleanupPackage(package);
     }
 
-    // Removal of installed libs and libraries on device is automatically handled by AndroidDevice::CleanupDevice.
+    // Removal of installed libs and libraries on device is automatically handled by
+    // AndroidDevice::CleanupDevice.
     return absl::OkStatus();
 }
 

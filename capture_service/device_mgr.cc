@@ -484,8 +484,8 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
         GetDevice()->CleanupPackage(package);
     }
 
-    // Removal of installed libs and libraries on device is automatically handled by
-    // AndroidDevice::CleanupDevice.
+    // Cleanup of device settings and installed libraries is handled in AndroidDevice::CleanupDevice.
+
     return absl::OkStatus();
 }
 

@@ -26,9 +26,11 @@ limitations under the License.
 #include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "android_application.h"
 #include "client.h"
+#include "command_utils.h"
 #include "constants.h"
 #include "device_mgr.h"
 

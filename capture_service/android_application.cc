@@ -128,7 +128,7 @@ absl::Status AndroidApplication::ParsePackage()
 {
     std::string output;
     ASSIGN_OR_RETURN(output,
-                     m_dev.Adb().RunAndGetResult("shell dumpsys package " + m_package, true));
+                     m_dev.Adb().RunAndGetResult("shell dumpsys package " + m_package));
 
     m_main_activity = ParsePackageForActivity(output, m_package);
     m_is_debuggable = absl::StrContains(output, "DEBUGGABLE");
@@ -141,8 +141,7 @@ absl::Status AndroidApplication::Start()
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s %s/%s ",
                                                     m_command_args,
                                                     m_package,
-                                                    m_main_activity),
-                                    false));
+                                                    m_main_activity)));
     m_started = IsRunning();
     return absl::OkStatus();
 }
@@ -161,7 +160,7 @@ bool AndroidApplication::IsRunning() const
 
 bool AndroidApplication::IsProcessRunning(absl::string_view process_name) const
 {
-    auto res = m_dev.Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name), false);
+    auto res = m_dev.Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name));
     if (!res.ok())
         return false;
     std::string pid = *res;
@@ -213,7 +212,7 @@ absl::Status VulkanApplication::Setup()
 
 absl::Status VulkanApplication::Cleanup()
 {
-    LOGD("Cleanup Vulkan application %s", m_package.c_str());
+    LOGD("Cleanup Vulkan application %s\n", m_package.c_str());
     RETURN_IF_ERROR(m_dev.Adb().Run("root"));
     RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     if (m_gfxr_enabled)
@@ -224,23 +223,19 @@ absl::Status VulkanApplication::Cleanup()
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName),
-                        true));
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }
     else
     {
         RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName),
-                        true));
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName)));
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     }
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_app"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layers"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles"));
-    LOGD("Cleanup Vulkan application %s done", m_package.c_str());
+
+    // Cleanup of Vulkan layers and corresponding settings is automatically handled in AndroidDevice::CleanupDevice.
+
+    LOGD("Cleanup Vulkan application %s done\n", m_package.c_str());
     return absl::OkStatus();
 }
 
@@ -366,8 +361,7 @@ absl::Status OpenXRApplication::Cleanup()
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName),
-                        true));
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }
     else
     {
@@ -412,7 +406,7 @@ absl::Status VulkanCliApplication::Setup()
                                     ResolveAndroidLibPath(kVkLayerLibName, "").generic_string(),
                                     kVulkanGlobalPath)));
     RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName), false));
+    m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName)));
 
     return absl::OkStatus();
 }
@@ -434,7 +428,7 @@ absl::Status VulkanCliApplication::Start()
                                             m_command_args);
 
     RETURN_IF_ERROR(m_dev.Adb().RunCommandBackground(cmd));
-    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().RunAndGetResult("shell pidof " + m_command, false));
+    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().RunAndGetResult("shell pidof " + m_command));
     m_started = true;
     return absl::OkStatus();
 }

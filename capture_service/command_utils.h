@@ -52,9 +52,13 @@ template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> res
 #define ASSIGN_OR_RETURN(lhs, rexpr) \
     ASSIGN_OR_RETURN_IMPL(STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), lhs, rexpr);
 
+// Logs the command and the result of a command line application.
+// Returns the output of the command if it finished successfully, or error status otherwise
+absl::StatusOr<std::string> LogCommand(const std::string &command, const std::string &output, int ret);
+
 // Runs a command line application.
 // Returns the output of the command if it finished successfully, or error status otherwise
-absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet = false);
+absl::StatusOr<std::string> RunCommand(const std::string &command);
 
 class AdbSession
 {
@@ -76,17 +80,16 @@ public:
     }
 
     // Run runs the commands and returns the status of that commands.
-    inline absl::Status Run(const std::string &command, bool quiet = false) const
+    inline absl::Status Run(const std::string &command) const
     {
-        return RunCommand("adb -s " + m_serial + " " + command, quiet).status();
+        return RunCommand("adb -s " + m_serial + " " + command).status();
     }
 
     // RunAndGetResult runs the commands and returns the output of the command if it finished
     // successfully, or error status otherwise
-    inline absl::StatusOr<std::string> RunAndGetResult(const std::string &command,
-                                                       bool               quiet = false) const
+    inline absl::StatusOr<std::string> RunAndGetResult(const std::string &command) const
     {
-        return RunCommand("adb -s " + m_serial + " " + command, quiet);
+        return RunCommand("adb -s " + m_serial + " " + command);
     }
 
     inline absl::Status RunCommandBackground(const std::string &command)

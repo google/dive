@@ -375,8 +375,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     std::string device_architecture = "";
     if (m_gfxr_capture)
     {
-        auto retrieve_device_architecture = device->Adb()
-                                            .RunAndGetResult("shell getprop ro.product.cpu.abi");
+        auto retrieve_device_architecture = device->Adb().RunAndGetResult(
+        "shell getprop ro.product.cpu.abi");
         device_architecture = retrieve_device_architecture.value_or("");
         m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
         m_gfxr_capture_button->setEnabled(true);

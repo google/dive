@@ -29,7 +29,9 @@ limitations under the License.
 namespace Dive
 {
 
-absl::StatusOr<std::string> LogCommand(const std::string &command, const std::string &output, int ret)
+absl::StatusOr<std::string> LogCommand(const std::string &command,
+                                       const std::string &output,
+                                       int                ret)
 {
     // Always log command and output for debug builds
     LOGD("> %s\n", command.c_str());
@@ -38,9 +40,9 @@ absl::StatusOr<std::string> LogCommand(const std::string &command, const std::st
     if (ret != 0)
     {
         auto err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s\n",
-                                  command,
-                                  ret,
-                                  output);
+                                       command,
+                                       ret,
+                                       output);
         // Always log error
         LOGE("ERROR: %s\n", err_msg.c_str());
         return absl::UnknownError(err_msg);

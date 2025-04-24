@@ -127,8 +127,7 @@ AndroidApplication::AndroidApplication(AndroidDevice  &dev,
 absl::Status AndroidApplication::ParsePackage()
 {
     std::string output;
-    ASSIGN_OR_RETURN(output,
-                     m_dev.Adb().RunAndGetResult("shell dumpsys package " + m_package));
+    ASSIGN_OR_RETURN(output, m_dev.Adb().RunAndGetResult("shell dumpsys package " + m_package));
 
     m_main_activity = ParsePackageForActivity(output, m_package);
     m_is_debuggable = absl::StrContains(output, "DEBUGGABLE");
@@ -138,10 +137,8 @@ absl::Status AndroidApplication::ParsePackage()
 absl::Status AndroidApplication::Start()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s %s/%s ",
-                                                    m_command_args,
-                                                    m_package,
-                                                    m_main_activity)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell am start -S -W %s %s/%s ", m_command_args, m_package, m_main_activity)));
     m_started = IsRunning();
     return absl::OkStatus();
 }
@@ -233,7 +230,8 @@ absl::Status VulkanApplication::Cleanup()
         m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     }
 
-    // Cleanup of Vulkan layers and corresponding settings is automatically handled in AndroidDevice::CleanupDevice.
+    // Cleanup of Vulkan layers and corresponding settings is automatically handled in
+    // AndroidDevice::CleanupDevice.
 
     LOGD("Cleanup Vulkan application %s done\n", m_package.c_str());
     return absl::OkStatus();

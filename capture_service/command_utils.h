@@ -54,7 +54,9 @@ template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> res
 
 // Logs the command and the result of a command line application.
 // Returns the output of the command if it finished successfully, or error status otherwise
-absl::StatusOr<std::string> LogCommand(const std::string &command, const std::string &output, int ret);
+absl::StatusOr<std::string> LogCommand(const std::string &command,
+                                       const std::string &output,
+                                       int                ret);
 
 // Runs a command line application.
 // Returns the output of the command if it finished successfully, or error status otherwise

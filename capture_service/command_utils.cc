@@ -18,24 +18,42 @@ limitations under the License.
 
 #include <cstdio>
 #include <cstring>
-#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
 #include "log.h"
 
-ABSL_FLAG(bool, force_output, false, "whether force to print out the command and its output.");
-
 namespace Dive
 {
-absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
+
+absl::StatusOr<std::string> LogCommand(const std::string &command,
+                                       const std::string &output,
+                                       int                ret)
+{
+    // Always log command and output for debug builds
+    LOGD("> %s\n", command.c_str());
+    LOGD("%s\n", output.c_str());
+
+    if (ret != 0)
+    {
+        auto err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s\n",
+                                       command,
+                                       ret,
+                                       output);
+        // Always log error
+        LOGE("ERROR: %s\n", err_msg.c_str());
+        return absl::UnknownError(err_msg);
+    }
+    return output;
+}
+
+absl::StatusOr<std::string> RunCommand(const std::string &command)
 {
     std::string output;
     std::string err_msg;
     std::string cmd_str = command + " 2>&1";  // Get both stdout and stderr;
     FILE       *pipe = popen(cmd_str.c_str(), "r");
-    bool        log_output = !quiet || absl::GetFlag(FLAGS_force_output);
     if (!pipe)
     {
         err_msg = "Popen call failed\n";
@@ -48,27 +66,10 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
     {
         output += std::string(buf);
     }
-    if (log_output)
-    {
-        LOGI("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
-    }
     output = absl::StripAsciiWhitespace(output);
     int ret = pclose(pipe);
-    if (ret != 0)
-    {
-        std::string
-        err_msg = absl::StrFormat("Command `%s` failed with return code %d, stderr: %s \n",
-                                  command,
-                                  ret,
-                                  output);
-        if (log_output)
-        {
-            LOGE("%s", err_msg.c_str());
-        }
-        return absl::InternalError(err_msg);
-    }
 
-    return output;
+    return LogCommand(command, output, ret);
 }
 
 }  // namespace Dive

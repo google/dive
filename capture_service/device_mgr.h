@@ -68,6 +68,7 @@ public:
     absl::Status ForwardFirstAvailablePort();
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
+    absl::Status CleanupPackage(const std::string &package);
     void         EnableGfxr(bool enable_gfxr);
 
     enum class PackageListOptions

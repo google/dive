@@ -29,7 +29,28 @@ limitations under the License.
 namespace Dive
 {
 
-absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
+absl::StatusOr<std::string> LogCommand(const std::string &command,
+                                       const std::string &output,
+                                       int                ret)
+{
+    // Always log command and output for debug builds
+    LOGD("> %s\n", command.c_str());
+    LOGD("%s\n", output.c_str());
+
+    if (ret != 0)
+    {
+        auto err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s\n",
+                                       command,
+                                       ret,
+                                       output);
+        // Always log error
+        LOGE("ERROR: %s\n", err_msg.c_str());
+        return absl::UnknownError(err_msg);
+    }
+    return output;
+}
+
+absl::StatusOr<std::string> RunCommand(const std::string &command)
 {
     std::string output;
     std::string err_msg;
@@ -145,26 +166,10 @@ absl::StatusOr<std::string> RunCommand(const std::string &command, bool quiet)
     WaitForSingleObject(pi.hProcess, INFINITE);
     int ret = 0;
     GetExitCodeProcess(pi.hProcess, (LPDWORD)&ret);
-    LOGD("result->m_ret is %d\n", ret);
-    if (!quiet)
-    {
-        LOGI("Command: %s\n Output: %s\n", command.c_str(), output.c_str());
-    }
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    if (ret != 0 && !quiet)
-    {
-
-        err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s \n",
-                                  command.c_str(),
-                                  ret,
-                                  output);
-
-        LOGE("%s\n", err_msg.c_str());
-        return absl::InternalError(err_msg);
-    }
-    return output;
+    return LogCommand(command, output, ret);
 }
 
 }  // namespace Dive

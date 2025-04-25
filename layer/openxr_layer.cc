@@ -174,7 +174,7 @@ ApiDiveLayerXrCreateApiLayerInstance(const XrInstanceCreateInfo        *info,
         LOGD("key is %lu , instance is %p \n", key, returned_instance);
         g_xr_instance_data[key] = std::move(id);
     }
-
+    SetLayerStatusLoaded();
     return result;
 }
 

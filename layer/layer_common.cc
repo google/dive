@@ -18,6 +18,7 @@ limitations under the License.
 
 #include "layer_common.h"
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -25,6 +26,11 @@ limitations under the License.
 
 #include "capture_service/log.h"
 #include "capture_service/server.h"
+
+namespace
+{
+std::atomic<bool> g_layer_load_status(false);
+}
 
 bool IsLibwrapLoaded()
 {
@@ -52,6 +58,16 @@ bool IsLibwrapLoaded()
     return loaded;
 }
 
+bool IsLayerLoaded()
+{
+    return g_layer_load_status.load(std::memory_order_acquire);
+}
+
+void SetLayerStatusLoaded()
+{
+    g_layer_load_status.store(true, std::memory_order_release);
+}
+
 struct InitServer
 {
     InitServer()
@@ -60,7 +76,19 @@ struct InitServer
         LOGI("libwrap loaded: %d", is_libwrap_loaded);
         if (is_libwrap_loaded)
         {
-            server_thread = std::thread(Dive::ServerMain);
+            server_thread = std::thread([]() {
+                // This is to make sure libraries are loaded before running gRPC server. This is a
+                // workaround to make sure that gRPC dependencies are loaded before we start the
+                // service. we can remove this check once we transit to our own socket
+                // implementation.
+                while (!IsLayerLoaded())
+                {
+                    LOGI("Waiting for Dive layer to finish loading.");
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+                LOGI("Dive layer loaded.");
+                Dive::ServerMain();
+            });
         }
     }
     ~InitServer()
@@ -80,7 +108,7 @@ void PreventLibraryUnload()
     Dl_info info;
     if (dladdr(reinterpret_cast<void *>(&PreventLibraryUnload), &info))
     {
-        dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL | RTLD_NODELETE);
+        dlopen(info.dli_fname, RTLD_NOLOAD | RTLD_NODELETE);
     }
 }
 

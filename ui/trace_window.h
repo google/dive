@@ -104,6 +104,9 @@ public:
 public slots:
     void SetDownloadedSize(uint64_t size) { m_downloaded_size = size; }
 
+signals:
+    void SetProgressBarValue(int percentage);
+
 private:
     QProgressDialog *m_progress_bar;
     std::string      m_capture_name;

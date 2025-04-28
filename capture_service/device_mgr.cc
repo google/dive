@@ -47,6 +47,7 @@ std::string DeviceInfo::GetDisplayName() const
 AndroidDevice::AndroidDevice(const std::string &serial) :
     m_serial(serial),
     m_adb(serial),
+    m_gfxr_enabled(false),
     m_port(kFirstPort)
 {
 }

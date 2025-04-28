@@ -20,6 +20,7 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "android_application.h"
 #include "command_utils.h"
+#include "constants.h"
 
 #include <cassert>
 #include <filesystem>
@@ -106,8 +107,8 @@ private:
     AdbSession                          m_adb;
     DeviceState                         m_original_state;
     std::unique_ptr<AndroidApplication> m_app;
-    bool                                m_gfxr_enabled;
-    int                                 m_port;
+    bool                                m_gfxr_enabled = false;
+    int                                 m_port = kFirstPort;
 };
 
 class DeviceManager

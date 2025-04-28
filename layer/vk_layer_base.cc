@@ -200,6 +200,7 @@ VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
         auto                        key = (uintptr_t)(*(void **)(*pInstance));
         g_instance_data[key] = std::move(id);
     }
+    SetLayerStatusLoaded();
 
     return result;
 }

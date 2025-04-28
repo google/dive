@@ -11,7 +11,7 @@ git submodule update --init --recursive
 
 ### Prerequisite
 
- - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.11.2
+ - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.
  - gRPC [dependencies](https://github.com/grpc/grpc/blob/master/BUILDING.md#pre-requisites)
  - Android NDK (currently we are using 25.2.9519653). Set the `ANDROID_NDK_HOME` environment variable.
   ```

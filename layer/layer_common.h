@@ -24,3 +24,5 @@ inline uintptr_t DataKey(const void *object)
 }
 
 bool IsLibwrapLoaded();
+
+void SetLayerStatusLoaded();

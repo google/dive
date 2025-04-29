@@ -554,6 +554,7 @@ void TraceDialog::OnTraceClicked()
     progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
+    progress_bar->setMinimumDuration(0);
     TraceWorker *workerThread = new TraceWorker(progress_bar);
     connect(workerThread, &TraceWorker::TraceAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &TraceWorker::finished, workerThread, &QObject::deleteLater);
@@ -570,20 +571,16 @@ void ProgressBarWorker::run()
 {
     int64_t cur_size = 0;
     int     percent = 0;
-
-    m_progress_bar->show();
-
     while (m_capture_size && cur_size < m_capture_size)
     {
+        QThread::msleep(10);  // 10 milliseconds
         cur_size = GetDownloadedSize();
         percent = cur_size * 100 / m_capture_size;
-        m_progress_bar->setValue(percent);
+        emit SetProgressBarValue(percent);
         std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
                   << m_capture_size << std::endl;
-        QThread::msleep(10);  // 10 milliseconds
     }
-
-    m_progress_bar->setValue(100);
+    emit SetProgressBarValue(100);
 }
 
 void TraceWorker::run()
@@ -664,6 +661,10 @@ void TraceWorker::run()
             &TraceWorker::DownloadedSize,
             progress_bar_worker,
             &ProgressBarWorker::SetDownloadedSize);
+    connect(progress_bar_worker,
+            &ProgressBarWorker::SetProgressBarValue,
+            m_progress_bar,
+            &QProgressDialog::setValue);
 
     progress_bar_worker->start();
 

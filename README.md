@@ -17,6 +17,7 @@ git submodule update --init --recursive
   ```
     export ANDROID_NDK_HOME=~/android_sdk/ndk/25.2.9519653
   ``` 
+ - Python is installed with `python` in your PATH. It is recommended to use a virtual environment such as virtualenv or pipenv. Alternatively, on Debian, you can `sudo apt install python-is-python3`.
  - Mako Templates for Python: can be installed with following commandline
   ```
     pip install Mako

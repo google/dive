@@ -32,12 +32,15 @@ struct InstanceDispatchTable
 
 struct DeviceDispatchTable
 {
-    PFN_vkGetDeviceProcAddr  pfn_get_device_proc_addr = nullptr;
-    PFN_vkQueuePresentKHR    QueuePresentKHR = nullptr;
-    PFN_vkCreateImage        CreateImage = nullptr;
-    PFN_vkCmdDrawIndexed     CmdDrawIndexed = nullptr;
-    PFN_vkBeginCommandBuffer BeginCommandBuffer = nullptr;
-    PFN_vkEndCommandBuffer   EndCommandBuffer = nullptr;
+    PFN_vkGetDeviceProcAddr   pfn_get_device_proc_addr = nullptr;
+    PFN_vkQueuePresentKHR     QueuePresentKHR = nullptr;
+    PFN_vkCreateImage         CreateImage = nullptr;
+    PFN_vkCmdDrawIndexed      CmdDrawIndexed = nullptr;
+    PFN_vkCmdResetQueryPool   CmdResetQueryPool = nullptr;
+    PFN_vkCmdWriteTimestamp   CmdWriteTimestamp = nullptr;
+    PFN_vkGetQueryPoolResults GetQueryPoolResults = nullptr;
+    PFN_vkBeginCommandBuffer  BeginCommandBuffer = nullptr;
+    PFN_vkEndCommandBuffer    EndCommandBuffer = nullptr;
 };
 
 void InitInstanceDispatchTable(VkInstance                instance,

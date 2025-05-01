@@ -197,6 +197,57 @@ void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer,
                           firstInstance);
 }
 
+void DiveInterceptCmdResetQueryPool(VkCommandBuffer commandBuffer,
+                                    VkQueryPool     queryPool,
+                                    uint32_t        firstQuery,
+                                    uint32_t        queryCount)
+{
+    PFN_vkCmdResetQueryPool pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdResetQueryPool;
+    CmdResetQueryPool(pfn, commandBuffer, queryPool, firstQuery, queryCount);
+}
+
+void DiveInterceptCmdWriteTimestamp(VkCommandBuffer         commandBuffer,
+                                    VkPipelineStageFlagBits pipelineStage,
+                                    VkQueryPool             queryPool,
+                                    uint32_t                query)
+{
+    PFN_vkCmdWriteTimestamp pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdWriteTimestamp;
+    CmdWriteTimestamp(pfn, commandBuffer, pipelineStage, queryPool, query);
+}
+
+VkResult DiveInterceptGetQueryPoolResults(VkDevice           device,
+                                          VkQueryPool        queryPool,
+                                          uint32_t           firstQuery,
+                                          uint32_t           queryCount,
+                                          size_t             dataSize,
+                                          void              *pData,
+                                          VkDeviceSize       stride,
+                                          VkQueryResultFlags flags)
+{
+    PFN_vkGetQueryPoolResults pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+
+    pfn = layer_data->dispatch_table.GetQueryPoolResults;
+    return GetQueryPoolResults(pfn,
+                               device,
+                               queryPool,
+                               firstQuery,
+                               queryCount,
+                               dataSize,
+                               pData,
+                               stride,
+                               flags);
+}
+
 VkResult DiveInterceptBeginCommandBuffer(VkCommandBuffer                 commandBuffer,
                                          const VkCommandBufferBeginInfo *pBeginInfo)
 {
@@ -556,6 +607,12 @@ extern "C"
             return (PFN_vkVoidFunction)DiveInterceptCreateImage;
         if (0 == strcmp(func, "vkCmdDrawIndexed"))
             return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
+        if (0 == strcmp(func, "vkCmdResetQueryPool"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdResetQueryPool;
+        if (0 == strcmp(func, "vkCmdWriteTimestamp"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdWriteTimestamp;
+        if (0 == strcmp(func, "vkGetQueryPoolResults"))
+            return (PFN_vkVoidFunction)DiveInterceptGetQueryPoolResults;
         if (0 == strcmp(func, "vkBeginCommandBuffer"))
             return (PFN_vkVoidFunction)DiveInterceptBeginCommandBuffer;
         if (0 == strcmp(func, "vkEndCommandBuffer"))

@@ -42,6 +42,9 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->QueuePresentKHR = (PFN_vkQueuePresentKHR)pa(device, "vkQueuePresentKHR");
     dt->CreateImage = (PFN_vkCreateImage)pa(device, "vkCreateImage");
     dt->CmdDrawIndexed = (PFN_vkCmdDrawIndexed)pa(device, "vkCmdDrawIndexed");
+    dt->CmdResetQueryPool = (PFN_vkCmdResetQueryPool)pa(device, "vkCmdResetQueryPool");
+    dt->CmdWriteTimestamp = (PFN_vkCmdWriteTimestamp)pa(device, "vkCmdWriteTimestamp");
+    dt->GetQueryPoolResults = (PFN_vkGetQueryPoolResults)pa(device, "vkGetQueryPoolResults");
     dt->BeginCommandBuffer = (PFN_vkBeginCommandBuffer)pa(device, "vkBeginCommandBuffer");
     dt->EndCommandBuffer = (PFN_vkEndCommandBuffer)pa(device, "vkEndCommandBuffer");
 }

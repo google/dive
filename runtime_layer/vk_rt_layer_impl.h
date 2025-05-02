@@ -40,6 +40,28 @@ void CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn,
                     int32_t              vertexOffset,
                     uint32_t             firstInstance);
 
+void CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn,
+                       VkCommandBuffer         commandBuffer,
+                       VkQueryPool             queryPool,
+                       uint32_t                firstQuery,
+                       uint32_t                queryCount);
+
+void CmdWriteTimestamp(PFN_vkCmdWriteTimestamp pfn,
+                       VkCommandBuffer         commandBuffer,
+                       VkPipelineStageFlagBits pipelineStage,
+                       VkQueryPool             queryPool,
+                       uint32_t                query);
+
+VkResult GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn,
+                             VkDevice                  device,
+                             VkQueryPool               queryPool,
+                             uint32_t                  firstQuery,
+                             uint32_t                  queryCount,
+                             size_t                    dataSize,
+                             void*                     pData,
+                             VkDeviceSize              stride,
+                             VkQueryResultFlags        flags);
+
 VkResult BeginCommandBuffer(PFN_vkBeginCommandBuffer        pfn,
                             VkCommandBuffer                 commandBuffer,
                             const VkCommandBufferBeginInfo* pBeginInfo);

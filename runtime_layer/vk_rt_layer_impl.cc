@@ -35,6 +35,7 @@ static bool sEnableDrawcallLimit = false;
 static bool sEnableDrawcallFilter = false;
 static bool sRemoveImageFlagFDMOffset = false;
 static bool sRemoveImageFlagSubSampled = false;
+static bool sDisableTimestamp = false;
 
 static uint32_t sDrawcallCounter = 0;
 static size_t   sTotalIndexCounter = 0;
@@ -103,6 +104,50 @@ void CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn,
     }
 
     return pfn(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn,
+                       VkCommandBuffer         commandBuffer,
+                       VkQueryPool             queryPool,
+                       uint32_t                firstQuery,
+                       uint32_t                queryCount)
+{
+    if (sDisableTimestamp)
+    {
+        return;
+    }
+    pfn(commandBuffer, queryPool, firstQuery, queryCount);
+}
+
+void CmdWriteTimestamp(PFN_vkCmdWriteTimestamp pfn,
+                       VkCommandBuffer         commandBuffer,
+                       VkPipelineStageFlagBits pipelineStage,
+                       VkQueryPool             queryPool,
+                       uint32_t                query)
+{
+    if (sDisableTimestamp)
+    {
+        return;
+    }
+    pfn(commandBuffer, pipelineStage, queryPool, query);
+}
+
+VkResult GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn,
+                             VkDevice                  device,
+                             VkQueryPool               queryPool,
+                             uint32_t                  firstQuery,
+                             uint32_t                  queryCount,
+                             size_t                    dataSize,
+                             void*                     pData,
+                             VkDeviceSize              stride,
+                             VkQueryResultFlags        flags)
+{
+    if (sDisableTimestamp)
+    {
+        return VK_SUCCESS;
+    }
+
+    return pfn(device, queryPool, firstQuery, queryCount, dataSize, pData, stride, flags);
 }
 
 VkResult BeginCommandBuffer(PFN_vkBeginCommandBuffer        pfn,

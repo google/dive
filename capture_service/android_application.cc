@@ -374,7 +374,7 @@ absl::Status OpenXRApplication::Cleanup()
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     }
-    LOGD("OpenXRApplication %s cleanup done.", m_package.c_str());
+    LOGD("OpenXRApplication %s cleanup done.\n", m_package.c_str());
     return absl::OkStatus();
 }
 

@@ -45,8 +45,20 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->CmdResetQueryPool = (PFN_vkCmdResetQueryPool)pa(device, "vkCmdResetQueryPool");
     dt->CmdWriteTimestamp = (PFN_vkCmdWriteTimestamp)pa(device, "vkCmdWriteTimestamp");
     dt->GetQueryPoolResults = (PFN_vkGetQueryPoolResults)pa(device, "vkGetQueryPoolResults");
+    dt->DestroyCommandPool = (PFN_vkDestroyCommandPool)pa(device, "vkDestroyCommandPool");
+    dt->AllocateCommandBuffers = (PFN_vkAllocateCommandBuffers)pa(device,
+                                                                  "vkAllocateCommandBuffers");
+    dt->FreeCommandBuffers = (PFN_vkFreeCommandBuffers)pa(device, "vkFreeCommandBuffers");
+    dt->ResetCommandBuffer = (PFN_vkResetCommandBuffer)pa(device, "vkResetCommandBuffer");
     dt->BeginCommandBuffer = (PFN_vkBeginCommandBuffer)pa(device, "vkBeginCommandBuffer");
     dt->EndCommandBuffer = (PFN_vkEndCommandBuffer)pa(device, "vkEndCommandBuffer");
+    dt->AcquireNextImageKHR = (PFN_vkAcquireNextImageKHR)pa(device, "vkAcquireNextImageKHR");
+    dt->QueueSubmit = (PFN_vkQueueSubmit)pa(device, "vkQueueSubmit");
+    dt->GetDeviceQueue2 = (PFN_vkGetDeviceQueue2)pa(device, "vkGetDeviceQueue2");
+    dt->GetDeviceQueue = (PFN_vkGetDeviceQueue)pa(device, "vkGetDeviceQueue");
+    dt->DestroyDevice = (PFN_vkDestroyDevice)pa(device, "vkDestroyDevice");
+    dt->CmdInsertDebugUtilsLabel = (PFN_vkCmdInsertDebugUtilsLabelEXT)
+    pa(device, "vkCmdInsertDebugUtilsLabelEXT");
 }
 
 }  // namespace DiveLayer

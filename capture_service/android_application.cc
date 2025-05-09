@@ -220,6 +220,8 @@ absl::Status VulkanApplication::Cleanup()
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }
     else
@@ -287,6 +289,9 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
 
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
+
+    // capture_android_trigger must be set in order for GFXR to listen for triggers.
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
 
     LOGD("GFXR capture setup for %s done\n", m_package.c_str());
     return absl::OkStatus();
@@ -359,6 +364,8 @@ absl::Status OpenXRApplication::Cleanup()
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }
     else
@@ -367,7 +374,7 @@ absl::Status OpenXRApplication::Cleanup()
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
     }
-    LOGD("OpenXRApplication %s cleanup done.", m_package.c_str());
+    LOGD("OpenXRApplication %s cleanup done.\n", m_package.c_str());
     return absl::OkStatus();
 }
 

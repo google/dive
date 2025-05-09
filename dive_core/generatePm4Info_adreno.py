@@ -165,6 +165,7 @@ static DiveVector<RegInfo> g_sRegInfo;
 static std::unordered_map<std::string, uint32_t> g_sRegNameToIndex;
 static DiveVector<DiveVector<const char*>> g_sEnumReflection;
 static DiveVector<PacketInfo> g_sPacketInfo;
+static std::unordered_map<uint32_t, PacketInfo> g_sPacketInfoVariant;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfoMultiple;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
 static uint32_t g_sGPU_id = 0;
@@ -206,6 +207,7 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
     "    assert(g_sRegInfo.empty());\n"
     "    assert(g_sEnumReflection.empty());\n"
     "    assert(g_sPacketInfo.empty());\n"
+    "    assert(g_sPacketInfoVariant.empty());\n"
     "\n"
   )
   outputOpcodes(pm4_info_file, opcode_dict)
@@ -823,6 +825,11 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       # Keep track of instance #. Only the 1st instance belongs in the vector. The rest are in the multimap.
       if opcode not in packet_type_instances:
         packet_type_instances[opcode] = 1
+        if (opcode == 0):
+          pm4_info_file.write("    // For descriptors, we purposefully try to include them as `packets` for easier parsing.\n")
+          pm4_info_file.write("    // They are not technically PM4 packets, hence the 0x0.\n")
+          pm4_info_file.write("    // Example: const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);.\n")
+
         pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
         outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
         pm4_info_file.write(" } };\n")
@@ -843,8 +850,22 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     domain = registers_et_root.find('{http://nouveau.freedesktop.org/}domain[@name="'+packet_name+'"]')
     if domain is None:
       opcode = int(pm4_type_packet_value.attrib['value'],0)
-      pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", 0, UINT8_MAX, {" % (opcode, packet_name))
-      pm4_info_file.write(" } };\n")
+
+      # We need the g_sPacketInfoVariant because some PM4s share the same value 
+      # but with different variants (CP_THREAD_CONTROL (A7XX-) and IN_IB_PREFETCH_END (A2XX) both use 0x17)
+      if 'variants' in pm4_type_packet_value.attrib:
+        variants = pm4_type_packet_value.attrib['variants']
+        variants_bitfield = GetGPUVariantsBitField(variants)
+        if (variants_bitfield != 0):
+          # kGPUVariantsBits has 6 bits
+          # it seems that the variant is only used for the non-domain ones
+          for i in range(6):
+            cur_variant_bitfield = (1<<i)
+            if cur_variant_bitfield & variants_bitfield:
+              pm4_info_file.write("    g_sPacketInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", 0, UINT8_MAX, {" % (opcode, cur_variant_bitfield, packet_name) + " } };\n")
+      else:
+        pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", 0, UINT8_MAX, {" % (opcode, packet_name) + " } };\n")
+      
   pm4_info_file.write("\n")
 
   # Append _A?XX to the name if there is any variant
@@ -963,8 +984,19 @@ const char *GetEnumString(uint32_t enum_handle, uint32_t val)
 
 const PacketInfo *GetPacketInfo(uint32_t op_code)
 {
+    // check without variant as key
     if (g_sPacketInfo[op_code].m_name == nullptr)
-        return nullptr;
+    {
+        // check with variant as key
+        uint32_t key = (op_code << kGPUVariantsBits) | g_sGPU_variant;
+        auto it = g_sPacketInfoVariant.find(key);
+        if (it == g_sPacketInfoVariant.end())
+        {
+            return nullptr;
+        }
+        return &it->second;
+    }
+
     return &g_sPacketInfo[op_code];
 }
 

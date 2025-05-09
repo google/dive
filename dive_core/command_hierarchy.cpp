@@ -942,13 +942,6 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     // Create the packet node and add it as child to the current submit_node and ib_node
     uint64_t packet_node_index = AddPacketNode(mem_manager, submit_index, va_addr, false, header);
 
-    // Events are fully contained within passes. This means that the first event in a pass will
-    // have the same start packet_node_index as the pass itself
-    if (m_new_pass_start)
-    {
-        m_new_pass_start = false;
-        m_start_node_stack[CommandHierarchy::kAllEventTopology].push_back(packet_node_index);
-    }
     if (m_new_event_start)
     {
         m_new_event_start = false;
@@ -1068,26 +1061,26 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         bool        add_child = true;
         switch (marker)
         {
-            // This is emitted at the begining of the render pass if tiled rendering mode is
+            // This is emitted at the beginning of the render pass if tiled rendering mode is
             // disabled
         case RM6_BYPASS:
             desc = "Direct Rendering Pass";
             break;
-            // This is emitted at the begining of the binning pass, although the binning pass
+            // This is emitted at the beginning of the binning pass, although the binning pass
             // could be missing even in tiled rendering mode
         case RM6_BINNING:
             desc = "Binning Pass";
             break;
-            // This is emitted at the begining of the tiled rendering pass
+            // This is emitted at the beginning of the tiled rendering pass
         case RM6_GMEM:
             desc = "Tile Rendering Pass";
             break;
             // This is emitted at the end of the tiled rendering pass
         case RM6_ENDVIS:
-            // should be paired with RM6_GMEM only if RM6_BINNING exist
+            // Should be paired with RM6_GMEM only if RM6_BINNING exist
             add_child = false;
             break;
-            // This is emitted at the begining of the resolve pass
+            // This is emitted at the beginning of the resolve pass
         case RM6_RESOLVE:
             desc = "Resolve Pass";
             break;
@@ -1134,7 +1127,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             AddChild(CommandHierarchy::kAllEventTopology,
                      m_cur_submit_node_index,
                      m_render_marker_index);
-            m_new_pass_start = true;
+
+            // Include the current packet in the scroll to range
+            m_start_node_stack[CommandHierarchy::kAllEventTopology].push_back(packet_node_index);
 
             // Events are fully contained within passes, so we're starting a new event
             // upon starting a new pass
@@ -1204,7 +1199,6 @@ void CommandHierarchyCreator::OnSubmitStart(uint32_t submit_index, const SubmitI
     m_state_tracker.Reset();
     m_new_event_start = true;
     m_new_ib_start = true;
-    m_new_pass_start = false;
 }
 
 //--------------------------------------------------------------------------------------------------

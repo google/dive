@@ -581,7 +581,6 @@ private:
 
     bool m_new_event_start = true;
     bool m_new_ib_start = true;
-    bool m_new_pass_start = false;
 
     // Stack of shared child node that begins the current ibs/pass/events
     // Need a stack because IBs and pass/events can be stacked

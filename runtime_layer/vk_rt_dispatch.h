@@ -32,15 +32,25 @@ struct InstanceDispatchTable
 
 struct DeviceDispatchTable
 {
-    PFN_vkGetDeviceProcAddr   pfn_get_device_proc_addr = nullptr;
-    PFN_vkQueuePresentKHR     QueuePresentKHR = nullptr;
-    PFN_vkCreateImage         CreateImage = nullptr;
-    PFN_vkCmdDrawIndexed      CmdDrawIndexed = nullptr;
-    PFN_vkCmdResetQueryPool   CmdResetQueryPool = nullptr;
-    PFN_vkCmdWriteTimestamp   CmdWriteTimestamp = nullptr;
-    PFN_vkGetQueryPoolResults GetQueryPoolResults = nullptr;
-    PFN_vkBeginCommandBuffer  BeginCommandBuffer = nullptr;
-    PFN_vkEndCommandBuffer    EndCommandBuffer = nullptr;
+    PFN_vkGetDeviceProcAddr           pfn_get_device_proc_addr = nullptr;
+    PFN_vkQueuePresentKHR             QueuePresentKHR = nullptr;
+    PFN_vkCreateImage                 CreateImage = nullptr;
+    PFN_vkCmdDrawIndexed              CmdDrawIndexed = nullptr;
+    PFN_vkCmdResetQueryPool           CmdResetQueryPool = nullptr;
+    PFN_vkCmdWriteTimestamp           CmdWriteTimestamp = nullptr;
+    PFN_vkGetQueryPoolResults         GetQueryPoolResults = nullptr;
+    PFN_vkDestroyCommandPool          DestroyCommandPool = nullptr;
+    PFN_vkAllocateCommandBuffers      AllocateCommandBuffers = nullptr;
+    PFN_vkFreeCommandBuffers          FreeCommandBuffers = nullptr;
+    PFN_vkResetCommandBuffer          ResetCommandBuffer = nullptr;
+    PFN_vkBeginCommandBuffer          BeginCommandBuffer = nullptr;
+    PFN_vkEndCommandBuffer            EndCommandBuffer = nullptr;
+    PFN_vkAcquireNextImageKHR         AcquireNextImageKHR = nullptr;
+    PFN_vkQueueSubmit                 QueueSubmit = nullptr;
+    PFN_vkGetDeviceQueue2             GetDeviceQueue2 = nullptr;
+    PFN_vkGetDeviceQueue              GetDeviceQueue = nullptr;
+    PFN_vkDestroyDevice               DestroyDevice = nullptr;
+    PFN_vkCmdInsertDebugUtilsLabelEXT CmdInsertDebugUtilsLabel = nullptr;
 };
 
 void InitInstanceDispatchTable(VkInstance                instance,

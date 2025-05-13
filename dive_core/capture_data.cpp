@@ -348,7 +348,7 @@ const MemoryAllocationInfo &MemoryManager::GetMemoryAllocationInfo() const
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MemoryManager::CopyMemory(void    *buffer_ptr,
+bool MemoryManager::ICopyMemory(void    *buffer_ptr,
                                uint32_t submit_index,
                                uint64_t va_addr,
                                uint64_t size) const
@@ -368,7 +368,7 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
 #ifndef NDEBUG
             if (mem_block.m_data_size >= 16 * 1024 * 1024)
             {
-                std::cout << "MemoryManager::CopyMemory data.m_data_size: " << mem_block.m_data_size
+                std::cout << "MemoryManager::ICopyMemory data.m_data_size: " << mem_block.m_data_size
                           << " gpu addr:  " << va_addr << std::endl;
             }
 #endif

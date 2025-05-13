@@ -193,7 +193,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
     if (type7_header->opcode == CP_SET_MARKER)
     {
         PM4_CP_SET_MARKER packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.ICopyMemory(&packet, submit_index, va_addr, sizeof(packet)));
         // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
         DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
         a6xx_marker marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);

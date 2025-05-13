@@ -98,7 +98,7 @@ public:
                               DiveVector<MemoryAllocationData> &&allocations);
 
     // Finalize load. After this, no memory block should be added!
-    // same_submit_copy_only - If set, then CopyMemory() will only copy from memory blocks used in
+    // same_submit_copy_only - If set, then ICopyMemory() will only copy from memory blocks used in
     // the same submit. If not set, then allowed to use any allocations from any submit, with the
     // assumption that there is no overlap in captured memory
     void Finalize(bool same_submit_copy_only, bool duplicate_ib_capture);
@@ -106,7 +106,7 @@ public:
     const MemoryAllocationInfo &GetMemoryAllocationInfo() const;
 
     // Load the given va/size from the memory blocks
-    virtual bool CopyMemory(void    *buffer_ptr,
+    virtual bool ICopyMemory(void    *buffer_ptr,
                             uint32_t submit_index,
                             uint64_t va_addr,
                             uint64_t size) const override;

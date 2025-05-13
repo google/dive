@@ -61,7 +61,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
             RegPair  reg_pair;
             uint64_t pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
             DIVE_VERIFY(
-            mem_manager.CopyMemory(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
+            mem_manager.ICopyMemory(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
             dword += 2;
             SetReg(reg_pair.m_reg_offset, reg_pair.m_reg_value);
 
@@ -70,7 +70,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
             {
                 RegPair  new_reg_pair;
                 uint64_t new_pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
-                DIVE_VERIFY(mem_manager.CopyMemory(&new_reg_pair,
+                DIVE_VERIFY(mem_manager.ICopyMemory(&new_reg_pair,
                                                    submit_index,
                                                    new_pair_addr,
                                                    sizeof(new_reg_pair)));
@@ -108,7 +108,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
             for (uint32_t i = 0; i < size_in_dwords; ++i)
             {
                 uint32_t reg_value = 0;
-                DIVE_VERIFY(mem_manager.CopyMemory(&reg_value,
+                DIVE_VERIFY(mem_manager.ICopyMemory(&reg_value,
                                                    submit_index,
                                                    reg_va_addr + i * dword_in_bytes,
                                                    dword_in_bytes));
@@ -354,7 +354,7 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
         EmulateState::IbStack *cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
 
         Pm4Header header;
-        DIVE_VERIFY(mem_manager.CopyMemory(&header,
+        DIVE_VERIFY(mem_manager.ICopyMemory(&header,
                                            emu_state.m_submit_index,
                                            cur_ib_level->m_cur_va,
                                            sizeof(Pm4Header)));
@@ -410,7 +410,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     {
 
         PM4_CP_INDIRECT_BUFFER ib_packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&ib_packet,
+        DIVE_VERIFY(mem_manager.ICopyMemory(&ib_packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
                                            sizeof(PM4_CP_INDIRECT_BUFFER)));
@@ -434,7 +434,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // CALL (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
         PM4_CP_SET_CTXSWITCH_IB packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+        DIVE_VERIFY(mem_manager.ICopyMemory(&packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
                                            (header.type7.count + 1) * sizeof(uint32_t)));
@@ -467,7 +467,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // CALLs (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
         PM4_CP_SET_DRAW_STATE packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+        DIVE_VERIFY(mem_manager.ICopyMemory(&packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
                                            (header.type7.count + 1) * sizeof(uint32_t)));
@@ -512,7 +512,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     {
 
         PM4_CP_START_BIN packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+        DIVE_VERIFY(mem_manager.ICopyMemory(&packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
                                            sizeof(PM4_CP_START_BIN)));
@@ -544,7 +544,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         while (true)
         {
             Pm4Header temp_header;
-            DIVE_VERIFY(mem_manager.CopyMemory(&temp_header,
+            DIVE_VERIFY(mem_manager.ICopyMemory(&temp_header,
                                                emu_state_ptr->m_submit_index,
                                                temp_va,
                                                sizeof(Pm4Header)));
@@ -601,7 +601,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // if CP_START_BIN/CP_END_BIN are used, and CP_FIXED_STRIDE_DRAW_TABLE is used for
         // drawcalls, it will be in the Common_block
         PM4_CP_FIXED_STRIDE_DRAW_TABLE packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
+        DIVE_VERIFY(mem_manager.ICopyMemory(&packet,
                                            emu_state_ptr->m_submit_index,
                                            emu_state_ptr->GetCurIb()->m_cur_va,
                                            sizeof(PM4_CP_FIXED_STRIDE_DRAW_TABLE)));

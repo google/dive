@@ -28,7 +28,7 @@ class IMemoryManager
 {
 public:
     // Copy the given va/size from the memory blocks
-    virtual bool CopyMemory(void*    buffer_ptr,
+    virtual bool ICopyMemory(void*    buffer_ptr,
                             uint32_t submit_index,
                             uint64_t va_addr,
                             uint64_t size) const = 0;

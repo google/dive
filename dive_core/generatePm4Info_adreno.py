@@ -11,36 +11,36 @@ from common import addMissingDomains
 
 # ---------------------------------------------------------------------------------------
 def outputHeader(pm4_info_file):
-  pm4_info_file.writelines(
-    " /*\n"
-    " Copyright 2020 Google LLC\n"
-    "\n"
-    " Licensed under the Apache License, Version 2.0 (the \"License\";\n"
-    " you may not use this file except in compliance with the License.\n"
-    " You may obtain a copy of the License at\n"
-    "\n"
-    " http://www.apache.org/licenses/LICENSE-2.0\n"
-    "\n"
-    " Unless required by applicable law or agreed to in writing, software\n"
-    " distributed under the License is distributed on an \"AS IS\" BASIS,\n"
-    " WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n"
-    " See the License for the specific language governing permissions and\n"
-    " limitations under the License.\n"
-    "*/\n"
-    "\n"
-    "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n"
-    "//\n"
-    "// WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!\n"
-    "//\n"
-    "// This code has been generated automatically by generatePm4Strings_adreno.py. Do not hand-modify this code.\n"
-    "//\n"
-    "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n"
-  )
+  pm4_info_file.writelines('''
+     /*
+     Copyright 2020 Google LLC
+    
+     Licensed under the Apache License, Version 2.0 (the "License";
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at\n'
+    
+     http://www.apache.org/licenses/LICENSE-2.0
+    
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+    */
+    
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //
+    // WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
+    //
+    // This code has been generated automatically by generatePm4Strings_adreno.py. Do not hand-modify this code.
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  ''')
 
 # ---------------------------------------------------------------------------------------
 def outputH(pm4_info_file):
   outputHeader(pm4_info_file)
-  pm4_info_file.writelines("""
+  pm4_info_file.writelines('''
 #pragma once
 
 #include <stdint.h>
@@ -143,13 +143,13 @@ void              SetGPUID(uint32_t gpu_id);
 uint32_t          GetGPUID();
 GPUVariantType    GetGPUVariantType();
 bool              IsFieldEnabled(const RegField *field);
-""")
+''')
 
 # ---------------------------------------------------------------------------------------
 def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
   outputHeader(pm4_info_file)
-  pm4_info_file.write("#include \"%s\"\n" % (pm4_info_header_file_name))
-  pm4_info_file.writelines("""
+  pm4_info_file.write('#include "%s"\n' % (pm4_info_header_file_name))
+  pm4_info_file.writelines('''
 #include <assert.h>
 #include <algorithm>
 #include <cstring>
@@ -189,7 +189,7 @@ std::string GetGPUStr(GPUVariantType variant)
     return s;
 }
 
-"""
+'''
   )
 
 # ---------------------------------------------------------------------------------------
@@ -200,24 +200,23 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   enum_list = []
   parseEnumInfo(enum_index_dict, enum_list, registers_et_root)
 
-  pm4_info_file.writelines(
-    "void Pm4InfoInit()\n"
-    "{\n"
-    "    assert(g_sOpCodeToString.empty());\n"
-    "    assert(g_sRegInfo.empty());\n"
-    "    assert(g_sEnumReflection.empty());\n"
-    "    assert(g_sPacketInfo.empty());\n"
-    "    assert(g_sPacketInfoVariant.empty());\n"
-    "\n"
-  )
+  pm4_info_file.writelines('''
+    void Pm4InfoInit()
+    {
+        assert(g_sOpCodeToString.empty());
+        assert(g_sRegInfo.empty());
+        assert(g_sEnumReflection.empty());
+        assert(g_sPacketInfo.empty());
+        assert(g_sPacketInfoVariant.empty());
+  ''')
   outputOpcodes(pm4_info_file, opcode_dict)
-  pm4_info_file.write("\n")
+  pm4_info_file.write('\n')
   outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict)
-  pm4_info_file.write("\n")
+  pm4_info_file.write('\n')
   outputEnums(pm4_info_file, enum_list)
-  pm4_info_file.write("\n")
+  pm4_info_file.write('\n')
   outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_dict)
-  pm4_info_file.write("}\n")
+  pm4_info_file.write('}\n')
   return
 
 valid_opcodes = {}
@@ -226,43 +225,43 @@ def outputOpcodes(pm4_info_file, opcode_dict):
   # Find max opcode first
   max_opcode = max(opcode_dict)
 
-  pm4_info_file.write("    g_sOpCodeToString.resize(0x%x);\n" % (max_opcode+1))
+  pm4_info_file.write('    g_sOpCodeToString.resize(0x%x);\n' % (max_opcode+1))
   for opcode in opcode_dict:
-    pm4_info_file.write("    g_sOpCodeToString[%s] = \"%s\";\n" % (hex(opcode), opcode_dict[opcode]))
+    pm4_info_file.write('    g_sOpCodeToString[%s] = "%s";\n' % (hex(opcode), opcode_dict[opcode]))
   return
 
 # ---------------------------------------------------------------------------------------
 def getTypeEnumString(type):
-  type_string = "ValueType::kOther"
-  if type == "boolean":
-    type_string = "ValueType::kBoolean"
-  elif type == "uint":
-    type_string = "ValueType::kUint"
-  elif type == "int":
-    type_string = "ValueType::kInt"
-  elif type == "float":
-    type_string = "ValueType::kFloat"
-  elif type == "fixed":
-    type_string = "ValueType::kFixed"
-  elif type == "ufixed":
-    type_string = "ValueType::kUFixed"
-  elif type == "address":
-    type_string = "ValueType::kAddress"
-  elif type == "waddress":
-    type_string = "ValueType::kWaddress"
-  elif type == "hex":
-    type_string = "ValueType::kHex"
-  elif type == "a3xx_regid":
-    type_string = "ValueType::kRegID"
+  type_string = 'ValueType::kOther'
+  if type == 'boolean':
+    type_string = 'ValueType::kBoolean'
+  elif type == 'uint':
+    type_string = 'ValueType::kUint'
+  elif type == 'int':
+    type_string = 'ValueType::kInt'
+  elif type == 'float':
+    type_string = 'ValueType::kFloat'
+  elif type == 'fixed':
+    type_string = 'ValueType::kFixed'
+  elif type == 'ufixed':
+    type_string = 'ValueType::kUFixed'
+  elif type == 'address':
+    type_string = 'ValueType::kAddress'
+  elif type == 'waddress':
+    type_string = 'ValueType::kWaddress'
+  elif type == 'hex':
+    type_string = 'ValueType::kHex'
+  elif type == 'a3xx_regid':
+    type_string = 'ValueType::kRegID'
   return type_string
 
 class RegAttributes():
-  name = ""
+  name = ''
   offset = 0
   bitfields = []
   type = None
   is_64 = False
-  variants = ""
+  variants = ''
   shr = 0
   bit_width = 0
   radix = 0
@@ -276,15 +275,15 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
 
       name = bitfield.attrib['name']
 
-      enum_handle = "UINT8_MAX"
-      bitfield_type = "other"
+      enum_handle = 'UINT8_MAX'
+      bitfield_type = 'other'
       if 'type' in bitfield.attrib:
         bitfield_type = bitfield.attrib['type']
         if not isBuiltInType(bitfield_type):
           if bitfield_type not in enum_index_dict:
-            raise Exception("Enumeration %s not found!" % bitfield_type)
+            raise Exception('Enumeration %s not found!' % bitfield_type)
           if enum_index_dict[bitfield_type] > 256:
-            raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[bitfield_type])
+            raise Exception('Enumeration handle %d is too big! The bitfield storing this is only 8-bits!' % enum_index_dict[bitfield_type])
           enum_handle = str(enum_index_dict[bitfield_type])
 
       shr = 0
@@ -306,7 +305,7 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
         shift = pos = int(bitfield.attrib['pos'])
         mask = (0x1 << pos)
       else:
-        raise Exception("Encountered a bitfield with no pos/low/high!")
+        raise Exception('Encountered a bitfield with no pos/low/high!')
 
       variants_bitfield = 0
       if 'variants' in bitfield.attrib:
@@ -314,7 +313,7 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
 
       radix = getIntAttributeValue(bitfield, 'radix')
 
-      pm4_info_file.write("    { %s, %s, %d, %d, %d, %d, %d, 0x%x, \"%s\" }, "  % (
+      pm4_info_file.write('    { %s, %s, %d, %d, %d, %d, %d, 0x%x, "%s" }, '  % (
           getTypeEnumString(bitfield_type),
           enum_handle,
           shift,
@@ -328,12 +327,12 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
 
 # ---------------------------------------------------------------------------------------
 def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, attributes: RegAttributes):
-    is_64_string = "0"
+    is_64_string = '0'
     if attributes.is_64 is True:
-      is_64_string = "1"
+      is_64_string = '1'
 
     # if a 'type' attrib is available, then check for a custom bitset
-    enum_handle = "UINT8_MAX"
+    enum_handle = 'UINT8_MAX'
     if attributes.type:
       # if it isn't one of the standard types, then it must be a custom bitset or an enum
       if not isBuiltInType(attributes.type):
@@ -348,12 +347,12 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_ind
           bitfields = []  # Create an empty list instead of a "None" object
           enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+attributes.type+'"]')
           if enum is None:
-            raise Exception("Not able to find bitset/enum " + attributes.type + " for register " + attributes.name)
+            raise Exception('Not able to find bitset/enum ' + attributes.type + ' for register ' + attributes.name)
           # Now that we know it's an enum, let's get the enum_handle for it!
           if attributes.type not in enum_index_dict:
-            raise Exception("Enumeration %s not found!" % attributes.type)
+            raise Exception('Enumeration %s not found!' % attributes.type)
           if enum_index_dict[attributes.type] > 256:
-            raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[attributes.type])
+            raise Exception('Enumeration handle %d is too big! The bitfield storing this is only 8-bits!' % enum_index_dict[attributes.type])
           enum_handle = str(enum_index_dict[attributes.type])
 
     variants_bitfield = GetGPUVariantsBitField(attributes.variants)
@@ -362,13 +361,13 @@ def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_ind
         for i in range(6):
             cur_variant_bitfield = (1<<i)
             if cur_variant_bitfield & variants_bitfield:
-                pm4_info_file.write("    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+                pm4_info_file.write('    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
                 AppendBitfield(pm4_info_file, enum_index_dict, attributes)
-                pm4_info_file.write("} };\n")
+                pm4_info_file.write('} };\n')
     else:
-        pm4_info_file.write("    g_sRegInfo[0x%x] = { \"%s\", %s, %s, %s, %d, %d, %d, {" % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+        pm4_info_file.write('    g_sRegInfo[0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
         AppendBitfield(pm4_info_file, enum_index_dict, attributes)
-        pm4_info_file.write("} };\n")
+        pm4_info_file.write('} };\n')
 
 
 # ---------------------------------------------------------------------------------------
@@ -404,7 +403,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
   for reg in regs:
     offset = int(reg.attrib['offset'],0)
     max_offset = max(max_offset, offset)
-  pm4_info_file.write("    g_sRegInfo.resize(0x%x);\n" % (max_offset+1))
+  pm4_info_file.write('    g_sRegInfo.resize(0x%x);\n' % (max_offset+1))
 
   # Parse through registers
   for reg in regs:
@@ -417,7 +416,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     is_64 = False
     if reg.tag == '{http://nouveau.freedesktop.org/}reg64':
       is_64 = True
-    variants = ""
+    variants = ''
     if 'variants' in reg.attrib:
       variants = reg.attrib['variants']
 
@@ -454,7 +453,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
       is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
       if is_reg_32 or is_reg_64:
         array_regs.append(element)
-      variants = ""
+      variants = ''
       if 'variants' in element.attrib:
         variants = element.attrib['variants']
       reg_variants.append(variants)
@@ -472,18 +471,18 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
         reg_attributes.bitfields = []
         reg_attributes.type = None
         reg_attributes.is_64 = False
-        reg_attributes.variants = ""
+        reg_attributes.variants = ''
         reg_attributes.shr = 0
         reg_attributes.bit_width = 0
         reg_attributes.radix = 0
         outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, reg_attributes)
       elif stride == 2 and not array_regs:
-        reg_attributes.name = array_name+str(i)+"_LO"
+        reg_attributes.name = array_name+str(i)+'_LO'
         reg_attributes.offset = offset+i*stride
         reg_attributes.bitfields = []
         reg_attributes.type = None
         reg_attributes.is_64 = True
-        reg_attributes.variants = ""
+        reg_attributes.variants = ''
         reg_attributes.shr = 0
         reg_attributes.bit_width = 0
         reg_attributes.radix = 0
@@ -504,7 +503,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
           bit_width = getBitWidth(reg);
           radix = getIntAttributeValue(reg, 'radix')
 
-          reg_attributes.name = array_name+str(i)+"_"+reg_name
+          reg_attributes.name = array_name+str(i)+'_'+reg_name
           reg_attributes.offset = offset+i*stride+reg_offset
           reg_attributes.bitfields = bitfields
           reg_attributes.type = type
@@ -526,7 +525,7 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
 
     # There shouldn't be any repeat entries
     if enum_name in enum_index_dict:
-      raise Exception("Encountered multiple enums with same name: " + enum_name)
+      raise Exception('Encountered multiple enums with same name: ' + enum_name)
 
     enum_index_dict[enum_name] = len(enum_list)
     enum_list.append((enum_name, dict()))
@@ -552,18 +551,18 @@ def parseEnumInfo(enum_index_dict, enum_list, registers_et_root):
           enum_list[index][1][enum_value] = enum_value_name
 
 class FieldAttributes():
-  name = ""
+  name = ''
   is_variant_opcode = 0
   dword_count = 0
-  type = ""
-  enum_handle = "UINT8_MAX"
+  type = ''
+  enum_handle = 'UINT8_MAX'
   shift = 0
   shr = 0
   mask = 0
 
 # ---------------------------------------------------------------------------------------
 def outputField(pm4_info_file, field_attributes: FieldAttributes):
-  pm4_info_file.write("{ \"%s\", %d, %d, %s, %s, %d, %d, 0x%x }," %
+  pm4_info_file.write('{ "%s", %d, %d, %s, %s, %d, %d, 0x%x },' %
                        (field_attributes.name, field_attributes.is_variant_opcode, field_attributes.dword_count, getTypeEnumString(field_attributes.type), field_attributes.enum_handle, field_attributes.shift, field_attributes.shr, field_attributes.mask))
 
 # ---------------------------------------------------------------------------------------
@@ -577,7 +576,7 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
     # Sanity check
     # Note: Allowed to skip an offset (see CP_EVENT_WRITE7)
     if dword_count > offset:
-        raise Exception("Unexpected reverse offset found in packet")
+        raise Exception('Unexpected reverse offset found in packet')
 
     dword_count = dword_count + 1
     if is_reg_64:
@@ -590,7 +589,7 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       field_name = element.attrib['name']
       shift = 0
       mask = int('0xffffffff', 16)
-      enum_handle = "UINT8_MAX"
+      enum_handle = 'UINT8_MAX'
 
       type = None
       if 'type' in element.attrib:
@@ -619,16 +618,16 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
 
         outputField(pm4_info_file, field_attributes)
       elif is_reg_64:
-        field_attributes.name = field_name+"_LO"
+        field_attributes.name = field_name+'_LO'
         field_attributes.dword_count = dword_count - 1
         outputField(pm4_info_file, field_attributes)
 
-        field_attributes.name = field_name+"_HI"
+        field_attributes.name = field_name+'_HI'
         field_attributes.dword_count = dword_count
         outputField(pm4_info_file, field_attributes)
 
     if is_reg_64 and len(bitfields) > 0:
-      raise Exception("Found a reg64 with bitfields: " + field_name)
+      raise Exception('Found a reg64 with bitfields: ' + field_name)
 
     for bitfield in bitfields:
       field_name = bitfield.attrib['name']
@@ -636,12 +635,12 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       if 'type' in bitfield.attrib:
         type = bitfield.attrib['type']
 
-      enum_handle = "UINT8_MAX"
+      enum_handle = 'UINT8_MAX'
       if not isBuiltInType(type):
         if type not in enum_index_dict:
-          raise Exception("Enumeration %s not found!" % type)
+          raise Exception('Enumeration %s not found!' % type)
         if enum_index_dict[type] > 256:
-          raise Exception("Enumeration handle %d is too big! The bitfield storing this is only 8-bits!" % enum_index_dict[type])
+          raise Exception('Enumeration handle %d is too big! The bitfield storing this is only 8-bits!' % enum_index_dict[type])
         enum_handle = str(enum_index_dict[type])
 
       # TODO: Store the shr bits so we know how much to shift left to extract the "original" value
@@ -655,7 +654,7 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
         shift = pos = int(bitfield.attrib['pos'])
         mask = (0x1 << pos)
       else:
-        raise Exception("Encountered a bitfield with no pos/low/high!")
+        raise Exception('Encountered a bitfield with no pos/low/high!')
 
       shr = 0
       if 'shr' in bitfield.attrib:
@@ -679,16 +678,16 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
 
 # ---------------------------------------------------------------------------------------
 def outputEnums(pm4_info_file, enum_list):
-  pm4_info_file.write("    g_sEnumReflection.resize(%d);\n" % (len(enum_list)+1));
+  pm4_info_file.write('    g_sEnumReflection.resize(%d);\n' % (len(enum_list)+1));
   # Output enum_list to file
   for idx, enum_info in enumerate(enum_list):
     # enum_list is an array of {string, dict()}, where the key of the dict() is
     # the integer enum_value
     enum_sorted_items = sorted(enum_info[1].items())
     max_enum_value = enum_sorted_items[-1][0]
-    pm4_info_file.write("    g_sEnumReflection[%d].resize(%d, nullptr); // %s\n" % (idx, max_enum_value+1, enum_info[0]));
+    pm4_info_file.write('    g_sEnumReflection[%d].resize(%d, nullptr); // %s\n' % (idx, max_enum_value+1, enum_info[0]));
     for enum_value, enum_value_string in enum_sorted_items:
-      pm4_info_file.write("    g_sEnumReflection[%d][%d] = \"%s\";\n" % (idx, enum_value, enum_value_string));
+      pm4_info_file.write('    g_sEnumReflection[%d][%d] = "%s";\n' % (idx, enum_value, enum_value_string));
 
 # ---------------------------------------------------------------------------------------
 # This function adds info for PM4 packets as well as structs that have no opcodes (e.g. V#s/T#s/S#s)
@@ -705,7 +704,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
 
     # Check if it is a domain describing a PM4 packet
     pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
-    if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
+    if (pm4_type_packet is None) and (not domain_name.startswith('A6XX_')):
       continue
 
     opcode = 0
@@ -717,16 +716,16 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     if highest_opcode < opcode:
       highest_opcode = opcode
 
-  pm4_info_file.write("    g_sPacketInfo.resize(0x%x);\n" % (highest_opcode+1))
+  pm4_info_file.write('    g_sPacketInfo.resize(0x%x);\n' % (highest_opcode+1))
 
   ############################################################################
   packet_type_instances = {}
   for domain in domains:
     domain_name = domain.attrib['name']
 
-    # Check if it is a domain describing a PM4 packet, OR see if it a "A6XX_" packet (e.g. V#s/T#s/S#s)
+    # Check if it is a domain describing a PM4 packet, OR see if it a 'A6XX_' packet (e.g. V#s/T#s/S#s)
     pm4_type_packet = pm4_type_packets.find('./{http://nouveau.freedesktop.org/}value[@name="'+domain_name+'"]')
-    if (pm4_type_packet is None) and (not domain_name.startswith("A6XX_")):
+    if (pm4_type_packet is None) and (not domain_name.startswith('A6XX_')):
       continue
 
     # Make sure the opcode_dict is referring to the same packet name
@@ -748,7 +747,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       # Double check that there are no registers in this domain (i.e. they're all within the array block)
       if domain.find('./{http://nouveau.freedesktop.org/}reg32') or \
          domain.find('./{http://nouveau.freedesktop.org/}reg64'):
-        raise Exception("Unexpected top-level registers found in a PM4 packet with arrays: " + domain_name)
+        raise Exception('Unexpected top-level registers found in a PM4 packet with arrays: ' + domain_name)
       pm4_packet = array
       array_size = int(array.attrib['length'])
 
@@ -760,15 +759,15 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     for idx, stripe in enumerate(stripes):
       varset = stripe.attrib['varset']
       variants = stripe.attrib['variants']
-      if varset == "chip":  # For chip-based variants, add only the last one
+      if varset == 'chip':  # For chip-based variants, add only the last one
         if idx == len(stripes) - 1:
           variant_list.append((variants, stripe))
       else:
         variant_list.append((variants, stripe))
 
-    # If there are no variants, add a "default" variant
+    # If there are no variants, add a 'default' variant
     if len(variant_list) == 0:
-      variant_list.append(("default", None))
+      variant_list.append(('default', None))
 
     for variant in variant_list:
       # Filter out everything but the reg32 and reg64 elements from the packet definition
@@ -805,13 +804,13 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
         # Add the prefix to the packet_name
         if 'prefix' in stripe.attrib:
           prefix = stripe.attrib['prefix']
-          packet_name = domain_name + "_" + prefix
+          packet_name = domain_name + '_' + prefix
 
       # Determine stripe opcode for this variant/stripe
-      stripe_variant = "UINT8_MAX"
+      stripe_variant = 'UINT8_MAX'
       if stripe is not None:
         varset = stripe.attrib['varset']
-        if varset != "chip":
+        if varset != 'chip':
           enum = domain.find('./{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
           enum_value = enum.find('./{http://nouveau.freedesktop.org/}value[@name="'+variant[0]+'"]')
           stripe_variant = enum_value.attrib['value']
@@ -826,21 +825,23 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       if opcode not in packet_type_instances:
         packet_type_instances[opcode] = 1
         if (opcode == 0):
-          pm4_info_file.write("    // For descriptors, we purposefully try to include them as `packets` for easier parsing.\n")
-          pm4_info_file.write("    // They are not technically PM4 packets, hence the 0x0.\n")
-          pm4_info_file.write("    // Example: const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);.\n")
+          pm4_info_file.write('''    
+    // For descriptors, we purposefully try to include them as "packets" for easier parsing.
+    // They are not technically PM4 packets, hence the 0x0.
+    // Example: const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);
+        ''')
 
-        pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
+        pm4_info_file.write('    g_sPacketInfo[0x%x] = { "%s", %d, %s, {' % (opcode, packet_name, array_size, stripe_variant))
         outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
-        pm4_info_file.write(" } };\n")
+        pm4_info_file.write(' } };\n')
       else:
         packet_type_instances[opcode] += 1
-        pm4_info_file.write("    g_sPacketInfoMultiple.insert(std::pair<uint32_t, PacketInfo>(")
-        pm4_info_file.write("0x%x, { \"%s\", %d, %s, {" % (opcode, packet_name, array_size, stripe_variant))
+        pm4_info_file.write('    g_sPacketInfoMultiple.insert(std::pair<uint32_t, PacketInfo>(')
+        pm4_info_file.write('0x%x, { "%s", %d, %s, {' % (opcode, packet_name, array_size, stripe_variant))
         outputPacketFields(pm4_info_file, enum_index_dict, reg_list)
-        pm4_info_file.write(" } }));\n")
+        pm4_info_file.write(' } }));\n')
 
-  # Not all pm4 packets are described via a "domain". These are usually packets (such as CP_WAIT_FOR_IDLE) which
+  # Not all pm4 packets are described via a 'domain'. These are usually packets (such as CP_WAIT_FOR_IDLE) which
   # have no fields. In that case, add a corresponding g_sPacketInfo entry with no fields
   pm4_type_packets_values = pm4_type_packets.findall('./{http://nouveau.freedesktop.org/}value')
   for pm4_type_packet_value in pm4_type_packets_values:
@@ -862,16 +863,16 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
           for i in range(6):
             cur_variant_bitfield = (1<<i)
             if cur_variant_bitfield & variants_bitfield:
-              pm4_info_file.write("    g_sPacketInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { \"%s\", 0, UINT8_MAX, {" % (opcode, cur_variant_bitfield, packet_name) + " } };\n")
+              pm4_info_file.write('    g_sPacketInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", 0, UINT8_MAX, {' % (opcode, cur_variant_bitfield, packet_name) + ' } };\n')
       else:
-        pm4_info_file.write("    g_sPacketInfo[0x%x] = { \"%s\", 0, UINT8_MAX, {" % (opcode, packet_name) + " } };\n")
+        pm4_info_file.write('    g_sPacketInfo[0x%x] = { "%s", 0, UINT8_MAX, {' % (opcode, packet_name) + ' } };\n')
       
-  pm4_info_file.write("\n")
+  pm4_info_file.write('\n')
 
   # Append _A?XX to the name if there is any variant
   # This is to handle the cases where the regsiters have the same name
   # but different offset for different variants, like PC_POLYGON_MODE
-  pm4_info_file.writelines("""
+  pm4_info_file.writelines('''
   for (uint64_t i = 0; i < g_sRegInfo.size(); ++i)
   {
     if (g_sRegInfo[i].m_name != nullptr)
@@ -903,12 +904,12 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
 		{
 			g_sRegNameToIndex[name] = reg_offset;
 		}
-	}\n""")
+	}\n''')
 
 # ---------------------------------------------------------------------------------------
 
 def outputFunctionsCpp(pm4_info_file):
-  pm4_info_file.writelines("""
+  pm4_info_file.writelines('''
 const char *GetOpCodeString(uint32_t op_code)
 {
     return g_sOpCodeToString[op_code];
@@ -1043,12 +1044,12 @@ bool IsFieldEnabled(const RegField* field)
     DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
     return (g_sGPU_variant & field->m_gpu_variants) != 0;
 }
-"""
+'''
   )
 
 # ---------------------------------------------------------------------------------------
 if len(sys.argv) != 4:
-  print(sys.argv[0] + " <Path to adreno register file> <Path to output file base-name>")
+  print(sys.argv[0] + ' <Path to adreno register file> <Path to output file base-name>')
   sys.exit()
 
 try:
@@ -1057,7 +1058,7 @@ try:
   register_file = sys.argv[2]
 
   # create element tree object
-  tree = ET.parse(sys.argv[1]+"/"+sys.argv[2])
+  tree = ET.parse(sys.argv[1]+'/'+sys.argv[2])
 
   # get root element
   registers_et_root = tree.getroot()
@@ -1067,19 +1068,19 @@ try:
   for child in registers_et_root:
     if child.tag == '{http://nouveau.freedesktop.org/}import':
       if 'file' in child.attrib:
-        sub_xml_file = sys.argv[1]+"/"+child.attrib['file']
+        sub_xml_file = sys.argv[1]+'/'+child.attrib['file']
 
         # Check if this file has already been parsed or not
         if sub_xml_file not in sub_xml_file_set:
           sub_xml_file_set.add(sub_xml_file)
-          sub_tree = ET.parse(sys.argv[1]+"/"+child.attrib['file'])
+          sub_tree = ET.parse(sys.argv[1]+'/'+child.attrib['file'])
           for sub_tree_child in sub_tree.getroot():
             registers_et_root.append(sub_tree_child)
 
-  pm4_info_file_h = open(sys.argv[3] + ".h", "w")
-  pm4_info_file_cpp = open(sys.argv[3] + ".cpp", "w")
+  pm4_info_file_h = open(sys.argv[3] + '.h', 'w')
+  pm4_info_file_cpp = open(sys.argv[3] + '.cpp', 'w')
 
-  head, tail = os.path.split(sys.argv[3] + ".h")
+  head, tail = os.path.split(sys.argv[3] + '.h')
   pm4_info_filename_h = tail
 
   addMissingDomains(registers_et_root)
@@ -1097,15 +1098,8 @@ try:
       pm4_name = pm4_type_packet.attrib['name']
       pm4_value = pm4_type_packet.attrib['value']
       # Only add ones that start with "CP_*" or "A6XX_*"
-      if pm4_name.startswith("CP_") or pm4_name.startswith("A6XX_"):
+      if pm4_name.startswith('CP_') or pm4_name.startswith('A6XX_'):
         opcode_dict[int(pm4_value,0)] = pm4_name
-
-
-  #pm4_info_file_h.write("enum Type7Opcodes\n")
-  #pm4_info_file_h.write("{\n")
-  #for opcode in opcode_dict:
-  #  pm4_info_file_h.write("    %s = %s,\n" % (opcode_dict[opcode], opcode))
-  #pm4_info_file_h.write("};\n")
 
   # .H file
   outputH(pm4_info_file_h)
@@ -1120,19 +1114,22 @@ try:
   pm4_info_file_h.close();
 
   # lint
-  print("formatting " + "clang-format -i -style=file " + sys.argv[2] + ".h")
-  os.system("clang-format -i -style=file " + sys.argv[2] + ".h")
-  print("formatting " + "clang-format -i -style=file " + sys.argv[2] + ".cpp")
-  os.system("clang-format -i -style=file  " + sys.argv[2] + ".cpp")
+  format_cmd = 'clang-format -i -style=file ' + sys.argv[2]
+  format_cmd_h = format_cmd + '.h'
+  format_cmd_cpp = format_cmd + '.cpp'
+  print('formatting ' + format_cmd_h)
+  os.system(format_cmd_h)
+  print('formatting ' + format_cmd_cpp)
+  os.system(format_cmd_cpp)
 
 except IOError as e:
     errno, strerror = e.args
-    print("I/O error({0}): {1}".format(errno,strerror))
+    print('I/O error({0}): {1}'.format(errno,strerror))
     # e can be printed directly without using .args:
     # print(e)
 except:
-  print("Unexpected error:", sys.exc_info()[0])
+  print('Unexpected error:', sys.exc_info()[0])
   raise
 
-print("%s: %s file generated" % (sys.argv[0], sys.argv[2]))
+print('%s: %s file generated' % (sys.argv[0], sys.argv[2]))
 

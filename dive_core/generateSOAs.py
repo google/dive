@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict
 
 from jinja2 import Environment, FileSystemLoader
-"""
+'''
 This script generates structure-of-array C++ classes from a template (structure_of_arrays.jinja)
 and a json description of the types (marker_types.json).
 
@@ -84,47 +84,47 @@ EventmarkerInfo &events = marker_data.Events();
 auto it = events.Add();
 it->SetThreadY(7);
 ```
-"""
+'''
 
 
 def clang_format(path: str) -> None:
-    """
+    '''
     Run clang-format on C++ source file given by the path
-    """
+    '''
     if 'CLANG_FORMAT' in os.environ:
         clang_format_path = os.environ['CLANG_FORMAT']
     else:
-        clang_format_path = shutil.which("clang-format-14") or \
-                            shutil.which("clang-format")
+        clang_format_path = shutil.which('clang-format-14') or \
+                            shutil.which('clang-format')
     if not clang_format_path or not os.path.isfile(clang_format_path):
-        raise (Exception("Could not find clang-format"))
-    res = subprocess.run([clang_format_path, "--version"],
+        raise (Exception('Could not find clang-format'))
+    res = subprocess.run([clang_format_path, '--version'],
                          capture_output=True,
                          check=True)
-    if not res.stdout.decode('utf-8').startswith("clang-format version 14"):
-        raise (Exception("Incorrect clang-format version"))
-    subprocess.run([clang_format_path, "-i", path], check=True)
+    if not res.stdout.decode('utf-8').startswith('clang-format version 14'):
+        raise (Exception('Incorrect clang-format version'))
+    subprocess.run([clang_format_path, '-i', path], check=True)
 
 
 def snake_case(value: str) -> str:
-    """
-    Converts a camel/Pascal case identifier (e.g. "MyIdentifier") into a snake case identifier (e.g. "my_identifier").
+    '''
+    Converts a camel/Pascal case identifier (e.g. 'MyIdentifier') into a snake case identifier (e.g. 'my_identifier').
 
     This is used by the template.
-    """
+    '''
     return re.sub('((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))', r'_\1',
                   value).lower()
 
 
 def _is_numeric(ty: str) -> str:
-    return ty in ["int32_t", "uint32_t", "int64_t", "uint64_t"]
+    return ty in ['int32_t', 'uint32_t', 'int64_t', 'uint64_t']
 
 
 def generate(spec: Dict, gen_name: str) -> None:
-    """
+    '''
     Generates the header and source files for a loaded spec
-    """
-    template_dir = os.path.abspath("dive_core")
+    '''
+    template_dir = os.path.abspath('dive_core')
     loader = FileSystemLoader(template_dir)
     env = Environment(loader=loader,
                       trim_blocks=True,
@@ -138,50 +138,50 @@ def generate(spec: Dict, gen_name: str) -> None:
         Path(os.path.dirname(path)).mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             tmpl = ''.join(
-                ["{% import 'struct_of_arrays.jinja' as macros %}", macro])
+                ['{% import 'struct_of_arrays.jinja' as macros %}', macro])
             env.from_string(tmpl).stream(**kwargs).dump(f)
-        if path.endswith(".h") or path.endswith(".cpp"):
+        if path.endswith('.h') or path.endswith('.cpp'):
             clang_format(path)
 
     spec_options = []
-    if "options" in spec["header"]:
-        spec_options=spec["header"]["options"]
+    if 'options' in spec['header']:
+        spec_options=spec['header']['options']
     env.globals['options'] = spec_options
 
-    gen_file("{{macros.soa_h(soas, includes, namespace, gen_name)}}",
-             spec["header"]["path"],
-             soas=spec["soa_types"],
-             includes=spec["header"]["includes"],
-             namespace=spec["namespace"],
+    gen_file('{{macros.soa_h(soas, includes, namespace, gen_name)}}',
+             spec['header']['path'],
+             soas=spec['soa_types'],
+             includes=spec['header']['includes'],
+             namespace=spec['namespace'],
              gen_name=gen_name)
 
     gen_file(
-        "{{macros.soa_cpp(soas, sys_includes, includes, namespace, gen_name)}}",
-        spec["src"]["path"],
-        soas=spec["soa_types"],
-        includes=spec["src"]["includes"],
-        sys_includes=spec["src"]["sys_includes"],
-        namespace=spec["namespace"],
+        '{{macros.soa_cpp(soas, sys_includes, includes, namespace, gen_name)}}',
+        spec['src']['path'],
+        soas=spec['soa_types'],
+        includes=spec['src']['includes'],
+        sys_includes=spec['src']['sys_includes'],
+        namespace=spec['namespace'],
         gen_name=gen_name)
 
     gen_file(
-        "{{macros.soa_py_cpp(soas, py_bind_func, includes, namespace, gen_name)}}",
-        spec["py_wrapper"]["path"],
-        soas=spec["soa_types"],
-        includes=spec["py_wrapper"]["includes"],
-        py_bind_func=spec["py_wrapper"]["func"],
-        namespace=spec["namespace"],
+        '{{macros.soa_py_cpp(soas, py_bind_func, includes, namespace, gen_name)}}',
+        spec['py_wrapper']['path'],
+        soas=spec['soa_types'],
+        includes=spec['py_wrapper']['includes'],
+        py_bind_func=spec['py_wrapper']['func'],
+        namespace=spec['namespace'],
         gen_name=gen_name)
 
-    gen_file("{{macros.natvis(soas, gen_name)}}",
-             spec["natvis"]["path"],
-             soas=spec["soa_types"],
+    gen_file('{{macros.natvis(soas, gen_name)}}',
+             spec['natvis']['path'],
+             soas=spec['soa_types'],
              gen_name=gen_name)
 
 
 def main():
     if len(sys.argv) != 2:
-        print(sys.argv[0] + " <Path to struct-of-arrays json spec file>")
+        print(sys.argv[0] + ' <Path to struct-of-arrays json spec file>')
         sys.exit()
     print(sys.argv[1])
     json_path = os.path.abspath(sys.argv[1])
@@ -194,7 +194,7 @@ def main():
     script_dir, script_name = os.path.split(script_path)
 
     # Attempt to detect if this script has been moved
-    assert (os.path.basename(script_dir) == "dive_core")
+    assert (os.path.basename(script_dir) == 'dive_core')
 
     dive_src = os.path.dirname(script_dir)
     print(dive_src)
@@ -205,5 +205,5 @@ def main():
         generate(spec, script_name)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

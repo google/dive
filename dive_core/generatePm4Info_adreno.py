@@ -12,30 +12,30 @@ from common import addMissingDomains
 # ---------------------------------------------------------------------------------------
 def outputHeader(pm4_info_file):
   pm4_info_file.writelines('''
-     /*
-     Copyright 2020 Google LLC
-    
-     Licensed under the Apache License, Version 2.0 (the "License");
-     you may not use this file except in compliance with the License.
-     You may obtain a copy of the License at
-    
-     http://www.apache.org/licenses/LICENSE-2.0
-    
-     Unless required by applicable law or agreed to in writing, software
-     distributed under the License is distributed on an "AS IS" BASIS,
-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     See the License for the specific language governing permissions and
-     limitations under the License.
-    */
-    
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
-    //
-    // This code has been generated automatically by generatePm4Strings_adreno.py. Do not hand-modify this code.
-    //
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ''')
+/*
+Copyright 2020 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
+//
+// This code has been generated automatically by generatePm4Strings_adreno.py. Do not hand-modify this code.
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+''')
 
 # ---------------------------------------------------------------------------------------
 def outputH(pm4_info_file):
@@ -201,14 +201,14 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   parseEnumInfo(enum_index_dict, enum_list, registers_et_root)
 
   pm4_info_file.writelines('''
-    void Pm4InfoInit()
-    {
-        assert(g_sOpCodeToString.empty());
-        assert(g_sRegInfo.empty());
-        assert(g_sEnumReflection.empty());
-        assert(g_sPacketInfo.empty());
-        assert(g_sPacketInfoVariant.empty());
-  ''')
+void Pm4InfoInit()
+{
+    assert(g_sOpCodeToString.empty());
+    assert(g_sRegInfo.empty());
+    assert(g_sEnumReflection.empty());
+    assert(g_sPacketInfo.empty());
+    assert(g_sPacketInfoVariant.empty());
+''')
   outputOpcodes(pm4_info_file, opcode_dict)
   pm4_info_file.write('\n')
   outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict)

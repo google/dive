@@ -359,6 +359,7 @@ VkResult DiveRuntimeLayer::ResetCommandPool(PFN_vkResetCommandPool  pfn,
     {
         if (cmd.second.pool == commandPool)
         {
+            cmd.second.timestamp_offset = CommandBufferInfo::kInvalidTimeStampOffset;
             cmd.second.Reset();
         }
     }
@@ -551,8 +552,9 @@ void DiveRuntimeLayer::UpdateFrameMetrics(VkDevice device)
                 const uint32_t timestamp_offset = m_cmds[cmd].timestamp_offset;
 
                 uint64_t
-                availability_begin = timestamps_with_availability[(timestamp_offset + 1) * 2 + 1];
-                uint64_t availability_end = timestamps_with_availability[timestamp_offset * 2 + 1];
+                availability_end = timestamps_with_availability[(timestamp_offset + 1) * 2 + 1];
+                uint64_t
+                availability_begin = timestamps_with_availability[timestamp_offset * 2 + 1];
 
                 if ((availability_begin != 0) && (availability_end != 0))
                 {

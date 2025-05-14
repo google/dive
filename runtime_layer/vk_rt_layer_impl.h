@@ -150,7 +150,6 @@ private:
     {
         void Reset()
         {
-            timestamp_offset = kInvalidTimeStampOffset;
             is_frameboundary = false;
             usage_one_submit = false;
         }

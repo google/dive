@@ -1,0 +1,1 @@
+add_subdirectory(gfxr_dump_resources)

@@ -1,0 +1,2 @@
+add_executable(gfxr_dump_resources main.cpp)
+target_link_libraries(gfxr_dump_resources gfxrecon_decode)

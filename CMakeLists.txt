@@ -111,6 +111,7 @@ if(NOT ANDROID)
     endif()
 
     add_subdirectory(third_party/gfxreconstruct)
+    add_subdirectory(tools)
 else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")

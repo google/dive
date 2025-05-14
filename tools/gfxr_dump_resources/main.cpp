@@ -1,15 +1,63 @@
+#include <cstdint>
+#include <functional>
 #include <iostream>
+#include <unordered_map>
 
+#include "gfxreconstruct/framework/decode/api_decoder.h"
 #include "gfxreconstruct/framework/decode/file_processor.h"
+#include "gfxreconstruct/framework/decode/struct_pointer_decoder.h"
+#include "gfxreconstruct/framework/format/format.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
+#include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
 namespace
 {
 
+// TODO: Process_vkBeginCommandBuffer: commandBuffer=18446744073709551612
+// Process_vkQueueSubmit
+// emit
+// Process_vkBeginCommandBuffer: commandBuffer=18446744073709551612
+// Process_vkQueueSubmit
+// emit
+
+// Mirrors dump resources JSON schema.
+// During MyConsumer, this may be incomplete and missing info.
+// When dump_found_callback is run, it should be complete and ready for `--dump-resources`.
+struct DumpEntry
+{
+    uint64_t begin_command_buffer_block_index = 0;
+    uint64_t queue_submit_block_index = 0;
+};
+
 class MyConsumer : public gfxrecon::decode::VulkanConsumer
 {
 public:
+    MyConsumer(std::function<void(DumpEntry)> dump_found_callback) :
+        dump_found_callback_(std::move(dump_found_callback))
+    {
+    }
+
+    void Process_vkBeginCommandBuffer(
+    const gfxrecon::decode::ApiCallInfo& call_info,
+    VkResult                             returnValue,
+    gfxrecon::format::HandleId           commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
+    pBeginInfo) override
+    {
+        std::cerr << "Process_vkBeginCommandBuffer: commandBuffer=" << commandBuffer << '\n';
+        DumpEntry new_dump{ .begin_command_buffer_block_index = call_info.index };
+        auto [it, inserted] = incomplete_dumps_.try_emplace(commandBuffer, new_dump);
+        if (!inserted)
+        {
+            std::cerr << "Command buffer " << commandBuffer
+                      << " never submitted! Discarding previous state...\n";
+            // TODO Command buffer 243 never submitted! Discarding previous state...
+            it->second = std::move(new_dump);
+            return;
+        }
+    }
+
     void Process_vkQueueSubmit(
     const gfxrecon::decode::ApiCallInfo&                                            call_info,
     VkResult                                                                        returnValue,
@@ -18,8 +66,43 @@ public:
     gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
     gfxrecon::format::HandleId                                                      fence) override
     {
-        std::cout << "Process_vkQueueSubmit\n";
+        std::cerr << "Process_vkQueueSubmit\n";
+        for (int submit_index = 0; submit_index < submitCount; submit_index++)
+        {
+            const gfxrecon::decode::Decoded_VkSubmitInfo&
+            submit = pSubmits->GetMetaStructPointer()[submit_index];
+            for (int command_buffer_index = 0;
+                 command_buffer_index < pSubmits->GetPointer()->commandBufferCount;
+                 command_buffer_index++)
+            {
+                gfxrecon::format::HandleId command_buffer_id = submit.pCommandBuffers
+                                                               .GetPointer()[command_buffer_index];
+                if (auto it = incomplete_dumps_.find(command_buffer_id);
+                    it != incomplete_dumps_.end())
+                {
+                    gfxrecon::format::HandleId command_buffer_id = it->first;
+                    DumpEntry                  dump_entry = std::move(it->second);
+                    incomplete_dumps_.erase(it);
+                    dump_entry.queue_submit_block_index = call_info.index;
+                    // TODO assert begin is before submit
+                    dump_found_callback_(std::move(dump_entry));
+                    std::cerr << "emit\n";
+                }
+                else
+                {
+                    std::cerr << "Command buffer " << command_buffer_id << " never started!\n";
+                }
+            }
+        }
     }
+
+private:
+    // Function run when a complete dump entry has been formed. This is ready to be written to disk,
+    // etc.
+    std::function<void(DumpEntry)> dump_found_callback_;
+    // Incomplete dumps for each command buffer
+    std::unordered_map<gfxrecon::format::HandleId, DumpEntry> incomplete_dumps_;
+    // TODO separate map of open command buffers?
 };
 
 }  // namespace
@@ -41,13 +124,24 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    std::vector<DumpEntry> complete_dump_entries;
+
     gfxrecon::decode::VulkanDecoder vulkan_decoder;
-    MyConsumer                      my_consumer;
+    MyConsumer                      my_consumer([&complete_dump_entries](DumpEntry dump_entry) {
+        complete_dump_entries.push_back(std::move(dump_entry));
+    });
     vulkan_decoder.AddConsumer(&my_consumer);
     file_processor.AddDecoder(&vulkan_decoder);
 
     file_processor.ProcessAllFrames();
 
-    std::cout << "Hello world\n";
+    std::cout << "Found " << complete_dump_entries.size() << " dumpables\n";
+    for (const DumpEntry& dump : complete_dump_entries)
+    {
+        std::cout << " Dump\n";
+        std::cout << "   BeginCommandBuffer=" << dump.begin_command_buffer_block_index << '\n';
+        std::cout << "   QueueSubmit=" << dump.queue_submit_block_index << '\n';
+    }
+
     return 0;
 }

@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <unordered_map>
 
 #include "gfxreconstruct/framework/decode/api_decoder.h"
@@ -34,6 +35,24 @@ struct IncompleteDump
 {
     DumpEntry                         dump_entry{};
     gfxrecon::decode::VulkanConsumer* state = nullptr;
+};
+
+class State
+{
+public:
+    virtual ~State() = default;
+
+    virtual void TransitionTo(State& from_state) { dump_entry_ = from_state.TransitionFrom(); }
+
+private:
+    virtual DumpEntry TransitionFrom()
+    {
+        DumpEntry dump_entry = std::move(dump_entry_).value();
+        dump_entry_ = {};
+        return std::move(dump_entry);
+    }
+
+    std::optional<DumpEntry> dump_entry_;
 };
 
 // TODO rename state machine

@@ -58,6 +58,70 @@ public:
                                                                        pBeginInfo);
     }
 
+    void Process_vkCmdBeginRenderPass(
+    const gfxrecon::decode::ApiCallInfo& call_info,
+    gfxrecon::format::HandleId           commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+                      pRenderPassBegin,
+    VkSubpassContents contents) override
+    {
+        std::cerr << "Process_vkCmdBeginRenderPass: commandBuffer=" << commandBuffer << '\n';
+        if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+        {
+            std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
+            return;
+        }
+        else
+        {
+            StateMachine& state_machine = *it->second;
+            state_machine.Process_vkCmdBeginRenderPass(call_info,
+                                                       commandBuffer,
+                                                       pRenderPassBegin,
+                                                       contents);
+        }
+    }
+
+    void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
+                                   gfxrecon::format::HandleId           commandBuffer,
+                                   uint32_t                             vertexCount,
+                                   uint32_t                             instanceCount,
+                                   uint32_t                             firstVertex,
+                                   uint32_t                             firstInstance) override
+    {
+        std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
+        if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+        {
+            std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
+            return;
+        }
+        else
+        {
+            StateMachine& state_machine = *it->second;
+            state_machine.Process_vkCmdDraw(call_info,
+                                            commandBuffer,
+                                            vertexCount,
+                                            instanceCount,
+                                            firstVertex,
+                                            firstInstance);
+        }
+    }
+
+    void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
+                                    gfxrecon::format::HandleId           commandBuffer) override
+    {
+        std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
+        if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+        {
+            std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
+            return;
+        }
+        else
+        {
+            StateMachine& state_machine = *it->second;
+            state_machine.Process_vkCmdEndRenderPass(call_info, commandBuffer);
+        }
+    }
+
     void Process_vkQueueSubmit(
     const gfxrecon::decode::ApiCallInfo&                                            call_info,
     VkResult                                                                        returnValue,
@@ -142,8 +206,16 @@ int main(int argc, char** argv)
     for (const DumpEntry& dump : complete_dump_entries)
     {
         std::cout << " Dump\n";
-        std::cout << "   BeginCommandBuffer=" << dump.begin_command_buffer_block_index << '\n';
-        std::cout << "   QueueSubmit=" << dump.queue_submit_block_index << '\n';
+        std::cout << "  BeginCommandBuffer=" << dump.begin_command_buffer_block_index << '\n';
+        std::cout << "  RenderPass size=" << dump.render_passes.size() << '\n';
+        for (const DumpRenderPass& render_pass : dump.render_passes) {
+            std::cout << "   RenderPass=" << render_pass.begin_block_index << ',' << render_pass.end_block_index << '\n';
+        }
+        std::cout << "  Draws size=" << dump.draws.size() << '\n';
+        for (const uint64_t& draw : dump.draws) {
+            std::cout << "   Draw=" << draw << '\n';
+        }
+        std::cout << "  QueueSubmit=" << dump.queue_submit_block_index << '\n';
     }
 
     return 0;

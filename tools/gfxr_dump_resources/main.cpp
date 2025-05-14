@@ -30,6 +30,13 @@ struct DumpEntry
     uint64_t queue_submit_block_index = 0;
 };
 
+struct IncompleteDump
+{
+    DumpEntry                         dump_entry{};
+    gfxrecon::decode::VulkanConsumer* state = nullptr;
+};
+
+// TODO rename state machine
 class MyConsumer : public gfxrecon::decode::VulkanConsumer
 {
 public:
@@ -46,14 +53,17 @@ public:
     pBeginInfo) override
     {
         std::cerr << "Process_vkBeginCommandBuffer: commandBuffer=" << commandBuffer << '\n';
-        DumpEntry new_dump{ .begin_command_buffer_block_index = call_info.index };
-        auto [it, inserted] = incomplete_dumps_.try_emplace(commandBuffer, new_dump);
+        // TODO set state
+        IncompleteDump incomplete_dump{ DumpEntry{
+        .begin_command_buffer_block_index = call_info.index } };
+        auto [it, inserted] = incomplete_dumps_.try_emplace(commandBuffer,
+                                                            std::move(incomplete_dump));
         if (!inserted)
         {
             std::cerr << "Command buffer " << commandBuffer
                       << " never submitted! Discarding previous state...\n";
-            // TODO Command buffer 243 never submitted! Discarding previous state...
-            it->second = std::move(new_dump);
+            // TODO why are some made but never submitted?
+            it->second = std::move(incomplete_dump);
             return;
         }
     }
@@ -81,7 +91,8 @@ public:
                     it != incomplete_dumps_.end())
                 {
                     gfxrecon::format::HandleId command_buffer_id = it->first;
-                    DumpEntry                  dump_entry = std::move(it->second);
+                    IncompleteDump&            incomplete_dump = it->second;
+                    DumpEntry                  dump_entry = std::move(incomplete_dump.dump_entry);
                     incomplete_dumps_.erase(it);
                     dump_entry.queue_submit_block_index = call_info.index;
                     // TODO assert begin is before submit
@@ -101,7 +112,7 @@ private:
     // etc.
     std::function<void(DumpEntry)> dump_found_callback_;
     // Incomplete dumps for each command buffer
-    std::unordered_map<gfxrecon::format::HandleId, DumpEntry> incomplete_dumps_;
+    std::unordered_map<gfxrecon::format::HandleId, IncompleteDump> incomplete_dumps_;
     // TODO separate map of open command buffers?
 };
 

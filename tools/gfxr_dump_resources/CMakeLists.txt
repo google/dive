@@ -1,4 +1,4 @@
-add_executable(gfxr_dump_resources main.cpp)
+add_executable(gfxr_dump_resources main.cpp state_machine.cpp states.cpp)
 target_link_libraries(gfxr_dump_resources gfxrecon_decode)
 # Allow includes like:
 #   #include "gfxreconstruct/framework/decode/file_processor.h"

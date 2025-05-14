@@ -1,9 +1,12 @@
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <unordered_map>
 
+#include "dump_entry.h"
 #include "gfxreconstruct/framework/decode/api_decoder.h"
 #include "gfxreconstruct/framework/decode/file_processor.h"
 #include "gfxreconstruct/framework/decode/struct_pointer_decoder.h"
@@ -12,50 +15,13 @@
 #include "gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
+#include "state_machine.h"
+#include "states.h"
+
 namespace
 {
 
-// TODO: Process_vkBeginCommandBuffer: commandBuffer=18446744073709551612
-// Process_vkQueueSubmit
-// emit
-// Process_vkBeginCommandBuffer: commandBuffer=18446744073709551612
-// Process_vkQueueSubmit
-// emit
-
-// Mirrors dump resources JSON schema.
-// During MyConsumer, this may be incomplete and missing info.
-// When dump_found_callback is run, it should be complete and ready for `--dump-resources`.
-struct DumpEntry
-{
-    uint64_t begin_command_buffer_block_index = 0;
-    uint64_t queue_submit_block_index = 0;
-};
-
-struct IncompleteDump
-{
-    DumpEntry                         dump_entry{};
-    gfxrecon::decode::VulkanConsumer* state = nullptr;
-};
-
-class State
-{
-public:
-    virtual ~State() = default;
-
-    virtual void TransitionTo(State& from_state) { dump_entry_ = from_state.TransitionFrom(); }
-
-private:
-    virtual DumpEntry TransitionFrom()
-    {
-        DumpEntry dump_entry = std::move(dump_entry_).value();
-        dump_entry_ = {};
-        return std::move(dump_entry);
-    }
-
-    std::optional<DumpEntry> dump_entry_;
-};
-
-// TODO rename state machine
+// TODO rename
 class MyConsumer : public gfxrecon::decode::VulkanConsumer
 {
 public:
@@ -72,19 +38,24 @@ public:
     pBeginInfo) override
     {
         std::cerr << "Process_vkBeginCommandBuffer: commandBuffer=" << commandBuffer << '\n';
-        // TODO set state
-        IncompleteDump incomplete_dump{ DumpEntry{
-        .begin_command_buffer_block_index = call_info.index } };
-        auto [it, inserted] = incomplete_dumps_.try_emplace(commandBuffer,
-                                                            std::move(incomplete_dump));
-        if (!inserted)
+        // TODO could reduce # of lookups by using `it`
+        if (auto it = incomplete_dumps_.find(commandBuffer); it != incomplete_dumps_.end())
         {
             std::cerr << "Command buffer " << commandBuffer
                       << " never submitted! Discarding previous state...\n";
-            // TODO why are some made but never submitted?
-            it->second = std::move(incomplete_dump);
-            return;
         }
+        incomplete_dumps_[commandBuffer] = std::make_unique<StateMachine>(
+        commandBuffer,
+        [this, commandBuffer](DumpEntry dump_entry) {
+            dump_found_callback_(std::move(dump_entry));
+            incomplete_dumps_.erase(commandBuffer);
+        },
+        [this, commandBuffer] { incomplete_dumps_.erase(commandBuffer); });
+        // TODO reduce # of lookups
+        incomplete_dumps_[commandBuffer]->Process_vkBeginCommandBuffer(call_info,
+                                                                       returnValue,
+                                                                       commandBuffer,
+                                                                       pBeginInfo);
     }
 
     void Process_vkQueueSubmit(
@@ -106,17 +77,18 @@ public:
             {
                 gfxrecon::format::HandleId command_buffer_id = submit.pCommandBuffers
                                                                .GetPointer()[command_buffer_index];
+                std::cerr << "... for commandBuffer=" << command_buffer_id << '\n';
                 if (auto it = incomplete_dumps_.find(command_buffer_id);
                     it != incomplete_dumps_.end())
                 {
-                    gfxrecon::format::HandleId command_buffer_id = it->first;
-                    IncompleteDump&            incomplete_dump = it->second;
-                    DumpEntry                  dump_entry = std::move(incomplete_dump.dump_entry);
-                    incomplete_dumps_.erase(it);
-                    dump_entry.queue_submit_block_index = call_info.index;
-                    // TODO assert begin is before submit
-                    dump_found_callback_(std::move(dump_entry));
-                    std::cerr << "emit\n";
+                    StateMachine& state_machine = *it->second;
+                    state_machine.Process_vkQueueSubmit(call_info,
+                                                        returnValue,
+                                                        queue,
+                                                        submitCount,
+                                                        pSubmits,
+                                                        fence);
+                    break;
                 }
                 else
                 {
@@ -131,7 +103,8 @@ private:
     // etc.
     std::function<void(DumpEntry)> dump_found_callback_;
     // Incomplete dumps for each command buffer
-    std::unordered_map<gfxrecon::format::HandleId, IncompleteDump> incomplete_dumps_;
+    // std::unique_ptr for pointer stability
+    std::unordered_map<gfxrecon::format::HandleId, std::unique_ptr<StateMachine>> incomplete_dumps_;
     // TODO separate map of open command buffers?
 };
 

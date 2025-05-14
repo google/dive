@@ -829,7 +829,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     // For descriptors, we purposefully try to include them as "packets" for easier parsing.
     // They are not technically PM4 packets, hence the 0x0.
     // Example: const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);
-        ''')
+''')
 
         pm4_info_file.write('    g_sPacketInfo[0x%x] = { "%s", %d, %s, {' % (opcode, packet_name, array_size, stripe_variant))
         outputPacketFields(pm4_info_file, enum_index_dict, reg_list)

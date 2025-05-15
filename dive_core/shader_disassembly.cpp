@@ -105,6 +105,7 @@ Disassembly::Disassembly(const IMemoryManager& mem_manager,
     m_address(address),
     m_log(log)
 {
+    ((void)(m_log));  // avoid unused variable
 }
 
 //--------------------------------------------------------------------------------------------------

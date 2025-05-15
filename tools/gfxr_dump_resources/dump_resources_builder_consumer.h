@@ -16,21 +16,45 @@
 
 #pragma once
 
+#include <functional>
+#include <memory>
+#include <unordered_map>
+
+#include "dump_entry.h"
+#include "state_machine.h"
+
+
 #include "gfxreconstruct/framework/decode/api_decoder.h"
 #include "gfxreconstruct/framework/decode/struct_pointer_decoder.h"
 #include "gfxreconstruct/framework/format/format.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
-// forward decl to break recursive includes
-class StateMachine;
+namespace Dive::tools
+{
 
-// Have BeginCommandBuffer, BeginRenderPass
-// Looking for Draw or EndRenderPass
-class LookingForDraw : public gfxrecon::decode::VulkanConsumer
+// Processes Vulkan commands originating from a .gfxr, looking for candidates for
+// `--dump-resources`.
+class DumpResourcesBuilderConsumer : public gfxrecon::decode::VulkanConsumer
 {
 public:
-    LookingForDraw(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_end);
+    // `dump_found_callback` is run when a complete DumpEntry is found which is suitable for being
+    // used with `--dump-resources`.
+    DumpResourcesBuilderConsumer(std::function<void(DumpEntry)> dump_found_callback);
+
+    void Process_vkBeginCommandBuffer(
+    const gfxrecon::decode::ApiCallInfo& call_info,
+    VkResult                             returnValue,
+    gfxrecon::format::HandleId           commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
+    pBeginInfo) override;
+
+    void Process_vkCmdBeginRenderPass(
+    const gfxrecon::decode::ApiCallInfo& call_info,
+    gfxrecon::format::HandleId           commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+                      pRenderPassBegin,
+    VkSubpassContents contents) override;
 
     void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
                            gfxrecon::format::HandleId           commandBuffer,
@@ -50,54 +74,20 @@ public:
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
                                     gfxrecon::format::HandleId           commandBuffer) override;
 
-    // TODO subpass
-
-private:
-    StateMachine&                     parent_;
-    gfxrecon::decode::VulkanConsumer& found_end_;
-};
-
-// Have BeginCommandBuffer
-// looking for BeginRenderPass or QueueSubmit
-class LookingForRenderPass : public gfxrecon::decode::VulkanConsumer
-{
-public:
-    LookingForRenderPass(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
-
     void Process_vkQueueSubmit(
     const gfxrecon::decode::ApiCallInfo&                                            call_info,
     VkResult                                                                        returnValue,
     gfxrecon::format::HandleId                                                      queue,
     uint32_t                                                                        submitCount,
     gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-    gfxrecon::format::HandleId                                                      fence) override;
-
-    void Process_vkCmdBeginRenderPass(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-                      pRenderPassBegin,
-    VkSubpassContents contents) override;
+    gfxrecon::format::HandleId                                                      fence);
 
 private:
-    StateMachine&                     parent_;
-    gfxrecon::decode::VulkanConsumer& found_begin_;
+    // Function run when a complete dump entry has been formed. This is ready to be written to disk,
+    // etc.
+    std::function<void(DumpEntry)> dump_found_callback_;
+    // Incomplete dumps for each command buffer. std::unique_ptr for pointer stability
+    std::unordered_map<gfxrecon::format::HandleId, std::unique_ptr<StateMachine>> incomplete_dumps_;
 };
 
-// A very short-lived state but modeled for completeness.
-class LookingForBegin : public gfxrecon::decode::VulkanConsumer
-{
-public:
-    LookingForBegin(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
-
-    void Process_vkBeginCommandBuffer(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    VkResult                             returnValue,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
-    pBeginInfo) override;
-
-private:
-    StateMachine&                     parent_;
-    gfxrecon::decode::VulkanConsumer& found_begin_;
-};
+}  // namespace Dive::tools

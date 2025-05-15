@@ -17,6 +17,7 @@
 #include "dump_resources_builder_consumer.h"
 
 #include <iostream>
+#include "state_machine.h"
 
 namespace Dive::tools
 {
@@ -35,24 +36,29 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBuffer
 pBeginInfo)
 {
     std::cerr << "Process_vkBeginCommandBuffer: commandBuffer=" << commandBuffer << '\n';
-    // TODO could reduce # of lookups by using `it`
-    if (auto it = incomplete_dumps_.find(commandBuffer); it != incomplete_dumps_.end())
+
+    auto [it, inserted] = incomplete_dumps_
+                          .insert_or_assign(commandBuffer,
+                                            std::make_unique<StateMachine>(
+                                            commandBuffer,
+                                            [this, commandBuffer](DumpEntry dump_entry) {
+                                                dump_found_callback_(std::move(dump_entry));
+                                                incomplete_dumps_.erase(commandBuffer);
+                                            },
+                                            [this, commandBuffer] {
+                                                incomplete_dumps_.erase(commandBuffer);
+                                            }));
+    if (!inserted)
     {
         std::cerr << "Command buffer " << commandBuffer
                   << " never submitted! Discarding previous state...\n";
     }
-    incomplete_dumps_[commandBuffer] = std::make_unique<StateMachine>(
-    commandBuffer,
-    [this, commandBuffer](DumpEntry dump_entry) {
-        dump_found_callback_(std::move(dump_entry));
-        incomplete_dumps_.erase(commandBuffer);
-    },
-    [this, commandBuffer] { incomplete_dumps_.erase(commandBuffer); });
-    // TODO reduce # of lookups
-    incomplete_dumps_[commandBuffer]->Process_vkBeginCommandBuffer(call_info,
-                                                                   returnValue,
-                                                                   commandBuffer,
-                                                                   pBeginInfo);
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkBeginCommandBuffer(call_info,
+                                                       returnValue,
+                                                       commandBuffer,
+                                                       pBeginInfo);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdBeginRenderPass(
@@ -63,19 +69,18 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeg
 VkSubpassContents contents)
 {
     std::cerr << "Process_vkCmdBeginRenderPass: commandBuffer=" << commandBuffer << '\n';
-    if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+    auto it = incomplete_dumps_.find(commandBuffer);
+    if (it == incomplete_dumps_.end())
     {
         std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
         return;
     }
-    else
-    {
-        StateMachine& state_machine = *it->second;
-        state_machine.Process_vkCmdBeginRenderPass(call_info,
-                                                   commandBuffer,
-                                                   pRenderPassBegin,
-                                                   contents);
-    }
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkCmdBeginRenderPass(call_info,
+                                                       commandBuffer,
+                                                       pRenderPassBegin,
+                                                       contents);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
@@ -86,21 +91,20 @@ void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::Api
                                                      uint32_t                   firstInstance)
 {
     std::cerr << "Process_vkCmdDraw: commandBuffer=" << commandBuffer << '\n';
-    if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+    auto it = incomplete_dumps_.find(commandBuffer);
+    if (it == incomplete_dumps_.end())
     {
         std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
         return;
     }
-    else
-    {
-        StateMachine& state_machine = *it->second;
-        state_machine.Process_vkCmdDraw(call_info,
-                                        commandBuffer,
-                                        vertexCount,
-                                        instanceCount,
-                                        firstVertex,
-                                        firstInstance);
-    }
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkCmdDraw(call_info,
+                                            commandBuffer,
+                                            vertexCount,
+                                            instanceCount,
+                                            firstVertex,
+                                            firstInstance);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdDrawIndexed(
@@ -113,22 +117,21 @@ int32_t                              vertexOffset,
 uint32_t                             firstInstance)
 {
     std::cerr << "Process_vkCmdDrawIndexed: commandBuffer=" << commandBuffer << '\n';
-    if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+    auto it = incomplete_dumps_.find(commandBuffer);
+    if (it == incomplete_dumps_.end())
     {
         std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
         return;
     }
-    else
-    {
-        StateMachine& state_machine = *it->second;
-        state_machine.Process_vkCmdDrawIndexed(call_info,
-                                               commandBuffer,
-                                               indexCount,
-                                               instanceCount,
-                                               firstIndex,
-                                               vertexOffset,
-                                               firstInstance);
-    }
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkCmdDrawIndexed(call_info,
+                                                   commandBuffer,
+                                                   indexCount,
+                                                   instanceCount,
+                                                   firstIndex,
+                                                   vertexOffset,
+                                                   firstInstance);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass(
@@ -136,16 +139,15 @@ const gfxrecon::decode::ApiCallInfo& call_info,
 gfxrecon::format::HandleId           commandBuffer)
 {
     std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
-    if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+    auto it = incomplete_dumps_.find(commandBuffer);
+    if (it == incomplete_dumps_.end())
     {
         std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
         return;
     }
-    else
-    {
-        StateMachine& state_machine = *it->second;
-        state_machine.Process_vkCmdEndRenderPass(call_info, commandBuffer);
-    }
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkCmdEndRenderPass(call_info, commandBuffer);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkQueueSubmit(
@@ -171,14 +173,12 @@ gfxrecon::format::HandleId                                                      
             if (auto it = incomplete_dumps_.find(command_buffer_id); it != incomplete_dumps_.end())
             {
                 StateMachine& state_machine = *it->second;
-                state_machine
+                state_machine.state()
                 .Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
                 break;
             }
-            else
-            {
-                std::cerr << "Command buffer " << command_buffer_id << " never started!\n";
-            }
+
+            std::cerr << "Command buffer " << command_buffer_id << " never started!\n";
         }
     }
 }

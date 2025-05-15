@@ -129,8 +129,6 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
 
 int main(int argc, char** argv)
 {
-    // TODO: Assertion failed: 'depth_img_view_info != nullptr'
-    // (/usr/local/google/home/hitchens/git/gfxreconstruct/framework/decode/vulkan_replay_dump_resources_draw_calls.cpp:2326
     if (argc != 3)
     {
         std::cerr << "Usage: gfxr_dump_resources FILE.GFXR OUTPUT.JSON\n";
@@ -157,26 +155,6 @@ int main(int argc, char** argv)
     file_processor.AddDecoder(&vulkan_decoder);
 
     file_processor.ProcessAllFrames();
-
-    // DEBUG OUTPUT REMOVE BEFORE COMMITTING
-    std::cerr << "Found " << complete_dump_entries.size() << " dumpables\n";
-    for (const DumpEntry& dump : complete_dump_entries)
-    {
-        std::cerr << " Dump\n";
-        std::cerr << "  BeginCommandBuffer=" << dump.begin_command_buffer_block_index << '\n';
-        std::cerr << "  RenderPass size=" << dump.render_passes.size() << '\n';
-        for (const DumpRenderPass& render_pass : dump.render_passes)
-        {
-            std::cerr << "   RenderPass=" << render_pass.begin_block_index << ','
-                      << render_pass.end_block_index << '\n';
-        }
-        std::cerr << "  Draws size=" << dump.draws.size() << '\n';
-        for (const uint64_t& draw : dump.draws)
-        {
-            std::cerr << "   Draw=" << draw << '\n';
-        }
-        std::cerr << "  QueueSubmit=" << dump.queue_submit_block_index << '\n';
-    }
 
     SaveAsJsonFile(complete_dump_entries, output_filename);
 

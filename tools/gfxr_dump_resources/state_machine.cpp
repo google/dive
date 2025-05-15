@@ -38,7 +38,6 @@ StateMachine::StateMachine(gfxrecon::format::HandleId command_buffer,
 void StateMachine::Transition(gfxrecon::decode::VulkanConsumer& new_state)
 {
     state_ = &new_state;
-    // TODO call TransitionTo
 }
 
 DumpEntry& StateMachine::dump_entry()
@@ -65,75 +64,8 @@ void StateMachine::Done()
     }
 }
 
-void StateMachine::Process_vkBeginCommandBuffer(
-const gfxrecon::decode::ApiCallInfo& call_info,
-VkResult                             returnValue,
-gfxrecon::format::HandleId           commandBuffer,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
-pBeginInfo)
-{
-    // Consumer will never be called if state != begin_state_
-    assert(state_ == &begin_state_);
-    state_->Process_vkBeginCommandBuffer(call_info, returnValue, commandBuffer, pBeginInfo);
-}
-
-void StateMachine::Process_vkCmdBeginRenderPass(
-const gfxrecon::decode::ApiCallInfo& call_info,
-gfxrecon::format::HandleId           commandBuffer,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-                  pRenderPassBegin,
-VkSubpassContents contents)
-{
-    state_->Process_vkCmdBeginRenderPass(call_info, commandBuffer, pRenderPassBegin, contents);
-}
-
-void StateMachine::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
-                                     gfxrecon::format::HandleId           commandBuffer,
-                                     uint32_t                             vertexCount,
-                                     uint32_t                             instanceCount,
-                                     uint32_t                             firstVertex,
-                                     uint32_t                             firstInstance)
-{
-    state_->Process_vkCmdDraw(call_info,
-                              commandBuffer,
-                              vertexCount,
-                              instanceCount,
-                              firstVertex,
-                              firstInstance);
-}
-
-void StateMachine::Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
-                                            gfxrecon::format::HandleId           commandBuffer,
-                                            uint32_t                             indexCount,
-                                            uint32_t                             instanceCount,
-                                            uint32_t                             firstIndex,
-                                            int32_t                              vertexOffset,
-                                            uint32_t                             firstInstance)
-{
-    state_->Process_vkCmdDrawIndexed(call_info,
-                                     commandBuffer,
-                                     indexCount,
-                                     instanceCount,
-                                     firstIndex,
-                                     vertexOffset,
-                                     firstInstance);
-}
-
-void StateMachine::Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
-                                              gfxrecon::format::HandleId           commandBuffer)
-{
-    state_->Process_vkCmdEndRenderPass(call_info, commandBuffer);
-}
-
-void StateMachine::Process_vkQueueSubmit(
-const gfxrecon::decode::ApiCallInfo&                                            call_info,
-VkResult                                                                        returnValue,
-gfxrecon::format::HandleId                                                      queue,
-uint32_t                                                                        submitCount,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-gfxrecon::format::HandleId                                                      fence)
-{
-    state_->Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
+gfxrecon::decode::VulkanConsumer& StateMachine::state() {
+    return *state_;
 }
 
 }  // namespace Dive::tools

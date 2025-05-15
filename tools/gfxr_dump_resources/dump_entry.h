@@ -16,40 +16,56 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <numeric>
 #include <vector>
 
 namespace Dive::tools
 {
 
+// A subelement of a dumpable that tracks the begin and end of a renderpass.
 struct DumpRenderPass
 {
+    // Block index for vkCmdBeginRenderPass.
     uint64_t begin_block_index = 0;
     // TODO subpass
+    // Block index for vkCmdEndRenderPass.
     uint64_t end_block_index = 0;
 
+    // Does the dumpable render pass have all the information that GFXR needs for replay.
     bool IsComplete() const { return begin_block_index != 0 && end_block_index != 0; }
 };
 
-// Mirrors dump resources JSON schema.
-// During MyConsumer, this may be incomplete and missing info.
-// When dump_found_callback is run, it should be complete and ready for `--dump-resources`.
+// Mirrors dump resources JSON schema for a single entry. During DumpResourcesBuilderConsumer, this
+// may be incomplete and missing info. When DumpResourcesBuilderConsumer calls `dump_found_callback`
+// is run, it should be complete and ready for `--dump-resources`.
+//
+// Each uint64_t is a block index in the .gfxr file. This is an autoincrementing number used to
+// uniquely identify each function call, etc. This is what GFXR wants when `--dump-resources` is
+// used. 0 is the sentinel used for "information missing".
 struct DumpEntry
 {
-    uint64_t                    begin_command_buffer_block_index = 0;
+    // Block index for vkBeginCommandBuffer.
+    uint64_t begin_command_buffer_block_index = 0;
+    // Render pass block indices. A single command buffer may have multiple render passes.
     std::vector<DumpRenderPass> render_passes;
-    std::vector<uint64_t>       draws;
-    uint64_t                    queue_submit_block_index = 0;
+    // All block indices for all vkCmdDraw* calls.
+    std::vector<uint64_t> draws;
+    // Block index for vkQueueSubmit.
+    uint64_t queue_submit_block_index = 0;
 
+    // Does the dumpable have all the information that GFXR needs for replay.
     bool IsComplete() const
     {
         bool complete = begin_command_buffer_block_index != 0 && queue_submit_block_index != 0 &&
                         !render_passes.empty() && !draws.empty();
-        // TODO std::acumulate?
         for (const DumpRenderPass& render_pass : render_passes)
         {
             complete &= render_pass.IsComplete();
         }
+        // TODO: If a render pass is incomplete, consider throwing away just the incomplete state so
+        // that any complete state will survive.
         return complete;
     }
 };

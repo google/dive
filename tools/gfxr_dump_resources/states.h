@@ -22,17 +22,23 @@
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
+// This file contains the states used by the state machine. See StateMachine for more docs.
+//
+// Each state has a weak reference to the owning state machine. This allows the state machine to
+// hold shared state that all states can reference, such as the current dumpable.
+
 namespace Dive::tools
 {
 
 // forward decl to break recursive includes
 class StateMachine;
 
-// Have BeginCommandBuffer, BeginRenderPass
-// Looking for Draw or EndRenderPass
+// Found vkBeginCommandBuffer, vkCmdBeginRenderPass.
+// Looking for vkCmdDraw or vkCmdEndRenderPass.
 class LookingForDraw : public gfxrecon::decode::VulkanConsumer
 {
 public:
+    // `found_end` is the state to transition to when vkCmdEndRenderPass is found.
     LookingForDraw(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_end);
 
     void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
@@ -53,20 +59,23 @@ public:
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
                                     gfxrecon::format::HandleId           commandBuffer) override;
 
-    // TODO subpass
+    // TODO: Subpass
+    // TODO: Other draws
 
 private:
     StateMachine&                     parent_;
     gfxrecon::decode::VulkanConsumer& found_end_;
 };
 
-// Have BeginCommandBuffer
-// looking for BeginRenderPass or QueueSubmit
+// Found vkBeginCommandBuffer.
+// Looking for vkCmdBeginRenderPass or vkQueueSubmit.
 class LookingForRenderPass : public gfxrecon::decode::VulkanConsumer
 {
 public:
+    // `found_begin` is the state to transition to when vkCmdBeginRenderPass is found.
     LookingForRenderPass(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
 
+    // Accept or reject depending on if the dumpable is complete.
     void Process_vkQueueSubmit(
     const gfxrecon::decode::ApiCallInfo&                                            call_info,
     VkResult                                                                        returnValue,
@@ -87,10 +96,11 @@ private:
     gfxrecon::decode::VulkanConsumer& found_begin_;
 };
 
-// A very short-lived state but modeled for completeness.
+// Looing for vkBeginCommandBuffer. This is the first state in the state machine.
 class LookingForBegin : public gfxrecon::decode::VulkanConsumer
 {
 public:
+    // `found_begin` is the state to transition to when vkBeginCommandBuffer is found.
     LookingForBegin(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
 
     void Process_vkBeginCommandBuffer(

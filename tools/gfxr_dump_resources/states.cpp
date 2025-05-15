@@ -80,8 +80,7 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeg
                   pRenderPassBegin,
 VkSubpassContents contents)
 {
-    parent_.dump_entry().render_passes.push_back(
-    DumpRenderPass{ .begin_block_index = call_info.index });
+    parent_.dump_entry().render_passes.push_back(DumpRenderPass{ call_info.index });
     parent_.Transition(found_begin_);
 }
 

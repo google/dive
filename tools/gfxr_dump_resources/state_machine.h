@@ -18,11 +18,8 @@
 
 #include <functional>
 
-#include "gfxreconstruct/framework/decode/api_decoder.h"
-#include "gfxreconstruct/framework/decode/struct_pointer_decoder.h"
 #include "gfxreconstruct/framework/format/format.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
-#include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
 #include "dump_entry.h"
 #include "states.h"
@@ -30,70 +27,73 @@
 namespace Dive::tools
 {
 
+// A state machine that, given a sequence of Vulkan calls for a particular command buffer, validates
+// the sequence and accumulates relevant dumpable information. Since we're looking for certain
+// functions in a certain order with certain constraints it made sense to model this as a state
+// machine.
+//
+// The actual command handling is deferred to the current state of the state machine. See states.h.
+//
+// Each command buffer ought to have its own state machine to avoid problems that could arise if two
+// command buffers are interleaved in the capture. This is handled by DumpResourcesBuilderConsumer.
+//
+// States:
+//
+// - LookingForDraw:
+//   - Start here.
+//   - When vkBeginCommandBuffer is found, record the block index and transition to
+//   LookingForRenderPass.
+//
+// - LookingForRenderPass:
+//   - when vkCmdBeginRenderPass is found, record the block index and transition to LookingForDraw.
+//   - When vkQueueSubmit is found, record the block index. Then, either accept or reject depending
+//   on whether the dumpable is complete
+//
+// - LookingForDraw:
+//    - When a vkCmdDraw* call is found, record the block index. Stay in this state to accumulate
+//    more draw calls.
+//    - When vkCmdEndRenderPass is found, record the block index and transition to
+//    LookingForRenderPass
+//
+// The state machine presents its results via one of two functions:
+//
+// 1. Accept: the dumpable is complete and can be used.
+// 2. Reject: the dumpable is incomplete and should be discard.
 class StateMachine : public gfxrecon::decode::VulkanConsumer
 {
 public:
     using RejectingFunction = std::function<void()>;
     using AcceptingFunction = std::function<void(DumpEntry)>;
 
+    // `command_buffer` is the GFXR ID for the command buffer that is being filtering for.
+    //
+    // `accept` will be run when a complete dumpable is found. `reject` will be run when the current
+    // state of this command buffer should be discard.
     StateMachine(gfxrecon::format::HandleId command_buffer,
                  AcceptingFunction          accept,
                  RejectingFunction          reject);
 
-    // Hooks for states
-    void                        Transition(gfxrecon::decode::VulkanConsumer& new_state);
-    DumpEntry&                  dump_entry();
+    // Change the state of the state machine.
+    void Transition(gfxrecon::decode::VulkanConsumer& new_state);
+    // Call accept for reject depending on whether the dumpable is complete.
+    void Done();
+
+    // Get the working state for the dumpable.
+    DumpEntry& dump_entry();
+    // Get the GFXR command buffer that we're looking for.
     gfxrecon::format::HandleId& command_buffer();
-    void                        Done();
-
-    void Process_vkBeginCommandBuffer(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    VkResult                             returnValue,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
-    pBeginInfo) override;
-
-    void Process_vkCmdBeginRenderPass(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-                      pRenderPassBegin,
-    VkSubpassContents contents) override;
-
-    void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
-                           gfxrecon::format::HandleId           commandBuffer,
-                           uint32_t                             vertexCount,
-                           uint32_t                             instanceCount,
-                           uint32_t                             firstVertex,
-                           uint32_t                             firstInstance) override;
-
-    void Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
-                                  gfxrecon::format::HandleId           commandBuffer,
-                                  uint32_t                             indexCount,
-                                  uint32_t                             instanceCount,
-                                  uint32_t                             firstIndex,
-                                  int32_t                              vertexOffset,
-                                  uint32_t                             firstInstance) override;
-
-    void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
-                                    gfxrecon::format::HandleId           commandBuffer) override;
-
-    void Process_vkQueueSubmit(
-    const gfxrecon::decode::ApiCallInfo&                                            call_info,
-    VkResult                                                                        returnValue,
-    gfxrecon::format::HandleId                                                      queue,
-    uint32_t                                                                        submitCount,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-    gfxrecon::format::HandleId                                                      fence) override;
+    // Get the current state machine state.
+    gfxrecon::decode::VulkanConsumer& state();
 
 private:
-    // For filtering Vulkan calls for relevant info
+    // For filtering Vulkan calls for relevant info.
     gfxrecon::format::HandleId command_buffer_;
-    // Something went wrong; throw away all state
+    // Something went wrong; halt the state machine throw away state so far.
     RejectingFunction reject_;
-    // Complete DumpEntry; propagate
+    // DumpEntry is complete and should be propagated.
     AcceptingFunction accept_;
 
+    // States of the state machine
     LookingForDraw       find_draw_;
     LookingForRenderPass find_render_pass_;
     LookingForBegin      begin_state_;
@@ -101,6 +101,7 @@ private:
     // Partial struct that will be filled as info is parsed. Once complete, accept_();
     DumpEntry dump_entry_{};
 
+    // Current state of the state machine
     gfxrecon::decode::VulkanConsumer* state_ = nullptr;
 };
 

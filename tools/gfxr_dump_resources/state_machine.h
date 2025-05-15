@@ -48,6 +48,14 @@ public:
                            uint32_t                             firstVertex,
                            uint32_t                             firstInstance) override;
 
+    void Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
+                                  gfxrecon::format::HandleId           commandBuffer,
+                                  uint32_t                             indexCount,
+                                  uint32_t                             instanceCount,
+                                  uint32_t                             firstIndex,
+                                  int32_t                              vertexOffset,
+                                  uint32_t                             firstInstance) override;
+
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
                                     gfxrecon::format::HandleId           commandBuffer) override;
 
@@ -67,9 +75,9 @@ private:
     // Complete DumpEntry; propagate
     AcceptingFunction accept_;
 
-    LookingForDraw        find_draw_;
-    LookingForRenderPass  find_render_pass_;
-    LookingForBegin       begin_state_;
+    LookingForDraw       find_draw_;
+    LookingForRenderPass find_render_pass_;
+    LookingForBegin      begin_state_;
 
     // Partial struct that will be filled as info is parsed. Once complete, accept_();
     DumpEntry dump_entry_{};

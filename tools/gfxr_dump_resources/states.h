@@ -24,6 +24,14 @@ public:
                            uint32_t                             firstVertex,
                            uint32_t                             firstInstance) override;
 
+    void Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
+                                  gfxrecon::format::HandleId           commandBuffer,
+                                  uint32_t                             indexCount,
+                                  uint32_t                             instanceCount,
+                                  uint32_t                             firstIndex,
+                                  int32_t                              vertexOffset,
+                                  uint32_t                             firstInstance) override;
+
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
                                     gfxrecon::format::HandleId           commandBuffer) override;
 

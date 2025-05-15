@@ -58,22 +58,6 @@ pBeginInfo)
     state_->Process_vkBeginCommandBuffer(call_info, returnValue, commandBuffer, pBeginInfo);
 }
 
-void StateMachine::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
-                                     gfxrecon::format::HandleId           commandBuffer,
-                                     uint32_t                             vertexCount,
-                                     uint32_t                             instanceCount,
-                                     uint32_t                             firstVertex,
-                                     uint32_t                             firstInstance)
-{
-
-    state_->Process_vkCmdDraw(call_info,
-                              commandBuffer,
-                              vertexCount,
-                              instanceCount,
-                              firstVertex,
-                              firstInstance);
-}
-
 void StateMachine::Process_vkCmdBeginRenderPass(
 const gfxrecon::decode::ApiCallInfo& call_info,
 gfxrecon::format::HandleId           commandBuffer,
@@ -82,6 +66,38 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeg
 VkSubpassContents contents)
 {
     state_->Process_vkCmdBeginRenderPass(call_info, commandBuffer, pRenderPassBegin, contents);
+}
+
+void StateMachine::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
+                                     gfxrecon::format::HandleId           commandBuffer,
+                                     uint32_t                             vertexCount,
+                                     uint32_t                             instanceCount,
+                                     uint32_t                             firstVertex,
+                                     uint32_t                             firstInstance)
+{
+    state_->Process_vkCmdDraw(call_info,
+                              commandBuffer,
+                              vertexCount,
+                              instanceCount,
+                              firstVertex,
+                              firstInstance);
+}
+
+void StateMachine::Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
+                                            gfxrecon::format::HandleId           commandBuffer,
+                                            uint32_t                             indexCount,
+                                            uint32_t                             instanceCount,
+                                            uint32_t                             firstIndex,
+                                            int32_t                              vertexOffset,
+                                            uint32_t firstInstance)
+{
+    state_->Process_vkCmdDrawIndexed(call_info,
+                                     commandBuffer,
+                                     indexCount,
+                                     instanceCount,
+                                     firstIndex,
+                                     vertexOffset,
+                                     firstInstance);
 }
 
 void StateMachine::Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,

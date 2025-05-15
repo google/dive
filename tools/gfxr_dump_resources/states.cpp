@@ -28,6 +28,18 @@ void LookingForDraw::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call
     // Stay in this state and keep accumulating any subsequent draws.
 }
 
+void LookingForDraw::Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
+                                              gfxrecon::format::HandleId           commandBuffer,
+                                              uint32_t                             indexCount,
+                                              uint32_t                             instanceCount,
+                                              uint32_t                             firstIndex,
+                                              int32_t                              vertexOffset,
+                                              uint32_t                             firstInstance)
+{
+    parent_.dump_entry().draws.push_back(call_info.index);
+    // Stay in this state and keep accumulating any subsequent draws.
+}
+
 void LookingForDraw::Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
                                                 gfxrecon::format::HandleId           commandBuffer)
 {

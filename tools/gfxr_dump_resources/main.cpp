@@ -89,7 +89,7 @@ public:
                            uint32_t                             firstVertex,
                            uint32_t                             firstInstance) override
     {
-        std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
+        std::cerr << "Process_vkCmdDraw: commandBuffer=" << commandBuffer << '\n';
         if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
         {
             std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
@@ -104,6 +104,33 @@ public:
                                             instanceCount,
                                             firstVertex,
                                             firstInstance);
+        }
+    }
+
+    void Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
+                                  gfxrecon::format::HandleId           commandBuffer,
+                                  uint32_t                             indexCount,
+                                  uint32_t                             instanceCount,
+                                  uint32_t                             firstIndex,
+                                  int32_t                              vertexOffset,
+                                  uint32_t                             firstInstance) override
+    {
+        std::cerr << "Process_vkCmdDrawIndexed: commandBuffer=" << commandBuffer << '\n';
+        if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
+        {
+            std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
+            return;
+        }
+        else
+        {
+            StateMachine& state_machine = *it->second;
+            state_machine.Process_vkCmdDrawIndexed(call_info,
+                                                   commandBuffer,
+                                                   indexCount,
+                                                   instanceCount,
+                                                   firstIndex,
+                                                   vertexOffset,
+                                                   firstInstance);
         }
     }
 
@@ -177,6 +204,7 @@ private:
 
 int main(int argc, char** argv)
 {
+    // TODO: Assertion failed: 'depth_img_view_info != nullptr' (/usr/local/google/home/hitchens/git/gfxreconstruct/framework/decode/vulkan_replay_dump_resources_draw_calls.cpp:2326
     if (argc != 3)
     {
         std::cerr << "Usage: gfxr_dump_resources FILE.GFXR OUTPUT.JSON\n";
@@ -264,7 +292,7 @@ int main(int argc, char** argv)
                 out << ',';
             }
             out << "[" << render_pass.begin_block_index << ',' << render_pass.end_block_index
-                      << ']';
+                << ']';
         }
         out << ']';
     }
@@ -307,7 +335,8 @@ int main(int argc, char** argv)
     out << "}\n";
 
     out.close();
-    if (!out.good()) {
+    if (!out.good())
+    {
         std::cerr << "Failed to close output file: " << output_filename << '\n';
         return 1;
     }

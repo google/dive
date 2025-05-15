@@ -159,6 +159,8 @@ class FileProcessor
 
     void PrintBlockInfo() const;
 
+    virtual void StoreBlockInfo() {}
+
   protected:
     uint64_t                 current_frame_number_;
     std::vector<ApiDecoder*> decoders_;
@@ -256,9 +258,9 @@ class FileProcessor
 
     struct ActiveFileContext
     {
-        ActiveFileContext(std::string filename_) : filename(std::move(filename_)){};
+        ActiveFileContext(std::string filename_) : filename(std::move(filename_)) {};
         ActiveFileContext(std::string filename_, bool execute_till_eof_) :
-            filename(std::move(filename_)), execute_till_eof(execute_till_eof_){};
+            filename(std::move(filename_)), execute_till_eof(execute_till_eof_) {};
 
         std::string filename;
         uint32_t    remaining_commands{ 0 };
@@ -276,14 +278,17 @@ class FileProcessor
         return file_stack_.back();
     }
 
-  // GOOGLE: Access modifications for derived FileProcessor classes
+    // GOOGLE: Access modifications for derived FileProcessor classes
   protected:
-    uint64_t      GetFirstFrame() const { return first_frame_; }
-    void          SetUsesFrameMarkers(bool uses_frame_markers) { capture_uses_frame_markers_ = uses_frame_markers; }
-    bool          SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
-    int64_t       TellActiveFile();
-    virtual bool  ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
-    virtual bool  ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
+    uint64_t GetFirstFrame() const { return first_frame_; }
+    void     SetUsesFrameMarkers(bool uses_frame_markers) { capture_uses_frame_markers_ = uses_frame_markers; }
+    bool     SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
+    int64_t  TellActiveFile();
+    virtual bool
+    ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
+    virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
+
+    bool run_without_decoders_ = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -28,10 +28,10 @@ class IMemoryManager
 {
 public:
     // Copy the given va/size from the memory blocks
-    virtual bool ICopyMemory(void*    buffer_ptr,
-                            uint32_t submit_index,
-                            uint64_t va_addr,
-                            uint64_t size) const = 0;
+    virtual bool CopyMem(void*    buffer_ptr,
+                         uint32_t submit_index,
+                         uint64_t va_addr,
+                         uint64_t size) const = 0;
 
     // For resources of unknown size (eg. shaders). The caller is responsible (via return value of
     // callback) with notifying when end of resource is reached. Otherwise MemoryManager will keep

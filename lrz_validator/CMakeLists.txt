@@ -48,6 +48,7 @@ if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
+  target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
 endif()

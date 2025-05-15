@@ -207,10 +207,10 @@ void BufferView::OnBufferSelectionChanged()
     const Dive::EventInfo     &event_info = metadata.m_event_info[m_event_index];
     const Dive::CaptureData   &capture_data = m_data_core.GetCaptureData();
     const Dive::MemoryManager &mem_manager = capture_data.GetMemoryManager();
-    DIVE_VERIFY(mem_manager.ICopyMemory(&buffer_memory[0],
-                                       event_info.m_submit_index,
-                                       buffer_info.m_addr,
-                                       buffer_info.m_size));
+    DIVE_VERIFY(mem_manager.CopyMem(&buffer_memory[0],
+                                    event_info.m_submit_index,
+                                    buffer_info.m_addr,
+                                    buffer_info.m_size));
 
     // Add each dword to the table
     uint32_t cur_col = 0;

@@ -68,6 +68,7 @@ endif()
 endif()
 if(WIN32)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${ZLIB_LIBRARIES} -static)
+target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
 endif()
 
 # Fuzz only on Clang for now.

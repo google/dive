@@ -27,6 +27,9 @@
 
 #include "state_machine.h"
 
+namespace Dive::tools
+{
+
 LookingForDraw::LookingForDraw(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_end) :
     parent_(parent),
     found_end_(found_end)
@@ -131,3 +134,5 @@ pBeginInfo)
     parent_.dump_entry().begin_command_buffer_block_index = call_info.index;
     parent_.Transition(found_begin_);
 }
+
+}  // namespace Dive::tools

@@ -21,17 +21,14 @@
 #include "dump_entry.h"
 #include "dump_resources_builder_consumer.h"
 
-#include "gfxreconstruct/framework/decode/api_decoder.h"
 #include "gfxreconstruct/framework/decode/file_processor.h"
-#include "gfxreconstruct/framework/decode/struct_pointer_decoder.h"
-#include "gfxreconstruct/framework/format/format.h"
-#include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
-#include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
 namespace
 {
 
+using Dive::tools::DumpEntry;
+using Dive::tools::DumpRenderPass;
 using Dive::tools::DumpResourcesBuilderConsumer;
 
 bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filename)
@@ -128,7 +125,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
     return true;
 }
 
-}
+}  // namespace
 
 int main(int argc, char** argv)
 {
@@ -153,7 +150,7 @@ int main(int argc, char** argv)
     std::vector<DumpEntry> complete_dump_entries;
 
     gfxrecon::decode::VulkanDecoder vulkan_decoder;
-    DumpResourcesBuilderConsumer                      consumer([&complete_dump_entries](DumpEntry dump_entry) {
+    DumpResourcesBuilderConsumer    consumer([&complete_dump_entries](DumpEntry dump_entry) {
         complete_dump_entries.push_back(std::move(dump_entry));
     });
     vulkan_decoder.AddConsumer(&consumer);

@@ -27,6 +27,9 @@
 #include "dump_entry.h"
 #include "states.h"
 
+namespace Dive::tools
+{
+
 class StateMachine : public gfxrecon::decode::VulkanConsumer
 {
 public:
@@ -100,3 +103,5 @@ private:
 
     gfxrecon::decode::VulkanConsumer* state_ = nullptr;
 };
+
+}  // namespace Dive::tools

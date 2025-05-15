@@ -22,6 +22,9 @@
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
+namespace Dive::tools
+{
+
 // forward decl to break recursive includes
 class StateMachine;
 
@@ -101,3 +104,5 @@ private:
     StateMachine&                     parent_;
     gfxrecon::decode::VulkanConsumer& found_begin_;
 };
+
+}  // namespace Dive::tools

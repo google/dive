@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Usage: replay-with-dump.sh GFXR GFXA
+#
+# If you have more than one adb device, set ANDROID_SERIAL
 
 set -eux
 
@@ -16,6 +18,8 @@ PUSH_DIR="$REMOTE_TEMP_DIR/replay"
 DUMP_DIR="$REMOTE_TEMP_DIR/dump"
 GFXR_DUMP_RESOURCES=$(find "$BUILD_DIR" -name gfxr_dump_resources -executable -type f)
 GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
+
+adb logcat -c
 
 $GFXR_DUMP_RESOURCES "$GFXR" "$JSON"
 adb shell mkdir -p "$PUSH_DIR"

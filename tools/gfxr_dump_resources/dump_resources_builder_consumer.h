@@ -23,7 +23,6 @@
 #include "dump_entry.h"
 #include "state_machine.h"
 
-
 #include "gfxreconstruct/framework/decode/api_decoder.h"
 #include "gfxreconstruct/framework/decode/struct_pointer_decoder.h"
 #include "gfxreconstruct/framework/format/format.h"
@@ -80,7 +79,7 @@ public:
     gfxrecon::format::HandleId                                                      queue,
     uint32_t                                                                        submitCount,
     gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-    gfxrecon::format::HandleId                                                      fence);
+    gfxrecon::format::HandleId                                                      fence) override;
 
 private:
     // Function run when a complete dump entry has been formed. This is ready to be written to disk,

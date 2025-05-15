@@ -19,6 +19,9 @@
 #include <cstdint>
 #include <vector>
 
+namespace Dive::tools
+{
+
 struct DumpRenderPass
 {
     uint64_t begin_block_index = 0;
@@ -50,3 +53,5 @@ struct DumpEntry
         return complete;
     }
 };
+
+}  // namespace Dive::tools

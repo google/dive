@@ -19,6 +19,9 @@
 #include <functional>
 #include <iostream>
 
+namespace Dive::tools
+{
+
 StateMachine::StateMachine(gfxrecon::format::HandleId command_buffer,
                            AcceptingFunction          accept,
                            RejectingFunction          reject) :
@@ -105,7 +108,7 @@ void StateMachine::Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo&
                                             uint32_t                             instanceCount,
                                             uint32_t                             firstIndex,
                                             int32_t                              vertexOffset,
-                                            uint32_t firstInstance)
+                                            uint32_t                             firstInstance)
 {
     state_->Process_vkCmdDrawIndexed(call_info,
                                      commandBuffer,
@@ -132,3 +135,5 @@ gfxrecon::format::HandleId                                                      
 {
     state_->Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
 }
+
+}  // namespace Dive::tools

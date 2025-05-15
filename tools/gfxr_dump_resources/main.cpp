@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -82,11 +83,11 @@ public:
     }
 
     void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
-                                   gfxrecon::format::HandleId           commandBuffer,
-                                   uint32_t                             vertexCount,
-                                   uint32_t                             instanceCount,
-                                   uint32_t                             firstVertex,
-                                   uint32_t                             firstInstance) override
+                           gfxrecon::format::HandleId           commandBuffer,
+                           uint32_t                             vertexCount,
+                           uint32_t                             instanceCount,
+                           uint32_t                             firstVertex,
+                           uint32_t                             firstInstance) override
     {
         std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
         if (auto it = incomplete_dumps_.find(commandBuffer); it == incomplete_dumps_.end())
@@ -176,18 +177,27 @@ private:
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc != 3)
     {
-        std::cerr << "Usage: gfxr_dump_resources FILE.GFXR\n";
+        std::cerr << "Usage: gfxr_dump_resources FILE.GFXR OUTPUT.JSON\n";
         return 1;
     }
 
+    // TODO std::filesystem?
     const char* input_filename = argv[1];
+    const char* output_filename = argv[2];
 
     gfxrecon::decode::FileProcessor file_processor;
     if (!file_processor.Initialize(input_filename))
     {
-        std::cerr << "Failed to open " << input_filename << '\n';
+        std::cerr << "Failed to open input:" << input_filename << '\n';
+        return 1;
+    }
+
+    std::ofstream out(output_filename);
+    if (!out.good() || !out.is_open())
+    {
+        std::cerr << "Failed to open output:" << output_filename << '\n';
         return 1;
     }
 
@@ -202,20 +212,104 @@ int main(int argc, char** argv)
 
     file_processor.ProcessAllFrames();
 
-    std::cout << "Found " << complete_dump_entries.size() << " dumpables\n";
+    // DEBUG OUTPUT REMOVE BEFORE COMMITTING
+    std::cerr << "Found " << complete_dump_entries.size() << " dumpables\n";
     for (const DumpEntry& dump : complete_dump_entries)
     {
-        std::cout << " Dump\n";
-        std::cout << "  BeginCommandBuffer=" << dump.begin_command_buffer_block_index << '\n';
-        std::cout << "  RenderPass size=" << dump.render_passes.size() << '\n';
-        for (const DumpRenderPass& render_pass : dump.render_passes) {
-            std::cout << "   RenderPass=" << render_pass.begin_block_index << ',' << render_pass.end_block_index << '\n';
+        std::cerr << " Dump\n";
+        std::cerr << "  BeginCommandBuffer=" << dump.begin_command_buffer_block_index << '\n';
+        std::cerr << "  RenderPass size=" << dump.render_passes.size() << '\n';
+        for (const DumpRenderPass& render_pass : dump.render_passes)
+        {
+            std::cerr << "   RenderPass=" << render_pass.begin_block_index << ','
+                      << render_pass.end_block_index << '\n';
         }
-        std::cout << "  Draws size=" << dump.draws.size() << '\n';
-        for (const uint64_t& draw : dump.draws) {
-            std::cout << "   Draw=" << draw << '\n';
+        std::cerr << "  Draws size=" << dump.draws.size() << '\n';
+        for (const uint64_t& draw : dump.draws)
+        {
+            std::cerr << "   Draw=" << draw << '\n';
         }
-        std::cout << "  QueueSubmit=" << dump.queue_submit_block_index << '\n';
+        std::cerr << "  QueueSubmit=" << dump.queue_submit_block_index << '\n';
+    }
+
+    // TODO transform into c++ version of output instead of processing vector<Dump>
+    out << "{\n";
+
+    out << "  \"BeginCommandBuffer\": [";
+    for (int i = 0; i < complete_dump_entries.size(); ++i)
+    {
+        DumpEntry& entry = complete_dump_entries[i];
+        if (i != 0)
+        {
+            out << ',';
+        }
+        out << entry.begin_command_buffer_block_index;
+    }
+    out << "],\n";
+
+    out << "  \"RenderPass\": [";
+    for (int i = 0; i < complete_dump_entries.size(); ++i)
+    {
+        DumpEntry& entry = complete_dump_entries[i];
+        if (i != 0)
+        {
+            out << ',';
+        }
+        out << '[';
+        for (int ii = 0; ii < entry.render_passes.size(); ++ii)
+        {
+            DumpRenderPass& render_pass = entry.render_passes[ii];
+            if (ii != 0)
+            {
+                out << ',';
+            }
+            out << "[" << render_pass.begin_block_index << ',' << render_pass.end_block_index
+                      << ']';
+        }
+        out << ']';
+    }
+    out << "],\n";
+
+    out << "  \"Draw\": [";
+    for (int i = 0; i < complete_dump_entries.size(); ++i)
+    {
+        DumpEntry& entry = complete_dump_entries[i];
+        if (i != 0)
+        {
+            out << ',';
+        }
+        out << '[';
+        for (int ii = 0; ii < entry.draws.size(); ++ii)
+        {
+            uint64_t& draw = entry.draws[ii];
+            if (ii != 0)
+            {
+                out << ',';
+            }
+            out << draw;
+        }
+        out << ']';
+    }
+    out << "],\n";
+
+    out << "  \"QueueSubmit\": [";
+    for (int i = 0; i < complete_dump_entries.size(); ++i)
+    {
+        DumpEntry& entry = complete_dump_entries[i];
+        if (i != 0)
+        {
+            out << ',';
+        }
+        out << entry.queue_submit_block_index;
+    }
+    out << "]\n";
+
+    out << "}\n";
+
+    out.close();
+    if (!out.good()) {
+        std::cerr << "Failed to close output file: " << output_filename << '\n';
+        return 1;
     }
 
     return 0;

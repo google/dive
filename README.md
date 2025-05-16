@@ -173,6 +173,14 @@ Then you can follow the hint output to trigger a capture by pressing key `g` and
 
 The capture file directory will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
 
+#### Modifying GFXR File
+Modifications to the GFXR file can be made using the Dive Host Tool `divecli`
+
+Example:
+ ```
+ ./divecli modify-gfxr -o new/file.gfxr original/file.gfxr 
+ ```
+
 #### GFXR Replay
 
 First, push the GFXR capture to the device or find the path where it is located on the device.

@@ -190,6 +190,12 @@ bool FileProcessor::ContinueDecoding()
     }
     else
     {
+        if (run_without_decoders_)
+        {
+            // Continue without checking decoder status
+            return true;
+        }
+
         int completed_decoders = 0;
 
         for (auto& decoder : decoders_)
@@ -480,6 +486,8 @@ bool FileProcessor::ProcessBlocks()
 bool FileProcessor::ReadBlockHeader(format::BlockHeader* block_header)
 {
     assert(block_header != nullptr);
+
+    StoreBlockInfo(); // Before any bytes are read
 
     bool success = false;
 

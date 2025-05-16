@@ -224,6 +224,57 @@ std::string ExtractCommand::Description() const
 }
 
 //--------------------------------------------------------------------------------------------------
+struct ModifyGFXRCommand : Command
+{
+    ModifyGFXRCommand();
+    static int  Run(const char* dive_file, const char* output_dir);
+    int         operator()(int argc, int at, char** argv) const override;
+    int         Help(int argc, int at, char** argv) const override;
+    std::string Description() const override;
+};
+
+ModifyGFXRCommand::ModifyGFXRCommand() :
+    Command("modify-gfxr", kNormal)
+{
+}
+
+int ModifyGFXRCommand::Run(const char* original_gfxr_file, const char* new_gfxr_file)
+{
+    if (strcmp(original_gfxr_file, new_gfxr_file) == 0)
+    {
+        std::cout << "cannot overwrite original GFXR file" << std::endl;
+        return EXIT_FAILURE;
+    }
+    return Dive::cli::ModifyGFXRCapture(original_gfxr_file, new_gfxr_file);
+}
+
+int ModifyGFXRCommand::operator()(int argc, int at, char** argv) const
+{
+    if (argc - at == 4)
+    {
+        if (strcmp(argv[at + 1], "-o") == 0 || strcmp(argv[at + 1], "--output") == 0)
+        {
+            return Run(argv[at + 3], argv[at + 2]);
+        }
+    }
+    Help(argc, at, argv);
+    return EXIT_FAILURE;
+}
+
+int ModifyGFXRCommand::Help(int argc, int at, char** argv) const
+{
+    std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName()
+              << " -o <new_gfxr> <original_gfxr>" << std::endl;
+    std::cout << "  -o,--output <file>: output GFXR file name" << std::endl;
+    return EXIT_SUCCESS;
+}
+
+std::string ModifyGFXRCommand::Description() const
+{
+    return "create a new GFXR file from an existing one with modifications";
+}
+
+//--------------------------------------------------------------------------------------------------
 struct PacketCommand : Command
 {
     PacketCommand();
@@ -482,6 +533,7 @@ template<typename T> const Command& CommandOf<T>::Get()
 
 template const Command& CommandOf<VersionCommand>::Get();
 template const Command& CommandOf<ExtractCommand>::Get();
+template const Command& CommandOf<ModifyGFXRCommand>::Get();
 template const Command& CommandOf<PacketCommand>::Get();
 template const Command& CommandOf<InfoCommand>::Get();
 template const Command& CommandOf<RawPM4Command>::Get();

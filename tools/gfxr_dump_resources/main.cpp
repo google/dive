@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <vector>
 
 #include "dump_entry.h"
 #include "dump_resources_builder_consumer.h"
@@ -36,12 +37,10 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
     std::ofstream out(filename);
     if (!out.good() || !out.is_open())
     {
-        // TODO dive_core log.h?
         std::cerr << "Failed to open output:" << filename << '\n';
         return false;
     }
 
-    // TODO transform `dumpables` into c++ version of output instead of processing vector<Dump>
     out << "{\n";
 
     out << "  \"BeginCommandBuffer\": [";

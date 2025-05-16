@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
-#include <numeric>
 #include <vector>
 
 namespace Dive::tools
@@ -29,7 +27,7 @@ struct DumpRenderPass
 {
     // Block index for vkCmdBeginRenderPass.
     uint64_t begin_block_index = 0;
-    // TODO subpass
+    // TODO: Record subpasses
     // Block index for vkCmdEndRenderPass.
     uint64_t end_block_index = 0;
 

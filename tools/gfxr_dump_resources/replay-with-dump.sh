@@ -9,7 +9,6 @@ set -eux
 GFXR=$1
 GFXR_BASENAME=$(basename "$GFXR")
 GFXA=$2
-# TODO write to temp dir
 BUILD_DIR=build
 JSON_BASENAME=dump.json
 JSON="$BUILD_DIR/$JSON_BASENAME"

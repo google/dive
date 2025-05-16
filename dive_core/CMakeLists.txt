@@ -203,7 +203,8 @@ target_compile_options(freedreno_ir3 PRIVATE -fPIC)
 add_dependencies(${PROJECT_NAME} freedreno_ir3)
 target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC gfxrecon_decode)
+target_link_libraries(${PROJECT_NAME} PRIVATE gfxrecon_decode)
+target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   target_link_libraries(${PROJECT_NAME} PRIVATE dl)

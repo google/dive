@@ -43,6 +43,7 @@ list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)
+target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 if (MSVC)
   # 4100: unreferenced formal parameter

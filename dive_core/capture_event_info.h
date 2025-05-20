@@ -75,7 +75,7 @@ struct EventInfo
     {
         kDraw,
         kDispatch,
-        kBlit,
+        kResolve,
         kSync
     };
     EventType m_type;
@@ -88,36 +88,32 @@ struct EventInfo
 // Helper functions
 enum class SyncType
 {
-    kNone,
-    kAcquireMem,
-    kWaitRegMem,
-    kReleaseMem,
-    kPfpSyncMe,
+    // Map to EVENT_WRITEs (vgt_event_type)
+    kEventWriteStart = vgt_event_type::VS_DEALLOC,
+    kEventWriteEnd = vgt_event_type::CACHE_INVALIDATE7,
 
-    // The following are all EVENT_WRITEs
-    kEventWriteStart,
-    kFlushInvCbMeta = kEventWriteStart,
-    kFlushInvCbPixelData,
-    kCacheFlushInvEvent,  // Flush/inv all CB/DB caches
-    kVsPartialFlush,
-    kPsPartialFlush,
-    kCsPartialFlush,
-    kDbCacheFlushAndInv,
-    kVgtFlush,
-    kEventWriteEnd = kVgtFlush + 1,
+    // Other types of sync to appear here?
+
+    kNone
 };
 
 SyncType GetSyncType(const IMemoryManager &mem_manager,
                      uint32_t              submit_index,
                      uint64_t              addr,
                      uint32_t              opcode);
-bool     IsDrawDispatchBlitSyncEvent(const IMemoryManager &mem_manager,
-                                     uint32_t              submit_index,
-                                     uint64_t              addr,
-                                     uint32_t              opcode);
-bool     IsBlitEvent(const IMemoryManager &mem_manager,
-                     uint32_t              submit_index,
-                     uint64_t              addr,
-                     uint32_t              opcode);
+
+bool IsDrawDispatchResolveEvent(const IMemoryManager &mem_manager,
+                                uint32_t              submit_index,
+                                uint64_t              addr,
+                                uint32_t              opcode);
+
+bool IsDrawDispatchResolveSyncEvent(const IMemoryManager &mem_manager,
+                                    uint32_t              submit_index,
+                                    uint64_t              addr,
+                                    uint32_t              opcode);
+bool IsResolveEvent(const IMemoryManager &mem_manager,
+                    uint32_t              submit_index,
+                    uint64_t              addr,
+                    uint32_t              opcode);
 
 }  // namespace Dive

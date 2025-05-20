@@ -42,7 +42,7 @@ bool DiveBlockData::AddOriginalBlock(size_t index, uint64_t offset)
     return true;
 }
 
-bool DiveBlockData::FinishOriginalBlocksMap()
+bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
 {
     if (original_blocks_map_locked_)
     {
@@ -74,7 +74,7 @@ bool DiveBlockData::UpdateNewBlockOrder()
 {
     new_blocks_order_.clear();
 
-    // TODO(chenangela): Insert modified blocks in the correct order
+    // TODO(chenangela): Insert modified blocks in the correct order, return false if an arrangement can't be found
     for (uint32_t primary_index = 0; primary_index < original_blocks_map_.size(); primary_index++)
     {
         NewBlockMetadata block;

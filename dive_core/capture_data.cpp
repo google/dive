@@ -1202,7 +1202,7 @@ CaptureData::LoadResult CaptureData::LoadGfxrFile(const char *file_name)
         return LoadResult::kFileIoError;
     }
 
-    if (!m_gfxr_capture_block_data->FinishOriginalBlocksMap())
+    if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
     {
         std::cerr << "Error: cannot lock gfxrecon DiveBlockData" << std::endl;
         return LoadResult::kFileIoError;

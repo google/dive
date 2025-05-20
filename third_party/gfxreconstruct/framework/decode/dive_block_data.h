@@ -49,7 +49,7 @@ class DiveBlockData
     bool AddOriginalBlock(size_t index, uint64_t offset);
 
     // Calculate block sizes, drop the file-end block and lock the map
-    bool FinishOriginalBlocksMap();
+    bool FinalizeOriginalBlocksMapSizes();
     bool IsOriginalBlocksMapLocked() { return original_blocks_map_locked_; }
 
     // Write modified GFXR file at the specified path

@@ -212,22 +212,15 @@ public:
     // The topologies are layed out such that the "normal" children contain non-packet nodes
     // and the "shared children" contain packet nodes. The difference lies in what is in
     // the "normal" children arrays:
-    //  The Engine hierarchy contains kRootNode -> kEngineNodes -> kSubmitNodes -> kIbNodes
     //  The Submit hierarchy contains kRootNode -> kSubmitNodes -> kIbNodes
     //  The Event hierarchy contains kRootNode -> kSubmitNodes/kPresentNodes -> (EventNodes)
     //      Where (EventNodes) == kMarkerNode/kDrawDispatchDmaNode/kSyncNode/kPostambleStateNode
     //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as shared children
-    const Topology &GetEngineHierarchyTopology() const;
     const Topology &GetSubmitHierarchyTopology() const;
-    const Topology &GetVulkanDrawEventHierarchyTopology() const;
-    const Topology &GetVulkanEventHierarchyTopology() const;
     const Topology &GetAllEventHierarchyTopology() const;
-    const Topology &GetRgpHierarchyTopology() const;
 
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
-
-    const DiveVector<uint8_t> &GetMetadata(uint64_t node_index) const;
 
     Dive::EngineType GetSubmitNodeEngineType(uint64_t node_index) const;
     uint32_t         GetSubmitNodeIndex(uint64_t node_index) const;
@@ -244,7 +237,6 @@ public:
     bool             GetRegFieldNodeIsCe(uint64_t node_index) const;
     SyncType         GetSyncNodeSyncType(uint64_t node_index) const;
     SyncInfo         GetSyncNodeSyncInfo(uint64_t node_index) const;
-    bool             HasVulkanMarkers() const { return m_has_vulkan_marker; }
 
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
@@ -254,12 +246,8 @@ private:
 
     enum TopologyType
     {
-        kEngineTopology,
         kSubmitTopology,
-        kVulkanEventTopology,
-        kVulkanCallTopology,
         kAllEventTopology,
-        kRgpTopology,
         kTopologyTypeCount
     };
 
@@ -339,26 +327,14 @@ private:
         DiveVector<AuxInfo>     m_aux_info;
         DiveVector<uint64_t>    m_event_node_indices;
 
-        // Used mostly to cache Vulkan argument metadata for Vulkan marker nodes
-        DiveVector<DiveVector<uint8_t>> m_metadata;
-
-        uint64_t AddNode(NodeType      type,
-                         std::string &&desc,
-                         AuxInfo       aux_info,
-                         char         *metadata_ptr,
-                         uint32_t      metadata_size);
+        uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
     };
 
     // Add a node and returns index of the added node
-    uint64_t AddNode(NodeType      type,
-                     std::string &&desc,
-                     AuxInfo       aux_info,
-                     char         *metadata_ptr,
-                     uint32_t      metadata_size);
+    uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
 
     Nodes    m_nodes;
     Topology m_topology[kTopologyTypeCount];
-    bool     m_has_vulkan_marker = false;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -425,11 +401,6 @@ private:
                                   uint64_t              va_addr,
                                   SyncType              sync_event);
 
-    void ParseVulkanCallMarker(char    *marker_ptr,
-                               uint32_t marker_size,
-                               uint64_t submit_node_index,
-                               uint64_t packet_node_index);
-
     bool IsBeginDebugMarkerNode(uint64_t node_index);
 
     uint32_t GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords);
@@ -495,11 +466,7 @@ private:
                                         uint64_t              va_addr,
                                         uint64_t              set_draw_state_node_index,
                                         Pm4Header             header);
-    uint64_t AddNode(NodeType                  type,
-                     std::string             &&desc,
-                     CommandHierarchy::AuxInfo aux_info = 0,
-                     char                     *metadata_ptr = nullptr,
-                     uint32_t                  metadata_size = 0);
+    uint64_t AddNode(NodeType type, std::string &&desc, CommandHierarchy::AuxInfo aux_info = 0);
 
     void AppendEventNodeIndex(uint64_t node_index);
 
@@ -524,12 +491,8 @@ private:
                                uint64_t                       child_index) const;
     uint64_t GetChildCount(CommandHierarchy::TopologyType type, uint64_t node_index) const;
     void     CreateTopologies();
-    bool     IsVulkanEventNode(uint64_t node_index) const;
-    bool     IsVulkanNonEventNode(uint64_t node_index) const;
 
     bool EventNodeHelper(uint64_t node_index, std::function<bool(uint32_t)> callback) const;
-    bool IsVulkanEvent(uint32_t cmd_id) const;
-    bool IsNonVulkanEvent(uint32_t cmd_id) const { return !IsVulkanEvent(cmd_id); }
 
     template<typename T>
     void AddConstantsToPacketNode(const IMemoryManager &mem_manager,
@@ -557,9 +520,8 @@ private:
     uint64_t m_render_marker_index = kInvalidRenderMarkerIndex;  // Current render marker index,
                                                                  // there is no nested render
                                                                  // marker, so no need to use stack
-    uint64_t             m_last_user_push_parent_node = UINT64_MAX;
-    DiveVector<uint64_t> m_vulkan_cmd_stack;  // Command buffer levels, first level is primary and
-                                              // second level secondary command buffer
+    uint64_t m_last_user_push_parent_node = UINT64_MAX;
+    // second level secondary command buffer
     std::unordered_map<int, std::unordered_map<uint64_t, uint64_t>>
     m_node_parent_info;  // Node parent index table, used to find which events need to be moved for
                          // VkBeginCommandBuffer.
@@ -581,7 +543,6 @@ private:
 
     bool m_new_event_start = true;
     bool m_new_ib_start = true;
-    bool m_new_pass_start = false;
 
     // Stack of shared child node that begins the current ibs/pass/events
     // Need a stack because IBs and pass/events can be stacked

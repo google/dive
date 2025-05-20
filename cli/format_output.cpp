@@ -506,10 +506,6 @@ void ExtractAssets(const char                   *dir,
 
     if (command_hierarchy)
     {
-
-        ExtractTopology(dir_path / "engines.txt",
-                        command_hierarchy,
-                        &command_hierarchy->GetEngineHierarchyTopology());
         ExtractTopology(dir_path / "submits.txt",
                         command_hierarchy,
                         &command_hierarchy->GetSubmitHierarchyTopology());
@@ -572,9 +568,6 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
     const Dive::Topology *topology_ptr = nullptr;
     switch (topology)
     {
-    case TopologyName::kTopologyEngine:
-        topology_ptr = &command_hierarchy_ptr->GetEngineHierarchyTopology();
-        break;
     case TopologyName::kTopologySubmit:
         topology_ptr = &command_hierarchy_ptr->GetSubmitHierarchyTopology();
         break;

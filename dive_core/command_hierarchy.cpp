@@ -554,10 +554,10 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
         }
 
         // Copy the given va/size from the memory blocks
-        virtual bool CopyMem(void    *buffer_ptr,
-                             uint32_t submit_index,
-                             uint64_t va_addr,
-                             uint64_t size) const
+        virtual bool RetrieveMemoryData(void    *buffer_ptr,
+                                        uint32_t submit_index,
+                                        uint64_t va_addr,
+                                        uint64_t size) const
         {
             if ((va_addr + size) > (m_size_in_dwords * sizeof(uint32_t)))
                 return false;
@@ -942,7 +942,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     else if (opcode == CP_SET_MARKER)
     {
         PM4_CP_SET_MARKER packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
         DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
         a6xx_marker marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);
@@ -1394,19 +1394,19 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     if (opcode == CP_DRAW_INDX)
     {
         PM4_CP_DRAW_INDX packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)))
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDX)
     {
         PM4_CP_DRAW_INDX packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)))
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDX_OFFSET)
     {
         PM4_CP_DRAW_INDX_OFFSET packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)))
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndexOffset("
                       << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
                       << "NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
@@ -1414,7 +1414,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     else if (opcode == CP_DRAW_INDIRECT)
     {
         PM4_CP_DRAW_INDIRECT packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)))
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndirect("
                       << "IndirectLo:" << std::hex << "0x" << packet.bitfields1.INDIRECT_LO << ","
                       << "IndirectHi:"
@@ -1423,7 +1423,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     else if (opcode == CP_DRAW_INDX_INDIRECT)
     {
         PM4_CP_DRAW_INDX_INDIRECT packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)))
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndexIndirect("
                       << "IndexBaseLo:" << std::hex << "0x" << packet.bitfields1.INDX_BASE_LO << ","
                       << "IndexBaseHi:"
@@ -1436,7 +1436,8 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     else if (opcode == CP_DRAW_INDIRECT_MULTI)
     {
         PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL base_packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&base_packet, submit_index, va_addr, sizeof(base_packet)));
+        DIVE_VERIFY(
+        mem_manager.RetrieveMemoryData(&base_packet, submit_index, va_addr, sizeof(base_packet)));
         if (base_packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
         {
             string_stream << "DrawIndirectMulti("
@@ -1449,7 +1450,8 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
         else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDEXED)
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
-            DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+            DIVE_VERIFY(
+            mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndexed("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
@@ -1461,7 +1463,8 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
         else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT)
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
-            DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+            DIVE_VERIFY(
+            mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirect("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
@@ -1472,7 +1475,8 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
         else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT_INDEXED)
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
-            DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+            DIVE_VERIFY(
+            mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirectIndexed("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
@@ -1491,7 +1495,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     else if (opcode == CP_EXEC_CS_INDIRECT)
     {
         PM4_CP_EXEC_CS_INDIRECT packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         string_stream << "ExecCsIndirect(x:" << packet.bitfields3.LOCALSIZEX << ","
                       << "y:" << packet.bitfields3.LOCALSIZEY << ","
                       << "z:" << packet.bitfields3.LOCALSIZEZ << ","
@@ -1502,7 +1506,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     else if (opcode == CP_EXEC_CS)
     {
         PM4_CP_EXEC_CS packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         string_stream << "ExecCsIndirect(x:" << packet.bitfields1.NGROUPS_X << ","
                       << "y:" << packet.bitfields2.NGROUPS_Y << ","
                       << "z:" << packet.bitfields3.NGROUPS_Z << ")";
@@ -1510,7 +1514,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     else if (opcode == CP_BLIT)
     {
         PM4_CP_BLIT packet;
-        DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         std::string op;
         switch (packet.bitfields0.OP)
         {
@@ -1555,7 +1559,8 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         };
         RegPair  reg_pair;
         uint64_t pair_addr = va_addr + dword * sizeof(uint32_t);
-        DIVE_VERIFY(mem_manager.CopyMem(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
+        DIVE_VERIFY(
+        mem_manager.RetrieveMemoryData(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
         dword += 2;
 
         const RegInfo *reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
@@ -1571,8 +1576,10 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         {
             RegPair  new_reg_pair;
             uint64_t new_pair_addr = va_addr + dword * sizeof(uint32_t);
-            DIVE_VERIFY(
-            mem_manager.CopyMem(&new_reg_pair, submit_index, new_pair_addr, sizeof(new_reg_pair)));
+            DIVE_VERIFY(mem_manager.RetrieveMemoryData(&new_reg_pair,
+                                                       submit_index,
+                                                       new_pair_addr,
+                                                       sizeof(new_reg_pair)));
 
             // Sometimes the upper 32-bits are not set
             // Probably because they're 0s and there's no need to set it
@@ -1624,7 +1631,8 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager &mem_manager,
         offset_in_bytes += size_to_read;
 
         uint64_t reg_value = 0;
-        DIVE_VERIFY(mem_manager.CopyMem(&reg_value, submit_index, reg_va_addr, size_to_read));
+        DIVE_VERIFY(
+        mem_manager.RetrieveMemoryData(&reg_value, submit_index, reg_va_addr, size_to_read));
         // Create the register node, as well as all its children nodes that describe the various
         // fields set in the single 32-bit register
         uint64_t reg_node_index = AddRegisterNode(reg_offset, reg_value, reg_info_ptr);
@@ -1752,8 +1760,10 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             // (field_dword - 1) since each field is always 1 32bit register, we don't have any
             // 64bit field
             uint64_t dword_va_addr = va_addr + (field_dword - 1) * sizeof(uint32_t);
-            DIVE_VERIFY(
-            mem_manager.CopyMem(&dword_value, submit_index, dword_va_addr, sizeof(uint32_t)));
+            DIVE_VERIFY(mem_manager.RetrieveMemoryData(&dword_value,
+                                                       submit_index,
+                                                       dword_va_addr,
+                                                       sizeof(uint32_t)));
 
             uint32_t field_value = ((dword_value & packet_field.m_mask) >> packet_field.m_shift)
                                    << packet_field.m_shr;
@@ -1796,8 +1806,10 @@ void CommandHierarchyCreator::AppendPacketFieldNodes(const IMemoryManager &mem_m
             {
                 uint32_t dword_value = 0;
                 uint64_t dword_va_addr = va_addr + i * sizeof(uint32_t);
-                DIVE_VERIFY(
-                mem_manager.CopyMem(&dword_value, submit_index, dword_va_addr, sizeof(uint32_t)));
+                DIVE_VERIFY(mem_manager.RetrieveMemoryData(&dword_value,
+                                                           submit_index,
+                                                           dword_va_addr,
+                                                           sizeof(uint32_t)));
 
                 std::ostringstream field_string_stream;
                 field_string_stream << prefix << "(DWORD " << i << "): 0x" << std::hex
@@ -1823,7 +1835,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
                                                            uint64_t              packet_node_index)
 {
     PM4_CP_LOAD_STATE6 packet;
-    DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
 
     enum class StateBlockCat
     {
@@ -1967,7 +1979,7 @@ void CommandHierarchyCreator::AppendMemRegNodes(const IMemoryManager &mem_manage
                                                 uint64_t              packet_node_index)
 {
     PM4_CP_MEM_TO_REG packet;
-    DIVE_VERIFY(mem_manager.CopyMem(&packet, submit_index, va_addr, sizeof(packet)));
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
 
     // Add base register name
     const RegInfo *reg_info_ptr = GetRegInfo(packet.bitfields0.REG);
@@ -2008,10 +2020,10 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
 
     // Obtain the address of each of the children group IBs
     PM4_CP_SET_DRAW_STATE packet;
-    DIVE_VERIFY(mem_manager.CopyMem(&packet,
-                                    submit_index,
-                                    va_addr,
-                                    (header.type7.count + 1) * sizeof(uint32_t)));
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                               submit_index,
+                                               va_addr,
+                                               (header.type7.count + 1) * sizeof(uint32_t)));
 
     // Sanity check: The # of children should match the array size
     uint32_t total_size_bytes = (header.type7.count * sizeof(uint32_t));
@@ -2227,7 +2239,7 @@ void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager &mem
 
                 // For some reason, some captures refer to memory not backed by memory blocks
                 // Let's not treat it as an error, since cffdump handles this gracefully as well
-                if (!mem_manager.CopyMem(&value, submit_index, addr, sizeof(T)))
+                if (!mem_manager.RetrieveMemoryData(&value, submit_index, addr, sizeof(T)))
                 {
                     DIVE_LOG("Indirect constant buffer at 0x%p with no backing memory!",
                              ext_src_addr);

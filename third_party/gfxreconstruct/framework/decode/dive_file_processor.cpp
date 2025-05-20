@@ -33,7 +33,7 @@ void DiveFileProcessor::SetLoopSingleFrameCount(uint64_t loop_single_frame_count
 
 void DiveFileProcessor::SetDiveBlockData(std::shared_ptr<DiveBlockData> p_block_data)
 {
-    p_dive_block_data_ = p_block_data;
+    dive_block_data_ = p_block_data;
 
     // When populating DiveBlockData we want to run through the entire file.
     run_without_decoders_ = true;
@@ -120,10 +120,10 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
 
 void DiveFileProcessor::StoreBlockInfo()
 {
-    GFXRECON_ASSERT(p_dive_block_data_ != nullptr);
+    GFXRECON_ASSERT(dive_block_data_ != nullptr);
     int64_t offset = TellActiveFile();
     GFXRECON_ASSERT(offset > 0);
-    p_dive_block_data_->AddOriginalBlock(block_index_, static_cast<uint64_t>(offset));
+    dive_block_data_->AddOriginalBlock(block_index_, static_cast<uint64_t>(offset));
 }
 
 GFXRECON_END_NAMESPACE(decode)

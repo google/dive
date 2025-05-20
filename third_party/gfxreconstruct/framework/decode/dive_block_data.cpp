@@ -22,7 +22,7 @@ limitations under the License.
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-bool DiveBlockData::AddOriginalBlock(uint32_t index, uint64_t offset)
+bool DiveBlockData::AddOriginalBlock(size_t index, uint64_t offset)
 {
     if (original_blocks_map_locked_)
     {
@@ -42,15 +42,14 @@ bool DiveBlockData::AddOriginalBlock(uint32_t index, uint64_t offset)
     return true;
 }
 
-bool DiveBlockData::LockOriginalBlocksMap()
+bool DiveBlockData::FinishOriginalBlocksMap()
 {
     if (original_blocks_map_locked_)
     {
-        GFXRECON_LOG_INFO("Original block map already locked");
         return true;
     }
 
-    if (original_blocks_map_.size() == 0)
+    if (original_blocks_map_.empty())
     {
         GFXRECON_LOG_ERROR("Original block map is empty");
         return false;
@@ -58,20 +57,20 @@ bool DiveBlockData::LockOriginalBlocksMap()
 
     // Calculating block sizes
     original_header_size_bytes_ = original_blocks_map_[0].offset;
-    for (int i = 0; i < original_blocks_map_.size() - 1; i++)
+    for (size_t i = 0; i < original_blocks_map_.size() - 1; i++)
     {
-        uint64_t size                = original_blocks_map_.at(i + 1).offset - original_blocks_map_.at(i).offset;
+        uint64_t size                = original_blocks_map_[i + 1].offset - original_blocks_map_[i].offset;
         original_blocks_map_[i].size = size;
     }
 
-    // Removing the last "block" which is the end of the file
+    // Removing the last "block" which was not a real block, just the marker added at the end of the file
     original_blocks_map_.pop_back();
 
     original_blocks_map_locked_ = true;
     return true;
 }
 
-bool DiveBlockData::GetNewBlocksOrder()
+bool DiveBlockData::UpdateNewBlockOrder()
 {
     new_blocks_order_.clear();
 
@@ -87,15 +86,37 @@ bool DiveBlockData::GetNewBlocksOrder()
     return true;
 }
 
+bool DiveBlockData::CopyBlockBetweenFiles(int32_t bytes_left_to_copy, FILE* original_fd, FILE* new_fd)
+{
+    while (bytes_left_to_copy > 0)
+    {
+        int32_t bytes_to_copy = bytes_left_to_copy;
+        if (bytes_left_to_copy > kDiveBlockBufferSize)
+        {
+            bytes_to_copy = kDiveBlockBufferSize;
+        }
+        util::platform::FileRead(block_buffer_, bytes_to_copy, original_fd);
+        util::platform::FileWrite(block_buffer_, bytes_to_copy, new_fd);
+
+        bytes_left_to_copy -= bytes_to_copy;
+        if (bytes_left_to_copy < 0)
+        {
+            GFXRECON_LOG_ERROR("Miscalculation of bytes_left_to_copy: %d", bytes_left_to_copy);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path, const std::string& new_file_path)
 {
     if (!original_blocks_map_locked_)
     {
-        GFXRECON_LOG_ERROR("DiveBlockData original map must be locked before writing new file");
+        GFXRECON_LOG_ERROR("DiveBlockData original map must be finished before writing new file");
         return false;
     }
 
-    bool res = GetNewBlocksOrder();
+    bool res = UpdateNewBlockOrder();
     if (!res)
     {
         GFXRECON_LOG_ERROR("Cannot determine new blocks order");
@@ -118,38 +139,57 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path, const s
         return false;
     }
 
-    // Copy the original header
-    util::platform::FileRead(block_buffer_, original_header_size_bytes_, original_fd);
-    util::platform::FileWrite(block_buffer_, original_header_size_bytes_, new_fd);
+    // Track block size relative to buffer size and recommend a larger buffer if required
+    uint32_t max_block_size = original_header_size_bytes_;
 
+    // Copy the original header
+    if (!CopyBlockBetweenFiles(original_header_size_bytes_, original_fd, new_fd))
+    {
+        GFXRECON_LOG_ERROR("Could not copy header");
+        return false;
+    }
+
+    // Write block by block
     for (size_t i = 0; i < new_blocks_order_.size(); i++)
     {
-        NewBlockMetadata current_block_metadata = new_blocks_order_.at(i);
+        NewBlockMetadata current_block_metadata = new_blocks_order_[i];
 
         if (current_block_metadata.is_original)
         {
-            // Prepare to copy the original block
             BlockBytesLocation current_block_location = original_blocks_map_.at(current_block_metadata.id);
-            int32_t            bytes_left_to_copy     = current_block_location.size;
+
+            if (current_block_location.size > max_block_size)
+            {
+                max_block_size = current_block_location.size;
+            }
+
             util::platform::FileSeek(original_fd, current_block_location.offset, util::platform::FileSeekSet);
 
-            while (bytes_left_to_copy > 0)
+            if (!CopyBlockBetweenFiles(current_block_location.size, original_fd, new_fd))
             {
-                int32_t bytes_to_copy = bytes_left_to_copy;
-                if (bytes_left_to_copy > BUFFER_SIZE)
-                {
-                    bytes_to_copy = BUFFER_SIZE;
-                }
-                util::platform::FileRead(block_buffer_, bytes_to_copy, original_fd);
-                util::platform::FileWrite(block_buffer_, bytes_to_copy, new_fd);
-
-                bytes_left_to_copy -= bytes_to_copy;
-                if (bytes_left_to_copy < 0)
-                {
-                    GFXRECON_LOG_ERROR("Miscalculation of bytes_left_to_copy: %d", bytes_left_to_copy);
-                }
+                GFXRECON_LOG_ERROR("Could not copy original block id: %d", current_block_metadata.id);
+                return false;
             }
         }
+    }
+
+    if (max_block_size > kDiveBlockBufferSize)
+    {
+        GFXRECON_LOG_WARNING("kDiveBlockBufferSize (%d) is too small to accommodate max block size (%d)",
+                             kDiveBlockBufferSize,
+                             max_block_size);
+    }
+
+    if (util::platform::FileClose(original_fd))
+    {
+        GFXRECON_LOG_ERROR("Failed to close file %s", original_file_path.c_str());
+        return false;
+    }
+
+    if (util::platform::FileClose(new_fd))
+    {
+        GFXRECON_LOG_ERROR("Failed to close file %s", new_file_path.c_str());
+        return false;
     }
 
     GFXRECON_LOG_INFO("Wrote new gfxr file: %s", new_file_path.c_str());

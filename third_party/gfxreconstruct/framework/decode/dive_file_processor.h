@@ -53,7 +53,7 @@ class DiveFileProcessor : public FileProcessor
     int64_t state_end_marker_file_offset_{ 0 };
 
     // The DiveBlockData object that contains the metadata for the original GFXR file and modifications
-    std::shared_ptr<DiveBlockData> p_dive_block_data_ = nullptr;
+    std::shared_ptr<DiveBlockData> dive_block_data_ = nullptr;
 };
 
 GFXRECON_END_NAMESPACE(decode)

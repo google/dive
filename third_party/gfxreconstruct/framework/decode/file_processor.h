@@ -159,8 +159,6 @@ class FileProcessor
 
     void PrintBlockInfo() const;
 
-    virtual void StoreBlockInfo() {}
-
   protected:
     uint64_t                 current_frame_number_;
     std::vector<ApiDecoder*> decoders_;
@@ -258,9 +256,9 @@ class FileProcessor
 
     struct ActiveFileContext
     {
-        ActiveFileContext(std::string filename_) : filename(std::move(filename_)) {};
+        ActiveFileContext(std::string filename_) : filename(std::move(filename_)){};
         ActiveFileContext(std::string filename_, bool execute_till_eof_) :
-            filename(std::move(filename_)), execute_till_eof(execute_till_eof_) {};
+            filename(std::move(filename_)), execute_till_eof(execute_till_eof_){};
 
         std::string filename;
         uint32_t    remaining_commands{ 0 };
@@ -287,6 +285,7 @@ class FileProcessor
     virtual bool
     ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
     virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
+    virtual void StoreBlockInfo() {}
 
     bool run_without_decoders_ = false;
 };

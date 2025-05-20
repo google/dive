@@ -25,7 +25,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-static const unsigned int BUFFER_SIZE = 4096;
+static constexpr size_t kDiveBlockBufferSize = 4096;
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -46,18 +46,21 @@ class DiveBlockData
 
   public:
     // Add info for the next block in the original GFXR file
-    bool AddOriginalBlock(uint32_t index, uint64_t offset);
+    bool AddOriginalBlock(size_t index, uint64_t offset);
 
     // Calculate block sizes, drop the file-end block and lock the map
-    bool LockOriginalBlocksMap();
+    bool FinishOriginalBlocksMap();
     bool IsOriginalBlocksMapLocked() { return original_blocks_map_locked_; }
 
     // Write modified GFXR file at the specified path
     bool WriteGFXRFile(const std::string& original_file_path, const std::string& new_file_path);
 
   private:
-    // Used in writing the new file with modifications
-    bool GetNewBlocksOrder();
+    // Determine the order of the blocks for the new file
+    bool UpdateNewBlockOrder();
+
+    // Copy a block from one file to another
+    bool CopyBlockBetweenFiles(int32_t bytes_left_to_copy, FILE* original_fd, FILE* new_fd);
 
     // Info for the blocks in the original GFXR file
     std::vector<BlockBytesLocation> original_blocks_map_        = {}; // Starting block index of 0
@@ -65,8 +68,8 @@ class DiveBlockData
     bool                            original_blocks_map_locked_ = false;
 
     // Used in writing the new file with modifications
-    std::vector<NewBlockMetadata> new_blocks_order_          = {};
-    char                          block_buffer_[BUFFER_SIZE] = {};
+    std::vector<NewBlockMetadata> new_blocks_order_                   = {};
+    char                          block_buffer_[kDiveBlockBufferSize] = {};
 };
 
 GFXRECON_END_NAMESPACE(decode)

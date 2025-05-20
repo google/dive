@@ -125,7 +125,8 @@ void Disassembly::Disassemble()
             max_size = kMaxSizeLimit;
 
         uint8_t* data_ptr = new uint8_t[max_size];
-        DIVE_VERIFY(m_mem_manager.CopyMem(data_ptr, m_submit_index, m_address, max_size));
+        DIVE_VERIFY(
+        m_mem_manager.RetrieveMemoryData(data_ptr, m_submit_index, m_address, max_size));
 
         struct shader_stats stats;
         std::string         disasm = DisassembleA3XX(data_ptr, max_size, &stats, PRINT_RAW);

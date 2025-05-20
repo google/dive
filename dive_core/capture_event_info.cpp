@@ -29,19 +29,43 @@ SyncType GetSyncType(const IMemoryManager &mem_manager,
                      uint64_t              addr,
                      uint32_t              opcode)
 {
+    // 6xx uses CP_EVENT_WRITE packet, which maps to same opcode as CP_EVENT_WRITE7
+    // The event field is in the same location with either packet type
+    if (opcode == CP_EVENT_WRITE7)
+    {
+        PM4_CP_EVENT_WRITE packet;
+        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, addr, sizeof(packet)));
+        SyncType type = (SyncType)packet.bitfields0.EVENT;
+        return type;
+    }
     return SyncType::kNone;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsDrawDispatchBlitSyncEvent(const IMemoryManager &mem_manager,
-                                 uint32_t              submit_index,
-                                 uint64_t              addr,
-                                 uint32_t              opcode)
+bool IsDrawDispatchResolveEvent(const IMemoryManager &mem_manager,
+                                uint32_t              submit_index,
+                                uint64_t              addr,
+                                uint32_t              opcode)
 {
     if (IsDrawDispatchEventOpcode(opcode))
         return true;
 
-    if (IsBlitEvent(mem_manager, submit_index, addr, opcode))
+    if (IsResolveEvent(mem_manager, submit_index, addr, opcode))
+        return true;
+
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool IsDrawDispatchResolveSyncEvent(const IMemoryManager &mem_manager,
+                                    uint32_t              submit_index,
+                                    uint64_t              addr,
+                                    uint32_t              opcode)
+{
+    if (IsDrawDispatchEventOpcode(opcode))
+        return true;
+
+    if (IsResolveEvent(mem_manager, submit_index, addr, opcode))
         return true;
 
     SyncType sync_type = GetSyncType(mem_manager, submit_index, addr, opcode);
@@ -52,10 +76,10 @@ bool IsDrawDispatchBlitSyncEvent(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsBlitEvent(const IMemoryManager &mem_manager,
-                 uint32_t              submit_index,
-                 uint64_t              addr,
-                 uint32_t              opcode)
+bool IsResolveEvent(const IMemoryManager &mem_manager,
+                    uint32_t              submit_index,
+                    uint64_t              addr,
+                    uint32_t              opcode)
 {
     if (opcode == CP_BLIT)
         return true;

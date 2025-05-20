@@ -396,10 +396,6 @@ private:
                                bool                  is_ce_packet,
                                Pm4Header             header);
     uint64_t     AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
-    uint64_t     AddSyncEventNode(const IMemoryManager &mem_manager,
-                                  uint32_t              submit_index,
-                                  uint64_t              va_addr,
-                                  SyncType              sync_event);
 
     bool IsBeginDebugMarkerNode(uint64_t node_index);
 

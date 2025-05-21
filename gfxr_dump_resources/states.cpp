@@ -23,8 +23,6 @@
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
-#include <iostream>
-
 #include "state_machine.h"
 
 namespace Dive::gfxr

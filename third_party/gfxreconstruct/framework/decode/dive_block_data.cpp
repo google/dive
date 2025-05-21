@@ -63,7 +63,9 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
         original_blocks_map_[i].size = size;
     }
 
-    // Removing the last "block" which was not a real block, just the marker added at the end of the file
+    // The file processor calls AddOriginalBlock() even at the very end of the GFXR file, so this last block has a size
+    // of 0 and its offset is equal to the file size. The info was used in the calculation of the size of the
+    // penultimate block and now the last block needs to be trimmed.
     original_blocks_map_.pop_back();
 
     original_blocks_map_locked_ = true;
@@ -175,7 +177,8 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path, const s
 
     if (max_block_size > kDiveBlockBufferSize)
     {
-        GFXRECON_LOG_WARNING("kDiveBlockBufferSize (%d) is too small to accommodate max block size (%d)",
+        GFXRECON_LOG_WARNING("kDiveBlockBufferSize (%d) is too small to accommodate max block size (%d) and will cause "
+                             "more copy operations in CopyBlockBetweenFiles",
                              kDiveBlockBufferSize,
                              max_block_size);
     }

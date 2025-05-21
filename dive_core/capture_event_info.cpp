@@ -34,7 +34,7 @@ SyncType GetSyncType(const IMemoryManager &mem_manager,
     if (opcode == CP_EVENT_WRITE7)
     {
         PM4_CP_EVENT_WRITE packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, addr, sizeof(packet)));
         SyncType type = (SyncType)packet.bitfields0.EVENT;
         return type;
     }
@@ -87,7 +87,7 @@ bool IsResolveEvent(const IMemoryManager &mem_manager,
     if (opcode == CP_EVENT_WRITE7)
     {
         PM4_CP_EVENT_WRITE packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet, submit_index, addr, sizeof(packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, addr, sizeof(packet)));
         if (packet.bitfields0.EVENT == CCU_RESOLVE)  // aka BLIT
             return true;
     }

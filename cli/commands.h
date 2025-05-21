@@ -57,6 +57,7 @@ private:
 struct HelpCommand;
 struct VersionCommand;
 struct ExtractCommand;
+struct ModifyGFXRCommand;
 
 // Internal utilities, originally from capture_reporter.
 // Hiding from user as they are not intended for normal end user flow.

@@ -26,6 +26,7 @@
 #include "dive_core/common/memory_manager_base.h"
 #include "log.h"
 #include "progress_tracker.h"
+#include "third_party/gfxreconstruct/framework/decode/dive_block_data.h"
 
 // Forward declarations
 struct SqttFileChunkAsicInfo;
@@ -98,18 +99,18 @@ public:
                               DiveVector<MemoryAllocationData> &&allocations);
 
     // Finalize load. After this, no memory block should be added!
-    // same_submit_copy_only - If set, then CopyMemory() will only copy from memory blocks used in
-    // the same submit. If not set, then allowed to use any allocations from any submit, with the
-    // assumption that there is no overlap in captured memory
+    // same_submit_copy_only - If set, then RetrieveMemoryData() will only copy from memory blocks
+    // used in the same submit. If not set, then allowed to use any allocations from any submit,
+    // with the assumption that there is no overlap in captured memory
     void Finalize(bool same_submit_copy_only, bool duplicate_ib_capture);
 
     const MemoryAllocationInfo &GetMemoryAllocationInfo() const;
 
     // Load the given va/size from the memory blocks
-    virtual bool CopyMemory(void    *buffer_ptr,
-                            uint32_t submit_index,
-                            uint64_t va_addr,
-                            uint64_t size) const override;
+    virtual bool RetrieveMemoryData(void    *buffer_ptr,
+                                    uint32_t submit_index,
+                                    uint64_t va_addr,
+                                    uint64_t size) const override;
 
     // Keep grabbing contiguous memory blocks until the callback returns false
     virtual bool GetMemoryOfUnknownSizeViaCallback(uint32_t     submit_index,
@@ -370,12 +371,18 @@ public:
 #if defined(DIVE_ENABLE_PERFETTO)
     LoadResult LoadPerfettoFile(const char *file_name);
 #endif
+    // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
+    LoadResult LoadGfxrFile(const char *file_name);
 
     bool HasPm4Data() const
     {
         return m_submits.size() > 0;
     }
     std::string GetFileFormatVersion() const;
+
+    // Writes a new GFXR file based on the original file m_cur_capture_file and modifications
+    // recorded in m_gfxr_capture_block_data
+    bool WriteModifiedGfxrFile(const char *new_file_name);
 
 private:
     LoadResult LoadCaptureFile(const char *file_name);
@@ -416,6 +423,9 @@ private:
     ILog                          *m_log_ptr;
     std::string                    m_cur_capture_file;
     CaptureDataHeader              m_data_header;
+
+    // Metadata for the original GFXR file m_cur_capture_file, as well as modifications
+    std::shared_ptr<gfxrecon::decode::DiveBlockData> m_gfxr_capture_block_data = nullptr;
 };
 
 }  // namespace Dive

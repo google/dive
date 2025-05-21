@@ -30,6 +30,7 @@
 #    include "perfetto_trace/trace_reader.h"
 #endif
 #include "pm4_info.h"
+#include "third_party/gfxreconstruct/framework/decode/dive_file_processor.h"
 
 namespace Dive
 {
@@ -348,10 +349,10 @@ const MemoryAllocationInfo &MemoryManager::GetMemoryAllocationInfo() const
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MemoryManager::CopyMemory(void    *buffer_ptr,
-                               uint32_t submit_index,
-                               uint64_t va_addr,
-                               uint64_t size) const
+bool MemoryManager::RetrieveMemoryData(void    *buffer_ptr,
+                                       uint32_t submit_index,
+                                       uint64_t va_addr,
+                                       uint64_t size) const
 {
     // Check the last-used block first, because this is the desired block most of the time
     if (m_last_used_block_ptr != nullptr)
@@ -368,8 +369,8 @@ bool MemoryManager::CopyMemory(void    *buffer_ptr,
 #ifndef NDEBUG
             if (mem_block.m_data_size >= 16 * 1024 * 1024)
             {
-                std::cout << "MemoryManager::CopyMemory data.m_data_size: " << mem_block.m_data_size
-                          << " gpu addr:  " << va_addr << std::endl;
+                std::cout << "MemoryManager::RetrieveMemoryData data.m_data_size: "
+                          << mem_block.m_data_size << " gpu addr:  " << va_addr << std::endl;
             }
 #endif
             memcpy(buffer_ptr, (void *)&mem_block.m_data_ptr[va_addr - mem_block.m_va_addr], size);
@@ -893,6 +894,10 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
         return LoadPerfettoFile(file_name);
     }
 #endif
+    else if (file_extension.compare(".gfxr") == 0)
+    {
+        return LoadGfxrFile(file_name);
+    }
     else
     {
         std::cerr << "Unknown capture type: " << file_name << std::endl;
@@ -1165,6 +1170,65 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     }
     m_memory.Finalize(true, true);
     return LoadResult::kSuccess;
+}
+
+//--------------------------------------------------------------------------------------------------
+CaptureData::LoadResult CaptureData::LoadGfxrFile(const char *file_name)
+{
+    if (m_gfxr_capture_block_data != nullptr)
+    {
+        std::cerr << "Error: cannot load another gfxr file with one currently stored: " << file_name
+                  << std::endl;
+        return LoadResult::kFileIoError;
+    }
+
+    m_gfxr_capture_block_data = std::make_shared<gfxrecon::decode::DiveBlockData>();
+
+    gfxrecon::decode::DiveFileProcessor file_processor;
+
+    if (!file_processor.Initialize(file_name))
+    {
+        return LoadResult::kFileIoError;
+    }
+
+    file_processor.SetLoopSingleFrameCount(1);
+    file_processor.SetDiveBlockData(m_gfxr_capture_block_data);
+
+    if (!file_processor.ProcessAllFrames())
+    {
+        std::cerr << "Error using gfxrecon DiveFileProcessor to load file: " << file_name
+                  << std::endl;
+        std::cerr << file_processor.GetErrorState() << std::endl;
+        return LoadResult::kFileIoError;
+    }
+
+    if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
+    {
+        std::cerr << "Error: cannot lock gfxrecon DiveBlockData" << std::endl;
+        return LoadResult::kFileIoError;
+    }
+
+    m_cur_capture_file = file_name;
+
+    return LoadResult::kSuccess;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool CaptureData::WriteModifiedGfxrFile(const char *new_file_name)
+{
+    if (m_cur_capture_file.empty())
+    {
+        std::cerr << "Error: no loaded gfxr file" << std::endl;
+        return false;
+    }
+
+    if (!m_gfxr_capture_block_data->WriteGFXRFile(m_cur_capture_file, new_file_name))
+    {
+        std::cerr << "Error writing modified GFXR file" << std::endl;
+        return false;
+    }
+
+    return true;
 }
 
 //--------------------------------------------------------------------------------------------------

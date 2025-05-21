@@ -194,6 +194,12 @@ bool FileProcessor::ContinueDecoding()
     }
     else
     {
+        // GOOGLE: If marked as run_without_decoders_, proceed without checking them
+        if (run_without_decoders_)
+        {
+            return true;
+        }
+
         int completed_decoders = 0;
 
         for (auto& decoder : decoders_)
@@ -484,6 +490,9 @@ bool FileProcessor::ProcessBlocks()
 bool FileProcessor::ReadBlockHeader(format::BlockHeader* block_header)
 {
     assert(block_header != nullptr);
+
+    // GOOGLE: Store info about block offset before any bytes are read
+    StoreBlockInfo();
 
     bool success = false;
 

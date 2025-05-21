@@ -864,7 +864,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
     if (opcode == CP_SET_DRAW_STATE)
         CacheSetDrawStateGroupInfo(mem_manager, submit_index, va_addr, packet_node_index, header);
 
-    if (IsDrawDispatchBlitSyncEvent(mem_manager, submit_index, va_addr, opcode))
+    if (IsDrawDispatchResolveSyncEvent(mem_manager, submit_index, va_addr, opcode))
     {
         uint64_t event_node_index = UINT64_MAX;
         uint64_t parent_node_index = m_cur_submit_node_index;
@@ -873,20 +873,32 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             parent_node_index = m_render_marker_index;
         }
 
-        // Draw/Dispatch/Blit
+        // Create the event node
         {
-            std::string draw_dispatch_node_string = Util::GetEventString(mem_manager,
-                                                                         submit_index,
-                                                                         va_addr,
-                                                                         opcode);
+            SyncType    sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode);
+            std::string event_string = Util::GetEventString(mem_manager,
+                                                            submit_index,
+                                                            va_addr,
+                                                            opcode);
             uint32_t    event_id = m_num_events++;
 
-            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
-            uint64_t draw_dispatch_node_index = AddNode(NodeType::kDrawDispatchBlitNode,
-                                                        std::move(draw_dispatch_node_string),
-                                                        aux_info);
-            AppendEventNodeIndex(draw_dispatch_node_index);
-            event_node_index = draw_dispatch_node_index;
+            uint64_t node_index;
+            if (sync_type != SyncType::kNone)
+            {
+                SyncInfo                  sync_info = {};
+                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::SyncNode(sync_type,
+                                                                                         sync_info);
+                node_index = AddNode(NodeType::kSyncNode, std::move(event_string), aux_info);
+            }
+            else
+            {
+                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
+                node_index = AddNode(NodeType::kDrawDispatchBlitNode,
+                                     std::move(event_string),
+                                     aux_info);
+            }
+            AppendEventNodeIndex(node_index);
+            event_node_index = node_index;
         }
 
         // Cache nodes that may be part of the vkBeginCommandBuffer.
@@ -1350,15 +1362,6 @@ uint64_t CommandHierarchyCreator::AddRegisterNode(uint32_t       reg,
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t CommandHierarchyCreator::AddSyncEventNode(const IMemoryManager &mem_manager,
-                                                   uint32_t              submit_index,
-                                                   uint64_t              va_addr,
-                                                   SyncType              sync_type)
-{
-    return UINT64_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
 uint32_t CommandHierarchyCreator::GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords)
 {
     return UINT32_MAX;
@@ -1388,8 +1391,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
                                  uint32_t              opcode)
 {
     std::ostringstream string_stream;
-    DIVE_ASSERT(IsDrawDispatchEventOpcode(opcode) ||
-                IsBlitEvent(mem_manager, submit_index, va_addr, opcode));
+    DIVE_ASSERT(IsDrawDispatchResolveSyncEvent(mem_manager, submit_index, va_addr, opcode));
 
     if (opcode == CP_DRAW_INDX)
     {
@@ -1534,8 +1536,20 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     }
     else if (opcode == CP_EVENT_WRITE7)
     {
-        // Assumed it is a BLIT event (note: renamed to CCU_RESOLVE for a7xx)
-        string_stream << "CpEventWrite(type:CCU_RESOLVE)";
+        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode);
+
+        // Note: For CP_EVENT_WRITEs, sync_type maps to a vgt_event_type
+        const PacketInfo *packet_info_ptr = GetPacketInfo(opcode);
+        DIVE_ASSERT(packet_info_ptr != nullptr);
+        DIVE_ASSERT(packet_info_ptr->m_fields.size() > 1);
+        DIVE_ASSERT(strcmp(packet_info_ptr->m_fields[0].m_name, "EVENT") == 0);
+        const char *enum_str = GetEnumString(packet_info_ptr->m_fields[0].m_enum_handle,
+                                             (uint32_t)sync_type);
+        string_stream << "CpEventWrite(type:" << enum_str << ")";
+    }
+    else
+    {
+        DIVE_ASSERT(false);
     }
     return string_stream.str();
 }

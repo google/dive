@@ -159,11 +159,11 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* 
 gfxrecon::format::HandleId                                                      fence)
 {
     std::cerr << "Process_vkQueueSubmit\n";
-    for (int submit_index = 0; submit_index < submitCount; submit_index++)
+    for (uint32_t submit_index = 0; submit_index < submitCount; submit_index++)
     {
         const gfxrecon::decode::Decoded_VkSubmitInfo&
         submit = pSubmits->GetMetaStructPointer()[submit_index];
-        for (int command_buffer_index = 0;
+        for (uint32_t command_buffer_index = 0;
              command_buffer_index < pSubmits->GetPointer()->commandBufferCount;
              command_buffer_index++)
         {

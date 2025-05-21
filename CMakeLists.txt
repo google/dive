@@ -110,8 +110,9 @@ if(NOT ANDROID)
         add_subdirectory(ui)
     endif()
 
+    # TODO: There are a bunch of people working on GFXR integration right now. Remove the following during merge
     add_subdirectory(third_party/gfxreconstruct)
-    add_subdirectory(tools)
+    add_subdirectory(gfxr_dump_resources)
 else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")

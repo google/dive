@@ -14,115 +14,19 @@
  limitations under the License.
 */
 
-#include <cstdint>
-#include <fstream>
 #include <iostream>
 #include <vector>
+#include <optional>
 
 #include "dump_entry.h"
-#include "dump_resources_builder_consumer.h"
-
-#include "gfxreconstruct/framework/decode/file_processor.h"
-#include "gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
+#include "gfxr_dump_resources.h"
 
 namespace
 {
 
 using Dive::gfxr::DumpEntry;
-using Dive::gfxr::DumpRenderPass;
-using Dive::gfxr::DumpResourcesBuilderConsumer;
-
-bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filename)
-{
-    std::ofstream out(filename);
-    if (!out.good() || !out.is_open())
-    {
-        std::cerr << "Failed to open output:" << filename << '\n';
-        return false;
-    }
-
-    out << "{\n";
-
-    out << "  \"BeginCommandBuffer\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
-    {
-        const DumpEntry& entry = dumpables[i];
-        if (i != 0)
-        {
-            out << ',';
-        }
-        out << entry.begin_command_buffer_block_index;
-    }
-    out << "],\n";
-
-    out << "  \"RenderPass\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
-    {
-        const DumpEntry& entry = dumpables[i];
-        if (i != 0)
-        {
-            out << ',';
-        }
-        out << '[';
-        for (int ii = 0; ii < entry.render_passes.size(); ++ii)
-        {
-            const DumpRenderPass& render_pass = entry.render_passes[ii];
-            if (ii != 0)
-            {
-                out << ',';
-            }
-            out << "[" << render_pass.begin_block_index << ',' << render_pass.end_block_index
-                << ']';
-        }
-        out << ']';
-    }
-    out << "],\n";
-
-    out << "  \"Draw\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
-    {
-        const DumpEntry& entry = dumpables[i];
-        if (i != 0)
-        {
-            out << ',';
-        }
-        out << '[';
-        for (int ii = 0; ii < entry.draws.size(); ++ii)
-        {
-            uint64_t draw = entry.draws[ii];
-            if (ii != 0)
-            {
-                out << ',';
-            }
-            out << draw;
-        }
-        out << ']';
-    }
-    out << "],\n";
-
-    out << "  \"QueueSubmit\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
-    {
-        const DumpEntry& entry = dumpables[i];
-        if (i != 0)
-        {
-            out << ',';
-        }
-        out << entry.queue_submit_block_index;
-    }
-    out << "]\n";
-
-    out << "}\n";
-
-    out.close();
-    if (!out.good())
-    {
-        std::cerr << "Failed to close output file: " << filename << '\n';
-        return false;
-    }
-
-    return true;
-}
+using Dive::gfxr::FindDumpableResources;
+using Dive::gfxr::SaveAsJsonFile;
 
 }  // namespace
 
@@ -137,25 +41,16 @@ int main(int argc, char** argv)
     const char* input_filename = argv[1];
     const char* output_filename = argv[2];
 
-    gfxrecon::decode::FileProcessor file_processor;
-    if (!file_processor.Initialize(input_filename))
-    {
-        std::cerr << "Failed to open input:" << input_filename << '\n';
+    std::optional<std::vector<DumpEntry>> dumpables = FindDumpableResources(input_filename);
+    if (!dumpables.has_value()) {
+        std::cerr << "Failed to find resources in " << input_filename << '\n';
         return 1;
     }
 
-    std::vector<DumpEntry> complete_dump_entries;
-
-    gfxrecon::decode::VulkanDecoder vulkan_decoder;
-    DumpResourcesBuilderConsumer    consumer([&complete_dump_entries](DumpEntry dump_entry) {
-        complete_dump_entries.push_back(std::move(dump_entry));
-    });
-    vulkan_decoder.AddConsumer(&consumer);
-    file_processor.AddDecoder(&vulkan_decoder);
-
-    file_processor.ProcessAllFrames();
-
-    SaveAsJsonFile(complete_dump_entries, output_filename);
+    if (!SaveAsJsonFile(*dumpables, output_filename)) {
+        std::cerr << "Failed to serialize to " << output_filename << '\n';
+        return 1;
+    }
 
     return 0;
 }

@@ -27,7 +27,7 @@
 // Each state has a weak reference to the owning state machine. This allows the state machine to
 // hold shared state that all states can reference, such as the current dumpable.
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 // forward decl to break recursive includes
@@ -115,4 +115,4 @@ private:
     gfxrecon::decode::VulkanConsumer& found_begin_;
 };
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

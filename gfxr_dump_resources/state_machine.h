@@ -24,7 +24,7 @@
 #include "dump_entry.h"
 #include "states.h"
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 // A state machine that, given a sequence of Vulkan calls for a particular command buffer, validates
@@ -105,4 +105,4 @@ private:
     gfxrecon::decode::VulkanConsumer* state_ = nullptr;
 };
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

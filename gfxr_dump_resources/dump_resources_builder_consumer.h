@@ -29,7 +29,7 @@
 #include "gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 #include "gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 // Processes Vulkan commands originating from a .gfxr, looking for candidates for
@@ -93,4 +93,4 @@ private:
     std::unordered_map<gfxrecon::format::HandleId, std::unique_ptr<StateMachine>> incomplete_dumps_;
 };
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

@@ -19,7 +19,7 @@
 #include <functional>
 #include <iostream>
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 StateMachine::StateMachine(gfxrecon::format::HandleId command_buffer,
@@ -68,4 +68,4 @@ gfxrecon::decode::VulkanConsumer& StateMachine::state() {
     return *state_;
 }
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

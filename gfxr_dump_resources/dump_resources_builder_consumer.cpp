@@ -19,7 +19,7 @@
 #include <iostream>
 #include "state_machine.h"
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 DumpResourcesBuilderConsumer::DumpResourcesBuilderConsumer(
@@ -183,4 +183,4 @@ gfxrecon::format::HandleId                                                      
     }
 }
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

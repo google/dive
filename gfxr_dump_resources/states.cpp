@@ -27,7 +27,7 @@
 
 #include "state_machine.h"
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 LookingForDraw::LookingForDraw(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_end) :
@@ -134,4 +134,4 @@ pBeginInfo)
     parent_.Transition(found_begin_);
 }
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

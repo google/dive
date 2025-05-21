@@ -28,9 +28,9 @@
 namespace
 {
 
-using Dive::tools::DumpEntry;
-using Dive::tools::DumpRenderPass;
-using Dive::tools::DumpResourcesBuilderConsumer;
+using Dive::gfxr::DumpEntry;
+using Dive::gfxr::DumpRenderPass;
+using Dive::gfxr::DumpResourcesBuilderConsumer;
 
 bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filename)
 {

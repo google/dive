@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace Dive::tools
+namespace Dive::gfxr
 {
 
 // A subelement of a dumpable that tracks the begin and end of a renderpass.
@@ -68,4 +68,4 @@ struct DumpEntry
     }
 };
 
-}  // namespace Dive::tools
+}  // namespace Dive::gfxr

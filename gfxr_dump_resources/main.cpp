@@ -15,8 +15,8 @@
 */
 
 #include <iostream>
-#include <vector>
 #include <optional>
+#include <vector>
 
 #include "dump_entry.h"
 #include "gfxr_dump_resources.h"
@@ -42,12 +42,14 @@ int main(int argc, char** argv)
     const char* output_filename = argv[2];
 
     std::optional<std::vector<DumpEntry>> dumpables = FindDumpableResources(input_filename);
-    if (!dumpables.has_value()) {
+    if (!dumpables.has_value())
+    {
         std::cerr << "Failed to find resources in " << input_filename << '\n';
         return 1;
     }
 
-    if (!SaveAsJsonFile(*dumpables, output_filename)) {
+    if (!SaveAsJsonFile(*dumpables, output_filename))
+    {
         std::cerr << "Failed to serialize to " << output_filename << '\n';
         return 1;
     }

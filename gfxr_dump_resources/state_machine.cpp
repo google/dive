@@ -64,7 +64,8 @@ void StateMachine::Done()
     }
 }
 
-gfxrecon::decode::VulkanConsumer& StateMachine::state() {
+gfxrecon::decode::VulkanConsumer& StateMachine::state()
+{
     return *state_;
 }
 

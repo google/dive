@@ -16,12 +16,13 @@
 
 #pragma once
 
-#include <vector>
 #include <optional>
+#include <vector>
 
 #include "dump_entry.h"
 
-namespace Dive::gfxr {
+namespace Dive::gfxr
+{
 
 // From a GFXR file, produce block indices that can be used with GXR --dump-resources.
 //
@@ -33,4 +34,4 @@ std::optional<std::vector<DumpEntry>> FindDumpableResources(const char* filename
 // Returns false on error.
 bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filename);
 
-}
+}  // namespace Dive::gfxr

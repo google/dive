@@ -38,6 +38,18 @@ SyncType GetSyncType(const IMemoryManager &mem_manager,
         SyncType type = (SyncType)packet.bitfields0.EVENT;
         return type;
     }
+    else if (opcode == CP_WAIT_MEM_WRITES)
+    {
+        return SyncType::kWaitMemWrites;
+    }
+    else if (opcode == CP_WAIT_FOR_IDLE)
+    {
+        return SyncType::kWaitForIdle;
+    }
+    else if (opcode == CP_WAIT_FOR_ME)
+    {
+        return SyncType::kWaitForMe;
+    }
     return SyncType::kNone;
 }
 

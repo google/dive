@@ -1557,6 +1557,18 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
                                              (uint32_t)sync_type);
         string_stream << "CpEventWrite(type:" << enum_str << ")";
     }
+    else if (opcode == CP_WAIT_MEM_WRITES)
+    {
+        string_stream << "CpWaitMemWrites()";
+    }
+    else if (opcode == CP_WAIT_FOR_IDLE)
+    {
+        string_stream << "CpWaitForIdle()";
+    }
+    else if (opcode == CP_WAIT_FOR_ME)
+    {
+        string_stream << "CpWaitForMe()";
+    }
     else
     {
         DIVE_ASSERT(false);

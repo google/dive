@@ -133,10 +133,12 @@ else()
 
   add_library(device_mgr device_mgr.cc ${COMMAND_UTILS_SRC} android_application.cc)
   target_link_libraries(device_mgr 
-  absl::flags
-  absl::flags_parse
-  absl::algorithm
-  absl::strings)
+    absl::flags
+    absl::flags_parse
+    absl::algorithm
+    absl::strings
+    absl::statusor
+    )
 
   add_executable(dive_client_cli dive_client_cli.cc )
   target_link_libraries(dive_client_cli
@@ -153,4 +155,13 @@ else()
 
     install(TARGETS dive_client_cli DESTINATION ${CMAKE_INSTALL_PREFIX})
 
+  enable_testing()
+  include(GoogleTest)
+  add_executable(device_mgr_test device_mgr_test.cc)
+  target_link_libraries(device_mgr_test
+    device_mgr
+    gtest
+    gtest_main
+    )
+  gtest_discover_tests(device_mgr_test)
 endif()

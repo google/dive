@@ -90,6 +90,10 @@ endif()
 option(DIVE_ENABLE_PERFETTO, "Enable functionality to get perfetto trace." OFF)
 include(perfetto.cmake)
 
+if (NOT ANDROID)
+    add_subdirectory(third_party/googletest)
+endif()
+
 add_subdirectory(capture_service)
 add_subdirectory(layer)
 add_subdirectory(runtime_layer)

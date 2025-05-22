@@ -19,6 +19,10 @@ add_library(gfxr_dump_resources_lib STATIC gfxr_dump_resources.cpp state_machine
 target_include_directories(gfxr_dump_resources_lib PRIVATE ..)
 # GFXR doesn't need to be PUBLIC since the tool's "public" headers don't expose GFXR constructs
 target_link_libraries(gfxr_dump_resources_lib PRIVATE gfxrecon_decode)
+# gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
+if (WIN32)
+    target_link_libraries(gfxr_dump_resources_lib PRIVATE psapi)
+endif()
 
 add_executable(gfxr_dump_resources main.cpp)
 target_link_libraries(gfxr_dump_resources gfxr_dump_resources_lib)

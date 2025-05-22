@@ -92,7 +92,9 @@ enum class SyncType
     kEventWriteStart = vgt_event_type::VS_DEALLOC,
     kEventWriteEnd = vgt_event_type::CACHE_INVALIDATE7,
 
-    // Other types of sync to appear here?
+    kWaitMemWrites,
+    kWaitForIdle,
+    kWaitForMe,
 
     kNone
 };

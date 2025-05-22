@@ -15,7 +15,7 @@ git submodule update --init --recursive
    ```
    sudo apt install cmake
    ```
- - Ninja. On Debian:
+ - On Linux, we recommend Ninja. On Debian:
    ```
    sudo apt install ninja-build
    ```

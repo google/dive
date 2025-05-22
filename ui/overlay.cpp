@@ -67,10 +67,7 @@ Overlay::Overlay(QWidget* parent) : OverlayWidget(parent)
 }
 
 //--------------------------------------------------------------------------------------------------
-void Overlay::SetMessage(const QString& message)
-{
-    m_message = message;
-}
+void Overlay::SetMessage(const QString& message) { m_message = message; }
 
 //--------------------------------------------------------------------------------------------------
 void Overlay::UpdateSize(const QRect& rect)

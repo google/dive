@@ -66,10 +66,7 @@ class AdbSession
 {
 public:
     AdbSession() = default;
-    AdbSession(const std::string &serial) :
-        m_serial(serial)
-    {
-    }
+    AdbSession(const std::string &serial) : m_serial(serial) {}
     ~AdbSession()
     {
         for (auto &t : m_background_threads)

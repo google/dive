@@ -18,10 +18,7 @@ limitations under the License.
 
 #include <cstdint>
 
-inline uintptr_t DataKey(const void *object)
-{
-    return (uintptr_t)(*(void **)object);
-}
+inline uintptr_t DataKey(const void *object) { return (uintptr_t)(*(void **)object); }
 
 bool IsLibwrapLoaded();
 

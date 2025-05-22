@@ -36,12 +36,8 @@ template<typename Tag, typename I = uint32_t, size_t kMaxBits = 32> class InfoId
 {
 public:
     using basic_type = I;
-    InfoIdT() :
-        m_id(std::numeric_limits<I>::max())
-    {
-    }
-    explicit InfoIdT(I id) :
-        m_id(id)
+    InfoIdT() : m_id(std::numeric_limits<I>::max()) {}
+    explicit InfoIdT(I id) : m_id(id)
     {
         const I mask = FullBitMask<I, kMaxBits>();
         if (m_id >= mask)

@@ -275,13 +275,13 @@
                         }
                     ]
                 },
-				{
+                {
                     "name": "LRZEnabled",
                     "ty": "bool",
                     "category": "GPU-specific",
                     "desc": "Whether LRZ is enabled for depth"
                 },
-				{
+                {
                     "name": "LRZWrite",
                     "ty": "bool",
                     "category": "GPU-specific",
@@ -293,7 +293,7 @@
                     "category": "GPU-specific",
                     "desc": "LRZ direction"
                 },
-				{
+                {
                     "name": "LRZDirWrite",
                     "ty": "bool",
                     "category": "GPU-specific",
@@ -341,13 +341,13 @@
                     "category": "GPU-specific",
                     "desc": "Whether all helper lanes are enabled of the 2x2 quad for fine derivatives"
                 },
-				{
+                {
                     "name": "EnablePartialHelperLanes",
                     "ty": "bool",
                     "category": "GPU-specific",
                     "desc": "Whether 3 out of 4 helper lanes are enabled of the 2x2 quad for coarse derivatives"
                 },
-				{
+                {
                     "name": "UBWCEnabled",
                     "ty": "bool",
                     "category": "GPU-specific",
@@ -359,7 +359,7 @@
                         }
                     ]
                 },
-				{
+                {
                     "name": "UBWCLosslessEnabled",
                     "ty": "bool",
                     "category": "GPU-specific",
@@ -371,13 +371,13 @@
                         }
                     ]
                 },
-				{
+                {
                     "name": "UBWCEnabledOnDS",
                     "ty": "bool",
                     "category": "GPU-specific",
                     "desc": "Whether UBWC is enabled for this depth stencil attachment"
                 },
-				{
+                {
                     "name": "UBWCLosslessEnabledOnDS",
                     "ty": "bool",
                     "category": "GPU-specific",

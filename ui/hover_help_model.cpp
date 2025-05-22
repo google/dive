@@ -82,7 +82,8 @@ void HoverHelp::SetCurItem(Item        item,
         cur_string = func(param1, param2, param3); \
         break;
 #define CASE_EMPTY(index) \
-    case Item::index: break;
+    case Item::index:     \
+        break;
 
     std::string cur_string;
     int64_t     cur_string_size;

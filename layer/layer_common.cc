@@ -58,15 +58,9 @@ bool IsLibwrapLoaded()
     return loaded;
 }
 
-bool IsLayerLoaded()
-{
-    return g_layer_load_status.load(std::memory_order_acquire);
-}
+bool IsLayerLoaded() { return g_layer_load_status.load(std::memory_order_acquire); }
 
-void SetLayerStatusLoaded()
-{
-    g_layer_load_status.store(true, std::memory_order_release);
-}
+void SetLayerStatusLoaded() { g_layer_load_status.store(true, std::memory_order_release); }
 
 struct InitServer
 {

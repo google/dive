@@ -47,15 +47,10 @@ public:
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     EventStateInfoViewportArray() = default;
     EventStateInfoViewportArray(const EventStateInfoViewportArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoViewportArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoViewportArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -111,20 +106,14 @@ public:
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     EventStateInfoViewportConstArray() = default;
     EventStateInfoViewportConstArray(const EventStateInfoViewportArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoViewportConstArray(const EventStateInfoViewportConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoViewportConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoViewportConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id         id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
     bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -172,15 +161,10 @@ public:
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
     EventStateInfoScissorArray() = default;
     EventStateInfoScissorArray(const EventStateInfoScissorArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoScissorArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoScissorArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -237,20 +221,14 @@ public:
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
     EventStateInfoScissorConstArray() = default;
     EventStateInfoScissorConstArray(const EventStateInfoScissorArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoScissorConstArray(const EventStateInfoScissorConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoScissorConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoScissorConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id         id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
     bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -299,15 +277,10 @@ public:
     using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
     EventStateInfoLogicOpEnabledArray() = default;
     EventStateInfoLogicOpEnabledArray(const EventStateInfoLogicOpEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoLogicOpEnabledArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -364,18 +337,14 @@ public:
     using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
     EventStateInfoLogicOpEnabledConstArray() = default;
     EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
+    EventStateInfoLogicOpEnabledConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id)
     {
     }
     Id         id() const { return m_id; }
@@ -426,15 +395,10 @@ public:
     using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     EventStateInfoLogicOpArray() = default;
     EventStateInfoLogicOpArray(const EventStateInfoLogicOpArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoLogicOpArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -490,20 +454,14 @@ public:
     using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     EventStateInfoLogicOpConstArray() = default;
     EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoLogicOpConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id         id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
     bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -551,15 +509,10 @@ public:
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     EventStateInfoAttachmentArray() = default;
     EventStateInfoAttachmentArray(const EventStateInfoAttachmentArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoAttachmentArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoAttachmentArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -616,20 +569,14 @@ public:
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     EventStateInfoAttachmentConstArray() = default;
     EventStateInfoAttachmentConstArray(const EventStateInfoAttachmentArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoAttachmentConstArray(const EventStateInfoAttachmentConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoAttachmentConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoAttachmentConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id         id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
     bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -677,15 +624,10 @@ public:
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
     EventStateInfoBlendConstantArray() = default;
     EventStateInfoBlendConstantArray(const EventStateInfoBlendConstantArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoBlendConstantArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoBlendConstantArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -741,18 +683,14 @@ public:
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
     EventStateInfoBlendConstantConstArray() = default;
     EventStateInfoBlendConstantConstArray(const EventStateInfoBlendConstantArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoBlendConstantConstArray(const EventStateInfoBlendConstantConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoBlendConstantConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
+    EventStateInfoBlendConstantConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id)
     {
     }
     Id         id() const { return m_id; }
@@ -802,15 +740,10 @@ public:
     using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
     EventStateInfoUBWCEnabledArray() = default;
     EventStateInfoUBWCEnabledArray(const EventStateInfoUBWCEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoUBWCEnabledArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -867,20 +800,14 @@ public:
     using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
     EventStateInfoUBWCEnabledConstArray() = default;
     EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoUBWCEnabledConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id         id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
     bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -929,15 +856,10 @@ public:
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoUBWCLosslessEnabledArray() = default;
     EventStateInfoUBWCLosslessEnabledArray(const EventStateInfoUBWCLosslessEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCLosslessEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoUBWCLosslessEnabledArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -996,19 +918,16 @@ public:
     EventStateInfoUBWCLosslessEnabledConstArray() = default;
     EventStateInfoUBWCLosslessEnabledConstArray(
     const EventStateInfoUBWCLosslessEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoUBWCLosslessEnabledConstArray(
     const EventStateInfoUBWCLosslessEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
     EventStateInfoUBWCLosslessEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
+        m_obj_ptr(obj_ptr), m_id(id)
     {
     }
     Id         id() const { return m_id; }
@@ -1078,15 +997,10 @@ public:
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoRefT() = default;
     EventStateInfoRefT(const EventStateInfoRefT& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoRefT(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoRefT(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id   id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
@@ -2973,21 +2887,12 @@ public:
     using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoConstRefT() = default;
-    EventStateInfoConstRefT(const Ref& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
-    {
-    }
+    EventStateInfoConstRefT(const Ref& other) : m_obj_ptr(&other.obj()), m_id(other.id()) {}
     EventStateInfoConstRefT(const EventStateInfoConstRefT& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoConstRefT(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
+    EventStateInfoConstRefT(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
     Id         id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
     bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }

@@ -20,15 +20,15 @@ limitations under the License.
 extern "C"
 {
 #if defined(__ANDROID__)
-    VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(VkPhysicalDevice   physicalDevice,
-                                                                uint32_t          *pPropertyCount,
-                                                                VkLayerProperties *pProperties);
+    VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(VkPhysicalDevice physicalDevice,
+                                                                    uint32_t        *pPropertyCount,
+                                                                    VkLayerProperties *pProperties);
 
     VkResult VKAPI_CALL
     DiveInterceptEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
-                                                const char            *pLayerName,
-                                                uint32_t              *pPropertyCount,
-                                                VkExtensionProperties *pProperties);
+                                                    const char            *pLayerName,
+                                                    uint32_t              *pPropertyCount,
+                                                    VkExtensionProperties *pProperties);
 
     VkResult VKAPI_CALL DiveInterceptEnumerateInstanceExtensionProperties(
     const VkEnumerateInstanceExtensionPropertiesChain *pChain,
@@ -40,7 +40,9 @@ extern "C"
                                                          uint32_t          *pPropertyCount,
                                                          VkLayerProperties *pProperties)
     {
-        return DiveInterceptEnumerateDeviceLayerProperties(physicalDevice, pPropertyCount, pProperties);
+        return DiveInterceptEnumerateDeviceLayerProperties(physicalDevice,
+                                                           pPropertyCount,
+                                                           pProperties);
     }
 
     VkResult VKAPI_CALL vkEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
@@ -49,15 +51,17 @@ extern "C"
                                                              VkExtensionProperties *pProperties)
     {
         return DiveInterceptEnumerateDeviceExtensionProperties(physicalDevice,
-                                                           pLayerName,
-                                                           pPropertyCount,
-                                                           pProperties);
+                                                               pLayerName,
+                                                               pPropertyCount,
+                                                               pProperties);
     }
 
     VkResult VKAPI_CALL vkEnumerateInstanceLayerProperties(uint32_t          *pPropertyCount,
                                                            VkLayerProperties *pProperties)
     {
-        return DiveInterceptEnumerateDeviceLayerProperties(VK_NULL_HANDLE, pPropertyCount, pProperties);
+        return DiveInterceptEnumerateDeviceLayerProperties(VK_NULL_HANDLE,
+                                                           pPropertyCount,
+                                                           pProperties);
     }
 
     VkResult VKAPI_CALL vkEnumerateInstanceExtensionProperties(const char *pLayerName,
@@ -65,9 +69,9 @@ extern "C"
                                                                VkExtensionProperties *pProperties)
     {
         return DiveInterceptEnumerateInstanceExtensionProperties(NULL,
-                                                             pLayerName,
-                                                             pPropertyCount,
-                                                             pProperties);
+                                                                 pLayerName,
+                                                                 pPropertyCount,
+                                                                 pProperties);
     }
 #endif
 }

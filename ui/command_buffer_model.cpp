@@ -64,16 +64,10 @@ void CommandBufferModel::SetTopologyToView(const Dive::Topology *topology_ptr)
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::columnCount(const QModelIndex &parent) const
-{
-    return kColumnCount;
-}
+int CommandBufferModel::columnCount(const QModelIndex &parent) const { return kColumnCount; }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::scrollToIndex() const
-{
-    return m_scroll_to_index;
-}
+QModelIndex CommandBufferModel::scrollToIndex() const { return m_scroll_to_index; }
 
 //--------------------------------------------------------------------------------------------------
 QVariant CommandBufferModel::data(const QModelIndex &index, int role) const

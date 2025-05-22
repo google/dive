@@ -26,8 +26,7 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
 // =================================================================================================
 CommandBufferViewDelegate::CommandBufferViewDelegate(
 const CommandBufferView *command_buffer_view_ptr) :
-    QStyledItemDelegate(0),
-    m_command_buffer_view_ptr(command_buffer_view_ptr)
+    QStyledItemDelegate(0), m_command_buffer_view_ptr(command_buffer_view_ptr)
 {
 }
 

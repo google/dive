@@ -69,10 +69,7 @@ public:
     std::condition_variable cv;
 };
 
-PerfettoTraceManager::PerfettoTraceManager()
-{
-    InitializePerfetto();
-}
+PerfettoTraceManager::PerfettoTraceManager() { InitializePerfetto(); }
 
 void PerfettoTraceManager::InitializePerfetto()
 {

@@ -98,16 +98,25 @@ std::string AbslUnparseFlag(Command command)
 {
     switch (command)
     {
-    case Command::kNone: return "";
-    case Command::kListDevice: return "list_device";
-    case Command::kGfxrCapture: return "gfxr_capture";
-    case Command::kGfxrReplay: return "gfxr_replay";
-    case Command::kListPackage: return "list_package";
-    case Command::kRunPackage: return "run";
-    case Command::kRunAndCapture: return "capture";
-    case Command::kCleanup: return "cleanup";
+    case Command::kNone:
+        return "";
+    case Command::kListDevice:
+        return "list_device";
+    case Command::kGfxrCapture:
+        return "gfxr_capture";
+    case Command::kGfxrReplay:
+        return "gfxr_replay";
+    case Command::kListPackage:
+        return "list_package";
+    case Command::kRunPackage:
+        return "run";
+    case Command::kRunAndCapture:
+        return "capture";
+    case Command::kCleanup:
+        return "cleanup";
 
-    default: return absl::StrCat(command);
+    default:
+        return absl::StrCat(command);
     }
 }
 
@@ -155,10 +164,7 @@ ABSL_FLAG(std::string,
           "specify the on-device path of the gfxr capture to replay.");
 ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr replay.");
 
-void print_usage()
-{
-    std::cout << absl::ProgramUsageMessage() << std::endl;
-}
+void print_usage() { std::cout << absl::ProgramUsageMessage() << std::endl; }
 
 bool list_device(const Dive::DeviceManager& mgr)
 {

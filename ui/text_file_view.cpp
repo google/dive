@@ -79,9 +79,7 @@ public:
     typedef decltype(std::declval<Dive::CaptureData>().GetNumText()) IndexType;
 
     TextFileWidgetItem(std::string name, IndexType index, QTreeWidget *view) :
-        QTreeWidgetItem(view),
-        m_name(name),
-        m_index(index)
+        QTreeWidgetItem(view), m_name(name), m_index(index)
     {
     }
     std::string GetName() const { return m_name; }
@@ -93,8 +91,7 @@ private:
 };
 
 // -------------------------------------------------------------------------------------------------
-TextFileView::TextFileView(const Dive::DataCore &data_core) :
-    m_data_core(data_core)
+TextFileView::TextFileView(const Dive::DataCore &data_core) : m_data_core(data_core)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_text_list = new QTreeWidget();

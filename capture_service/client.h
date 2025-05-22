@@ -27,10 +27,7 @@ namespace Dive
 class DiveClient
 {
 public:
-    DiveClient(std::shared_ptr<grpc::Channel> channel) :
-        m_stub(DiveService::NewStub(channel))
-    {
-    }
+    DiveClient(std::shared_ptr<grpc::Channel> channel) : m_stub(DiveService::NewStub(channel)) {}
 
     absl::StatusOr<std::string> RequestStartTrace();
 

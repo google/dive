@@ -36,14 +36,8 @@ public:
     Task& operator=(const Task& other) = delete;
     Task& operator=(const Function& f) = delete;
 
-    Task(Task&& other) :
-        m_func(std::move(other.m_func))
-    {
-    }
-    Task(Function&& f) :
-        m_func(std::move(f))
-    {
-    }
+    Task(Task&& other) : m_func(std::move(other.m_func)) {}
+    Task(Function&& f) : m_func(std::move(f)) {}
 
     Task& operator=(Task&& other)
     {

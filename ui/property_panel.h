@@ -32,7 +32,7 @@ private:
 
     // Selection info string
     QScrollArea *m_selection_info_sa;
-    QLabel *     m_selection_info_str;
+    QLabel      *m_selection_info_str;
 
     // Hover help string
     QLabel *m_hover_help_str;

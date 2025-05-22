@@ -100,10 +100,7 @@ Disassembly::Disassembly(const IMemoryManager& mem_manager,
                          uint32_t              submit_index,
                          uint64_t              address,
                          ILog*                 log) :
-    m_mem_manager(mem_manager),
-    m_submit_index(submit_index),
-    m_address(address),
-    m_log(log)
+    m_mem_manager(mem_manager), m_submit_index(submit_index), m_address(address), m_log(log)
 {
     ((void)(m_log));  // avoid unused variable
 }

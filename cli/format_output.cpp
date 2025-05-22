@@ -506,10 +506,6 @@ void ExtractAssets(const char                   *dir,
 
     if (command_hierarchy)
     {
-
-        ExtractTopology(dir_path / "engines.txt",
-                        command_hierarchy,
-                        &command_hierarchy->GetEngineHierarchyTopology());
         ExtractTopology(dir_path / "submits.txt",
                         command_hierarchy,
                         &command_hierarchy->GetSubmitHierarchyTopology());
@@ -572,9 +568,6 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
     const Dive::Topology *topology_ptr = nullptr;
     switch (topology)
     {
-    case TopologyName::kTopologyEngine:
-        topology_ptr = &command_hierarchy_ptr->GetEngineHierarchyTopology();
-        break;
     case TopologyName::kTopologySubmit:
         topology_ptr = &command_hierarchy_ptr->GetSubmitHierarchyTopology();
         break;
@@ -622,6 +615,26 @@ int ExtractCapture(const char *filename, const char *extract_assets)
     }
 
     ExtractAssets(extract_assets, filename, data->GetCaptureData(), command_hierarchy);
+
+    return EXIT_SUCCESS;
+}
+
+//--------------------------------------------------------------------------------------------------
+int ModifyGFXRCapture(const char *original_filename, const char *new_filename)
+{
+    Dive::LogConsole                log;
+    std::unique_ptr<Dive::DataCore> data = std::make_unique<Dive::DataCore>(&log);
+    if (data->LoadCaptureData(original_filename) != Dive::CaptureData::LoadResult::kSuccess)
+    {
+        std::cerr << "Load GFXR capture failed." << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    if (!data->WriteNewGFXRCaptureData(new_filename))
+    {
+        std::cerr << "Write modified GFXR capture failed." << std::endl;
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }

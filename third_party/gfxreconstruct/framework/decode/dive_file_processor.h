@@ -20,7 +20,10 @@ limitations under the License.
 #ifndef GFXRECON_DECODE_DIVE_FILE_PROCESSOR_H
 #define GFXRECON_DECODE_DIVE_FILE_PROCESSOR_H
 
+#include "decode/dive_block_data.h"
 #include "decode/file_processor.h"
+
+#include <memory>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -30,12 +33,16 @@ class DiveFileProcessor : public FileProcessor
   public:
     void SetLoopSingleFrameCount(uint64_t loop_single_frame_count);
 
+    void SetDiveBlockData(std::shared_ptr<DiveBlockData> p_block_data);
+
   protected:
     bool ProcessFrameMarker(const format::BlockHeader& block_header,
                             format::MarkerType         marker_type,
                             bool&                      should_break) override;
 
     bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type) override;
+
+    void StoreBlockInfo() override;
 
   private:
     // Application will terminate after the single frame has been looped loop_single_frame_count_ times.
@@ -44,6 +51,9 @@ class DiveFileProcessor : public FileProcessor
 
     // Capture file offset of the marker that indicates the end of resources setup.
     int64_t state_end_marker_file_offset_{ 0 };
+
+    // The DiveBlockData object that contains the metadata for the original GFXR file and modifications
+    std::shared_ptr<DiveBlockData> dive_block_data_ = nullptr;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -87,7 +87,6 @@ private slots:
     void OnShortcuts();
     void OnSaveCapture();
     void OnSearchTrigger();
-    void OnCheckboxStateChanged(int state);
     void OpenRecentFile();
     void UpdateOverlay(const QString &);
     void OnCrossReference(Dive::CrossRef);
@@ -106,7 +105,6 @@ private:
     void    CreateStatusBar();
     void    ShowTempStatus(const QString &status_message);
     void    ExpandResizeHierarchyView();
-    void    ShowEventView(const Dive::CommandHierarchy &command_hierarchy, EventMode event_mode);
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
     void    UpdateRecentFileActions(QStringList recent_files);
     QString StrippedName(const QString &fullFileName);
@@ -158,10 +156,6 @@ private:
     QPushButton         *m_prev_event_button;
     QPushButton         *m_next_event_button;
     QList<QPushButton *> m_expand_to_lvl_buttons;
-
-#ifndef NDEBUG
-    QCheckBox *m_show_marker_checkbox;
-#endif
 
     // Right pane
     QTabWidget      *m_tab_widget;

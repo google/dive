@@ -31,6 +31,7 @@ int main(int argc, char** argv)
         &CommandOf<HelpCommand>::Get(&commands),
         &CommandOf<VersionCommand>::Get(),
         &CommandOf<ExtractCommand>::Get(),
+        &CommandOf<ModifyGFXRCommand>::Get(),
         // Internal, use `divecli help --internal`
         // It's hidden to not cause confusion.
         &CommandOf<PacketCommand>::Get(),

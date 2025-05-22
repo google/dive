@@ -49,7 +49,6 @@ void PrintHang(std::ostream         &out,
 enum class TopologyName
 {
     kTopologyUnknown,
-    kTopologyEngine,
     kTopologySubmit,
     kTopologyEvent
 };

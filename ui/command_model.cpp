@@ -119,11 +119,7 @@ QVariant CommandModel::headerData(int section, Qt::Orientation orientation, int 
 {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
     {
-        if (section == 1 &&
-            (m_topology_ptr == &m_command_hierarchy.GetVulkanDrawEventHierarchyTopology() ||
-             m_topology_ptr == &m_command_hierarchy.GetVulkanEventHierarchyTopology() ||
-             m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology() ||
-             m_topology_ptr == &m_command_hierarchy.GetRgpHierarchyTopology()))
+        if (section == 1 && (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology()))
         {
             return QString(tr("Event"));
         }
@@ -190,10 +186,7 @@ int CommandModel::rowCount(const QModelIndex &parent) const
 //--------------------------------------------------------------------------------------------------
 int CommandModel::columnCount(const QModelIndex &parent) const
 {
-    if (m_topology_ptr == &m_command_hierarchy.GetVulkanDrawEventHierarchyTopology() ||
-        m_topology_ptr == &m_command_hierarchy.GetVulkanEventHierarchyTopology() ||
-        m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology() ||
-        m_topology_ptr == &m_command_hierarchy.GetRgpHierarchyTopology())
+    if (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology())
         return 2;
     return 1;
 }
@@ -203,17 +196,8 @@ QModelIndex CommandModel::findNode(uint64_t node_index) const
 {
     if (m_node_lookup.size() != m_command_hierarchy.size())
         BuildNodeLookup();
-    while (node_index < m_command_hierarchy.size())
-    {
-        if (m_node_lookup[node_index].isValid())
-            return m_node_lookup[node_index];
-        if (m_topology_ptr == &m_command_hierarchy.GetVulkanEventHierarchyTopology() ||
-            m_topology_ptr == &m_command_hierarchy.GetVulkanDrawEventHierarchyTopology())
-            node_index = m_command_hierarchy.GetAllEventHierarchyTopology().GetParentNodeIndex(
-            node_index);
-        else
-            break;
-    }
+    if (node_index < m_command_hierarchy.size() && m_node_lookup[node_index].isValid())
+        return m_node_lookup[node_index];
     return QModelIndex();
 }
 

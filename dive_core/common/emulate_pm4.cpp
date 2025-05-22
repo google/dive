@@ -61,7 +61,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
             RegPair  reg_pair;
             uint64_t pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
             DIVE_VERIFY(
-            mem_manager.CopyMemory(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
+            mem_manager.RetrieveMemoryData(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
             dword += 2;
             SetReg(reg_pair.m_reg_offset, reg_pair.m_reg_value);
 
@@ -70,10 +70,10 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
             {
                 RegPair  new_reg_pair;
                 uint64_t new_pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
-                DIVE_VERIFY(mem_manager.CopyMemory(&new_reg_pair,
-                                                   submit_index,
-                                                   new_pair_addr,
-                                                   sizeof(new_reg_pair)));
+                DIVE_VERIFY(mem_manager.RetrieveMemoryData(&new_reg_pair,
+                                                           submit_index,
+                                                           new_pair_addr,
+                                                           sizeof(new_reg_pair)));
 
                 // Sometimes the upper 32-bits are not set
                 // Probably because they're 0s and there's no need to set it
@@ -108,10 +108,10 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
             for (uint32_t i = 0; i < size_in_dwords; ++i)
             {
                 uint32_t reg_value = 0;
-                DIVE_VERIFY(mem_manager.CopyMemory(&reg_value,
-                                                   submit_index,
-                                                   reg_va_addr + i * dword_in_bytes,
-                                                   dword_in_bytes));
+                DIVE_VERIFY(mem_manager.RetrieveMemoryData(&reg_value,
+                                                           submit_index,
+                                                           reg_va_addr + i * dword_in_bytes,
+                                                           dword_in_bytes));
                 SetReg(reg_offset + i, reg_value);
             }
 
@@ -354,10 +354,10 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
         EmulateState::IbStack *cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
 
         Pm4Header header;
-        DIVE_VERIFY(mem_manager.CopyMemory(&header,
-                                           emu_state.m_submit_index,
-                                           cur_ib_level->m_cur_va,
-                                           sizeof(Pm4Header)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&header,
+                                                   emu_state.m_submit_index,
+                                                   cur_ib_level->m_cur_va,
+                                                   sizeof(Pm4Header)));
 
         // Check validity of packet
         if (header.type == 4)
@@ -410,10 +410,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     {
 
         PM4_CP_INDIRECT_BUFFER ib_packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&ib_packet,
-                                           emu_state_ptr->m_submit_index,
-                                           emu_state_ptr->GetCurIb()->m_cur_va,
-                                           sizeof(PM4_CP_INDIRECT_BUFFER)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&ib_packet,
+                                                   emu_state_ptr->m_submit_index,
+                                                   emu_state_ptr->GetCurIb()->m_cur_va,
+                                                   sizeof(PM4_CP_INDIRECT_BUFFER)));
         uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
         IbType   ib_type = (header.type7.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
                                                                                IbType::kCall;
@@ -434,10 +434,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // CALL (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
         PM4_CP_SET_CTXSWITCH_IB packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
-                                           emu_state_ptr->m_submit_index,
-                                           emu_state_ptr->GetCurIb()->m_cur_va,
-                                           (header.type7.count + 1) * sizeof(uint32_t)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                                   emu_state_ptr->m_submit_index,
+                                                   emu_state_ptr->GetCurIb()->m_cur_va,
+                                                   (header.type7.count + 1) * sizeof(uint32_t)));
 
         // Sometimes this packet is used for purposes other than to jump to an IB. Check size.
         // Example: When TYPE is SAVE_IB
@@ -467,10 +467,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // CALLs (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
         PM4_CP_SET_DRAW_STATE packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
-                                           emu_state_ptr->m_submit_index,
-                                           emu_state_ptr->GetCurIb()->m_cur_va,
-                                           (header.type7.count + 1) * sizeof(uint32_t)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                                   emu_state_ptr->m_submit_index,
+                                                   emu_state_ptr->GetCurIb()->m_cur_va,
+                                                   (header.type7.count + 1) * sizeof(uint32_t)));
         uint32_t packet_size = (packet.HEADER.count * sizeof(uint32_t));
         uint32_t array_size = packet_size / sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
         DIVE_ASSERT((packet_size % sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT)) == 0);
@@ -512,10 +512,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
     {
 
         PM4_CP_START_BIN packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
-                                           emu_state_ptr->m_submit_index,
-                                           emu_state_ptr->GetCurIb()->m_cur_va,
-                                           sizeof(PM4_CP_START_BIN)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                                   emu_state_ptr->m_submit_index,
+                                                   emu_state_ptr->GetCurIb()->m_cur_va,
+                                                   sizeof(PM4_CP_START_BIN)));
 
         // The CP_START_BIN & CP_END_BIN are pm4s only availabe at a650+
         // here is the layout:
@@ -544,10 +544,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         while (true)
         {
             Pm4Header temp_header;
-            DIVE_VERIFY(mem_manager.CopyMemory(&temp_header,
-                                               emu_state_ptr->m_submit_index,
-                                               temp_va,
-                                               sizeof(Pm4Header)));
+            DIVE_VERIFY(mem_manager.RetrieveMemoryData(&temp_header,
+                                                       emu_state_ptr->m_submit_index,
+                                                       temp_va,
+                                                       sizeof(Pm4Header)));
             if (temp_header.type == 7 && temp_header.type7.opcode == CP_END_BIN)
             {
                 uint64_t common_block_size = temp_va - cp_start_common_block_va;
@@ -601,10 +601,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // if CP_START_BIN/CP_END_BIN are used, and CP_FIXED_STRIDE_DRAW_TABLE is used for
         // drawcalls, it will be in the Common_block
         PM4_CP_FIXED_STRIDE_DRAW_TABLE packet;
-        DIVE_VERIFY(mem_manager.CopyMemory(&packet,
-                                           emu_state_ptr->m_submit_index,
-                                           emu_state_ptr->GetCurIb()->m_cur_va,
-                                           sizeof(PM4_CP_FIXED_STRIDE_DRAW_TABLE)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                                   emu_state_ptr->m_submit_index,
+                                                   emu_state_ptr->GetCurIb()->m_cur_va,
+                                                   sizeof(PM4_CP_FIXED_STRIDE_DRAW_TABLE)));
 
         for (uint32_t draw = 0; draw < packet.bitfields2.COUNT; ++draw)
         {

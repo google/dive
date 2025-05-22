@@ -331,6 +331,7 @@ absl::Status OpenXRApplication::Setup()
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
     if (m_gfxr_enabled)
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
         RETURN_IF_ERROR(GfxrSetup());
     }
     else
@@ -365,6 +366,7 @@ absl::Status OpenXRApplication::Cleanup()
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }

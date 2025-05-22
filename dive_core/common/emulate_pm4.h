@@ -27,6 +27,7 @@
 
 #pragma once
 #include <stdint.h>
+
 #include "adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "dive_core/stl_replacement.h"

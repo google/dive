@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <dlfcn.h>
-
 #include "layer_common.h"
 
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <dlfcn.h>
 #include <thread>
 
 #include "capture_service/log.h"
@@ -58,15 +57,9 @@ bool IsLibwrapLoaded()
     return loaded;
 }
 
-bool IsLayerLoaded()
-{
-    return g_layer_load_status.load(std::memory_order_acquire);
-}
+bool IsLayerLoaded() { return g_layer_load_status.load(std::memory_order_acquire); }
 
-void SetLayerStatusLoaded()
-{
-    g_layer_load_status.store(true, std::memory_order_release);
-}
+void SetLayerStatusLoaded() { g_layer_load_status.store(true, std::memory_order_release); }
 
 struct InitServer
 {

@@ -14,12 +14,13 @@
  limitations under the License.
 */
 #include "buffer_view.h"
-#include "dive_core/data_core.h"
-#include "dive_core/dive_strings.h"
 
 #include <QTableWidget>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
+#include "dive_core/data_core.h"
+#include "dive_core/dive_strings.h"
 
 // =================================================================================================
 // BufferWidgetItem
@@ -28,8 +29,7 @@ class BufferWidgetItem : public QTreeWidgetItem
 {
 public:
     BufferWidgetItem(uint32_t buffer_index, QTreeWidget *view) :
-        QTreeWidgetItem(view),
-        m_buffer_index(buffer_index)
+        QTreeWidgetItem(view), m_buffer_index(buffer_index)
     {
     }
     uint32_t GetBufferIndex() const { return m_buffer_index; }
@@ -42,8 +42,7 @@ private:
 // BufferView
 // =================================================================================================
 BufferView::BufferView(const Dive::DataCore &data_core) :
-    m_data_core(data_core),
-    m_event_index(UINT32_MAX)
+    m_data_core(data_core), m_event_index(UINT32_MAX)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_buffer_list = new QTreeWidget();
@@ -162,7 +161,8 @@ void BufferView::OnEventSelected(uint32_t event_index)
             case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
                 snprintf(str_buffer, str_buffer_size, "GartCacheable");
                 break;
-            default: DIVE_ASSERT(false);
+            default:
+                DIVE_ASSERT(false);
             }
             treeItem->setText(8, tr(str_buffer));
 

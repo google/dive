@@ -14,8 +14,8 @@
  limitations under the License.
 */
 
-#include <dive_core/progress_tracker.h>
 #include <QObject>
+#include <dive_core/progress_tracker.h>
 
 #pragma once
 

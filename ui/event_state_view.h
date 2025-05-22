@@ -15,6 +15,7 @@
 */
 
 #include <QFrame>
+
 #include "dive_core/event_state.h"
 #pragma once
 

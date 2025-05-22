@@ -14,9 +14,10 @@
  limitations under the License.
 */
 
+#include "capture_event_info.h"
+
 #include <assert.h>
 
-#include "capture_event_info.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 
 namespace Dive

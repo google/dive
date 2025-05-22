@@ -19,6 +19,9 @@
 #include <map>
 #include <memory>
 #include <string>
+
+#include "third_party/gfxreconstruct/framework/decode/dive_block_data.h"
+
 #include "archive.h"
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
@@ -26,7 +29,6 @@
 #include "dive_core/common/memory_manager_base.h"
 #include "log.h"
 #include "progress_tracker.h"
-#include "third_party/gfxreconstruct/framework/decode/dive_block_data.h"
 
 // Forward declarations
 struct SqttFileChunkAsicInfo;
@@ -374,10 +376,7 @@ public:
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
     LoadResult LoadGfxrFile(const char *file_name);
 
-    bool HasPm4Data() const
-    {
-        return m_submits.size() > 0;
-    }
+    bool        HasPm4Data() const { return m_submits.size() > 0; }
     std::string GetFileFormatVersion() const;
 
     // Writes a new GFXR file based on the original file m_cur_capture_file and modifications

@@ -18,6 +18,7 @@
 #pragma once
 #include <map>
 #include <vector>
+
 #include "capture_data.h"
 #include "capture_event_info.h"
 #include "command_hierarchy.h"

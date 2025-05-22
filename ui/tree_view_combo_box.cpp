@@ -12,6 +12,7 @@
 */
 
 #include "tree_view_combo_box.h"
+
 #include <QHeaderView>
 #include <QTreeView>
 

@@ -30,9 +30,7 @@ public:
 class memstream : public std::istream
 {
 public:
-    memstream(const uint8_t *p, size_t l) :
-        std::istream(&m_buffer),
-        m_buffer(p, l)
+    memstream(const uint8_t *p, size_t l) : std::istream(&m_buffer), m_buffer(p, l)
     {
         rdbuf(&m_buffer);
     }

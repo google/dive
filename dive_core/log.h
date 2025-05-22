@@ -14,9 +14,9 @@
  limitations under the License.
 */
 #pragma once
-#include <stdint.h>
 #include <ostream>
 #include <sstream>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -135,10 +135,7 @@ std::ostream& detailed(std::ostream& out);
 class code
 {
 public:
-    code(LogCode c) :
-        m_code(c)
-    {
-    }
+    code(LogCode c) : m_code(c) {}
     LogCode GetCode() const { return m_code; }
 
 private:

@@ -13,6 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include "most_expensive_events_view.h"
+
 #include <QAction>
 #include <QHeaderView>
 #include <QLabel>
@@ -27,7 +29,6 @@
 #include "dive_core/data_core.h"
 #include "gui_constants.h"
 #include "hover_help_model.h"
-#include "most_expensive_events_view.h"
 #include "settings.h"
 
 const uint32_t kDurationColumn = 2;
@@ -40,10 +41,7 @@ const uint32_t kShaderStageColumn = 4;
 class EventWidgetItem : public QTreeWidgetItem
 {
 public:
-    EventWidgetItem(QTreeWidget *view) :
-        QTreeWidgetItem(view)
-    {
-    }
+    EventWidgetItem(QTreeWidget *view) : QTreeWidgetItem(view) {}
     void SetStageEnabled(Dive::ShaderStage stage, bool enable)
     {
         m_stage_enabled[(uint32_t)stage] = enable;
@@ -187,10 +185,7 @@ MostExpensiveEventsView::MostExpensiveEventsView(const Dive::CaptureMetadata &ca
 }
 
 //--------------------------------------------------------------------------------------------------
-void MostExpensiveEventsView::Update()
-{
-    return;
-}
+void MostExpensiveEventsView::Update() { return; }
 
 //--------------------------------------------------------------------------------------------------
 void MostExpensiveEventsView::OnCustomContextMenuRequested(QPoint pos)

@@ -15,16 +15,15 @@
 */
 #include "shader_view.h"
 
+#include <QTextEdit>
+#include <QTreeWidget>
+#include <QVBoxLayout>
+
 #include "dive_core/cross_ref.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
 #include "dive_core/shader_disassembly.h"
-
 #include "shader_text_view.h"
-
-#include <QTextEdit>
-#include <QTreeWidget>
-#include <QVBoxLayout>
 
 // =================================================================================================
 // ShaderWidgetItem
@@ -71,8 +70,7 @@ private:
 // ShaderView
 // =================================================================================================
 ShaderView::ShaderView(const Dive::DataCore &data_core) :
-    m_data_core(data_core),
-    m_node_index(UINT64_MAX)
+    m_data_core(data_core), m_node_index(UINT64_MAX)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_shader_list = new QTreeWidget();

@@ -16,14 +16,14 @@ limitations under the License.
 
 #pragma once
 
-#include <vulkan/vk_layer.h>
-#include <vulkan/vulkan.h>
 #include <deque>
 #include <limits>
 #include <numeric>
 #include <set>
 #include <unordered_map>
 #include <vector>
+#include <vulkan/vk_layer.h>
+#include <vulkan/vulkan.h>
 
 namespace DiveLayer
 {

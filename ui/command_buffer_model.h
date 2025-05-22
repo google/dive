@@ -17,8 +17,8 @@ limitations under the License.
 #include <QList>
 #include <QModelIndex>
 #include <QVariant>
-
 #include <vector>
+
 #include "dive_core/common.h"
 
 // Forward Declarations

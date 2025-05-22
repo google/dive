@@ -11,13 +11,11 @@
  limitations under the License.
 */
 #include "event_graphics_item.h"
+
 #include <QPainter>
 
 //--------------------------------------------------------------------------------------------------
-EventGraphicsItem::EventGraphicsItem()
-{
-    setAcceptHoverEvents(true);
-}
+EventGraphicsItem::EventGraphicsItem() { setAcceptHoverEvents(true); }
 
 //--------------------------------------------------------------------------------------------------
 void EventGraphicsItem::SetWidth(uint64_t width)
@@ -48,10 +46,7 @@ void EventGraphicsItem::SetVisibleRange(int64_t scene_x,
 }
 
 //--------------------------------------------------------------------------------------------------
-QRectF EventGraphicsItem::boundingRect() const
-{
-    return QRectF(0, 0, m_width, m_height);
-}
+QRectF EventGraphicsItem::boundingRect() const { return QRectF(0, 0, m_width, m_height); }
 
 //--------------------------------------------------------------------------------------------------
 QPainterPath EventGraphicsItem::shape() const
@@ -86,13 +81,7 @@ void EventGraphicsItem::CalcRectCoord(uint64_t  start_cycle,
 }
 
 //--------------------------------------------------------------------------------------------------
-QColor EventGraphicsItem::GetEventColor(uint32_t event)
-{
-    return QColor(250, 218, 94);
-}
+QColor EventGraphicsItem::GetEventColor(uint32_t event) { return QColor(250, 218, 94); }
 
 //--------------------------------------------------------------------------------------------------
-void EventGraphicsItem::setColorByIndex(int index)
-{
-    m_color_by_index = index;
-}
+void EventGraphicsItem::setColorByIndex(int index) { m_color_by_index = index; }

@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <string>
 #include <thread>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 
@@ -66,10 +67,7 @@ class AdbSession
 {
 public:
     AdbSession() = default;
-    AdbSession(const std::string &serial) :
-        m_serial(serial)
-    {
-    }
+    AdbSession(const std::string &serial) : m_serial(serial) {}
     ~AdbSession()
     {
         for (auto &t : m_background_threads)

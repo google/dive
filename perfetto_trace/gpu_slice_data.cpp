@@ -15,8 +15,10 @@
 */
 
 #include "gpu_slice_data.h"
+
 #include <cstdint>
 #include <iostream>
+
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 

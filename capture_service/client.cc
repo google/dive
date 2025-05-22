@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "client.h"
+
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -21,7 +23,6 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "client.h"
 #include "constants.h"
 #include "dive_service.grpc.pb.h"
 #include "dive_service.pb.h"

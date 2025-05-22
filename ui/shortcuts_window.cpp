@@ -14,8 +14,7 @@
  limitations under the License.
 */
 #include "shortcuts_window.h"
-#include <qfont.h>
-#include <qlabel.h>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -28,7 +27,10 @@
 #include <QSizePolicy>
 #include <QVBoxLayout>
 #include <iostream>
+#include <qfont.h>
+#include <qlabel.h>
 #include <sstream>
+
 #include "shortcuts.h"
 
 // =================================================================================================

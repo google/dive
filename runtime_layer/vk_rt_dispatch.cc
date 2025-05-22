@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 #include "vk_rt_dispatch.h"
+
 #include "capture_service/log.h"
 
 namespace DiveLayer

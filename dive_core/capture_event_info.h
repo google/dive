@@ -16,6 +16,7 @@
 
 #pragma once
 #include <vector>
+
 #include "capture_data.h"
 #include "common.h"
 #include "shader_disassembly.h"

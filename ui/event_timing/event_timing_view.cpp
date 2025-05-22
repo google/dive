@@ -11,12 +11,6 @@
  limitations under the License.
 */
 #include "event_timing_view.h"
-#include "dive_core/common.h"
-#include "dive_core/common/gpudefs.h"
-#include "event_graphics_item.h"
-#include "event_timing_graphics_scene.h"
-#include "event_timing_graphics_view.h"
-#include "ui/sqtt/ruler_graphics_item.h"
 
 #include <QComboBox>
 #include <QGraphicsScene>
@@ -25,6 +19,13 @@
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QVBoxLayout>
+
+#include "dive_core/common.h"
+#include "dive_core/common/gpudefs.h"
+#include "event_graphics_item.h"
+#include "event_timing_graphics_scene.h"
+#include "event_timing_graphics_view.h"
+#include "ui/sqtt/ruler_graphics_item.h"
 
 // =================================================================================================
 // EventTimingView
@@ -67,7 +68,7 @@ EventTimingView::EventTimingView()
 
     const uint32_t kStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
     QString        shader_names[kStageCount] = {
-               "Vertex Shader", "Pixel Shader", "Compute Shader", "Geometry Shader", "Hull Shader"
+        "Vertex Shader", "Pixel Shader", "Compute Shader", "Geometry Shader", "Hull Shader"
     };
     Dive::ShaderStage shader_stage_order[kStageCount] = { Dive::ShaderStage::kShaderStageVs,
                                                           Dive::ShaderStage::kShaderStagePs,
@@ -263,10 +264,7 @@ void EventTimingView::OnMouseWheel(QPoint mouse_pos, int angle_delta)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventTimingView::resizeEvent(QResizeEvent *event)
-{
-    Update();
-}
+void EventTimingView::resizeEvent(QResizeEvent *event) { Update(); }
 
 void EventTimingView::OnColorByIndexChange(int index)
 {

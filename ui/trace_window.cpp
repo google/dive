@@ -16,8 +16,6 @@
 
 #include "trace_window.h"
 
-#include <qboxlayout.h>
-#include <qspinbox.h>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
@@ -38,6 +36,8 @@
 #include <QVBoxLayout>
 #include <cstdint>
 #include <filesystem>
+#include <qboxlayout.h>
+#include <qspinbox.h>
 #include <string>
 #include <vector>
 
@@ -562,10 +562,7 @@ void TraceDialog::OnTraceClicked()
     std::cout << "OnTraceClicked done " << std::endl;
 }
 
-void TraceDialog::OnTraceAvailable(QString const &trace_path)
-{
-    emit TraceAvailable(trace_path);
-}
+void TraceDialog::OnTraceAvailable(QString const &trace_path) { emit TraceAvailable(trace_path); }
 
 void ProgressBarWorker::run()
 {
@@ -924,15 +921,9 @@ void GfxrCaptureWorker::run()
     emit    GfxrCaptureAvailable(capture_saved_path);
 }
 
-void TraceDialog::OnDevListRefresh()
-{
-    UpdateDeviceList(true);
-}
+void TraceDialog::OnDevListRefresh() { UpdateDeviceList(true); }
 
-void TraceDialog::OnAppListRefresh()
-{
-    UpdatePackageList();
-}
+void TraceDialog::OnAppListRefresh() { UpdatePackageList(); }
 
 void TraceDialog::UpdatePackageList()
 {

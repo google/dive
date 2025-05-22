@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "command_utils.h"
-
 #include <vector>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "command_utils.h"
 #include "log.h"
 #ifndef WIN32
 #    error "Build this for Win32 platform only"

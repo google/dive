@@ -14,10 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <vulkan/vk_layer.h>
-#include <vulkan/vulkan.h>
-
-#include <vulkan/vulkan_core.h>
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -27,6 +23,9 @@ limitations under the License.
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <vulkan/vk_layer.h>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #include "capture_service/log.h"
 #include "capture_service/server.h"

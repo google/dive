@@ -11,6 +11,7 @@
  limitations under the License.
 */
 #include "event_timing_graphics_view.h"
+
 #include <QApplication>
 #include <QEasingCurve>
 #include <QMouseEvent>

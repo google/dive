@@ -11,8 +11,8 @@
  limitations under the License.
 */
 
-#include <qevent.h>
 #include <QDialog>
+#include <qevent.h>
 #include <unordered_set>
 
 #pragma once

@@ -14,26 +14,18 @@
  limitations under the License.
 */
 #include <algorithm>
+
 #include "common/common.h"
 
 namespace Dive
 {
 
 //--------------------------------------------------------------------------------------------------
-template<class Type>
-Vector<Type>::Vector() :
-    m_buffer(nullptr),
-    m_reserved(0),
-    m_size(0)
-{
-}
+template<class Type> Vector<Type>::Vector() : m_buffer(nullptr), m_reserved(0), m_size(0) {}
 
 //--------------------------------------------------------------------------------------------------
 template<class Type>
-Vector<Type>::Vector(Vector &&a) :
-    m_buffer(a.m_buffer),
-    m_reserved(a.m_reserved),
-    m_size(a.m_size)
+Vector<Type>::Vector(Vector &&a) : m_buffer(a.m_buffer), m_reserved(a.m_reserved), m_size(a.m_size)
 {
     a.m_buffer = nullptr;
     a.m_reserved = 0;
@@ -41,10 +33,7 @@ Vector<Type>::Vector(Vector &&a) :
 }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type>
-Vector<Type>::Vector(const Vector &a) :
-    m_buffer(nullptr),
-    m_reserved(0)
+template<class Type> Vector<Type>::Vector(const Vector &a) : m_buffer(nullptr), m_reserved(0)
 {
     // Do not call resize() directly, since it invokes default constructor
     // And not all classes have default constructors
@@ -55,10 +44,7 @@ Vector<Type>::Vector(const Vector &a) :
 
 //--------------------------------------------------------------------------------------------------
 template<class Type>
-Vector<Type>::Vector(uint64_t size) :
-    m_buffer(nullptr),
-    m_reserved(0),
-    m_size(0)
+Vector<Type>::Vector(uint64_t size) : m_buffer(nullptr), m_reserved(0), m_size(0)
 {
     reserve(size);
 
@@ -70,10 +56,7 @@ Vector<Type>::Vector(uint64_t size) :
 
 //--------------------------------------------------------------------------------------------------
 template<class Type>
-Vector<Type>::Vector(std::initializer_list<Type> a) :
-    m_buffer(nullptr),
-    m_reserved(0),
-    m_size(0)
+Vector<Type>::Vector(std::initializer_list<Type> a) : m_buffer(nullptr), m_reserved(0), m_size(0)
 {
     reserve(a.size());
     m_size = a.size();
@@ -81,10 +64,7 @@ Vector<Type>::Vector(std::initializer_list<Type> a) :
 }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> Vector<Type>::~Vector()
-{
-    internal_clear();
-}
+template<class Type> Vector<Type>::~Vector() { internal_clear(); }
 
 //--------------------------------------------------------------------------------------------------
 template<class Type> Type &Vector<Type>::operator[](uint64_t i) const
@@ -123,40 +103,22 @@ template<class Type> Vector<Type> &Vector<Type>::operator=(Vector<Type> &&a)
 }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> Type *Vector<Type>::data() const
-{
-    return m_buffer;
-}
+template<class Type> Type *Vector<Type>::data() const { return m_buffer; }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> Type &Vector<Type>::front() const
-{
-    return *m_buffer;
-}
+template<class Type> Type &Vector<Type>::front() const { return *m_buffer; }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> Type &Vector<Type>::back() const
-{
-    return m_buffer[m_size - 1];
-}
+template<class Type> Type &Vector<Type>::back() const { return m_buffer[m_size - 1]; }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> uint64_t Vector<Type>::size() const
-{
-    return m_size;
-}
+template<class Type> uint64_t Vector<Type>::size() const { return m_size; }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> uint64_t Vector<Type>::capacity() const
-{
-    return m_reserved;
-}
+template<class Type> uint64_t Vector<Type>::capacity() const { return m_reserved; }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> bool Vector<Type>::empty() const
-{
-    return m_size == 0;
-}
+template<class Type> bool Vector<Type>::empty() const { return m_size == 0; }
 
 //--------------------------------------------------------------------------------------------------
 template<class Type> void Vector<Type>::push_back(const Type &a)
@@ -258,10 +220,7 @@ template<class Type> void Vector<Type>::reserve(uint64_t size)
 }
 
 //--------------------------------------------------------------------------------------------------
-template<class Type> void Vector<Type>::clear()
-{
-    internal_clear();
-}
+template<class Type> void Vector<Type>::clear() { internal_clear(); }
 
 //--------------------------------------------------------------------------------------------------
 template<class Type> void Vector<Type>::internal_clear()

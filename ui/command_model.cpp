@@ -14,6 +14,7 @@
  limitations under the License.
 */
 #include "command_model.h"
+
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
@@ -44,16 +45,10 @@ void CommandModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::BeginResetModel()
-{
-    emit beginResetModel();
-}
+void CommandModel::BeginResetModel() { emit beginResetModel(); }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::EndResetModel()
-{
-    emit endResetModel();
-}
+void CommandModel::EndResetModel() { emit endResetModel(); }
 
 //--------------------------------------------------------------------------------------------------
 void CommandModel::SetTopologyToView(const Dive::Topology *topology_ptr)
@@ -210,22 +205,13 @@ QVariant CommandModel::GetNodeUIId(uint64_t                      node_index,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandModel::EventNodeHasMarker(uint64_t node_index) const
-{
-    return false;
-}
+bool CommandModel::EventNodeHasMarker(uint64_t node_index) const { return false; }
 
 //--------------------------------------------------------------------------------------------------
-char CommandModel::GetEventNodeStream(uint64_t node_index) const
-{
-    return '\0';
-}
+char CommandModel::GetEventNodeStream(uint64_t node_index) const { return '\0'; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t node_index) const
-{
-    return UINT32_MAX;
-}
+uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t node_index) const { return UINT32_MAX; }
 
 //--------------------------------------------------------------------------------------------------
 void CommandModel::BuildNodeLookup(const QModelIndex &parent) const

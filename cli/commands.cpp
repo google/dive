@@ -13,6 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include "commands.h"
+
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -21,7 +23,6 @@
 #include <map>
 #include <string>
 
-#include "commands.h"
 #include "format_output.h"
 
 namespace Dive
@@ -30,11 +31,7 @@ namespace cli
 {
 
 //--------------------------------------------------------------------------------------------------
-Command::Command(const char* name, Visibility vis) :
-    m_name(name),
-    m_visibility(vis)
-{
-}
+Command::Command(const char* name, Visibility vis) : m_name(name), m_visibility(vis) {}
 
 Command::~Command() {}
 
@@ -58,8 +55,7 @@ struct HelpCommand : Command
 };
 
 HelpCommand::HelpCommand(const std::map<std::string, const Command*>* commands) :
-    Command("help", kNormal),
-    m_commands(*commands)
+    Command("help", kNormal), m_commands(*commands)
 {
 }
 
@@ -113,10 +109,7 @@ int HelpCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string HelpCommand::Description() const
-{
-    return "print help menu";
-}
+std::string HelpCommand::Description() const { return "print help menu"; }
 
 //--------------------------------------------------------------------------------------------------
 struct VersionCommand : Command
@@ -127,10 +120,7 @@ struct VersionCommand : Command
     std::string Description() const override;
 };
 
-VersionCommand::VersionCommand() :
-    Command("version", kNormal)
-{
-}
+VersionCommand::VersionCommand() : Command("version", kNormal) {}
 
 int VersionCommand::operator()(int argc, int at, char** argv) const
 {
@@ -150,10 +140,7 @@ int VersionCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string VersionCommand::Description() const
-{
-    return "display version of DiveCLI";
-}
+std::string VersionCommand::Description() const { return "display version of DiveCLI"; }
 
 //--------------------------------------------------------------------------------------------------
 struct ExtractCommand : Command
@@ -165,10 +152,7 @@ struct ExtractCommand : Command
     std::string Description() const override;
 };
 
-ExtractCommand::ExtractCommand() :
-    Command("extract", kNormal)
-{
-}
+ExtractCommand::ExtractCommand() : Command("extract", kNormal) {}
 
 int ExtractCommand::Run(const char* dive_file, const char* output_dir)
 {
@@ -218,10 +202,7 @@ int ExtractCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string ExtractCommand::Description() const
-{
-    return "extract the content of a dive file";
-}
+std::string ExtractCommand::Description() const { return "extract the content of a dive file"; }
 
 //--------------------------------------------------------------------------------------------------
 struct ModifyGFXRCommand : Command
@@ -233,10 +214,7 @@ struct ModifyGFXRCommand : Command
     std::string Description() const override;
 };
 
-ModifyGFXRCommand::ModifyGFXRCommand() :
-    Command("modify-gfxr", kNormal)
-{
-}
+ModifyGFXRCommand::ModifyGFXRCommand() : Command("modify-gfxr", kNormal) {}
 
 int ModifyGFXRCommand::Run(const char* original_gfxr_file, const char* new_gfxr_file)
 {
@@ -284,10 +262,7 @@ struct PacketCommand : Command
     std::string Description() const override;
 };
 
-PacketCommand::PacketCommand() :
-    Command("packet", kInternal)
-{
-}
+PacketCommand::PacketCommand() : Command("packet", kInternal) {}
 
 int PacketCommand::operator()(int argc, int at, char** argv) const
 {
@@ -305,10 +280,7 @@ int PacketCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string PacketCommand::Description() const
-{
-    return "decode packet header";
-}
+std::string PacketCommand::Description() const { return "decode packet header"; }
 
 int PacketCommand::PrintPacketHeader(const char* header)
 {
@@ -334,10 +306,7 @@ struct InfoCommand : Command
     std::string Description() const override;
 };
 
-InfoCommand::InfoCommand() :
-    Command("info", kInternal)
-{
-}
+InfoCommand::InfoCommand() : Command("info", kInternal) {}
 
 int InfoCommand::operator()(int argc, int at, char** argv) const
 {
@@ -357,10 +326,7 @@ int InfoCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string InfoCommand::Description() const
-{
-    return "print basic information about a dive file";
-}
+std::string InfoCommand::Description() const { return "print basic information about a dive file"; }
 
 int InfoCommand::PrintFileMetadata(const char* filename)
 {
@@ -424,10 +390,7 @@ struct RawPM4Command : Command
     std::string Description() const override;
 };
 
-RawPM4Command::RawPM4Command() :
-    Command("rawpm4", kInternal)
-{
-}
+RawPM4Command::RawPM4Command() : Command("rawpm4", kInternal) {}
 
 int RawPM4Command::operator()(int argc, int at, char** argv) const
 {
@@ -465,10 +428,7 @@ int RawPM4Command::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string RawPM4Command::Description() const
-{
-    return "opens and parses raw command stream";
-}
+std::string RawPM4Command::Description() const { return "opens and parses raw command stream"; }
 
 bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
 {
@@ -488,8 +448,9 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
     Dive::QueueType  queue_type = Dive::QueueType::kUniversal;
     switch (raw_cmd_buffer_type)
     {
-    case 0: break;  // Gfx
-    case 1:         // Dma
+    case 0:
+        break;  // Gfx
+    case 1:     // Dma
         engine_type = Dive::EngineType::kDma;
         queue_type = Dive::QueueType::kDma;
         break;

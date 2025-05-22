@@ -17,10 +17,10 @@
 
 #include "common.h"
 
-#include <stdarg.h>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <stdarg.h>
 
 void DIVE_LOG_INTERNAL(const char *file, int line, const char *format, ...)
 {

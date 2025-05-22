@@ -150,10 +150,7 @@ absl::Status AndroidApplication::Stop()
     return absl::OkStatus();
 }
 
-bool AndroidApplication::IsRunning() const
-{
-    return IsProcessRunning(m_package);
-}
+bool AndroidApplication::IsRunning() const { return IsProcessRunning(m_package); }
 
 bool AndroidApplication::IsProcessRunning(absl::string_view process_name) const
 {
@@ -239,10 +236,7 @@ absl::Status VulkanApplication::Cleanup()
     return absl::OkStatus();
 }
 
-void AndroidApplication::SetGfxrEnabled(bool enable)
-{
-    m_gfxr_enabled = enable;
-}
+void AndroidApplication::SetGfxrEnabled(bool enable) { m_gfxr_enabled = enable; }
 
 absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory)
 {
@@ -446,9 +440,6 @@ absl::Status VulkanCliApplication::Stop()
     m_started = false;
     return absl::OkStatus();
 }
-bool VulkanCliApplication::IsRunning() const
-{
-    return IsProcessRunning(m_command);
-}
+bool VulkanCliApplication::IsRunning() const { return IsProcessRunning(m_command); }
 
 }  // namespace Dive

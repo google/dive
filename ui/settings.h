@@ -15,9 +15,9 @@
 */
 
 #pragma once
-#include <stdint.h>
 #include <QString>
 #include <QStringList>
+#include <stdint.h>
 
 //--------------------------------------------------------------------------------------------------
 class Settings

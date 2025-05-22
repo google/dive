@@ -16,17 +16,8 @@
 #pragma once
 #include "dive_core/common/gpudefs.h"
 
-static double ConvertCyclesToMs(uint64_t cycle)
-{
-    return (cycle / Dive::kClockMhz) / 1000.0;
-}
+static double ConvertCyclesToMs(uint64_t cycle) { return (cycle / Dive::kClockMhz) / 1000.0; }
 
-static double ConvertCyclesToUs(uint64_t cycle)
-{
-    return (cycle / Dive::kClockMhz);
-}
+static double ConvertCyclesToUs(uint64_t cycle) { return (cycle / Dive::kClockMhz); }
 
-static double ConvertCyclesToNs(uint64_t cycle)
-{
-    return (cycle / Dive::kClockMhz) * 1000.0;
-}
+static double ConvertCyclesToNs(uint64_t cycle) { return (cycle / Dive::kClockMhz) * 1000.0; }

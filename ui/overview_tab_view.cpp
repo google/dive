@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#include "overview_tab_view.h"
+
 #include <QApplication>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -21,7 +23,6 @@
 #include "dive_core/data_core.h"
 #include "event_selection_model.h"
 #include "most_expensive_events_view.h"
-#include "overview_tab_view.h"
 #include "problems_view.h"
 
 // =================================================================================================

@@ -13,6 +13,11 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include "text_file_view.h"
+
+#include <QPlainTextEdit>
+#include <QTreeWidget>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -20,13 +25,7 @@
 #include <string>
 #include <utility>
 
-#include <QPlainTextEdit>
-#include <QTreeWidget>
-#include <QVBoxLayout>
-
 #include "dive_core/data_core.h"
-
-#include "text_file_view.h"
 
 // -------------------------------------------------------------------------------------------------
 static bool IsEmbeddedTextASCII(const char *s, size_t size)
@@ -79,9 +78,7 @@ public:
     typedef decltype(std::declval<Dive::CaptureData>().GetNumText()) IndexType;
 
     TextFileWidgetItem(std::string name, IndexType index, QTreeWidget *view) :
-        QTreeWidgetItem(view),
-        m_name(name),
-        m_index(index)
+        QTreeWidgetItem(view), m_name(name), m_index(index)
     {
     }
     std::string GetName() const { return m_name; }
@@ -93,8 +90,7 @@ private:
 };
 
 // -------------------------------------------------------------------------------------------------
-TextFileView::TextFileView(const Dive::DataCore &data_core) :
-    m_data_core(data_core)
+TextFileView::TextFileView(const Dive::DataCore &data_core) : m_data_core(data_core)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_text_list = new QTreeWidget();

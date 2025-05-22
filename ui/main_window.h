@@ -15,6 +15,7 @@
 */
 
 #include <QMainWindow>
+
 #include "dive_core/cross_ref.h"
 #include "dive_core/data_core.h"
 #include "event_selection_model.h"

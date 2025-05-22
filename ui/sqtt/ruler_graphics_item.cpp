@@ -15,11 +15,13 @@
 */
 
 #include "ruler_graphics_item.h"
+
 #include <QGraphicsSceneContextMenuEvent>
 #include <QMenu>
 #include <QPainter>
 #include <QTextStream>
 #include <QTransform>
+
 #include "dive_core/common.h"
 #include "dive_core/conversions.h"
 
@@ -31,16 +33,10 @@ RulerGraphicsItem::RulerGraphicsItem()
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::SetMaxCycles(uint64_t max_cycles)
-{
-    m_max_cycles = max_cycles;
-}
+void RulerGraphicsItem::SetMaxCycles(uint64_t max_cycles) { m_max_cycles = max_cycles; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RulerGraphicsItem::GetWidth() const
-{
-    return m_width;
-}
+uint64_t RulerGraphicsItem::GetWidth() const { return m_width; }
 
 //--------------------------------------------------------------------------------------------------
 void RulerGraphicsItem::SetWidth(uint64_t width)
@@ -90,10 +86,7 @@ uint64_t RulerGraphicsItem::GetCyclesVisible(uint64_t visible_width, uint64_t ru
 }
 
 //--------------------------------------------------------------------------------------------------
-QRectF RulerGraphicsItem::boundingRect() const
-{
-    return QRectF(0, 0, m_width, 39);
-}
+QRectF RulerGraphicsItem::boundingRect() const { return QRectF(0, 0, m_width, 39); }
 
 //--------------------------------------------------------------------------------------------------
 QPainterPath RulerGraphicsItem::shape() const
@@ -104,9 +97,9 @@ QPainterPath RulerGraphicsItem::shape() const
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::paint(QPainter *                      painter,
+void RulerGraphicsItem::paint(QPainter                       *painter,
                               const QStyleOptionGraphicsItem *option,
-                              QWidget *                       widget)
+                              QWidget                        *widget)
 {
     if (m_max_cycles == 0)
         return;

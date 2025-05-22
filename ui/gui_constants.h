@@ -15,8 +15,9 @@
 */
 
 #pragma once
-#include <stdint.h>
 #include <QColor>
+#include <stdint.h>
+
 #include "dive_core/common/gpudefs.h"
 
 #ifndef _MSC_VER

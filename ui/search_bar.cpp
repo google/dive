@@ -12,9 +12,11 @@
 */
 
 #include "search_bar.h"
-#include <qwidget.h>
+
 #include <QDebug>
 #include <iostream>
+#include <qwidget.h>
+
 #include "QHBoxLayout"
 #include "QLabel"
 #include "QLineEdit"
@@ -25,8 +27,7 @@
 #include "shortcuts.h"
 
 //--------------------------------------------------------------------------------------------------
-SearchBar::SearchBar(QWidget* parent) :
-    QWidget(parent)
+SearchBar::SearchBar(QWidget* parent) : QWidget(parent)
 {
     QLabel* searchlabel = new QLabel(this);
     QPixmap pixmap(":/images/search.png");
@@ -167,7 +168,4 @@ void SearchBar::cancelSearch()
 }
 
 //--------------------------------------------------------------------------------------------------
-void SearchBar::setTreeView(DiveTreeView* tree_view)
-{
-    m_tree_view = tree_view;
-}
+void SearchBar::setTreeView(DiveTreeView* tree_view) { m_tree_view = tree_view; }

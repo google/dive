@@ -21,6 +21,7 @@
 
 #pragma once
 #include <QGraphicsItem>
+
 #include "settings.h"
 
 #define RULER_FONT_HEIGHT 9
@@ -52,9 +53,9 @@ public:
     // QGraphicsItem overrides
     virtual QRectF       boundingRect() const Q_DECL_OVERRIDE;
     virtual QPainterPath shape() const Q_DECL_OVERRIDE;
-    virtual void         paint(QPainter *                      painter,
+    virtual void         paint(QPainter                       *painter,
                                const QStyleOptionGraphicsItem *option,
-                               QWidget *                       widget) Q_DECL_OVERRIDE;
+                               QWidget                        *widget) Q_DECL_OVERRIDE;
 
 protected:
     virtual void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) Q_DECL_OVERRIDE;

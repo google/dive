@@ -14,6 +14,7 @@
  limitations under the License.
 */
 #include "dive_tree_view.h"
+
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QHeaderView>
@@ -36,8 +37,7 @@
 // DiveTreeViewDelegate
 // =================================================================================================
 DiveTreeViewDelegate::DiveTreeViewDelegate(const DiveTreeView *dive_tree_view_ptr) :
-    QStyledItemDelegate(0),
-    m_dive_tree_view_ptr(dive_tree_view_ptr)
+    QStyledItemDelegate(0), m_dive_tree_view_ptr(dive_tree_view_ptr)
 {
     m_hover_help_ptr = HoverHelp::Get();
 }
@@ -124,9 +124,7 @@ QSize DiveTreeViewDelegate::sizeHint(const QStyleOptionViewItem &option,
 // DiveTreeView
 // =================================================================================================
 DiveTreeView::DiveTreeView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent) :
-    QTreeView(parent),
-    m_command_hierarchy(command_hierarchy),
-    curr_node_selected(QModelIndex())
+    QTreeView(parent), m_command_hierarchy(command_hierarchy), curr_node_selected(QModelIndex())
 {
     setHorizontalScrollBar(new QScrollBar);
     horizontalScrollBar()->setEnabled(true);
@@ -139,10 +137,7 @@ DiveTreeView::DiveTreeView(const Dive::CommandHierarchy &command_hierarchy, QWid
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DiveTreeView::RenderBranch(const QModelIndex &index) const
-{
-    return true;
-}
+bool DiveTreeView::RenderBranch(const QModelIndex &index) const { return true; }
 
 //--------------------------------------------------------------------------------------------------
 void DiveTreeView::setCurrentNode(uint64_t node_index)
@@ -186,16 +181,10 @@ void DiveTreeView::collapseNode(const QModelIndex &index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void DiveTreeView::gotoPrevEvent()
-{
-    gotoEvent(true);
-}
+void DiveTreeView::gotoPrevEvent() { gotoEvent(true); }
 
 //--------------------------------------------------------------------------------------------------
-void DiveTreeView::gotoNextEvent()
-{
-    gotoEvent(false);
-}
+void DiveTreeView::gotoNextEvent() { gotoEvent(false); }
 
 //--------------------------------------------------------------------------------------------------
 void DiveTreeView::gotoEvent(bool is_above)

@@ -16,17 +16,18 @@
 */
 
 #include "command_hierarchy.h"
-#include <assert.h>
+
 #include <algorithm>  // std::transform
+#include <assert.h>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
+
 #include "dive_core/common/common.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
-
 #include "dive_strings.h"
 #include "log.h"
 #include "pm4_info.h"
@@ -391,10 +392,7 @@ uint64_t CommandHierarchy::Nodes::AddNode(NodeType type, std::string &&desc, Aux
 // =================================================================================================
 // CommandHierarchy::AuxInfo
 // =================================================================================================
-CommandHierarchy::AuxInfo::AuxInfo(uint64_t val)
-{
-    m_u64All = val;
-}
+CommandHierarchy::AuxInfo::AuxInfo(uint64_t val) { m_u64All = val; }
 
 //--------------------------------------------------------------------------------------------------
 CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SubmitNode(Dive::EngineType engine_type,
@@ -548,8 +546,7 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     {
     public:
         TempMemoryManager(uint32_t *command_dwords, uint32_t size_in_dwords) :
-            m_command_dwords(command_dwords),
-            m_size_in_dwords(size_in_dwords)
+            m_command_dwords(command_dwords), m_size_in_dwords(size_in_dwords)
         {
         }
 
@@ -987,7 +984,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             desc = "Resolve Pass";
             break;
             // This is emitted for each dispatch
-        case RM6_COMPUTE: desc = "Compute Dispatch"; break;
+        case RM6_COMPUTE:
+            desc = "Compute Dispatch";
+            break;
         // This seems to be the end of Resolve Pass
         case RM6_YIELD:
             // should be paired with RM6_RESOLVE
@@ -997,7 +996,9 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         case RM6_BLIT2DSCALE:
         case RM6_IB1LIST_START:
         case RM6_IB1LIST_END:
-        default: add_child = false; break;
+        default:
+            add_child = false;
+            break;
         }
 
         if (add_child)
@@ -1520,9 +1521,15 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
         std::string op;
         switch (packet.bitfields0.OP)
         {
-        case BLIT_OP_FILL: op = "BLIT_OP_FILL"; break;
-        case BLIT_OP_COPY: op = "BLIT_OP_COPY"; break;
-        case BLIT_OP_SCALE: op = "BLIT_OP_SCALE"; break;
+        case BLIT_OP_FILL:
+            op = "BLIT_OP_FILL";
+            break;
+        case BLIT_OP_COPY:
+            op = "BLIT_OP_COPY";
+            break;
+        case BLIT_OP_SCALE:
+            op = "BLIT_OP_SCALE";
+            break;
         }
         string_stream << "CpBlit(op:" << op << ","
                       << "srcX1:" << packet.bitfields1.SRC_X1 << ","
@@ -1868,23 +1875,33 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
     case SB6_DS_TEX:
     case SB6_GS_TEX:
     case SB6_FS_TEX:
-    case SB6_CS_TEX: cat = StateBlockCat::kTex; break;
+    case SB6_CS_TEX:
+        cat = StateBlockCat::kTex;
+        break;
     case SB6_VS_SHADER:
     case SB6_HS_SHADER:
     case SB6_DS_SHADER:
     case SB6_GS_SHADER:
     case SB6_FS_SHADER:
-    case SB6_CS_SHADER: cat = StateBlockCat::kShader; break;
+    case SB6_CS_SHADER:
+        cat = StateBlockCat::kShader;
+        break;
     case SB6_IBO:
-    case SB6_CS_IBO: cat = StateBlockCat::kIbo; break;
-    default: DIVE_ASSERT(false); cat = StateBlockCat::kTex;
+    case SB6_CS_IBO:
+        cat = StateBlockCat::kIbo;
+        break;
+    default:
+        DIVE_ASSERT(false);
+        cat = StateBlockCat::kTex;
     }
 
     uint64_t ext_src_addr = 0;
     bool     bindless = false;
     switch (packet.bitfields0.STATE_SRC)
     {
-    case SS6_DIRECT: ext_src_addr = va_addr + sizeof(PM4_CP_LOAD_STATE6); break;
+    case SS6_DIRECT:
+        ext_src_addr = va_addr + sizeof(PM4_CP_LOAD_STATE6);
+        break;
     case SS6_BINDLESS:
     {
         bindless = true;
@@ -1906,7 +1923,8 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         ext_src_addr = packet.u32All1 & 0xfffffffc;
         ext_src_addr |= ((uint64_t)packet.u32All2) << 32;
         break;
-    case SS6_UBO: DIVE_ASSERT(false);  // Not used. Not sure what it's for
+    case SS6_UBO:
+        DIVE_ASSERT(false);  // Not used. Not sure what it's for
     }
 
     auto AppendSharps = [&](const char *sharp_struct_name, uint32_t sharp_struct_size) {
@@ -1982,7 +2000,9 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
             // TODO(wangra): could dump textures here
         }
         break;
-    default: DIVE_ASSERT(false); break;
+    default:
+        DIVE_ASSERT(false);
+        break;
     }
 }
 

@@ -16,11 +16,11 @@ limitations under the License.
 
 #include "perfetto_trace.h"
 
+#include <chrono>
+#include <cstdint>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <perfetto.h>
-#include <chrono>
-#include <cstdint>
 #include <string>
 #include <thread>
 
@@ -69,10 +69,7 @@ public:
     std::condition_variable cv;
 };
 
-PerfettoTraceManager::PerfettoTraceManager()
-{
-    InitializePerfetto();
-}
+PerfettoTraceManager::PerfettoTraceManager() { InitializePerfetto(); }
 
 void PerfettoTraceManager::InitializePerfetto()
 {

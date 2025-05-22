@@ -15,7 +15,6 @@
 */
 
 #include "dive_core/capture_data.h"
-
 #include "py_common.h"
 
 using namespace pybind11::literals;

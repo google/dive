@@ -14,11 +14,13 @@
  limitations under the License.
 */
 #include "problems_view.h"
+
 #include <QLabel>
 #include <QStyledItemDelegate>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
 #include "command_model.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/data_core.h"
@@ -39,10 +41,7 @@ public:
                       std::string    short_desc,
                       std::string    long_desc,
                       QTreeWidget   *view) :
-        QTreeWidgetItem(view),
-        m_ref(ref),
-        m_short_desc(short_desc),
-        m_long_desc(long_desc)
+        QTreeWidgetItem(view), m_ref(ref), m_short_desc(short_desc), m_long_desc(long_desc)
     {
     }
     Dive::CrossRef       GetRef() const { return m_ref; }
@@ -116,7 +115,8 @@ void ProblemsView::Update(const Dive::LogRecord *log_ptr)
         // Column 0
         switch (entry.m_type)
         {
-        case Dive::LogType::kInfo: break;
+        case Dive::LogType::kInfo:
+            break;
         case Dive::LogType::kWarning:
             item->setIcon(0, m_log_list->style()->standardIcon(QStyle::SP_MessageBoxWarning));
             break;

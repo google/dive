@@ -14,10 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <vulkan/vk_layer.h>
-#include <vulkan/vulkan.h>
-
-#include <vulkan/vulkan_core.h>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -26,6 +22,9 @@ limitations under the License.
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <vulkan/vk_layer.h>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #include "capture_service/log.h"
 #include "vk_rt_dispatch.h"
@@ -55,10 +54,7 @@ struct DeviceData
 // according to the vulkan loader, vkdevice, vkcmd, vkqueue share the same table
 // search `loader_set_dispatch` in
 // https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/trampoline.c#L1067
-inline uintptr_t DataKey(const void *object)
-{
-    return (uintptr_t)(*(void **)object);
-}
+inline uintptr_t DataKey(const void *object) { return (uintptr_t)(*(void **)object); }
 
 namespace
 {

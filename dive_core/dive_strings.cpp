@@ -15,6 +15,7 @@
 */
 
 #include "dive_strings.h"
+
 #include <map>
 
 #include "third_party/Vulkan-Headers/include/vulkan/vulkan_core.h"

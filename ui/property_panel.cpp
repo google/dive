@@ -12,6 +12,7 @@
 */
 
 #include "property_panel.h"
+
 #include <QGridLayout>
 #include <QLabel>
 #include <QResizeEvent>

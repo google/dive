@@ -12,19 +12,20 @@
 */
 
 #include "package_filter.h"
-#include <qevent.h>
-#include <qnamespace.h>
+
 #include <QLabel>
 #include <iostream>
+#include <qevent.h>
+#include <qnamespace.h>
 #include <string>
+
 #include "QCheckBox"
 #include "QHBoxLayout"
 #include "QPushButton"
 #include "QVBoxLayout"
 
 //--------------------------------------------------------------------------------------------------
-PackageFilter::PackageFilter(QWidget* parent) :
-    QWidget(parent)
+PackageFilter::PackageFilter(QWidget* parent) : QWidget(parent)
 
 {
     m_all_filter = new QCheckBox("All", this);
@@ -123,10 +124,7 @@ void PackageFilter::applyFilters()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::onReject()
-{
-    close();
-}
+void PackageFilter::onReject() { close(); }
 
 //--------------------------------------------------------------------------------------------------
 void PackageFilter::closeEvent(QCloseEvent* event)

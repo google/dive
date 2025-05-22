@@ -16,6 +16,7 @@
 
 #pragma once
 #include <QFrame>
+
 #include "dive_core/cross_ref.h"
 
 // Forward declaration

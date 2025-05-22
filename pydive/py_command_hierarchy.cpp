@@ -18,7 +18,6 @@
 
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/pm4_info.h"
-
 #include "py_common.h"
 
 using namespace pybind11::literals;

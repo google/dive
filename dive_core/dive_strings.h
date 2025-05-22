@@ -15,10 +15,12 @@
 */
 #pragma once
 #include <string>
+
+#include "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
+
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/gpudefs.h"
-#include "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
 
 #ifndef _MSC_VER
 #    pragma GCC diagnostic push

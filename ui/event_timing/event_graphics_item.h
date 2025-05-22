@@ -17,6 +17,7 @@
 
 #pragma once
 #include <QGraphicsItem>
+
 #include "dive_core/common/gpudefs.h"
 
 #define EVENT_HEIGHT 30

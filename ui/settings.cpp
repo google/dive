@@ -14,9 +14,11 @@
  limitations under the License.
 */
 #include "settings.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QSettings>
+
 #include "dive_core/common.h"
 
 //--------------------------------------------------------------------------------------------------

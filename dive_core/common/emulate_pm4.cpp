@@ -17,6 +17,12 @@
 
 // Warning: This is a common file that is shared with the Dive GUI tool!
 
+#include "emulate_pm4.h"
+
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <stdarg.h>
 #include <string.h>  // memcpy
 
 #include "adreno.h"
@@ -24,14 +30,8 @@
 #include "dive_capture_format.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/stl_replacement.h"
-#include "emulate_pm4.h"
 #include "memory_manager_base.h"
 #include "pm4_info.h"
-
-#include <stdarg.h>
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
 
 namespace Dive
 {
@@ -123,28 +123,16 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsUConfigStateSet(uint16_t reg) const
-{
-    return false;
-}
+bool EmulateStateTracker::IsUConfigStateSet(uint16_t reg) const { return false; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetUConfigRegData(uint16_t reg) const
-{
-    return UINT32_MAX;
-}
+uint32_t EmulateStateTracker::GetUConfigRegData(uint16_t reg) const { return UINT32_MAX; }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsShStateSet(uint16_t reg) const
-{
-    return false;
-}
+bool EmulateStateTracker::IsShStateSet(uint16_t reg) const { return false; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetShRegData(uint16_t reg) const
-{
-    return UINT32_MAX;
-}
+uint32_t EmulateStateTracker::GetShRegData(uint16_t reg) const { return UINT32_MAX; }
 
 //--------------------------------------------------------------------------------------------------
 uint32_t EmulateStateTracker::GetNumberOfUserDataRegsSetSinceLastEvent(ShaderStage stage) const
@@ -170,12 +158,23 @@ uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage stage, uint32_t enabl
     uint32_t offset = UINT32_MAX;
     switch (stage)
     {
-    case ShaderStage::kShaderStageCs: offset = 0xa9b4 /* SP_CS_OBJ_START */; break;
-    case ShaderStage::kShaderStageGs: offset = 0xa88d /* SP_GS_OBJ_START */; break;
-    case ShaderStage::kShaderStageHs: offset = 0xa834 /* SP_HS_OBJ_START */; break;
-    case ShaderStage::kShaderStagePs: offset = 0xa983 /* SP_FS_OBJ_START */; break;
-    case ShaderStage::kShaderStageVs: offset = 0xa81c /* SP_VS_OBJ_START */; break;
-    default: return UINT64_MAX;
+    case ShaderStage::kShaderStageCs:
+        offset = 0xa9b4 /* SP_CS_OBJ_START */;
+        break;
+    case ShaderStage::kShaderStageGs:
+        offset = 0xa88d /* SP_GS_OBJ_START */;
+        break;
+    case ShaderStage::kShaderStageHs:
+        offset = 0xa834 /* SP_HS_OBJ_START */;
+        break;
+    case ShaderStage::kShaderStagePs:
+        offset = 0xa983 /* SP_FS_OBJ_START */;
+        break;
+    case ShaderStage::kShaderStageVs:
+        offset = 0xa81c /* SP_VS_OBJ_START */;
+        break;
+    default:
+        return UINT64_MAX;
     }
     if (!IsRegSet(offset, enable_mask))
     {
@@ -827,7 +826,8 @@ bool IsDispatchEventOpcode(uint32_t opcode)
     switch (opcode)
     {
     case CP_EXEC_CS_INDIRECT:
-    case CP_EXEC_CS: return true;
+    case CP_EXEC_CS:
+        return true;
     };
     return false;
 }
@@ -841,7 +841,8 @@ bool IsDrawEventOpcode(uint32_t opcode)
     case CP_DRAW_INDIRECT:
     case CP_DRAW_INDX_INDIRECT:
     case CP_DRAW_INDIRECT_MULTI:
-    case CP_DRAW_AUTO: return true;
+    case CP_DRAW_AUTO:
+        return true;
     };
     return false;
 }
@@ -852,12 +853,14 @@ uint32_t GetPacketSize(Pm4Header header)
     // Assumes the packet is valid, so doesn't check the parity bits at all
     switch (header.type)
     {
-    case 2: return 1;
+    case 2:
+        return 1;
     case 4:
     {
         return header.type4.count + 1;
     }
-    case 7: return header.type7.count + 1;
+    case 7:
+        return header.type7.count + 1;
     }
     DIVE_ASSERT(false);
     return 0;

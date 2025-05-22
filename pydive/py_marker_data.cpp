@@ -15,7 +15,6 @@
 */
 
 #include "dive_core/marker_data.h"
-
 #include "py_common.h"
 
 using namespace pybind11::literals;
@@ -47,7 +46,7 @@ void py_marker_data(py::module &m)
         py::dtype             dtype("S" + std::to_string(elem_len));
         std::array<size_t, 1> shape{ n };
         std::array<size_t, 1> stride{ elem_len };
-        py::capsule           capsule(p, [](void *p) { delete[](char *) p; });
+        py::capsule           capsule(p, [](void *p) { delete[] (char *)p; });
         return py::array(dtype, shape, stride, p, capsule);
     });
 
@@ -85,7 +84,7 @@ void py_marker_data(py::module &m)
              }
              size_t max_width = 0;
              std::unique_ptr<const char[]>
-                                   p = self.GetFixedWidthFullLabelStrings(reinterpret_cast<const LabelMarkerId *>(
+             p = self.GetFixedWidthFullLabelStrings(reinterpret_cast<const LabelMarkerId *>(
                                                     r.data(0)),
                                                     (uint32_t)n,
                                                     "/",
@@ -94,7 +93,7 @@ void py_marker_data(py::module &m)
              py::dtype             dtype("|S" + std::to_string(max_width));
              std::array<size_t, 1> shape{ n };
              std::array<size_t, 1> stride{ max_width };
-             py::capsule           capsule(p.get(), [](void *p) { delete[](char *) p; });
+             py::capsule           capsule(p.get(), [](void *p) { delete[] (char *)p; });
              return py::array(dtype, shape, stride, p.release(), capsule);
          });
 }

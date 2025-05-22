@@ -12,6 +12,7 @@
 */
 
 #include <QWidget>
+
 #include "dive_tree_view.h"
 
 #pragma once

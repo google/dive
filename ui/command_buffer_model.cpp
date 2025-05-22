@@ -14,12 +14,13 @@
  limitations under the License.
 */
 #include "command_buffer_model.h"
+
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
-
 #include <iostream>
 #include <sstream>
+
 #include "dive_core/command_hierarchy.h"
 
 static_assert(sizeof(void *) == sizeof(uint64_t),
@@ -64,16 +65,10 @@ void CommandBufferModel::SetTopologyToView(const Dive::Topology *topology_ptr)
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::columnCount(const QModelIndex &parent) const
-{
-    return kColumnCount;
-}
+int CommandBufferModel::columnCount(const QModelIndex &parent) const { return kColumnCount; }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::scrollToIndex() const
-{
-    return m_scroll_to_index;
-}
+QModelIndex CommandBufferModel::scrollToIndex() const { return m_scroll_to_index; }
 
 //--------------------------------------------------------------------------------------------------
 QVariant CommandBufferModel::data(const QModelIndex &index, int role) const

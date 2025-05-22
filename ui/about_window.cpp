@@ -14,6 +14,7 @@
  limitations under the License.
 */
 #include "about_window.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -26,6 +27,7 @@
 #include <QSizePolicy>
 #include <QVBoxLayout>
 #include <sstream>
+
 #include "version.h"
 
 // =================================================================================================

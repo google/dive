@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#include "format_output.h"
+
 #include <algorithm>
 #include <array>
 #include <filesystem>
@@ -27,15 +29,12 @@
 #include <sstream>
 #include <string>
 
+#include "../dive_core/shader_disassembly.h"
+#include "cli.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
-
-#include "../dive_core/shader_disassembly.h"
-
-#include "cli.h"
-#include "format_output.h"
 
 namespace Dive
 {
@@ -43,18 +42,17 @@ namespace cli
 {
 
 //--------------------------------------------------------------------------------------------------
-const char *GetOpCodeStringSafe(uint32_t op_code)
-{
-    return "UNKNOWN";
-}
+const char *GetOpCodeStringSafe(uint32_t op_code) { return "UNKNOWN"; }
 
 //--------------------------------------------------------------------------------------------------
 const char *CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type)
 {
     switch (type)
     {
-    case Dive::CaptureDataHeader::CaptureType::kSingleFrame: return "Single Frame";
-    case Dive::CaptureDataHeader::CaptureType::kBeginEndRange: return "Begin End Range";
+    case Dive::CaptureDataHeader::CaptureType::kSingleFrame:
+        return "Single Frame";
+    case Dive::CaptureDataHeader::CaptureType::kBeginEndRange:
+        return "Begin End Range";
     }
 
     DIVE_ASSERT(false);
@@ -168,18 +166,30 @@ bool IsPossibleBlock(const BlockInfo &info)
 {
     switch (info.m_block_type)
     {
-    case BlockType::kCapture: return true;
-    case BlockType::kMemoryAlloc: return true;
-    case BlockType::kSubmit: return true;
-    case BlockType::kMemoryRaw: return true;
-    case BlockType::kRgp: return true;
-    case BlockType::kPresent: return true;
-    case BlockType::kRing: return true;
-    case BlockType::kText: return true;
-    case BlockType::kRegisters: return true;
-    case BlockType::kWaveState: return true;
-    case BlockType::kVulkanMetadata: return true;
-    default: break;
+    case BlockType::kCapture:
+        return true;
+    case BlockType::kMemoryAlloc:
+        return true;
+    case BlockType::kSubmit:
+        return true;
+    case BlockType::kMemoryRaw:
+        return true;
+    case BlockType::kRgp:
+        return true;
+    case BlockType::kPresent:
+        return true;
+    case BlockType::kRing:
+        return true;
+    case BlockType::kText:
+        return true;
+    case BlockType::kRegisters:
+        return true;
+    case BlockType::kWaveState:
+        return true;
+    case BlockType::kVulkanMetadata:
+        return true;
+    default:
+        break;
     }
     return false;
 }
@@ -352,7 +362,8 @@ LoadResult PrintBlock(std::ostream      &out,
     }
     break;
 
-    default: break;
+    default:
+        break;
     }
 
     out << std::endl;
@@ -574,7 +585,8 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
     case TopologyName::kTopologyEvent:
         topology_ptr = &command_hierarchy_ptr->GetAllEventHierarchyTopology();
         break;
-    default: abort();  // This should be checked during args parsing.
+    default:
+        abort();  // This should be checked during args parsing.
     }
 
     uint64_t root_num_children = topology_ptr->GetNumChildren(Dive::Topology::kRootNodeIndex);

@@ -19,10 +19,7 @@ EventSelection::EventSelection(const Dive::CommandHierarchy &command_hierarchy) 
 {
 }
 
-void EventSelection::Reset()
-{
-    updateCurrentNode(UINT64_MAX);
-}
+void EventSelection::Reset() { updateCurrentNode(UINT64_MAX); }
 
 //--------------------------------------------------------------------------------------------------
 void EventSelection::updateCurrentNode(uint64_t node_index)

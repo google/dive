@@ -19,8 +19,8 @@
 #ifdef WIN32
 #    include <windows.h>
 #else
-#    include <unistd.h>  // for isatty()
 #    include <cstdio>    // for fileno()
+#    include <unistd.h>  // for isatty()
 #endif
 
 #include "cli.h"

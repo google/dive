@@ -31,14 +31,8 @@ public:
     using basic_type = uint8_t;
     static const SqttStreamId kGraphics;
     static const SqttStreamId kNone;
-    inline SqttStreamId() :
-        m_id(0)
-    {
-    }
-    explicit inline SqttStreamId(uint8_t id) :
-        m_id(id)
-    {
-    }
+    inline SqttStreamId() : m_id(0) {}
+    explicit inline SqttStreamId(uint8_t id) : m_id(id) {}
     SqttStreamId(uint8_t me_id, uint8_t pipe_id);
     bool        operator==(const SqttStreamId &other) const { return m_id == other.m_id; }
     bool        operator!=(const SqttStreamId &other) const { return m_id != other.m_id; }

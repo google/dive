@@ -15,19 +15,20 @@
 */
 
 #include "command_tab_view.h"
+
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
-#include "search_bar.h"
-#include "shortcuts.h"
-
 #include "dive_core/command_hierarchy.h"
 #include "object_names.h"
+#include "search_bar.h"
+#include "shortcuts.h"
 
 // =================================================================================================
 // CommandTabView

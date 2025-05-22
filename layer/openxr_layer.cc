@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <openxr/openxr.h>
-#include <openxr/openxr_platform.h>
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 #include <string>
 #include <unordered_map>
 

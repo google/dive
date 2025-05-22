@@ -14,9 +14,9 @@
  limitations under the License.
 */
 #pragma once
-#include <stdint.h>
 #include <QObject>
 #include <functional>
+#include <stdint.h>
 
 // Forward Declaration
 namespace Dive

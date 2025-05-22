@@ -16,12 +16,13 @@
 
 #include "capture_data.h"
 
-#include <assert.h>
-#include <string.h>  // memcpy
 #include <algorithm>
+#include <assert.h>
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <string.h>  // memcpy
+
 #include "archive.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
@@ -29,8 +30,9 @@
 #if defined(DIVE_ENABLE_PERFETTO)
 #    include "perfetto_trace/trace_reader.h"
 #endif
-#include "pm4_info.h"
 #include "third_party/gfxreconstruct/framework/decode/dive_file_processor.h"
+
+#include "pm4_info.h"
 
 namespace Dive
 {
@@ -530,34 +532,19 @@ SubmitInfo::SubmitInfo(EngineType                       engine_type,
 }
 
 //--------------------------------------------------------------------------------------------------
-EngineType SubmitInfo::GetEngineType() const
-{
-    return m_engine_type;
-}
+EngineType SubmitInfo::GetEngineType() const { return m_engine_type; }
 
 //--------------------------------------------------------------------------------------------------
-QueueType SubmitInfo::GetQueueType() const
-{
-    return m_queue_type;
-}
+QueueType SubmitInfo::GetQueueType() const { return m_queue_type; }
 
 //--------------------------------------------------------------------------------------------------
-uint8_t SubmitInfo::GetEngineIndex() const
-{
-    return m_engine_index;
-}
+uint8_t SubmitInfo::GetEngineIndex() const { return m_engine_index; }
 
 //--------------------------------------------------------------------------------------------------
-bool SubmitInfo::IsDummySubmit() const
-{
-    return m_is_dummy_submit;
-}
+bool SubmitInfo::IsDummySubmit() const { return m_is_dummy_submit; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t SubmitInfo::GetNumIndirectBuffers() const
-{
-    return (uint32_t)m_ibs.size();
-}
+uint32_t SubmitInfo::GetNumIndirectBuffers() const { return (uint32_t)m_ibs.size(); }
 
 //--------------------------------------------------------------------------------------------------
 const IndirectBufferInfo &SubmitInfo::GetIndirectBufferInfo(uint32_t ib_index) const
@@ -566,24 +553,15 @@ const IndirectBufferInfo &SubmitInfo::GetIndirectBufferInfo(uint32_t ib_index) c
 }
 
 //--------------------------------------------------------------------------------------------------
-const IndirectBufferInfo *SubmitInfo::GetIndirectBufferInfoPtr() const
-{
-    return &m_ibs[0];
-}
+const IndirectBufferInfo *SubmitInfo::GetIndirectBufferInfoPtr() const { return &m_ibs[0]; }
 
 //--------------------------------------------------------------------------------------------------
-void SubmitInfo::AppendIb(const IndirectBufferInfo &ib)
-{
-    m_ibs.push_back(ib);
-}
+void SubmitInfo::AppendIb(const IndirectBufferInfo &ib) { m_ibs.push_back(ib); }
 
 // =================================================================================================
 // Present Info
 // =================================================================================================
-PresentInfo::PresentInfo()
-{
-    m_valid_data = false;
-}
+PresentInfo::PresentInfo() { m_valid_data = false; }
 
 //--------------------------------------------------------------------------------------------------
 PresentInfo::PresentInfo(EngineType engine_type,
@@ -607,58 +585,31 @@ PresentInfo::PresentInfo(EngineType engine_type,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool PresentInfo::HasValidData() const
-{
-    return m_valid_data;
-}
+bool PresentInfo::HasValidData() const { return m_valid_data; }
 
 //--------------------------------------------------------------------------------------------------
-EngineType PresentInfo::GetEngineType() const
-{
-    return m_engine_type;
-}
+EngineType PresentInfo::GetEngineType() const { return m_engine_type; }
 
 //--------------------------------------------------------------------------------------------------
-QueueType PresentInfo::GetQueueType() const
-{
-    return m_queue_type;
-}
+QueueType PresentInfo::GetQueueType() const { return m_queue_type; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t PresentInfo::GetSubmitIndex() const
-{
-    return m_submit_index;
-}
+uint32_t PresentInfo::GetSubmitIndex() const { return m_submit_index; }
 
 //--------------------------------------------------------------------------------------------------
-bool PresentInfo::IsFullScreen() const
-{
-    return m_full_screen;
-}
+bool PresentInfo::IsFullScreen() const { return m_full_screen; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t PresentInfo::GetSurfaceAddr() const
-{
-    return m_addr;
-}
+uint64_t PresentInfo::GetSurfaceAddr() const { return m_addr; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t PresentInfo::GetSurfaceSize() const
-{
-    return m_size;
-}
+uint64_t PresentInfo::GetSurfaceSize() const { return m_size; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t PresentInfo::GetSurfaceVkFormat() const
-{
-    return m_vk_format;
-}
+uint32_t PresentInfo::GetSurfaceVkFormat() const { return m_vk_format; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t PresentInfo::GetSurfaceVkColorSpaceKHR() const
-{
-    return m_vk_color_space;
-}
+uint32_t PresentInfo::GetSurfaceVkColorSpaceKHR() const { return m_vk_color_space; }
 
 // =================================================================================================
 // RingInfo
@@ -687,64 +638,34 @@ RingInfo::RingInfo(QueueType queue_type,
 }
 
 //--------------------------------------------------------------------------------------------------
-QueueType RingInfo::GetQueueType() const
-{
-    return m_queue_type;
-}
+QueueType RingInfo::GetQueueType() const { return m_queue_type; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t RingInfo::GetQueueIndex() const
-{
-    return m_queue_index;
-}
+uint32_t RingInfo::GetQueueIndex() const { return m_queue_index; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetRingBaseAddress() const
-{
-    return m_ring_base_addr;
-}
+uint64_t RingInfo::GetRingBaseAddress() const { return m_ring_base_addr; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t RingInfo::GetRingSize() const
-{
-    return m_ring_full_size;
-}
+uint32_t RingInfo::GetRingSize() const { return m_ring_full_size; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetRingCaptureAddress() const
-{
-    return m_ring_capture_addr;
-}
+uint64_t RingInfo::GetRingCaptureAddress() const { return m_ring_capture_addr; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t RingInfo::GetRingCaptureSize() const
-{
-    return m_ring_capture_size;
-}
+uint32_t RingInfo::GetRingCaptureSize() const { return m_ring_capture_size; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetHungIbAddress() const
-{
-    return m_hang_ib_addr;
-}
+uint64_t RingInfo::GetHungIbAddress() const { return m_hang_ib_addr; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetHungSizeLeft() const
-{
-    return m_hang_size_left;
-}
+uint64_t RingInfo::GetHungSizeLeft() const { return m_hang_size_left; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetEmittedFenceAddress() const
-{
-    return m_fence_emitted_addr;
-}
+uint64_t RingInfo::GetEmittedFenceAddress() const { return m_fence_emitted_addr; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetSignaledFenceAddress() const
-{
-    return m_fence_signaled_addr;
-}
+uint64_t RingInfo::GetSignaledFenceAddress() const { return m_fence_signaled_addr; }
 
 // =================================================================================================
 // TextInfo
@@ -757,22 +678,13 @@ TextInfo::TextInfo(std::string name, uint64_t size, DiveVector<char> &&text)
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::string &TextInfo::GetName() const
-{
-    return m_name;
-}
+const std::string &TextInfo::GetName() const { return m_name; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t TextInfo::GetSize() const
-{
-    return m_size;
-}
+uint64_t TextInfo::GetSize() const { return m_size; }
 
 //--------------------------------------------------------------------------------------------------
-const char *TextInfo::GetText() const
-{
-    return m_text.data();
-}
+const char *TextInfo::GetText() const { return m_text.data(); }
 
 // =================================================================================================
 // WaveInfo
@@ -789,77 +701,44 @@ WaveStateInfo::WaveStateInfo(const Dive::WaveState &state,
 }
 
 //--------------------------------------------------------------------------------------------------
-const Dive::WaveState &WaveStateInfo::GetState() const
-{
-    return m_state;
-}
+const Dive::WaveState &WaveStateInfo::GetState() const { return m_state; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<uint32_t> &WaveStateInfo::GetSGPRs() const
-{
-    return m_sgprs;
-}
+const DiveVector<uint32_t> &WaveStateInfo::GetSGPRs() const { return m_sgprs; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<uint32_t> &WaveStateInfo::GetVGPRs() const
-{
-    return m_vgprs;
-}
+const DiveVector<uint32_t> &WaveStateInfo::GetVGPRs() const { return m_vgprs; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<uint32_t> &WaveStateInfo::GetTTMPs() const
-{
-    return m_ttmps;
-}
+const DiveVector<uint32_t> &WaveStateInfo::GetTTMPs() const { return m_ttmps; }
 
 // =================================================================================================
 // WaveInfo
 // =================================================================================================
-WaveInfo::WaveInfo(DiveVector<WaveStateInfo> &&waves)
-{
-    m_waves = waves;
-}
+WaveInfo::WaveInfo(DiveVector<WaveStateInfo> &&waves) { m_waves = waves; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<WaveStateInfo> &WaveInfo::GetWaves() const
-{
-    return m_waves;
-}
+const DiveVector<WaveStateInfo> &WaveInfo::GetWaves() const { return m_waves; }
 
 // =================================================================================================
 // RegisterInfo
 // =================================================================================================
-RegisterInfo::RegisterInfo(std::map<std::string, uint32_t> &&regs)
-{
-    m_registers = regs;
-}
+RegisterInfo::RegisterInfo(std::map<std::string, uint32_t> &&regs) { m_registers = regs; }
 
 //--------------------------------------------------------------------------------------------------
-const std::map<std::string, uint32_t> &RegisterInfo::GetRegisters() const
-{
-    return m_registers;
-}
+const std::map<std::string, uint32_t> &RegisterInfo::GetRegisters() const { return m_registers; }
 
 // =================================================================================================
 // CaptureData
 // =================================================================================================
-CaptureData::CaptureData() :
-    m_progress_tracker(NULL),
-    m_log_ptr(&LogNull::GetInstance())
-{
-}
+CaptureData::CaptureData() : m_progress_tracker(NULL), m_log_ptr(&LogNull::GetInstance()) {}
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::CaptureData(ILog *log_ptr) :
-    m_progress_tracker(NULL),
-    m_log_ptr(log_ptr)
-{
-}
+CaptureData::CaptureData(ILog *log_ptr) : m_progress_tracker(NULL), m_log_ptr(log_ptr) {}
 
 //--------------------------------------------------------------------------------------------------
 CaptureData::CaptureData(ProgressTracker *progress_tracker, ILog *log_ptr) :
-    m_progress_tracker(progress_tracker),
-    m_log_ptr(log_ptr)
+    m_progress_tracker(progress_tracker), m_log_ptr(log_ptr)
 {
 }
 
@@ -910,11 +789,21 @@ std::ostream &operator<<(std::ostream &os, const CaptureData::LoadResult &r)
 {
     switch (r)
     {
-    case CaptureData::LoadResult::kSuccess: os << "Success"; break;
-    case CaptureData::LoadResult::kFileIoError: os << "File IO Error"; break;
-    case CaptureData::LoadResult::kCorruptData: os << "Corrupt Data"; break;
-    case CaptureData::LoadResult::kVersionError: os << "Version Error"; break;
-    default: os << "Unknown"; break;
+    case CaptureData::LoadResult::kSuccess:
+        os << "Success";
+        break;
+    case CaptureData::LoadResult::kFileIoError:
+        os << "File IO Error";
+        break;
+    case CaptureData::LoadResult::kCorruptData:
+        os << "Corrupt Data";
+        break;
+    case CaptureData::LoadResult::kVersionError:
+        os << "Version Error";
+        break;
+    default:
+        os << "Unknown";
+        break;
     }
     return os;
 }
@@ -1232,22 +1121,13 @@ bool CaptureData::WriteModifiedGfxrFile(const char *new_file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureDataHeader::CaptureType CaptureData::GetCaptureType() const
-{
-    return m_capture_type;
-}
+CaptureDataHeader::CaptureType CaptureData::GetCaptureType() const { return m_capture_type; }
 
 //--------------------------------------------------------------------------------------------------
-const MemoryManager &CaptureData::GetMemoryManager() const
-{
-    return m_memory;
-}
+const MemoryManager &CaptureData::GetMemoryManager() const { return m_memory; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumSubmits() const
-{
-    return (uint32_t)m_submits.size();
-}
+uint32_t CaptureData::GetNumSubmits() const { return (uint32_t)m_submits.size(); }
 
 //--------------------------------------------------------------------------------------------------
 const SubmitInfo &CaptureData::GetSubmitInfo(uint32_t submit_index) const
@@ -1256,16 +1136,10 @@ const SubmitInfo &CaptureData::GetSubmitInfo(uint32_t submit_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<SubmitInfo> &CaptureData::GetSubmits() const
-{
-    return m_submits;
-}
+const DiveVector<SubmitInfo> &CaptureData::GetSubmits() const { return m_submits; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumPresents() const
-{
-    return (uint32_t)m_presents.size();
-}
+uint32_t CaptureData::GetNumPresents() const { return (uint32_t)m_presents.size(); }
 
 //--------------------------------------------------------------------------------------------------
 const PresentInfo &CaptureData::GetPresentInfo(uint32_t present_index) const
@@ -1274,28 +1148,16 @@ const PresentInfo &CaptureData::GetPresentInfo(uint32_t present_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumRings() const
-{
-    return (uint32_t)m_rings.size();
-}
+uint32_t CaptureData::GetNumRings() const { return (uint32_t)m_rings.size(); }
 
 //--------------------------------------------------------------------------------------------------
-const RingInfo &CaptureData::GetRingInfo(uint32_t ring_index) const
-{
-    return m_rings[ring_index];
-}
+const RingInfo &CaptureData::GetRingInfo(uint32_t ring_index) const { return m_rings[ring_index]; }
 
 //--------------------------------------------------------------------------------------------------
-const WaveInfo &CaptureData::GetWaveInfo() const
-{
-    return m_waves;
-}
+const WaveInfo &CaptureData::GetWaveInfo() const { return m_waves; }
 
 //--------------------------------------------------------------------------------------------------
-const RegisterInfo &CaptureData::GetRegisterInfo() const
-{
-    return m_registers;
-}
+const RegisterInfo &CaptureData::GetRegisterInfo() const { return m_registers; }
 
 //--------------------------------------------------------------------------------------------------
 bool CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header)
@@ -1590,10 +1452,7 @@ bool CaptureData::LoadRegisterBlock(std::istream &capture_file)
     return true;
 }
 
-bool CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file)
-{
-    return true;
-}
+bool CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file) { return true; }
 
 //--------------------------------------------------------------------------------------------------
 bool CaptureData::LoadGpuAddressAndSize(FileReader &capture_file,

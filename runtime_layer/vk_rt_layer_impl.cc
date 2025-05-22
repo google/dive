@@ -22,13 +22,13 @@ limitations under the License.
 #    include <dlfcn.h>
 #endif
 
-#include <vulkan/vulkan_core.h>
-#include "capture_service/log.h"
-
-#include <inttypes.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <inttypes.h>
+#include <vulkan/vulkan_core.h>
+
+#include "capture_service/log.h"
 
 namespace DiveLayer
 {

@@ -27,6 +27,24 @@ adb pull /sdcard/Download/dump
 ./gfxr_dump_resources/replay-with-dump.sh in_capture.gfxr in_capture.gfxa
 ```
 
+## Using as a Library
+
+Here's a sample:
+
+```c++
+#include "gfxr_dump_resources/dump_entry.h"
+#include "gfxr_dump_resources/gfxr_dump_resources.h"
+
+// Process GFXR file
+std::optional<std::vector<DumpEntry>> dumpables = FindDumpableResources(in_gfxr_filename);
+assert(dumpables.has_value());
+
+// Save results to JSON file
+assert(SaveAsJsonFile(*dumpables, out_json_filename));
+```
+
+In CMakeLists.txt, link against `gfxr_dump_resources_lib`.
+
 ## Architecture
 
 The GFXR file is parsed top to bottom for Vulkan instructions by FileProcessor with a VulkanDecoder. Vulkan instructions are forwarded to our custom DumpResourcesBuilderConsumer. DumpResourcesBuilderConsumer checks if there's any in-flight command buffers and sends the request through the state machine for that command buffer. The state machine validates that Vulkan calls appear in the expected order as well as accumulating that info into the DumpEntry struct. If all the required info is found then the complete DumpEntry is emitted. At the end, all complete DumpEntry's are written to disk as JSON.

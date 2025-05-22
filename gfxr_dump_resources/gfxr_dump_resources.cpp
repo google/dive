@@ -24,8 +24,8 @@
 #include "dump_entry.h"
 #include "dump_resources_builder_consumer.h"
 
-#include "gfxreconstruct/framework/decode/file_processor.h"
-#include "gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
+#include "third_party/gfxreconstruct/framework/decode/file_processor.h"
+#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
 
 namespace Dive::gfxr
 {

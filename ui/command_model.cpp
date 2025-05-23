@@ -238,11 +238,11 @@ void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
     int n = rowCount(parent);
     for (int r = 0; r < n; ++r)
     {
-        auto     ix = index(r, 0, parent);
-        uint64_t node_index = (uint64_t)ix.internalPointer();
+        auto     idx = index(r, 0, parent);
+        uint64_t node_index = (uint64_t)idx.internalPointer();
         if (node_index < m_node_lookup.size())
-            m_node_lookup[node_index] = QPersistentModelIndex(ix);
-        BuildNodeLookup(ix);
+            m_node_lookup[node_index] = QPersistentModelIndex(idx);
+        BuildNodeLookup(idx);
     }
 }
 

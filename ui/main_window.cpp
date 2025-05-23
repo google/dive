@@ -58,11 +58,18 @@
 #include "shortcuts_window.h"
 #include "text_file_view.h"
 #include "tree_view_combo_box.h"
+#include "ui/dive_tree_view.h"
 
-static const int   kViewModeStringCount = 2;
-static const int   kEventViewModeStringCount = 1;
-static const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
-static const char *kEventViewModeStrings[kEventViewModeStringCount] = { "GPU Events" };
+static constexpr int         kViewModeStringCount = 2;
+static constexpr int         kEventViewModeStringCount = 1;
+static constexpr const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
+static constexpr const char *kEventViewModeStrings[kEventViewModeStringCount] = { "GPU Events" };
+static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] = {
+    "None",
+    "BinningPassOnly",
+    "FirstTilePassOnly",
+    "BinningAndFirstTilePass"
+};
 
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {
@@ -98,6 +105,8 @@ MainWindow::MainWindow()
     QFrame *left_frame = new QFrame();
     m_view_mode_combo_box = new TreeViewComboBox();
     m_view_mode_combo_box->setMinimumWidth(150);
+    constexpr DiveFilterModel::FilterMode
+    kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
     {
         QVBoxLayout *left_vertical_layout = new QVBoxLayout();
 
@@ -132,6 +141,22 @@ MainWindow::MainWindow()
             text_combo_box_layout->addWidget(combo_box_label);
             text_combo_box_layout->addWidget(m_view_mode_combo_box, 1);
 
+            QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
+            m_filter_mode_combo_box = new TreeViewComboBox();
+            m_filter_mode_combo_box->setMinimumWidth(150);
+
+            QStandardItemModel *filter_combo_box_model = new QStandardItemModel();
+            for (uint32_t i = 0; i < DiveFilterModel::kFilterModeCount; i++)
+            {
+                QStandardItem *item = new QStandardItem(kFilterStrings[i]);
+                filter_combo_box_model->appendRow(item);
+            }
+            m_filter_mode_combo_box->setModel(filter_combo_box_model);
+            m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
+
+            text_combo_box_layout->addWidget(filter_combo_box_label);
+            text_combo_box_layout->addWidget(m_filter_mode_combo_box, 1);
+
             m_search_trigger_button = new QPushButton;
             m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
             text_combo_box_layout->addWidget(m_search_trigger_button);
@@ -149,9 +174,14 @@ MainWindow::MainWindow()
 
         m_command_hierarchy_model = new CommandModel(m_data_core->GetCommandHierarchy());
         m_command_hierarchy_view = new DiveTreeView(m_data_core->GetCommandHierarchy());
-        m_command_hierarchy_view->setModel(m_command_hierarchy_model);
         m_command_hierarchy_view->SetDataCore(m_data_core);
         m_event_search_bar->setTreeView(m_command_hierarchy_view);
+
+        m_filter_model = new DiveFilterModel(m_data_core->GetCommandHierarchy(), this);
+        m_filter_model->setSourceModel(m_command_hierarchy_model);
+        // Set the proxy model as the view's model
+        m_command_hierarchy_view->setModel(m_filter_model);
+        m_filter_model->SetMode(kDefaultFilterMode);
 
         QLabel *goto_draw_call_label = new QLabel(tr("Go To:"));
         m_prev_event_button = new QPushButton("Prev Event");
@@ -238,8 +268,8 @@ MainWindow::MainWindow()
                      SIGNAL(textHighlighted(const QString &)),
                      this,
                      SLOT(OnCommandViewModeComboBoxHover(const QString &)));
-    QObject::connect(m_command_hierarchy_view->selectionModel(),
-                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+    QObject::connect(m_command_hierarchy_view,
+                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_command_tab_view,
                      SLOT(OnSelectionChanged(const QModelIndex &)));
     QObject::connect(m_command_hierarchy_view->selectionModel(),
@@ -305,6 +335,11 @@ MainWindow::MainWindow()
                      &TraceDialog::TraceAvailable,
                      this,
                      &MainWindow::OnTraceAvailable);
+
+    QObject::connect(m_filter_mode_combo_box,
+                     SIGNAL(currentTextChanged(const QString &)),
+                     this,
+                     SLOT(OnFilterModeChange(const QString &)));
 
     QObject::connect(this, &MainWindow::FileLoaded, m_text_file_view, &TextFileView::OnFileLoaded);
     QObject::connect(this, &MainWindow::FileLoaded, this, &MainWindow::OnFileLoaded);
@@ -389,9 +424,6 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
 
     m_prev_command_view_mode = view_mode;
     ExpandResizeHierarchyView();
-
-    // Retain node selection
-    m_command_hierarchy_view->RetainCurrentNode();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -408,9 +440,10 @@ void MainWindow::OnCommandViewModeComboBoxHover(const QString &view_mode)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnSelectionChanged(const QModelIndex &index)
 {
+    QModelIndex source_model_index = m_filter_model->mapToSource(index);
     // Determine which node it is, and emit this signal
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
-    uint64_t                      selected_item_node_index = (uint64_t)(index.internalPointer());
+    uint64_t       selected_item_node_index = (uint64_t)(source_model_index.internalPointer());
     Dive::NodeType node_type = command_hierarchy.GetNodeType(selected_item_node_index);
     if (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
         node_type == Dive::NodeType::kMarkerNode)
@@ -421,6 +454,45 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     {
         emit EventSelected(UINT64_MAX);
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnFilterModeChange(const QString &filter_mode)
+{
+    DiveFilterModel::FilterMode new_mode;
+
+    if (filter_mode == kFilterStrings[DiveFilterModel::kNone])
+    {
+        new_mode = DiveFilterModel::kNone;
+    }
+    else if (filter_mode == kFilterStrings[DiveFilterModel::kBinningPassOnly])
+    {
+        new_mode = DiveFilterModel::kBinningPassOnly;
+    }
+    else if (filter_mode == kFilterStrings[DiveFilterModel::kFirstTilePassOnly])
+    {
+        new_mode = DiveFilterModel::kFirstTilePassOnly;
+    }
+    else if (filter_mode == kFilterStrings[DiveFilterModel::kBinningAndFirstTilePass])
+    {
+        new_mode = DiveFilterModel::kBinningAndFirstTilePass;
+    }
+    else
+    {
+        new_mode = DiveFilterModel::kNone;
+    }
+
+    if (m_filter_model)
+    {
+        m_filter_model->SetMode(new_mode);
+    }
+
+    if (m_command_hierarchy_view)
+    {
+        m_command_hierarchy_view->scrollToTop();
+    }
+
+    ExpandResizeHierarchyView();
 }
 
 //--------------------------------------------------------------------------------------------------

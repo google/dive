@@ -107,6 +107,9 @@ void CommandTabView::ResetModel()
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::OnSelectionChanged(const QModelIndex &index)
 {
+    if (!index.isValid())
+        return;
+
     m_command_buffer_model->OnSelectionChanged(index);
 
     // After m_command_buffer_view is filled out in CommandBufferModel::OnSelectionChanged(), do NOT

@@ -49,6 +49,7 @@ class TreeViewComboBox;
 class SearchBar;
 class CaptureSettingView;
 class TraceDialog;
+class DiveFilterModel;
 enum class EventMode;
 
 #define MESSAGE_TIMEOUT 2500
@@ -78,6 +79,7 @@ private slots:
     void OnCommandViewModeChange(const QString &string);
     void OnCommandViewModeComboBoxHover(const QString &);
     void OnSelectionChanged(const QModelIndex &index);
+    void OnFilterModeChange(const QString &string);
     void OnOpenFile();
     void OnGFXRCapture();
     void OnNormalCapture();
@@ -153,6 +155,7 @@ private:
     SearchBar    *m_event_search_bar = nullptr;
 
     TreeViewComboBox    *m_view_mode_combo_box;
+    TreeViewComboBox    *m_filter_mode_combo_box;
     QPushButton         *m_prev_event_button;
     QPushButton         *m_next_event_button;
     QList<QPushButton *> m_expand_to_lvl_buttons;
@@ -176,6 +179,8 @@ private:
 #endif
     TextFileView *m_text_file_view;
     int           m_text_file_view_tab_index = -1;
+
+    DiveFilterModel *m_filter_model;
 
     // Side pane
     PropertyPanel *m_property_panel;

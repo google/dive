@@ -40,8 +40,8 @@ private slots:
 
 private:
     const Dive::DataCore &m_data_core;
-    QTableWidget *        m_memory_view;
-    QTreeWidget *         m_buffer_list;
+    QTableWidget         *m_memory_view;
+    QTreeWidget          *m_buffer_list;
     uint32_t              m_event_index;
 
     const uint32_t kNumDwordsPerRow = 4;

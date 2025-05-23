@@ -910,11 +910,21 @@ std::ostream &operator<<(std::ostream &os, const CaptureData::LoadResult &r)
 {
     switch (r)
     {
-    case CaptureData::LoadResult::kSuccess: os << "Success"; break;
-    case CaptureData::LoadResult::kFileIoError: os << "File IO Error"; break;
-    case CaptureData::LoadResult::kCorruptData: os << "Corrupt Data"; break;
-    case CaptureData::LoadResult::kVersionError: os << "Version Error"; break;
-    default: os << "Unknown"; break;
+    case CaptureData::LoadResult::kSuccess:
+        os << "Success";
+        break;
+    case CaptureData::LoadResult::kFileIoError:
+        os << "File IO Error";
+        break;
+    case CaptureData::LoadResult::kCorruptData:
+        os << "Corrupt Data";
+        break;
+    case CaptureData::LoadResult::kVersionError:
+        os << "Version Error";
+        break;
+    default:
+        os << "Unknown";
+        break;
     }
     return os;
 }

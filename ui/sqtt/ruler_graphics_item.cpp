@@ -104,9 +104,9 @@ QPainterPath RulerGraphicsItem::shape() const
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::paint(QPainter *                      painter,
+void RulerGraphicsItem::paint(QPainter                       *painter,
                               const QStyleOptionGraphicsItem *option,
-                              QWidget *                       widget)
+                              QWidget                        *widget)
 {
     if (m_max_cycles == 0)
         return;

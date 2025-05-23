@@ -98,16 +98,25 @@ std::string AbslUnparseFlag(Command command)
 {
     switch (command)
     {
-    case Command::kNone: return "";
-    case Command::kListDevice: return "list_device";
-    case Command::kGfxrCapture: return "gfxr_capture";
-    case Command::kGfxrReplay: return "gfxr_replay";
-    case Command::kListPackage: return "list_package";
-    case Command::kRunPackage: return "run";
-    case Command::kRunAndCapture: return "capture";
-    case Command::kCleanup: return "cleanup";
+    case Command::kNone:
+        return "";
+    case Command::kListDevice:
+        return "list_device";
+    case Command::kGfxrCapture:
+        return "gfxr_capture";
+    case Command::kGfxrReplay:
+        return "gfxr_replay";
+    case Command::kListPackage:
+        return "list_package";
+    case Command::kRunPackage:
+        return "run";
+    case Command::kRunAndCapture:
+        return "capture";
+    case Command::kCleanup:
+        return "cleanup";
 
-    default: return absl::StrCat(command);
+    default:
+        return absl::StrCat(command);
     }
 }
 

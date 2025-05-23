@@ -108,7 +108,9 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
             std::string package(absl::StripAsciiWhitespace(fields[1]));
             switch (option)
             {
-            case PackageListOptions::kAll: package_list.push_back(package); break;
+            case PackageListOptions::kAll:
+                package_list.push_back(package);
+                break;
             case PackageListOptions::kDebuggableOnly:
                 result = Adb().RunAndGetResult("shell dumpsys package " + package);
                 if (!result.ok())
@@ -134,7 +136,9 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
                     package_list.push_back(package);
                 }
                 break;
-            default: DIVE_ASSERT(false); break;  // Unknown Package List Option.
+            default:
+                DIVE_ASSERT(false);
+                break;  // Unknown Package List Option.
             }
         }
     }

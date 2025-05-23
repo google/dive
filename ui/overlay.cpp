@@ -26,7 +26,8 @@ void OverlayWidget::newParent()
 }
 
 //--------------------------------------------------------------------------------------------------
-OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent)
+OverlayWidget::OverlayWidget(QWidget* parent) :
+    QWidget(parent)
 {
     setAttribute(Qt::WA_NoSystemBackground);
     setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -60,7 +61,8 @@ bool OverlayWidget::event(QEvent* event)
 }
 
 //--------------------------------------------------------------------------------------------------
-Overlay::Overlay(QWidget* parent) : OverlayWidget(parent)
+Overlay::Overlay(QWidget* parent) :
+    OverlayWidget(parent)
 {
     setAttribute(Qt::WA_TranslucentBackground);
     hide();

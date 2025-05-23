@@ -43,16 +43,28 @@ void LogConsole::Log(const LogEntry& entry)
 
     switch (entry.m_type)
     {
-    case LogType::kInfo: oss << "INFO"; break;
-    case LogType::kWarning: oss << "WARNING"; break;
-    case LogType::kError: oss << "ERROR"; break;
-    default: DIVE_ASSERT(false);
+    case LogType::kInfo:
+        oss << "INFO";
+        break;
+    case LogType::kWarning:
+        oss << "WARNING";
+        break;
+    case LogType::kError:
+        oss << "ERROR";
+        break;
+    default:
+        DIVE_ASSERT(false);
     }
     switch (entry.m_cat)
     {
-    case LogCategory::kParsing: oss << "(Parsing): "; break;
-    case LogCategory::kPerformance: oss << "(Performance): "; break;
-    default: DIVE_ASSERT(false);
+    case LogCategory::kParsing:
+        oss << "(Parsing): ";
+        break;
+    case LogCategory::kPerformance:
+        oss << "(Performance): ";
+        break;
+    default:
+        DIVE_ASSERT(false);
     }
 
     oss << entry.m_file << "(" << entry.m_line << "): " << entry.m_short_desc;

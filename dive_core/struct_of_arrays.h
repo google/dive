@@ -42,11 +42,16 @@ public:
     StructOfArraysIterator() = default;
     StructOfArraysIterator(StructOfArraysIterator&& other) :
         m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
-    {}
+    {
+    }
     StructOfArraysIterator(const StructOfArraysIterator& other) :
         m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
-    {}
-    StructOfArraysIterator(Class* obj, Id id) : m_ref(obj, id) {}
+    {
+    }
+    StructOfArraysIterator(Class* obj, Id id) :
+        m_ref(obj, id)
+    {
+    }
 
     StructOfArraysIterator& operator=(const StructOfArraysIterator& other)
     {
@@ -220,10 +225,12 @@ public:
     StructOfArraysConstIterator(const StructOfArraysConstIterator& other) = default;
     StructOfArraysConstIterator(const StructOfArraysIterator<Class, Id, RefT>& other) :
         StructOfArraysIterator<const Class, Id, ConstRefT>(other.obj_ptr(), other->id())
-    {}
+    {
+    }
     StructOfArraysConstIterator(const Class* obj, Id id) :
         StructOfArraysIterator<const Class, Id, ConstRefT>(obj, id)
-    {}
+    {
+    }
 
     StructOfArraysConstIterator& operator=(const StructOfArraysConstIterator& other)
     {

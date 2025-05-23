@@ -36,7 +36,11 @@ class CrossRef
 public:
     typedef uint64_t IdType;
 
-    CrossRef(CrossRefType type = CrossRefType::kNone, IdType id = 0) : m_type(type), m_id(id) {}
+    CrossRef(CrossRefType type = CrossRefType::kNone, IdType id = 0) :
+        m_type(type),
+        m_id(id)
+    {
+    }
 
     CrossRef(const CrossRef&) = default;
     CrossRef& operator=(const CrossRef&) = default;

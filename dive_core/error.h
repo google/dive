@@ -60,7 +60,8 @@ struct SqttErrorPayload
     SqttErrorPayload(uint32_t shader_engine, uint32_t msg_index) :
         m_shader_engine(shader_engine),
         m_msg_index(msg_index)
-    {}
+    {
+    }
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -83,7 +84,8 @@ struct RgpMarkerErrorPayload
         m_shader_engine(shader_engine),
         m_msg_index(msg_index),
         m_pm4_addr(pm4_addr)
-    {}
+    {
+    }
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -133,7 +135,10 @@ struct ErrorInfo
     std::string m_desc;
 
 protected:
-    inline ErrorInfo(ErrorCode code) : m_code(code) {}
+    inline ErrorInfo(ErrorCode code) :
+        m_code(code)
+    {
+    }
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -144,7 +149,8 @@ template<ErrorCode C> struct ErrorInfoT : public ErrorInfo
     inline ErrorInfoT(const typename ErrorPayloadT<C>::PayloadT &payload) :
         ErrorInfo(C),
         m_payload(payload)
-    {}
+    {
+    }
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -165,7 +171,7 @@ public:
     class Builder
     {
     public:
-                                      operator Error();
+        operator Error();
         template<typename T> Builder &operator<<(const T &val)
         {
             m_buf << val;

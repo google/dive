@@ -67,7 +67,7 @@ EventTimingView::EventTimingView()
 
     const uint32_t kStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
     QString        shader_names[kStageCount] = {
-               "Vertex Shader", "Pixel Shader", "Compute Shader", "Geometry Shader", "Hull Shader"
+        "Vertex Shader", "Pixel Shader", "Compute Shader", "Geometry Shader", "Hull Shader"
     };
     Dive::ShaderStage shader_stage_order[kStageCount] = { Dive::ShaderStage::kShaderStageVs,
                                                           Dive::ShaderStage::kShaderStagePs,

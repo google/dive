@@ -25,13 +25,17 @@ namespace Dive
 // DataCore
 // =================================================================================================
 DataCore::DataCore(ILog *log_ptr) :
-    m_progress_tracker(NULL), m_capture_data(log_ptr), m_log_ptr(log_ptr)
+    m_progress_tracker(NULL),
+    m_capture_data(log_ptr),
+    m_log_ptr(log_ptr)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
 DataCore::DataCore(ProgressTracker *progress_tracker, ILog *log_ptr) :
-    m_progress_tracker(progress_tracker), m_capture_data(log_ptr), m_log_ptr(log_ptr)
+    m_progress_tracker(progress_tracker),
+    m_capture_data(log_ptr),
+    m_log_ptr(log_ptr)
 {
 }
 
@@ -104,9 +108,15 @@ bool DataCore::ParseCaptureData()
 }
 
 //--------------------------------------------------------------------------------------------------
-const CaptureData &DataCore::GetCaptureData() const { return m_capture_data; }
+const CaptureData &DataCore::GetCaptureData() const
+{
+    return m_capture_data;
+}
 
-CaptureData &DataCore::GetMutableCaptureData() { return m_capture_data; }
+CaptureData &DataCore::GetMutableCaptureData()
+{
+    return m_capture_data;
+}
 
 //--------------------------------------------------------------------------------------------------
 const CommandHierarchy &DataCore::GetCommandHierarchy() const
@@ -115,7 +125,10 @@ const CommandHierarchy &DataCore::GetCommandHierarchy() const
 }
 
 //--------------------------------------------------------------------------------------------------
-const CaptureMetadata &DataCore::GetCaptureMetadata() const { return m_capture_metadata; }
+const CaptureMetadata &DataCore::GetCaptureMetadata() const
+{
+    return m_capture_metadata;
+}
 
 //--------------------------------------------------------------------------------------------------
 bool DataCore::WriteNewGFXRCaptureData(const char *new_file_name)
@@ -128,7 +141,8 @@ bool DataCore::WriteNewGFXRCaptureData(const char *new_file_name)
 // =================================================================================================
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata     &capture_metadata,
                                                EmulateStateTracker &state_tracker) :
-    m_capture_metadata(capture_metadata), m_state_tracker(state_tracker)
+    m_capture_metadata(capture_metadata),
+    m_state_tracker(state_tracker)
 {
     m_state_tracker.Reset();
     m_capture_metadata.m_num_pm4_packets = 0;

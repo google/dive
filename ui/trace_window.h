@@ -43,7 +43,10 @@ class TraceWorker : public QThread
     void run() override;
 
 public:
-    TraceWorker(QProgressDialog *pd) : m_progress_bar(pd) {}
+    TraceWorker(QProgressDialog *pd) :
+        m_progress_bar(pd)
+    {
+    }
 signals:
     void TraceAvailable(const QString &);
     void DownloadedSize(uint64_t size);
@@ -58,7 +61,10 @@ class GfxrCaptureWorker : public QThread
     void run() override;
 
 public:
-    GfxrCaptureWorker(QProgressDialog *pd) : m_progress_bar(pd) {}
+    GfxrCaptureWorker(QProgressDialog *pd) :
+        m_progress_bar(pd)
+    {
+    }
     void                    SetGfxrCapturePath(const std::string &capture_path);
     void                    SetGfxrTargetCapturePath(const std::string &target_capture_path);
     bool                    areTimestampsCurrent(Dive::AndroidDevice     *device,

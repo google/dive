@@ -391,7 +391,10 @@ uint64_t CommandHierarchy::Nodes::AddNode(NodeType type, std::string &&desc, Aux
 // =================================================================================================
 // CommandHierarchy::AuxInfo
 // =================================================================================================
-CommandHierarchy::AuxInfo::AuxInfo(uint64_t val) { m_u64All = val; }
+CommandHierarchy::AuxInfo::AuxInfo(uint64_t val)
+{
+    m_u64All = val;
+}
 
 //--------------------------------------------------------------------------------------------------
 CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SubmitNode(Dive::EngineType engine_type,
@@ -545,7 +548,8 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
     {
     public:
         TempMemoryManager(uint32_t *command_dwords, uint32_t size_in_dwords) :
-            m_command_dwords(command_dwords), m_size_in_dwords(size_in_dwords)
+            m_command_dwords(command_dwords),
+            m_size_in_dwords(size_in_dwords)
         {
         }
 

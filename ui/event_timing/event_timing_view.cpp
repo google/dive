@@ -263,7 +263,10 @@ void EventTimingView::OnMouseWheel(QPoint mouse_pos, int angle_delta)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventTimingView::resizeEvent(QResizeEvent *event) { Update(); }
+void EventTimingView::resizeEvent(QResizeEvent *event)
+{
+    Update();
+}
 
 void EventTimingView::OnColorByIndexChange(int index)
 {

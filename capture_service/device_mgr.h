@@ -46,7 +46,10 @@ inline bool operator==(const DeviceInfo &lhs, const DeviceInfo &rhs)
            lhs.m_model == rhs.m_model;
 }
 
-inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs) { return !(lhs == rhs); }
+inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs)
+{
+    return !(lhs == rhs);
+}
 
 struct DeviceState
 {

@@ -40,7 +40,10 @@ const uint32_t kShaderStageColumn = 4;
 class EventWidgetItem : public QTreeWidgetItem
 {
 public:
-    EventWidgetItem(QTreeWidget *view) : QTreeWidgetItem(view) {}
+    EventWidgetItem(QTreeWidget *view) :
+        QTreeWidgetItem(view)
+    {
+    }
     void SetStageEnabled(Dive::ShaderStage stage, bool enable)
     {
         m_stage_enabled[(uint32_t)stage] = enable;
@@ -184,7 +187,10 @@ MostExpensiveEventsView::MostExpensiveEventsView(const Dive::CaptureMetadata &ca
 }
 
 //--------------------------------------------------------------------------------------------------
-void MostExpensiveEventsView::Update() { return; }
+void MostExpensiveEventsView::Update()
+{
+    return;
+}
 
 //--------------------------------------------------------------------------------------------------
 void MostExpensiveEventsView::OnCustomContextMenuRequested(QPoint pos)

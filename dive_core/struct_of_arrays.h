@@ -48,7 +48,10 @@ public:
         m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
     {
     }
-    StructOfArraysIterator(Class* obj, Id id) : m_ref(obj, id) {}
+    StructOfArraysIterator(Class* obj, Id id) :
+        m_ref(obj, id)
+    {
+    }
 
     StructOfArraysIterator& operator=(const StructOfArraysIterator& other)
     {

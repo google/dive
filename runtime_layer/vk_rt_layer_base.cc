@@ -55,7 +55,10 @@ struct DeviceData
 // according to the vulkan loader, vkdevice, vkcmd, vkqueue share the same table
 // search `loader_set_dispatch` in
 // https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/trampoline.c#L1067
-inline uintptr_t DataKey(const void *object) { return (uintptr_t)(*(void **)object); }
+inline uintptr_t DataKey(const void *object)
+{
+    return (uintptr_t)(*(void **)object);
+}
 
 namespace
 {

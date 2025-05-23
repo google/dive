@@ -71,7 +71,8 @@ private:
 // ShaderView
 // =================================================================================================
 ShaderView::ShaderView(const Dive::DataCore &data_core) :
-    m_data_core(data_core), m_node_index(UINT64_MAX)
+    m_data_core(data_core),
+    m_node_index(UINT64_MAX)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_shader_list = new QTreeWidget();

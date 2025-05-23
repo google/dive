@@ -164,7 +164,10 @@ ABSL_FLAG(std::string,
           "specify the on-device path of the gfxr capture to replay.");
 ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr replay.");
 
-void print_usage() { std::cout << absl::ProgramUsageMessage() << std::endl; }
+void print_usage()
+{
+    std::cout << absl::ProgramUsageMessage() << std::endl;
+}
 
 bool list_device(const Dive::DeviceManager& mgr)
 {

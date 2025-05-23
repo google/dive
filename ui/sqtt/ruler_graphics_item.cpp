@@ -31,10 +31,16 @@ RulerGraphicsItem::RulerGraphicsItem()
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::SetMaxCycles(uint64_t max_cycles) { m_max_cycles = max_cycles; }
+void RulerGraphicsItem::SetMaxCycles(uint64_t max_cycles)
+{
+    m_max_cycles = max_cycles;
+}
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RulerGraphicsItem::GetWidth() const { return m_width; }
+uint64_t RulerGraphicsItem::GetWidth() const
+{
+    return m_width;
+}
 
 //--------------------------------------------------------------------------------------------------
 void RulerGraphicsItem::SetWidth(uint64_t width)
@@ -84,7 +90,10 @@ uint64_t RulerGraphicsItem::GetCyclesVisible(uint64_t visible_width, uint64_t ru
 }
 
 //--------------------------------------------------------------------------------------------------
-QRectF RulerGraphicsItem::boundingRect() const { return QRectF(0, 0, m_width, 39); }
+QRectF RulerGraphicsItem::boundingRect() const
+{
+    return QRectF(0, 0, m_width, 39);
+}
 
 //--------------------------------------------------------------------------------------------------
 QPainterPath RulerGraphicsItem::shape() const

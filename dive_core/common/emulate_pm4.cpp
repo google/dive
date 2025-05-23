@@ -123,16 +123,28 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsUConfigStateSet(uint16_t reg) const { return false; }
+bool EmulateStateTracker::IsUConfigStateSet(uint16_t reg) const
+{
+    return false;
+}
 
 //--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetUConfigRegData(uint16_t reg) const { return UINT32_MAX; }
+uint32_t EmulateStateTracker::GetUConfigRegData(uint16_t reg) const
+{
+    return UINT32_MAX;
+}
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsShStateSet(uint16_t reg) const { return false; }
+bool EmulateStateTracker::IsShStateSet(uint16_t reg) const
+{
+    return false;
+}
 
 //--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetShRegData(uint16_t reg) const { return UINT32_MAX; }
+uint32_t EmulateStateTracker::GetShRegData(uint16_t reg) const
+{
+    return UINT32_MAX;
+}
 
 //--------------------------------------------------------------------------------------------------
 uint32_t EmulateStateTracker::GetNumberOfUserDataRegsSetSinceLastEvent(ShaderStage stage) const

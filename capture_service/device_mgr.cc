@@ -45,7 +45,10 @@ std::string DeviceInfo::GetDisplayName() const
 }
 
 AndroidDevice::AndroidDevice(const std::string &serial) :
-    m_serial(serial), m_adb(serial), m_gfxr_enabled(false), m_port(kFirstPort)
+    m_serial(serial),
+    m_adb(serial),
+    m_gfxr_enabled(false),
+    m_port(kFirstPort)
 {
 }
 
@@ -76,7 +79,10 @@ absl::Status AndroidDevice::Init()
     return absl::OkStatus();
 }
 
-std::string AndroidDevice::GetDeviceDisplayName() const { return m_dev_info.GetDisplayName(); }
+std::string AndroidDevice::GetDeviceDisplayName() const
+{
+    return m_dev_info.GetDisplayName();
+}
 
 absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListOptions option) const
 {
@@ -498,6 +504,9 @@ absl::Status AndroidDevice::RetrieveTrace(const std::string &trace_path,
     return Adb().Run(absl::StrFormat("shell rm -rf %s", trace_path));
 }
 
-void AndroidDevice::EnableGfxr(bool enable_gfxr) { m_gfxr_enabled = enable_gfxr; }
+void AndroidDevice::EnableGfxr(bool enable_gfxr)
+{
+    m_gfxr_enabled = enable_gfxr;
+}
 
 }  // namespace Dive

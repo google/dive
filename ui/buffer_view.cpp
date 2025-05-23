@@ -28,7 +28,8 @@ class BufferWidgetItem : public QTreeWidgetItem
 {
 public:
     BufferWidgetItem(uint32_t buffer_index, QTreeWidget *view) :
-        QTreeWidgetItem(view), m_buffer_index(buffer_index)
+        QTreeWidgetItem(view),
+        m_buffer_index(buffer_index)
     {
     }
     uint32_t GetBufferIndex() const { return m_buffer_index; }
@@ -41,7 +42,8 @@ private:
 // BufferView
 // =================================================================================================
 BufferView::BufferView(const Dive::DataCore &data_core) :
-    m_data_core(data_core), m_event_index(UINT32_MAX)
+    m_data_core(data_core),
+    m_event_index(UINT32_MAX)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_buffer_list = new QTreeWidget();

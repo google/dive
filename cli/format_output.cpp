@@ -43,7 +43,10 @@ namespace cli
 {
 
 //--------------------------------------------------------------------------------------------------
-const char *GetOpCodeStringSafe(uint32_t op_code) { return "UNKNOWN"; }
+const char *GetOpCodeStringSafe(uint32_t op_code)
+{
+    return "UNKNOWN";
+}
 
 //--------------------------------------------------------------------------------------------------
 const char *CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type)

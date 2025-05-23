@@ -22,7 +22,10 @@
 
 ShaderTextView::ShaderTextView() {}
 
-void ShaderTextView::EnableHoverEvent(bool enabled) { m_hover_enabled = enabled; }
+void ShaderTextView::EnableHoverEvent(bool enabled)
+{
+    m_hover_enabled = enabled;
+}
 
 void ShaderTextView::enterEvent(QEvent *event)
 {

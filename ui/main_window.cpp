@@ -535,12 +535,18 @@ void MainWindow::OnOpenFile()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnGFXRCapture() { emit OnCapture(false, true); }
+void MainWindow::OnGFXRCapture()
+{
+    emit OnCapture(false, true);
+}
 
 // =================================================================================================
 // OnNormalCapture is triggered for captures without counters.
 // =================================================================================================
-void MainWindow::OnNormalCapture() { emit OnCapture(false); }
+void MainWindow::OnNormalCapture()
+{
+    emit OnCapture(false);
+}
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCaptureTrigger()

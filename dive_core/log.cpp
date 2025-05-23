@@ -82,13 +82,22 @@ void LogConsole::Log(const LogEntry& entry)
 // =================================================================================================
 // LogRecord
 // =================================================================================================
-void LogRecord::Reset() { m_log_entries.clear(); }
+void LogRecord::Reset()
+{
+    m_log_entries.clear();
+}
 
 //--------------------------------------------------------------------------------------------------
-void LogRecord::Log(const LogEntry& entry) { m_log_entries.push_back(entry); }
+void LogRecord::Log(const LogEntry& entry)
+{
+    m_log_entries.push_back(entry);
+}
 
 //--------------------------------------------------------------------------------------------------
-size_t LogRecord::GetNumEntries() const { return m_log_entries.size(); }
+size_t LogRecord::GetNumEntries() const
+{
+    return m_log_entries.size();
+}
 
 //--------------------------------------------------------------------------------------------------
 const LogRecord::LogEntry& LogRecord::GetEntry(uint32_t index) const
@@ -120,7 +129,10 @@ void LogCompound::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void LogCompound::AddLog(ILog* log_ptr) { m_logs.push_back(log_ptr); }
+void LogCompound::AddLog(ILog* log_ptr)
+{
+    m_logs.push_back(log_ptr);
+}
 
 //--------------------------------------------------------------------------------------------------
 void LogCompound::Log(const LogEntry& entry)
@@ -134,7 +146,10 @@ void LogCompound::Log(const LogEntry& entry)
 // =================================================================================================
 // Stream manipulators
 // =================================================================================================
-std::ostream& detailed(std::ostream& out) { return out; }
+std::ostream& detailed(std::ostream& out)
+{
+    return out;
+}
 
 // =================================================================================================
 // LogEntryBuilder

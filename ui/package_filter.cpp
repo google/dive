@@ -23,7 +23,8 @@
 #include "QVBoxLayout"
 
 //--------------------------------------------------------------------------------------------------
-PackageFilter::PackageFilter(QWidget* parent) : QWidget(parent)
+PackageFilter::PackageFilter(QWidget* parent) :
+    QWidget(parent)
 
 {
     m_all_filter = new QCheckBox("All", this);
@@ -122,7 +123,10 @@ void PackageFilter::applyFilters()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::onReject() { close(); }
+void PackageFilter::onReject()
+{
+    close();
+}
 
 //--------------------------------------------------------------------------------------------------
 void PackageFilter::closeEvent(QCloseEvent* event)

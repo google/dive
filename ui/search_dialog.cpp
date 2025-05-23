@@ -21,7 +21,8 @@
 #include "shortcuts.h"
 
 //--------------------------------------------------------------------------------------------------
-SearchDialog::SearchDialog(QWidget* parent, const QString& title) : QDialog(parent)
+SearchDialog::SearchDialog(QWidget* parent, const QString& title) :
+    QDialog(parent)
 
 {
     m_input = new QLineEdit;

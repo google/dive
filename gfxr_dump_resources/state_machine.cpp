@@ -45,7 +45,7 @@ DumpEntry& StateMachine::dump_entry()
     return dump_entry_;
 }
 
-gfxrecon::format::HandleId& StateMachine::command_buffer()
+const gfxrecon::format::HandleId& StateMachine::command_buffer()
 {
     return command_buffer_;
 }

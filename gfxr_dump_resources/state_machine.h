@@ -39,7 +39,7 @@ namespace Dive::gfxr
 //
 // States:
 //
-// - LookingForDraw:
+// - LookingForBegin:
 //   - Start here.
 //   - When vkBeginCommandBuffer is found, record the block index and transition to
 //   LookingForRenderPass.
@@ -59,7 +59,7 @@ namespace Dive::gfxr
 //
 // 1. Accept: the dumpable is complete and can be used.
 // 2. Reject: the dumpable is incomplete and should be discard.
-class StateMachine : public gfxrecon::decode::VulkanConsumer
+class StateMachine
 {
 public:
     using RejectingFunction = std::function<void()>;
@@ -81,7 +81,7 @@ public:
     // Get the working state for the dumpable.
     DumpEntry& dump_entry();
     // Get the GFXR command buffer that we're looking for.
-    gfxrecon::format::HandleId& command_buffer();
+    const gfxrecon::format::HandleId& command_buffer();
     // Get the current state machine state.
     gfxrecon::decode::VulkanConsumer& state();
 

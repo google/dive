@@ -174,6 +174,9 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_json_consumer_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/marker_json_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/metadata_json_consumer.h
+                    # GOOGLE: Include custom dive consumers.
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_dive_consumer_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_dive_consumer_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_enum_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_util.cpp
@@ -237,6 +240,9 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_enum_to_json.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_json_consumer.h
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_json_consumer.cpp
+                    # GOOGLE: Include the custom generated vulkan dive consumer.
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_dive_consumer.h
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_dive_consumer.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_feature_util.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_pnext_struct_decoder.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_referenced_resource_consumer.h

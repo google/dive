@@ -49,7 +49,7 @@ In CMakeLists.txt, link against `gfxr_dump_resources_lib`.
 
 The GFXR file is parsed top to bottom for Vulkan instructions by FileProcessor with a VulkanDecoder. Vulkan instructions are forwarded to our custom DumpResourcesBuilderConsumer. DumpResourcesBuilderConsumer checks if there's any in-flight command buffers and sends the request through the state machine for that command buffer. The state machine validates that Vulkan calls appear in the expected order as well as accumulating that info into the DumpEntry struct. If all the required info is found then the complete DumpEntry is emitted. At the end, all complete DumpEntry's are written to disk as JSON.
 
-This has only been tested on a handfull of BigWheels samples: cube_xr, fishtornado_xr, and sample_04_cube. Other captures will probably require implementing new Vulkan calls; to implement new calls:
+This has only been tested on a handful of BigWheels samples: cube_xr, fishtornado_xr, and sample_04_cube. Other captures will probably require implementing new Vulkan calls; to implement new calls:
 
 1. Modify DumpResourcesBuilderConsumer to override `Process_vk*()`. The implementation for this function typically involves finding if there's an incomplete dump for the command buffer then forwarding the call to the state machine. Look at VulkanConsumer for the right signature.
 2. Figure out which state to modify. Override `Process_vk*()` to translate the info into the DumpEntry and transition to an new state.

@@ -69,11 +69,11 @@ private:
 
 // Found vkBeginCommandBuffer.
 // Looking for vkCmdBeginRenderPass or vkQueueSubmit.
-class LookingForRenderPass : public gfxrecon::decode::VulkanConsumer
+class LookingForBeginRenderPass : public gfxrecon::decode::VulkanConsumer
 {
 public:
     // `found_begin` is the state to transition to when vkCmdBeginRenderPass is found.
-    LookingForRenderPass(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
+    LookingForBeginRenderPass(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
 
     // Accept or reject depending on if the dumpable is complete.
     void Process_vkQueueSubmit(
@@ -97,11 +97,12 @@ private:
 };
 
 // Looking for vkBeginCommandBuffer. This is the first state in the state machine.
-class LookingForBegin : public gfxrecon::decode::VulkanConsumer
+class LookingForBeginCommandBuffer : public gfxrecon::decode::VulkanConsumer
 {
 public:
     // `found_begin` is the state to transition to when vkBeginCommandBuffer is found.
-    LookingForBegin(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
+    LookingForBeginCommandBuffer(StateMachine&                     parent,
+                                 gfxrecon::decode::VulkanConsumer& found_begin);
 
     void Process_vkBeginCommandBuffer(
     const gfxrecon::decode::ApiCallInfo& call_info,

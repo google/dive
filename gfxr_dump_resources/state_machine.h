@@ -39,12 +39,12 @@ namespace Dive::gfxr
 //
 // States:
 //
-// - LookingForBegin:
+// - LookingForBeginCommandBuffer:
 //   - Start here.
 //   - When vkBeginCommandBuffer is found, record the block index and transition to
-//   LookingForRenderPass.
+//   LookingForBeginRenderPass.
 //
-// - LookingForRenderPass:
+// - LookingForBeginRenderPass:
 //   - when vkCmdBeginRenderPass is found, record the block index and transition to LookingForDraw.
 //   - When vkQueueSubmit is found, record the block index. Then, either accept or reject depending
 //   on whether the dumpable is complete
@@ -53,7 +53,7 @@ namespace Dive::gfxr
 //    - When a vkCmdDraw* call is found, record the block index. Stay in this state to accumulate
 //    more draw calls.
 //    - When vkCmdEndRenderPass is found, record the block index and transition to
-//    LookingForRenderPass
+//    LookingForBeginRenderPass
 //
 // The state machine presents its results via one of two functions:
 //
@@ -79,8 +79,8 @@ public:
 private:
     // States are friends to avoid certain methods being public unnecessarily.
     friend class LookingForDraw;
-    friend class LookingForRenderPass;
-    friend class LookingForBegin;
+    friend class LookingForBeginRenderPass;
+    friend class LookingForBeginCommandBuffer;
 
     // Change the state of the state machine.
     void Transition(gfxrecon::decode::VulkanConsumer& new_state);
@@ -99,9 +99,9 @@ private:
     AcceptingFunction accept_;
 
     // States of the state machine
-    LookingForDraw       find_draw_;
-    LookingForRenderPass find_render_pass_;
-    LookingForBegin      begin_state_;
+    LookingForDraw               find_draw_;
+    LookingForBeginRenderPass    find_render_pass_;
+    LookingForBeginCommandBuffer begin_state_;
 
     // Partial struct that will be filled as info is parsed. Once complete, accept_();
     DumpEntry dump_entry_{};

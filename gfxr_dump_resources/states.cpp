@@ -64,14 +64,15 @@ void LookingForDraw::Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallI
     parent_.Transition(found_end_);
 }
 
-LookingForRenderPass::LookingForRenderPass(StateMachine&                     parent,
-                                           gfxrecon::decode::VulkanConsumer& found_begin) :
+LookingForBeginRenderPass::LookingForBeginRenderPass(
+StateMachine&                     parent,
+gfxrecon::decode::VulkanConsumer& found_begin) :
     parent_(parent),
     found_begin_(found_begin)
 {
 }
 
-void LookingForRenderPass::Process_vkCmdBeginRenderPass(
+void LookingForBeginRenderPass::Process_vkCmdBeginRenderPass(
 const gfxrecon::decode::ApiCallInfo& call_info,
 gfxrecon::format::HandleId           commandBuffer,
 gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
@@ -82,7 +83,7 @@ VkSubpassContents contents)
     parent_.Transition(found_begin_);
 }
 
-void LookingForRenderPass::Process_vkQueueSubmit(
+void LookingForBeginRenderPass::Process_vkQueueSubmit(
 const gfxrecon::decode::ApiCallInfo&                                            call_info,
 VkResult                                                                        returnValue,
 gfxrecon::format::HandleId                                                      queue,
@@ -113,14 +114,15 @@ gfxrecon::format::HandleId                                                      
     }
 }
 
-LookingForBegin::LookingForBegin(StateMachine&                     parent,
-                                 gfxrecon::decode::VulkanConsumer& found_begin) :
+LookingForBeginCommandBuffer::LookingForBeginCommandBuffer(
+StateMachine&                     parent,
+gfxrecon::decode::VulkanConsumer& found_begin) :
     parent_(parent),
     found_begin_(found_begin)
 {
 }
 
-void LookingForBegin::Process_vkBeginCommandBuffer(
+void LookingForBeginCommandBuffer::Process_vkBeginCommandBuffer(
 const gfxrecon::decode::ApiCallInfo& call_info,
 VkResult                             returnValue,
 gfxrecon::format::HandleId           commandBuffer,

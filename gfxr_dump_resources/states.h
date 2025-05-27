@@ -96,7 +96,7 @@ private:
     gfxrecon::decode::VulkanConsumer& found_begin_;
 };
 
-// Looing for vkBeginCommandBuffer. This is the first state in the state machine.
+// Looking for vkBeginCommandBuffer. This is the first state in the state machine.
 class LookingForBegin : public gfxrecon::decode::VulkanConsumer
 {
 public:

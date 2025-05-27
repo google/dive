@@ -22,7 +22,7 @@
 namespace Dive::gfxr
 {
 
-// A subelement of a dumpable that tracks the begin and end of a renderpass.
+// A sub-element of a dumpable that tracks the begin and end of a renderpass.
 struct DumpRenderPass
 {
     // Block index for vkCmdBeginRenderPass.

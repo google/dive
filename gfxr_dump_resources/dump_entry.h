@@ -37,7 +37,7 @@ struct DumpRenderPass
 
 // Mirrors dump resources JSON schema for a single entry. During DumpResourcesBuilderConsumer, this
 // may be incomplete and missing info. When DumpResourcesBuilderConsumer calls `dump_found_callback`
-// is run, it should be complete and ready for `--dump-resources`.
+// it should be complete and ready for `--dump-resources`.
 //
 // Each uint64_t is a block index in the .gfxr file. This is an autoincrementing number used to
 // uniquely identify each function call, etc. This is what GFXR wants when `--dump-resources` is

@@ -73,19 +73,24 @@ public:
                  AcceptingFunction          accept,
                  RejectingFunction          reject);
 
-    // Change the state of the state machine.
-    void Transition(gfxrecon::decode::VulkanConsumer& new_state);
-    // Call accept for reject depending on whether the dumpable is complete.
-    void Done();
-
-    // Get the working state for the dumpable.
-    DumpEntry& dump_entry();
-    // Get the GFXR command buffer that we're looking for.
-    const gfxrecon::format::HandleId& command_buffer();
     // Get the current state machine state.
     gfxrecon::decode::VulkanConsumer& state();
 
 private:
+    // States are friends to avoid certain methods being public unnecessarily.
+    friend class LookingForDraw;
+    friend class LookingForRenderPass;
+    friend class LookingForBegin;
+
+    // Change the state of the state machine.
+    void Transition(gfxrecon::decode::VulkanConsumer& new_state);
+    // Call accept for reject depending on whether the dumpable is complete.
+    void Done();
+    // Get the working state for the dumpable.
+    DumpEntry& dump_entry();
+    // Get the GFXR command buffer that we're looking for.
+    const gfxrecon::format::HandleId& command_buffer();
+
     // For filtering Vulkan calls for relevant info.
     gfxrecon::format::HandleId command_buffer_;
     // Something went wrong; halt the state machine throw away state so far.

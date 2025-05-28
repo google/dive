@@ -11,14 +11,8 @@ git submodule update --init --recursive
 
 ### Prerequisite
 
- - CMake. On Debian:
-   ```
-   sudo apt install cmake
-   ```
- - On Linux, we recommend Ninja. On Debian:
-   ```
-   sudo apt install ninja-build
-   ```
+ - CMake.
+ - On Linux, we recommend Ninja.
  - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.
  - gRPC [dependencies](https://github.com/grpc/grpc/blob/master/BUILDING.md#pre-requisites)
  - Android NDK (currently we are using 25.2.9519653). Set the `ANDROID_NDK_HOME` environment variable.
@@ -32,9 +26,8 @@ git submodule update --init --recursive
   ```
  - gfxreconstruct [dependencies](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#android-development-requirements), if targetting Android. Specifically:
    - Android Studio. Make sure to install an SDK and accept the licenses.
-   - Java 17. Because it uses an older version of Gradle. On Debian, install the `openjdk-17-jre` package; set the `JAVA_HOME` environment variable before building:
+   - Java 17. Because it uses an older version of Gradle. Set the `JAVA_HOME` environment variable before building:
      ```
-     sudo apt install openjdk-17-jre
      export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
      ```
 

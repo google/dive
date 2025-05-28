@@ -36,7 +36,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 class VulkanExportDiveConsumerBase : public VulkanConsumer
 {
   public:
-  VulkanExportDiveConsumerBase();
+    VulkanExportDiveConsumerBase() = default;
 
     virtual ~VulkanExportDiveConsumerBase() override;
 

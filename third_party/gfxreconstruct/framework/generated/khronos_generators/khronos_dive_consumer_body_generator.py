@@ -60,8 +60,8 @@ class KhronosExportDiveConsumerBodyGenerator():
                 {
                 '''
             )
-            # Only include full processing for vulkan commands since those are what are displayed in dive.
-            if self.is_command_buffer_cmd(cmd):
+            # Only include full processing for vulkan commands and vkQueueSubmits since those are what are displayed in dive.
+            if self.is_command_buffer_cmd(cmd) or cmd in self.queueSubmit:
                 cmddef += '\n'
                 cmddef += format_cpp_code(
                     '''
@@ -72,7 +72,7 @@ class KhronosExportDiveConsumerBodyGenerator():
             cmddef += '\n'
             # Only include this for vulkan commands since those are what are displayed in dive.
             cmddef += self.make_consumer_func_body(return_type, cmd, values)
-            if self.is_command_buffer_cmd(cmd):
+            if self.is_command_buffer_cmd(cmd) or cmd in self.queueSubmit:
                 cmddef += format_cpp_code(
                 '''
                     WriteBlockEnd(function_data);
@@ -104,7 +104,7 @@ class KhronosExportDiveConsumerBodyGenerator():
         """Return ExportDiveConsumer class member function definition."""
         body = ''
 
-        if len(values) > 0 and self.is_command_buffer_cmd(name):
+        if (len(values) > 0 and self.is_command_buffer_cmd(name)) or name in self.queueSubmit:
             body += f'    auto& args = dive_data["args"];\n'
             # Handle function arguments
             for value in values:

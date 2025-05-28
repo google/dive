@@ -26,17 +26,17 @@ GFXRECON_BEGIN_NAMESPACE(util)
 class DiveFunctionData
 {
   public:
-  DiveFunctionData(const std::string& name, uint32_t cmd_buffer_index, uint64_t block_index, const nlohmann::ordered_json& args);
+    DiveFunctionData(const std::string& name, uint32_t cmd_buffer_index, uint64_t block_index, const nlohmann::ordered_json& args);
 
-  const std::string& GetFunctionName() const;
-  uint32_t GetCmdBufferIndex() const;
-  uint64_t GetBlockIndex() const;
-  const nlohmann::ordered_json GetArgs() const;
-
-  std::string name_;
-  uint32_t cmd_buffer_index_;
-  uint64_t block_index_;
-  nlohmann::ordered_json args_;
+    const std::string& GetFunctionName() const;
+    uint32_t GetCmdBufferIndex() const;
+    uint64_t GetBlockIndex() const;
+    const nlohmann::ordered_json GetArgs() const;
+private:
+    std::string name_;
+    uint32_t cmd_buffer_index_;
+    uint64_t block_index_;
+    nlohmann::ordered_json args_;
 };
 
 GFXRECON_END_NAMESPACE(util)

@@ -25,6 +25,18 @@ Guidelines](https://opensource.google/conduct/).
 
 ## Contribution process
 
+### Formatting
+
+This repository contains a copy of LLVM clang-format version 18.1.8 binaries in `clang-format/`.
+
+#### Formatting Linux
+
+Suggested usage is to run `./scripts/clangformat.sh` after committing changes.
+
+#### Formatting Windows
+
+Suggested usage is using your preferred IDE and pointing at `clang-format\clang-format.exe`, and setting it up to format on save.
+
 ### Code Reviews
 
 All submissions, including submissions by project members, require review. We

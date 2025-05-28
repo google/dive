@@ -86,44 +86,39 @@
 // Has to use macro here since prev_event_state_it could be potentially invalid
 // ADD_FIELD_TYPE_STRING checks if prev_event_state_it is invalid and delays the evaluation of the
 // content from prev_event_state_it
-#define ADD_FIELD_STENCIL(_name, _cur, _pre, _is_pre_set, _items)   \
-    {                                                               \
-        ADD_FIELD_TYPE_STRING((_name + "_FailOp").c_str(),          \
-                              GetVkStencilOp(_cur.failOp),          \
-                              _is_pre_set,                          \
-                              GetVkStencilOp(_pre.failOp),          \
-                              _items)                               \
-        ADD_FIELD_TYPE_STRING((_name + "_PassOp").c_str(),          \
-                              GetVkStencilOp(_cur.passOp),          \
-                              _is_pre_set,                          \
-                              GetVkStencilOp(_pre.passOp),          \
-                              _items)                               \
-        ADD_FIELD_TYPE_STRING((_name + "_DepthFailOp").c_str(),     \
-                              GetVkStencilOp(_cur.depthFailOp),     \
-                              _is_pre_set,                          \
-                              GetVkStencilOp(_pre.depthFailOp),     \
-                              _items)                               \
-        ADD_FIELD_TYPE_STRING((_name + "_CompareOp").c_str(),       \
-                              GetVkCompareOp(_cur.compareOp),       \
-                              _is_pre_set,                          \
-                              GetVkCompareOp(_pre.compareOp),       \
-                              _items)                               \
-        ADD_FIELD_TYPE_NUMBER_HEX((_name + "_CompareMask").c_str(), \
-                                  _cur.compareMask,                 \
-                                  _is_pre_set,                      \
-                                  _pre.compareMask,                 \
-                                  _items)                           \
-        ADD_FIELD_TYPE_NUMBER_HEX((_name + "_WriteMask").c_str(),   \
-                                  _cur.writeMask,                   \
-                                  _is_pre_set,                      \
-                                  _pre.writeMask,                   \
-                                  _items)                           \
-        ADD_FIELD_TYPE_NUMBER_HEX((_name + "_Reference").c_str(),   \
-                                  _cur.reference,                   \
-                                  _is_pre_set,                      \
-                                  _pre.reference,                   \
-                                  _items)                           \
-    }
+#define ADD_FIELD_STENCIL(_name, _cur, _pre, _is_pre_set, _items)                                 \
+    { ADD_FIELD_TYPE_STRING((_name + "_FailOp").c_str(),                                          \
+                            GetVkStencilOp(_cur.failOp),                                          \
+                            _is_pre_set,                                                          \
+                            GetVkStencilOp(_pre.failOp),                                          \
+                            _items) ADD_FIELD_TYPE_STRING((_name + "_PassOp").c_str(),            \
+                                                          GetVkStencilOp(_cur.passOp),            \
+                                                          _is_pre_set,                            \
+                                                          GetVkStencilOp(_pre.passOp),            \
+                                                          _items)                                 \
+      ADD_FIELD_TYPE_STRING((_name + "_DepthFailOp").c_str(),                                     \
+                            GetVkStencilOp(_cur.depthFailOp),                                     \
+                            _is_pre_set,                                                          \
+                            GetVkStencilOp(_pre.depthFailOp),                                     \
+                            _items) ADD_FIELD_TYPE_STRING((_name + "_CompareOp").c_str(),         \
+                                                          GetVkCompareOp(_cur.compareOp),         \
+                                                          _is_pre_set,                            \
+                                                          GetVkCompareOp(_pre.compareOp),         \
+                                                          _items)                                 \
+      ADD_FIELD_TYPE_NUMBER_HEX((_name + "_CompareMask").c_str(),                                 \
+                                _cur.compareMask,                                                 \
+                                _is_pre_set,                                                      \
+                                _pre.compareMask,                                                 \
+                                _items) ADD_FIELD_TYPE_NUMBER_HEX((_name + "_WriteMask").c_str(), \
+                                                                  _cur.writeMask,                 \
+                                                                  _is_pre_set,                    \
+                                                                  _pre.writeMask,                 \
+                                                                  _items)                         \
+      ADD_FIELD_TYPE_NUMBER_HEX((_name + "_Reference").c_str(),                                   \
+                                _cur.reference,                                                   \
+                                _is_pre_set,                                                      \
+                                _pre.reference,                                                   \
+                                _items) }
 
 // =================================================================================================
 // EventStateView
@@ -914,9 +909,15 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         std::string s;
         switch (status)
         {
-        case LRZ_DIR_LE: s = "Less Equal"; break;
-        case LRZ_DIR_GE: s = "Greater Equal"; break;
-        case LRZ_DIR_INVALID: s = "Invalid"; break;
+        case LRZ_DIR_LE:
+            s = "Less Equal";
+            break;
+        case LRZ_DIR_GE:
+            s = "Greater Equal";
+            break;
+        case LRZ_DIR_INVALID:
+            s = "Invalid";
+            break;
         default:
             s = "Undefined";
             break;  // TODO(wangra): we have cases where this value is 0, same
@@ -947,11 +948,21 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         std::string s;
         switch (mode)
         {
-        case A6XX_EARLY_Z: s = "Early Z"; break;
-        case A6XX_LATE_Z: s = "Late Z"; break;
-        case A6XX_EARLY_LRZ_LATE_Z: s = "Early Z LRZ Late Z"; break;
-        case A6XX_INVALID_ZTEST: s = "Invalid ZTest"; break;
-        default: DIVE_ASSERT(false); break;
+        case A6XX_EARLY_Z:
+            s = "Early Z";
+            break;
+        case A6XX_LATE_Z:
+            s = "Late Z";
+            break;
+        case A6XX_EARLY_LRZ_LATE_Z:
+            s = "Early Z LRZ Late Z";
+            break;
+        case A6XX_INVALID_ZTEST:
+            s = "Invalid ZTest";
+            break;
+        default:
+            DIVE_ASSERT(false);
+            break;
         }
         return QString::fromStdString(s);
     };
@@ -987,9 +998,15 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         std::string s;
         switch (mode)
         {
-        case RENDERING_PASS: s = "Rendering Pass"; break;
-        case BINNING_PASS: s = "Binning Pass"; break;
-        default: DIVE_ASSERT(false); break;
+        case RENDERING_PASS:
+            s = "Rendering Pass";
+            break;
+        case BINNING_PASS:
+            s = "Binning Pass";
+            break;
+        default:
+            DIVE_ASSERT(false);
+            break;
         }
         return QString::fromStdString(s);
     };
@@ -1008,9 +1025,15 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         std::string s;
         switch (location)
         {
-        case BUFFERS_IN_GMEM: s = "Buffers in GMEM"; break;
-        case BUFFERS_IN_SYSMEM: s = "Buffers in SYSMEM"; break;
-        default: s = "Unknown"; break;
+        case BUFFERS_IN_GMEM:
+            s = "Buffers in GMEM";
+            break;
+        case BUFFERS_IN_SYSMEM:
+            s = "Buffers in SYSMEM";
+            break;
+        default:
+            s = "Unknown";
+            break;
         }
         return QString::fromStdString(s);
     };
@@ -1028,9 +1051,15 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         std::string s;
         switch (size)
         {
-        case THREAD64: s = "Thread 64"; break;
-        case THREAD128: s = "Thread 128"; break;
-        default: DIVE_ASSERT(false); break;
+        case THREAD64:
+            s = "Thread 64";
+            break;
+        case THREAD128:
+            s = "Thread 128";
+            break;
+        default:
+            DIVE_ASSERT(false);
+            break;
         }
         return QString::fromStdString(s);
     };

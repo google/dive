@@ -632,7 +632,9 @@ void MainWindow::closeEvent(QCloseEvent *closeEvent)
                                       QMessageBox::Yes | QMessageBox::No,
                                       QMessageBox::No))
         {
-        case QMessageBox::Yes: OnSaveCapture(); break;
+        case QMessageBox::Yes:
+            OnSaveCapture();
+            break;
         case QMessageBox::No:
         {
             // Remove unsaved capture files.
@@ -643,7 +645,8 @@ void MainWindow::closeEvent(QCloseEvent *closeEvent)
             }
             break;
         }
-        default: DIVE_ASSERT(false);
+        default:
+            DIVE_ASSERT(false);
         }
     }
     if (m_trace_dig)
@@ -692,9 +695,13 @@ void MainWindow::OnSaveCapture()
                                       QMessageBox::Yes | QMessageBox::No,
                                       QMessageBox::No))
         {
-        case QMessageBox::Yes: target_file.remove(); break;
-        case QMessageBox::No: return OnSaveCapture();
-        default: DIVE_ASSERT(false);
+        case QMessageBox::Yes:
+            target_file.remove();
+            break;
+        case QMessageBox::No:
+            return OnSaveCapture();
+        default:
+            DIVE_ASSERT(false);
         }
     }
 
@@ -1059,7 +1066,9 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
         if (m_shader_view->OnCrossReference(ref))
             m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
         break;
-    case Dive::CrossRefType::kGFRIndex: m_command_hierarchy_view->setCurrentNode(ref.Id()); break;
+    case Dive::CrossRefType::kGFRIndex:
+        m_command_hierarchy_view->setCurrentNode(ref.Id());
+        break;
     default:
         // Ignore
         break;

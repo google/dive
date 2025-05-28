@@ -162,7 +162,8 @@ void BufferView::OnEventSelected(uint32_t event_index)
             case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
                 snprintf(str_buffer, str_buffer_size, "GartCacheable");
                 break;
-            default: DIVE_ASSERT(false);
+            default:
+                DIVE_ASSERT(false);
             }
             treeItem->setText(8, tr(str_buffer));
 

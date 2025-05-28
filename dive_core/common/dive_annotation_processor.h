@@ -41,7 +41,7 @@ public:
             m_index = data.GetCmdBufferIndex();
             m_args = data.GetArgs();
         }
-        const std::string&            GetVkCmdName() { return m_name; }
+        const std::string&            GetVkCmdName() const { return m_name; }
         uint32_t                      GetVkCmdIndex() const { return m_index; }
         void                          SetCmdCount(uint32_t cmd_count) { m_cmd_count = cmd_count; }
         uint32_t                      GetCmdCount() const { return m_cmd_count; }

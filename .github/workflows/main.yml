@@ -13,6 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Check the formatting on all source files
+  lint_clang_format_18_1_8:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: DoozyX/clang-format-lint-action@v0.20
+      with:
+        source: '.'
+        extensions: 'h,cpp'
+        clangFormatVersion: 18.1.8
+
+
   # Build the code
   build_Windows_Debug:
     runs-on: windows-2022

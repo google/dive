@@ -30,22 +30,22 @@ public:
     struct VulkanCommandInfo
     {
     public:
-        VulkanCommandInfo(std::string name, uint32_t index)
+        VulkanCommandInfo(const std::string& name, uint32_t index)
         {
             m_name = name;
             m_index = index;
         }
-        VulkanCommandInfo(gfxrecon::util::DiveFunctionData data)
+        VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data)
         {
             m_name = data.GetFunctionName();
             m_index = data.GetCmdBufferIndex();
             m_args = data.GetArgs();
         }
-        const std::string      GetVkCmdName() { return m_name; }
-        uint32_t               GetVkCmdIndex() { return m_index; }
-        void                   SetCmdCount(uint32_t cmd_count) { m_cmd_count = cmd_count; }
-        uint32_t               GetCmdCount() { return m_cmd_count; }
-        nlohmann::ordered_json GetArgs() { return m_args; }
+        const std::string&            GetVkCmdName() { return m_name; }
+        uint32_t                      GetVkCmdIndex() const { return m_index; }
+        void                          SetCmdCount(uint32_t cmd_count) { m_cmd_count = cmd_count; }
+        uint32_t                      GetCmdCount() const { return m_cmd_count; }
+        const nlohmann::ordered_json& GetArgs() const { return m_args; }
 
     private:
         std::string            m_name;
@@ -58,12 +58,12 @@ public:
     {
     public:
         SubmitInfo() = default;
-        SubmitInfo(std::string name) :
+        SubmitInfo(const std::string& name) :
             m_name(name)
         {
         }
-        std::string GetSubmitText() const { return m_name; }
-        void        SetCommandBufferCount(uint32_t cmd_buffer_count)
+        const std::string& GetSubmitText() const { return m_name; }
+        void               SetCommandBufferCount(uint32_t cmd_buffer_count)
         {
             m_cmd_buffer_count = cmd_buffer_count;
         }
@@ -81,11 +81,10 @@ public:
     ~DiveAnnotationProcessor();
 
     void EndStream();
-    void Destroy();
     bool IsValid() const;
 
     /// Finalise the current block and stream it out.
-    void WriteBlockEnd(gfxrecon::util::DiveFunctionData function_data) override;
+    void WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data) override;
 
     void WriteMarker(const char* name, const std::string_view marker_type, uint64_t frame_number);
 
@@ -97,18 +96,14 @@ public:
 
     bool WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data);
 
-    inline void SetCurrentBlockIndex(uint64_t block_index) { block_index_ = block_index; }
+    inline void SetCurrentBlockIndex(uint64_t block_index) { m_block_index_ = block_index; }
 
-    DiveVector<std::unique_ptr<SubmitInfo>> getSubmits()
-    {
-        return std::move(m_submits);
-        ;
-    }
+    DiveVector<std::unique_ptr<SubmitInfo>> getSubmits() { return std::move(m_submits); }
 
 private:
     DiveVector<std::unique_ptr<SubmitInfo>> m_submits;
     SubmitInfo*                             m_curr_submit = nullptr;
     uint32_t                                m_command_buffer_count = 0;
     std::vector<VulkanCommandInfo> m_pre_submit_commands;  // Buffer for commands before a submit
-    uint64_t                       block_index_;
+    uint64_t                       m_block_index_;
 };

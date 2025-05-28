@@ -47,7 +47,7 @@ class AnnotationHandler
     void WriteBlockStart();
     void WriteBlockEnd();
     // GOOGLE: Adds overridable function definition for custom dive annotation processor.
-    virtual void WriteBlockEnd(util::DiveFunctionData function_data){}
+    virtual void WriteBlockEnd(const util::DiveFunctionData& function_data){}
 };
 
 GFXRECON_END_NAMESPACE(decode)

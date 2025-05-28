@@ -22,13 +22,11 @@
 #include "util/logging.h"
 #include "util/output_stream.h"
 
-DiveAnnotationProcessor::DiveAnnotationProcessor() {}
+DiveAnnotationProcessor::DiveAnnotationProcessor() = default;
 
 DiveAnnotationProcessor::~DiveAnnotationProcessor() {}
 
-void DiveAnnotationProcessor::Destroy() {}
-
-void DiveAnnotationProcessor::WriteBlockEnd(gfxrecon::util::DiveFunctionData function_data)
+void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data)
 {
     std::string function_name = function_data.GetFunctionName();
 

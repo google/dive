@@ -29,21 +29,14 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 using namespace util::platform;
 
-VulkanExportDiveConsumerBase::VulkanExportDiveConsumerBase() {}
-
 VulkanExportDiveConsumerBase::~VulkanExportDiveConsumerBase()
 {
-    Destroy();
 }
 
 void VulkanExportDiveConsumerBase::Initialize(AnnotationHandler* writer)
 {
     GFXRECON_ASSERT(writer);
     writer_ = writer;
-}
-
-void VulkanExportDiveConsumerBase::Destroy()
-{
 }
 
 void VulkanExportDiveConsumerBase::ProcessSetDeviceMemoryPropertiesCommand(

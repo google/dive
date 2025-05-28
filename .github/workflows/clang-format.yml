@@ -23,4 +23,3 @@ jobs:
         source: '.'
         extensions: 'h,cpp'
         clangFormatVersion: 18.1.8
-        style: Google

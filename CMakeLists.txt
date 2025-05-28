@@ -91,6 +91,8 @@ option(DIVE_ENABLE_PERFETTO, "Enable functionality to get perfetto trace." OFF)
 include(perfetto.cmake)
 
 if (NOT ANDROID)
+    # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     add_subdirectory(third_party/googletest)
 endif()
 

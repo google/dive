@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CLANG_FORMAT=./clang_format/clang-format-18
+CLANG_FORMAT=clang-format-18
 
 $CLANG_FORMAT --version
 

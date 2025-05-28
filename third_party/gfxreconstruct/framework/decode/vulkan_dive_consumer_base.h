@@ -151,8 +151,7 @@ class VulkanExportDiveConsumerBase : public VulkanConsumer
     }
 
     void ResetCommandBufferRecordIndex(format::HandleId command_buffer) { rec_cmd_index_[command_buffer] = 0; }
-
-    uint32_t                                       submit_index_{ 0 }; // index of submissions across the trace
+  private:
     std::unordered_map<format::HandleId, uint32_t> rec_cmd_index_;
     AnnotationHandler* writer_{ nullptr };
 };

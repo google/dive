@@ -154,6 +154,15 @@ void VulkanExportDiveConsumer::Process_vkQueueSubmit(
     StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
     format::HandleId                            fence)
 {
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["queue"], queue, json_options);
+    FieldToJson(args["submitCount"], submitCount, json_options);
+    FieldToJson(args["pSubmits"], pSubmits, json_options);
+    HandleToJson(args["fence"], fence, json_options);
+    util::DiveFunctionData function_data("vkQueueSubmit", 0, call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkQueueWaitIdle(
@@ -2172,6 +2181,15 @@ void VulkanExportDiveConsumer::Process_vkQueueSubmit2(
     StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
     format::HandleId                            fence)
 {
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["queue"], queue, json_options);
+    FieldToJson(args["submitCount"], submitCount, json_options);
+    FieldToJson(args["pSubmits"], pSubmits, json_options);
+    HandleToJson(args["fence"], fence, json_options);
+    util::DiveFunctionData function_data("vkQueueSubmit2", 0, call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkCmdCopyBuffer2(
@@ -4093,6 +4111,15 @@ void VulkanExportDiveConsumer::Process_vkQueueSubmit2KHR(
     StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
     format::HandleId                            fence)
 {
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["queue"], queue, json_options);
+    FieldToJson(args["submitCount"], submitCount, json_options);
+    FieldToJson(args["pSubmits"], pSubmits, json_options);
+    HandleToJson(args["fence"], fence, json_options);
+    util::DiveFunctionData function_data("vkQueueSubmit2KHR", 0, call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkCmdCopyBuffer2KHR(

@@ -23,7 +23,10 @@
 
 struct ApiCallInfo;
 
-/// Manages writing
+// The DiveAnnotationProcessor is used by the VulkanExportDiveConsumer on each WriteBlockEnd call
+// made when processing the vulkan commands. WriteBlockEnd is called passing the function data
+// (name, command buffer index, args) and then DiveAnnotationProcessor converts the data to
+// SubmitInfo for vkQueueSubmits or VulkanCommandInfo for vulkan commands.
 class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 {
 public:
@@ -48,10 +51,10 @@ public:
         const nlohmann::ordered_json& GetArgs() const { return m_args; }
 
     private:
+        nlohmann::ordered_json m_args;
         std::string            m_name;
         uint32_t               m_index;
         uint32_t               m_cmd_count;  // Only used by vkBeginCommandBuffers
-        nlohmann::ordered_json m_args;
     };
 
     struct SubmitInfo
@@ -68,13 +71,13 @@ public:
             m_cmd_buffer_count = cmd_buffer_count;
         }
         uint32_t GetCommandBufferCount() const { return m_cmd_buffer_count; }
-        const DiveVector<VulkanCommandInfo>& GetVkCmds() const { return vulkan_cmds; }
-        void AppendVkCmd(VulkanCommandInfo vkCmd) { vulkan_cmds.push_back(vkCmd); }
+        const DiveVector<VulkanCommandInfo>& GetVkCmds() const { return m_vulkan_cmds; }
+        void AppendVkCmd(VulkanCommandInfo vkCmd) { m_vulkan_cmds.push_back(vkCmd); }
 
     private:
+        DiveVector<VulkanCommandInfo> m_vulkan_cmds;
         std::string                   m_name;
         uint32_t                      m_cmd_buffer_count;
-        DiveVector<VulkanCommandInfo> vulkan_cmds;
     };
 
     DiveAnnotationProcessor();
@@ -96,14 +99,14 @@ public:
 
     bool WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data);
 
-    inline void SetCurrentBlockIndex(uint64_t block_index) { m_block_index_ = block_index; }
+    inline void SetCurrentBlockIndex(uint64_t block_index) { m_block_index = block_index; }
 
     DiveVector<std::unique_ptr<SubmitInfo>> getSubmits() { return std::move(m_submits); }
 
 private:
+    std::vector<VulkanCommandInfo> m_pre_submit_commands;  // Buffer for commands before a submit
     DiveVector<std::unique_ptr<SubmitInfo>> m_submits;
+    uint64_t                                m_block_index;
     SubmitInfo*                             m_curr_submit = nullptr;
     uint32_t                                m_command_buffer_count = 0;
-    std::vector<VulkanCommandInfo> m_pre_submit_commands;  // Buffer for commands before a submit
-    uint64_t                       m_block_index_;
 };

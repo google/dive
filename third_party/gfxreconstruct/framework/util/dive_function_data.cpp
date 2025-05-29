@@ -16,19 +16,19 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 
-DiveFunctionData::DiveFunctionData(const std::string& name, uint32_t cmd_buffer_index, uint64_t block_index, const nlohmann::ordered_json& args) : name_(name), cmd_buffer_index_(cmd_buffer_index), block_index_(block_index), args_(args){}
+DiveFunctionData::DiveFunctionData(const std::string& name, uint32_t cmd_buffer_index, uint64_t block_index, const nlohmann::ordered_json& args) : m_name(name), m_cmd_buffer_index(cmd_buffer_index), m_block_index(block_index), m_args(args){}
 
 const std::string& DiveFunctionData::GetFunctionName() const {
-    return name_;
+    return m_name;
 }
 uint32_t DiveFunctionData::GetCmdBufferIndex() const {
-    return cmd_buffer_index_;
+    return m_cmd_buffer_index;
 }
 uint64_t DiveFunctionData::GetBlockIndex() const{
-    return block_index_;
+    return m_block_index;
 }
 const nlohmann::ordered_json DiveFunctionData::GetArgs() const {
-    return args_;
+    return m_args;
 }
 
 GFXRECON_END_NAMESPACE(util)

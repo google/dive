@@ -16,7 +16,11 @@
 
 #include "progress_tracker_callback.h"
 
-ProgressTrackerCallback::ProgressTrackerCallback() : QObject(), Dive::ProgressTracker() {}
+ProgressTrackerCallback::ProgressTrackerCallback() :
+    QObject(),
+    Dive::ProgressTracker()
+{
+}
 
 //--------------------------------------------------------------------------------------------------
 void ProgressTrackerCallback::sendMessage(std::string message)

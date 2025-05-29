@@ -223,7 +223,7 @@ public:
              uint64_t  fence_signaled_addr,
              uint64_t  fence_emitted_addr);
 
-    RingInfo(){};
+    RingInfo() {};
 
     QueueType GetQueueType() const;
     uint32_t  GetQueueIndex() const;
@@ -292,7 +292,7 @@ class WaveInfo
 {
 public:
     explicit WaveInfo(DiveVector<WaveStateInfo> &&waves);
-    WaveInfo(){};
+    WaveInfo() {};
 
     const DiveVector<WaveStateInfo> &GetWaves() const;
 
@@ -305,7 +305,7 @@ class RegisterInfo
 {
 public:
     explicit RegisterInfo(std::map<std::string, uint32_t> &&regs);
-    RegisterInfo(){};
+    RegisterInfo() {};
 
     const std::map<std::string, uint32_t> &GetRegisters() const;
 
@@ -374,10 +374,7 @@ public:
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
     LoadResult LoadGfxrFile(const char *file_name);
 
-    bool HasPm4Data() const
-    {
-        return m_submits.size() > 0;
-    }
+    bool        HasPm4Data() const { return m_submits.size() > 0; }
     std::string GetFileFormatVersion() const;
 
     // Writes a new GFXR file based on the original file m_cur_capture_file and modifications

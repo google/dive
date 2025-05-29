@@ -29,10 +29,6 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 using namespace util::platform;
 
-VulkanExportDiveConsumerBase::~VulkanExportDiveConsumerBase()
-{
-}
-
 void VulkanExportDiveConsumerBase::Initialize(AnnotationHandler* writer)
 {
     GFXRECON_ASSERT(writer);
@@ -57,9 +53,9 @@ void VulkanExportDiveConsumerBase::Process_vkCmdBuildAccelerationStructuresIndir
     FieldToJson(args["pIndirectDeviceAddresses"], pIndirectDeviceAddresses, json_options);
     FieldToJson(args["pIndirectStrides"], pIndirectStrides, json_options);
 
-    auto infos                     = pInfos ? pInfos->GetPointer() : nullptr;
-    auto max_primitive_counts      = ppMaxPrimitiveCounts ? ppMaxPrimitiveCounts->GetPointer() : nullptr;
-    auto max_primitive_counts_json = args["ppMaxPrimitiveCounts"];
+    Decoded_VkAccelerationStructureBuildGeometryInfoKHR::struct_type * infos = pInfos ? pInfos->GetPointer() : nullptr;
+    unsigned int** max_primitive_counts = ppMaxPrimitiveCounts ? ppMaxPrimitiveCounts->GetPointer() : nullptr;
+    nlohmann::basic_json<nlohmann::ordered_map>& max_primitive_counts_json = args["ppMaxPrimitiveCounts"];
 
     if (infoCount > 0 && infos != nullptr && max_primitive_counts != nullptr) 
     {
@@ -68,7 +64,7 @@ void VulkanExportDiveConsumerBase::Process_vkCmdBuildAccelerationStructuresIndir
             FieldToJson(max_primitive_counts_json[i], max_primitive_counts[i], infos[i].geometryCount, json_options);
         }
     }
-    util::DiveFunctionData function_data("vkCmdBuildAccelerationStructuresIndirectKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBuildAccelerationStructuresIndirectKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -118,7 +114,7 @@ void VulkanExportDiveConsumerBase::Process_vkCmdPushConstants(const ApiCallInfo&
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["size"], size, json_options);
     FieldToJson(args["pValues"], pValues, json_options);
-    util::DiveFunctionData function_data("vkCmdPushConstants", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushConstants", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -148,7 +144,7 @@ void VulkanExportDiveConsumerBase::Process_vkCmdPushDescriptorSetWithTemplateKHR
     FieldToJson(args["set"], set, json_options);
     FieldToJson(args["pData"], pData, json_options);
 
-    util::DiveFunctionData function_data("vkCmdPushDescriptorSetWithTemplateKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushDescriptorSetWithTemplateKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -165,7 +161,7 @@ void VulkanExportDiveConsumerBase::Process_vkCmdPushDescriptorSetWithTemplate2KH
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pPushDescriptorSetWithTemplateInfo"], info, json_options);
 
-    util::DiveFunctionData function_data("vkCmdPushDescriptorSetWithTemplate2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushDescriptorSetWithTemplate2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 

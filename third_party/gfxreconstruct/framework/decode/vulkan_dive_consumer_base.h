@@ -38,13 +38,9 @@ class VulkanExportDiveConsumerBase : public VulkanConsumer
   public:
     VulkanExportDiveConsumerBase() = default;
 
-    virtual ~VulkanExportDiveConsumerBase() override;
+    virtual ~VulkanExportDiveConsumerBase() = default;
 
     void Initialize(AnnotationHandler* writer);
-
-    void Destroy();
-
-    bool IsValid() const { return true; }
 
     void Process_vkCmdBuildAccelerationStructuresIndirectKHR(
         const ApiCallInfo&                                                         call_info,
@@ -139,7 +135,7 @@ class VulkanExportDiveConsumerBase : public VulkanConsumer
     /// the binary trace file.
     /// @todo Make this field optional.
 
-    uint32_t GetCommandBufferRecordIndex(format::HandleId command_buffer)
+    uint32_t UpdateAndGetCommandBufferRecordIndex(format::HandleId command_buffer)
     {
         uint32_t index = ++rec_cmd_index_[command_buffer];
         return index;

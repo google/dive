@@ -133,7 +133,7 @@ class VulkanExportDiveConsumerBodyGenerator(VulkanBaseGenerator, KhronosExportDi
         body = ''
         body += KhronosExportDiveConsumerBodyGenerator.make_consumer_func_body(self, return_type, name, values)
         if KhronosExportDiveConsumerBodyGenerator.is_command_buffer_cmd(self, name):
-            body += f'    util::DiveFunctionData function_data("{name}", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);\n'
+            body += f'    util::DiveFunctionData function_data("{name}", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);\n'
         elif name in self.queueSubmit:
             # cmd_buffer_index is 0. The submit index is determined when processing the submits on the Dive side of things.
             body += f'    util::DiveFunctionData function_data("{name}", 0, call_info.index, args);\n'

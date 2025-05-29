@@ -1,0 +1,18 @@
+# ignore third_party submodule code from clang-format checks
+./third_party/OpenXR-SDK/*
+./third_party/Vulkan-Headers/*
+./third_party/catch2/*
+./third_party/grpc/*
+./third_party/libarchive/*
+./third_party/perfetto/*
+./third_party/pybind11/*
+
+# ignore third_party subtree code from clang-format checks
+# TODO: figure out what kind of formatting is required for these subtrees
+./third_party/Qt/*
+./third_party/freedreno/*
+./third_party/gfxreconstruct/*
+./third_party/mesa/*
+
+# ignore prebuild files from clang-format checks
+./prebuild/*

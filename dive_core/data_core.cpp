@@ -231,7 +231,9 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
             m_current_render_mode = RenderModeType::kResolve;
             break;
             // This is emitted for each dispatch
-        case RM6_COMPUTE: m_current_render_mode = RenderModeType::kDispatch; break;
+        case RM6_COMPUTE:
+            m_current_render_mode = RenderModeType::kDispatch;
+            break;
         // This seems to be the end of Resolve Pass
         case RM6_YIELD:
             // should be paired with RM6_RESOLVE, end of resolve pass
@@ -240,7 +242,9 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         case RM6_BLIT2DSCALE:
         case RM6_IB1LIST_START:
         case RM6_IB1LIST_END:
-        default: m_current_render_mode = RenderModeType::kUnknown; break;
+        default:
+            m_current_render_mode = RenderModeType::kUnknown;
+            break;
         }
     }
 
@@ -516,10 +520,17 @@ void CaptureMetadataCreator::FillRasterizerState(EventStateInfo::Iterator event_
         pc_polygon_mode.u32All = m_state_tracker.GetRegValue(pc_polygon_mode_reg_offset);
         switch (pc_polygon_mode.bitfields.MODE)
         {
-        case POLYMODE6_TRIANGLES: event_state_it->SetPolygonMode(VK_POLYGON_MODE_FILL); break;
-        case POLYMODE6_LINES: event_state_it->SetPolygonMode(VK_POLYGON_MODE_LINE); break;
-        case POLYMODE6_POINTS: event_state_it->SetPolygonMode(VK_POLYGON_MODE_POINT); break;
-        default: DIVE_ASSERT(false);
+        case POLYMODE6_TRIANGLES:
+            event_state_it->SetPolygonMode(VK_POLYGON_MODE_FILL);
+            break;
+        case POLYMODE6_LINES:
+            event_state_it->SetPolygonMode(VK_POLYGON_MODE_LINE);
+            break;
+        case POLYMODE6_POINTS:
+            event_state_it->SetPolygonMode(VK_POLYGON_MODE_POINT);
+            break;
+        default:
+            DIVE_ASSERT(false);
         };
     }
 

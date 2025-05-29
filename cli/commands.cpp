@@ -488,8 +488,9 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
     Dive::QueueType  queue_type = Dive::QueueType::kUniversal;
     switch (raw_cmd_buffer_type)
     {
-    case 0: break;  // Gfx
-    case 1:         // Dma
+    case 0:
+        break;  // Gfx
+    case 1:     // Dma
         engine_type = Dive::EngineType::kDma;
         queue_type = Dive::QueueType::kDma;
         break;

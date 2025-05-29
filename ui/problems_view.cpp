@@ -116,7 +116,8 @@ void ProblemsView::Update(const Dive::LogRecord *log_ptr)
         // Column 0
         switch (entry.m_type)
         {
-        case Dive::LogType::kInfo: break;
+        case Dive::LogType::kInfo:
+            break;
         case Dive::LogType::kWarning:
             item->setIcon(0, m_log_list->style()->standardIcon(QStyle::SP_MessageBoxWarning));
             break;

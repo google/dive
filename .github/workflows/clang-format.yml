@@ -1,0 +1,26 @@
+name: lint_clang_format
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# Cancel previous runs if a more recent commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Check the formatting on all source files
+  v_18_1_8_on_dive_sources:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: DoozyX/clang-format-lint-action@v0.20
+      with:
+        source: '.'
+        exclude: './third_party'
+        extensions: 'h,cpp'
+        clangFormatVersion: 18.1.8

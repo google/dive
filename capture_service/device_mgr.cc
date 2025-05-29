@@ -408,7 +408,6 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
 
 absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &serial)
 {
-    assert(!serial.empty());
     if (serial.empty())
     {
         return absl::InvalidArgumentError("Device Serial is empty");

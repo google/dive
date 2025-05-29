@@ -46,11 +46,6 @@ class VulkanExportDiveConsumerBase : public VulkanConsumer
 
     bool IsValid() const { return true; }
 
-    virtual void
-    ProcessSetDeviceMemoryPropertiesCommand(format::HandleId                             physical_device_id,
-                                            const std::vector<format::DeviceMemoryType>& memory_types,
-                                            const std::vector<format::DeviceMemoryHeap>& memory_heaps) override;
-
     void Process_vkCmdBuildAccelerationStructuresIndirectKHR(
         const ApiCallInfo&                                                         call_info,
         format::HandleId                                                           commandBuffer,

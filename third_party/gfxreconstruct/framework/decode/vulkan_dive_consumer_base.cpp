@@ -39,13 +39,6 @@ void VulkanExportDiveConsumerBase::Initialize(AnnotationHandler* writer)
     writer_ = writer;
 }
 
-void VulkanExportDiveConsumerBase::ProcessSetDeviceMemoryPropertiesCommand(
-    format::HandleId                             physical_device_id,
-    const std::vector<format::DeviceMemoryType>& memory_types,
-    const std::vector<format::DeviceMemoryHeap>& memory_heaps)
-{
-}
-
 void VulkanExportDiveConsumerBase::Process_vkCmdBuildAccelerationStructuresIndirectKHR(
     const ApiCallInfo&                                                         call_info,
     format::HandleId                                                           commandBuffer,

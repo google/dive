@@ -61,10 +61,12 @@ void VulkanExportDiveConsumerBase::Process_vkCmdBuildAccelerationStructuresIndir
     auto max_primitive_counts      = ppMaxPrimitiveCounts ? ppMaxPrimitiveCounts->GetPointer() : nullptr;
     auto max_primitive_counts_json = args["ppMaxPrimitiveCounts"];
 
-    for (uint32_t i = 0; i < infoCount; ++i)
+    if (infoCount > 0 && infos != nullptr && max_primitive_counts != nullptr) 
     {
-        auto element = max_primitive_counts_json[i];
-        FieldToJson(max_primitive_counts_json[i], max_primitive_counts[i], infos[i].geometryCount, json_options);
+        for (uint32_t i = 0; i < infoCount; ++i)
+        {
+            FieldToJson(max_primitive_counts_json[i], max_primitive_counts[i], infos[i].geometryCount, json_options);
+        }
     }
     util::DiveFunctionData function_data("vkCmdBuildAccelerationStructuresIndirectKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);

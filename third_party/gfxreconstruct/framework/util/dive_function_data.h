@@ -33,10 +33,10 @@ class DiveFunctionData
     uint64_t GetBlockIndex() const;
     const nlohmann::ordered_json GetArgs() const;
 private:
-    std::string name_;
-    uint32_t cmd_buffer_index_;
-    uint64_t block_index_;
-    nlohmann::ordered_json args_;
+    nlohmann::ordered_json m_args;
+    uint64_t m_block_index;
+    std::string m_name;
+    uint32_t m_cmd_buffer_index;
 };
 
 GFXRECON_END_NAMESPACE(util)

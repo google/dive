@@ -821,7 +821,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindPipeline(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pipelineBindPoint"], pipelineBindPoint, json_options);
     HandleToJson(args["pipeline"], pipeline, json_options);
-    util::DiveFunctionData function_data("vkCmdBindPipeline", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindPipeline", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -839,7 +839,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewport(
     FieldToJson(args["firstViewport"], firstViewport, json_options);
     FieldToJson(args["viewportCount"], viewportCount, json_options);
     FieldToJson(args["pViewports"], pViewports, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewport", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewport", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -857,7 +857,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetScissor(
     FieldToJson(args["firstScissor"], firstScissor, json_options);
     FieldToJson(args["scissorCount"], scissorCount, json_options);
     FieldToJson(args["pScissors"], pScissors, json_options);
-    util::DiveFunctionData function_data("vkCmdSetScissor", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetScissor", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -871,7 +871,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLineWidth(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["lineWidth"], lineWidth, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLineWidth", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLineWidth", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -889,7 +889,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBias(
     FieldToJson(args["depthBiasConstantFactor"], depthBiasConstantFactor, json_options);
     FieldToJson(args["depthBiasClamp"], depthBiasClamp, json_options);
     FieldToJson(args["depthBiasSlopeFactor"], depthBiasSlopeFactor, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBias", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBias", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -903,7 +903,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetBlendConstants(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["blendConstants"], blendConstants, json_options);
-    util::DiveFunctionData function_data("vkCmdSetBlendConstants", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetBlendConstants", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -919,7 +919,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBounds(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["minDepthBounds"], minDepthBounds, json_options);
     FieldToJson(args["maxDepthBounds"], maxDepthBounds, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBounds", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBounds", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -935,7 +935,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilCompareMask(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(VkStencilFaceFlags_t(), args["faceMask"], faceMask, json_options);
     FieldToJson(args["compareMask"], compareMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilCompareMask", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilCompareMask", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -951,7 +951,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilWriteMask(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(VkStencilFaceFlags_t(), args["faceMask"], faceMask, json_options);
     FieldToJson(args["writeMask"], writeMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilWriteMask", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilWriteMask", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -967,7 +967,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilReference(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(VkStencilFaceFlags_t(), args["faceMask"], faceMask, json_options);
     FieldToJson(args["reference"], reference, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilReference", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilReference", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -993,7 +993,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindDescriptorSets(
     HandleToJson(args["pDescriptorSets"], pDescriptorSets, json_options);
     FieldToJson(args["dynamicOffsetCount"], dynamicOffsetCount, json_options);
     FieldToJson(args["pDynamicOffsets"], pDynamicOffsets, json_options);
-    util::DiveFunctionData function_data("vkCmdBindDescriptorSets", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindDescriptorSets", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1011,7 +1011,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindIndexBuffer(
     HandleToJson(args["buffer"], buffer, json_options);
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["indexType"], indexType, json_options);
-    util::DiveFunctionData function_data("vkCmdBindIndexBuffer", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindIndexBuffer", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1031,7 +1031,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindVertexBuffers(
     FieldToJson(args["bindingCount"], bindingCount, json_options);
     HandleToJson(args["pBuffers"], pBuffers, json_options);
     FieldToJson(args["pOffsets"], pOffsets, json_options);
-    util::DiveFunctionData function_data("vkCmdBindVertexBuffers", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindVertexBuffers", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1051,7 +1051,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDraw(
     FieldToJson(args["instanceCount"], instanceCount, json_options);
     FieldToJson(args["firstVertex"], firstVertex, json_options);
     FieldToJson(args["firstInstance"], firstInstance, json_options);
-    util::DiveFunctionData function_data("vkCmdDraw", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDraw", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1073,7 +1073,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndexed(
     FieldToJson(args["firstIndex"], firstIndex, json_options);
     FieldToJson(args["vertexOffset"], vertexOffset, json_options);
     FieldToJson(args["firstInstance"], firstInstance, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndexed", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndexed", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1093,7 +1093,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndirect(
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["drawCount"], drawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndirect", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndirect", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1113,7 +1113,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndexedIndirect(
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["drawCount"], drawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirect", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirect", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1131,7 +1131,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDispatch(
     FieldToJson(args["groupCountX"], groupCountX, json_options);
     FieldToJson(args["groupCountY"], groupCountY, json_options);
     FieldToJson(args["groupCountZ"], groupCountZ, json_options);
-    util::DiveFunctionData function_data("vkCmdDispatch", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDispatch", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1147,7 +1147,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDispatchIndirect(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["buffer"], buffer, json_options);
     FieldToJson(args["offset"], offset, json_options);
-    util::DiveFunctionData function_data("vkCmdDispatchIndirect", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDispatchIndirect", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1167,7 +1167,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyBuffer(
     HandleToJson(args["dstBuffer"], dstBuffer, json_options);
     FieldToJson(args["regionCount"], regionCount, json_options);
     FieldToJson(args["pRegions"], pRegions, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyBuffer", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyBuffer", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1191,7 +1191,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyImage(
     FieldToJson(args["dstImageLayout"], dstImageLayout, json_options);
     FieldToJson(args["regionCount"], regionCount, json_options);
     FieldToJson(args["pRegions"], pRegions, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyImage", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyImage", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1217,7 +1217,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBlitImage(
     FieldToJson(args["regionCount"], regionCount, json_options);
     FieldToJson(args["pRegions"], pRegions, json_options);
     FieldToJson(args["filter"], filter, json_options);
-    util::DiveFunctionData function_data("vkCmdBlitImage", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBlitImage", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1239,7 +1239,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyBufferToImage(
     FieldToJson(args["dstImageLayout"], dstImageLayout, json_options);
     FieldToJson(args["regionCount"], regionCount, json_options);
     FieldToJson(args["pRegions"], pRegions, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyBufferToImage", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyBufferToImage", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1261,7 +1261,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyImageToBuffer(
     HandleToJson(args["dstBuffer"], dstBuffer, json_options);
     FieldToJson(args["regionCount"], regionCount, json_options);
     FieldToJson(args["pRegions"], pRegions, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyImageToBuffer", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyImageToBuffer", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1281,7 +1281,7 @@ void VulkanExportDiveConsumer::Process_vkCmdUpdateBuffer(
     FieldToJson(args["dstOffset"], dstOffset, json_options);
     FieldToJson(args["dataSize"], dataSize, json_options);
     FieldToJson(args["pData"], pData, json_options);
-    util::DiveFunctionData function_data("vkCmdUpdateBuffer", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdUpdateBuffer", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1301,7 +1301,7 @@ void VulkanExportDiveConsumer::Process_vkCmdFillBuffer(
     FieldToJson(args["dstOffset"], dstOffset, json_options);
     FieldToJson(args["size"], size, json_options);
     FieldToJson(args["data"], data, json_options);
-    util::DiveFunctionData function_data("vkCmdFillBuffer", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdFillBuffer", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1323,7 +1323,7 @@ void VulkanExportDiveConsumer::Process_vkCmdClearColorImage(
     FieldToJson(args["pColor"], pColor, json_options);
     FieldToJson(args["rangeCount"], rangeCount, json_options);
     FieldToJson(args["pRanges"], pRanges, json_options);
-    util::DiveFunctionData function_data("vkCmdClearColorImage", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdClearColorImage", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1345,7 +1345,7 @@ void VulkanExportDiveConsumer::Process_vkCmdClearDepthStencilImage(
     FieldToJson(args["pDepthStencil"], pDepthStencil, json_options);
     FieldToJson(args["rangeCount"], rangeCount, json_options);
     FieldToJson(args["pRanges"], pRanges, json_options);
-    util::DiveFunctionData function_data("vkCmdClearDepthStencilImage", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdClearDepthStencilImage", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1365,7 +1365,7 @@ void VulkanExportDiveConsumer::Process_vkCmdClearAttachments(
     FieldToJson(args["pAttachments"], pAttachments, json_options);
     FieldToJson(args["rectCount"], rectCount, json_options);
     FieldToJson(args["pRects"], pRects, json_options);
-    util::DiveFunctionData function_data("vkCmdClearAttachments", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdClearAttachments", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1389,7 +1389,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResolveImage(
     FieldToJson(args["dstImageLayout"], dstImageLayout, json_options);
     FieldToJson(args["regionCount"], regionCount, json_options);
     FieldToJson(args["pRegions"], pRegions, json_options);
-    util::DiveFunctionData function_data("vkCmdResolveImage", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResolveImage", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1405,7 +1405,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetEvent(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["event"], event, json_options);
     FieldToJson(VkPipelineStageFlags_t(), args["stageMask"], stageMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetEvent", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetEvent", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1421,7 +1421,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResetEvent(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["event"], event, json_options);
     FieldToJson(VkPipelineStageFlags_t(), args["stageMask"], stageMask, json_options);
-    util::DiveFunctionData function_data("vkCmdResetEvent", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResetEvent", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1453,7 +1453,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWaitEvents(
     FieldToJson(args["pBufferMemoryBarriers"], pBufferMemoryBarriers, json_options);
     FieldToJson(args["imageMemoryBarrierCount"], imageMemoryBarrierCount, json_options);
     FieldToJson(args["pImageMemoryBarriers"], pImageMemoryBarriers, json_options);
-    util::DiveFunctionData function_data("vkCmdWaitEvents", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWaitEvents", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1483,7 +1483,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPipelineBarrier(
     FieldToJson(args["pBufferMemoryBarriers"], pBufferMemoryBarriers, json_options);
     FieldToJson(args["imageMemoryBarrierCount"], imageMemoryBarrierCount, json_options);
     FieldToJson(args["pImageMemoryBarriers"], pImageMemoryBarriers, json_options);
-    util::DiveFunctionData function_data("vkCmdPipelineBarrier", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPipelineBarrier", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1501,7 +1501,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginQuery(
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["query"], query, json_options);
     FieldToJson(VkQueryControlFlags_t(), args["flags"], flags, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginQuery", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginQuery", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1517,7 +1517,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndQuery(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["query"], query, json_options);
-    util::DiveFunctionData function_data("vkCmdEndQuery", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndQuery", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1535,7 +1535,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResetQueryPool(
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["firstQuery"], firstQuery, json_options);
     FieldToJson(args["queryCount"], queryCount, json_options);
-    util::DiveFunctionData function_data("vkCmdResetQueryPool", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResetQueryPool", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1553,7 +1553,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteTimestamp(
     FieldToJson(args["pipelineStage"], pipelineStage, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["query"], query, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteTimestamp", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteTimestamp", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1579,7 +1579,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyQueryPoolResults(
     FieldToJson(args["dstOffset"], dstOffset, json_options);
     FieldToJson(args["stride"], stride, json_options);
     FieldToJson(VkQueryResultFlags_t(), args["flags"], flags, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyQueryPoolResults", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyQueryPoolResults", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1595,7 +1595,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginRenderPass(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pRenderPassBegin"], pRenderPassBegin, json_options);
     FieldToJson(args["contents"], contents, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginRenderPass", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginRenderPass", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1609,7 +1609,7 @@ void VulkanExportDiveConsumer::Process_vkCmdNextSubpass(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["contents"], contents, json_options);
-    util::DiveFunctionData function_data("vkCmdNextSubpass", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdNextSubpass", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1621,7 +1621,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndRenderPass(
     const JsonOptions json_options;
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdEndRenderPass", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndRenderPass", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1637,7 +1637,7 @@ void VulkanExportDiveConsumer::Process_vkCmdExecuteCommands(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["commandBufferCount"], commandBufferCount, json_options);
     HandleToJson(args["pCommandBuffers"], pCommandBuffers, json_options);
-    util::DiveFunctionData function_data("vkCmdExecuteCommands", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdExecuteCommands", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1679,7 +1679,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDeviceMask(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["deviceMask"], deviceMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDeviceMask", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDeviceMask", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1703,7 +1703,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDispatchBase(
     FieldToJson(args["groupCountX"], groupCountX, json_options);
     FieldToJson(args["groupCountY"], groupCountY, json_options);
     FieldToJson(args["groupCountZ"], groupCountZ, json_options);
-    util::DiveFunctionData function_data("vkCmdDispatchBase", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDispatchBase", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1900,7 +1900,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndirectCount(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndirectCount", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndirectCount", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1924,7 +1924,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndexedIndirectCount(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirectCount", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirectCount", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1950,7 +1950,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginRenderPass2(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pRenderPassBegin"], pRenderPassBegin, json_options);
     FieldToJson(args["pSubpassBeginInfo"], pSubpassBeginInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginRenderPass2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginRenderPass2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1966,7 +1966,7 @@ void VulkanExportDiveConsumer::Process_vkCmdNextSubpass2(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pSubpassBeginInfo"], pSubpassBeginInfo, json_options);
     FieldToJson(args["pSubpassEndInfo"], pSubpassEndInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdNextSubpass2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdNextSubpass2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -1980,7 +1980,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndRenderPass2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pSubpassEndInfo"], pSubpassEndInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdEndRenderPass2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndRenderPass2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2103,7 +2103,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetEvent2(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["event"], event, json_options);
     FieldToJson(args["pDependencyInfo"], pDependencyInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetEvent2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetEvent2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2119,7 +2119,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResetEvent2(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["event"], event, json_options);
     FieldToJson(VkPipelineStageFlags2_t(), args["stageMask"], stageMask, json_options);
-    util::DiveFunctionData function_data("vkCmdResetEvent2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResetEvent2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2137,7 +2137,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWaitEvents2(
     FieldToJson(args["eventCount"], eventCount, json_options);
     HandleToJson(args["pEvents"], pEvents, json_options);
     FieldToJson(args["pDependencyInfos"], pDependencyInfos, json_options);
-    util::DiveFunctionData function_data("vkCmdWaitEvents2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWaitEvents2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2151,7 +2151,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPipelineBarrier2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pDependencyInfo"], pDependencyInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPipelineBarrier2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPipelineBarrier2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2169,7 +2169,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteTimestamp2(
     FieldToJson(VkPipelineStageFlags2_t(), args["stage"], stage, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["query"], query, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteTimestamp2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteTimestamp2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2202,7 +2202,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyBuffer2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyBufferInfo"], pCopyBufferInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyBuffer2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyBuffer2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2216,7 +2216,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyImage2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyImageInfo"], pCopyImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyImage2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyImage2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2230,7 +2230,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyBufferToImage2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyBufferToImageInfo"], pCopyBufferToImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyBufferToImage2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyBufferToImage2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2244,7 +2244,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyImageToBuffer2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyImageToBufferInfo"], pCopyImageToBufferInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyImageToBuffer2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyImageToBuffer2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2258,7 +2258,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBlitImage2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBlitImageInfo"], pBlitImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBlitImage2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBlitImage2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2272,7 +2272,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResolveImage2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pResolveImageInfo"], pResolveImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdResolveImage2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResolveImage2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2286,7 +2286,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginRendering(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pRenderingInfo"], pRenderingInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginRendering", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginRendering", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2298,7 +2298,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndRendering(
     const JsonOptions json_options;
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdEndRendering", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndRendering", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2312,7 +2312,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCullMode(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(VkCullModeFlags_t(), args["cullMode"], cullMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCullMode", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCullMode", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2326,7 +2326,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetFrontFace(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["frontFace"], frontFace, json_options);
-    util::DiveFunctionData function_data("vkCmdSetFrontFace", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetFrontFace", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2340,7 +2340,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPrimitiveTopology(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["primitiveTopology"], primitiveTopology, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPrimitiveTopology", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPrimitiveTopology", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2356,7 +2356,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewportWithCount(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["viewportCount"], viewportCount, json_options);
     FieldToJson(args["pViewports"], pViewports, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewportWithCount", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewportWithCount", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2372,7 +2372,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetScissorWithCount(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["scissorCount"], scissorCount, json_options);
     FieldToJson(args["pScissors"], pScissors, json_options);
-    util::DiveFunctionData function_data("vkCmdSetScissorWithCount", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetScissorWithCount", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2396,7 +2396,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindVertexBuffers2(
     FieldToJson(args["pOffsets"], pOffsets, json_options);
     FieldToJson(args["pSizes"], pSizes, json_options);
     FieldToJson(args["pStrides"], pStrides, json_options);
-    util::DiveFunctionData function_data("vkCmdBindVertexBuffers2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindVertexBuffers2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2410,7 +2410,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthTestEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthTestEnable"], depthTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthTestEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthTestEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2424,7 +2424,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthWriteEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthWriteEnable"], depthWriteEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthWriteEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthWriteEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2438,7 +2438,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthCompareOp(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["depthCompareOp"], depthCompareOp, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthCompareOp", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthCompareOp", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2452,7 +2452,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBoundsTestEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthBoundsTestEnable"], depthBoundsTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBoundsTestEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBoundsTestEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2466,7 +2466,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilTestEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["stencilTestEnable"], stencilTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilTestEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilTestEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2488,7 +2488,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilOp(
     FieldToJson(args["passOp"], passOp, json_options);
     FieldToJson(args["depthFailOp"], depthFailOp, json_options);
     FieldToJson(args["compareOp"], compareOp, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilOp", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilOp", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2502,7 +2502,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRasterizerDiscardEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["rasterizerDiscardEnable"], rasterizerDiscardEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRasterizerDiscardEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRasterizerDiscardEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2516,7 +2516,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBiasEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthBiasEnable"], depthBiasEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBiasEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBiasEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2530,7 +2530,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPrimitiveRestartEnable(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["primitiveRestartEnable"], primitiveRestartEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPrimitiveRestartEnable", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPrimitiveRestartEnable", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2571,7 +2571,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLineStipple(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["lineStippleFactor"], lineStippleFactor, json_options);
     FieldToJson(args["lineStipplePattern"], lineStipplePattern, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLineStipple", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLineStipple", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2608,7 +2608,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindIndexBuffer2(
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["size"], size, json_options);
     FieldToJson(args["indexType"], indexType, json_options);
-    util::DiveFunctionData function_data("vkCmdBindIndexBuffer2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindIndexBuffer2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2655,7 +2655,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPushDescriptorSet(
     FieldToJson(args["set"], set, json_options);
     FieldToJson(args["descriptorWriteCount"], descriptorWriteCount, json_options);
     FieldToJson(args["pDescriptorWrites"], pDescriptorWrites, json_options);
-    util::DiveFunctionData function_data("vkCmdPushDescriptorSet", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushDescriptorSet", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2669,7 +2669,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRenderingAttachmentLocations(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pLocationInfo"], pLocationInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRenderingAttachmentLocations", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRenderingAttachmentLocations", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2683,7 +2683,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRenderingInputAttachmentIndices(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInputAttachmentIndexInfo"], pInputAttachmentIndexInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRenderingInputAttachmentIndices", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRenderingInputAttachmentIndices", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2697,7 +2697,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindDescriptorSets2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBindDescriptorSetsInfo"], pBindDescriptorSetsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBindDescriptorSets2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindDescriptorSets2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2711,7 +2711,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPushConstants2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pPushConstantsInfo"], pPushConstantsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPushConstants2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushConstants2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -2725,7 +2725,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPushDescriptorSet2(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pPushDescriptorSetInfo"], pPushDescriptorSetInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPushDescriptorSet2", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushDescriptorSet2", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3154,7 +3154,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginVideoCodingKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBeginInfo"], pBeginInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginVideoCodingKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginVideoCodingKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3168,7 +3168,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndVideoCodingKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pEndCodingInfo"], pEndCodingInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdEndVideoCodingKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndVideoCodingKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3182,7 +3182,7 @@ void VulkanExportDiveConsumer::Process_vkCmdControlVideoCodingKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCodingControlInfo"], pCodingControlInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdControlVideoCodingKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdControlVideoCodingKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3196,7 +3196,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDecodeVideoKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pDecodeInfo"], pDecodeInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdDecodeVideoKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDecodeVideoKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3210,7 +3210,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginRenderingKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pRenderingInfo"], pRenderingInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginRenderingKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginRenderingKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3222,7 +3222,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndRenderingKHR(
     const JsonOptions json_options;
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdEndRenderingKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndRenderingKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3301,7 +3301,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDeviceMaskKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["deviceMask"], deviceMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDeviceMaskKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDeviceMaskKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3325,7 +3325,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDispatchBaseKHR(
     FieldToJson(args["groupCountX"], groupCountX, json_options);
     FieldToJson(args["groupCountY"], groupCountY, json_options);
     FieldToJson(args["groupCountZ"], groupCountZ, json_options);
-    util::DiveFunctionData function_data("vkCmdDispatchBaseKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDispatchBaseKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3452,7 +3452,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPushDescriptorSetKHR(
     FieldToJson(args["set"], set, json_options);
     FieldToJson(args["descriptorWriteCount"], descriptorWriteCount, json_options);
     FieldToJson(args["pDescriptorWrites"], pDescriptorWrites, json_options);
-    util::DiveFunctionData function_data("vkCmdPushDescriptorSetKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushDescriptorSetKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3496,7 +3496,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginRenderPass2KHR(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pRenderPassBegin"], pRenderPassBegin, json_options);
     FieldToJson(args["pSubpassBeginInfo"], pSubpassBeginInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginRenderPass2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginRenderPass2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3512,7 +3512,7 @@ void VulkanExportDiveConsumer::Process_vkCmdNextSubpass2KHR(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pSubpassBeginInfo"], pSubpassBeginInfo, json_options);
     FieldToJson(args["pSubpassEndInfo"], pSubpassEndInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdNextSubpass2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdNextSubpass2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3526,7 +3526,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndRenderPass2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pSubpassEndInfo"], pSubpassEndInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdEndRenderPass2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndRenderPass2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3758,7 +3758,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndirectCountKHR(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndirectCountKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndirectCountKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3782,7 +3782,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndexedIndirectCountKHR(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirectCountKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirectCountKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3833,7 +3833,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetFragmentShadingRateKHR(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pFragmentSize"], pFragmentSize, json_options);
     FieldToJson(args["combinerOps"], combinerOps, json_options);
-    util::DiveFunctionData function_data("vkCmdSetFragmentShadingRateKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetFragmentShadingRateKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3847,7 +3847,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRenderingAttachmentLocationsKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pLocationInfo"], pLocationInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRenderingAttachmentLocationsKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRenderingAttachmentLocationsKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -3861,7 +3861,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRenderingInputAttachmentIndicesKH
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInputAttachmentIndexInfo"], pInputAttachmentIndexInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRenderingInputAttachmentIndicesKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRenderingInputAttachmentIndicesKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4017,7 +4017,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEncodeVideoKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pEncodeInfo"], pEncodeInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdEncodeVideoKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEncodeVideoKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4033,7 +4033,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetEvent2KHR(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["event"], event, json_options);
     FieldToJson(args["pDependencyInfo"], pDependencyInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetEvent2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetEvent2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4049,7 +4049,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResetEvent2KHR(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["event"], event, json_options);
     FieldToJson(VkPipelineStageFlags2_t(), args["stageMask"], stageMask, json_options);
-    util::DiveFunctionData function_data("vkCmdResetEvent2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResetEvent2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4067,7 +4067,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWaitEvents2KHR(
     FieldToJson(args["eventCount"], eventCount, json_options);
     HandleToJson(args["pEvents"], pEvents, json_options);
     FieldToJson(args["pDependencyInfos"], pDependencyInfos, json_options);
-    util::DiveFunctionData function_data("vkCmdWaitEvents2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWaitEvents2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4081,7 +4081,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPipelineBarrier2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pDependencyInfo"], pDependencyInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPipelineBarrier2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPipelineBarrier2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4099,7 +4099,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteTimestamp2KHR(
     FieldToJson(VkPipelineStageFlags2_t(), args["stage"], stage, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["query"], query, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteTimestamp2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteTimestamp2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4132,7 +4132,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyBuffer2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyBufferInfo"], pCopyBufferInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyBuffer2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyBuffer2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4146,7 +4146,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyImage2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyImageInfo"], pCopyImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyImage2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyImage2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4160,7 +4160,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyBufferToImage2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyBufferToImageInfo"], pCopyBufferToImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyBufferToImage2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyBufferToImage2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4174,7 +4174,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyImageToBuffer2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCopyImageToBufferInfo"], pCopyImageToBufferInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyImageToBuffer2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyImageToBuffer2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4188,7 +4188,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBlitImage2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBlitImageInfo"], pBlitImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBlitImage2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBlitImage2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4202,7 +4202,7 @@ void VulkanExportDiveConsumer::Process_vkCmdResolveImage2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pResolveImageInfo"], pResolveImageInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdResolveImage2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdResolveImage2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4216,7 +4216,7 @@ void VulkanExportDiveConsumer::Process_vkCmdTraceRaysIndirect2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJsonAsHex(args["indirectDeviceAddress"], indirectDeviceAddress, json_options);
-    util::DiveFunctionData function_data("vkCmdTraceRaysIndirect2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdTraceRaysIndirect2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4261,7 +4261,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindIndexBuffer2KHR(
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["size"], size, json_options);
     FieldToJson(args["indexType"], indexType, json_options);
-    util::DiveFunctionData function_data("vkCmdBindIndexBuffer2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindIndexBuffer2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4358,7 +4358,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLineStippleKHR(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["lineStippleFactor"], lineStippleFactor, json_options);
     FieldToJson(args["lineStipplePattern"], lineStipplePattern, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLineStippleKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLineStippleKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4392,7 +4392,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindDescriptorSets2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBindDescriptorSetsInfo"], pBindDescriptorSetsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBindDescriptorSets2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindDescriptorSets2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4406,7 +4406,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPushConstants2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pPushConstantsInfo"], pPushConstantsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPushConstants2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushConstants2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4420,7 +4420,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPushDescriptorSet2KHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pPushDescriptorSetInfo"], pPushDescriptorSetInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPushDescriptorSet2KHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPushDescriptorSet2KHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4434,7 +4434,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDescriptorBufferOffsets2EXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pSetDescriptorBufferOffsetsInfo"], pSetDescriptorBufferOffsetsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDescriptorBufferOffsets2EXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDescriptorBufferOffsets2EXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4448,7 +4448,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindDescriptorBufferEmbeddedSamplers
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBindDescriptorBufferEmbeddedSamplersInfo"], pBindDescriptorBufferEmbeddedSamplersInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBindDescriptorBufferEmbeddedSamplers2EXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindDescriptorBufferEmbeddedSamplers2EXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4517,7 +4517,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDebugMarkerBeginEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pMarkerInfo"], pMarkerInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdDebugMarkerBeginEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDebugMarkerBeginEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4529,7 +4529,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDebugMarkerEndEXT(
     const JsonOptions json_options;
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdDebugMarkerEndEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDebugMarkerEndEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4543,7 +4543,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDebugMarkerInsertEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pMarkerInfo"], pMarkerInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdDebugMarkerInsertEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDebugMarkerInsertEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4565,7 +4565,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindTransformFeedbackBuffersEXT(
     HandleToJson(args["pBuffers"], pBuffers, json_options);
     FieldToJson(args["pOffsets"], pOffsets, json_options);
     FieldToJson(args["pSizes"], pSizes, json_options);
-    util::DiveFunctionData function_data("vkCmdBindTransformFeedbackBuffersEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindTransformFeedbackBuffersEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4585,7 +4585,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginTransformFeedbackEXT(
     FieldToJson(args["counterBufferCount"], counterBufferCount, json_options);
     HandleToJson(args["pCounterBuffers"], pCounterBuffers, json_options);
     FieldToJson(args["pCounterBufferOffsets"], pCounterBufferOffsets, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginTransformFeedbackEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginTransformFeedbackEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4605,7 +4605,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndTransformFeedbackEXT(
     FieldToJson(args["counterBufferCount"], counterBufferCount, json_options);
     HandleToJson(args["pCounterBuffers"], pCounterBuffers, json_options);
     FieldToJson(args["pCounterBufferOffsets"], pCounterBufferOffsets, json_options);
-    util::DiveFunctionData function_data("vkCmdEndTransformFeedbackEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndTransformFeedbackEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4625,7 +4625,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginQueryIndexedEXT(
     FieldToJson(args["query"], query, json_options);
     FieldToJson(VkQueryControlFlags_t(), args["flags"], flags, json_options);
     FieldToJson(args["index"], index, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginQueryIndexedEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginQueryIndexedEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4643,7 +4643,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndQueryIndexedEXT(
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["query"], query, json_options);
     FieldToJson(args["index"], index, json_options);
-    util::DiveFunctionData function_data("vkCmdEndQueryIndexedEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndQueryIndexedEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4667,7 +4667,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndirectByteCountEXT(
     FieldToJson(args["counterBufferOffset"], counterBufferOffset, json_options);
     FieldToJson(args["counterOffset"], counterOffset, json_options);
     FieldToJson(args["vertexStride"], vertexStride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndirectByteCountEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndirectByteCountEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4716,7 +4716,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndirectCountAMD(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndirectCountAMD", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndirectCountAMD", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4740,7 +4740,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawIndexedIndirectCountAMD(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirectCountAMD", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawIndexedIndirectCountAMD", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4810,7 +4810,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginConditionalRenderingEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pConditionalRenderingBegin"], pConditionalRenderingBegin, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginConditionalRenderingEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginConditionalRenderingEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4822,7 +4822,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndConditionalRenderingEXT(
     const JsonOptions json_options;
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdEndConditionalRenderingEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndConditionalRenderingEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4840,7 +4840,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewportWScalingNV(
     FieldToJson(args["firstViewport"], firstViewport, json_options);
     FieldToJson(args["viewportCount"], viewportCount, json_options);
     FieldToJson(args["pViewportWScalings"], pViewportWScalings, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewportWScalingNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewportWScalingNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4953,7 +4953,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDiscardRectangleEXT(
     FieldToJson(args["firstDiscardRectangle"], firstDiscardRectangle, json_options);
     FieldToJson(args["discardRectangleCount"], discardRectangleCount, json_options);
     FieldToJson(args["pDiscardRectangles"], pDiscardRectangles, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDiscardRectangleEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDiscardRectangleEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4967,7 +4967,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDiscardRectangleEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["discardRectangleEnable"], discardRectangleEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDiscardRectangleEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDiscardRectangleEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -4981,7 +4981,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDiscardRectangleModeEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["discardRectangleMode"], discardRectangleMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDiscardRectangleModeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDiscardRectangleModeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5060,7 +5060,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBeginDebugUtilsLabelEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pLabelInfo"], pLabelInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBeginDebugUtilsLabelEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBeginDebugUtilsLabelEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5072,7 +5072,7 @@ void VulkanExportDiveConsumer::Process_vkCmdEndDebugUtilsLabelEXT(
     const JsonOptions json_options;
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdEndDebugUtilsLabelEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdEndDebugUtilsLabelEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5086,7 +5086,7 @@ void VulkanExportDiveConsumer::Process_vkCmdInsertDebugUtilsLabelEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pLabelInfo"], pLabelInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdInsertDebugUtilsLabelEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdInsertDebugUtilsLabelEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5145,7 +5145,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetSampleLocationsEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pSampleLocationsInfo"], pSampleLocationsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetSampleLocationsEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetSampleLocationsEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5216,7 +5216,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindShadingRateImageNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["imageView"], imageView, json_options);
     FieldToJson(args["imageLayout"], imageLayout, json_options);
-    util::DiveFunctionData function_data("vkCmdBindShadingRateImageNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindShadingRateImageNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5234,7 +5234,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewportShadingRatePaletteNV(
     FieldToJson(args["firstViewport"], firstViewport, json_options);
     FieldToJson(args["viewportCount"], viewportCount, json_options);
     FieldToJson(args["pShadingRatePalettes"], pShadingRatePalettes, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewportShadingRatePaletteNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewportShadingRatePaletteNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5252,7 +5252,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoarseSampleOrderNV(
     FieldToJson(args["sampleOrderType"], sampleOrderType, json_options);
     FieldToJson(args["customSampleOrderCount"], customSampleOrderCount, json_options);
     FieldToJson(args["pCustomSampleOrders"], pCustomSampleOrders, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoarseSampleOrderNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoarseSampleOrderNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5315,7 +5315,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBuildAccelerationStructureNV(
     HandleToJson(args["src"], src, json_options);
     HandleToJson(args["scratch"], scratch, json_options);
     FieldToJson(args["scratchOffset"], scratchOffset, json_options);
-    util::DiveFunctionData function_data("vkCmdBuildAccelerationStructureNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBuildAccelerationStructureNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5333,7 +5333,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyAccelerationStructureNV(
     HandleToJson(args["dst"], dst, json_options);
     HandleToJson(args["src"], src, json_options);
     FieldToJson(args["mode"], mode, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyAccelerationStructureNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyAccelerationStructureNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5373,7 +5373,7 @@ void VulkanExportDiveConsumer::Process_vkCmdTraceRaysNV(
     FieldToJson(args["width"], width, json_options);
     FieldToJson(args["height"], height, json_options);
     FieldToJson(args["depth"], depth, json_options);
-    util::DiveFunctionData function_data("vkCmdTraceRaysNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdTraceRaysNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5441,7 +5441,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteAccelerationStructuresPropertie
     FieldToJson(args["queryType"], queryType, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["firstQuery"], firstQuery, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteAccelerationStructuresPropertiesNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteAccelerationStructuresPropertiesNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5480,7 +5480,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteBufferMarkerAMD(
     HandleToJson(args["dstBuffer"], dstBuffer, json_options);
     FieldToJson(args["dstOffset"], dstOffset, json_options);
     FieldToJson(args["marker"], marker, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteBufferMarkerAMD", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteBufferMarkerAMD", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5500,7 +5500,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteBufferMarker2AMD(
     HandleToJson(args["dstBuffer"], dstBuffer, json_options);
     FieldToJson(args["dstOffset"], dstOffset, json_options);
     FieldToJson(args["marker"], marker, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteBufferMarker2AMD", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteBufferMarker2AMD", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5536,7 +5536,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMeshTasksNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["taskCount"], taskCount, json_options);
     FieldToJson(args["firstTask"], firstTask, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMeshTasksNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMeshTasksNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5556,7 +5556,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMeshTasksIndirectNV(
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["drawCount"], drawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5580,7 +5580,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMeshTasksIndirectCountNV(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectCountNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectCountNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5598,7 +5598,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetExclusiveScissorEnableNV(
     FieldToJson(args["firstExclusiveScissor"], firstExclusiveScissor, json_options);
     FieldToJson(args["exclusiveScissorCount"], exclusiveScissorCount, json_options);
     Bool32ToJson(args["pExclusiveScissorEnables"], pExclusiveScissorEnables, json_options);
-    util::DiveFunctionData function_data("vkCmdSetExclusiveScissorEnableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetExclusiveScissorEnableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5616,7 +5616,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetExclusiveScissorNV(
     FieldToJson(args["firstExclusiveScissor"], firstExclusiveScissor, json_options);
     FieldToJson(args["exclusiveScissorCount"], exclusiveScissorCount, json_options);
     FieldToJson(args["pExclusiveScissors"], pExclusiveScissors, json_options);
-    util::DiveFunctionData function_data("vkCmdSetExclusiveScissorNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetExclusiveScissorNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5630,7 +5630,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCheckpointNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pCheckpointMarker"], pCheckpointMarker, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCheckpointNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCheckpointNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5675,7 +5675,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPerformanceMarkerINTEL(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pMarkerInfo"], pMarkerInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPerformanceMarkerINTEL", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPerformanceMarkerINTEL", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5690,7 +5690,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPerformanceStreamMarkerINTEL(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pMarkerInfo"], pMarkerInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPerformanceStreamMarkerINTEL", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPerformanceStreamMarkerINTEL", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5705,7 +5705,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPerformanceOverrideINTEL(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pOverrideInfo"], pOverrideInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPerformanceOverrideINTEL", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPerformanceOverrideINTEL", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5863,7 +5863,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLineStippleEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["lineStippleFactor"], lineStippleFactor, json_options);
     FieldToJson(args["lineStipplePattern"], lineStipplePattern, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLineStippleEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLineStippleEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5886,7 +5886,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCullModeEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(VkCullModeFlags_t(), args["cullMode"], cullMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCullModeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCullModeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5900,7 +5900,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetFrontFaceEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["frontFace"], frontFace, json_options);
-    util::DiveFunctionData function_data("vkCmdSetFrontFaceEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetFrontFaceEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5914,7 +5914,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPrimitiveTopologyEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["primitiveTopology"], primitiveTopology, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPrimitiveTopologyEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPrimitiveTopologyEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5930,7 +5930,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewportWithCountEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["viewportCount"], viewportCount, json_options);
     FieldToJson(args["pViewports"], pViewports, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewportWithCountEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewportWithCountEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5946,7 +5946,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetScissorWithCountEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["scissorCount"], scissorCount, json_options);
     FieldToJson(args["pScissors"], pScissors, json_options);
-    util::DiveFunctionData function_data("vkCmdSetScissorWithCountEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetScissorWithCountEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5970,7 +5970,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindVertexBuffers2EXT(
     FieldToJson(args["pOffsets"], pOffsets, json_options);
     FieldToJson(args["pSizes"], pSizes, json_options);
     FieldToJson(args["pStrides"], pStrides, json_options);
-    util::DiveFunctionData function_data("vkCmdBindVertexBuffers2EXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindVertexBuffers2EXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5984,7 +5984,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthTestEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthTestEnable"], depthTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthTestEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthTestEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -5998,7 +5998,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthWriteEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthWriteEnable"], depthWriteEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthWriteEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthWriteEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6012,7 +6012,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthCompareOpEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["depthCompareOp"], depthCompareOp, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthCompareOpEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthCompareOpEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6026,7 +6026,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBoundsTestEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthBoundsTestEnable"], depthBoundsTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBoundsTestEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBoundsTestEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6040,7 +6040,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilTestEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["stencilTestEnable"], stencilTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilTestEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilTestEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6062,7 +6062,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetStencilOpEXT(
     FieldToJson(args["passOp"], passOp, json_options);
     FieldToJson(args["depthFailOp"], depthFailOp, json_options);
     FieldToJson(args["compareOp"], compareOp, json_options);
-    util::DiveFunctionData function_data("vkCmdSetStencilOpEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetStencilOpEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6134,7 +6134,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPreprocessGeneratedCommandsNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pGeneratedCommandsInfo"], pGeneratedCommandsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdPreprocessGeneratedCommandsNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPreprocessGeneratedCommandsNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6150,7 +6150,7 @@ void VulkanExportDiveConsumer::Process_vkCmdExecuteGeneratedCommandsNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["isPreprocessed"], isPreprocessed, json_options);
     FieldToJson(args["pGeneratedCommandsInfo"], pGeneratedCommandsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdExecuteGeneratedCommandsNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdExecuteGeneratedCommandsNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6168,7 +6168,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindPipelineShaderGroupNV(
     FieldToJson(args["pipelineBindPoint"], pipelineBindPoint, json_options);
     HandleToJson(args["pipeline"], pipeline, json_options);
     FieldToJson(args["groupIndex"], groupIndex, json_options);
-    util::DiveFunctionData function_data("vkCmdBindPipelineShaderGroupNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindPipelineShaderGroupNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6200,7 +6200,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBias2EXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pDepthBiasInfo"], pDepthBiasInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBias2EXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBias2EXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6274,7 +6274,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetFragmentShadingRateEnumNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["shadingRate"], shadingRate, json_options);
     FieldToJson(args["combinerOps"], combinerOps, json_options);
-    util::DiveFunctionData function_data("vkCmdSetFragmentShadingRateEnumNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetFragmentShadingRateEnumNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6339,7 +6339,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetVertexInputEXT(
     FieldToJson(args["pVertexBindingDescriptions"], pVertexBindingDescriptions, json_options);
     FieldToJson(args["vertexAttributeDescriptionCount"], vertexAttributeDescriptionCount, json_options);
     FieldToJson(args["pVertexAttributeDescriptions"], pVertexAttributeDescriptions, json_options);
-    util::DiveFunctionData function_data("vkCmdSetVertexInputEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetVertexInputEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6391,7 +6391,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindInvocationMaskHUAWEI(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["imageView"], imageView, json_options);
     FieldToJson(args["imageLayout"], imageLayout, json_options);
-    util::DiveFunctionData function_data("vkCmdBindInvocationMaskHUAWEI", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindInvocationMaskHUAWEI", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6414,7 +6414,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPatchControlPointsEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["patchControlPoints"], patchControlPoints, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPatchControlPointsEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPatchControlPointsEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6428,7 +6428,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRasterizerDiscardEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["rasterizerDiscardEnable"], rasterizerDiscardEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRasterizerDiscardEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRasterizerDiscardEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6442,7 +6442,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthBiasEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthBiasEnable"], depthBiasEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthBiasEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthBiasEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6456,7 +6456,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLogicOpEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["logicOp"], logicOp, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLogicOpEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLogicOpEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6470,7 +6470,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPrimitiveRestartEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["primitiveRestartEnable"], primitiveRestartEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPrimitiveRestartEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPrimitiveRestartEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6505,7 +6505,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetColorWriteEnableEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["attachmentCount"], attachmentCount, json_options);
     Bool32ToJson(args["pColorWriteEnables"], pColorWriteEnables, json_options);
-    util::DiveFunctionData function_data("vkCmdSetColorWriteEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetColorWriteEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6527,7 +6527,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMultiEXT(
     FieldToJson(args["instanceCount"], instanceCount, json_options);
     FieldToJson(args["firstInstance"], firstInstance, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMultiEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMultiEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6551,7 +6551,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMultiIndexedEXT(
     FieldToJson(args["firstInstance"], firstInstance, json_options);
     FieldToJson(args["stride"], stride, json_options);
     FieldToJson(args["pVertexOffset"], pVertexOffset, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMultiIndexedEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMultiIndexedEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6585,7 +6585,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBuildMicromapsEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["infoCount"], infoCount, json_options);
     FieldToJson(args["pInfos"], pInfos, json_options);
-    util::DiveFunctionData function_data("vkCmdBuildMicromapsEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBuildMicromapsEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6649,7 +6649,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyMicromapEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInfo"], pInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyMicromapEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyMicromapEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6663,7 +6663,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyMicromapToMemoryEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInfo"], pInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyMicromapToMemoryEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyMicromapToMemoryEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6677,7 +6677,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyMemoryToMicromapEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInfo"], pInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyMemoryToMicromapEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyMemoryToMicromapEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6699,7 +6699,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteMicromapsPropertiesEXT(
     FieldToJson(args["queryType"], queryType, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["firstQuery"], firstQuery, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteMicromapsPropertiesEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteMicromapsPropertiesEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6734,7 +6734,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawClusterHUAWEI(
     FieldToJson(args["groupCountX"], groupCountX, json_options);
     FieldToJson(args["groupCountY"], groupCountY, json_options);
     FieldToJson(args["groupCountZ"], groupCountZ, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawClusterHUAWEI", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawClusterHUAWEI", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6750,7 +6750,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawClusterIndirectHUAWEI(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["buffer"], buffer, json_options);
     FieldToJson(args["offset"], offset, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawClusterIndirectHUAWEI", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawClusterIndirectHUAWEI", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6798,7 +6798,7 @@ void VulkanExportDiveConsumer::Process_vkCmdUpdatePipelineIndirectBufferNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pipelineBindPoint"], pipelineBindPoint, json_options);
     HandleToJson(args["pipeline"], pipeline, json_options);
-    util::DiveFunctionData function_data("vkCmdUpdatePipelineIndirectBufferNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdUpdatePipelineIndirectBufferNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6820,7 +6820,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthClampEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthClampEnable"], depthClampEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthClampEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthClampEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6834,7 +6834,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetPolygonModeEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["polygonMode"], polygonMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetPolygonModeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetPolygonModeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6848,7 +6848,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRasterizationSamplesEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["rasterizationSamples"], rasterizationSamples, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRasterizationSamplesEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRasterizationSamplesEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6864,7 +6864,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetSampleMaskEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["samples"], samples, json_options);
     FieldToJson(args["pSampleMask"], pSampleMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetSampleMaskEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetSampleMaskEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6878,7 +6878,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetAlphaToCoverageEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["alphaToCoverageEnable"], alphaToCoverageEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetAlphaToCoverageEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetAlphaToCoverageEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6892,7 +6892,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetAlphaToOneEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["alphaToOneEnable"], alphaToOneEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetAlphaToOneEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetAlphaToOneEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6906,7 +6906,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLogicOpEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["logicOpEnable"], logicOpEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLogicOpEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLogicOpEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6924,7 +6924,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetColorBlendEnableEXT(
     FieldToJson(args["firstAttachment"], firstAttachment, json_options);
     FieldToJson(args["attachmentCount"], attachmentCount, json_options);
     Bool32ToJson(args["pColorBlendEnables"], pColorBlendEnables, json_options);
-    util::DiveFunctionData function_data("vkCmdSetColorBlendEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetColorBlendEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6942,7 +6942,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetColorBlendEquationEXT(
     FieldToJson(args["firstAttachment"], firstAttachment, json_options);
     FieldToJson(args["attachmentCount"], attachmentCount, json_options);
     FieldToJson(args["pColorBlendEquations"], pColorBlendEquations, json_options);
-    util::DiveFunctionData function_data("vkCmdSetColorBlendEquationEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetColorBlendEquationEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6960,7 +6960,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetColorWriteMaskEXT(
     FieldToJson(args["firstAttachment"], firstAttachment, json_options);
     FieldToJson(args["attachmentCount"], attachmentCount, json_options);
     FieldToJson(args["pColorWriteMasks"], pColorWriteMasks, json_options);
-    util::DiveFunctionData function_data("vkCmdSetColorWriteMaskEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetColorWriteMaskEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6974,7 +6974,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetTessellationDomainOriginEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["domainOrigin"], domainOrigin, json_options);
-    util::DiveFunctionData function_data("vkCmdSetTessellationDomainOriginEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetTessellationDomainOriginEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -6988,7 +6988,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRasterizationStreamEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["rasterizationStream"], rasterizationStream, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRasterizationStreamEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRasterizationStreamEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7002,7 +7002,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetConservativeRasterizationModeEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["conservativeRasterizationMode"], conservativeRasterizationMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetConservativeRasterizationModeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetConservativeRasterizationModeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7016,7 +7016,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetExtraPrimitiveOverestimationSizeE
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["extraPrimitiveOverestimationSize"], extraPrimitiveOverestimationSize, json_options);
-    util::DiveFunctionData function_data("vkCmdSetExtraPrimitiveOverestimationSizeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetExtraPrimitiveOverestimationSizeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7030,7 +7030,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthClipEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["depthClipEnable"], depthClipEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthClipEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthClipEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7044,7 +7044,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetSampleLocationsEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["sampleLocationsEnable"], sampleLocationsEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetSampleLocationsEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetSampleLocationsEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7062,7 +7062,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetColorBlendAdvancedEXT(
     FieldToJson(args["firstAttachment"], firstAttachment, json_options);
     FieldToJson(args["attachmentCount"], attachmentCount, json_options);
     FieldToJson(args["pColorBlendAdvanced"], pColorBlendAdvanced, json_options);
-    util::DiveFunctionData function_data("vkCmdSetColorBlendAdvancedEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetColorBlendAdvancedEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7076,7 +7076,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetProvokingVertexModeEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["provokingVertexMode"], provokingVertexMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetProvokingVertexModeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetProvokingVertexModeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7090,7 +7090,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLineRasterizationModeEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["lineRasterizationMode"], lineRasterizationMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLineRasterizationModeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLineRasterizationModeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7104,7 +7104,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetLineStippleEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["stippledLineEnable"], stippledLineEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetLineStippleEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetLineStippleEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7118,7 +7118,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthClipNegativeOneToOneEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["negativeOneToOne"], negativeOneToOne, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthClipNegativeOneToOneEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthClipNegativeOneToOneEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7132,7 +7132,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewportWScalingEnableNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["viewportWScalingEnable"], viewportWScalingEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewportWScalingEnableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewportWScalingEnableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7150,7 +7150,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetViewportSwizzleNV(
     FieldToJson(args["firstViewport"], firstViewport, json_options);
     FieldToJson(args["viewportCount"], viewportCount, json_options);
     FieldToJson(args["pViewportSwizzles"], pViewportSwizzles, json_options);
-    util::DiveFunctionData function_data("vkCmdSetViewportSwizzleNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetViewportSwizzleNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7164,7 +7164,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoverageToColorEnableNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["coverageToColorEnable"], coverageToColorEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoverageToColorEnableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoverageToColorEnableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7178,7 +7178,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoverageToColorLocationNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["coverageToColorLocation"], coverageToColorLocation, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoverageToColorLocationNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoverageToColorLocationNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7192,7 +7192,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoverageModulationModeNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["coverageModulationMode"], coverageModulationMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoverageModulationModeNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoverageModulationModeNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7206,7 +7206,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoverageModulationTableEnableNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["coverageModulationTableEnable"], coverageModulationTableEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoverageModulationTableEnableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoverageModulationTableEnableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7222,7 +7222,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoverageModulationTableNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["coverageModulationTableCount"], coverageModulationTableCount, json_options);
     FieldToJson(args["pCoverageModulationTable"], pCoverageModulationTable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoverageModulationTableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoverageModulationTableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7236,7 +7236,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetShadingRateImageEnableNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["shadingRateImageEnable"], shadingRateImageEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetShadingRateImageEnableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetShadingRateImageEnableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7250,7 +7250,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRepresentativeFragmentTestEnableN
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["representativeFragmentTestEnable"], representativeFragmentTestEnable, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRepresentativeFragmentTestEnableNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRepresentativeFragmentTestEnableNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7264,7 +7264,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetCoverageReductionModeNV(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["coverageReductionMode"], coverageReductionMode, json_options);
-    util::DiveFunctionData function_data("vkCmdSetCoverageReductionModeNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetCoverageReductionModeNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7335,7 +7335,7 @@ void VulkanExportDiveConsumer::Process_vkCmdOpticalFlowExecuteNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     HandleToJson(args["session"], session, json_options);
     FieldToJson(args["pExecuteInfo"], pExecuteInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdOpticalFlowExecuteNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdOpticalFlowExecuteNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7389,7 +7389,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBindShadersEXT(
     FieldToJson(args["stageCount"], stageCount, json_options);
     FieldToJson(args["pStages"], pStages, json_options);
     HandleToJson(args["pShaders"], pShaders, json_options);
-    util::DiveFunctionData function_data("vkCmdBindShadersEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBindShadersEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7405,7 +7405,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetDepthClampRangeEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["depthClampMode"], depthClampMode, json_options);
     FieldToJson(args["pDepthClampRange"], pDepthClampRange, json_options);
-    util::DiveFunctionData function_data("vkCmdSetDepthClampRangeEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetDepthClampRangeEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7457,7 +7457,7 @@ void VulkanExportDiveConsumer::Process_vkCmdConvertCooperativeVectorMatrixNV(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["infoCount"], infoCount, json_options);
     FieldToJson(args["pInfos"], pInfos, json_options);
-    util::DiveFunctionData function_data("vkCmdConvertCooperativeVectorMatrixNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdConvertCooperativeVectorMatrixNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7512,7 +7512,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(VkImageAspectFlags_t(), args["aspectMask"], aspectMask, json_options);
-    util::DiveFunctionData function_data("vkCmdSetAttachmentFeedbackLoopEnableEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetAttachmentFeedbackLoopEnableEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7534,7 +7534,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBuildPartitionedAccelerationStructur
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pBuildInfo"], pBuildInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdBuildPartitionedAccelerationStructuresNV", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBuildPartitionedAccelerationStructuresNV", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7558,7 +7558,7 @@ void VulkanExportDiveConsumer::Process_vkCmdPreprocessGeneratedCommandsEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pGeneratedCommandsInfo"], pGeneratedCommandsInfo, json_options);
     HandleToJson(args["stateCommandBuffer"], stateCommandBuffer, json_options);
-    util::DiveFunctionData function_data("vkCmdPreprocessGeneratedCommandsEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdPreprocessGeneratedCommandsEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7574,7 +7574,7 @@ void VulkanExportDiveConsumer::Process_vkCmdExecuteGeneratedCommandsEXT(
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     Bool32ToJson(args["isPreprocessed"], isPreprocessed, json_options);
     FieldToJson(args["pGeneratedCommandsInfo"], pGeneratedCommandsInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdExecuteGeneratedCommandsEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdExecuteGeneratedCommandsEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7692,7 +7692,7 @@ void VulkanExportDiveConsumer::Process_vkCmdBuildAccelerationStructuresKHR(
     FieldToJson(args["infoCount"], infoCount, json_options);
     FieldToJson(args["pInfos"], pInfos, json_options);
     FieldToJson(args["ppBuildRangeInfos"], ppBuildRangeInfos, json_options);
-    util::DiveFunctionData function_data("vkCmdBuildAccelerationStructuresKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdBuildAccelerationStructuresKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7737,7 +7737,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyAccelerationStructureKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInfo"], pInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyAccelerationStructureKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyAccelerationStructureKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7751,7 +7751,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyAccelerationStructureToMemoryKHR
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInfo"], pInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyAccelerationStructureToMemoryKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyAccelerationStructureToMemoryKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7765,7 +7765,7 @@ void VulkanExportDiveConsumer::Process_vkCmdCopyMemoryToAccelerationStructureKHR
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pInfo"], pInfo, json_options);
-    util::DiveFunctionData function_data("vkCmdCopyMemoryToAccelerationStructureKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdCopyMemoryToAccelerationStructureKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7795,7 +7795,7 @@ void VulkanExportDiveConsumer::Process_vkCmdWriteAccelerationStructuresPropertie
     FieldToJson(args["queryType"], queryType, json_options);
     HandleToJson(args["queryPool"], queryPool, json_options);
     FieldToJson(args["firstQuery"], firstQuery, json_options);
-    util::DiveFunctionData function_data("vkCmdWriteAccelerationStructuresPropertiesKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdWriteAccelerationStructuresPropertiesKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7839,7 +7839,7 @@ void VulkanExportDiveConsumer::Process_vkCmdTraceRaysKHR(
     FieldToJson(args["width"], width, json_options);
     FieldToJson(args["height"], height, json_options);
     FieldToJson(args["depth"], depth, json_options);
-    util::DiveFunctionData function_data("vkCmdTraceRaysKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdTraceRaysKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7886,7 +7886,7 @@ void VulkanExportDiveConsumer::Process_vkCmdTraceRaysIndirectKHR(
     FieldToJson(args["pHitShaderBindingTable"], pHitShaderBindingTable, json_options);
     FieldToJson(args["pCallableShaderBindingTable"], pCallableShaderBindingTable, json_options);
     FieldToJsonAsHex(args["indirectDeviceAddress"], indirectDeviceAddress, json_options);
-    util::DiveFunctionData function_data("vkCmdTraceRaysIndirectKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdTraceRaysIndirectKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7910,7 +7910,7 @@ void VulkanExportDiveConsumer::Process_vkCmdSetRayTracingPipelineStackSizeKHR(
     auto& args = dive_data["args"];
     HandleToJson(args["commandBuffer"], commandBuffer, json_options);
     FieldToJson(args["pipelineStackSize"], pipelineStackSize, json_options);
-    util::DiveFunctionData function_data("vkCmdSetRayTracingPipelineStackSizeKHR", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdSetRayTracingPipelineStackSizeKHR", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7928,7 +7928,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMeshTasksEXT(
     FieldToJson(args["groupCountX"], groupCountX, json_options);
     FieldToJson(args["groupCountY"], groupCountY, json_options);
     FieldToJson(args["groupCountZ"], groupCountZ, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMeshTasksEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMeshTasksEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7948,7 +7948,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMeshTasksIndirectEXT(
     FieldToJson(args["offset"], offset, json_options);
     FieldToJson(args["drawCount"], drawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 
@@ -7972,7 +7972,7 @@ void VulkanExportDiveConsumer::Process_vkCmdDrawMeshTasksIndirectCountEXT(
     FieldToJson(args["countBufferOffset"], countBufferOffset, json_options);
     FieldToJson(args["maxDrawCount"], maxDrawCount, json_options);
     FieldToJson(args["stride"], stride, json_options);
-    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectCountEXT", GetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    util::DiveFunctionData function_data("vkCmdDrawMeshTasksIndirectCountEXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
     WriteBlockEnd(function_data);
 }
 GFXRECON_END_NAMESPACE(decode)

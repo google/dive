@@ -18,7 +18,8 @@
 #include <QVBoxLayout>
 
 //--------------------------------------------------------------------------------------------------
-PropertyPanel::PropertyPanel(QFrame* m_parent) : QFrame(m_parent)
+PropertyPanel::PropertyPanel(QFrame* m_parent) :
+    QFrame(m_parent)
 {
     setMinimumWidth(250);
 

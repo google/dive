@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,16 +14,24 @@
  limitations under the License.
 */
 
-#include "progress_tracker_callback.h"
+#pragma once
 
-ProgressTrackerCallback::ProgressTrackerCallback() :
-    QObject(),
-    Dive::ProgressTracker()
-{
-}
+#include <optional>
+#include <vector>
 
-//--------------------------------------------------------------------------------------------------
-void ProgressTrackerCallback::sendMessage(std::string message)
+#include "dump_entry.h"
+
+namespace Dive::gfxr
 {
-    emit sendMessageSignal(QString::fromStdString(message));
-}
+
+// From a GFXR file, produce block indices that can be used with GXR --dump-resources.
+//
+// Returns std::nullopt on error.
+std::optional<std::vector<DumpEntry>> FindDumpableResources(const char* filename);
+
+// Serialize a list of complete dumpable to a JSON file.
+//
+// Returns false on error.
+bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filename);
+
+}  // namespace Dive::gfxr

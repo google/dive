@@ -90,6 +90,12 @@ endif()
 option(DIVE_ENABLE_PERFETTO, "Enable functionality to get perfetto trace." OFF)
 include(perfetto.cmake)
 
+if (NOT ANDROID)
+    # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/googletest)
+endif()
+
 add_subdirectory(capture_service)
 add_subdirectory(layer)
 add_subdirectory(runtime_layer)
@@ -111,6 +117,8 @@ if(NOT ANDROID)
     if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT DIVE_NO_DISASSEMBLY)
         add_subdirectory(ui)
     endif()
+
+    add_subdirectory(gfxr_dump_resources)
 else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")

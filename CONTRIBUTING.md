@@ -25,6 +25,23 @@ Guidelines](https://opensource.google/conduct/).
 
 ## Contribution process
 
+### Formatting
+
+This repository is formatted with LLVM clang-format version 18.1.8.
+
+#### Setup on Linux
+
+Install `clang-format-18` with `sudo apt install clang-format-18` and verify that it is version 18.1.8.
+Suggested usage is to run `./scripts/clangformat.sh` after committing changes, and all `.h` and `.cpp` files in the commit will be verified.
+
+#### Setup on Windows
+
+Install clang-format 18.1.8 using the appropriate Windows installer at: https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.8
+Suggested usage is using your preferred IDE, set it to format on save, and point to the installed `clang-format.exe`.
+
+#### Pull requests
+There is a lint github action that will run clang-format on all source code in the project.
+
 ### Code Reviews
 
 All submissions, including submissions by project members, require review. We

@@ -23,6 +23,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "capture_data.h"
@@ -113,7 +114,25 @@ private:
     };
 
     // List of all children for all nodes
+
+    // m_children_list contains the node_indexes of all the "normal" children throughout the entire
+    // command hierarchy for a specific TopologyType (e.g., kSubmitTopology or kAllEventTopology).
+    // It's a concatenated list of all direct children, ordered by the parent node they belong to.
+    // For example,
+    //  if node A has children(C1, C2) and node B has children(C3),
+    //  then m_children_list might look like[C1_index, C2_index, C3_index, ...]
+    //
+    // The m_node_children vector then contains ChildrenInfo structs for each parent node. Each
+    // ChildrenInfo struct has a m_start_index and m_num_children. These values tell you where in
+    // m_children_list to find the children for a specific parent node.
     DiveVector<uint64_t> m_children_list;
+
+    // m_shared_children_list contains the node_indexes of all the "shared" children throughout the
+    // entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
+    // flat, concatenated list of all nodes that are designated as "shared children". These are
+    // typically kPacketNodes that can logically appear under multiple different parent nodes or
+    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_list to
+    // define the range of shared children belonging to a particular node.
     DiveVector<uint64_t> m_shared_children_list;
 
     // This is a per-node pointer to m_children_list
@@ -241,6 +260,30 @@ public:
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
 
+    // For kBinningPassOnly
+    // - Keep Binning Pass
+    // - Exclude all Tile&Resolve Passes (0 - N)
+    // For kFirstTilePassOnly
+    // - Keep Tile Pass 0 (1st Tile&Resolve Pass after the Binning Pass)
+    // - Exclude all nodes in Binning Pass
+    // - Exclude Tile Pass 1 to N
+    // For kBinningAndFirstTilePass
+    // - Keep Binning Pass
+    // - Keep Tile Pass 0 (1st Tile&Resolve Pass after the Binning Pass)
+    // - Exclude Tile Pass 1 to N
+    enum FilterListType : uint32_t
+    {
+        kBinningPassOnly,
+        kFirstTilePassOnly,
+        kBinningAndFirstTilePass,
+        kFilterListTypeCount
+    };
+
+    const std::unordered_set<uint64_t> &GetFilterExcludeIndices(FilterListType filter_type) const
+    {
+        return m_filter_exclude_indices_list[filter_type];
+    }
+
 private:
     friend class CommandHierarchyCreator;
 
@@ -332,9 +375,14 @@ private:
 
     // Add a node and returns index of the added node
     uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
+    void     AddToFilterExcludeIndexList(uint64_t index, FilterListType filter_mode)
+    {
+        m_filter_exclude_indices_list[filter_mode].insert(index);
+    }
 
-    Nodes    m_nodes;
-    Topology m_topology[kTopologyTypeCount];
+    Nodes                        m_nodes;
+    std::unordered_set<uint64_t> m_filter_exclude_indices_list[kFilterListTypeCount];
+    Topology                     m_topology[kTopologyTypeCount];
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -539,6 +587,7 @@ private:
 
     bool m_new_event_start = true;
     bool m_new_ib_start = true;
+    bool m_tracking_first_tile_pass_start = false;
 
     // Stack of shared child node that begins the current ibs/pass/events
     // Need a stack because IBs and pass/events can be stacked

@@ -18,9 +18,51 @@ limitations under the License.
 #include "util/logging.h"
 
 #include <fstream>
+#include <memory>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
+
+bool WriterBlockVisitor::Visit(DiveSingleGfxrBlockInOriginalFile& block)
+{
+    util::platform::FileSeek(original_file_ptr_, block.offset_, util::platform::FileSeekSet);
+    int32_t bytes_left_to_copy = block.size_;
+    while (bytes_left_to_copy > 0)
+    {
+        int32_t bytes_to_copy = bytes_left_to_copy;
+        if (bytes_left_to_copy > kDiveBlockBufferSize)
+        {
+            bytes_to_copy = kDiveBlockBufferSize;
+        }
+        if (!util::platform::FileRead(copy_buffer_, bytes_to_copy, original_file_ptr_))
+        {
+            GFXRECON_LOG_ERROR("Copying original block, could not read from original file");
+            return false;
+        }
+        if (!util::platform::FileWrite(copy_buffer_, bytes_to_copy, new_file_ptr_))
+        {
+            GFXRECON_LOG_ERROR("Copying original block, could not write to new file");
+            return false;
+        }
+        bytes_left_to_copy -= bytes_to_copy;
+        if (bytes_left_to_copy < 0)
+        {
+            GFXRECON_LOG_ERROR("Copying original block, miscalculation of bytes_left_to_copy: %d", bytes_left_to_copy);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool WriterBlockVisitor::Visit(DiveSingleGfxrBlockInBuffer& block)
+{
+    if (!util::platform::FileWrite(copy_buffer_, block.size_in_bytes_, new_file_ptr_))
+    {
+        GFXRECON_LOG_ERROR("Writing modified block, could not write to new file");
+        return false;
+    }
+    return true;
+}
 
 bool DiveBlockData::AddOriginalBlock(size_t index, uint64_t offset)
 {
@@ -37,7 +79,7 @@ bool DiveBlockData::AddOriginalBlock(size_t index, uint64_t offset)
         return false;
     }
 
-    original_blocks_map_.push_back(BlockBytesLocation{ offset, 0 });
+    original_blocks_map_.emplace_back(std::make_shared<DiveSingleGfxrBlockInOriginalFile>(offset));
 
     return true;
 }
@@ -55,12 +97,24 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
         return false;
     }
 
+    // Calculating block size for header (before block id 0)
+    original_header_block_.offset_ = 0;
+    original_header_block_.size_   = original_blocks_map_[0]->offset_;
+
     // Calculating block sizes
-    original_header_size_bytes_ = original_blocks_map_[0].offset;
     for (size_t i = 0; i < original_blocks_map_.size() - 1; i++)
     {
-        uint64_t size                = original_blocks_map_[i + 1].offset - original_blocks_map_[i].offset;
-        original_blocks_map_[i].size = size;
+        uint64_t size = original_blocks_map_[i + 1]->offset_ - original_blocks_map_[i]->offset_;
+        if (size > kDiveBlockBufferSize)
+        {
+            GFXRECON_LOG_WARNING("Original block with id (%d) is larger than kDiveBlockBufferSize: %d > %d, will cause "
+                                 "more copy operations when writing new file",
+                                 i,
+                                 size,
+                                 kDiveBlockBufferSize);
+        }
+
+        original_blocks_map_[i]->size_ = size;
     }
 
     // The file processor calls AddOriginalBlock() even at the very end of the GFXR file, so this last block has a size
@@ -72,42 +126,57 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
     return true;
 }
 
-bool DiveBlockData::UpdateNewBlockOrder()
+bool DiveBlockData::AddModification(uint32_t                primary_id,
+                                    int32_t                 secondary_id,
+                                    std::shared_ptr<char[]> blob_ptr,
+                                    uint64_t                blob_size)
 {
-    new_blocks_order_.clear();
-
-    // TODO(chenangela): Insert modified blocks in the correct order, return false if an arrangement can't be found
-    for (uint32_t primary_index = 0; primary_index < original_blocks_map_.size(); primary_index++)
+    if (!original_blocks_map_locked_)
     {
-        NewBlockMetadata block;
-        block.is_original = true;
-        block.id          = primary_index;
-        new_blocks_order_.push_back(block);
+        GFXRECON_LOG_ERROR("Cannot make modifications before original file is processed");
+        return false;
     }
+
+    if (primary_id >= original_blocks_map_.size())
+    {
+        GFXRECON_LOG_ERROR("Primary index (%d) is out of bounds, largest original block id: %d",
+                           primary_id,
+                           original_blocks_map_.size() - 1);
+        return false;
+    }
+
+    // The only time an empty blob is used is to indicate a deletion modficiation of the original block
+    if (secondary_id != 0)
+    {
+        if ((blob_size == 0) || (blob_ptr == nullptr))
+            GFXRECON_LOG_ERROR("Invalid blob provided for modification at: (%d, %d)", primary_id, secondary_id);
+        return false;
+    }
+
+    if ((modifications_map_.count(primary_id) > 0) && (modifications_map_[primary_id].count(secondary_id) > 0))
+    {
+        GFXRECON_LOG_ERROR(
+            "Modified block already exists, please remove or clear first: (%d, %d)", primary_id, secondary_id);
+        return false;
+    }
+
+    auto new_block_ptr = std::make_shared<DiveSingleGfxrBlockInBuffer>(blob_ptr, blob_size);
+
+    modifications_map_[primary_id][secondary_id] = std::move(new_block_ptr);
 
     return true;
 }
 
-bool DiveBlockData::CopyBlockBetweenFiles(int32_t bytes_left_to_copy, FILE* original_fd, FILE* new_fd)
+bool DiveBlockData::RemoveModification(uint32_t primary_id, int32_t secondary_id)
 {
-    while (bytes_left_to_copy > 0)
+    if ((modifications_map_.count(primary_id) > 0) && (modifications_map_[primary_id].count(secondary_id) > 0))
     {
-        int32_t bytes_to_copy = bytes_left_to_copy;
-        if (bytes_left_to_copy > kDiveBlockBufferSize)
-        {
-            bytes_to_copy = kDiveBlockBufferSize;
-        }
-        util::platform::FileRead(block_buffer_, bytes_to_copy, original_fd);
-        util::platform::FileWrite(block_buffer_, bytes_to_copy, new_fd);
-
-        bytes_left_to_copy -= bytes_to_copy;
-        if (bytes_left_to_copy < 0)
-        {
-            GFXRECON_LOG_ERROR("Miscalculation of bytes_left_to_copy: %d", bytes_left_to_copy);
-            return false;
-        }
+        modifications_map_[primary_id].erase(secondary_id);
+        return false;
     }
-    return true;
+
+    GFXRECON_LOG_ERROR("No modified block at: (%d, %d), cannot remove", primary_id, secondary_id);
+    return false;
 }
 
 bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path, const std::string& new_file_path)
@@ -115,13 +184,6 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path, const s
     if (!original_blocks_map_locked_)
     {
         GFXRECON_LOG_ERROR("DiveBlockData original map must be finished before writing new file");
-        return false;
-    }
-
-    bool res = UpdateNewBlockOrder();
-    if (!res)
-    {
-        GFXRECON_LOG_ERROR("Cannot determine new blocks order");
         return false;
     }
 
@@ -141,46 +203,45 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path, const s
         return false;
     }
 
-    // Track block size relative to buffer size and recommend a larger buffer if required
-    uint32_t max_block_size = original_header_size_bytes_;
+    WriterBlockVisitor writer = { original_fd, new_fd };
 
     // Copy the original header
-    if (!CopyBlockBetweenFiles(original_header_size_bytes_, original_fd, new_fd))
+    if (!original_header_block_.Accept(writer))
     {
         GFXRECON_LOG_ERROR("Could not copy header");
         return false;
     }
 
-    // Write block by block
-    for (size_t i = 0; i < new_blocks_order_.size(); i++)
+    // Go through block-by-block in order of primary_id
+    for (uint32_t primary_id = 0; primary_id < original_blocks_map_.size(); primary_id++)
     {
-        NewBlockMetadata current_block_metadata = new_blocks_order_[i];
-
-        if (current_block_metadata.is_original)
+        std::map<int32_t, std::shared_ptr<DiveSingleBlock>> blocks_to_write = {};
+        if (modifications_map_.count(primary_id) > 0)
         {
-            BlockBytesLocation current_block_location = original_blocks_map_.at(current_block_metadata.id);
+            // Copy all the modifications relating to the original block with primary_id
+            blocks_to_write = modifications_map_[primary_id];
+        }
 
-            if (current_block_location.size > max_block_size)
+        // If there is no modification of the original block, insert a pointer to the original block into the map of
+        // blocks ordered by secondary_id
+        if (blocks_to_write.count(0) == 0)
+        {
+            blocks_to_write[0] = original_blocks_map_[primary_id];
+        }
+
+        // For a given primary_id, go through block-by-block in order of secondary_id
+        for (auto it = blocks_to_write.begin(); it != blocks_to_write.end(); ++it)
+        {
+            int32_t secondary_id = it->first;
+
+            auto current_block = it->second;
+
+            if (!current_block->Accept(writer))
             {
-                max_block_size = current_block_location.size;
-            }
-
-            util::platform::FileSeek(original_fd, current_block_location.offset, util::platform::FileSeekSet);
-
-            if (!CopyBlockBetweenFiles(current_block_location.size, original_fd, new_fd))
-            {
-                GFXRECON_LOG_ERROR("Could not copy original block id: %d", current_block_metadata.id);
+                GFXRECON_LOG_ERROR("Couldn't write block with ids (%d, %d)", primary_id, secondary_id);
                 return false;
             }
         }
-    }
-
-    if (max_block_size > kDiveBlockBufferSize)
-    {
-        GFXRECON_LOG_WARNING("kDiveBlockBufferSize (%d) is too small to accommodate max block size (%d) and will cause "
-                             "more copy operations in CopyBlockBetweenFiles",
-                             kDiveBlockBufferSize,
-                             max_block_size);
     }
 
     if (util::platform::FileClose(original_fd))

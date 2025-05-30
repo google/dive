@@ -18,18 +18,47 @@
 
 #include <QList>
 #include <QListIterator>
+#include <QSortFilterProxyModel>
 #include <QStyledItemDelegate>
 #include <QTreeView>
 
 // Forward declarations
-class QWidget;
+class CommandModel;
 class DiveTreeView;
 class HoverHelp;
+class QWidget;
+
 namespace Dive
 {
 class CommandHierarchy;
 class DataCore;
 };  // namespace Dive
+
+class DiveFilterModel : public QSortFilterProxyModel
+{
+    Q_OBJECT
+public:
+    enum FilterMode : uint32_t
+    {
+        kNone,
+        kBinningPassOnly,
+        kFirstTilePassOnly,
+        kBinningAndFirstTilePass,
+        kFilterModeCount
+    };
+
+    DiveFilterModel(const Dive::CommandHierarchy &command_hierarchy, QObject *parent = nullptr);
+    void SetMode(FilterMode filter_mode);
+public slots:
+    void applyNewFilterMode(FilterMode new_mode);
+
+protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+
+private:
+    const Dive::CommandHierarchy &m_command_hierarchy;
+    FilterMode                    m_filter_mode = kNone;
+};
 
 //--------------------------------------------------------------------------------------------------
 class DiveTreeViewDelegate : public QStyledItemDelegate
@@ -69,6 +98,8 @@ public:
 
     void SetDataCore(Dive::DataCore *data_core) { m_data_core = data_core; }
 
+    uint64_t GetNodeSourceIndex(const QModelIndex &proxy_model_index) const;
+
 public slots:
     void setCurrentNode(uint64_t node_index);
     void expandNode(const QModelIndex &index);
@@ -89,18 +120,22 @@ protected:
     const Dive::CommandHierarchy &m_command_hierarchy;
 
 signals:
-    void currentNodeChanged(uint64_t node_index, uint64_t prev_node_index);
     void labelExpanded(uint64_t node_index);
     void labelCollapsed(uint64_t node_index);
     void updateSearch(uint64_t curr_item_pos, uint64_t total_search_results);
+    void sourceCurrentChanged(const QModelIndex &currentSourceIndex,
+                              const QModelIndex &previousSourceIndex);
 
 private:
-    void gotoEvent(bool is_above);
-    void setAndScrollToNode(QModelIndex &idx);
-    int  getNearestSearchNode(uint64_t target_index);
+    void GotoEvent(bool is_above);
+    void SetAndScrollToNode(QModelIndex &proxy_model_idx);
+    int  GetNearestSearchNode(uint64_t source_node_idx);
 
-    QModelIndex                  curr_node_selected;
-    QList<QModelIndex>           search_indexes;
-    QList<QModelIndex>::Iterator search_index_it;
+    CommandModel *GetCommandModel();
+    QModelIndex   GetNodeSourceModelIndex(const QModelIndex &proxy_model_index) const;
+
+    QModelIndex                  m_curr_node_selected;
+    QList<QModelIndex>           m_search_indexes;
+    QList<QModelIndex>::Iterator m_search_index_it;
     Dive::DataCore              *m_data_core = nullptr;
 };

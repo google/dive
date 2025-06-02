@@ -74,6 +74,29 @@ VkSubpassContents contents)
     });
 }
 
+void DumpResourcesBuilderConsumer::Process_vkCmdBeginRenderPass2KHR(
+const gfxrecon::decode::ApiCallInfo& call_info,
+gfxrecon::format::HandleId           commandBuffer,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+pRenderPassBegin,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+pSubpassBeginInfo)
+{
+    std::cerr << "Process_vkCmdBeginRenderPass2KHR: commandBuffer=" << commandBuffer << '\n';
+    auto it = incomplete_dumps_.find(commandBuffer);
+    if (it == incomplete_dumps_.end())
+    {
+        std::cerr << "Command buffer " << commandBuffer << "n ever started! Ignoring...\n";
+        return;
+    }
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkCmdBeginRenderPass2KHR(call_info,
+                                                           commandBuffer,
+                                                           pRenderPassBegin,
+                                                           pSubpassBeginInfo);
+}
+
 void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
                                                      gfxrecon::format::HandleId commandBuffer,
                                                      uint32_t                   vertexCount,
@@ -121,6 +144,23 @@ gfxrecon::format::HandleId           commandBuffer)
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
         consumer.Process_vkCmdEndRenderPass(call_info, commandBuffer);
     });
+}
+
+void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass2KHR(
+const gfxrecon::decode::ApiCallInfo&                                                call_info,
+gfxrecon::format::HandleId                                                          commandBuffer,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+{
+    std::cerr << "Process_vkCmdEndRenderPass2KHR: commandBuffer=" << commandBuffer << '\n';
+    auto it = incomplete_dumps_.find(commandBuffer);
+    if (it == incomplete_dumps_.end())
+    {
+        std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
+        return;
+    }
+
+    StateMachine& state_machine = *it->second;
+    state_machine.state().Process_vkCmdEndRenderPass2KHR(call_info, commandBuffer, pSubpassEndInfo);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkQueueSubmit(

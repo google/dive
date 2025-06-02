@@ -59,6 +59,12 @@ public:
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
                                     gfxrecon::format::HandleId           commandBuffer) override;
 
+    void Process_vkCmdEndRenderPass2KHR(
+    const gfxrecon::decode::ApiCallInfo& call_info,
+    gfxrecon::format::HandleId           commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>*
+    pSubpassEndInfo) override;
+
     // TODO: Subpass
     // TODO: Other draws
 
@@ -90,6 +96,14 @@ public:
     gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
                       pRenderPassBegin,
     VkSubpassContents contents) override;
+
+    void Process_vkCmdBeginRenderPass2KHR(
+    const gfxrecon::decode::ApiCallInfo& call_info,
+    gfxrecon::format::HandleId           commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+    pRenderPassBegin,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+    pSubpassBeginInfo) override;
 
 private:
     StateMachine&                     parent_;

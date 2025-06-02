@@ -64,6 +64,15 @@ void LookingForDraw::Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallI
     parent_.Transition(found_end_);
 }
 
+void LookingForDraw::Process_vkCmdEndRenderPass2KHR(
+const gfxrecon::decode::ApiCallInfo&                                                call_info,
+gfxrecon::format::HandleId                                                          commandBuffer,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+{
+    parent_.dump_entry().render_passes.back().end_block_index = call_info.index;
+    parent_.Transition(found_end_);
+}
+
 LookingForBeginRenderPass::LookingForBeginRenderPass(
 StateMachine&                     parent,
 gfxrecon::decode::VulkanConsumer& found_begin) :
@@ -78,6 +87,18 @@ gfxrecon::format::HandleId           commandBuffer,
 gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
                   pRenderPassBegin,
 VkSubpassContents contents)
+{
+    parent_.dump_entry().render_passes.push_back(DumpRenderPass{ call_info.index });
+    parent_.Transition(found_begin_);
+}
+
+void LookingForBeginRenderPass::Process_vkCmdBeginRenderPass2KHR(
+const gfxrecon::decode::ApiCallInfo& call_info,
+gfxrecon::format::HandleId           commandBuffer,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+pRenderPassBegin,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+pSubpassBeginInfo)
 {
     parent_.dump_entry().render_passes.push_back(DumpRenderPass{ call_info.index });
     parent_.Transition(found_begin_);

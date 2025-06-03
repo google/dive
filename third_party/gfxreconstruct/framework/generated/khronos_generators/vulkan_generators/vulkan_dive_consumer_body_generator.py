@@ -90,6 +90,7 @@ class VulkanExportDiveConsumerBodyGenerator(VulkanBaseGenerator, KhronosExportDi
             "vkQueueSubmit",
             "vkQueueSubmit2",
             "vkQueueSubmit2KHR",
+            "vkBeginCommandBuffer"
             }
     def endFile(self):
         """Method override."""

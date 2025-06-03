@@ -792,6 +792,13 @@ void VulkanExportDiveConsumer::Process_vkBeginCommandBuffer(
     format::HandleId                            commandBuffer,
     StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
 {
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    FieldToJson(args["pBeginInfo"], pBeginInfo, json_options);
+    util::DiveFunctionData function_data("vkBeginCommandBuffer", 0, call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkEndCommandBuffer(

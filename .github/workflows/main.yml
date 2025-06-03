@@ -65,7 +65,7 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
 
-  build_Linux_Debug:
+  build_Linux_Gcc_Debug:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -87,7 +87,7 @@ jobs:
         run: |
           cd build; ctest --output-on-failure -C Debug
 
-  build_Linux_Release:
+  build_Linux_Gcc_Release:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -105,6 +105,48 @@ jobs:
       - name: Build the UI with gcc-14
         run: |
           mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 .. -GNinja && ninja && cd ..
+      - name: Run tests
+        run: |
+          cd build; ctest --output-on-failure -C Release
+
+  build_Linux_Clang_Debug:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
+          which clang-14
+      - name: Build the UI with clang-14
+        run: |
+          mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. -GNinja && ninja && cd ..
+      - name: Run tests
+        run: |
+          cd build; ctest --output-on-failure -C Debug
+
+  build_Linux_Clang_Release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
+          which clang-14
+      - name: Build the UI with clang-14
+        run: |
+          mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. -GNinja && ninja && cd ..
       - name: Run tests
         run: |
           cd build; ctest --output-on-failure -C Release

@@ -76,7 +76,7 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 add_executable(capture_fuzzer fuzz_main.cpp)
 target_compile_definitions(capture_fuzzer PUBLIC -DDIVE_GUI_TOOL)
-
+target_include_directories(capture_fuzzer PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 target_compile_options(capture_fuzzer
             PRIVATE $<$<C_COMPILER_ID:Clang>:-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,address>
             )
@@ -90,6 +90,7 @@ target_link_libraries(capture_fuzzer
 add_executable(capture_fuzzer_loader fuzz_main.cpp)
 target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_GUI_TOOL)
 target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_FUZZ_LOADER)
+target_include_directories(capture_fuzzer_loader PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 target_compile_options(capture_fuzzer_loader
             PRIVATE $<$<C_COMPILER_ID:Clang>:-g -O1 -fno-omit-frame-pointer -fsanitize=address>

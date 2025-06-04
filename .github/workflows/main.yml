@@ -15,6 +15,7 @@ concurrency:
 jobs:
   # Build the code
   build_Windows_Debug:
+    name: "Windows debug build"
     runs-on: windows-2022
     steps:
       - name: Check out code
@@ -40,6 +41,7 @@ jobs:
           cd build; ctest --output-on-failure -C Debug
   # Build the code
   build_Windows_Release:
+    name: "Windows release build"
     runs-on: windows-2022
     steps:
       - name: Check out code
@@ -66,6 +68,7 @@ jobs:
 
 
   build_Linux_Gcc_Debug:
+    name: "Linux gcc debug build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -88,6 +91,7 @@ jobs:
           cd build; ctest --output-on-failure -C Debug
 
   build_Linux_Gcc_Release:
+    name: "Linux gcc release build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -110,6 +114,7 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
   build_Linux_Clang_Debug:
+    name: "Linux clang debug build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -131,6 +136,7 @@ jobs:
           cd build; ctest --output-on-failure -C Debug
 
   build_Linux_Clang_Release:
+    name: "Linux clang release build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -152,6 +158,7 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
   build_Android:
+    name: "Android build"
     runs-on: ubuntu-24.04
     steps:
       - name: Set up Java 17

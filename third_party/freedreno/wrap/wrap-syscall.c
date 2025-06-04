@@ -599,24 +599,6 @@ int close(int fd)
 	return orig_close(fd);
 }
 
-static void log_gpuaddr(int device_fd, uint64_t gpuaddr, uint32_t len)
-{
-	uint32_t sect[3] = {
-			/* upper 32b of gpuaddr added after len for backwards compat */
-			gpuaddr, len, gpuaddr >> 32,
-	};
-	rd_write_section(device_fd, RD_GPUADDR, sect, sizeof(sect));
-}
-
-static void log_cmdaddr(int device_fd, uint64_t gpuaddr, uint32_t sizedwords)
-{
-	uint32_t sect[3] = {
-			/* upper 32b of gpuaddr added after len for backwards compat */
-			gpuaddr, sizedwords, gpuaddr >> 32,
-	};
-	rd_write_section(device_fd, RD_CMDSTREAM_ADDR, sect, sizeof(sect));
-}
-
 // GOOGLE: Need this mutex to make sure only 1 thread can dump bos 
 // This is required since we assume RD_GPUADDR is always followed by RD_BUFFER_CONTENTS
 static pthread_mutex_t bo_lock = PTHREAD_MUTEX_INITIALIZER;

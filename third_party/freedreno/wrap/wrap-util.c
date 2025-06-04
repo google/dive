@@ -328,7 +328,6 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 	}
 
 
-	struct device_file *df = get_file(device_fd);
 	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
 		const char *name = getenv("TESTNAME");
 		if (!name)

@@ -47,3 +47,7 @@ There is a lint github action that will run clang-format on all source code in t
 All submissions, including submissions by project members, require review. We
 use [GitHub pull requests](https://docs.github.com/articles/about-pull-requests)
 for this purpose.
+
+- Merging reviews approval from 2 Google reviewers.
+- "Squash and merge" is the preferred option to merge a PR since we like a linear git history.
+- "Update with rebase" only when the branch is out-of-date. This ensures a linear history in case "Rebase and merge" is used to submit a PR.

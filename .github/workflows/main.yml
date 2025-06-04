@@ -65,7 +65,7 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
 
-  build_Linux_Gcc_Debug:
+  build_Linux_Debug:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -87,7 +87,7 @@ jobs:
         run: |
           cd build; ctest --output-on-failure -C Debug
 
-  build_Linux_Gcc_Release:
+  build_Linux_Release:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code

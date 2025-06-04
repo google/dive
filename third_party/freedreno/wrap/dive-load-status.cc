@@ -17,13 +17,22 @@ limitations under the License.
 
 #include "dive-wrap.h"
 
+#include <sys/system_properties.h>
+
 #include <unistd.h>
 #include <pthread.h>
 
-
 #if defined(__ANDROID__)
-struct DiveWrapLoadLog
+struct DiveWrapLoadStatus
 {
-    DiveWrapLoadLog() { LOGI("Libwrap loaded in pid %d, thread id %ld...", getpid(),pthread_self()); }
+    DiveWrapLoadStatus()
+    {
+        if (IsGfrxReplayCapture())
+        {
+            SetCaptureFileNameByProperty();
+            StartCapture();
+        }
+        LOGI("Libwrap loaded in pid %d, thread id %ld...", getpid(), pthread_self());
+    }
 } load_log;
 #endif

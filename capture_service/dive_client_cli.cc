@@ -164,6 +164,8 @@ ABSL_FLAG(std::string,
           "specify the on-device path of the gfxr capture to replay.");
 ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr replay.");
 
+ABSL_FLAG(bool, dump_pm4, false, "dump pm4 for gfxr replay");
+
 void print_usage()
 {
     std::cout << absl::ProgramUsageMessage() << std::endl;
@@ -642,14 +644,36 @@ bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr,
                                 const std::string    gfxr_replay_capture,
                                 const std::string    gfxr_replay_flags)
 {
+    bool dump_pm4 = absl::GetFlag(FLAGS_dump_pm4);
+    auto dev_ret = mgr.SelectDevice(device_serial);
+
+    if (!dev_ret.ok())
+    {
+        std::cout << "Failed to select device " << dev_ret.status().message() << std::endl;
+        return false;
+    }
+
+    auto dev = *dev_ret;
+    auto ret = dev->SetupDevice();
+    if (!ret.ok())
+    {
+        std::cout << "Failed to setup device, error: " << ret.message() << std::endl;
+        return false;
+    }
     // Deploying install/gfxr-replay.apk
-    absl::Status ret = mgr.DeployReplayApk(device_serial);
+    ret = mgr.DeployReplayApk(device_serial);
     if (!ret.ok())
     {
         return false;
     }
+
+    std::string pm4_capture_download_path = absl::GetFlag(FLAGS_download_path);
+
     // Running replay for on-device capture
-    ret = mgr.RunReplayApk(gfxr_replay_capture, gfxr_replay_flags);
+    ret = mgr.RunReplayApk(gfxr_replay_capture,
+                           gfxr_replay_flags,
+                           dump_pm4,
+                           pm4_capture_download_path);
     return ret.ok();
 }
 

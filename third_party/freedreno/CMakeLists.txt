@@ -30,7 +30,7 @@ set(HDR_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/wrap/list.h"
 
 set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/wrap/wrap-util.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/wrap/wrap-syscall.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/dive-load-log.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/dive-load-status.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/wrap/dive-wrap.c"
 )
 

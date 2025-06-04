@@ -24,8 +24,18 @@ limitations under the License.
 #    define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #endif
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+    extern int  IsCapturing();
+    extern int  IsGfrxReplayCapture();
+    extern void SetCaptureFileNameByProperty();
+    extern void StartCapture();
+    extern void StopCapture();
+    extern void SetCaptureName(const char* name, const char* frame_num);
+#ifdef __cplusplus
+}
+#endif
 
-int IsCapturing() ;
-extern void SetCaptureState(int state);
-extern void SetCaptureName(const char* name, const char* frame_num);
 #endif

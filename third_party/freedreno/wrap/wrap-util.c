@@ -206,8 +206,7 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	testnum = getenv("TESTNUM");
 	if (testnum) {
 		n = strtol(testnum, NULL, 0);
-		// GOOGLE: add open_count to the filename.
-		sprintf(buf, "%s-%04u-%d.rd.inprogress", name, n, df->open_count);
+		sprintf(buf, "%s-%04u.rd.inprogress", name, n);
 	} else {
 		if (device_fd == -1) {
 			if (df->open_count == 0)
@@ -275,6 +274,8 @@ void rd_end(int device_fd)
 	if (rename(df->file_name, new_file_name) == -1) {
 		printf("Failed to rename trace file (%s)", strerror(errno));
 	}
+	// Google Add a debug log.
+	LOGD("%s renamed to %s", df->file_name, new_file_name);
 
 	df->log_fd = LOG_NULL_FILE;
 	df->device_fd = -1;

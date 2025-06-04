@@ -202,13 +202,12 @@ absl::Status AndroidDevice::SetupDevice()
 {
     RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
     RETURN_IF_ERROR(Adb().Run("shell getenforce"));
-
+    RETURN_IF_ERROR(
+    Adb().Run(absl::StrFormat("push %s %s",
+                              ResolveAndroidLibPath(kWrapLibName, "").generic_string(),
+                              kTargetPath)));
     if (!m_gfxr_enabled)
     {
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("push %s %s",
-                                  ResolveAndroidLibPath(kWrapLibName, "").generic_string(),
-                                  kTargetPath)));
         RETURN_IF_ERROR(
         Adb().Run(absl::StrFormat("push %s %s",
                                   ResolveAndroidLibPath(kVkLayerLibName, "").generic_string(),
@@ -459,9 +458,27 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 }
 
 absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
-                                         const std::string &replay_args)
+                                         const std::string &replay_args,
+                                         bool               dump_pm4,
+                                         const std::string &pm4_capture_download_path)
 {
     LOGD("RunReplayApk(): starting\n");
+
+    // Enable pm4 capture
+    if (dump_pm4)
+    {
+        std::string enable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 1",
+                                                          kEnableReplayPm4DumpPropertyName);
+        m_device->Adb().Run(enable_pm4_dump_cmd).IgnoreError();
+
+        std::string dump_pm4_file_name = std::filesystem::path(capture_path).filename().string();
+        LOGD("Enable pm4 capture file name is %s\n", dump_pm4_file_name.c_str());
+        std::string set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \"%s\"",
+                                                                 kReplayPm4DumpFileNamePropertyName,
+                                                                 dump_pm4_file_name);
+
+        m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
+    }
 
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("python %s replay %s %s",
@@ -469,12 +486,49 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                       capture_path,
                                       replay_args);
     absl::StatusOr<std::string> res = RunCommand(cmd);
+    // Cleanup PM4 capture
+    if (dump_pm4)
+    {
+        // Wait application to exit before trying to retrieve the trace file.
+        while (m_device->IsProcessRunning(kGfxrReplayAppName))
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+
+        std::string disable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 0",
+                                                           kEnableReplayPm4DumpPropertyName);
+        m_device->Adb().Run(disable_pm4_dump_cmd).IgnoreError();
+
+        std::string
+        set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \\\"\\\"",
+                                                     kReplayPm4DumpFileNamePropertyName);
+        m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
+
+        std::string on_device_trace_path = absl::StrFormat("%s/%s-0001.rd",
+                                                           kDeviceCaptureDirectory,
+                                                           std::filesystem::path(capture_path)
+                                                           .filename()
+                                                           .string()
+                                                           .c_str());
+        auto status = m_device->RetrieveTrace(on_device_trace_path, pm4_capture_download_path);
+        if (status.ok())
+        {
+            LOGI("Trace file %s downloaded to %s\n",
+                 on_device_trace_path.c_str(),
+                 pm4_capture_download_path.c_str());
+        }
+        else
+        {
+            LOGI("Failed to download the trace file %s\n", on_device_trace_path.c_str());
+        }
+    }
+
     if (!res.ok())
     {
-        LOGD("ERROR: RunReplayApk(): running capture and args: %s %s\n",
+        LOGD("ERROR: RunReplayApk(): running replay and args: %s %s\n",
              capture_path.c_str(),
              replay_args.c_str());
-        ;
+
         return res.status();
     }
 
@@ -506,6 +560,17 @@ absl::Status AndroidDevice::RetrieveTrace(const std::string &trace_path,
 void AndroidDevice::EnableGfxr(bool enable_gfxr)
 {
     m_gfxr_enabled = enable_gfxr;
+}
+
+bool AndroidDevice::IsProcessRunning(absl::string_view process_name) const
+{
+    auto res = Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name));
+    if (!res.ok())
+        return false;
+    std::string pid = *res;
+    if (pid.empty())
+        return false;
+    return true;
 }
 
 }  // namespace Dive

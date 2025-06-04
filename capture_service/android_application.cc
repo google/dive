@@ -152,18 +152,7 @@ absl::Status AndroidApplication::Stop()
 
 bool AndroidApplication::IsRunning() const
 {
-    return IsProcessRunning(m_package);
-}
-
-bool AndroidApplication::IsProcessRunning(absl::string_view process_name) const
-{
-    auto res = m_dev.Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name));
-    if (!res.ok())
-        return false;
-    std::string pid = *res;
-    if (pid.empty())
-        return false;
-    return true;
+    return m_dev.IsProcessRunning(m_package);
 }
 
 VulkanApplication::~VulkanApplication()
@@ -448,7 +437,7 @@ absl::Status VulkanCliApplication::Stop()
 }
 bool VulkanCliApplication::IsRunning() const
 {
-    return IsProcessRunning(m_command);
+    return m_dev.IsProcessRunning(m_command);
 }
 
 }  // namespace Dive

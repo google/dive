@@ -56,6 +56,9 @@ int wrap_printf(const char *format, ...);
 #define USE_PTHREADS
 #endif
 
+// Google Don't call printf to print debug message to console.
+#define printf(...) do { } while(0)
+
 void * __rd_dlsym_helper(const char *name);
 
 #define PROLOG(func) 					\

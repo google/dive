@@ -28,8 +28,6 @@
 #  include <dlfcn.h>
 #endif
 
-//#define USE_PTHREADS
-
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -55,6 +53,7 @@
 #if 0 /* uncomment for printf in logcat */
 int wrap_printf(const char *format, ...);
 #define printf wrap_printf
+#define USE_PTHREADS
 #endif
 
 void * __rd_dlsym_helper(const char *name);
@@ -66,12 +65,35 @@ void * __rd_dlsym_helper(const char *name);
 
 
 unsigned int env2u(const char *name);
+int wrap_get_next_fd(int index, int *fd);
+struct list *wrap_get_buffers_of_interest(int device_fd);
 unsigned int wrap_safe(void);
 unsigned int wrap_gpu_id(void);
 unsigned int wrap_gpu_id_patchid(void);
+unsigned int wrap_chip_id(void);
 unsigned int wrap_gmem_size(void);
 unsigned int wrap_buf_len_cap(void);
 unsigned int wrap_dump_all_bo(void);
+
+void hexdump(const void *data, int size);
+
+static void log_gpuaddr(int device_fd, uint64_t gpuaddr, uint32_t len)
+{
+	uint32_t sect[3] = {
+			/* upper 32b of gpuaddr added after len for backwards compat */
+			gpuaddr, len, gpuaddr >> 32,
+	};
+	rd_write_section(device_fd, RD_GPUADDR, sect, sizeof(sect));
+}
+
+static void log_cmdaddr(int device_fd, uint64_t gpuaddr, uint32_t sizedwords)
+{
+	uint32_t sect[3] = {
+			/* upper 32b of gpuaddr added after len for backwards compat */
+			gpuaddr, sizedwords, gpuaddr >> 32,
+	};
+	rd_write_section(device_fd, RD_CMDSTREAM_ADDR, sect, sizeof(sect));
+}
 
 #if 0
 #ifdef USE_PTHREADS

@@ -26,6 +26,7 @@
  */
 
 #include <ctype.h>
+#include <inttypes.h>
 
 #include "wrap.h"
 
@@ -57,34 +58,68 @@ static struct device_info kgsl_3d_info = {
 				IOCTL_INFO(IOCTL_KGSL_DEVICE_WAITTIMESTAMP),
 				IOCTL_INFO(IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID),
 				IOCTL_INFO(IOCTL_KGSL_RINGBUFFER_ISSUEIBCMDS),
+				IOCTL_INFO(IOCTL_KGSL_CMDSTREAM_READTIMESTAMP_OLD),
 				IOCTL_INFO(IOCTL_KGSL_CMDSTREAM_READTIMESTAMP),
 				IOCTL_INFO(IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP),
+				IOCTL_INFO(IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP_OLD),
 				IOCTL_INFO(IOCTL_KGSL_DRAWCTXT_CREATE),
 				IOCTL_INFO(IOCTL_KGSL_DRAWCTXT_DESTROY),
 				IOCTL_INFO(IOCTL_KGSL_MAP_USER_MEM),
+				IOCTL_INFO(IOCTL_KGSL_CMDSTREAM_READTIMESTAMP_CTXTID),
+				IOCTL_INFO(IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP_CTXTID),
 				IOCTL_INFO(IOCTL_KGSL_SHAREDMEM_FROM_PMEM),
 				IOCTL_INFO(IOCTL_KGSL_SHAREDMEM_FREE),
+				IOCTL_INFO(IOCTL_KGSL_CFF_USER_EVENT),
+				IOCTL_INFO(IOCTL_KGSL_DRAWCTXT_BIND_GMEM_SHADOW),
 				IOCTL_INFO(IOCTL_KGSL_SHAREDMEM_FROM_VMALLOC),
 				IOCTL_INFO(IOCTL_KGSL_SHAREDMEM_FLUSH_CACHE),
+				IOCTL_INFO(IOCTL_KGSL_DRAWCTXT_SET_BIN_BASE_OFFSET),
+				IOCTL_INFO(IOCTL_KGSL_CMDWINDOW_WRITE),
 				IOCTL_INFO(IOCTL_KGSL_GPUMEM_ALLOC),
 				IOCTL_INFO(IOCTL_KGSL_CFF_SYNCMEM),
-				IOCTL_INFO(IOCTL_KGSL_CFF_USER_EVENT),
+				IOCTL_INFO(IOCTL_KGSL_TIMESTAMP_EVENT_OLD),
+				IOCTL_INFO(IOCTL_KGSL_SETPROPERTY),
 				IOCTL_INFO(IOCTL_KGSL_TIMESTAMP_EVENT),
 				IOCTL_INFO(IOCTL_KGSL_GPUMEM_ALLOC_ID),
 				IOCTL_INFO(IOCTL_KGSL_GPUMEM_FREE_ID),
+				IOCTL_INFO(IOCTL_KGSL_GPUMEM_GET_INFO),
+				IOCTL_INFO(IOCTL_KGSL_GPUMEM_SYNC_CACHE),
 				IOCTL_INFO(IOCTL_KGSL_PERFCOUNTER_GET),
 				IOCTL_INFO(IOCTL_KGSL_PERFCOUNTER_PUT),
+				IOCTL_INFO(IOCTL_KGSL_PERFCOUNTER_QUERY),
 				IOCTL_INFO(IOCTL_KGSL_PERFCOUNTER_READ),
-				/* kgsl-3d specific ioctls: */
-				IOCTL_INFO(IOCTL_KGSL_DRAWCTXT_SET_BIN_BASE_OFFSET),
+				IOCTL_INFO(IOCTL_KGSL_GPUMEM_SYNC_CACHE_BULK),
 				IOCTL_INFO(IOCTL_KGSL_SUBMIT_COMMANDS),
 				IOCTL_INFO(IOCTL_KGSL_SYNCSOURCE_CREATE),
 				IOCTL_INFO(IOCTL_KGSL_SYNCSOURCE_DESTROY),
+				IOCTL_INFO(IOCTL_KGSL_SYNCSOURCE_CREATE_FENCE),
+				IOCTL_INFO(IOCTL_KGSL_SYNCSOURCE_SIGNAL_FENCE),
+				IOCTL_INFO(IOCTL_KGSL_CFF_SYNC_GPUOBJ),
 				IOCTL_INFO(IOCTL_KGSL_GPUOBJ_ALLOC),
 				IOCTL_INFO(IOCTL_KGSL_GPUOBJ_FREE),
 				IOCTL_INFO(IOCTL_KGSL_GPUOBJ_INFO),
 				IOCTL_INFO(IOCTL_KGSL_GPUOBJ_IMPORT),
+				IOCTL_INFO(IOCTL_KGSL_GPUOBJ_SYNC),
 				IOCTL_INFO(IOCTL_KGSL_GPU_COMMAND),
+				IOCTL_INFO(IOCTL_KGSL_PREEMPTIONCOUNTER_QUERY),
+				IOCTL_INFO(IOCTL_KGSL_GPUOBJ_SET_INFO),
+				IOCTL_INFO(IOCTL_KGSL_SPARSE_PHYS_ALLOC),
+				IOCTL_INFO(IOCTL_KGSL_SPARSE_PHYS_FREE),
+				IOCTL_INFO(IOCTL_KGSL_SPARSE_VIRT_ALLOC),
+				IOCTL_INFO(IOCTL_KGSL_SPARSE_VIRT_FREE),
+				IOCTL_INFO(IOCTL_KGSL_SPARSE_BIND),
+				IOCTL_INFO(IOCTL_KGSL_GPU_SPARSE_COMMAND),
+				IOCTL_INFO(IOCTL_KGSL_GPUMEM_BIND_RANGES),
+				IOCTL_INFO(IOCTL_KGSL_GPU_AUX_COMMAND),
+				IOCTL_INFO(IOCTL_KGSL_TIMELINE_CREATE),
+				IOCTL_INFO(IOCTL_KGSL_TIMELINE_WAIT),
+				IOCTL_INFO(IOCTL_KGSL_TIMELINE_QUERY),
+				IOCTL_INFO(IOCTL_KGSL_TIMELINE_SIGNAL),
+				IOCTL_INFO(IOCTL_KGSL_TIMELINE_FENCE_GET),
+				IOCTL_INFO(IOCTL_KGSL_TIMELINE_DESTROY),
+				IOCTL_INFO(IOCTL_KGSL_GET_FAULT_REPORT),
+				IOCTL_INFO(IOCTL_KGSL_RECURRING_COMMAND),
+				IOCTL_INFO(IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS),
 		},
 };
 
@@ -158,51 +193,6 @@ is_ion(int fd)
 }
 
 static void
-hexdump(const void *data, int size)
-{
-	unsigned char *buf = (void *) data;
-	char alpha[17];
-	int i;
-
-	for (i = 0; i < size; i++) {
-		if (!(i % 16))
-			printf("\t\t\t%08X", (unsigned int) i);
-		if (!(i % 4))
-			printf(" ");
-
-		if (((void *) (buf + i)) < ((void *) data)) {
-			printf("   ");
-			alpha[i % 16] = '.';
-		} else {
-			printf(" %02x", buf[i]);
-
-			if (isprint(buf[i]) && (buf[i] < 0xA0))
-				alpha[i % 16] = buf[i];
-			else
-				alpha[i % 16] = '.';
-		}
-
-		if ((i % 16) == 15) {
-			alpha[16] = 0;
-			printf("\t|%s|\n", alpha);
-		}
-	}
-
-	if (i % 16) {
-		for (i %= 16; i < 16; i++) {
-			printf("   ");
-			alpha[i] = '.';
-
-			if (i == 15) {
-				alpha[16] = 0;
-				printf("\t|%s|\n", alpha);
-			}
-		}
-	}
-}
-
-
-static void
 hexdump_dwords(const void *data, int sizedwords)
 {
 	uint32_t *buf = (void *) data;
@@ -220,6 +210,67 @@ hexdump_dwords(const void *data, int sizedwords)
 		printf("\n");
 }
 
+
+#define PRINT_SINGLE_FLAG(flags, flag, name) \
+	if (flags & flag) { \
+		printf(" %s |", name); \
+		flags &= ~flag; \
+	}
+
+#define PRINT_SINGLE_ENUM(flags, mask, val, name) \
+	if ((flags & mask) == val) { \
+		printf(" %s |", name); \
+		flags &= ~mask; \
+	}
+
+static void
+print_kgsl_memflags(__u64 flags)
+{
+	PRINT_SINGLE_ENUM(flags, KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_WRITECOMBINE << KGSL_CACHEMODE_SHIFT, "WRITECOMBINE")
+	PRINT_SINGLE_ENUM(flags, KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_UNCACHED << KGSL_CACHEMODE_SHIFT, "UNCACHED")
+	PRINT_SINGLE_ENUM(flags, KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_WRITETHROUGH << KGSL_CACHEMODE_SHIFT, "WRITETHROUGH")
+	PRINT_SINGLE_ENUM(flags, KGSL_CACHEMODE_MASK, KGSL_CACHEMODE_WRITEBACK << KGSL_CACHEMODE_SHIFT, "WRITEBACK")
+
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_SECURE, "SECURE")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_GPUREADONLY, "GPUREADONLY")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_GPUWRITEONLY, "GPUWRITEONLY")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_FORCE_32BIT, "FORCE_32BIT")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_USE_CPU_MAP, "USE_CPU_MAP")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_SPARSE_PHYS, "SPARSE_PHYS")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_SPARSE_VIRT, "SPARSE_VIRT")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_IOCOHERENT, "IOCOHERENT")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_GUARD_PAGE, "GUARD_PAGE")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_VBO, "VBO")
+	PRINT_SINGLE_FLAG(flags, KGSL_MEMFLAGS_VBO_NO_MAP_ZERO, "VBO_NO_MAP_ZERO")
+
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_OBJECTANY << KGSL_MEMTYPE_SHIFT, "MEMTYPE_OBJECTANY")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_FRAMEBUFFER << KGSL_MEMTYPE_SHIFT, "MEMTYPE_FRAMEBUFFER")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_RENDERBUFFER << KGSL_MEMTYPE_SHIFT, "MEMTYPE_RENDERBUFFER")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_ARRAYBUFFER << KGSL_MEMTYPE_SHIFT, "MEMTYPE_ARRAYBUFFER")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_ELEMENTARRAYBUFFER << KGSL_MEMTYPE_SHIFT, "MEMTYPE_ELEMENTARRAYBUFFER")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_VERTEXARRAYBUFFER << KGSL_MEMTYPE_SHIFT, "MEMTYPE_VERTEXARRAYBUFFER")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_TEXTURE << KGSL_MEMTYPE_SHIFT, "MEMTYPE_TEXTURE")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_SURFACE << KGSL_MEMTYPE_SHIFT, "MEMTYPE_SURFACE")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_EGL_SURFACE << KGSL_MEMTYPE_SHIFT, "MEMTYPE_EGL_SURFACE")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_GL << KGSL_MEMTYPE_SHIFT, "MEMTYPE_GL")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_CL << KGSL_MEMTYPE_SHIFT, "MEMTYPE_CL")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_CL_BUFFER_MAP << KGSL_MEMTYPE_SHIFT, "MEMTYPE_CL_BUFFER_MAP")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_CL_BUFFER_NOMAP << KGSL_MEMTYPE_SHIFT, "MEMTYPE_CL_BUFFER_NOMAP")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_CL_IMAGE_MAP << KGSL_MEMTYPE_SHIFT, "MEMTYPE_CL_IMAGE_MAP")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_CL_IMAGE_NOMAP << KGSL_MEMTYPE_SHIFT, "MEMTYPE_CL_IMAGE_NOMAP")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_CL_KERNEL_STACK << KGSL_MEMTYPE_SHIFT, "MEMTYPE_CL_KERNEL_STACK")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_COMMAND << KGSL_MEMTYPE_SHIFT, "MEMTYPE_COMMAND")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_2D << KGSL_MEMTYPE_SHIFT, "MEMTYPE_2D")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_EGL_IMAGE << KGSL_MEMTYPE_SHIFT, "MEMTYPE_EGL_IMAGE")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_EGL_SHADOW << KGSL_MEMTYPE_SHIFT, "MEMTYPE_EGL_SHADOW")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_MULTISAMPLE << KGSL_MEMTYPE_SHIFT, "MEMTYPE_MULTISAMPLE")
+	PRINT_SINGLE_ENUM(flags, KGSL_MEMTYPE_MASK, KGSL_MEMTYPE_KERNEL << KGSL_MEMTYPE_SHIFT, "MEMTYPE_KERNEL")
+
+	if (flags)
+		printf(" %08x %08x\n", (uint32_t)(flags >> 32), (uint32_t)flags);
+	else
+		printf("\n");
+}
 
 static void dump_ioctl(struct device_info *info, int dir, int fd,
 		unsigned long int request, void *ptr, int ret)
@@ -270,25 +321,28 @@ struct buffer {
 	int dumped;
 };
 
-static LIST_HEAD(buffers_of_interest);
-
-static struct buffer * register_buffer(void *hostptr, uint64_t flags,
-		unsigned int len, unsigned int handle)
+static struct buffer * register_buffer(int device_fd, void *hostptr,
+		uint64_t flags, unsigned int len, unsigned int handle)
 {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
+	assert(buffers_of_interest);
 	struct buffer *buf = calloc(1, sizeof *buf);
 	buf->hostptr = hostptr;
 	buf->flags = flags;
 	buf->len = len;
 	buf->handle = handle;
-	list_add(&buf->node, &buffers_of_interest);
+	list_add(&buf->node, buffers_of_interest);
 	return buf;
 }
 
-static struct buffer * find_buffer(void *hostptr, uint64_t gpuaddr,
-		uint64_t offset, unsigned int handle, unsigned id)
+static struct buffer * find_buffer(int device_fd, void *hostptr,
+        uint64_t gpuaddr, uint64_t offset, unsigned int handle, unsigned id)
 {
 	struct buffer *buf = NULL;
-	list_for_each_entry(buf, &buffers_of_interest, node) {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
+	if(!buffers_of_interest)
+		return NULL;
+	list_for_each_entry(buf, buffers_of_interest, node) {
 		if (hostptr)
 			if ((buf->hostptr <= hostptr) && (hostptr < (buf->hostptr + buf->len)))
 				return buf;
@@ -308,6 +362,18 @@ static struct buffer * find_buffer(void *hostptr, uint64_t gpuaddr,
 	return NULL;
 }
 
+static struct buffer * find_buffer_all(void *hostptr, uint64_t gpuaddr) {
+	int fd;
+	int index = 0;
+	while(-1 != (index = wrap_get_next_fd(index, &fd))) {
+		struct buffer *buf = find_buffer(fd, hostptr, gpuaddr, 0, 0, 0);
+		if(buf)
+			return buf;
+	}
+
+	return NULL;
+}
+
 static void unregister_buffer(struct buffer *buf)
 {
 	if (buf) {
@@ -321,11 +387,11 @@ static void unregister_buffer(struct buffer *buf)
 static void dump_buffer(uint64_t gpuaddr)
 {
 	static int cnt = 0;
-	struct buffer *buf = find_buffer((void *)-1, gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer_all((void *)-1, gpuaddr);
 	if (buf) {
 		char filename[32];
 		int fd;
-		sprintf(filename, "%04d-%016lx.dat", cnt, buf->gpuaddr);
+		sprintf(filename, "%04d-%016" PRIx64 ".dat", cnt, buf->gpuaddr);
 		printf("\t\tdumping: %s\n", filename);
 		fd = open(filename, O_WRONLY| O_TRUNC | O_CREAT, 0644);
 		write(fd, buf->hostptr, buf->len);
@@ -354,8 +420,8 @@ static void install_fd(const char *path, int fd)
 	assert(fd < ARRAY_SIZE(file_table));
 	if (!strcmp(path, "/dev/kgsl-3d0")) {
 #ifdef FAKE
-		assert(wrap_gpu_id() && wrap_gmem_size());
-		if ((wrap_gpu_id() >= 500) && !env2u("WRAP_FORCE_32B"))
+		assert((wrap_gpu_id() || wrap_chip_id()) && wrap_gmem_size());
+		if ((wrap_gpu_id() >= 500 || wrap_chip_id()) && !env2u("WRAP_FORCE_32B"))
 			is64b = 1;
 		file_table[fd].is_emulated = 1;
 #endif
@@ -509,6 +575,7 @@ int close(int fd)
 		if (file_table[fd].is_3d) {
 			// XXX unregister buffers
 			printf("closing 3d\n");
+			rd_end(fd);
 		}
 		file_table[fd].is_3d = 0;
 		file_table[fd].is_2d = 0;
@@ -522,31 +589,15 @@ int close(int fd)
 	return orig_close(fd);
 }
 
-static void log_gpuaddr(uint64_t gpuaddr, uint32_t len)
-{
-	uint32_t sect[3] = {
-			/* upper 32b of gpuaddr added after len for backwards compat */
-			gpuaddr, len, gpuaddr >> 32,
-	};
-	rd_write_section(RD_GPUADDR, sect, sizeof(sect));
-}
-
-static void log_cmdaddr(uint64_t gpuaddr, uint32_t sizedwords)
-{
-	uint32_t sect[3] = {
-			/* upper 32b of gpuaddr added after len for backwards compat */
-			gpuaddr, sizedwords, gpuaddr >> 32,
-	};
-	rd_write_section(RD_CMDSTREAM_ADDR, sect, sizeof(sect));
-}
-
 static void dump_bos(int fd)
 {
 	PROLOG(mmap);
 	PROLOG(munmap);
 
 	struct buffer *buf;
-	list_for_each_entry(buf, &buffers_of_interest, node) {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(fd);
+	assert(buffers_of_interest);
+	list_for_each_entry(buf, buffers_of_interest, node) {
 		if (!buf || buf->dumped)
 			continue;
 
@@ -566,8 +617,8 @@ static void dump_bos(int fd)
 			dump_len = min(buf->len, wrap_buf_len_cap());
 		}
 
-		log_gpuaddr(buf->gpuaddr, dump_len);
-		rd_write_section(RD_BUFFER_CONTENTS, buf->hostptr, dump_len);
+		log_gpuaddr(fd, buf->gpuaddr, dump_len);
+		rd_write_section(fd, RD_BUFFER_CONTENTS, buf->hostptr, dump_len);
 		buf->dumped = 1;
 
 		if (need_unmap) {
@@ -577,18 +628,19 @@ static void dump_bos(int fd)
 	}
 }
 
-static void dump_ib_prep(void)
+static void dump_ib_prep(int device_fd)
 {
 	struct buffer *other_buf;
-
-	list_for_each_entry(other_buf, &buffers_of_interest, node) {
+	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
+	assert(buffers_of_interest);
+	list_for_each_entry(other_buf, buffers_of_interest, node) {
 		other_buf->dumped = 0;
 	}
 }
 
 static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 {
-	struct buffer *buf = find_buffer(NULL, ibdesc->gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer(fd, NULL, ibdesc->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
 		struct buffer *other_buf;
 		uint32_t off = ibdesc->gpuaddr - buf->gpuaddr;
@@ -603,14 +655,14 @@ static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 		/* we already dump all the buffer contents, so just need
 		 * to dump the address/size of the cmdstream:
 		 */
-		log_cmdaddr(ibdesc->gpuaddr, ibdesc->sizedwords);
+		log_cmdaddr(fd, ibdesc->gpuaddr, ibdesc->sizedwords);
 	}
 }
 
 static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 {
 	/* note: kgsl seems to ignore cmd->offset.. which may be a bug.. */
-	struct buffer *buf = find_buffer(NULL, cmd->gpuaddr, 0, 0, 0);
+	struct buffer *buf = find_buffer(fd, NULL, cmd->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
 		struct buffer *other_buf;
 		uint32_t sizedwords = cmd->size / 4;
@@ -626,9 +678,16 @@ static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 		/* we already dump all the buffer contents, so just need
 		 * to dump the address/size of the cmdstream:
 		 */
-		log_cmdaddr(cmd->gpuaddr, sizedwords);
+		log_cmdaddr(fd, cmd->gpuaddr, sizedwords);
 	}
 }
+
+struct kgsl_ibdesc_legacy {
+	unsigned long gpuaddr;
+	void *hostptr;
+	size_t sizedwords;
+	unsigned int ctrl;
+};
 
 static void kgsl_ioctl_ringbuffer_issueibcmds_pre(int fd,
 		struct kgsl_ringbuffer_issueibcmds *param)
@@ -636,7 +695,7 @@ static void kgsl_ioctl_ringbuffer_issueibcmds_pre(int fd,
 	int is2d = get_kgsl_info(fd) == &kgsl_2d_info;
 	int i;
 	struct kgsl_ibdesc *ibdesc;
-	dump_ib_prep();
+	dump_ib_prep(fd);
 	printf("\t\tdrawctxt_id:\t%08x\n", param->drawctxt_id);
 	/*
 For z180_cmdstream_issueibcmds():
@@ -681,14 +740,15 @@ so the context, restored on context switch, is the first: 320 (0x140) words
 	*/
 	printf("\t\tflags:\t\t%08x\n", param->flags);
 	printf("\t\tnumibs:\t\t%08x\n", param->numibs);
-	printf("\t\tibdesc_addr:\t%08x\n", param->ibdesc_addr);
+	printf("\t\tibdesc_addr:\t%08lx\n", param->ibdesc_addr);
 	ibdesc = (struct kgsl_ibdesc *)param->ibdesc_addr;
 	for (i = 0; i < param->numibs; i++) {
+		struct kgsl_ibdesc_legacy *legacy_ibdesc = (struct kgsl_ibdesc_legacy *) ibdesc;
 		// z180_cmdstream_issueibcmds or adreno_ringbuffer_issueibcmds
-		printf("\t\tibdesc[%d].ctrl:\t\t%08x\n", i, ibdesc[i].ctrl);
-		printf("\t\tibdesc[%d].sizedwords:\t%08x\n", i, (uint32_t)ibdesc[i].sizedwords);
-		printf("\t\tibdesc[%d].gpuaddr:\t%08x\n", i, ibdesc[i].gpuaddr);
-		printf("\t\tibdesc[%d].hostptr:\t%p\n", i, ibdesc[i].hostptr);
+		printf("\t\tibdesc[%d].ctrl:\t\t%08x\n", i, legacy_ibdesc[i].ctrl);
+		printf("\t\tibdesc[%d].sizedwords:\t%08x\n", i, (uint32_t)legacy_ibdesc[i].sizedwords);
+		printf("\t\tibdesc[%d].gpuaddr:\t%08lx\n", i, legacy_ibdesc[i].gpuaddr);
+		printf("\t\tibdesc[%d].hostptr:\t%p\n", i, legacy_ibdesc[i].hostptr);
 		if (is2d) {
 			if (ibdesc[i].sizedwords > PACKETSIZE_STATESTREAM) {
 				unsigned int len, *ptr;
@@ -701,25 +761,25 @@ so the context, restored on context switch, is the first: 320 (0x140) words
 				 * entry.
 				 */
 				printf("\t\tcontext:\n");
-				hexdump_dwords(ibdesc[i].hostptr, PACKETSIZE_STATESTREAM);
-				rd_write_section(RD_CONTEXT, ibdesc[i].hostptr,
+				hexdump_dwords(legacy_ibdesc[i].hostptr, PACKETSIZE_STATESTREAM);
+				rd_write_section(fd, RD_CONTEXT, legacy_ibdesc[i].hostptr,
 						PACKETSIZE_STATESTREAM * sizeof(unsigned int));
 
 				printf("\t\tcmd:\n");
-				ptr = (unsigned int *)(ibdesc[i].hostptr +
+				ptr = (unsigned int *)(legacy_ibdesc[i].hostptr +
 						PACKETSIZE_STATESTREAM * sizeof(unsigned int));
 				len = ptr[2] & 0xfff;
 				/* 5 is length of first packet, 2 for the two 7f000000's */
 				hexdump_dwords(ptr, len + 5 + 2);
-				rd_write_section(RD_CMDSTREAM, ptr,
+				rd_write_section(fd, RD_CMDSTREAM, ptr,
 						(len + 5 + 2) * sizeof(unsigned int));
 				/* dump out full buffer in case I need to go back and check
 				 * if I missed something..
 				 */
-				dump_buffer(ibdesc[i].gpuaddr);
+				dump_buffer(legacy_ibdesc[i].gpuaddr);
 			} else {
 				printf("\t\tWARNING: INVALID CONTEXT!\n");
-				hexdump_dwords(ibdesc[i].hostptr, ibdesc[i].sizedwords);
+				hexdump_dwords(legacy_ibdesc[i].hostptr, legacy_ibdesc[i].sizedwords);
 			}
 		} else {
 			dump_ib(fd, &ibdesc[i]);
@@ -739,7 +799,7 @@ static void kgsl_ioctl_submit_commands_pre(int fd,
 	int i;
 	struct kgsl_ibdesc *ibdesc;
 
-	dump_ib_prep();
+	dump_ib_prep(fd);
 
 	ibdesc = (struct kgsl_ibdesc *)param->cmdlist;
 
@@ -749,8 +809,8 @@ static void kgsl_ioctl_submit_commands_pre(int fd,
 	for (i = 0; i < param->numcmds; i++) {
 		printf("\t\tibdesc[%d].ctrl:\t\t%08x\n", i, ibdesc[i].ctrl);
 		printf("\t\tibdesc[%d].sizedwords:\t%08x\n", i, (uint32_t)ibdesc[i].sizedwords);
-		printf("\t\tibdesc[%d].gpuaddr:\t%08x\n", i, ibdesc[i].gpuaddr);
-		printf("\t\tibdesc[%d].hostptr:\t%p\n", i, ibdesc[i].hostptr);
+		printf("\t\tibdesc[%d].gpuaddr:\t%08lx\n", i, ibdesc[i].gpuaddr);
+		// printf("\t\tibdesc[%d].hostptr:\t%p\n", i, ibdesc[i].hostptr);
 		dump_ib(fd, &ibdesc[i]);
 	}
 }
@@ -800,6 +860,23 @@ static const char *propnames[] = {
 		PROP_INFO(KGSL_PROP_MIN_ACCESS_LENGTH),
 		PROP_INFO(KGSL_PROP_UBWC_MODE),
 		PROP_INFO(KGSL_PROP_DEVICE_QTIMER),
+		PROP_INFO(KGSL_PROP_L3_PWR_CONSTRAINT),
+		PROP_INFO(KGSL_PROP_SECURE_BUFFER_ALIGNMENT),
+		PROP_INFO(KGSL_PROP_SECURE_CTXT_SUPPORT),
+		PROP_INFO(KGSL_PROP_SPEED_BIN),
+		PROP_INFO(KGSL_PROP_GAMING_BIN),
+		PROP_INFO(KGSL_PROP_QUERY_CAPABILITIES),
+		PROP_INFO(KGSL_PROP_CONTEXT_PROPERTY),
+		PROP_INFO(KGSL_PROP_GPU_MODEL),
+		PROP_INFO(KGSL_PROP_VK_DEVICE_ID),
+		PROP_INFO(KGSL_PROP_IS_LPAC_ENABLED),
+		PROP_INFO(KGSL_PROP_GPU_VA64_SIZE),
+		PROP_INFO(KGSL_PROP_IS_RAYTRACING_ENABLED),
+		PROP_INFO(KGSL_PROP_IS_FASTBLEND_ENABLED),
+		PROP_INFO(KGSL_PROP_UCHE_TRAP_BASE),
+		PROP_INFO(KGSL_PROP_IS_AQE_ENABLED),
+		PROP_INFO(KGSL_PROP_GPU_SECURE_VA_SIZE),
+		PROP_INFO(KGSL_PROP_GPU_SECURE_VA_INUSE),
 };
 
 static void kgsl_ioctl_device_getproperty_post(int fd,
@@ -832,6 +909,17 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 			printf("\t\tEMULATING gpu_id: %d (%08x)!!!\n",
 					devinfo->gpu_id, devinfo->chip_id);
 		}
+		if (wrap_chip_id()) {
+			devinfo->gpu_id = 0;
+			devinfo->chip_id = wrap_chip_id();
+#ifdef FAKE
+			devinfo->device_id = 1;
+			devinfo->mmu_enabled = 1;
+			devinfo->gmem_gpubaseaddr = 0x10000;
+#endif
+			printf("\t\tEMULATING chip_id: %08x!!!\n", devinfo->chip_id);
+		}
+
 		if (wrap_gmem_size()) {
 			devinfo->gmem_sizebytes = wrap_gmem_size();
 			printf("\t\tEMULATING gmem_sizebytes: %u !!!\n", (uint32_t)devinfo->gmem_sizebytes);
@@ -842,7 +930,10 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 				((devinfo->chip_id >> 16) & 0xff) * 10 +
 				((devinfo->chip_id >> 8) & 0xff) * 1;
 		}
-		rd_write_section(RD_GPU_ID, &gpu_id, sizeof(gpu_id));
+		rd_write_section(fd, RD_GPU_ID, &gpu_id, sizeof(gpu_id));
+		uint64_t chip_id = devinfo->chip_id;
+		rd_write_section(fd, RD_CHIP_ID, &chip_id, sizeof(chip_id));
+
 		printf("\t\tgpu_id: %d\n", gpu_id);
 		printf("\t\tgmem_sizebytes: 0x%x\n", (uint32_t)devinfo->gmem_sizebytes);
 #ifdef FAKE
@@ -868,7 +959,7 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 	} else if (param->type == KGSL_PROP_UCODE_VERSION) {
 		struct kgsl_ucode_version *ucode = param->value;
 		unsigned gpu_id = wrap_gpu_id();
-		if (gpu_id >= 600) {
+		if (gpu_id >= 600 || wrap_chip_id()) {
 			ucode->pfp = 0x016ee187;  /* SQE version goes in pfp slot */
 			ucode->pm4 = 0;
 		} else {
@@ -1045,7 +1136,7 @@ static void kgsl_ioctl_sharedmem_from_vmalloc_pre(int fd,
 //		case 0x9000:
 //		case 0x81000:
 			/* register buffer of interest */
-			register_buffer((void *)param->hostptr, param->flags, len, 0);
+			register_buffer(fd, (void *)param->hostptr, param->flags, len, 0);
 			break;
 		}
 	}
@@ -1058,25 +1149,26 @@ static void kgsl_ioctl_sharedmem_from_vmalloc_pre(int fd,
 static void kgsl_ioctl_sharedmem_from_vmalloc_post(int fd,
 		struct kgsl_sharedmem_from_vmalloc *param)
 {
-	struct buffer *buf = find_buffer((void *)param->hostptr, 0, 0, 0, 0);
-	log_gpuaddr(param->gpuaddr, len_from_vma(param->hostptr));
+	struct buffer *buf = find_buffer(fd, (void *)param->hostptr, 0, 0, 0, 0);
+	log_gpuaddr(fd, param->gpuaddr, len_from_vma(param->hostptr));
 	if (buf)
 		buf->gpuaddr = param->gpuaddr;
-	printf("\t\tgpuaddr:\t%08x\n", param->gpuaddr);
+	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 }
 
 static void kgsl_ioctl_sharedmem_free_pre(int fd,
 		struct kgsl_sharedmem_free *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, param->gpuaddr, 0, 0, 0);
-	printf("\t\tgpuaddr:\t%08x\n", param->gpuaddr);
+	struct buffer *buf = find_buffer(fd, (void *)-1, param->gpuaddr, 0, 0, 0);
+	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	unregister_buffer(buf);
 }
 
 static void kgsl_ioctl_gpumem_alloc_pre(int fd,
 		struct kgsl_gpumem_alloc *param)
 {
-	printf("\t\tflags:\t\t%08x\n", param->flags);
+	printf("\t\tflags:\t\t%08x // ", param->flags);
+	print_kgsl_memflags(param->flags);
 	printf("\t\tsize:\t\t%08x\n", (uint32_t)param->size);
 }
 
@@ -1084,10 +1176,10 @@ static void kgsl_ioctl_gpumem_alloc_post(int fd,
 		struct kgsl_gpumem_alloc *param)
 {
 	struct buffer *buf;
-	log_gpuaddr(param->gpuaddr, param->size);
+	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
-	buf = register_buffer(NULL, param->flags, param->size, 0);
+	buf = register_buffer(fd, NULL, param->flags, param->size, 0);
 	buf->gpuaddr = param->gpuaddr;
 	buf->offset = param->gpuaddr;
 }
@@ -1095,7 +1187,8 @@ static void kgsl_ioctl_gpumem_alloc_post(int fd,
 static void kgsl_ioctl_gpumem_alloc_id_pre(int fd,
 		struct kgsl_gpumem_alloc_id *param)
 {
-	printf("\t\tflags:\t\t%08x\n", param->flags);
+	printf("\t\tflags:\t\t%08x // ", param->flags);
+	print_kgsl_memflags(param->flags);
 	printf("\t\tsize:\t\t%08x\n", (uint32_t)param->size);
 	/* easier to force it not to USE_CPU_MAP than dealing with
 	 * the mmap dance:
@@ -1115,11 +1208,11 @@ static void kgsl_ioctl_gpumem_alloc_id_post(int fd,
 	param->gpuaddr = alloc_gpuaddr(param->mmapsize);
 #endif
 
-	log_gpuaddr(param->gpuaddr, param->size);
+	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tid:\t%u\n", param->id);
 	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
-	buf = register_buffer(NULL, param->flags, param->size, 0);
+	buf = register_buffer(fd, NULL, param->flags, param->size, 0);
 	buf->id = param->id;
 	buf->gpuaddr = param->gpuaddr;
 	buf->offset = param->gpuaddr;
@@ -1134,7 +1227,7 @@ static void kgsl_ioctl_gpumem_free_id_pre(int fd,
 static void kgsl_ioctl_gpumem_free_id_post(int fd,
 		struct kgsl_gpumem_free_id *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, 0, 0, 0, param->id);
+	struct buffer *buf = find_buffer(fd, (void *)-1, 0, 0, 0, param->id);
 	unregister_buffer(buf);
 }
 
@@ -1171,7 +1264,7 @@ static void kgls_ioctl_perfcounter_get_post(int fd,
 	printf("\t\toffset_lo:\t0x%x\n", param->offset);
 	printf("\t\toffset_hi:\t0x%x\n", param->offset_hi);
 
-	rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+	rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 			"perfcounter_get: groupid=%u, countable=%u, off_lo=0x%x, off_hi=0x%x",
 			param->groupid, param->countable, param->offset, param->offset_hi));
 }
@@ -1183,7 +1276,7 @@ static void kgls_ioctl_perfcounter_read_post(int fd,
 
 	printf("\t\tcount:\t%u\n", param->count);
 
-	rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+	rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 			"perfcounter_read: count=%u", param->count));
 
 	for (int i = 0; i < param->count; i++) {
@@ -1192,7 +1285,7 @@ static void kgls_ioctl_perfcounter_read_post(int fd,
 		printf("\t\tgroup[%i].countable:\t%u\n", i, perf->countable);
 		printf("\t\tgroup[%i].value:\t%llu\n", i, perf->value);
 
-		rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+		rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 				"\tgroup[%i]: groupid=%u, countable=%u, value=%llu",
 				i, perf->groupid, perf->countable, perf->value));
 	}
@@ -1206,7 +1299,7 @@ static void kgls_ioctl_perfcounter_put_pre(int fd,
 	printf("\t\tgroupid:\t%u\n", param->groupid);
 	printf("\t\tcountable:\t%u\n", param->countable);
 
-	rd_write_section(RD_CMD, buf, snprintf(buf, sizeof(buf),
+	rd_write_section(fd, RD_CMD, buf, snprintf(buf, sizeof(buf),
 			"perfcounter_put: groupid=%u, countable=%u",
 			param->groupid, param->countable));
 }
@@ -1214,7 +1307,8 @@ static void kgls_ioctl_perfcounter_put_pre(int fd,
 static void kgls_ioctl_gpuobj_alloc_pre(int fd,
 		struct kgsl_gpuobj_alloc *param)
 {
-	printf("\t\tflags:\t\t%08x %08x\n", (uint32_t)(param->flags >> 32), (uint32_t)param->flags);
+	printf("\t\tflags:\t\t%08x %08x // ", (uint32_t)(param->flags >> 32), (uint32_t)param->flags);
+	print_kgsl_memflags(param->flags);
 	printf("\t\tsize:\t\t%08x\n", (uint32_t)param->size);
 	/* easier to force it not to USE_CPU_MAP than dealing with
 	 * the mmap dance:
@@ -1234,7 +1328,7 @@ static void kgls_ioctl_gpuobj_alloc_post(int fd,
 #endif
 	printf("\t\tid:\t%u\n", param->id);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
-	buf = register_buffer(NULL, param->flags, param->size, 0);
+	buf = register_buffer(fd, NULL, param->flags, param->size, 0);
 	buf->id = param->id;
 }
 
@@ -1247,7 +1341,7 @@ static void kgls_ioctl_gpuobj_free_pre(int fd,
 static void kgls_ioctl_gpuobj_free_post(int fd,
 		struct kgsl_gpuobj_free *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, 0, 0, 0, param->id);
+	struct buffer *buf = find_buffer(fd, (void *)-1, 0, 0, 0, param->id);
 	unregister_buffer(buf);
 }
 
@@ -1260,7 +1354,7 @@ static void kgsl_ioclt_gpuobj_info_pre(int fd,
 static void kgsl_ioclt_gpuobj_info_post(int fd,
 		struct kgsl_gpuobj_info *param)
 {
-	struct buffer *buf = find_buffer((void *)-1, 0, 0, 0, param->id);
+	struct buffer *buf = find_buffer(fd, (void *)-1, 0, 0, 0, param->id);
 
 	/* This could be an ION buffer which we don't track */
 	if (!buf)
@@ -1273,9 +1367,9 @@ static void kgsl_ioclt_gpuobj_info_post(int fd,
 	param->va_len = buf->len;
 #endif
 
-	log_gpuaddr(param->gpuaddr, param->size);
+	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tid:\t%u\n", param->id);
-	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
+	printf("\t\tgpuaddr:\t%08" PRIx64 "\n", (uint64_t)param->gpuaddr);
 	buf->gpuaddr = param->gpuaddr;
 	buf->offset = param->gpuaddr;
 }
@@ -1284,7 +1378,7 @@ static void kgsl_ioclt_gpuobj_import_pre(int fd,
 		struct kgsl_gpuobj_import *param)
 {
 	if (param->type == KGSL_USER_MEM_TYPE_DMABUF) {
-		struct kgsl_gpuobj_import_dma_buf *import_dmabuf = param->priv;
+		struct kgsl_gpuobj_import_dma_buf *import_dmabuf = (struct kgsl_gpuobj_import_dma_buf *)param->priv;
 
 		printf("\t\tdmabuf_fd:\t%u\n", import_dmabuf->fd);
 	}
@@ -1304,7 +1398,7 @@ static void kgls_ioctl_gpuobj_gpu_command_pre(int fd,
 	int i;
 	struct kgsl_command_object *cmdobj;
 
-	dump_ib_prep();
+	dump_ib_prep(fd);
 
 	dump_bos(fd);
 
@@ -1317,7 +1411,7 @@ static void kgls_ioctl_gpuobj_gpu_command_pre(int fd,
 	for (i = 0; i < param->numcmds; i++) {
 		printf("\t\tcmd[%d].flags:\t\t%08x\n", i, cmdobj[i].flags);
 		printf("\t\tcmd[%d].sizedwords:\t%08x\n", i, (uint32_t)cmdobj[i].size / 4);
-		printf("\t\tcmd[%d].gpuaddr:\t%08x\n", i, cmdobj[i].gpuaddr);
+		printf("\t\tcmd[%d].gpuaddr:\t%08" PRIx64 "\n", i, (uint64_t)cmdobj[i].gpuaddr);
 		dump_cmd(fd, &cmdobj[i]);
 	}
 }
@@ -1331,8 +1425,8 @@ static void kgls_ioctl_gpuobj_gpu_command_post(int fd,
 static void kgls_ion_ioc_alloc_pre(int fd,
 		struct ion_allocation_data *param)
 {
-	printf("\t\tlen:\t\t%08x\n", param->len);
-	printf("\t\talign:\t\t%08x\n", param->align);
+	printf("\t\tlen:\t\t%08zx\n", param->len);
+	printf("\t\talign:\t\t%08zx\n", param->align);
 	printf("\t\theap_id_mask:\t%08x\n", param->heap_id_mask);
 	printf("\t\tflags:\t\t%08x\n", param->flags);
 }
@@ -1478,7 +1572,11 @@ static void kgsl_ioctl_post(int fd, unsigned long int request, void *ptr, int re
 }
 
 // XXX android/bionic has messed up ioctl signature:
+#if defined(BIONIC)
 int ioctl(int fd, int request, ...)
+#else
+int ioctl(int fd, unsigned long int request, ...)
+#endif
 {
 	int ioc_size = _IOC_SIZE(request);
 	int ret;
@@ -1572,7 +1670,7 @@ void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 
 		printf("< [%4d]         : mmap: addr=%p, length=%u, prot=%x, flags=%x, offset=%08lx\n",
 				fd, addr, (uint32_t)length, prot, flags, offset);
@@ -1597,7 +1695,7 @@ void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 		if (buf)
 			buf->hostptr = ret;
 		else {
@@ -1606,7 +1704,7 @@ void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset
 			 * it's mmapped by id, not by gpuaddr, so try to find that
 			 * buffer via id now.
 			 */
-			buf = find_buffer(NULL, 0, 0, 0, offset >> 12);
+			buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12);
 			if (buf)
 				buf->hostptr = ret;
 		}
@@ -1627,9 +1725,9 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 
-		printf("< [%4d]         : mmap64: addr=%p, length=%u, prot=%x, flags=%x, offset=%08lx\n",
+		printf("< [%4d]         : mmap64: addr=%p, length=%u, prot=%x, flags=%x, offset=%08" PRIx64 "\n",
 				fd, addr, (uint32_t)length, prot, flags, offset);
 
 		if (buf && buf->hostptr) {
@@ -1653,7 +1751,7 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 
 	if ((fd >= 0) && get_kgsl_info(fd)) {
 		//struct buffer *buf = find_buffer(NULL, 0, offset, 0, 0);
-		struct buffer *buf = find_buffer(NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
+		struct buffer *buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12); // XXX only id's are used now
 		if (buf)
 			buf->hostptr = ret;
 		else {
@@ -1662,7 +1760,7 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 			 * it's mmapped by id, not by gpuaddr, so try to find that
 			 * buffer via id now.
 			 */
-			buf = find_buffer(NULL, 0, 0, 0, offset >> 12);
+			buf = find_buffer(fd, NULL, 0, 0, 0, offset >> 12);
 			if (buf)
 				buf->hostptr = ret;
 		}
@@ -1682,7 +1780,7 @@ int munmap(void *addr, size_t length)
 
 	LOCK();
 
-	buf = find_buffer(addr, 0, 0, 0, 0);
+	buf = find_buffer_all(addr, 0);
 	if (buf) {
 		/* we need the contents at submit ioctl: */
 printf("fake munmap: buf=%p\n", buf);

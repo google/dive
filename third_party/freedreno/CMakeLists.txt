@@ -37,7 +37,7 @@ set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/wrap/wrap-util.c"
 add_library(wrap SHARED ${HDR_FILES} ${SRC_FILES})
 set(CMAKE_CPP_FLAGS "${CMAKE_CPP_FLAGS} -frtti -fexceptions")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DBIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD")
-add_definitions(-DANDROID_STL=c++_shared -DNDK_DEBUG=1)
+add_definitions(-DANDROID_STL=c++_shared -DNDK_DEBUG=1 -DBIONIC=1)
 set(CMAKE_BUILD_TYPE Debug)  # Release build didn't work (TODO: check why release build not working)
 target_include_directories(${target_name} 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/includes

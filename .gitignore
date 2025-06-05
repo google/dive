@@ -11,6 +11,9 @@
 /compile_commands.json
 /.cache/
 
+# ctest
+Testing/
+
 # Build-related directories
 build/
 build_android/

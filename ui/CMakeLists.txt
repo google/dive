@@ -62,7 +62,7 @@ add_executable(${PROJECT_NAME} WIN32 ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILE
 # Use the Widgets module from Qt 5
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
-target_link_libraries(${PROJECT_NAME} dive_core device_mgr client)
+target_link_libraries(${PROJECT_NAME} dive_core device_mgr client dive_plugin_manager)
 target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0

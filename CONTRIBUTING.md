@@ -46,6 +46,7 @@ There is a lint github action that will run clang-format on all source code in t
 
 - `CamelCase` for class and function names. The exception is overriding methods, like Qt, where adopting their naming convention is required.
 - Prefix class member variables with `m_`
+- Variable naming: use `snake_case`
 
 ### Code Reviews
 

@@ -15,6 +15,7 @@ concurrency:
 jobs:
   # Build the code
   build_Windows_Debug:
+    name: "Windows debug build"
     runs-on: windows-2022
     steps:
       - name: Check out code
@@ -31,7 +32,7 @@ jobs:
       - name: Install dependency
         run: |
           python3 -m pip install mako
-      - name: Build the UI
+      - name: Build Dive host tools
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 ..
           cmake --build ./ --config Debug
@@ -40,6 +41,7 @@ jobs:
           cd build; ctest --output-on-failure -C Debug
   # Build the code
   build_Windows_Release:
+    name: "Windows release build"
     runs-on: windows-2022
     steps:
       - name: Check out code
@@ -56,7 +58,7 @@ jobs:
       - name: Install dependency
         run: |
           python3 -m pip install mako
-      - name: Build the UI
+      - name: Build Dive host tools
         run: |
           mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 ..
           cmake --build ./ --config Release
@@ -65,7 +67,8 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
 
-  build_Linux_Debug:
+  build_Linux_Gcc_Debug:
+    name: "Linux gcc debug build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -80,14 +83,15 @@ jobs:
           sudo apt-get install --yes cmake gcc-14  clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
           which gcc-14
           which clang-14
-      - name: Build the UI with gcc-14
+      - name: Build Dive host tools with gcc-14
         run: |
           mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 .. -GNinja && ninja && cd ..
       - name: Run tests
         run: |
           cd build; ctest --output-on-failure -C Debug
 
-  build_Linux_Release:
+  build_Linux_Gcc_Release:
+    name: "Linux gcc release build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -102,7 +106,7 @@ jobs:
           sudo apt-get install --yes cmake gcc-14 clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
           which gcc-14
           which clang-14
-      - name: Build the UI with gcc-14
+      - name: Build Dive host tools with gcc-14
         run: |
           mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 .. -GNinja && ninja && cd ..
       - name: Run tests
@@ -110,6 +114,7 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
   build_Linux_Clang_Debug:
+    name: "Linux clang debug build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -123,7 +128,7 @@ jobs:
           sudo apt-get update --yes
           sudo apt-get install --yes cmake clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
           which clang-14
-      - name: Build the UI with clang-14
+      - name: Build Dive host tools with clang-14
         run: |
           mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. -GNinja && ninja && cd ..
       - name: Run tests
@@ -131,6 +136,7 @@ jobs:
           cd build; ctest --output-on-failure -C Debug
 
   build_Linux_Clang_Release:
+    name: "Linux clang release build"
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
@@ -144,7 +150,7 @@ jobs:
           sudo apt-get update --yes
           sudo apt-get install --yes cmake clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
           which clang-14
-      - name: Build the UI with clang-14
+      - name: Build Dive host tools with clang-14
         run: |
           mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. -GNinja && ninja && cd ..
       - name: Run tests
@@ -152,6 +158,7 @@ jobs:
           cd build; ctest --output-on-failure -C Release
 
   build_Android:
+    name: "Android build"
     runs-on: ubuntu-24.04
     steps:
       - name: Set up Java 17

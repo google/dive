@@ -107,7 +107,7 @@ LFLAGS_CL = -lOpenCL
 LDFLAGS_MISC = -lgsl -llog -lcutils -lstdc++ -lstlport -lm
 CFLAGS += -DBIONIC
 CC = gcc -L /system/lib -mfloat-abi=soft
-LD = ld --entry=_start -nostdlib --dynamic-linker /system/bin/linker -rpath /system/lib -L /system/lib
+LD = ld --entry=_start -nostdlib --dynamic-linker /system/bin/linker -rpath /system/lib -L /system/lib -llog
 # only build c2d2 bits for android, otherwise we don't have the right
 # headers/libs:
 WRAP_C2D2 = wrap-c2d2.o
@@ -121,11 +121,12 @@ CFLAGS += -DSUPPORT_WAYLAND
 LDFLAGS_MISC = -lwayland-client -lwayland-egl -lm
 endif
 
+CFLAGS += -D_GNU_SOURCE
 LFLAGS_3D = -lEGL -lGLESv2
 LFLAGS_2D =
 #LFLAGS_CL = -lOpenCL
-CC = gcc -L /usr/lib
-LD = gcc -L /usr/lib
+CC = gcc -L /usr/lib -L /usr/lib/aarch64-linux-gnu
+LD = gcc -L /usr/lib -L /usr/lib/aarch64-linux-gnu
 WRAP_C2D2 =
 else
 error "Invalid build type"
@@ -135,7 +136,7 @@ LFLAGS = $(LFLAGS_2D) $(LFLAGS_3D) $(LFLAGS_CL) $(LDFLAGS_MISC) -ldl -lc
 
 all: tests-3d tests-2d tests-cl
 
-utils: libwrap.so $(UTILS) redump zdump
+utils: libwrap.so libwrap-wsl.so $(UTILS) redump zdump
 
 tests-2d: $(TESTS_2D)
 
@@ -147,16 +148,19 @@ clean:
 	rm -f *.bmp *.dat *.so *.o *.rd *.html *.log redump $(TESTS)
 
 wrap%.o: wrap%.c
-	$(CC) -fPIC -g -c -ldl -llog -c -Iincludes -Iutil $< -o $@
+	$(CC) -fPIC -g -c $(CFLAGS) -ldl -llog -c -Iincludes -Iutil $< -o $@
 
 %.o: %.c
 	$(CC) -fPIC -g -c $(CFLAGS) $(LFLAGS) $< -o $@
 
 libwrap.so: wrap-util.o wrap-syscall.o $(WRAP_C2D2)
-	$(LD) -shared -ldl -lc -llog $^ -o $@
+	$(LD) -shared -ldl -lc -Wl,--no-as-needed -lz $^ -o $@
 
 libwrapfake.so: wrap-util.o wrap-syscall-fake.o
-	$(LD) -shared -ldl -lc -llog $^ -o $@
+	$(LD) -shared -ldl -lc -Wl,--no-as-needed -lz $^ -o $@
+
+libwrap-wsl.so: wrap-util.o wrap-syscall-wsl.o
+	$(LD) -shared -ldl -lc -Wl,--no-as-needed -lz $^ -o $@
 
 test-%: test-%.o $(UTILS)
 	$(LD) $^ $(LFLAGS) -o $@

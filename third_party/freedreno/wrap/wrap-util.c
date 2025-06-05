@@ -27,6 +27,8 @@
 #include "dive-wrap.h"
 
 int IsCapturing();
+#include <ctype.h>
+
 #define COMPRESS_TRACE
 #ifdef COMPRESS_TRACE
 #include <zlib.h>
@@ -61,9 +63,8 @@ struct device_file {
 static struct device_file device_files[MAX_DEVICE_FILES] = {
 	[0 ... MAX_DEVICE_FILES-1] = {-1, LOG_NULL_FILE, 0, {0}, {0}}
 };
-static unsigned int gpu_id;
-// GOOGLE: Store the chip ID.
 static uint64_t chip_id = 0;
+static unsigned int gpu_id = 0;
 
 #ifdef USE_PTHREADS
 static pthread_mutex_t l = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
@@ -148,7 +149,11 @@ int wrap_printf(const char *format, ...)
 		char *p2, *p = tracebuf;
 		while ((p < tracebufp) && (p2 = strstr(p, "\n"))) {
 			*p2 = '\0';
+#if defined(BIONIC)
 			__android_log_print(5, "WRAP", "%s\n", p);
+#else
+			fprintf(stderr, "WRAP %s\n", p);
+#endif
 			p = p2 + 1;
 		}
 		memcpy(tracebuf, p, tracebufp - p);
@@ -192,6 +197,12 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 		name = "trace";
 	}
 
+#if defined(BIONIC)
+	char* base_path = "/sdcard/Download";
+#else
+	char* base_path = "/tmp";
+#endif
+
 	testnum = getenv("TESTNUM");
 	if (testnum) {
 		n = strtol(testnum, NULL, 0);
@@ -200,15 +211,15 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	} else {
 		if (device_fd == -1) {
 			if (df->open_count == 0)
-				sprintf(buf, "/sdcard/Download/%s.rd.inprogress", name);
+				sprintf(buf, "%s/%s.rd.inprogress", base_path, name);
 			else
-				sprintf(buf, "/sdcard/Download/%s-%d.rd.inprogress", name, df->open_count);
+				sprintf(buf, "%s/%s-%d.rd.inprogress", base_path, name, df->open_count);
 		}
 		else {
 			if (df->open_count == 0)
-				sprintf(buf, "/sdcard/Download/%s-fd%d.rd.inprogress", name, device_fd);
+				sprintf(buf, "%s/%s-fd%d.rd.inprogress", base_path, name, device_fd);
 			else
-				sprintf(buf, "/sdcard/Download/%s-fd%d-%d.rd.inprogress", name, device_fd, df->open_count);
+				sprintf(buf, "%s/%s-fd%d-%d.rd.inprogress", base_path, name, device_fd, df->open_count);
 		}
 	}
 
@@ -235,9 +246,7 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 		 */
 		rd_write_section(device_fd, RD_GPU_ID, &gpu_id, sizeof(gpu_id));
 	}
-
-	// GOOGLE: Write out the chip id.
-	if(chip_id) {
+	if (chip_id) {
 		rd_write_section(device_fd, RD_CHIP_ID, &chip_id, sizeof(chip_id));
 	}
 }
@@ -298,16 +307,27 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 {
 	uint32_t val = ~0;
 
-	// GOOGLE: cache gup_id and chip_id.
+	struct device_file *df = get_file(device_fd);
+	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
+		const char *name = getenv("TESTNAME");
+		if (!name)
+			name = "unknown";
+		rd_start(device_fd, name, "");
+		df = get_file(device_fd);
+		assert(df != NULL);
+		printf("opened rd, %"LOG_PRI_FILE"\n", df->log_fd);
+	}
+
 	if (type == RD_GPU_ID) {
 		gpu_id = *(unsigned int *)buf;
+	} else if (type == RD_CHIP_ID) {
+		chip_id = *(uint64_t *)buf;
 	}
 	if (type == RD_CHIP_ID) {
 		chip_id = *(uint64_t *)buf;
 	}
 
 
-	struct device_file *df = get_file(device_fd);
 	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
 		const char *name = getenv("TESTNAME");
 		if (!name)
@@ -401,6 +421,15 @@ unsigned int wrap_gpu_id_patchid(void)
 	return val;
 }
 
+unsigned int wrap_chip_id(void)
+{
+	static unsigned int val = -1;
+	if (val == -1) {
+		val = env2u("WRAP_CHIP_ID");
+	}
+	return val;
+}
+
 unsigned int wrap_gmem_size(void)
 {
 	static unsigned int val = -1;
@@ -451,6 +480,8 @@ void * __rd_dlsym_helper(const char *name)
 		libc_dl = dlopen("/lib/arm-linux-gnueabihf/libc-2.15.so", RTLD_LAZY);
 	if (!libc_dl)
 		libc_dl = dlopen("/lib/libc-2.16.so", RTLD_LAZY);
+	if (!libc_dl)
+		libc_dl = dlopen("libc.so.6", RTLD_LAZY);
 #endif
 	if (!libc_dl)
 		libc_dl = dlopen("libc.so", RTLD_LAZY);
@@ -546,5 +577,47 @@ void collect_trace_file(const char* capture_file_path)
 			// delete the file that has been concatenated. 
 			remove(df->file_name);
         }
+	}
+}
+void hexdump(const void *data, int size)
+{
+	unsigned char *buf = (void *) data;
+	char alpha[17];
+	int i;
+
+	for (i = 0; i < size; i++) {
+		if (!(i % 16))
+			printf("\t\t\t%08X", (unsigned int) i);
+		if (!(i % 4))
+			printf(" ");
+
+		if (((void *) (buf + i)) < ((void *) data)) {
+			printf("   ");
+			alpha[i % 16] = '.';
+		} else {
+			printf(" %02x", buf[i]);
+
+			if (isprint(buf[i]) && (buf[i] < 0xA0))
+				alpha[i % 16] = buf[i];
+			else
+				alpha[i % 16] = '.';
+		}
+
+		if ((i % 16) == 15) {
+			alpha[16] = 0;
+			printf("\t|%s|\n", alpha);
+		}
+	}
+
+	if (i % 16) {
+		for (i %= 16; i < 16; i++) {
+			printf("   ");
+			alpha[i] = '.';
+
+			if (i == 15) {
+				alpha[16] = 0;
+				printf("\t|%s|\n", alpha);
+			}
+		}
 	}
 }

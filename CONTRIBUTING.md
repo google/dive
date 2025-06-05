@@ -42,6 +42,12 @@ Suggested usage is using your preferred IDE, set it to format on save, and point
 #### Pull requests
 There is a lint github action that will run clang-format on all source code in the project.
 
+### Code style
+
+- `CamelCase` for class and function names. The exception is overriding methods, like Qt, where adopting their naming convention is required.
+- `snake_case` for variable names.
+- Prefix class member variables with `m_`
+
 ### Code Reviews
 
 All submissions, including submissions by project members, require review. We

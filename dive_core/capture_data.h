@@ -377,6 +377,12 @@ public:
     bool        HasPm4Data() const { return m_submits.size() > 0; }
     std::string GetFileFormatVersion() const;
 
+    // Get the gfxr data
+    std::shared_ptr<gfxrecon::decode::DiveBlockData> GetMutableGfxrData()
+    {
+        return m_gfxr_capture_block_data;
+    }
+
     // Writes a new GFXR file based on the original file m_cur_capture_file and modifications
     // recorded in m_gfxr_capture_block_data
     bool WriteModifiedGfxrFile(const char *new_file_name);

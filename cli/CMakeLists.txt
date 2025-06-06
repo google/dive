@@ -46,7 +46,6 @@ list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
 add_library(${PROJECT_NAME}_lib ${HDR_FILES} ${LIB_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${PM4_GENERATED_HDR_FILE})
 target_link_libraries(${PROJECT_NAME}_lib PRIVATE dive_core)
 target_link_libraries(${PROJECT_NAME}_lib PRIVATE gfxrecon_decode)
-target_include_directories(${PROJECT_NAME}_lib PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib ${PEFFETTO_TRACE_READER_LIB})

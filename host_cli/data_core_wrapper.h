@@ -33,13 +33,13 @@ class DataCoreWrapper
 {
 public:
     DataCoreWrapper();
-    bool         IsGfxrLoaded() const { return m_loaded_gfxr; }
+    bool         IsGfxrLoaded() const;
     bool         IsDataCoreInitialized() const { return m_data_core != nullptr; }
     absl::Status LoadGfxrFile(const std::string& original_gfxr_file_path);
     absl::Status WriteNewGfxrFile(const std::string& new_gfxr_file_path);
 
 private:
-    bool                            m_loaded_gfxr = false;
+    Dive::LogConsole                m_log;
     std::unique_ptr<Dive::DataCore> m_data_core = nullptr;
 };
 

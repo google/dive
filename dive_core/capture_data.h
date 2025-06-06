@@ -378,6 +378,7 @@ public:
     std::string GetFileFormatVersion() const;
 
     // Get the gfxr data
+    bool IsDiveBlockDataInitialized() const { return m_gfxr_capture_block_data != nullptr; }
     std::shared_ptr<gfxrecon::decode::DiveBlockData> GetMutableGfxrData()
     {
         return m_gfxr_capture_block_data;

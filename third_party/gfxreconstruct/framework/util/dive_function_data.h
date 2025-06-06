@@ -23,6 +23,8 @@
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(util)
 
+// The DiveFunctionData is used by the VulkanExportDiveConsumer to store the name, command buffer index, block index, and args for
+// a vulkan command.
 class DiveFunctionData
 {
   public:

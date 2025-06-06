@@ -120,8 +120,6 @@ class VulkanExportDiveConsumerBase : public VulkanConsumer
         const ApiCallInfo&                                                 call_info,
         format::HandleId                                                   commandBuffer,
         StructPointerDecoder<Decoded_VkPushDescriptorSetWithTemplateInfo>* pPushDescriptorSetWithTemplateInfo) override;
-
-    void WriteBlockStart() { writer_->WriteBlockStart(); }
                                       
     void WriteBlockEnd(util::DiveFunctionData function_data) { writer_->WriteBlockEnd(function_data); }
 

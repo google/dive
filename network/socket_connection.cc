@@ -24,7 +24,7 @@ limitations under the License.
 #    define NOMINMAX
 #    include <ws2tcpip.h>
 #    pragma comment(lib, "Ws2_32.lib")
-typedef SSIZE_T ssize_t;
+using ssize_t = SSIZE_T;
 #else
 #    include <netdb.h>
 #    include <poll.h>

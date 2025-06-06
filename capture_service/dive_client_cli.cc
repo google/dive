@@ -257,7 +257,7 @@ bool run_package(Dive::DeviceManager& mgr,
     {
         ret = dev->SetupApp(package,
                             Dive::ApplicationType::OPENXR_APK,
-                            "",
+                            command_args,
                             device_architecture,
                             gfxr_capture_directory);
     }
@@ -265,7 +265,7 @@ bool run_package(Dive::DeviceManager& mgr,
     {
         ret = dev->SetupApp(package,
                             Dive::ApplicationType::VULKAN_APK,
-                            "",
+                            command_args,
                             device_architecture,
                             gfxr_capture_directory);
     }

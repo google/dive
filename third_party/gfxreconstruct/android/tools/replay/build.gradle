@@ -41,6 +41,12 @@ android {
             path "CMakeLists.txt"
         }
     }
+    // Google: add wrap.sh
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
 }
 
 dependencies {

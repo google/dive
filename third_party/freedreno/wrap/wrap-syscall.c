@@ -423,7 +423,7 @@ static void install_fd(const char *path, int fd)
 	// which calls ioctl(fd, SYNC_IOC_MERGE, &data) where the fd is larger than 1024
 	if (fd >= ARRAY_SIZE(file_table))
 	{
-		LOGI("\t\tWARNING: fd %d is larger than or equal to the ARRAY_SIZE(file_table) %d, skip install_fd! \n", fd, ARRAY_SIZE(file_table));
+		LOGI("\t\tWARNING: fd %d is larger than or equal to the ARRAY_SIZE(file_table) %lu, skip install_fd! \n", fd, ARRAY_SIZE(file_table));
 		assert(0);
         return;
 	}

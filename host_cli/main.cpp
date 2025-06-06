@@ -133,6 +133,7 @@ int main(int argc, char **argv)
             std::cout << res << std::endl;
             return 1;
         }
+        return 0;
     }
 
     // No action taken, print usage message

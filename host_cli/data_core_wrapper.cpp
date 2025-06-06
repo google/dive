@@ -28,8 +28,13 @@ namespace HostCli
 DataCoreWrapper::DataCoreWrapper()
 {
     // Initialize DataCore
-    Dive::LogConsole log;
-    m_data_core = std::make_unique<Dive::DataCore>(&log);
+    m_data_core = std::make_unique<Dive::DataCore>(&m_log);
+}
+
+bool DataCoreWrapper::IsGfxrLoaded() const
+{
+    assert(m_data_core != nullptr);
+    return m_data_core->GetCaptureData().IsDiveBlockDataInitialized();
 }
 
 absl::Status DataCoreWrapper::LoadGfxrFile(const std::string& original_gfxr_file_path)
@@ -43,14 +48,13 @@ absl::Status DataCoreWrapper::LoadGfxrFile(const std::string& original_gfxr_file
         return absl::UnknownError(
         absl::StrFormat("Could not load GFXR file: %s", original_gfxr_file_path));
     }
-    m_loaded_gfxr = true;
     return absl::OkStatus();
 }
 
 absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::string& new_gfxr_file_path)
 {
     assert(m_data_core != nullptr);
-    if (!m_loaded_gfxr)
+    if (!IsGfxrLoaded())
     {
         return absl::FailedPreconditionError("Must load original GFXR first");
     }

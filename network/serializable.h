@@ -21,10 +21,10 @@ limitations under the License.
 
 #include "absl/status/statusor.h"
 
-typedef std::vector<uint8_t> Buffer;
-
 namespace Network
 {
+
+using Buffer = std::vector<uint8_t>;
 
 class ISerializable
 {

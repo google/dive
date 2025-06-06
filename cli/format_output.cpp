@@ -635,25 +635,5 @@ int ExtractCapture(const char *filename, const char *extract_assets)
     return EXIT_SUCCESS;
 }
 
-//--------------------------------------------------------------------------------------------------
-int ModifyGFXRCapture(const char *original_filename, const char *new_filename)
-{
-    Dive::LogConsole                log;
-    std::unique_ptr<Dive::DataCore> data = std::make_unique<Dive::DataCore>(&log);
-    if (data->LoadCaptureData(original_filename) != Dive::CaptureData::LoadResult::kSuccess)
-    {
-        std::cerr << "Load GFXR capture failed." << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    if (!data->WriteNewGFXRCaptureData(new_filename))
-    {
-        std::cerr << "Write modified GFXR capture failed." << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
-}
-
 }  // namespace cli
 }  // namespace Dive

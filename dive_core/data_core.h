@@ -82,9 +82,6 @@ public:
     // Get metadata describing the capture (info obtained by parsing the capture)
     const CaptureMetadata &GetCaptureMetadata() const;
 
-    // Write the new GFXR capture file
-    bool WriteNewGFXRCaptureData(const char *new_file_name);
-
 private:
     // Create command hierarchy from the captured data
     bool CreateCommandHierarchy();

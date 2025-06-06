@@ -36,9 +36,5 @@ std::string FileFormatVersion();
 // Dive Capture / Crash Analysis related
 int ExtractCapture(const char *filename, const char *extract_assets);
 
-//--------------------------------------------------------------------------------------------------
-// GFXR Capture related
-int ModifyGFXRCapture(const char *original_filename, const char *new_filename);
-
 }  // namespace cli
 }  // namespace Dive

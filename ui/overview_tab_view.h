@@ -30,7 +30,8 @@ void SetTabAvailable(QTabWidget *widget, int index, bool available);
 namespace Dive
 {
 class LogRecord;
-};
+struct CaptureMetadata;
+};  // namespace Dive
 
 class OverviewTabView : public QFrame
 {

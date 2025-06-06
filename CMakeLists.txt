@@ -120,6 +120,8 @@ if(NOT ANDROID)
     endif()
 
     add_subdirectory(gfxr_dump_resources)
+
+    add_subdirectory(plugins)
 else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")

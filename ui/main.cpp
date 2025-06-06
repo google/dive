@@ -20,6 +20,7 @@
 #include <QStyleFactory>
 #include <QTimer>
 #include <iostream>
+#include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
 #include "main_window.h"
 #include "version.h"

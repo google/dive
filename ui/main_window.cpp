@@ -14,8 +14,10 @@
  limitations under the License.
 */
 #include "main_window.h"
+#include "adreno.h"
 #include <QAction>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QFile>
 #include <QFileDialog>
 #include <QHeaderView>
@@ -48,9 +50,13 @@
 #    include "event_timing/event_timing_view.h"
 #endif
 #include "command_tab_view.h"
+#include "dive_core/data_core.h"
+#include "event_selection_model.h"
 #include "event_state_view.h"
 #include "hover_help_model.h"
+#include "overlay.h"
 #include "overview_tab_view.h"
+#include "plugins/plugin_manager.h"
 #include "property_panel.h"
 #include "search_bar.h"
 #include "shader_view.h"
@@ -382,8 +388,24 @@ MainWindow::MainWindow()
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
     m_hover_help->SetDataCore(m_data_core);
     setAccessibleName("DiveMainWindow");
+
+    m_plugin_manager = new PluginManager(this);
+    // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
+    std::string pluginPath = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
+    m_plugin_manager->LoadPlugins(pluginPath);
 }
 
+//--------------------------------------------------------------------------------------------------
+MainWindow::~MainWindow()
+{
+    if (m_plugin_manager)
+    {
+        delete m_plugin_manager;
+        m_plugin_manager = nullptr;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString &path)
 {
     qDebug() << "Trace is at " << path;
@@ -696,6 +718,11 @@ void MainWindow::OnShortcuts()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::closeEvent(QCloseEvent *closeEvent)
 {
+    if (m_plugin_manager)
+    {
+        m_plugin_manager->UnloadPlugins();
+    }
+
     if (!m_capture_saved && !m_unsaved_capture_path.empty())
     {
         switch (QMessageBox::question(this,

@@ -35,13 +35,13 @@ class PluginTest : public QObject, public IDivePlugin
 {
     Q_OBJECT
 public:
-    explicit PluginTest(QObject *parent = nullptr);
+    explicit PluginTest(QObject* parent = nullptr);
     ~PluginTest() override;
 
     std::string PluginName() const override { return "Plugin Test"; }
     std::string PluginVersion() const override { return "1.0.0"; }
 
-    bool Initialize(MainWindow *main_window) override;
+    bool Initialize(MainWindow& main_window) override;
     void Shutdown() override;
 
 private slots:

@@ -16,39 +16,50 @@
 
 #pragma once
 
-#include <string>
 #include <vector>
+#include <memory>
 
-#ifdef WIN32
-#    include <windows.h>
-#else
-#    include <dlfcn.h>
-#endif
-
-#include "idive_plugin.h"  // Include the pure C++ plugin interface
+#include "idive_plugin.h"
+#include "idynamic_library_loader.h"
+#include <filesystem>
 
 class MainWindow;
 
-// The PluginManager class is responsible for discovering, loading, and managing IDivePlugin
-// instances using platform-native dynamic library loading.
 class PluginManager
 {
 public:
-    explicit PluginManager(MainWindow *main_window);
+    explicit PluginManager(MainWindow &main_window);
     ~PluginManager();
 
-    void LoadPlugins(const std::string &plugin_directory_path);
+    PluginManager(const PluginManager &) = delete;
+    PluginManager &operator=(const PluginManager &) = delete;
+
+    void LoadPlugins(const std::filesystem::path &plugin_directory_path);
     void UnloadPlugins();
 
-    const std::vector<IDivePlugin *> &GetLoadedPlugins() const { return m_loaded_plugins; }
-
 private:
-    std::vector<IDivePlugin *> m_loaded_plugins;
+    struct NativeLibraryHandleDeleter
+    {
+        IDynamicLibraryLoader *loader;
 
-#ifdef WIN32
-    std::vector<HMODULE> m_library_handles;
-#else
-    std::vector<void *> m_library_handles;
-#endif
-    MainWindow *m_main_window;
+        explicit NativeLibraryHandleDeleter(IDynamicLibraryLoader *l = nullptr) :
+            loader(l)
+        {
+        }
+
+        using pointer = NativeLibraryHandle;
+        void operator()(NativeLibraryHandle handle) const;
+    };
+    using LibraryHandleUniquePtr = std::unique_ptr<NativeLibraryHandle, NativeLibraryHandleDeleter>;
+
+    struct PluginDeleter
+    {
+        void operator()(IDivePlugin *plugin) const;
+    };
+    using PluginUniquePtr = std::unique_ptr<IDivePlugin, PluginDeleter>;
+
+    std::vector<PluginUniquePtr>           m_loaded_plugins;
+    std::vector<LibraryHandleUniquePtr>    m_library_handles;
+    std::unique_ptr<IDynamicLibraryLoader> m_library_loader;
+    MainWindow                            &m_main_window;
 };

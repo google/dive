@@ -27,15 +27,10 @@ PluginTest::PluginTest(QObject* parent) :
 
 PluginTest::~PluginTest() {}
 
-bool PluginTest::Initialize(MainWindow* main_window)
+bool PluginTest::Initialize(MainWindow& main_window)
 {
-    if (!main_window)
-    {
-        return false;
-    }
-
     QMenu*          help_menu = nullptr;
-    QList<QAction*> menu_bar_actions = main_window->menuBar()->actions();
+    QList<QAction*> menu_bar_actions = main_window.menuBar()->actions();
     for (QAction* action : menu_bar_actions)
     {
         if (action->menu())
@@ -48,17 +43,15 @@ bool PluginTest::Initialize(MainWindow* main_window)
         }
     }
 
-    if (help_menu)
-    {
-        QAction* action = new QAction(QString::fromStdString("Plugin Info"), this);
-        connect(action, &QAction::triggered, this, &PluginTest::OnPluginTestActionTriggered);
-        help_menu->addAction(action);
-        return true;
-    }
-    else
+    if (!help_menu)
     {
         return false;
     }
+
+    QAction* action = new QAction(QString::fromStdString("Plugin Info"), this);
+    connect(action, &QAction::triggered, this, &PluginTest::OnPluginTestActionTriggered);
+    help_menu->addAction(action);
+    return true;
 }
 
 void PluginTest::Shutdown() {}
@@ -72,7 +65,6 @@ void PluginTest::OnPluginTestActionTriggered()
                              "alongside the dive_ui executable."));
 }
 
-// C-style function to create an instance of the plugin.
 // This function must be exported from the shared library.
 extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance()
 {

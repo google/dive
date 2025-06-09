@@ -389,21 +389,23 @@ MainWindow::MainWindow()
     m_hover_help->SetDataCore(m_data_core);
     setAccessibleName("DiveMainWindow");
 
-    m_plugin_manager = new PluginManager(this);
+    m_plugin_manager = std::unique_ptr<PluginManager>(new PluginManager(*this));
     // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
-    std::string pluginPath = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
-    m_plugin_manager->LoadPlugins(pluginPath);
+    std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
+
+    std::filesystem::path plugins_dir_path(plugin_path);
+    if (!std::filesystem::exists(plugins_dir_path) ||
+        !std::filesystem::is_directory(plugins_dir_path))
+    {
+        qDebug() << "Plugin path is invalid: " << QString::fromStdString(plugin_path);
+        return;
+    }
+
+    m_plugin_manager->LoadPlugins(plugins_dir_path);
 }
 
 //--------------------------------------------------------------------------------------------------
-MainWindow::~MainWindow()
-{
-    if (m_plugin_manager)
-    {
-        delete m_plugin_manager;
-        m_plugin_manager = nullptr;
-    }
-}
+MainWindow::~MainWindow() {}
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString &path)

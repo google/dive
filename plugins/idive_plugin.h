@@ -41,13 +41,11 @@ public:
     // main_window: A pointer to the main application window. Plugins can use this
     // to interact with or modify the main UI using MainWindow's public API.
     // Return true if initialization was successful, false otherwise.
-    virtual bool Initialize(MainWindow* main_window) = 0;
+    virtual bool Initialize(MainWindow& main_window) = 0;
 
     // Shuts down the plugin and performs any necessary cleanup.
     virtual void Shutdown() = 0;
 };
-
-typedef IDivePlugin* (*CreatePluginFunc)();
 
 #ifdef WIN32
 #    define DIVE_PLUGIN_EXPORT __declspec(dllexport)

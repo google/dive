@@ -15,7 +15,6 @@
 */
 
 #pragma once
-
 #include <QMainWindow>
 #include "dive_core/cross_ref.h"
 #include "progress_tracker_callback.h"
@@ -205,5 +204,5 @@ private:
     // Overlay to be displayed while capture
     Overlay *m_overlay;
 
-    PluginManager *m_plugin_manager = nullptr;
+    std::unique_ptr<PluginManager> m_plugin_manager;
 };

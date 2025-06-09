@@ -73,7 +73,7 @@ public:
 
     // Data transfer methods.
     absl::Status                Send(const uint8_t* data, size_t size);
-    absl::StatusOr<size_t>      Recv(uint8_t* data, size_t size);
+    absl::StatusOr<size_t>      Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout);
     absl::Status                SendString(const std::string& s);
     absl::StatusOr<std::string> ReceiveString();
     absl::Status                SendFile(const std::string& file_path);
@@ -88,7 +88,6 @@ private:
     SocketType m_socket;
     bool       m_is_listening;
     int        m_accept_timout_ms;
-    int        m_recv_timeout_ms;
 };
 
 }  // namespace Network

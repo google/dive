@@ -47,7 +47,7 @@ absl::Status ValidateFlags()
     std::string input_file_ext = "";
 
     std::string input_file_path = absl::GetFlag(FLAGS_input_file_path);
-    if (input_file_path != "")
+    if (!input_file_path.empty())
     {
         std::filesystem::path input_fp = input_file_path;
         std::string           ext = input_fp.extension().string();
@@ -93,12 +93,6 @@ int main(int argc, char **argv)
                  argv[0],
                  " --helpfull"));
     absl::ParseCommandLine(argc, argv);
-    absl::Status res = ValidateFlags();
-    if (!res.ok())
-    {
-        std::cout << res << std::endl;
-        return 1;
-    }
 
     // Early termination flags
     bool show_version = absl::GetFlag(FLAGS_version_info);
@@ -106,6 +100,13 @@ int main(int argc, char **argv)
     {
         std::cout << "Dive " << GetDiveRepositoryVersion() << std::endl;
         return 0;
+    }
+
+    absl::Status res = ValidateFlags();
+    if (!res.ok())
+    {
+        std::cout << res << std::endl;
+        return 1;
     }
 
     Dive::HostCli::DataCoreWrapper data_core;

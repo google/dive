@@ -18,9 +18,7 @@
 
 #include <gtest/gtest.h>
 
-namespace Dive
-{
-namespace HostCli
+namespace Dive::HostCli
 {
 namespace
 {
@@ -36,5 +34,4 @@ TEST(DataCoreWrapperTest, CheckInitialization)
 // DataCore
 
 }  // namespace
-}  // namespace HostCli
-}  // namespace Dive
+}  // namespace Dive::HostCli

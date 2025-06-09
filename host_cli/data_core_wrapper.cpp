@@ -20,9 +20,7 @@
 #include "dive_core/capture_data.h"
 #include "dive_core/data_core.h"
 
-namespace Dive
-{
-namespace HostCli
+namespace Dive::HostCli
 {
 
 DataCoreWrapper::DataCoreWrapper()
@@ -69,5 +67,4 @@ absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::string& new_gfxr_file_
     return absl::OkStatus();
 }
 
-}  // namespace HostCli
-}  // namespace Dive
+}  // namespace Dive::HostCli

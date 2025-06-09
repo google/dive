@@ -51,9 +51,9 @@ absl::Status ValidateFlags()
     {
         std::filesystem::path input_fp = input_file_path;
         std::string           ext = input_fp.extension().string();
-        if ((ext == "") || std::find(kAllowedInputFileExtensions.begin(),
-                                     kAllowedInputFileExtensions.end(),
-                                     ext) == kAllowedInputFileExtensions.end())
+        if ((ext.empty()) || std::find(kAllowedInputFileExtensions.begin(),
+                                       kAllowedInputFileExtensions.end(),
+                                       ext) == kAllowedInputFileExtensions.end())
         {
             return absl::InvalidArgumentError(
             absl::StrFormat("unrecognizable extension provided for --input_file_path: %s", ext));
@@ -62,7 +62,7 @@ absl::Status ValidateFlags()
     }
 
     std::string output_gfxr_path = absl::GetFlag(FLAGS_output_gfxr_path);
-    if (output_gfxr_path != "")
+    if (!output_gfxr_path.empty())
     {
         if (input_file_ext != ".gfxr")
         {
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
         }
 
         std::string output_gfxr_path = absl::GetFlag(FLAGS_output_gfxr_path);
-        if (output_gfxr_path == "")
+        if (!output_gfxr_path.empty())
         {
             // Nothing further to do with the loaded .gfxr file
             return 0;

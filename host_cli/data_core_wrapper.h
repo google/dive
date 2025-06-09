@@ -23,9 +23,7 @@
 
 #include "absl/status/status.h"
 
-namespace Dive
-{
-namespace HostCli
+namespace Dive::HostCli
 {
 
 // Initializes DataCore and provides access to it, also stores relevant info for operations
@@ -43,5 +41,4 @@ private:
     std::unique_ptr<Dive::DataCore> m_data_core = nullptr;
 };
 
-}  // namespace HostCli
-}  // namespace Dive
+}  // namespace Dive::HostCli

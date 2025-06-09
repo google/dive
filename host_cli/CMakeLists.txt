@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
 project(host_cli)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

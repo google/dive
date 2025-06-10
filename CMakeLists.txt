@@ -19,8 +19,7 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 project(dive)
 
 # Global properties
-set_property(GLOBAL PROPERTY CMAKE_VERBOSE_MAKEFILE ON)
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

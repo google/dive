@@ -16,22 +16,24 @@
 
 #include <iostream>
 #include <string>
-#include "plugin_manager.h"
+#include "plugin_loader.h"
 
+namespace Dive
+{
 using CreatePluginFunc = IDivePlugin* (*)();
 
-PluginManager::PluginManager(MainWindow& main_window) :
+PluginLoader::PluginLoader(MainWindow& main_window) :
     m_main_window(main_window),
     m_library_loader(CreateDynamicLibraryLoader())
 {
 }
 
-PluginManager::~PluginManager()
+PluginLoader::~PluginLoader()
 {
     UnloadPlugins();
 }
 
-void PluginManager::LoadPlugins(const std::filesystem::path& plugins_dir_path)
+void PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_path)
 {
     std::string expected_suffix = m_library_loader->GetPluginFileExtension();
 
@@ -45,21 +47,15 @@ void PluginManager::LoadPlugins(const std::filesystem::path& plugins_dir_path)
         std::string file_name = entry.path().filename().string();
         std::string file_path = entry.path().string();
 
-        auto HasSuffix = [&](const std::string& file_name, const std::string& expected_suffix) {
-            return file_name.length() < expected_suffix.length() ||
-                   file_name.substr(file_name.length() - expected_suffix.length()) !=
-                   expected_suffix;
-        };
-
-        if (HasSuffix(file_name, expected_suffix))
+        if (entry.path().extension() != m_library_loader->GetPluginFileExtension())
         {
             continue;
         }
 
-        NativeLibraryHandle handle = m_library_loader->LoadDynamicLibrary(file_path);
+        NativeLibraryHandle handle = m_library_loader->Load(file_path);
         if (handle == nullptr)
         {
-            std::cout << "PluginManager: Failed to load library: " << file_path
+            std::cout << "PluginLoader: Failed to load library: " << file_path
                       << " Error: " << m_library_loader->GetLastErrorString() << std::endl;
             continue;
         }
@@ -73,7 +69,7 @@ void PluginManager::LoadPlugins(const std::filesystem::path& plugins_dir_path)
 
         if (!create_func)
         {
-            std::cout << "PluginManager: 'CreateDivePluginInstance' returned null for: "
+            std::cout << "PluginLoader: 'CreateDivePluginInstance' symbol not found in: "
                       << file_path << std::endl;
             continue;
         }
@@ -82,58 +78,54 @@ void PluginManager::LoadPlugins(const std::filesystem::path& plugins_dir_path)
 
         if (!raw_plugin)
         {
-            std::cout << "PluginManager: 'CreateDivePluginInstance' not found in " << file_path
+            std::cout << "PluginLoader: 'CreateDivePluginInstance' returned null for: " << file_path
                       << std::endl;
             continue;
         }
 
         PluginUniquePtr plugin(raw_plugin);
 
-        std::cout << "PluginManager: Successfully instantiated plugin: " << plugin->PluginName()
+        std::cout << "PluginLoader: Successfully instantiated plugin: " << plugin->PluginName()
                   << " Version: " << plugin->PluginVersion() << std::endl;
 
-        if (plugin->Initialize(m_main_window))
+        if (!plugin->Initialize(m_main_window))
         {
-            m_loaded_plugins.push_back(std::move(plugin));
-            m_library_handles.push_back(std::move(library_handle_ptr));
-            std::cout << "PluginManager: Plugin " << m_loaded_plugins.back()->PluginName()
-                      << " initialized successfully." << std::endl;
-        }
-        else
-        {
-            std::cout << "PluginManager: Failed to initialize plugin: " << raw_plugin->PluginName()
+            std::cout << "PluginLoader: Failed to initialize plugin: " << raw_plugin->PluginName()
                       << std::endl;
         }
+
+        m_loaded_plugin_entries.emplace_back(std::move(library_handle_ptr), std::move(plugin));
+        std::cout << "PluginLoader: Plugin " << m_loaded_plugin_entries.back().plugin->PluginName()
+                  << " initialized successfully." << std::endl;
     }
 }
 
-void PluginManager::UnloadPlugins()
+void PluginLoader::UnloadPlugins()
 {
-    std::cout << "PluginManager: Unloading all plugins..." << std::endl;
+    std::cout << "PluginLoader: Unloading all plugins..." << std::endl;
 
-    m_loaded_plugins.clear();
-    m_library_handles.clear();
+    m_loaded_plugin_entries.clear();
 
-    std::cout << "PluginManager: All plugins unloaded." << std::endl;
+    std::cout << "PluginLoader: All plugins unloaded." << std::endl;
 }
 
-void PluginManager::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle handle) const
+void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle handle) const
 {
     if (handle != nullptr && loader != nullptr)
     {
-        if (loader->FreeLibrary(handle))
+        if (loader->Free(handle))
         {
-            std::cout << "PluginManager: Library handle auto-freed via RAII." << std::endl;
+            std::cout << "PluginLoader: Library handle auto-freed via RAII." << std::endl;
         }
         else
         {
-            std::cout << "PluginManager: Failed to auto-free library handle. Error: "
+            std::cout << "PluginLoader: Failed to auto-free library handle. Error: "
                       << loader->GetLastErrorString() << std::endl;
         }
     }
 }
 
-void PluginManager::PluginDeleter::operator()(IDivePlugin* plugin) const
+void PluginLoader::PluginDeleter::operator()(IDivePlugin* plugin) const
 {
     if (plugin)
     {
@@ -141,3 +133,5 @@ void PluginManager::PluginDeleter::operator()(IDivePlugin* plugin) const
     }
     delete plugin;
 }
+
+}  // namespace Dive

@@ -26,6 +26,8 @@
 
 class MainWindow;
 
+namespace Dive
+{
 // The PluginTest class is a sample implementation of IDivePlugin.
 // It adds a new menu item to the "Help" menu of the MainWindow and displays a message box when that
 // action is triggered.
@@ -47,3 +49,5 @@ public:
 private slots:
     void OnPluginTestActionTriggered();
 };
+
+}  // namespace Dive

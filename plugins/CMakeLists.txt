@@ -14,41 +14,36 @@
 # limitations under the License.
 #
 
-set(DIVE_PLUGINS_BUILD_OUTPUT_DIR "${CMAKE_BINARY_DIR}/plugins")
-file(MAKE_DIRECTORY "${DIVE_PLUGINS_BUILD_OUTPUT_DIR}")
-
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(DYNAMIC_LIBRARY_LOADER_HEADERS
     idynamic_library_loader.h
 )
 
-set(DYNAMIC_LIBRARY_LOADER_SOURCES "")
+add_library(dive_plugin_loader STATIC
+    plugin_loader.h
+    plugin_loader.cpp
+    ${DYNAMIC_LIBRARY_LOADER_HEADERS}
+)
+
 if (WIN32)
-    list(APPEND DYNAMIC_LIBRARY_LOADER_SOURCES windows_library_loader.cpp)
+    target_sources(dive_plugin_loader PRIVATE windows_library_loader.cpp)
     message(STATUS "Building for Windows: Including windows_library_loader.cpp")
 elseif (LINUX)
-    list(APPEND DYNAMIC_LIBRARY_LOADER_SOURCES linux_library_loader.cpp)
+    target_sources(dive_plugin_loader PRIVATE linux_library_loader.cpp)
     message(STATUS "Building for Linux: Including linux_library_loader.cpp")
 else()
     message(FATAL_ERROR "Unsupported platform for dynamic library loading. Only Windows and Linux are supported.")
 endif()
 
-add_library(dive_plugin_manager STATIC
-    plugin_manager.h
-    plugin_manager.cpp
-    ${DYNAMIC_LIBRARY_LOADER_HEADERS}
-    ${DYNAMIC_LIBRARY_LOADER_SOURCES}
-)
-
-set_target_properties(dive_plugin_manager PROPERTIES
+set_target_properties(dive_plugin_loader PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
 if (LINUX)
     find_library(DL_LIBRARY NAMES dl)
     if (DL_LIBRARY)
-        target_link_libraries(dive_plugin_manager PRIVATE ${DL_LIBRARY}) 
+        target_link_libraries(dive_plugin_loader PRIVATE ${DL_LIBRARY})
     else()
         message(FATAL_ERROR "dl library not found on Linux. Required for dynamic loading.")
     endif()

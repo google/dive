@@ -37,7 +37,6 @@ class Overlay;
 class OverlayWidget;
 class OverviewTabView;
 class PerfCounterView;
-class PluginManager;
 class PropertyPanel;
 class QCheckBox;
 class QComboBox;
@@ -58,7 +57,8 @@ enum class EventMode;
 namespace Dive
 {
 class DataCore;
-}
+class PluginLoader;
+}  // namespace Dive
 
 #define MESSAGE_TIMEOUT 2500
 
@@ -69,6 +69,8 @@ public:
     MainWindow();
     ~MainWindow();
     bool LoadFile(const char *file_name, bool is_temp_file = false);
+
+    bool InitializePlugins();
 
 protected:
     virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
@@ -204,5 +206,5 @@ private:
     // Overlay to be displayed while capture
     Overlay *m_overlay;
 
-    std::unique_ptr<PluginManager> m_plugin_manager;
+    std::unique_ptr<Dive::PluginLoader> m_plugin_manager;
 };

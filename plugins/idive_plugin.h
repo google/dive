@@ -20,6 +20,8 @@
 
 class MainWindow;
 
+namespace Dive
+{
 // The IDivePlugin class defines the interface for Dive plugins.
 // Concrete plugin implementations (e.g., PluginTest) will still need to inherit from QObject if
 // they interact with Qt UI elements or use Qt's signal/slot mechanism.
@@ -54,3 +56,4 @@ public:
 #endif
 
 extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance();
+}  // namespace Dive

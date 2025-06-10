@@ -16,23 +16,25 @@
 
 #pragma once
 
-#include <vector>
+#include <filesystem>
 #include <memory>
+#include <vector>
 
 #include "idive_plugin.h"
 #include "idynamic_library_loader.h"
-#include <filesystem>
 
 class MainWindow;
 
-class PluginManager
+namespace Dive
+{
+class PluginLoader
 {
 public:
-    explicit PluginManager(MainWindow &main_window);
-    ~PluginManager();
+    explicit PluginLoader(MainWindow &main_window);
+    ~PluginLoader();
 
-    PluginManager(const PluginManager &) = delete;
-    PluginManager &operator=(const PluginManager &) = delete;
+    PluginLoader(const PluginLoader &) = delete;
+    PluginLoader &operator=(const PluginLoader &) = delete;
 
     void LoadPlugins(const std::filesystem::path &plugin_directory_path);
     void UnloadPlugins();
@@ -58,8 +60,26 @@ private:
     };
     using PluginUniquePtr = std::unique_ptr<IDivePlugin, PluginDeleter>;
 
-    std::vector<PluginUniquePtr>           m_loaded_plugins;
-    std::vector<LibraryHandleUniquePtr>    m_library_handles;
+    struct LoadedPluginEntry
+    {
+        // The plugin must be shut down BEFORE its library handle is freed.
+        // This ensures reverse destruction order (library_handle then plugin).
+        LibraryHandleUniquePtr library_handle;
+        PluginUniquePtr        plugin;
+
+        LoadedPluginEntry(LibraryHandleUniquePtr lh, PluginUniquePtr p) :
+            library_handle(std::move(lh)),
+            plugin(std::move(p))
+        {
+        }
+    };
+
+    // Members are destroyed in the reverse order of their declaration.
+    // m_library_loader must be destroyed AFTER m_loaded_plugin_entries
+    // because NativeLibraryHandleDeleter uses a raw pointer to m_library_loader.
     std::unique_ptr<IDynamicLibraryLoader> m_library_loader;
+    std::vector<LoadedPluginEntry>         m_loaded_plugin_entries;
     MainWindow                            &m_main_window;
 };
+
+}  // namespace Dive

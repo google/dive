@@ -19,6 +19,8 @@
 #include <memory>
 #include <string>
 
+namespace Dive
+{
 using NativeLibraryHandle = void*;
 
 class IDynamicLibraryLoader
@@ -26,11 +28,13 @@ class IDynamicLibraryLoader
 public:
     virtual ~IDynamicLibraryLoader() = default;
 
-    virtual NativeLibraryHandle LoadDynamicLibrary(const std::string& path) = 0;
+    virtual NativeLibraryHandle Load(const std::string& path) = 0;
     virtual void*       GetSymbol(NativeLibraryHandle handle, const std::string& symbolName) = 0;
-    virtual bool        FreeLibrary(NativeLibraryHandle handle) = 0;
+    virtual bool        Free(NativeLibraryHandle handle) = 0;
     virtual std::string GetLastErrorString() = 0;
     virtual std::string GetPluginFileExtension() const = 0;
 };
 
 std::unique_ptr<IDynamicLibraryLoader> CreateDynamicLibraryLoader();
+
+}  // namespace Dive

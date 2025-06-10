@@ -14,16 +14,17 @@
  limitations under the License.
 */
 
-#ifndef WIN32
-#    include "idynamic_library_loader.h"
-#    include <dlfcn.h>
-#    include <string>
-#    include <memory>
+#include "idynamic_library_loader.h"
+#include <dlfcn.h>
+#include <string>
+#include <memory>
 
+namespace Dive
+{
 class LinuxLibraryLoader : public IDynamicLibraryLoader
 {
 public:
-    NativeLibraryHandle LoadDynamicLibrary(const std::string& path) override
+    NativeLibraryHandle Load(const std::string& path) override
     {
         return dlopen(path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     }
@@ -34,7 +35,7 @@ public:
         return dlsym(handle, symbolName.c_str());
     }
 
-    bool FreeLibrary(NativeLibraryHandle handle) override { return dlclose(handle) == 0; }
+    bool Free(NativeLibraryHandle handle) override { return dlclose(handle) == 0; }
 
     std::string GetLastErrorString() override
     {
@@ -50,4 +51,4 @@ std::unique_ptr<IDynamicLibraryLoader> CreateDynamicLibraryLoader()
     return std::make_unique<LinuxLibraryLoader>();
 }
 
-#endif
+}  // namespace Dive

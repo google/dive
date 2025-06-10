@@ -56,7 +56,7 @@
 #include "hover_help_model.h"
 #include "overlay.h"
 #include "overview_tab_view.h"
-#include "plugins/plugin_manager.h"
+#include "plugins/plugin_loader.h"
 #include "property_panel.h"
 #include "search_bar.h"
 #include "shader_view.h"
@@ -389,7 +389,15 @@ MainWindow::MainWindow()
     m_hover_help->SetDataCore(m_data_core);
     setAccessibleName("DiveMainWindow");
 
-    m_plugin_manager = std::unique_ptr<PluginManager>(new PluginManager(*this));
+    m_plugin_manager = std::unique_ptr<Dive::PluginLoader>(new Dive::PluginLoader(*this));
+}
+
+//--------------------------------------------------------------------------------------------------
+MainWindow::~MainWindow() {}
+
+//--------------------------------------------------------------------------------------------------
+bool MainWindow::InitializePlugins()
+{
     // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
     std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
 
@@ -398,14 +406,12 @@ MainWindow::MainWindow()
         !std::filesystem::is_directory(plugins_dir_path))
     {
         qDebug() << "Plugin path is invalid: " << QString::fromStdString(plugin_path);
-        return;
+        return false;
     }
 
     m_plugin_manager->LoadPlugins(plugins_dir_path);
+    return true;
 }
-
-//--------------------------------------------------------------------------------------------------
-MainWindow::~MainWindow() {}
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString &path)
@@ -720,10 +726,8 @@ void MainWindow::OnShortcuts()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::closeEvent(QCloseEvent *closeEvent)
 {
-    if (m_plugin_manager)
-    {
-        m_plugin_manager->UnloadPlugins();
-    }
+    DIVE_ASSERT(m_plugin_manager != nullptr);
+    m_plugin_manager->UnloadPlugins();
 
     if (!m_capture_saved && !m_unsaved_capture_path.empty())
     {

@@ -20,6 +20,8 @@
 #include <iostream>
 #include "ui/main_window.h"
 
+namespace Dive
+{
 PluginTest::PluginTest(QObject* parent) :
     QObject(parent)
 {
@@ -70,3 +72,4 @@ extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance()
 {
     return new PluginTest();
 }
+}  // namespace Dive

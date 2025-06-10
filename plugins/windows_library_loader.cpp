@@ -14,28 +14,29 @@
  limitations under the License.
 */
 
-#ifdef WIN32
-#    include "idynamic_library_loader.h"
-#    include <windows.h>
-#    include <string>
-#    include <memory>
+#include "idynamic_library_loader.h"
+#include <windows.h>
+#include <string>
+#include <memory>
 
+namespace Dive
+{
 class WindowsLibraryLoader : public IDynamicLibraryLoader
 {
 public:
-    NativeLibraryHandle LoadDynamicLibrary(const std::string& path) override
+    NativeLibraryHandle Load(const std::string& path) override
     {
-        return (NativeLibraryHandle)LoadLibraryA(path.c_str());
+        return static_cast<NativeLibraryHandle>(LoadLibraryA(path.c_str()));
     }
 
     void* GetSymbol(NativeLibraryHandle handle, const std::string& symbolName) override
     {
-        return (void*)GetProcAddress((HMODULE)handle, symbolName.c_str());
+        return static_cast<void*>(GetProcAddress((HMODULE)handle, symbolName.c_str()));
     }
 
-    bool FreeLibrary(NativeLibraryHandle handle) override
+    bool Free(NativeLibraryHandle handle) override
     {
-        return ::FreeLibrary((HMODULE)handle) != 0;
+        return ::FreeLibrary(static_cast<HMODULE>(handle)) != 0;
     }
 
     std::string GetLastErrorString() override { return std::to_string(GetLastError()); }
@@ -48,4 +49,4 @@ std::unique_ptr<IDynamicLibraryLoader> CreateDynamicLibraryLoader()
     return std::make_unique<WindowsLibraryLoader>();
 }
 
-#endif  // WIN32
+}  // namespace Dive

@@ -14,12 +14,10 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
-project(lrz_validator)
+project(host_cli)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CMAKE_CXX_STANDARD 17)
-
 
 if(MSVC)
   set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
@@ -29,27 +27,39 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-file(GLOB HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include 
   ${CMAKE_SOURCE_DIR} 
   ${CMAKE_BINARY_DIR}
   ${LibArchive_INCLUDE_DIRS})
 
-set(LIB_SRC_FILES ${SRC_FILES})
-list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
+set(HDR_FILES data_core_wrapper.h)
+set(LIB_SRC_FILES data_core_wrapper.cpp)
 
-add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
-target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)
-target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
-
-if (MSVC)
-  # 4100: unreferenced formal parameter
-  # 4201: prevent nameless struct/union
-  target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
-  target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
-else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+add_library(${PROJECT_NAME}_lib ${HDR_FILES} ${LIB_SRC_FILES})
+target_link_libraries(${PROJECT_NAME}_lib PUBLIC 
+  dive_core
+  absl::status
+)
+if(WIN32)
+  target_link_libraries(${PROJECT_NAME}_lib PUBLIC psapi)
 endif()
+target_include_directories(${PROJECT_NAME}_lib PUBLIC ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
+add_executable(${PROJECT_NAME} "main.cpp")
+target_link_libraries(${PROJECT_NAME} PUBLIC 
+  ${PROJECT_NAME}_lib 
+  absl::flags
+  absl::flags_parse
+  absl::status
+  absl::str_format
+)
+
+enable_testing()
+include(GoogleTest)
+add_executable(data_core_wrapper_test data_core_wrapper_test.cpp)
+target_link_libraries(data_core_wrapper_test
+  ${PROJECT_NAME}_lib
+  gtest
+  gtest_main
+  )
+gtest_discover_tests(data_core_wrapper_test)

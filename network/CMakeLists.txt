@@ -18,9 +18,9 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(network)
 
-set(NETWORK_SRCS socket_connection.cc)
+set(NETWORK_SRCS socket_connection.cc messages.cc)
 
-set(NETWORK_HDRS socket_connection.h)
+set(NETWORK_HDRS socket_connection.h serializable.h messages.h)
 
 add_library(network SHARED ${NETWORK_SRCS} ${NETWORK_HDRS})
 

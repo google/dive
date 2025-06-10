@@ -18,6 +18,9 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive)
 
+# Global properties
+set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(MSVC)
@@ -47,7 +50,7 @@ endif()
 if(BUILD_GRPC)
     set(GRPC_AS_SUBMODULE "ON")
 else()
-    if(MSVC AND EXISTS "${CMAKE_SOURCE_DIR}/prebuild/grpc/lib/grpc.tar.gz")
+    if(MSVC)
         # Unzip certain large debug gRPC libraries
         execute_process(
         COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpcd.tar.gz
@@ -107,15 +110,11 @@ if(NOT ANDROID)
     add_subdirectory(third_party/gfxreconstruct)
     include(libarchive.cmake)
     add_subdirectory(dive_core)
-    if (EXISTS "${CMAKE_SOURCE_DIR}/cli/CMakeLists.txt")
-        add_subdirectory(cli)
-    endif()
+    add_subdirectory(cli)
+    add_subdirectory(host_cli)
+    add_subdirectory(lrz_validator)
 
-    if (EXISTS "${CMAKE_SOURCE_DIR}/lrz_validator/CMakeLists.txt")
-        add_subdirectory(lrz_validator)
-    endif()
-
-    if (EXISTS "${CMAKE_SOURCE_DIR}/ui/CMakeLists.txt" AND NOT DIVE_NO_DISASSEMBLY)
+    if (NOT DIVE_NO_DISASSEMBLY)
         add_subdirectory(ui)
     endif()
 
@@ -163,3 +162,6 @@ add_test(NAME TestLoadingUncompressedTrace
          COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0052.rd)
 add_test(NAME TestLoadingCompressedTrace
          COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd)
+#TODO: Improve test to check result
+add_test(NAME TestModifyGfxrNoop
+         COMMAND ${CMAKE_BINARY_DIR}/bin/host_cli --input_file_path ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110.gfxr --output_gfxr_path ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110_noop.gfxr)

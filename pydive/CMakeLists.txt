@@ -17,9 +17,7 @@
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(pydive)
-set_property(GLOBAL PROPERTY CMAKE_VERBOSE_MAKEFILE ON)
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_CXX_STANDARD 17)
 
 

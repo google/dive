@@ -33,7 +33,19 @@ enum class ClientStatus
     DISCONNECTED,
     CONNECTING,
     CONNECTED,
-    STATUS_ERROR
+    CONNECTION_FAILED
+};
+
+struct SocketConnectionDeleter
+{
+    void operator()(SocketConnection* conn) const
+    {
+        if (conn)
+        {
+            conn->Close();
+            delete conn;
+        }
+    }
 };
 
 class TcpClient
@@ -63,7 +75,7 @@ public:
 
 private:
     // Performs a ping-pong check with the server.
-    absl::Status PingServer(int timeout_ms);
+    absl::Status PingServer();
 
     // Performs a handshake with the server.
     absl::Status PerformHandshake();
@@ -78,12 +90,13 @@ private:
     void StopKeepAlive();
 
     ClientStatus GetClientStatus() const;
-    ClientStatus SetClientStatus(ClientStatus status);
+    void         SetClientStatus(ClientStatus status);
+    absl::Status SetStatusAndReturnError(ClientStatus status, const absl::Status& error_status);
 
-    std::unique_ptr<SocketConnection> m_connection;
-    std::mutex                        m_connection_mutex;
-    ClientStatus                      m_status;
-    mutable std::mutex                m_status_mutex;
+    std::unique_ptr<SocketConnection, SocketConnectionDeleter> m_connection;
+    std::mutex                                                 m_connection_mutex;
+    ClientStatus                                               m_status;
+    mutable std::mutex                                         m_status_mutex;
 
     // KeepAlive is used to check the connection with the server periodically via a ping-pong
     // mechanism.
@@ -93,8 +106,7 @@ private:
         std::atomic<bool>       running;
         std::mutex              mutex;
         std::condition_variable cv;
-        int                     interval_sec;
-        int                     ping_timeout_ms;
+        uint32_t                interval_sec;
     } m_keep_alive;
 };
 

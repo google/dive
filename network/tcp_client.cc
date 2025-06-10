@@ -18,12 +18,10 @@ limitations under the License.
 
 #include "tcp_client.h"
 
-constexpr int      kKeepAliveIntervalSec = 5;
-constexpr int      kPingTimeoutMs = 5000;
+constexpr uint32_t kKeepAliveIntervalSec = 5;
+constexpr uint32_t kPingTimeoutMs = 5000;
 constexpr uint32_t kHandshakeMajorVersion = 1;
 constexpr uint32_t kHandshakeMinorVersion = 0;
-constexpr char     kPingMessage[] = "ping";
-constexpr char     kPongMessage[] = "pong";
 
 namespace Network
 {
@@ -33,7 +31,6 @@ TcpClient::TcpClient() :
 {
     m_keep_alive.running = false;
     m_keep_alive.interval_sec = kKeepAliveIntervalSec;
-    m_keep_alive.ping_timeout_ms = kPingTimeoutMs;
 }
 
 TcpClient::~TcpClient()
@@ -51,44 +48,41 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
     }
 
     StopKeepAlive();
-    if (m_connection)
-    {
-        m_connection->Close();
-        m_connection.reset();
-    }
+    m_connection.reset();
 
     SetClientStatus(ClientStatus::CONNECTING);
     auto connection_or = SocketConnection::Create();
     if (!connection_or.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(connection_or.status().code(),
-                            absl::StrCat("Connect: ", connection_or.status().message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(connection_or.status().code(),
+                                                    absl::StrCat("Connect: ",
+                                                                 connection_or.status()
+                                                                 .message())));
     }
-
-    m_connection = std::move(connection_or.value());
-    auto conn_status = m_connection->Connect(host, port);
+    auto new_connection = std::move(connection_or.value());
+    auto conn_status = new_connection->Connect(host, port);
     if (!conn_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        m_connection.reset();
-        return absl::Status(conn_status.code(),
-                            absl::StrCat("Connect: Connect fail: ", conn_status.message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(conn_status.code(),
+                                                    absl::StrCat("Connect: Connect fail: ",
+                                                                 conn_status.message())));
     }
+
+    m_connection = std::unique_ptr<SocketConnection, SocketConnectionDeleter>(
+    new_connection.release());
     SetClientStatus(ClientStatus::CONNECTED);
 
     std::cout << "Client: Connected & handshaking." << std::endl;
     auto handshake_status = PerformHandshake();
     if (!handshake_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        if (m_connection)
-        {
-            m_connection->Close();
-            m_connection.reset();
-        }
-        return absl::Status(handshake_status.code(),
-                            absl::StrCat("Connect: Handshake fail: ", handshake_status.message()));
+        m_connection.reset();
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(handshake_status.code(),
+                                                    absl::StrCat("Connect: Handshake fail: ",
+                                                                 handshake_status.message())));
     }
 
     std::cout << "Client: Connected & StartKeepAlive." << std::endl;
@@ -101,10 +95,11 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
         }
         else
         {
-            SetClientStatus(ClientStatus::STATUS_ERROR);
-            return absl::Status(keep_alive_status.code(),
-                                absl::StrCat("Connect: KeepAlive fail: ",
-                                             keep_alive_status.message()));
+            m_connection.reset();
+            return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                           absl::Status(keep_alive_status.code(),
+                                                        absl::StrCat("Connect: KeepAlive fail: ",
+                                                                     keep_alive_status.message())));
         }
     }
     std::cout << "Client: Succesfully connected." << std::endl;
@@ -113,17 +108,8 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
 
 void TcpClient::Disconnect()
 {
-    std::cout << "Client: Disconnecting." << std::endl;
     StopKeepAlive();
-    if (GetClientStatus() == ClientStatus::DISCONNECTED && !m_connection)
-    {
-        return;
-    }
-    if (m_connection)
-    {
-        m_connection->Close();
-        m_connection.reset();
-    }
+    m_connection.reset();
     SetClientStatus(ClientStatus::DISCONNECTED);
     std::cout << "Client: Disconnected." << std::endl;
 }
@@ -146,19 +132,21 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
     auto send_status = SendMessage(m_connection.get(), pm4_request);
     if (!send_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(send_status.code(),
-                            absl::StrCat("StartPm4Capture: SendMessage fail: ",
-                                         send_status.message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::
+                                       Status(send_status.code(),
+                                              absl::StrCat("StartPm4Capture: SendMessage fail: ",
+                                                           send_status.message())));
     }
 
     auto receive_or = ReceiveMessage(m_connection.get());
     if (!receive_or.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(receive_or.status().code(),
-                            absl::StrCat("StartPm4Capture: ReceiveMessage fail: ",
-                                         receive_or.status().message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::
+                                       Status(receive_or.status().code(),
+                                              absl::StrCat("StartPm4Capture: ReceiveMessage fail: ",
+                                                           receive_or.status().message())));
     }
 
     auto response = std::move(receive_or.value());
@@ -202,19 +190,21 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
     auto send_status = SendMessage(m_connection.get(), download_request);
     if (!send_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(send_status.code(),
-                            absl::StrCat("DownloadFileFromServer: SendMessage fail: ",
-                                         send_status.message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(send_status.code(),
+                                                    absl::StrCat("DownloadFileFromServer: "
+                                                                 "SendMessage fail: ",
+                                                                 send_status.message())));
     }
 
     auto receive_or = ReceiveMessage(m_connection.get());
     if (!receive_or.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(receive_or.status().code(),
-                            absl::StrCat("DownloadFileFromServer: ReceiveMessage fail: ",
-                                         receive_or.status().message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(receive_or.status().code(),
+                                                    absl::StrCat("DownloadFileFromServer: "
+                                                                 "ReceiveMessage fail: ",
+                                                                 receive_or.status().message())));
     }
 
     auto response = std::move(receive_or.value());
@@ -245,7 +235,6 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
 
     std::cout << "Client: Server offering file (size = " << download_response->GetFileSizeStr()
               << " bytes). Starting download." << std::endl;
-
     size_t file_size = 0;
     try
     {
@@ -256,16 +245,18 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
         return absl::InvalidArgumentError(
         absl::StrCat("DownloadFileFromServer: Invalid file size from server: '",
                      download_response->GetFileSizeStr(),
-                     "'"));
+                     "'. Message error: ",
+                     e.what()));
     }
 
     auto recv_status = m_connection->ReceiveFile(local_save_path, file_size);
     if (!recv_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(recv_status.code(),
-                            absl::StrCat("DownloadFileFromServer: ReceiveFile fail: ",
-                                         recv_status.message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(recv_status.code(),
+                                                    absl::StrCat("DownloadFileFromServer: "
+                                                                 "ReceiveFile fail: ",
+                                                                 recv_status.message())));
     }
 
     std::cout << "Client: File from server '" << download_request.GetString()
@@ -273,7 +264,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
     return absl::OkStatus();
 }
 
-absl::Status TcpClient::PingServer(int timeout_ms)
+absl::Status TcpClient::PingServer()
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);
     if (!IsConnected())
@@ -282,23 +273,24 @@ absl::Status TcpClient::PingServer(int timeout_ms)
     }
 
     PingMessage ping_request;
-    ping_request.SetString(kPingMessage);
     std::cout << "Client: Send PING." << std::endl;
     auto send_status = SendMessage(m_connection.get(), ping_request);
     if (!send_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(send_status.code(),
-                            absl::StrCat("PingServer: SendMessage fail: ", send_status.message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(send_status.code(),
+                                                    absl::StrCat("PingServer: SendMessage fail: ",
+                                                                 send_status.message())));
     }
 
-    auto receive_or = ReceiveMessage(m_connection.get(), timeout_ms);
+    auto receive_or = ReceiveMessage(m_connection.get(), kPingTimeoutMs);
     if (!receive_or.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(receive_or.status().code(),
-                            absl::StrCat("PingServer: ReceiveMessage fail: ",
-                                         receive_or.status().message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::
+                                       Status(receive_or.status().code(),
+                                              absl::StrCat("PingServer: ReceiveMessage fail: ",
+                                                           receive_or.status().message())));
     }
 
     auto response = std::move(receive_or.value());
@@ -317,16 +309,6 @@ absl::Status TcpClient::PingServer(int timeout_ms)
     if (!pong_response)
     {
         return absl::InternalError("PingServer: Failed to cast received message to PongMessage.");
-    }
-
-    if (pong_response->GetString() != kPongMessage)
-    {
-        return absl::InternalError(
-        absl::StrCat("PingServer: Pong response contents do not match (Expected: ",
-                     kPongMessage,
-                     ", got: ",
-                     pong_response->GetString(),
-                     ")."));
     }
     std::cout << "Client: Ping successful." << std::endl;
     return absl::OkStatus();
@@ -350,19 +332,21 @@ absl::Status TcpClient::PerformHandshake()
     auto send_status = SendMessage(m_connection.get(), hs_request);
     if (!send_status.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(send_status.code(),
-                            absl::StrCat("PerformHandshake: SendMessage fail: ",
-                                         send_status.message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::
+                                       Status(send_status.code(),
+                                              absl::StrCat("PerformHandshake: SendMessage fail: ",
+                                                           send_status.message())));
     }
 
     auto receive_or = ReceiveMessage(m_connection.get());
     if (!receive_or.ok())
     {
-        SetClientStatus(ClientStatus::STATUS_ERROR);
-        return absl::Status(receive_or.status().code(),
-                            absl::StrCat("PerformHandshake: ReceiveMessage fail: ",
-                                         receive_or.status().message()));
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(receive_or.status().code(),
+                                                    absl::StrCat("PerformHandshake: ReceiveMessage "
+                                                                 "fail: ",
+                                                                 receive_or.status().message())));
     }
 
     auto response = std::move(receive_or.value());
@@ -419,7 +403,7 @@ absl::Status TcpClient::StartKeepAlive()
     m_keep_alive.thread = std::thread(&TcpClient::KeepAliveLoop, this);
 
     std::cout << "Client: Keep-alive thread started. Interval: " << m_keep_alive.interval_sec
-              << " s, Ping Timeout: " << m_keep_alive.ping_timeout_ms << " ms." << std::endl;
+              << " s, Ping Timeout: " << kPingTimeoutMs << " ms." << std::endl;
     return absl::OkStatus();
 }
 
@@ -438,19 +422,14 @@ void TcpClient::KeepAliveLoop()
         }
         lk.unlock();
 
-        if (!m_keep_alive.running.load())
-        {
-            break;
-        }
-
         if (IsConnected())
         {
-            auto ping_status = PingServer(m_keep_alive.ping_timeout_ms);
+            auto ping_status = PingServer();
             if (!ping_status.ok())
             {
                 std::cout << "KeepAliveLoop: Ping failed. Reason: " << ping_status.message()
                           << std::endl;
-                SetClientStatus(ClientStatus::STATUS_ERROR);
+                SetClientStatus(ClientStatus::CONNECTION_FAILED);
                 m_keep_alive.running.store(false);
             }
         }
@@ -481,10 +460,17 @@ ClientStatus TcpClient::GetClientStatus() const
     return m_status;
 }
 
-ClientStatus TcpClient::SetClientStatus(ClientStatus status)
+void TcpClient::SetClientStatus(ClientStatus status)
 {
     std::lock_guard<std::mutex> lock(m_status_mutex);
-    return m_status = status;
+    m_status = status;
+}
+
+absl::Status TcpClient::SetStatusAndReturnError(ClientStatus        status,
+                                                const absl::Status& error_status)
+{
+    SetClientStatus(status);
+    return error_status;
 }
 
 }  // namespace Network

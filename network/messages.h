@@ -118,7 +118,7 @@ private:
     const uint32_t m_type = static_cast<uint32_t>(MessageType::PM4_CAPTURE_RESPONSE);
 };
 
-class PingMessage : public StringMessage
+class PingMessage : public EmptyMessage
 {
 public:
     uint32_t GetMessageType() const override { return m_type; }
@@ -127,7 +127,7 @@ private:
     const uint32_t m_type = static_cast<uint32_t>(MessageType::PING_MESSAGE);
 };
 
-class PongMessage : public StringMessage
+class PongMessage : public EmptyMessage
 {
 public:
     uint32_t GetMessageType() const override { return m_type; }

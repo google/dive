@@ -18,10 +18,13 @@ limitations under the License.
 
 #include "tcp_client.h"
 
+namespace
+{
 constexpr uint32_t kKeepAliveIntervalSec = 5;
 constexpr uint32_t kPingTimeoutMs = 5000;
 constexpr uint32_t kHandshakeMajorVersion = 1;
 constexpr uint32_t kHandshakeMinorVersion = 0;
+}  // namespace
 
 namespace Network
 {

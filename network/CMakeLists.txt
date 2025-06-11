@@ -20,7 +20,7 @@ project(network)
 
 set(NETWORK_SRCS socket_connection.cc messages.cc tcp_client.cc)
 
-set(NETWORK_HDRS socket_connection.h serializable.h messages.h tcp_client.h)
+set(NETWORK_HDRS platform_net.h socket_connection.h serializable.h messages.h tcp_client.h)
 
 add_library(network SHARED ${NETWORK_SRCS} ${NETWORK_HDRS})
 

@@ -16,13 +16,6 @@ limitations under the License.
 
 #include "messages.h"
 
-#ifdef WIN32
-#    include <winsock2.h>
-#    undef SendMessage
-#else
-#    include <netinet/in.h>
-#endif
-
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 
 namespace Network

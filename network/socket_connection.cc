@@ -19,19 +19,6 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#ifdef WIN32
-#    define _WINSOCK_DEPRECATED_NO_WARNINGS
-#    define NOMINMAX
-#    include <ws2tcpip.h>
-#    pragma comment(lib, "Ws2_32.lib")
-using ssize_t = SSIZE_T;
-#else
-#    include <netdb.h>
-#    include <poll.h>
-#    include <sys/un.h>
-#    include <unistd.h>
-#endif
-
 namespace Network
 {
 

@@ -19,19 +19,8 @@ limitations under the License.
 #include <memory>
 #include <system_error>
 
+#include "platform_net.h"
 #include "absl/status/statusor.h"
-
-#ifdef WIN32
-// On Windows, a socket is a pointer-sized handle to ensure 32/64-bit compatibility.
-using SocketType = uintptr_t;
-// The value for an invalid socket on Windows is INVALID_SOCKET (~0).
-constexpr SocketType kInvalidSocketValue = ~static_cast<SocketType>(0);
-#else
-// On POSIX systems, a socket is a file descriptor (`int`).
-using SocketType = int;
-// Functions that return a file descriptor use -1 to indicate an error.
-constexpr SocketType kInvalidSocketValue = -1;
-#endif
 
 constexpr int kNoTimeout = -1;
 constexpr int kAcceptTimeout = 2000;

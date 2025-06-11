@@ -119,6 +119,8 @@ if(NOT ANDROID)
     endif()
 
     add_subdirectory(gfxr_dump_resources)
+
+    add_subdirectory(plugins)
 else()
     if(NOT CMAKE_HOST_WIN32)
         message(CHECK_START "Build gfxr for android")
@@ -160,7 +162,6 @@ add_test(NAME TestLoadingUncompressedTrace
          COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0052.rd)
 add_test(NAME TestLoadingCompressedTrace
          COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd)
-
 #TODO: Improve test to check result
 add_test(NAME TestModifyGfxrNoop
          COMMAND ${CMAKE_BINARY_DIR}/bin/host_cli --input_file_path ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110.gfxr --output_gfxr_path ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110_noop.gfxr)

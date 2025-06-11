@@ -14,8 +14,10 @@
  limitations under the License.
 */
 #include "main_window.h"
+#include "adreno.h"
 #include <QAction>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QFile>
 #include <QFileDialog>
 #include <QHeaderView>
@@ -48,9 +50,13 @@
 #    include "event_timing/event_timing_view.h"
 #endif
 #include "command_tab_view.h"
+#include "dive_core/data_core.h"
+#include "event_selection_model.h"
 #include "event_state_view.h"
 #include "hover_help_model.h"
+#include "overlay.h"
 #include "overview_tab_view.h"
+#include "plugins/plugin_loader.h"
 #include "property_panel.h"
 #include "search_bar.h"
 #include "shader_view.h"
@@ -382,8 +388,32 @@ MainWindow::MainWindow()
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
     m_hover_help->SetDataCore(m_data_core);
     setAccessibleName("DiveMainWindow");
+
+    m_plugin_manager = std::unique_ptr<Dive::PluginLoader>(new Dive::PluginLoader(*this));
 }
 
+//--------------------------------------------------------------------------------------------------
+MainWindow::~MainWindow() {}
+
+//--------------------------------------------------------------------------------------------------
+bool MainWindow::InitializePlugins()
+{
+    // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
+    std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
+
+    std::filesystem::path plugins_dir_path(plugin_path);
+    if (!std::filesystem::exists(plugins_dir_path) ||
+        !std::filesystem::is_directory(plugins_dir_path))
+    {
+        qDebug() << "Plugin path is invalid: " << QString::fromStdString(plugin_path);
+        return false;
+    }
+
+    m_plugin_manager->LoadPlugins(plugins_dir_path);
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString &path)
 {
     qDebug() << "Trace is at " << path;
@@ -696,6 +726,9 @@ void MainWindow::OnShortcuts()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::closeEvent(QCloseEvent *closeEvent)
 {
+    DIVE_ASSERT(m_plugin_manager != nullptr);
+    m_plugin_manager->UnloadPlugins();
+
     if (!m_capture_saved && !m_unsaved_capture_path.empty())
     {
         switch (QMessageBox::question(this,

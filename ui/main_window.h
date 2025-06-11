@@ -14,43 +14,51 @@
  limitations under the License.
 */
 
+#pragma once
 #include <QMainWindow>
 #include "dive_core/cross_ref.h"
-#include "dive_core/data_core.h"
-#include "event_selection_model.h"
-#include "overlay.h"
 #include "progress_tracker_callback.h"
-
-#pragma once
+#include "dive_core/log.h"
 
 // Forward declarations
-class DiveTreeView;
-class QCheckBox;
-class QComboBox;
-class QProgressBar;
-class QLabel;
-class QTabWidget;
-class ShaderView;
-class TextFileView;
-class EventStateView;
 class BufferView;
-class OverviewTabView;
-class PerfCounterView;
-class SqttView;
+class CaptureSettingView;
+class CommandModel;
+class CommandTabView;
+class DiveFilterModel;
+class DiveTreeView;
+class EventSelection;
+class EventStateView;
 #ifndef NDEBUG
 class EventTimingView;
 #endif
-class CommandTabView;
-class CommandModel;
-class PropertyPanel;
 class HoverHelp;
+class Overlay;
+class OverlayWidget;
+class OverviewTabView;
+class PerfCounterView;
+class PropertyPanel;
+class QCheckBox;
+class QComboBox;
 class QItemSelection;
-class TreeViewComboBox;
+class QLabel;
+class QProgressBar;
+class QPushButton;
+class QTabWidget;
 class SearchBar;
-class CaptureSettingView;
+class ShaderView;
+class SqttView;
+class TextFileView;
 class TraceDialog;
-class DiveFilterModel;
+class TreeViewComboBox;
+
 enum class EventMode;
+
+namespace Dive
+{
+class DataCore;
+class PluginLoader;
+}  // namespace Dive
 
 #define MESSAGE_TIMEOUT 2500
 
@@ -59,7 +67,10 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 public:
     MainWindow();
+    ~MainWindow();
     bool LoadFile(const char *file_name, bool is_temp_file = false);
+
+    bool InitializePlugins();
 
 protected:
     virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
@@ -194,4 +205,6 @@ private:
 
     // Overlay to be displayed while capture
     Overlay *m_overlay;
+
+    std::unique_ptr<Dive::PluginLoader> m_plugin_manager;
 };

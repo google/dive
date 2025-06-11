@@ -15,11 +15,13 @@
 */
 
 #include <QApplication>
+#include <QDebug>
 #include <QFile>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
 #include <iostream>
+#include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
 #include "main_window.h"
 #include "version.h"
@@ -136,6 +138,12 @@ int main(int argc, char *argv[])
     Pm4InfoInit();
 
     MainWindow *main_window = new MainWindow();
+
+    if (!main_window->InitializePlugins())
+    {
+        qDebug()
+        << "Application: Plugin initialization failed. Application may proceed without plugins.";
+    }
 
     if (argc == 2 && !main_window->LoadFile(argv[1]))
     {

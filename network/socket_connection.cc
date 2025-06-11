@@ -19,19 +19,6 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#ifdef WIN32
-#    define _WINSOCK_DEPRECATED_NO_WARNINGS
-#    define NOMINMAX
-#    include <ws2tcpip.h>
-#    pragma comment(lib, "Ws2_32.lib")
-using ssize_t = SSIZE_T;
-#else
-#    include <netdb.h>
-#    include <poll.h>
-#    include <sys/un.h>
-#    include <unistd.h>
-#endif
-
 namespace Network
 {
 
@@ -72,7 +59,7 @@ SocketType initial_socket_value)
 {
     if (!NetworkInitializer::Instance().IsInitialized())
     {
-        return absl::InternalError("CRITICAL: Network subsystem failed to initialize.");
+        return absl::InternalError("Create: Network failed to initialize.");
     }
     return std::unique_ptr<SocketConnection>(new SocketConnection(initial_socket_value));
 }
@@ -85,8 +72,7 @@ SocketConnection::~SocketConnection()
 SocketConnection::SocketConnection(SocketType initial_socket_value) :
     m_socket(initial_socket_value),
     m_is_listening(false),
-    m_accept_timout_ms(kAcceptTimeout),
-    m_recv_timeout_ms(kNoTimeout)
+    m_accept_timout_ms(kAcceptTimeout)
 {
 }
 
@@ -299,7 +285,7 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
     return absl::OkStatus();
 }
 
-absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size)
+absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int timeout_ms)
 {
     if (!IsOpen() || m_is_listening)
     {
@@ -321,16 +307,12 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size)
         FD_ZERO(&read_fds);
         FD_SET(static_cast<SOCKET>(m_socket), &read_fds);
 
-        if (m_recv_timeout_ms >= 0)
+        if (timeout_ms >= 0)
         {
-            tv.tv_sec = m_recv_timeout_ms / 1000;
-            tv.tv_usec = (m_recv_timeout_ms % 1000) * 1000;
+            tv.tv_sec = timeout_ms / 1000;
+            tv.tv_usec = (timeout_ms % 1000) * 1000;
         }
-        int activity = select(0,
-                              &read_fds,
-                              nullptr,
-                              nullptr,
-                              (m_recv_timeout_ms < 0) ? nullptr : &tv);
+        int activity = select(0, &read_fds, nullptr, nullptr, (timeout_ms < 0) ? nullptr : &tv);
         if (activity == SOCKET_ERROR)
         {
             return absl::InternalError(
@@ -346,7 +328,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size)
         pfd.events = POLLIN;
         pfd.revents = 0;
 
-        int ret = poll(&pfd, 1, m_recv_timeout_ms);
+        int ret = poll(&pfd, 1, timeout_ms);
         if (ret < 0)
         {
             return absl::InternalError(absl::StrCat("Recv: poll() failed: ", strerror(errno)));

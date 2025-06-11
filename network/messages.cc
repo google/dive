@@ -16,12 +16,6 @@ limitations under the License.
 
 #include "messages.h"
 
-#ifdef WIN32
-#    include <winsock2.h>
-#else
-#    include <netinet/in.h>
-#endif
-
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 
 namespace Network
@@ -179,7 +173,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     return absl::OkStatus();
 }
 
-absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size)
+absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size, int timeout_ms)
 {
     if (!conn)
     {
@@ -189,7 +183,8 @@ absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size)
     while (total_received < size)
     {
         absl::StatusOr<size_t> received_or = conn->Recv(buffer + total_received,
-                                                        size - total_received);
+                                                        size - total_received,
+                                                        timeout_ms);
         if (!received_or.ok())
         {
             return received_or.status();
@@ -208,7 +203,8 @@ absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t si
     return conn->Send(buffer, size);
 }
 
-absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* conn)
+absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* conn,
+                                                              int               timeout_ms)
 {
     if (!conn)
     {
@@ -219,7 +215,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* 
     uint8_t      header_buffer[header_size];
 
     // Receive the message header.
-    absl::Status status = ReceiveBuffer(conn, header_buffer, header_size);
+    absl::Status status = ReceiveBuffer(conn, header_buffer, header_size, timeout_ms);
     if (!status.ok())
     {
         return status;
@@ -241,7 +237,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* 
 
     // Receive the message payload.
     Buffer payload_buffer(payload_length);
-    status = ReceiveBuffer(conn, payload_buffer.data(), payload_length);
+    status = ReceiveBuffer(conn, payload_buffer.data(), payload_length, timeout_ms);
     if (!status.ok())
     {
         return status;

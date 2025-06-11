@@ -345,9 +345,8 @@ bool trigger_capture(Dive::DeviceManager& mgr)
 absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
                                        const std::string&   gfxr_capture_directory)
 {
-    std::string on_device_capture_directory = Dive::kDeviceCapturePath +
-                                              gfxr_capture_directory;
-    std::string                 command = "shell lsof " + on_device_capture_directory;
+    std::string on_device_capture_directory = Dive::kDeviceCapturePath + gfxr_capture_directory;
+    std::string command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 
     if (!output.ok())
@@ -537,8 +536,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
     }
 
     // Only delete the on device capture directory when the application is closed.
-    std::string on_device_capture_directory = Dive::kDeviceCapturePath +
-                                              gfxr_capture_directory;
+    std::string on_device_capture_directory = Dive::kDeviceCapturePath + gfxr_capture_directory;
     ret = mgr.GetDevice()->Adb().Run(
     absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
 }

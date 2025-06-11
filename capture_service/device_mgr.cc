@@ -505,7 +505,7 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
         m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
 
         std::string on_device_trace_path = absl::StrFormat("%s/%s-0001.rd",
-                                                           kDeviceCaptureDirectory,
+                                                           kDeviceCapturePath,
                                                            std::filesystem::path(capture_path)
                                                            .filename()
                                                            .string()

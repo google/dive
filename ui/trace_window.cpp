@@ -520,7 +520,7 @@ void TraceDialog::OnStartClicked()
             }
 
             // Only delete the on device capture directory when the application is closed.
-            std::string on_device_capture_directory = Dive::kDeviceCaptureDirectory +
+            std::string on_device_capture_directory = Dive::kDeviceCapturePath +
                                                       m_gfxr_capture_file_directory_input_box
                                                       ->text()
                                                       .toStdString();
@@ -1102,7 +1102,7 @@ void TraceDialog::RetrieveGfxrCapture()
                                             .toStdString();
     }
 
-    std::string on_device_capture_file_directory = Dive::kDeviceCaptureDirectory +
+    std::string on_device_capture_file_directory = Dive::kDeviceCapturePath +
                                                    m_gfxr_capture_file_directory_input_box->text()
                                                    .toStdString();
 

@@ -74,7 +74,6 @@ endif()
 # Fuzz only on Clang for now.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 add_executable(capture_fuzzer fuzz_main.cpp)
-target_include_directories(capture_fuzzer PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 target_compile_definitions(capture_fuzzer PUBLIC -DDIVE_GUI_TOOL)
 target_include_directories(capture_fuzzer PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 target_compile_options(capture_fuzzer
@@ -88,7 +87,6 @@ target_link_libraries(capture_fuzzer
             )
 
 add_executable(capture_fuzzer_loader fuzz_main.cpp)
-target_include_directories(capture_fuzzer_loader PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_GUI_TOOL)
 target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_FUZZ_LOADER)
 target_include_directories(capture_fuzzer_loader PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)

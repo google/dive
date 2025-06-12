@@ -49,8 +49,6 @@ if (LINUX)
     endif()
 endif()
 
-find_package(absl CONFIG REQUIRED)
-
 target_link_libraries(dive_plugin_loader PRIVATE
     absl::status
     absl::statusor

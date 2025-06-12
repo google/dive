@@ -18,7 +18,6 @@
 #include <windows.h>
 #include <string>
 #include <memory>
-#include "absl/strings/str_cat.h"
 
 namespace Dive
 {

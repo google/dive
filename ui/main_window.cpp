@@ -402,14 +402,18 @@ bool MainWindow::InitializePlugins()
     std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
 
     std::filesystem::path plugins_dir_path(plugin_path);
-    if (!std::filesystem::exists(plugins_dir_path) ||
-        !std::filesystem::is_directory(plugins_dir_path))
+
+    absl::Status load_status = m_plugin_manager->LoadPlugins(plugins_dir_path);
+    if (!load_status.ok())
     {
-        qDebug() << "Plugin path is invalid: " << QString::fromStdString(plugin_path);
+        QMessageBox::warning(this,
+                             tr("Plugin Loading Failed"),
+                             QString("Failed to load plugins from '%1'. \nError: %2")
+                             .arg(QString::fromStdString(plugin_path))
+                             .arg(QString::fromStdString(std::string(load_status.message()))),
+                             QMessageBox::Ok);
         return false;
     }
-
-    m_plugin_manager->LoadPlugins(plugins_dir_path);
     return true;
 }
 

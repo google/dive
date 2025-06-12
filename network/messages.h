@@ -118,7 +118,7 @@ private:
     const uint32_t m_type = static_cast<uint32_t>(MessageType::PM4_CAPTURE_RESPONSE);
 };
 
-class PingMessage : public StringMessage
+class PingMessage : public EmptyMessage
 {
 public:
     uint32_t GetMessageType() const override { return m_type; }
@@ -127,7 +127,7 @@ private:
     const uint32_t m_type = static_cast<uint32_t>(MessageType::PING_MESSAGE);
 };
 
-class PongMessage : public StringMessage
+class PongMessage : public EmptyMessage
 {
 public:
     uint32_t GetMessageType() const override { return m_type; }
@@ -182,13 +182,17 @@ private:
 // Message Helper Functions (TLV Framing).
 
 // Helper to receive an exact number of bytes.
-absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size);
+absl::Status ReceiveBuffer(SocketConnection* conn,
+                           uint8_t*          buffer,
+                           size_t            size,
+                           int               timeout_ms = kNoTimeout);
 
 // Helper to send an exact number of bytes.
 absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t size);
 
 // Returns a fully-formed message or an error status.
-absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* conn);
+absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* conn,
+                                                              int timeout_ms = kNoTimeout);
 
 // Sends a full message (header + payload).
 absl::Status SendMessage(SocketConnection* conn, const ISerializable& message);

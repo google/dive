@@ -16,7 +16,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include "dive_core/stl_replacement.h"
 #include "third_party/gfxreconstruct/framework/decode/annotation_handler.h"
 #include "util/defines.h"
 #include "util/platform.h"
@@ -80,18 +79,18 @@ public:
         }
 
         const std::string& GetSubmitText() const { return m_name; }
-        void               SetCommandBufferCount(uint32_t cmd_buffer_count)
+        void               SetCommandBufferCount(uint32_t command_buffer_count)
         {
-            m_cmd_buffer_count = cmd_buffer_count;
+            m_command_buffer_count = command_buffer_count;
         }
-        uint32_t GetCommandBufferCount() const { return m_cmd_buffer_count; }
-        const DiveVector<VulkanCommandInfo>& GetVkCmds() const { return m_vulkan_cmds; }
-        void AppendVkCmd(VulkanCommandInfo vkCmd) { m_vulkan_cmds.push_back(vkCmd); }
+        uint32_t GetCommandBufferCount() const { return m_command_buffer_count; }
+        const std::vector<VulkanCommandInfo>& GetVulkanCommands() const { return m_vulkan_commands; }
+        void SetVulkanCommands(const std::vector<VulkanCommandInfo>& vulkan_commands) { m_vulkan_commands = std::move(vulkan_commands); }
 
     private:
-        DiveVector<VulkanCommandInfo> m_vulkan_cmds{};
+        std::vector<VulkanCommandInfo> m_vulkan_commands{};
         std::string                   m_name{ "" };
-        uint32_t                      m_cmd_buffer_count{ 0 };
+        uint32_t                      m_command_buffer_count{ 0 };
     };
 
     DiveAnnotationProcessor() {}
@@ -115,11 +114,11 @@ public:
 
     bool WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data);
 
-    DiveVector<std::unique_ptr<SubmitInfo>> getSubmits() { return std::move(m_submits); }
+    std::vector<std::unique_ptr<SubmitInfo>> getSubmits() { return std::move(m_submits); }
 
 private:
     std::vector<VulkanCommandInfo>
     m_current_submit_commands;  // Buffer for commands before a submit
-    DiveVector<std::unique_ptr<SubmitInfo>> m_submits;
+    std::vector<std::unique_ptr<SubmitInfo>> m_submits;
     uint32_t                                m_current_submit_command_buffer_count = 0;
 };

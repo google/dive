@@ -30,25 +30,14 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
     {
         std::unique_ptr<SubmitInfo> submit_ptr = std::make_unique<SubmitInfo>(function_name);
 
-        for (auto it = m_current_submit_commands.begin(); it != m_current_submit_commands.end();
-             ++it)
-        {
-            submit_ptr->AppendVkCmd(*it);
-        }
+        submit_ptr->SetVulkanCommands(m_current_submit_commands);
         m_current_submit_commands.clear();
         submit_ptr->SetCommandBufferCount(m_current_submit_command_buffer_count);
         m_submits.push_back(std::move(submit_ptr));
         m_current_submit_command_buffer_count = 0;
     }
-    else if (function_name.find("vkCmd") != std::string::npos ||
-             function_name.find("vkBeginCommandBuffer") != std::string::npos)
+    else
     {
-        // Don't include the vkEndCommandBuffer call.
-        if (function_name.find("vkEndCommandBuffer") != std::string::npos)
-        {
-            return;
-        }
-
         VulkanCommandInfo vkCmd(function_data);
 
         if (function_name.find("vkBeginCommandBuffer") != std::string::npos)

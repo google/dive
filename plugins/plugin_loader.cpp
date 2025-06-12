@@ -52,24 +52,35 @@ void PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_path)
             continue;
         }
 
-        NativeLibraryHandle handle = m_library_loader->Load(file_path);
-        if (handle == nullptr)
+        absl::StatusOr<NativeLibraryHandle> handle_status = m_library_loader->Load(file_path);
+        if (!handle_status.ok())
         {
             std::cout << "PluginLoader: Failed to load library: " << file_path
-                      << " Error: " << m_library_loader->GetLastErrorString() << std::endl;
+                      << " Error: " << handle_status.status().message() << std::endl;
             continue;
         }
+        NativeLibraryHandle handle = handle_status.value();
 
         LibraryHandleUniquePtr library_handle_ptr(handle,
                                                   NativeLibraryHandleDeleter(
                                                   m_library_loader.get()));
 
+        absl::StatusOr<void*>
+        create_func_symbol_status = m_library_loader->GetSymbol(handle, "CreateDivePluginInstance");
+
+        if (!create_func_symbol_status.ok())
+        {
+            std::cout << "PluginLoader: 'CreateDivePluginInstance' symbol not found in: "
+                      << file_path << ". Error: " << create_func_symbol_status.status().message()
+                      << std::endl;
+            continue;
+        }
         CreatePluginFunc create_func = reinterpret_cast<CreatePluginFunc>(
-        m_library_loader->GetSymbol(handle, "CreateDivePluginInstance"));
+        create_func_symbol_status.value());
 
         if (!create_func)
         {
-            std::cout << "PluginLoader: 'CreateDivePluginInstance' symbol not found in: "
+            std::cout << "PluginLoader: 'CreatePluginFunc' is nullptr from : "
                       << file_path << std::endl;
             continue;
         }
@@ -113,14 +124,15 @@ void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle ha
 {
     if (handle != nullptr && loader != nullptr)
     {
-        if (loader->Free(handle))
+        absl::Status free_status = loader->Free(handle);
+        if (free_status.ok())
         {
             std::cout << "PluginLoader: Library handle auto-freed via RAII." << std::endl;
         }
         else
         {
             std::cout << "PluginLoader: Failed to auto-free library handle. Error: "
-                      << loader->GetLastErrorString() << std::endl;
+                      << free_status.message() << std::endl;
         }
     }
 }

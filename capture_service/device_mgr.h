@@ -71,6 +71,7 @@ public:
     absl::Status CleanupDevice();
     absl::Status CleanupPackage(const std::string &package);
     void         EnableGfxr(bool enable_gfxr);
+    bool         IsProcessRunning(absl::string_view process_name) const;
 
     enum class PackageListOptions
     {
@@ -125,7 +126,10 @@ public:
     absl::Status                    Cleanup(const std::string &serial, const std::string &package);
 
     absl::Status DeployReplayApk(const std::string &serial);
-    absl::Status RunReplayApk(const std::string &capture_path, const std::string &replay_args);
+    absl::Status RunReplayApk(const std::string &capture_path,
+                              const std::string &replay_args,
+                              bool               dump_pm4,
+                              const std::string &pm4_capture_download_path);
 
 private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };

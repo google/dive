@@ -64,7 +64,6 @@ public:
 
 protected:
     absl::Status ParsePackage();
-    bool         IsProcessRunning(absl::string_view process_name) const;
 
     AndroidDevice  &m_dev;
     std::string     m_package;

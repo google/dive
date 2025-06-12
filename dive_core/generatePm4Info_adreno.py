@@ -32,7 +32,7 @@ limitations under the License.
 //
 // WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!  WARNING!
 //
-// This code has been generated automatically by generatePm4Strings_adreno.py. Do not hand-modify this code.
+// This code has been generated automatically by generatePm4Info_adreno.py. Do not hand-modify this code.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ''')
@@ -267,9 +267,39 @@ class RegAttributes():
   radix = 0
 
 # ---------------------------------------------------------------------------------------
-def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
+def GetBitfieldsOrEnumHandleFromBitset(input_type, input_bitfields, input_name, registers_et_root, enum_index_dict):
+  if not isinstance(input_bitfields, list):
+    raise TypeError("The 'bitfields' argument must be a list.")
+  enum_handle = 'UINT8_MAX'
+  bitfields = input_bitfields;
+  if input_type:
+    # if it isn't one of the standard types, then it must be a custom bitset or an enum
+    if not isBuiltInType(input_type):
+      a6xx_domain = registers_et_root.find('./{http://nouveau.freedesktop.org/}domain[@name="A6XX"]')
+      bitfields = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+input_type+'"]')
+
+      # Not found in the A6XX domain. Some of the bitsets are defined in the root.
+      if bitfields is None:
+        bitfields = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+input_type+'"]')
+
+      # It's not a bitset. Let's sanity check that it's a top-level enum!
+      if bitfields is None:
+        bitfields = []
+        enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+input_type+'"]')
+        if enum is None:
+          raise Exception('Not able to find bitset/enum ' + input_type + ' for register ' + input_name)
+        # Now that we know it's an enum, let's get the enum_handle for it!
+        if input_type not in enum_index_dict:
+          raise Exception('Enumeration %s not found!' % input_type)
+        if enum_index_dict[input_type] > 256:
+          raise Exception('Enumeration handle %d is too big! The bitfield storing this is only 8-bits!' % enum_index_dict[input_type])
+        enum_handle = str(enum_index_dict[input_type])
+  return bitfields, enum_handle
+
+# ---------------------------------------------------------------------------------------
+def AppendBitfield(pm4_info_file, enum_index_dict, bitfields, is_64):
     # Iterate through optional bitfields
-    for bitfield in attributes.bitfields:
+    for bitfield in bitfields:
       if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
         continue
 
@@ -299,7 +329,7 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
         high = int(bitfield.attrib['high'])
         width = high - low
         mask = (0xffffffffffffffff >> (63 - (high - low))) << low
-        if not attributes.is_64:
+        if not is_64:
           mask = (0x00000000ffffffff >> (31 - (high - low))) << low
       elif 'pos' in bitfield.attrib:
         shift = pos = int(bitfield.attrib['pos'])
@@ -326,48 +356,26 @@ def AppendBitfield(pm4_info_file, enum_index_dict, attributes):
         ))
 
 # ---------------------------------------------------------------------------------------
-def outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, attributes: RegAttributes):
-    is_64_string = '0'
-    if attributes.is_64 is True:
-      is_64_string = '1'
+def outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, attributes: RegAttributes):
+  is_64_string = '0'
+  if attributes.is_64 is True:
+    is_64_string = '1'
+  
+  bitfields, enum_handle = GetBitfieldsOrEnumHandleFromBitset(attributes.type, attributes.bitfields, attributes.name, registers_et_root, enum_index_dict)
 
-    # if a 'type' attrib is available, then check for a custom bitset
-    enum_handle = 'UINT8_MAX'
-    if attributes.type:
-      # if it isn't one of the standard types, then it must be a custom bitset or an enum
-      if not isBuiltInType(attributes.type):
-        bitfields = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+attributes.type+'"]')
-
-        # Not found in the A6XX domain. Some of the bitsets are defined in the root.
-        if bitfields is None:
-          bitfields = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+attributes.type+'"]')
-
-        # It's not a bitset. Let's sanity check that it's a top-level enum!
-        if bitfields is None:
-          bitfields = []  # Create an empty list instead of a "None" object
-          enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+attributes.type+'"]')
-          if enum is None:
-            raise Exception('Not able to find bitset/enum ' + attributes.type + ' for register ' + attributes.name)
-          # Now that we know it's an enum, let's get the enum_handle for it!
-          if attributes.type not in enum_index_dict:
-            raise Exception('Enumeration %s not found!' % attributes.type)
-          if enum_index_dict[attributes.type] > 256:
-            raise Exception('Enumeration handle %d is too big! The bitfield storing this is only 8-bits!' % enum_index_dict[attributes.type])
-          enum_handle = str(enum_index_dict[attributes.type])
-
-    variants_bitfield = GetGPUVariantsBitField(attributes.variants)
-    if (variants_bitfield != 0):
-        # kGPUVariantsBits has 6 bits
-        for i in range(6):
-            cur_variant_bitfield = (1<<i)
-            if cur_variant_bitfield & variants_bitfield:
-                pm4_info_file.write('    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
-                AppendBitfield(pm4_info_file, enum_index_dict, attributes)
-                pm4_info_file.write('} };\n')
-    else:
-        pm4_info_file.write('    g_sRegInfo[0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
-        AppendBitfield(pm4_info_file, enum_index_dict, attributes)
-        pm4_info_file.write('} };\n')
+  variants_bitfield = GetGPUVariantsBitField(attributes.variants)
+  if (variants_bitfield != 0):
+      # kGPUVariantsBits has 6 bits
+      for i in range(6):
+          cur_variant_bitfield = (1<<i)
+          if cur_variant_bitfield & variants_bitfield:
+              pm4_info_file.write('    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+              AppendBitfield(pm4_info_file, enum_index_dict, bitfields, attributes.is_64)
+              pm4_info_file.write('} };\n')
+  else:
+      pm4_info_file.write('    g_sRegInfo[0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
+      AppendBitfield(pm4_info_file, enum_index_dict, bitfields, attributes.is_64)
+      pm4_info_file.write('} };\n')
 
 
 # ---------------------------------------------------------------------------------------
@@ -435,7 +443,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
     reg_attributes.bit_width = bit_width
     reg_attributes.radix = radix
 
-    outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, reg_attributes)
+    outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, reg_attributes)
 
   # Iterate and output the arrays as a sequence of reg32s with an index as a suffix
   arrays = a6xx_domain.findall('{http://nouveau.freedesktop.org/}array')
@@ -475,7 +483,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
         reg_attributes.shr = 0
         reg_attributes.bit_width = 0
         reg_attributes.radix = 0
-        outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, reg_attributes)
+        outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, reg_attributes)
       elif stride == 2 and not array_regs:
         reg_attributes.name = array_name+str(i)+'_LO'
         reg_attributes.offset = offset+i*stride
@@ -486,7 +494,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
         reg_attributes.shr = 0
         reg_attributes.bit_width = 0
         reg_attributes.radix = 0
-        outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, reg_attributes)
+        outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, reg_attributes)
       else:
         for reg_idx, reg in enumerate(array_regs):
           reg_name = reg.attrib['name']
@@ -512,7 +520,7 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
           reg_attributes.shr = shr
           reg_attributes.bit_width = bit_width
           reg_attributes.radix = radix
-          outputSingleRegister(pm4_info_file, registers_et_root, a6xx_domain, enum_index_dict, reg_attributes)
+          outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, reg_attributes)
   return
 
 # ---------------------------------------------------------------------------------------
@@ -582,18 +590,18 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
     if is_reg_64:
       dword_count = dword_count + 1
 
-    bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
+    input_bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
+
+    type = None
+    if 'type' in element.attrib:
+      type = element.attrib['type']
+    field_name = element.attrib['name']
+    bitfields, enum_handle = GetBitfieldsOrEnumHandleFromBitset(type, input_bitfields, field_name, registers_et_root, enum_index_dict)
 
     # No bitfields, so use the register specification directly
     if len(bitfields) == 0:
-      field_name = element.attrib['name']
       shift = 0
       mask = int('0xffffffff', 16)
-      enum_handle = 'UINT8_MAX'
-
-      type = None
-      if 'type' in element.attrib:
-        type = element.attrib['type']
 
       shr = 0
       if 'shr' in element.attrib:

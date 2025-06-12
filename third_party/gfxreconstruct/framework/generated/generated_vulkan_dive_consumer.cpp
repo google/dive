@@ -806,6 +806,12 @@ void VulkanExportDiveConsumer::Process_vkEndCommandBuffer(
     VkResult                                    returnValue,
     format::HandleId                            commandBuffer)
 {
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    util::DiveFunctionData function_data("vkEndCommandBuffer", 0, call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkResetCommandBuffer(

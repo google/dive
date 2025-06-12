@@ -84,13 +84,19 @@ public:
             m_command_buffer_count = command_buffer_count;
         }
         uint32_t GetCommandBufferCount() const { return m_command_buffer_count; }
-        const std::vector<VulkanCommandInfo>& GetVulkanCommands() const { return m_vulkan_commands; }
-        void SetVulkanCommands(const std::vector<VulkanCommandInfo>& vulkan_commands) { m_vulkan_commands = std::move(vulkan_commands); }
+        const std::vector<VulkanCommandInfo>& GetVulkanCommands() const
+        {
+            return m_vulkan_commands;
+        }
+        void SetVulkanCommands(const std::vector<VulkanCommandInfo>& vulkan_commands)
+        {
+            m_vulkan_commands = std::move(vulkan_commands);
+        }
 
     private:
         std::vector<VulkanCommandInfo> m_vulkan_commands{};
-        std::string                   m_name{ "" };
-        uint32_t                      m_command_buffer_count{ 0 };
+        std::string                    m_name{ "" };
+        uint32_t                       m_command_buffer_count{ 0 };
     };
 
     DiveAnnotationProcessor() {}
@@ -120,5 +126,5 @@ private:
     std::vector<VulkanCommandInfo>
     m_current_submit_commands;  // Buffer for commands before a submit
     std::vector<std::unique_ptr<SubmitInfo>> m_submits;
-    uint32_t                                m_current_submit_command_buffer_count = 0;
+    uint32_t                                 m_current_submit_command_buffer_count = 0;
 };

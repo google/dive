@@ -164,6 +164,8 @@ ABSL_FLAG(std::string,
           "specify the on-device path of the gfxr capture to replay.");
 ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr replay.");
 
+ABSL_FLAG(bool, dump_pm4, false, "dump pm4 for gfxr replay");
+
 void print_usage()
 {
     std::cout << absl::ProgramUsageMessage() << std::endl;
@@ -343,9 +345,8 @@ bool trigger_capture(Dive::DeviceManager& mgr)
 absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
                                        const std::string&   gfxr_capture_directory)
 {
-    std::string on_device_capture_directory = Dive::kDeviceCaptureDirectory +
-                                              gfxr_capture_directory;
-    std::string                 command = "shell lsof " + on_device_capture_directory;
+    std::string on_device_capture_directory = Dive::kDeviceCapturePath + gfxr_capture_directory;
+    std::string command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 
     if (!output.ok())
@@ -369,7 +370,7 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
 {
     std::filesystem::path download_path = absl::GetFlag(FLAGS_download_path);
     std::filesystem::path target_download_path(download_path / gfxr_capture_directory);
-    std::filesystem::path on_device_capture_directory = Dive::kDeviceCaptureDirectory +
+    std::filesystem::path on_device_capture_directory = Dive::kDeviceCapturePath +
                                                         gfxr_capture_directory;
 
     std::cout << "Retrieving capture..." << std::endl;
@@ -535,8 +536,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
     }
 
     // Only delete the on device capture directory when the application is closed.
-    std::string on_device_capture_directory = Dive::kDeviceCaptureDirectory +
-                                              gfxr_capture_directory;
+    std::string on_device_capture_directory = Dive::kDeviceCapturePath + gfxr_capture_directory;
     ret = mgr.GetDevice()->Adb().Run(
     absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
 }
@@ -642,14 +642,36 @@ bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr,
                                 const std::string    gfxr_replay_capture,
                                 const std::string    gfxr_replay_flags)
 {
+    bool dump_pm4 = absl::GetFlag(FLAGS_dump_pm4);
+    auto dev_ret = mgr.SelectDevice(device_serial);
+
+    if (!dev_ret.ok())
+    {
+        std::cout << "Failed to select device " << dev_ret.status().message() << std::endl;
+        return false;
+    }
+
+    auto dev = *dev_ret;
+    auto ret = dev->SetupDevice();
+    if (!ret.ok())
+    {
+        std::cout << "Failed to setup device, error: " << ret.message() << std::endl;
+        return false;
+    }
     // Deploying install/gfxr-replay.apk
-    absl::Status ret = mgr.DeployReplayApk(device_serial);
+    ret = mgr.DeployReplayApk(device_serial);
     if (!ret.ok())
     {
         return false;
     }
+
+    std::string pm4_capture_download_path = absl::GetFlag(FLAGS_download_path);
+
     // Running replay for on-device capture
-    ret = mgr.RunReplayApk(gfxr_replay_capture, gfxr_replay_flags);
+    ret = mgr.RunReplayApk(gfxr_replay_capture,
+                           gfxr_replay_flags,
+                           dump_pm4,
+                           pm4_capture_download_path);
     return ret.ok();
 }
 

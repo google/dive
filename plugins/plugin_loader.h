@@ -22,6 +22,7 @@
 
 #include "idive_plugin.h"
 #include "idynamic_library_loader.h"
+#include "absl/status/status.h"
 
 class MainWindow;
 
@@ -36,8 +37,8 @@ public:
     PluginLoader(const PluginLoader &) = delete;
     PluginLoader &operator=(const PluginLoader &) = delete;
 
-    void LoadPlugins(const std::filesystem::path &plugin_directory_path);
-    void UnloadPlugins();
+    absl::Status LoadPlugins(const std::filesystem::path &plugin_directory_path);
+    void         UnloadPlugins();
 
 private:
     struct NativeLibraryHandleDeleter

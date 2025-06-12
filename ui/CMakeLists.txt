@@ -91,6 +91,10 @@ else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-inconsistent-missing-override)
 endif()
 
+if(MSVC)
+  set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+endif()
+
 # Collect 3rd party licenses
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/catch2/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/catch2/)

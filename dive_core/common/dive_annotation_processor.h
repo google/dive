@@ -25,7 +25,8 @@ struct ApiCallInfo;
 // The DiveAnnotationProcessor is used by the VulkanExportDiveConsumer on each WriteBlockEnd call
 // made when processing the vulkan commands. WriteBlockEnd is called passing the function data
 // (name, command buffer index, args) and then DiveAnnotationProcessor converts the data to
-// SubmitInfo for vkQueueSubmits or VulkanCommandInfo for vulkan commands.
+// SubmitInfo for vkQueueSubmits or VulkanCommandInfo for vulkan commands. These structs are then
+// used to construct the command hierarchy displayed in the Dive UI.
 class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 {
 public:

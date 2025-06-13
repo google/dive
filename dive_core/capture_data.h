@@ -26,7 +26,7 @@
 #include "dive_core/common/memory_manager_base.h"
 #include "log.h"
 #include "progress_tracker.h"
-#include "third_party/gfxreconstruct/framework/decode/dive_block_data.h"
+#include "gfxr_ext/decode/dive_block_data.h"
 
 // Forward declarations
 struct SqttFileChunkAsicInfo;

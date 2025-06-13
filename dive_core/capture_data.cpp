@@ -30,7 +30,7 @@
 #    include "perfetto_trace/trace_reader.h"
 #endif
 #include "pm4_info.h"
-#include "third_party/gfxreconstruct/framework/decode/dive_file_processor.h"
+#include "gfxr_ext/decode/dive_file_processor.h"
 
 namespace Dive
 {

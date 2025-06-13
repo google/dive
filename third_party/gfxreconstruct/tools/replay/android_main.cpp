@@ -27,7 +27,7 @@
 #include "application/android_window.h"
 
 // GOOGLE: Custom file processor for Dive
-#include "decode/dive_file_processor.h"
+#include "gfxr_ext/decode/dive_file_processor.h"
 
 #include "decode/file_processor.h"
 #include "decode/preload_file_processor.h"
@@ -165,7 +165,8 @@ void android_main(struct android_app* app)
         try
         {
             // GOOGLE: Initialize DiveFileProcessor instead of FileProcessor when --loop-single-frame is set
-            if (arg_parser.IsOptionSet(kLoopSingleFrame)) {
+            if (arg_parser.IsOptionSet(kLoopSingleFrame))
+            {
                 file_processor = std::make_unique<gfxrecon::decode::DiveFileProcessor>();
             }
             else

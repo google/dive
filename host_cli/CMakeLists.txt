@@ -40,10 +40,10 @@ target_link_libraries(${PROJECT_NAME}_lib PUBLIC
   dive_core
   absl::status
 )
+# gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if(WIN32)
   target_link_libraries(${PROJECT_NAME}_lib PUBLIC psapi)
 endif()
-target_include_directories(${PROJECT_NAME}_lib PUBLIC ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 add_executable(${PROJECT_NAME} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PUBLIC 

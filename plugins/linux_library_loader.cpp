@@ -32,11 +32,10 @@ public:
         if (handle == nullptr)
         {
             const char* error_msg = dlerror();
-            return absl::Status(absl::StatusCode::kUnknown,
-                                absl::StrCat("Failed to load library '",
-                                             path,
-                                             "': ",
-                                             error_msg ? error_msg : "Unknown error"));
+            return absl::UnknownError(absl::StrCat("Failed to load library '",
+                                                   path,
+                                                   "': ",
+                                                   error_msg ? error_msg : "Unknown error"));
         }
         return handle;
     }
@@ -50,11 +49,8 @@ public:
         const char* error_msg = dlerror();
         if (error_msg != nullptr)
         {
-            return absl::Status(absl::StatusCode::kNotFound,
-                                absl::StrCat("Failed to find symbol '",
-                                             symbolName,
-                                             "': ",
-                                             error_msg));
+            return absl::UnknownError(
+            absl::StrCat("Failed to find symbol '", symbolName, "': ", error_msg));
         }
         return symbol;
     }
@@ -64,9 +60,8 @@ public:
         if (dlclose(handle) != 0)
         {
             const char* error_msg = dlerror();
-            return absl::Status(absl::StatusCode::kInternal,
-                                absl::StrCat("Failed to free library handle: ",
-                                             error_msg ? error_msg : "Unknown error"));
+            return absl::UnknownError(absl::StrCat("Failed to free library handle: ",
+                                                   error_msg ? error_msg : "Unknown error"));
         }
         return absl::OkStatus();
     }

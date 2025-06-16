@@ -822,15 +822,13 @@ void MainWindow::OnSaveCapture()
 
     if (save_result)
     {
-        QMessageBox::information(this,
-                                 QString("Save capture succeed"),
-                                 (QString("Save capture succeed.")));
+        QMessageBox::information(this, tr("Save capture succeed"), tr("Save capture succeed."));
     }
     else
     {
         QMessageBox::critical(this,
-                              QString("Save capture file failed"),
-                              (QString("Save capture file failed.")));
+                              tr("Save capture file failed"),
+                              tr("Save capture file failed."));
         return;
     }
     if (is_saving_new_capture)

@@ -30,11 +30,8 @@ public:
         if (handle == nullptr)
         {
             DWORD error_code = GetLastError();
-            return absl::Status(absl::StatusCode::kNotFound,
-                                absl::StrCat("Failed to load library '",
-                                             path,
-                                             "'. Error code: ",
-                                             error_code));
+            return absl::UnknownError(
+            absl::StrCat("Failed to load library '", path, "'. Error code: ", error_code));
         }
         return static_cast<NativeLibraryHandle>(handle);
     }
@@ -47,17 +44,12 @@ public:
         {
             if (DWORD error_code = GetLastError(); error_code != 0)
             {
-                return absl::Status(absl::StatusCode::kNotFound,
-                                    absl::StrCat("Failed to find symbol '",
-                                                 symbolName,
-                                                 "'. Error code: ",
-                                                 error_code));
+                return absl::UnknownError(
+                absl::StrCat("Failed to find symbol '", symbolName, "'. Error code: ", error_code));
             }
 
-            return absl::Status(absl::StatusCode::kNotFound,
-                                absl::StrCat("Symbol '",
-                                             symbolName,
-                                             "' not found or is a null export."));
+            return absl::UnknownError(
+            absl::StrCat("Symbol '", symbolName, "' not found or is a null export."));
         }
         return static_cast<void*>(symbol);
     }
@@ -67,9 +59,8 @@ public:
         if (::FreeLibrary(static_cast<HMODULE>(handle)) == 0)
         {
             DWORD error_code = GetLastError();
-            return absl::Status(absl::StatusCode::kInternal,
-                                absl::StrCat("Failed to free library handle. Error code: ",
-                                             error_code));
+            return absl::UnknownError(
+            absl::StrCat("Failed to free library handle. Error code: ", error_code));
         }
         return absl::OkStatus();
     }

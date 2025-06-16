@@ -35,12 +35,10 @@ PluginLoader::~PluginLoader()
 
 absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_path)
 {
-    std::string expected_suffix = m_library_loader->GetPluginFileExtension();
     std::string error_message;
 
     auto append_error_message = [&](const std::string& msg) {
-        std::string formatted_msg = "PluginLoader: " + msg + "\n";
-        error_message += formatted_msg;
+        absl::StrAppend(&error_message, "PluginLoader: ", msg, "\n");
     };
 
     if (!std::filesystem::exists(plugins_dir_path) ||
@@ -64,28 +62,28 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_
             continue;
         }
 
-        absl::StatusOr<NativeLibraryHandle> handle_status = m_library_loader->Load(file_path);
-        if (!handle_status.ok())
+        absl::StatusOr<NativeLibraryHandle> handle = m_library_loader->Load(file_path);
+        if (!handle.ok())
         {
-            append_error_message(std::string(handle_status.status().message()));
+            append_error_message(std::string(handle.status().message()));
             continue;
         }
-        NativeLibraryHandle handle = handle_status.value();
 
-        LibraryHandleUniquePtr library_handle_ptr(handle,
+        LibraryHandleUniquePtr library_handle_ptr(handle.value(),
                                                   NativeLibraryHandleDeleter(
                                                   m_library_loader.get()));
 
-        absl::StatusOr<void*>
-        create_func_symbol_status = m_library_loader->GetSymbol(handle, "CreateDivePluginInstance");
+        absl::StatusOr<void*> create_func_symbol = m_library_loader
+                                                   ->GetSymbol(handle.value(),
+                                                               "CreateDivePluginInstance");
 
-        if (!create_func_symbol_status.ok())
+        if (!create_func_symbol.ok())
         {
-            append_error_message(std::string(create_func_symbol_status.status().message()));
+            append_error_message(std::string(create_func_symbol.status().message()));
             continue;
         }
         CreatePluginFunc create_func = reinterpret_cast<CreatePluginFunc>(
-        create_func_symbol_status.value());
+        create_func_symbol.value());
 
         if (!create_func)
         {
@@ -140,15 +138,14 @@ void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle ha
 {
     if (handle != nullptr && loader != nullptr)
     {
-        absl::Status free_status = loader->Free(handle);
-        if (free_status.ok())
+        if (absl::Status free = loader->Free(handle); free.ok())
         {
             std::cout << "PluginLoader: Library handle auto-freed via RAII." << std::endl;
         }
         else
         {
             std::cout << "PluginLoader: Failed to auto-free library handle. Error: "
-                      << free_status.message() << std::endl;
+                      << free.message() << std::endl;
         }
     }
 }

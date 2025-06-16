@@ -24,22 +24,46 @@ namespace Dive
 class WindowsLibraryLoader : public IDynamicLibraryLoader
 {
 public:
-    NativeLibraryHandle Load(const std::string& path) override
+    absl::StatusOr<NativeLibraryHandle> Load(const std::string& path) override
     {
-        return static_cast<NativeLibraryHandle>(LoadLibraryA(path.c_str()));
+        HMODULE handle = LoadLibraryA(path.c_str());
+        if (handle == nullptr)
+        {
+            DWORD error_code = GetLastError();
+            return absl::UnknownError(
+            absl::StrCat("Failed to load library '", path, "'. Error code: ", error_code));
+        }
+        return static_cast<NativeLibraryHandle>(handle);
     }
 
-    void* GetSymbol(NativeLibraryHandle handle, const std::string& symbolName) override
+    absl::StatusOr<void*> GetSymbol(NativeLibraryHandle handle,
+                                    const std::string&  symbolName) override
     {
-        return static_cast<void*>(GetProcAddress((HMODULE)handle, symbolName.c_str()));
+        FARPROC symbol = GetProcAddress(static_cast<HMODULE>(handle), symbolName.c_str());
+        if (symbol == nullptr)
+        {
+            if (DWORD error_code = GetLastError(); error_code != 0)
+            {
+                return absl::UnknownError(
+                absl::StrCat("Failed to find symbol '", symbolName, "'. Error code: ", error_code));
+            }
+
+            return absl::UnknownError(
+            absl::StrCat("Symbol '", symbolName, "' not found or is a null export."));
+        }
+        return static_cast<void*>(symbol);
     }
 
-    bool Free(NativeLibraryHandle handle) override
+    absl::Status Free(NativeLibraryHandle handle) override
     {
-        return ::FreeLibrary(static_cast<HMODULE>(handle)) != 0;
+        if (::FreeLibrary(static_cast<HMODULE>(handle)) == 0)
+        {
+            DWORD error_code = GetLastError();
+            return absl::UnknownError(
+            absl::StrCat("Failed to free library handle. Error code: ", error_code));
+        }
+        return absl::OkStatus();
     }
-
-    std::string GetLastErrorString() override { return std::to_string(GetLastError()); }
 
     std::string GetPluginFileExtension() const override { return ".dll"; }
 };

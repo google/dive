@@ -24,23 +24,46 @@ namespace Dive
 class LinuxLibraryLoader : public IDynamicLibraryLoader
 {
 public:
-    NativeLibraryHandle Load(const std::string& path) override
+    absl::StatusOr<NativeLibraryHandle> Load(const std::string& path) override
     {
-        return dlopen(path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
-    }
-
-    void* GetSymbol(NativeLibraryHandle handle, const std::string& symbolName) override
-    {
+        // Clear any existing error state from dlopen.
         dlerror();
-        return dlsym(handle, symbolName.c_str());
+        NativeLibraryHandle handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+        if (handle == nullptr)
+        {
+            const char* error_msg = dlerror();
+            return absl::UnknownError(absl::StrCat("Failed to load library '",
+                                                   path,
+                                                   "': ",
+                                                   error_msg ? error_msg : "Unknown error"));
+        }
+        return handle;
     }
 
-    bool Free(NativeLibraryHandle handle) override { return dlclose(handle) == 0; }
-
-    std::string GetLastErrorString() override
+    absl::StatusOr<void*> GetSymbol(NativeLibraryHandle handle,
+                                    const std::string&  symbolName) override
     {
-        const char* error = dlerror();
-        return error ? std::string(error) : "";
+        // Clear any existing error state from dlsym.
+        dlerror();
+        void*       symbol = dlsym(handle, symbolName.c_str());
+        const char* error_msg = dlerror();
+        if (error_msg != nullptr)
+        {
+            return absl::UnknownError(
+            absl::StrCat("Failed to find symbol '", symbolName, "': ", error_msg));
+        }
+        return symbol;
+    }
+
+    absl::Status Free(NativeLibraryHandle handle) override
+    {
+        if (dlclose(handle) != 0)
+        {
+            const char* error_msg = dlerror();
+            return absl::UnknownError(absl::StrCat("Failed to free library handle: ",
+                                                   error_msg ? error_msg : "Unknown error"));
+        }
+        return absl::OkStatus();
     }
 
     std::string GetPluginFileExtension() const override { return ".so"; }

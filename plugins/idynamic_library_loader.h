@@ -18,6 +18,8 @@
 
 #include <memory>
 #include <string>
+#include "absl/status/statusor.h"
+#include "absl/status/status.h"
 
 namespace Dive
 {
@@ -28,10 +30,13 @@ class IDynamicLibraryLoader
 public:
     virtual ~IDynamicLibraryLoader() = default;
 
-    virtual NativeLibraryHandle Load(const std::string& path) = 0;
-    virtual void*       GetSymbol(NativeLibraryHandle handle, const std::string& symbolName) = 0;
-    virtual bool        Free(NativeLibraryHandle handle) = 0;
-    virtual std::string GetLastErrorString() = 0;
+    virtual absl::StatusOr<NativeLibraryHandle> Load(const std::string& path) = 0;
+
+    virtual absl::StatusOr<void*> GetSymbol(NativeLibraryHandle handle,
+                                            const std::string&  symbolName) = 0;
+
+    virtual absl::Status Free(NativeLibraryHandle handle) = 0;
+
     virtual std::string GetPluginFileExtension() const = 0;
 };
 

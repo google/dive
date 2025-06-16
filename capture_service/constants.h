@@ -30,14 +30,19 @@ inline constexpr char kXrLayerName[] = "XR_APILAYER_dive";
 inline constexpr char kTargetPath[] = "/data/local/tmp";
 inline constexpr char kGfxrTargetPath[] = "/data/data/";
 inline constexpr char kGfxrReconPyPath[] = "third_party/gfxreconstruct/android/scripts/gfxrecon.py";
-inline constexpr char kDeviceCaptureDirectory[] = "/sdcard/Download/";
+inline constexpr char kDeviceCapturePath[] = "/sdcard/Download";
 inline constexpr char kManifestFileName[] = "XrApiLayer_dive.json";
 inline constexpr char kManifestFilePath[] = "/system/etc/openxr/1/api_layers/implicit.d/";
 inline constexpr char kVulkanGlobalPath[] = "/data/local/debug/vulkan";
 inline constexpr int  kDownLoadFileChunkSize = 4096;
 inline constexpr char kUnixAbstractPath[] = "dive_abstract";
+inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
+inline constexpr char
+kReplayPm4DumpFileNamePropertyName[] = "debug.dive.replay.capture_pm4_file_name";
+
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)
 inline constexpr int
 kPortRange = 7;  // A small range of ports should be enough to find an available one
+
 }  // namespace Dive

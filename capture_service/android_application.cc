@@ -152,18 +152,7 @@ absl::Status AndroidApplication::Stop()
 
 bool AndroidApplication::IsRunning() const
 {
-    return IsProcessRunning(m_package);
-}
-
-bool AndroidApplication::IsProcessRunning(absl::string_view process_name) const
-{
-    auto res = m_dev.Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name));
-    if (!res.ok())
-        return false;
-    std::string pid = *res;
-    if (pid.empty())
-        return false;
-    return true;
+    return m_dev.IsProcessRunning(m_package);
 }
 
 VulkanApplication::~VulkanApplication()
@@ -277,10 +266,10 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run(
     absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
 
-    std::string capture_file_location = kDeviceCaptureDirectory + m_gfxr_capture_file_directory +
-                                        "/" + m_package + ".gfxr";
+    std::string capture_file_location = kDeviceCapturePath + m_gfxr_capture_file_directory + "/" +
+                                        m_package + ".gfxr";
 
-    std::string gfxr_capture_directory = kDeviceCaptureDirectory + m_gfxr_capture_file_directory;
+    std::string gfxr_capture_directory = kDeviceCapturePath + m_gfxr_capture_file_directory;
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(
@@ -448,7 +437,7 @@ absl::Status VulkanCliApplication::Stop()
 }
 bool VulkanCliApplication::IsRunning() const
 {
-    return IsProcessRunning(m_command);
+    return m_dev.IsProcessRunning(m_command);
 }
 
 }  // namespace Dive

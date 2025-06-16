@@ -15,7 +15,6 @@
 #
 
 project(host_cli)
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -27,39 +26,41 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include 
-  ${CMAKE_SOURCE_DIR} 
-  ${CMAKE_BINARY_DIR}
-  ${LibArchive_INCLUDE_DIRS})
+# TODO: Try to use include_directories sparingly or at the highest level appropriate
+include_directories(
+    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+)
 
-set(HDR_FILES data_core_wrapper.h)
-set(LIB_SRC_FILES data_core_wrapper.cpp)
-
-add_library(${PROJECT_NAME}_lib ${HDR_FILES} ${LIB_SRC_FILES})
-target_link_libraries(${PROJECT_NAME}_lib PUBLIC 
+# ---------------------
+# data_core_wrapper_lib
+add_library(data_core_wrapper_lib 
+  data_core_wrapper.h
+  data_core_wrapper.cpp
+)
+target_link_libraries(data_core_wrapper_lib PUBLIC 
   dive_core
   absl::status
 )
-if(WIN32)
-  target_link_libraries(${PROJECT_NAME}_lib PUBLIC psapi)
-endif()
-target_include_directories(${PROJECT_NAME}_lib PUBLIC ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
-add_executable(${PROJECT_NAME} "main.cpp")
-target_link_libraries(${PROJECT_NAME} PUBLIC 
-  ${PROJECT_NAME}_lib 
+# --------
+# host_cli
+add_executable(host_cli "main.cpp")
+target_link_libraries(host_cli PUBLIC 
+  data_core_wrapper_lib 
   absl::flags
   absl::flags_parse
   absl::status
   absl::str_format
 )
 
+# ---------------------
+# data_core_wrapper_test
 enable_testing()
 include(GoogleTest)
 add_executable(data_core_wrapper_test data_core_wrapper_test.cpp)
-target_link_libraries(data_core_wrapper_test
-  ${PROJECT_NAME}_lib
+target_link_libraries(data_core_wrapper_test PRIVATE
+  data_core_wrapper_lib
   gtest
   gtest_main
-  )
+)
 gtest_discover_tests(data_core_wrapper_test)

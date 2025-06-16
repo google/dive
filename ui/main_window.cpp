@@ -403,15 +403,14 @@ bool MainWindow::InitializePlugins()
 
     std::filesystem::path plugins_dir_path(plugin_path);
 
-    absl::Status load_status = m_plugin_manager->LoadPlugins(plugins_dir_path);
-    if (!load_status.ok())
+    if (absl::Status load_status = m_plugin_manager->LoadPlugins(plugins_dir_path);
+        !load_status.ok())
     {
         QMessageBox::warning(this,
                              tr("Plugin Loading Failed"),
-                             QString("Failed to load plugins from '%1'. \nError: %2")
+                             tr("Failed to load plugins from '%1'. \nError: %2")
                              .arg(QString::fromStdString(plugin_path))
-                             .arg(QString::fromStdString(std::string(load_status.message()))),
-                             QMessageBox::Ok);
+                             .arg(QString::fromStdString(std::string(load_status.message()))));
         return false;
     }
     return true;
@@ -553,10 +552,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
             error_msg = QString("File corrupt!");
         else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
             error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this,
-                              (QString("Unable to open file: ") + file_name),
-                              error_msg,
-                              QMessageBox::Ok);
+        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
         return false;
     }
 
@@ -566,8 +562,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name),
-                              QMessageBox::Ok);
+                              (QString("Unable to parse file: ") + file_name));
         return false;
     }
 
@@ -634,8 +629,7 @@ void MainWindow::OnOpenFile()
         {
             QMessageBox::critical(this,
                                   QString("Error opening file"),
-                                  (QString("Unable to open file: ") + file_name),
-                                  QMessageBox::Ok);
+                                  (QString("Unable to open file: ") + file_name));
         }
     }
 }
@@ -830,15 +824,13 @@ void MainWindow::OnSaveCapture()
     {
         QMessageBox::information(this,
                                  QString("Save capture succeed"),
-                                 (QString("Save capture succeed.")),
-                                 QMessageBox::Ok);
+                                 (QString("Save capture succeed.")));
     }
     else
     {
         QMessageBox::critical(this,
                               QString("Save capture file failed"),
-                              (QString("Save capture file failed.")),
-                              QMessageBox::Ok);
+                              (QString("Save capture file failed.")));
         return;
     }
     if (is_saving_new_capture)

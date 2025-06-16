@@ -45,8 +45,7 @@ public:
         FARPROC symbol = GetProcAddress(static_cast<HMODULE>(handle), symbolName.c_str());
         if (symbol == nullptr)
         {
-            DWORD error_code = GetLastError();
-            if (error_code != 0)
+            if (DWORD error_code = GetLastError(); error_code != 0)
             {
                 return absl::Status(absl::StatusCode::kNotFound,
                                     absl::StrCat("Failed to find symbol '",

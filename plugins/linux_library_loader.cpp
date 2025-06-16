@@ -32,7 +32,7 @@ public:
         if (handle == nullptr)
         {
             const char* error_msg = dlerror();
-            return absl::Status(absl::StatusCode::kNotFound,
+            return absl::Status(absl::StatusCode::kUnknown,
                                 absl::StrCat("Failed to load library '",
                                              path,
                                              "': ",

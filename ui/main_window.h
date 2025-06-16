@@ -15,6 +15,7 @@
 */
 
 #pragma once
+#include <memory>
 #include <QMainWindow>
 #include "dive_core/cross_ref.h"
 #include "progress_tracker_callback.h"

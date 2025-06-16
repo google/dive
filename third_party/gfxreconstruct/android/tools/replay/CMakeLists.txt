@@ -19,6 +19,9 @@ add_subdirectory(../../framework/format ${PROJECT_SOURCE_DIR}/../../framework/fo
 add_subdirectory(../../framework/decode ${PROJECT_SOURCE_DIR}/../../framework/decode/build/tools/replay/${ANDROID_ABI})
 add_subdirectory(../../framework/application ${PROJECT_SOURCE_DIR}/../../framework/application/build/tools/replay/${ANDROID_ABI})
 
+# GOOGLE: Add subdirectories for gfxr_ext
+add_subdirectory(../../../../../gfxr_ext/decode ${CMAKE_SOURCE_DIR}/../../framework/gfxr_ext/decode/build/tools/replay/${})
+
 add_library(gfxrecon-replay
             SHARED
                 ${GFXRECON_SOURCE_DIR}/tools/tool_settings.h
@@ -35,6 +38,8 @@ target_include_directories(gfxrecon-replay
 
 target_link_libraries(
         gfxrecon-replay
+        nlohmann_json
+        gfxr_decode_ext_lib
         gfxrecon_application
         gfxrecon_decode
         gfxrecon_graphics

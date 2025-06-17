@@ -202,11 +202,8 @@ target_compile_options(freedreno_ir3 PRIVATE -fPIC)
 add_dependencies(${PROJECT_NAME} freedreno_ir3)
 target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
 
-# This is linked privately because gfxr contains X11 headers that contain preprocessor macros which cause collisions
-# gfxr_decode_ext_lib itself can't link gfxrecon_decode privately because it's a dependency of a target (gfxrecon-replay) that doesn't specify PRIVATE/PUBLIC 
-target_link_libraries(${PROJECT_NAME} PRIVATE 
-    gfxr_decode_ext_lib
-)
+target_link_libraries(${PROJECT_NAME} PRIVATE gfxrecon_decode)
+target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   target_link_libraries(${PROJECT_NAME} PRIVATE dl)

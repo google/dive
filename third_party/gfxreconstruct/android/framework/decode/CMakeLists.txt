@@ -19,6 +19,11 @@ target_sources(gfxrecon_decode
                    ${GFXRECON_SOURCE_DIR}/framework/decode/decode_allocator.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/descriptor_update_template_decoder.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/descriptor_update_template_decoder.cpp
+                   # GOOGLE: Custom classes for dive
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/dive_block_data.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/dive_block_data.cpp
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/dive_file_processor.h
+                   ${GFXRECON_SOURCE_DIR}/framework/decode/dive_file_processor.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/file_processor.h
                    ${GFXRECON_SOURCE_DIR}/framework/decode/file_processor.cpp
                    ${GFXRECON_SOURCE_DIR}/framework/decode/preload_file_processor.h

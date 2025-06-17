@@ -63,6 +63,7 @@ add_executable(${PROJECT_NAME} WIN32 ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILE
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
 target_link_libraries(${PROJECT_NAME} dive_core device_mgr client dive_plugin_loader)
+target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
@@ -85,6 +86,7 @@ if (MSVC)
   # 4201: prevent nameless struct/union
   # 4127: "conditional expression is constant" warnings
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127)
+  target_link_libraries(${PROJECT_NAME} psapi)
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-inconsistent-missing-override)
 endif()

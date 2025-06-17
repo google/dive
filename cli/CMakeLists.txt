@@ -45,6 +45,7 @@ list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
 
 add_library(${PROJECT_NAME}_lib ${HDR_FILES} ${LIB_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${PM4_GENERATED_HDR_FILE})
 target_link_libraries(${PROJECT_NAME}_lib PRIVATE dive_core)
+target_include_directories(${PROJECT_NAME}_lib PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib ${PEFFETTO_TRACE_READER_LIB})
@@ -67,12 +68,14 @@ endif()
 endif()
 if(WIN32)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${ZLIB_LIBRARIES} -static)
+target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
 endif()
 
 # Fuzz only on Clang for now.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 add_executable(capture_fuzzer fuzz_main.cpp)
 target_compile_definitions(capture_fuzzer PUBLIC -DDIVE_GUI_TOOL)
+target_include_directories(capture_fuzzer PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 target_compile_options(capture_fuzzer
             PRIVATE $<$<C_COMPILER_ID:Clang>:-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,address>
             )
@@ -86,6 +89,7 @@ target_link_libraries(capture_fuzzer
 add_executable(capture_fuzzer_loader fuzz_main.cpp)
 target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_GUI_TOOL)
 target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_FUZZ_LOADER)
+target_include_directories(capture_fuzzer_loader PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
 
 target_compile_options(capture_fuzzer_loader
             PRIVATE $<$<C_COMPILER_ID:Clang>:-g -O1 -fno-omit-frame-pointer -fsanitize=address>

@@ -19,14 +19,14 @@
 #include <map>
 #include <memory>
 #include <string>
-#include "third_party/libarchive/libarchive/archive.h"
+#include "archive.h"
 #include "common.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/memory_manager_base.h"
 #include "log.h"
 #include "progress_tracker.h"
-#include "gfxr_ext/decode/dive_block_data.h"
+#include "third_party/gfxreconstruct/framework/decode/dive_block_data.h"
 
 // Forward declarations
 struct SqttFileChunkAsicInfo;

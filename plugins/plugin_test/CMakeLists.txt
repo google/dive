@@ -55,6 +55,7 @@ set_target_properties(dive_plugin_test PROPERTIES
 target_include_directories(dive_plugin_test
   PRIVATE
     ${CMAKE_SOURCE_DIR} 
+	${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework
     ${CMAKE_BINARY_DIR}/dive_core
     ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
     ${CMAKE_CURRENT_SOURCE_DIR}/..

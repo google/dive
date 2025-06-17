@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Build the code
   build_Windows_Debug:
     name: "Windows debug build"
     runs-on: windows-2022
@@ -32,14 +31,15 @@ jobs:
       - name: Install dependency
         run: |
           python3 -m pip install mako
-      - name: Build Dive host tools
+      - name: Generate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 ..
-          cmake --build ./ --config Debug
+          cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 -Bbuild .
+      - name: Build Dive host tools with VS 2022
+        run: |
+          cmake --build build --config Debug
       - name: Run tests
         run: |
-          cd build; ctest --output-on-failure -C Debug
-  # Build the code
+          ctest --output-on-failure -C Debug --test-dir build
   build_Windows_Release:
     name: "Windows release build"
     runs-on: windows-2022
@@ -58,13 +58,15 @@ jobs:
       - name: Install dependency
         run: |
           python3 -m pip install mako
-      - name: Build Dive host tools
+      - name: Generate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 ..
-          cmake --build ./ --config Release
+          cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -Bbuild .
+      - name: Build Dive host tools with VS 2022
+        run: |
+          cmake --build build --config Release
       - name: Run tests
         run: |
-          cd build; ctest --output-on-failure -C Release
+          ctest --output-on-failure -C Release --test-dir build
 
 
   build_Linux_Gcc_Debug:
@@ -80,15 +82,30 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake gcc-14  clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
+          sudo apt-get install --yes \
+            cmake \
+            gcc-14 \
+            clang-14 \
+            libsystemd-dev \
+            libbsd-dev \
+            ninja-build \
+            python3-mako
           which gcc-14
           which clang-14
-      - name: Build Dive host tools with gcc-14
+      - name: Generate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 .. -GNinja && ninja && cd ..
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with gcc-14
+        run: |
+          ninja -C build
       - name: Run tests
         run: |
-          cd build; ctest --output-on-failure -C Debug
+          ctest --output-on-failure -C Debug --test-dir build
 
   build_Linux_Gcc_Release:
     name: "Linux gcc release build"
@@ -103,15 +120,29 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake gcc-14 clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
+          sudo apt-get install --yes \
+            cmake gcc-14 \
+            clang-14 \
+            libsystemd-dev \
+            libbsd-dev \
+            ninja-build \
+            python3-mako
           which gcc-14
           which clang-14
-      - name: Build Dive host tools with gcc-14
+      - name: Generate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 .. -GNinja && ninja && cd ..
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with gcc-14
+        run: |
+          ninja -C build
       - name: Run tests
         run: |
-          cd build; ctest --output-on-failure -C Release
+          ctest --output-on-failure -C Release --test-dir build
 
   build_Linux_Clang_Debug:
     name: "Linux clang debug build"
@@ -126,14 +157,27 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
+          sudo apt-get install --yes \
+          cmake clang-14 \
+          libsystemd-dev \
+          libbsd-dev \
+          ninja-build \
+          python3-mako
           which clang-14
-      - name: Build Dive host tools with clang-14
+      - name: Generate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. -GNinja && ninja && cd ..
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with clang-14
+        run: |
+          ninja -C build
       - name: Run tests
         run: |
-          cd build; ctest --output-on-failure -C Debug
+          ctest --output-on-failure -C Debug --test-dir build
 
   build_Linux_Clang_Release:
     name: "Linux clang release build"
@@ -148,17 +192,30 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
-          sudo apt-get install --yes cmake clang-14 libsystemd-dev libbsd-dev ninja-build python3-mako
+          sudo apt-get install --yes \
+          cmake clang-14 \
+          libsystemd-dev \
+          libbsd-dev \
+          ninja-build \
+          python3-mako
           which clang-14
-      - name: Build Dive host tools with clang-14
+      - name: Generate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 .. -GNinja && ninja && cd ..
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with clang-14
+        run: |
+          ninja -C build
       - name: Run tests
         run: |
-          cd build; ctest --output-on-failure -C Release
+          ctest --output-on-failure -C Release --test-dir build
 
-  build_Android:
-    name: "Android build"
+  build_Android_from_Linux:
+    name: "Android build on Linux platform"
     runs-on: ubuntu-24.04
     steps:
       - name: Set up Java 17
@@ -182,9 +239,9 @@ jobs:
           ndk-version: r25
           add-to-path: true
 
-      - name: Build lib with NDK
+      - name: Gemerate build files with cmake
         run: |
-          mkdir build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+          cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
           -G "Ninja" \
           -DCMAKE_MAKE_PROGRAM="ninja" \
           -DCMAKE_BUILD_TYPE=Release \
@@ -198,8 +255,13 @@ jobs:
           -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
           -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
           -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-          ..
-          ninja
+          -Bbuild .
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Build lib with NDK
+        run: |
+          ninja -C build
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}

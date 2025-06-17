@@ -30,6 +30,7 @@
 #include "adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "dive_core/stl_replacement.h"
+#include "dive_core/common/dive_annotation_processor.h"
 #include "gpudefs.h"
 
 namespace Dive
@@ -234,6 +235,11 @@ public:
                        uint32_t                  submit_index,
                        uint32_t                  num_ibs,
                        const IndirectBufferInfo *ib_ptr);
+
+    bool ExecuteGfxrSubmit(IEmulateCallbacks    &callbacks,
+                           const IMemoryManager &mem_manager,
+                           uint32_t              submit_index,
+                           const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds);
 
 private:
     // Keep all emulation state together

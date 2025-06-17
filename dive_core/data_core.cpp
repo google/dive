@@ -16,6 +16,7 @@
 */
 #include "data_core.h"
 #include <assert.h>
+#include <optional>
 #include "pm4_info.h"
 
 namespace Dive
@@ -40,53 +41,78 @@ CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateCommandHierarchy()
+bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 {
-    // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
-    // This is an educated guess that each PM4 packet results in x number of associated
-    // field/register nodes. Overguessing means more memory used during creation. Underguessing
-    // means more allocations. For big captures, this is easily in the multi-millions, so
-    // pre-reserving the space is a signficiant performance win
-    uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
+    if (is_gfxr_capture)
+    {
+        GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
+                                                         m_capture_data);
+        if (!vk_cmd_creator.CreateTrees())
+        {
+            return false;
+        }
+    }
+    else
+    {
+        // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
+        // This is an educated guess that each PM4 packet results in x number of associated
+        // field/register nodes. Overguessing means more memory used during creation. Underguessing
+        // means more allocations. For big captures, this is easily in the multi-millions, so
+        // pre-reserving the space is a signficiant performance win
+        uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
-    // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
+        // Command hierarchy tree creation
+        CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
                                              m_capture_data);
-    if (!cmd_hier_creator.CreateTrees(true, reserve_size))
-    {
-        return false;
+        if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
+        {
+            return false;
+        }
     }
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateMetaData()
+bool DataCore::CreateMetaData(bool is_gfxr_capture)
 {
-    CaptureMetadataCreator metadata_creator(m_capture_metadata);
-    if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
-                                         m_capture_data.GetMemoryManager()))
+    if (!is_gfxr_capture)
     {
-        return false;
+        CaptureMetadataCreator metadata_creator(m_capture_metadata);
+        if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
+                                         m_capture_data.GetMemoryManager()))
+        {
+            return false;
+        }
     }
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseCaptureData()
+bool DataCore::ParseCaptureData(bool is_gfxr_capture)
 {
     if (m_progress_tracker)
     {
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (!CreateMetaData())
+    if (is_gfxr_capture)
     {
-        return false;
+        if (!CreateCommandHierarchy(is_gfxr_capture))
+        {
+            return false;
+        }
     }
-
-    if (!CreateCommandHierarchy())
+    else
     {
-        return false;
+        if (!CreateMetaData())
+        {
+            return false;
+        }
+
+        if (!CreateCommandHierarchy())
+        {
+            return false;
+        }
     }
 
     return true;

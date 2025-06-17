@@ -26,8 +26,10 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "freedreno_dev_info.h"
+#include "generated/generated_vulkan_dive_consumer.h"
 #include "pm4_info.h"
 #include "gfxr_ext/decode/dive_file_processor.h"
+#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
 
 namespace Dive
 {
@@ -1160,6 +1162,15 @@ CaptureData::LoadResult CaptureData::LoadGfxrFile(const char *file_name)
     file_processor.SetLoopSingleFrameCount(1);
     file_processor.SetDiveBlockData(m_gfxr_capture_block_data);
 
+    gfxrecon::decode::VulkanExportDiveConsumer dive_consumer;
+    gfxrecon::decode::VulkanDecoder            decoder;
+    decoder.AddConsumer(&dive_consumer);
+    file_processor.AddDecoder(&decoder);
+
+    DiveAnnotationProcessor dive_annotation_processor;
+    file_processor.SetAnnotationProcessor(&dive_annotation_processor);
+    dive_consumer.Initialize(&dive_annotation_processor);
+
     if (!file_processor.ProcessAllFrames())
     {
         std::cerr << "Error using gfxrecon DiveFileProcessor to load file: " << file_name
@@ -1167,6 +1178,8 @@ CaptureData::LoadResult CaptureData::LoadGfxrFile(const char *file_name)
         std::cerr << file_processor.GetErrorState() << std::endl;
         return LoadResult::kFileIoError;
     }
+
+    m_gfxr_submits = dive_annotation_processor.getSubmits();
 
     if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
     {
@@ -1225,6 +1238,13 @@ const SubmitInfo &CaptureData::GetSubmitInfo(uint32_t submit_index) const
 const DiveVector<SubmitInfo> &CaptureData::GetSubmits() const
 {
     return m_submits;
+}
+
+//--------------------------------------------------------------------------------------------------
+const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &
+CaptureData::GetGfxrSubmits() const
+{
+    return std::move(m_gfxr_submits);
 }
 
 //--------------------------------------------------------------------------------------------------

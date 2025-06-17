@@ -24,6 +24,7 @@
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/memory_manager_base.h"
+#include "dive_core/common/dive_annotation_processor.h"
 #include "log.h"
 #include "progress_tracker.h"
 #include "gfxr_ext/decode/dive_block_data.h"
@@ -362,6 +363,8 @@ public:
     }
     const DiveVector<SubmitInfo> &GetSubmits() const;
 
+    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &GetGfxrSubmits() const;
+
     CaptureData &operator=(CaptureData &&) = default;
 
     LoadResult LoadCaptureFile(std::istream &capture_file);
@@ -424,6 +427,9 @@ private:
 
     // Metadata for the original GFXR file m_cur_capture_file, as well as modifications
     std::shared_ptr<gfxrecon::decode::DiveBlockData> m_gfxr_capture_block_data = nullptr;
+
+    // Vector of SubmitInfo objects used to add the GFXR vulkan commands to the UI.
+    std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> m_gfxr_submits;
 };
 
 }  // namespace Dive

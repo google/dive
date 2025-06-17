@@ -52,3 +52,8 @@ else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
 endif()
 
+# Add NOMINMAX definition for Windows builds to prevent min/max macro conflicts
+if (MSVC)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
+endif()
+

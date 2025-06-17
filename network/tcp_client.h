@@ -36,18 +36,6 @@ enum class ClientStatus
     CONNECTION_FAILED
 };
 
-struct SocketConnectionDeleter
-{
-    void operator()(SocketConnection* conn) const
-    {
-        if (conn)
-        {
-            conn->Close();
-            delete conn;
-        }
-    }
-};
-
 class TcpClient
 {
 public:

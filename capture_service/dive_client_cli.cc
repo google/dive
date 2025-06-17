@@ -369,7 +369,8 @@ absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
 bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
     std::filesystem::path download_path = absl::GetFlag(FLAGS_download_path);
-    std::filesystem::path target_download_path(download_path / gfxr_capture_directory);
+    std::filesystem::path target_download_path(download_path.string() + "/" +
+                                               gfxr_capture_directory);
     std::filesystem::path on_device_capture_directory = Dive::kDeviceCapturePath +
                                                         gfxr_capture_directory;
 
@@ -424,10 +425,18 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
     std::vector<std::string> file_list = absl::StrSplit(std::string(output->data()), '\n');
 
     // Retrieve each file in the capture directory (capture file and asset file).
-    for (const auto& file : file_list)
+    for (const auto& file_with_trailing : file_list)
     {
-        std::string target_file = (target_download_path / file.data()).string();
-        std::string source_file = (on_device_capture_directory / file.data()).string();
+        std::string file = file_with_trailing;
+        // Windows-style line endings use \r\n. When absl::StrSplit splits by \n, the \r remains at
+        // the end of each line if the input string originated from a Windows-style line ending.
+        if (!file.empty() && file.back() == '\r')
+        {
+            file.pop_back();
+        }
+
+        std::string target_file = target_download_path.string() + "/" + file.data();
+        std::string source_file = on_device_capture_directory.string() + "/" + file.data();
         auto        ret = mgr.GetDevice()->RetrieveTrace(source_file, target_file);
 
         if (!ret.ok())

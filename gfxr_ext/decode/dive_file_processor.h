@@ -22,7 +22,7 @@ limitations under the License.
 
 #include <memory>
 
-#include "decode/file_processor.h"
+#include "third_party/gfxreconstruct/framework/decode/file_processor.h"
 
 #include "dive_block_data.h"
 

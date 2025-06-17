@@ -18,7 +18,7 @@ limitations under the License.
 
 #include "dive_file_processor.h"
 
-#include "util/logging.h"
+#include "third_party/gfxreconstruct/framework/util/logging.h"
 
 #include "dive_block_data.h"
 

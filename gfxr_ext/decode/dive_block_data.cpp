@@ -18,7 +18,7 @@ limitations under the License.
 
 #include "dive_block_data.h"
 
-#include "util/logging.h"
+#include "third_party/gfxreconstruct/framework/util/logging.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)

@@ -41,8 +41,6 @@ target_link_libraries(data_core_wrapper_lib PUBLIC
   dive_core
   absl::status
 )
-target_include_directories(data_core_wrapper_lib PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/../)
 
 # --------
 # host_cli

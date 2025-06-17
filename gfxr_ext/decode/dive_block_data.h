@@ -21,7 +21,7 @@ limitations under the License.
 #ifndef GFXRECON_DECODE_DIVE_BLOCK_DATA_H
 #define GFXRECON_DECODE_DIVE_BLOCK_DATA_H
 
-#include "util/defines.h"
+#include "third_party/gfxreconstruct/framework/util/defines.h"
 
 #include <string>
 #include <vector>

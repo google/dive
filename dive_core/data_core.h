@@ -23,6 +23,7 @@
 #include "command_hierarchy.h"
 #include "event_state.h"
 #include "progress_tracker.h"
+#include "gfxr_vulkan_command_hierarchy.h"
 
 namespace Dive
 {
@@ -67,10 +68,10 @@ public:
     CaptureData::LoadResult LoadCaptureData(const char *file_name);
 
     // Parse the capture to generate info that describes the capture
-    bool ParseCaptureData();
+    bool ParseCaptureData(bool is_gfxr_capture = false);
 
     // Create meta data from the captured data
-    bool CreateMetaData();
+    bool CreateMetaData(bool is_gfxr_capture = false);
 
     // Get the capture data (includes access to raw command buffers and memory blocks)
     const CaptureData &GetCaptureData() const;
@@ -84,7 +85,7 @@ public:
 
 private:
     // Create command hierarchy from the captured data
-    bool CreateCommandHierarchy();
+    bool CreateCommandHierarchy(bool is_gfxr_capture = false);
     // The relatively raw captured data (memory & submit blocks)
     CaptureData m_capture_data;
 

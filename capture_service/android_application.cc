@@ -137,7 +137,7 @@ absl::Status AndroidApplication::ParsePackage()
 absl::Status AndroidApplication::Start()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s -n %s/%s ",
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s -n %s/%s",
                                                     m_command_args,
                                                     m_package,
                                                     m_main_activity)));
@@ -268,10 +268,14 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run(
     absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
 
-    std::string gfxr_capture_directory = std::string(kDeviceCapturePath) + "/" +
-                                         m_gfxr_capture_file_directory;
+    std::string gfxr_capture_directory = absl::StrCat(kDeviceCapturePath,
+                                                      "/",
+                                                      m_gfxr_capture_file_directory);
 
-    std::string capture_file_location = gfxr_capture_directory + "/" + m_package + ".gfxr";
+    std::string capture_file_location = absl::StrCat(gfxr_capture_directory,
+                                                     "/",
+                                                     m_package,
+                                                     ".gfxr");
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(

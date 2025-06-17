@@ -41,6 +41,8 @@ target_link_libraries(gfxr_decode_ext_lib
 if (WIN32)
   target_link_libraries(gfxr_decode_ext_lib psapi)
 endif()
+target_include_directories(gfxr_decode_ext_lib PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework)
 
 # ------------------------
 # gfxr_decode_ext_lib_test
@@ -58,4 +60,6 @@ if(WIN32)
     gtest_main
   )
   gtest_discover_tests(gfxr_decode_ext_lib_test)
+  target_include_directories(gfxr_decode_ext_lib PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 endif()

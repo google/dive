@@ -446,10 +446,7 @@ void TcpClient::KeepAliveLoop()
 
 void TcpClient::StopKeepAlive()
 {
-    if (!m_keep_alive.running.exchange(false))
-    {
-        return;
-    }
+    m_keep_alive.running.store(false);
     m_keep_alive.cv.notify_one();
     if (m_keep_alive.thread.joinable())
     {

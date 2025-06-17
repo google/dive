@@ -79,4 +79,16 @@ private:
     int        m_accept_timout_ms;
 };
 
+struct SocketConnectionDeleter
+{
+    void operator()(SocketConnection* conn) const
+    {
+        if (conn)
+        {
+            conn->Close();
+            delete conn;
+        }
+    }
+};
+
 }  // namespace Network

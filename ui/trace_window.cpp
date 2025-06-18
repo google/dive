@@ -95,7 +95,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     m_pkg_filter_button->setDisabled(true);
     m_pkg_filter_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_pkg_filter->hide();
-    m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kAll;
+    m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
 
     m_main_layout = new QVBoxLayout();
 
@@ -383,7 +383,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
 
         if (m_gfxr_capture_file_directory_input_box->text() == "")
         {
-            m_gfxr_capture_file_directory_input_box->setText("gfxr_capture");
+            m_gfxr_capture_file_directory_input_box->setText(
+            QString::fromUtf8(Dive::kDefaultCaptureFolderName));
         }
     }
 
@@ -520,10 +521,12 @@ void TraceDialog::OnStartClicked()
             }
 
             // Only delete the on device capture directory when the application is closed.
-            std::string on_device_capture_directory = Dive::kDeviceCapturePath +
-                                                      m_gfxr_capture_file_directory_input_box
-                                                      ->text()
-                                                      .toStdString();
+            std::string
+            on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
+                                                       "/",
+                                                       m_gfxr_capture_file_directory_input_box
+                                                       ->text()
+                                                       .toStdString());
             ret = device->Adb().Run(
             absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
 
@@ -764,12 +767,14 @@ bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
                                              std::vector<std::string> previous_timestamps)
 {
     std::vector<std::string> current_time_stamps;
-    std::string              get_first_current_timestamp_command = "shell stat -c %Y " +
-                                                      (m_capture_path / m_file_list[0].data())
-                                                      .string();
-    std::string get_second_current_timestamp_command = "shell stat -c %Y " +
-                                                       (m_capture_path / m_file_list[1].data())
-                                                       .string();
+    std::string              get_first_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
+                                                                   m_capture_path.string(),
+                                                                   "/",
+                                                                   m_file_list[0].data());
+    std::string get_second_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
+                                                                    m_capture_path.string(),
+                                                                    "/",
+                                                                    m_file_list[1].data());
     absl::StatusOr<std::string> first_current_timestamp = device->Adb().RunAndGetResult(
     get_first_current_timestamp_command);
     absl::StatusOr<std::string> second_current_timestamp = device->Adb().RunAndGetResult(
@@ -791,9 +796,21 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
     if (!ls_output.ok())
     {
         std::cout << "Error getting capture files: " << ls_output.status().message() << std::endl;
+        return ls_output.status();
     }
 
     m_file_list = absl::StrSplit(std::string(ls_output->data()), '\n');
+
+    for (std::string &file_with_trailing : m_file_list)
+    {
+        // Windows-style line endings use \r\n. When absl::StrSplit splits by \n, the \r remains
+        // at the end of each line if the input string originated from a Windows-style line
+        // ending.
+        if (!file_with_trailing.empty() && file_with_trailing.back() == '\r')
+        {
+            file_with_trailing.pop_back();
+        }
+    }
 
     // Ensure that the .gfxa and .gfxr file sizes are set and neither is being written to.
     int64_t                  size = 0;
@@ -803,7 +820,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
     {
         for (std::string file : m_file_list)
         {
-            path = (m_capture_path / file.data()).string();
+            path = absl::StrCat(m_capture_path.string(), "/", file.data());
 
             // Get the size of the file.
             std::string get_file_size_command = "shell stat -c %s " + path;
@@ -898,9 +915,10 @@ void GfxrCaptureWorker::run()
     // Retrieve each file in the capture directory (capture file and asset file).
     for (std::string file : m_file_list)
     {
-        std::string target_file = (m_target_capture_path / file.data()).string();
-        std::string source_file = (m_capture_path / file.data()).string();
-        auto        retrieve_file = device->RetrieveTrace(source_file, target_file);
+        std::string target_file = absl::StrCat(m_target_capture_path.string(), "/", file.data());
+        std::string source_file = absl::StrCat(m_capture_path.string(), "/", file.data());
+
+        auto retrieve_file = device->RetrieveTrace(source_file, target_file);
 
         if (!retrieve_file.ok())
         {
@@ -1093,24 +1111,22 @@ void TraceDialog::RetrieveGfxrCapture()
 
     if (m_gfxr_capture_file_local_directory_input_box->text() == "")
     {
-        m_gfxr_capture_file_local_directory_input_box->setText("./gfxr_capture");
-    }
-    else
-    {
-        std::string
-        local_gfxr_capture_directory_path = m_gfxr_capture_file_local_directory_input_box->text()
-                                            .toStdString();
+        m_gfxr_capture_file_local_directory_input_box->setText(
+        "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
     }
 
-    std::string on_device_capture_file_directory = Dive::kDeviceCapturePath +
-                                                   m_gfxr_capture_file_directory_input_box->text()
-                                                   .toStdString();
+    std::string
+    on_device_capture_file_directory = absl::StrCat(std::string(Dive::kDeviceCapturePath),
+                                                    "/",
+                                                    m_gfxr_capture_file_directory_input_box->text()
+                                                    .toStdString());
 
     QProgressDialog *progress_bar = new QProgressDialog("Downloading GFXR Capture ... ",
                                                         nullptr,
                                                         0,
                                                         100,
                                                         this);
+    progress_bar->setObjectName("gfxr_download_progress");
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
     progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
@@ -1134,6 +1150,11 @@ void TraceDialog::RetrieveGfxrCapture()
 
 void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
 {
+    QProgressDialog *progress_bar = findChild<QProgressDialog *>("gfxr_download_progress");
+    if (progress_bar)
+    {
+        progress_bar->close();
+    }
     std::string success_msg = "Capture successfully saved at " + capture_path.toStdString();
     qDebug() << success_msg.c_str();
     ShowErrorMessage(success_msg);

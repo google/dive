@@ -35,7 +35,6 @@ if(MSVC)
 endif()
 
 # GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
-# GOOGLE: Add dive_* files
 target_sources(gfxrecon_decode
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/annotation_handler.h
@@ -65,10 +64,6 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/decode_allocator.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/decode_api_detection.h
                     ${CMAKE_CURRENT_LIST_DIR}/decode_api_detection.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/dive_block_data.h
-                    ${CMAKE_CURRENT_LIST_DIR}/dive_block_data.cpp
-                    ${CMAKE_CURRENT_LIST_DIR}/dive_file_processor.h
-                    ${CMAKE_CURRENT_LIST_DIR}/dive_file_processor.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/info_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/info_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/info_decoder.cpp

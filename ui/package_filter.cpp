@@ -28,12 +28,13 @@ PackageFilter::PackageFilter(QWidget* parent) :
 
 {
     m_all_filter = new QCheckBox("All", this);
-    m_all_filter->setCheckState(Qt::Checked);
-    m_active_filters.insert(m_all_filter);
     m_debuggable_filter = new QCheckBox("Debuggable", this);
     m_non_debuggable_filter = new QCheckBox("Non-Debuggable", this);
     m_apply = new QPushButton("Apply Filters", this);
     m_apply->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    m_debuggable_filter->setCheckState(Qt::Checked);
+    m_active_filters.insert(m_debuggable_filter);
 
     connect(this, SIGNAL(rejected()), this, SLOT(onReject()));
     connect(m_all_filter, SIGNAL(stateChanged(int)), this, SLOT(selectAllEventsFilter(int)));
@@ -96,9 +97,9 @@ void PackageFilter::applyFilters()
 
     if (m_filters.empty())
     {
-        m_all_filter->setCheckState(Qt::Checked);
-        m_active_filters.insert(m_all_filter);
-        emit filtersApplied({ m_all_filter->text() });
+        m_debuggable_filter->setCheckState(Qt::Checked);
+        m_active_filters.insert(m_debuggable_filter);
+        emit filtersApplied({ m_debuggable_filter->text() });
     }
     else
     {

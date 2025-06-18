@@ -16,9 +16,11 @@ limitations under the License.
 
 // Implementing a custom file processor for Dive
 
-#include "decode/dive_block_data.h"
-#include "decode/dive_file_processor.h"
+#include "dive_file_processor.h"
+
 #include "util/logging.h"
+
+#include "dive_block_data.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -46,12 +48,12 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
     // Read the rest of the frame marker data. Currently frame markers are not dispatched to
     // decoders.
     uint64_t frame_number = 0;
-    bool     success      = ReadBytes(&frame_number, sizeof(frame_number));
+    bool     success = ReadBytes(&frame_number, sizeof(frame_number));
 
     if (success)
     {
-        // Validate frame end marker's frame number matches first_frame_ when capture_uses_frame_markers_ is
-        // true.
+        // Validate frame end marker's frame number matches first_frame_ when
+        // capture_uses_frame_markers_ is true.
         GFXRECON_ASSERT((marker_type != format::kEndMarker) || (!UsesFrameMarkers()) ||
                         (frame_number == GetFirstFrame()));
 
@@ -63,7 +65,8 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
             }
             else
             {
-                GFXRECON_LOG_WARNING("Skipping unrecognized frame marker with type %u", marker_type);
+                GFXRECON_LOG_WARNING("Skipping unrecognized frame marker with type %u",
+                                     marker_type);
             }
         }
     }
@@ -103,7 +106,8 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
     return success;
 }
 
-bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type)
+bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_header,
+                                           format::MarkerType         marker_type)
 {
     bool success = FileProcessor::ProcessStateMarker(block_header, marker_type);
 
@@ -120,7 +124,11 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
 
 void DiveFileProcessor::StoreBlockInfo()
 {
-    GFXRECON_ASSERT(dive_block_data_ != nullptr);
+    if (!dive_block_data_)
+    {
+        return;
+    }
+
     int64_t offset = TellActiveFile();
     GFXRECON_ASSERT(offset > 0);
     dive_block_data_->AddOriginalBlock(block_index_, static_cast<uint64_t>(offset));

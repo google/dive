@@ -103,12 +103,15 @@ add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)
 add_subdirectory(runtime_layer)
+
+# For generated headers
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)
     SET(D3D12_SUPPORT OFF CACHE BOOL "")
     add_subdirectory(third_party/gfxreconstruct)
     include(libarchive.cmake)
+    add_subdirectory(gfxr_ext/decode)
     add_subdirectory(dive_core)
     add_subdirectory(cli)
     add_subdirectory(host_cli)

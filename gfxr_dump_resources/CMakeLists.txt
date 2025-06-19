@@ -22,3 +22,7 @@ target_link_libraries(gfxr_dump_resources_lib PRIVATE gfxr_decode_ext_lib)
 
 add_executable(gfxr_dump_resources main.cpp)
 target_link_libraries(gfxr_dump_resources gfxr_dump_resources_lib)
+
+enable_testing()
+add_test(NAME gfxr_dump_resources_test
+  COMMAND ${CMAKE_COMMAND} -D TEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -D PROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake)

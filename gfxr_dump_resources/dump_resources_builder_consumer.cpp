@@ -175,10 +175,11 @@ gfxrecon::format::HandleId                                                      
                 StateMachine& state_machine = *it->second;
                 state_machine.state()
                 .Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
-                break;
             }
-
-            std::cerr << "Command buffer " << command_buffer_id << " never started!\n";
+            else
+            {
+                std::cerr << "Command buffer " << command_buffer_id << " never started!\n";
+            }
         }
     }
 }

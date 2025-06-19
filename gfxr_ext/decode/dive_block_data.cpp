@@ -242,7 +242,6 @@ bool DiveBlockData::TraverseBlocks(BlockVisitor& visitor) const
     // Go through block-by-block in order of primary_id
     for (uint32_t primary_id = 0; primary_id < original_blocks_map_.size(); primary_id++)
     {
-        GFXRECON_LOG_INFO("UNICORN primary (%d)", primary_id);
         std::map<int32_t, std::shared_ptr<IDiveBlock>> blocks_to_write = {};
         if (modifications_map_.count(primary_id) > 0)
         {
@@ -262,7 +261,6 @@ bool DiveBlockData::TraverseBlocks(BlockVisitor& visitor) const
         {
             int32_t                     secondary_id = it->first;
             std::shared_ptr<IDiveBlock> current_modification_ptr = it->second;
-            GFXRECON_LOG_INFO("UNICORN secondary (%d, %d)", primary_id, secondary_id);
 
             if (current_modification_ptr == nullptr)
             {

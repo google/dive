@@ -618,7 +618,7 @@ int ExtractCapture(const char *filename, const char *extract_assets)
     }
 
     const Dive::CommandHierarchy *command_hierarchy = nullptr;
-    if (data->ParseCaptureData())
+    if (data->ParseCaptureData(false))
     {
         command_hierarchy = &data->GetCommandHierarchy();
     }

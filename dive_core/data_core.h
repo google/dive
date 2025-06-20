@@ -68,10 +68,10 @@ public:
     CaptureData::LoadResult LoadCaptureData(const char *file_name);
 
     // Parse the capture to generate info that describes the capture
-    bool ParseCaptureData(bool is_gfxr_capture = false);
+    bool ParseCaptureData(bool is_gfxr_capture);
 
     // Create meta data from the captured data
-    bool CreateMetaData(bool is_gfxr_capture = false);
+    bool CreateMetaData(bool is_gfxr_capture);
 
     // Get the capture data (includes access to raw command buffers and memory blocks)
     const CaptureData &GetCaptureData() const;
@@ -85,7 +85,7 @@ public:
 
 private:
     // Create command hierarchy from the captured data
-    bool CreateCommandHierarchy(bool is_gfxr_capture = false);
+    bool CreateCommandHierarchy(bool is_gfxr_capture);
     // The relatively raw captured data (memory & submit blocks)
     CaptureData m_capture_data;
 

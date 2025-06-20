@@ -56,8 +56,8 @@ uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string &
 
     for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; ++i)
     {
-        DIVE_ASSERT(m_node_children[i][kDirectChildren].size() == node_index);
-        m_node_children[i][kDirectChildren].resize(m_node_children[i][kDirectChildren].size() + 1);
+        DIVE_ASSERT(m_node_children[i].size() == node_index);
+        m_node_children[i].resize(m_node_children[i].size() + 1);
 
         m_node_root_node_index[i].resize(m_node_root_node_index[i].size() + 1);
     }
@@ -69,20 +69,24 @@ void GfxrVulkanCommandHierarchyCreator::AddChild(CommandHierarchy::TopologyType 
                                                  uint64_t                       node_index,
                                                  uint64_t                       child_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_children[type][kDirectChildren].size());
-    m_node_children[type][kDirectChildren][node_index].push_back(child_node_index);
+    DIVE_ASSERT(node_index < m_node_children[type].size());
+    m_node_children[type][node_index].push_back(child_node_index);
 }
 
 void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &json_args,
                                                 uint64_t                      curr_index,
                                                 const std::string            &current_path)
 {
+    // This block processes key-value pairs where keys represent field names
+    // and values can be objects, arrays, or primitives.
     if (json_args.is_object())
     {
         for (auto const &[key, val] : json_args.items())
         {
             if (val.is_object())
             {
+                // If the value is another object, create a new node for it
+                // and recursively process it.
                 uint64_t object_node_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
                                                      key.c_str());
                 AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
@@ -93,6 +97,8 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             }
             else if (val.is_array())
             {
+                // If the value is an array, create a new node for the array
+                // and then iterate through its elements.
                 uint64_t array_node_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
                                                     key.c_str());
                 AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
@@ -103,10 +109,13 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                     const auto &element = val[i];
                     if (element.is_object())
                     {
+                        // If an array element is an object, recursively process it.
                         GetArgs(element, array_node_index, "");
                     }
                     else if (element.is_array())
                     {
+                        // If an array element is a nested array,
+                        // create a node for it and recursively process it.
                         uint64_t
                         nested_array_node_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
                                                           "element_" + std::to_string(i));
@@ -117,6 +126,8 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                     }
                     else
                     {
+                        // If an array element is a primitive,
+                        // create a node containing its string representation.
                         std::ostringstream vk_cmd_arg_string_stream;
                         vk_cmd_arg_string_stream << element;
                         uint64_t arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
@@ -129,8 +140,10 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             }
             else
             {
+                // If the value is a primitive,
+                // create a node containing the "key:value" pair.
                 std::ostringstream vk_cmd_arg_string_stream;
-                vk_cmd_arg_string_stream << key << ":" << val;  // key:value format for primitive
+                vk_cmd_arg_string_stream << key << ":" << val;
                 uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
                                                     vk_cmd_arg_string_stream.str());
                 AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
@@ -139,6 +152,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             }
         }
     }
+    // This block processes each element of an array.
     else if (json_args.is_array())
     {
         for (size_t i = 0; i < json_args.size(); ++i)
@@ -146,10 +160,13 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             const auto &element = json_args[i];
             if (element.is_object() || element.is_array())
             {
+                // If an array element is an object or another array,
+                // recursively process it, and associate it with the current parent node.
                 GetArgs(element, curr_index, "");
             }
             else
             {
+                // If an array element is a primitive, create a node for its string representation.
                 std::ostringstream vk_cmd_arg_string_stream;
                 vk_cmd_arg_string_stream << element;
                 uint64_t arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
@@ -158,10 +175,13 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             }
         }
     }
+    // This block handles the case where the argument is a simple value.
     else
     {
         if (!current_path.empty())
         {
+            // If there's a current path, meaning it's part of a key-value pair,
+            // combine the path and value for the node name.
             std::ostringstream vk_cmd_arg_string_stream;
             vk_cmd_arg_string_stream << current_path << ":" << json_args;
             uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
@@ -227,7 +247,7 @@ void GfxrVulkanCommandHierarchyCreator::CreateTopologies()
     // Convert the m_node_children temporary structure into CommandHierarchy's topologies
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
-        size_t    num_nodes = m_node_children[topology][kDirectChildren].size();
+        size_t    num_nodes = m_node_children[topology].size();
         Topology &cur_topology = m_command_hierarchy.m_topology[topology];
         cur_topology.SetNumNodes(num_nodes);
 
@@ -236,7 +256,7 @@ void GfxrVulkanCommandHierarchyCreator::CreateTopologies()
             for (uint64_t node_index = 0; node_index < num_nodes; ++node_index)
             {
                 auto &node_children = m_node_children[topology];
-                total_num_children[topology] += node_children[kDirectChildren][node_index].size();
+                total_num_children[topology] += node_children[node_index].size();
             }
         }
 
@@ -244,8 +264,7 @@ void GfxrVulkanCommandHierarchyCreator::CreateTopologies()
 
         for (uint64_t node_index = 0; node_index < num_nodes; ++node_index)
         {
-            cur_topology.AddChildren(node_index,
-                                     m_node_children[topology][kDirectChildren][node_index]);
+            cur_topology.AddChildren(node_index, m_node_children[topology][node_index]);
         }
     }
 }

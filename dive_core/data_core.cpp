@@ -95,24 +95,14 @@ bool DataCore::ParseCaptureData(bool is_gfxr_capture)
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (is_gfxr_capture)
+    if (!CreateMetaData(is_gfxr_capture))
     {
-        if (!CreateCommandHierarchy(is_gfxr_capture))
-        {
-            return false;
-        }
+        return false;
     }
-    else
-    {
-        if (!CreateMetaData())
-        {
-            return false;
-        }
 
-        if (!CreateCommandHierarchy())
-        {
-            return false;
-        }
+    if (!CreateCommandHierarchy(is_gfxr_capture))
+    {
+        return false;
     }
 
     return true;

@@ -175,20 +175,6 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             }
         }
     }
-    // This block handles the case where the argument is a simple value.
-    else
-    {
-        if (!current_path.empty())
-        {
-            // If there's a current path, meaning it's part of a key-value pair,
-            // combine the path and value for the node name.
-            std::ostringstream vk_cmd_arg_string_stream;
-            vk_cmd_arg_string_stream << current_path << ":" << json_args;
-            uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
-                                                vk_cmd_arg_string_stream.str());
-            AddChild(CommandHierarchy::TopologyType::kSubmitTopology, curr_index, vk_cmd_arg_index);
-        }
-    }
 }
 
 //--------------------------------------------------------------------------------------------------

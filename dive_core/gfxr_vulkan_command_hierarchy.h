@@ -30,13 +30,6 @@ public:
     bool CreateTrees();
 
 private:
-    enum ChildListType
-    {
-        kDirectChildren,
-    };
-
-    static const uint64_t kNumChildrenLists = 1;
-
     void     GetArgs(const nlohmann::ordered_json &j,
                      uint64_t                      curr_index,
                      const std::string            &current_path = "");
@@ -54,8 +47,7 @@ private:
     CaptureData      &m_capture_data;
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
-    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount]
-                                                    [kNumChildrenLists];
-    DiveVector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t>             m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
 };
 }  // namespace Dive

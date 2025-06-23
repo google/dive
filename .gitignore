@@ -29,9 +29,12 @@ local_notebooks/*.ipynb
 
 .env
 
-prebuild/grpc/Debug/lib/grpc.lib
-prebuild/grpc/Debug/lib/grpc_authorization_provider.lib
-prebuild/grpc/Debug/lib/grpc_unsecure.lib
-prebuild/grpc/Debug/lib/libprotobufd.lib
-prebuild/grpc/Debug/lib/libprotocd.lib
+prebuild/grpc/lib/grpc.lib
+prebuild/grpc/lib/grpc_authorization_providerd.lib
+prebuild/grpc/lib/grpc_unsecure.lib
+prebuild/grpc/lib/grpc_unsecured.lib
+prebuild/grpc/lib/grpcd.lib
+prebuild/grpc/lib/libprotobufd.lib
+prebuild/grpc/lib/libprotoc.lib
+prebuild/grpc/lib/libprotocd.lib
 install/

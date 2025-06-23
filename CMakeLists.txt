@@ -52,7 +52,7 @@ if(BUILD_GRPC)
 else()
     if(MSVC)
         # Unzip certain large debug gRPC libraries
-        # Please update .gitignore!
+        # If changed, please update .gitignore!
         execute_process(
         COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpcd.tar.gz
         COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc.tar.gz

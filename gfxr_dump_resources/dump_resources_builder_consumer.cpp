@@ -69,18 +69,9 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeg
 VkSubpassContents contents)
 {
     std::cerr << "Process_vkCmdBeginRenderPass: commandBuffer=" << commandBuffer << '\n';
-    auto it = incomplete_dumps_.find(commandBuffer);
-    if (it == incomplete_dumps_.end())
-    {
-        std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
-        return;
-    }
-
-    StateMachine& state_machine = *it->second;
-    state_machine.state().Process_vkCmdBeginRenderPass(call_info,
-                                                       commandBuffer,
-                                                       pRenderPassBegin,
-                                                       contents);
+    InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+        consumer.Process_vkCmdBeginRenderPass(call_info, commandBuffer, pRenderPassBegin, contents);
+    });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
@@ -91,20 +82,14 @@ void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::Api
                                                      uint32_t                   firstInstance)
 {
     std::cerr << "Process_vkCmdDraw: commandBuffer=" << commandBuffer << '\n';
-    auto it = incomplete_dumps_.find(commandBuffer);
-    if (it == incomplete_dumps_.end())
-    {
-        std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
-        return;
-    }
-
-    StateMachine& state_machine = *it->second;
-    state_machine.state().Process_vkCmdDraw(call_info,
-                                            commandBuffer,
-                                            vertexCount,
-                                            instanceCount,
-                                            firstVertex,
-                                            firstInstance);
+    InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+        consumer.Process_vkCmdDraw(call_info,
+                                   commandBuffer,
+                                   vertexCount,
+                                   instanceCount,
+                                   firstVertex,
+                                   firstInstance);
+    });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdDrawIndexed(
@@ -117,21 +102,15 @@ int32_t                              vertexOffset,
 uint32_t                             firstInstance)
 {
     std::cerr << "Process_vkCmdDrawIndexed: commandBuffer=" << commandBuffer << '\n';
-    auto it = incomplete_dumps_.find(commandBuffer);
-    if (it == incomplete_dumps_.end())
-    {
-        std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
-        return;
-    }
-
-    StateMachine& state_machine = *it->second;
-    state_machine.state().Process_vkCmdDrawIndexed(call_info,
-                                                   commandBuffer,
-                                                   indexCount,
-                                                   instanceCount,
-                                                   firstIndex,
-                                                   vertexOffset,
-                                                   firstInstance);
+    InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+        consumer.Process_vkCmdDrawIndexed(call_info,
+                                          commandBuffer,
+                                          indexCount,
+                                          instanceCount,
+                                          firstIndex,
+                                          vertexOffset,
+                                          firstInstance);
+    });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass(
@@ -139,15 +118,9 @@ const gfxrecon::decode::ApiCallInfo& call_info,
 gfxrecon::format::HandleId           commandBuffer)
 {
     std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
-    auto it = incomplete_dumps_.find(commandBuffer);
-    if (it == incomplete_dumps_.end())
-    {
-        std::cerr << "Command buffer " << commandBuffer << " never started! Ignoring...\n";
-        return;
-    }
-
-    StateMachine& state_machine = *it->second;
-    state_machine.state().Process_vkCmdEndRenderPass(call_info, commandBuffer);
+    InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+        consumer.Process_vkCmdEndRenderPass(call_info, commandBuffer);
+    });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkQueueSubmit(
@@ -170,18 +143,27 @@ gfxrecon::format::HandleId                                                      
             gfxrecon::format::HandleId command_buffer_id = submit.pCommandBuffers
                                                            .GetPointer()[command_buffer_index];
             std::cerr << "... for commandBuffer=" << command_buffer_id << '\n';
-            if (auto it = incomplete_dumps_.find(command_buffer_id); it != incomplete_dumps_.end())
-            {
-                StateMachine& state_machine = *it->second;
-                state_machine.state()
+            InvokeIfFound(command_buffer_id, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+                consumer
                 .Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
-            }
-            else
-            {
-                std::cerr << "Command buffer " << command_buffer_id << " never started!\n";
-            }
+            });
         }
     }
+}
+
+void DumpResourcesBuilderConsumer::InvokeIfFound(
+gfxrecon::format::HandleId                                    command_buffer,
+const std::function<void(gfxrecon::decode::VulkanConsumer&)>& function)
+{
+    auto it = incomplete_dumps_.find(command_buffer);
+    if (it == incomplete_dumps_.end())
+    {
+        std::cerr << "Command buffer " << command_buffer << " never started! Ignoring...\n";
+        return;
+    }
+
+    StateMachine& state_machine = *it->second;
+    function(state_machine.state());
 }
 
 }  // namespace Dive::gfxr

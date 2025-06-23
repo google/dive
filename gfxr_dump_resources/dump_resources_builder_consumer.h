@@ -85,6 +85,15 @@ public:
     gfxrecon::format::HandleId                                                      fence) override;
 
 private:
+    // Run `function` if we're processing state for `command_buffer` (i.e. vkBeginCommandBuffer has
+    // been called). If we're not processing state for `command_buffer` then `function` is not
+    // called.
+    //
+    // The argument to `function` is the current state of the state machine used for processing
+    // `command_buffer`.
+    void InvokeIfFound(gfxrecon::format::HandleId                                    command_buffer,
+                       const std::function<void(gfxrecon::decode::VulkanConsumer&)>& function);
+
     // Function run when a complete dump entry has been formed. This is ready to be written to disk,
     // etc.
     std::function<void(DumpEntry)> dump_found_callback_;

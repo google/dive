@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include "third_party/gfxreconstruct/framework/decode/annotation_handler.h"
+#include "decode/annotation_handler.h"
 #include "util/defines.h"
 #include "util/platform.h"
 

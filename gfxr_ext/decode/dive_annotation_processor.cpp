@@ -18,9 +18,9 @@
 #include <cstdint>
 #include <iostream>
 #include <ostream>
-#include "third_party/gfxreconstruct/framework/decode/api_decoder.h"
-#include "third_party/gfxreconstruct/framework/util/logging.h"
-#include "third_party/gfxreconstruct/framework/util/output_stream.h"
+#include "decode/api_decoder.h"
+#include "util/logging.h"
+#include "util/output_stream.h"
 
 void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data)
 {

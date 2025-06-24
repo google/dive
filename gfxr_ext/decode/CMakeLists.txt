@@ -29,6 +29,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # -------------------
 # gfxr_decode_ext_lib
 add_library(gfxr_decode_ext_lib
+  dive_annotation_processor.h
+  dive_annotation_processor.cpp
   dive_block_data.h
   dive_block_data.cpp
   dive_file_processor.h

@@ -65,13 +65,16 @@ while true; do
   echo "Press any key to retrieve capture"
   read
   adb shell setprop debug.gfxrecon.capture_android_trigger false
-  # List the dir so that the output contains the names of the files that we're pulling.
-  adb shell ls "${GFXR_CAPTURE_REMOTE_DIR}"
-  # Since timestamp is added, we can't predict the filename. Just pull the entire dir.
+  # Easiest to just pull the entire directory.
   adb pull "${GFXR_CAPTURE_REMOTE_DIR}"
+  # Clean up so that we're not constantly pulling the same files.
+  # Also causes names to be printed to output so the user knows.
+  for file in $(adb shell ls "${GFXR_CAPTURE_REMOTE_DIR}"); do  
+    # Clean up so that we're not constantly pulling the same files.
+    adb shell rm "${GFXR_CAPTURE_REMOTE_DIR}/${file}"
+  done
 done
 
-# Clean up so that we're not constantly pulling the same files.
 adb shell rm -rf "${GFXR_CAPTURE_REMOTE_DIR}"
 
 # Next launch should not use GFXR

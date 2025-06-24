@@ -24,7 +24,7 @@ limitations under the License.
 #include <cstring>
 #include <thread>
 
-#include "capture_service/log.h"
+#include "common/log.h"
 #include "capture_service/server.h"
 
 namespace

@@ -40,12 +40,16 @@ public:
     void OnDisconnect() override;
 };
 
+// The UnixDomainServer is designed to run two threads. One thread accepts and handles a single
+// client connection, while the main thread starts the server and waits for the first thread to
+// finish or for an unexpected error to occur that necessitates stopping the server.
+// The server is designed to accept only one client connection at a time.
 class UnixDomainServer
 {
 public:
     // Constructs the server, taking ownership of the provided IMessageHandler.
     explicit UnixDomainServer(
-    std::unique_ptr<IMessageHandler> handler = std::unique_ptr<DefaultMessageHandler>());
+    std::unique_ptr<IMessageHandler> handler = std::make_unique<DefaultMessageHandler>());
 
     // Stops the server and cleans up all resources.
     ~UnixDomainServer();
@@ -66,12 +70,15 @@ private:
     // Resets the client connection to prepare for a new client.
     void ResetClientConnection();
 
+    // Server connection.
     std::unique_ptr<SocketConnection, SocketConnectionDeleter> m_listen_connection;
+    // The only one client connection at a time.
     std::unique_ptr<SocketConnection, SocketConnectionDeleter> m_client_connection;
+    // The thread that accepts and handles the only one client connection at a time.
+    std::thread m_server_thread;
 
     std::unique_ptr<IMessageHandler> m_handler;
     std::atomic<bool>                m_is_running;
-    std::thread                      m_server_thread;
     std::mutex                       m_client_mutex;
     std::mutex                       m_wait_mutex;
     std::condition_variable          m_wait_cv;

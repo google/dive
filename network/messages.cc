@@ -306,7 +306,7 @@ absl::Status SendMessage(SocketConnection* conn, const ISerializable& message)
     }
 
     // Construct and send the header.
-    uint32_t     net_type = htonl(message.GetMessageType());
+    uint32_t     net_type = htonl(static_cast<uint32_t>(message.GetMessageType()));
     uint32_t     net_payload_length = htonl(static_cast<uint32_t>(payload_buffer.size()));
     const size_t header_size = sizeof(net_type) + sizeof(net_payload_length);
     uint8_t      header_buffer[header_size];

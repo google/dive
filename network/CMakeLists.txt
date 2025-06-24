@@ -32,7 +32,6 @@ set(NETWORK_HDRS
   messages.h
   tcp_client.h
   message_handler.h
-  log.h
   unix_domain_server.h
 )
 
@@ -53,4 +52,7 @@ target_link_libraries(
   ${NETWORK_LINK_LIBS}
 )
 
-target_include_directories(network PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(network PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/common
+)

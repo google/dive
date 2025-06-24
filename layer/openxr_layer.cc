@@ -22,7 +22,7 @@ limitations under the License.
 #include <string>
 #include <unordered_map>
 
-#include "capture_service/log.h"
+#include "common/log.h"
 #include "capture_service/trace_mgr.h"
 #include "layer_common.h"
 #include "openxr/openxr_loader_negotiation.h"

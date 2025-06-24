@@ -24,6 +24,7 @@ limitations under the License.
 namespace Network
 {
 
+enum class MessageType : uint32_t;
 using Buffer = std::vector<uint8_t>;
 
 class ISerializable
@@ -32,7 +33,7 @@ public:
     virtual ~ISerializable() = default;
 
     // Returns the specific type identifier for this message.
-    virtual uint32_t GetMessageType() const = 0;
+    virtual MessageType GetMessageType() const = 0;
 
     // Serializes the object's payload into the destination buffer.
     // Returns absl::OkStatus() on success, or an error status on failure.

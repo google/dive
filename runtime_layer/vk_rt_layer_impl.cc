@@ -23,7 +23,7 @@ limitations under the License.
 #endif
 
 #include <vulkan/vulkan_core.h>
-#include "capture_service/log.h"
+#include "common/log.h"
 
 #include <inttypes.h>
 #include <algorithm>

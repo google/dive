@@ -65,19 +65,19 @@ private:
 class HandShakeRequest : public HandShakeMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::HANDSHAKE_REQUEST);
+    const MessageType m_type = MessageType::HANDSHAKE_REQUEST;
 };
 
 class HandShakeResponse : public HandShakeMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::HANDSHAKE_RESPONSE);
+    const MessageType m_type = MessageType::HANDSHAKE_RESPONSE;
 };
 
 class EmptyMessage : public ISerializable
@@ -90,10 +90,10 @@ public:
 class Pm4CaptureRequest : public EmptyMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::PM4_CAPTURE_REQUEST);
+    const MessageType m_type = MessageType::PM4_CAPTURE_REQUEST;
 };
 
 class StringMessage : public ISerializable
@@ -112,43 +112,43 @@ private:
 class Pm4CaptureResponse : public StringMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::PM4_CAPTURE_RESPONSE);
+    const MessageType m_type = MessageType::PM4_CAPTURE_RESPONSE;
 };
 
 class PingMessage : public EmptyMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::PING_MESSAGE);
+    const MessageType m_type = MessageType::PING_MESSAGE;
 };
 
 class PongMessage : public EmptyMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::PONG_MESSAGE);
+    const MessageType m_type = MessageType::PONG_MESSAGE;
 };
 
 class DownloadFileRequest : public StringMessage
 {
 public:
-    uint32_t GetMessageType() const override { return m_type; }
+    MessageType GetMessageType() const override { return m_type; }
 
 private:
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::DOWNLOAD_FILE_REQUEST);
+    const MessageType m_type = MessageType::DOWNLOAD_FILE_REQUEST;
 };
 
 class DownloadFileResponse : public ISerializable
 {
 public:
-    uint32_t     GetMessageType() const override { return m_type; }
+    MessageType  GetMessageType() const override { return m_type; }
     absl::Status Serialize(Buffer& dest) const override;
     absl::Status Deserialize(const Buffer& src) override;
 
@@ -176,7 +176,7 @@ private:
     // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
     std::string m_file_size_str;
 
-    const uint32_t m_type = static_cast<uint32_t>(MessageType::DOWNLOAD_FILE_RESPONSE);
+    const MessageType m_type = MessageType::DOWNLOAD_FILE_RESPONSE;
 };
 
 // Message Helper Functions (TLV Framing).

@@ -32,16 +32,16 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
 {
     if (!message)
     {
-        LOGI("DefaultMessageHandler::HandleMessage: Null message.");
+        LOGW("DefaultMessageHandler::HandleMessage: Null message.");
         return;
     }
     if (!client_conn)
     {
-        LOGI("DefaultMessageHandler::HandleMessage: Null client connection.");
+        LOGW("DefaultMessageHandler::HandleMessage: Null client connection.");
         return;
     }
 
-    switch (static_cast<MessageType>(message->GetMessageType()))
+    switch (message->GetMessageType())
     {
     case MessageType::HANDSHAKE_REQUEST:
     {
@@ -54,13 +54,14 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
             auto status = SendMessage(client_conn, response);
             if (!status.ok())
             {
-                LOGI("DefaultMessageHandler::HandleMessage: SendMessage fail: %s",
-                     status.message());
+                LOGW("DefaultMessageHandler::HandleMessage: SendMessage fail: %.*s",
+                     static_cast<int>(status.message().length()),
+                     status.message().data());
             }
         }
         else
         {
-            LOGI("DefaultMessageHandler::HandleMessage: Handshake request is null");
+            LOGW("DefaultMessageHandler::HandleMessage: Handshake request is null");
         }
         break;
     }
@@ -73,19 +74,21 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
             auto        status = SendMessage(client_conn, response);
             if (!status.ok())
             {
-                LOGI("DefaultMessageHandler::HandleMessage: SendMessage fail: %s",
-                     status.message());
+                LOGW("DefaultMessageHandler::HandleMessage: SendMessage fail: %.*s",
+                     static_cast<int>(status.message().length()),
+                     status.message().data());
             }
         }
         else
         {
-            LOGI("DefaultMessageHandler::HandleMessage: Ping request is null");
+            LOGW("DefaultMessageHandler::HandleMessage: Ping request is null");
         }
         break;
     }
     default:
     {
-        LOGI("DefaultMessageHandler::HandleMessage: Unknown message type.");
+        LOGW("DefaultMessageHandler::HandleMessage: Unknown message type = %d",
+             static_cast<uint32_t>(message->GetMessageType()));
     }
     }
 }
@@ -112,26 +115,24 @@ absl::Status UnixDomainServer::Start(const std::string& server_address)
     {
         return absl::AlreadyExistsError("Start: Server is already running.");
     }
-    if (m_server_thread.joinable())
-    {
-        m_server_thread.join();
-    }
 
-    auto connection_or = SocketConnection::Create();
-    if (!connection_or.ok())
+    auto connection = SocketConnection::Create();
+    if (!connection.ok())
     {
-        return absl::Status(connection_or.status().code(),
-                            absl::StrCat("Start: ", connection_or.status().message()));
+        return absl::Status(connection.status().code(),
+                            absl::StrCat("Start: Failed to create socket: ",
+                                         connection.status().message()));
     }
-    auto new_connection = std::move(connection_or.value());
-    auto conn_status = new_connection->BindAndListenOnUnixDomain(server_address);
+    auto conn_status = (*connection)->BindAndListenOnUnixDomain(server_address);
     if (!conn_status.ok())
     {
-        return absl::Status(conn_status.code(), absl::StrCat("Start: ", conn_status.message()));
+        return absl::Status(conn_status.code(),
+                            absl::StrCat("Start: Failed to bind and listen socket: ",
+                                         conn_status.message()));
     }
 
     m_listen_connection = std::unique_ptr<SocketConnection, SocketConnectionDeleter>(
-    new_connection.release());
+    (*std::move(connection)).release());
     m_is_running.store(true);
     m_server_thread = std::thread(&UnixDomainServer::AcceptAndHandleClientLoop, this);
     return absl::OkStatus();
@@ -161,45 +162,41 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
 {
     while (m_is_running.load())
     {
+        // We only accept one client connection at a time.
         if (!m_client_connection)
         {
             if (!m_listen_connection || !m_listen_connection->IsOpen())
             {
-                if (m_is_running.load())
-                {
-                    LOGI(
-                    "AcceptAndHandleClientLoop: Listen socket is closed unexpectedly. Stopping.");
-                }
-                else
-                {
-                    LOGI("AcceptAndHandleClientLoop: Listen socket closed for shutdown.");
-                }
+                LOGI(m_is_running.load() ?
+                     "AcceptAndHandleClientLoop: Listen socket closed unexpectedly. Stopping." :
+                     "AcceptAndHandleClientLoop: Listen socket closed for shutdown.");
                 break;
             }
 
-            auto acc_connection_or = m_listen_connection->Accept();
-            if (!acc_connection_or.ok())
+            auto acc_connection = m_listen_connection->Accept();
+            if (!acc_connection.ok())
             {
                 if (!m_is_running.load())
                 {
                     LOGI("AcceptAndHandleClientLoop: Accept: Exiting loop due to shutdown.");
                     break;
                 }
-                LOGI("AcceptAndHandleClientLoop: Error accepting new client: %s",
-                     acc_connection_or.status().message());
+                LOGI("AcceptAndHandleClientLoop: Error accepting new client: %.*s",
+                     static_cast<int>(acc_connection.status().message().length()),
+                     acc_connection.status().message().data());
                 continue;
             }
 
-            auto acc_connection = std::move(acc_connection_or.value());
             {
                 std::lock_guard<std::mutex> lk(m_client_mutex);
                 m_client_connection = std::unique_ptr<SocketConnection, SocketConnectionDeleter>(
-                acc_connection.release());
+                (*std::move(acc_connection)).release());
             }
             LOGI("AcceptAndHandleClientLoop: New client accepted.");
             m_handler->OnConnect();
         }
 
+        // Having accepted the only client connection, we're now ready to receive messages from it.
         if (m_client_connection)
         {
             if (!m_client_connection->IsOpen())
@@ -210,8 +207,8 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
                 continue;
             }
 
-            auto recv_message_or = ReceiveMessage(m_client_connection.get());
-            if (!recv_message_or.ok())
+            auto recv_message = ReceiveMessage(m_client_connection.get());
+            if (!recv_message.ok())
             {
                 if (!m_is_running.load())
                 {
@@ -221,18 +218,19 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
                     break;
                 }
 
-                LOGI("AcceptAndHandleClientLoop: ReceiveMessage failed: %s",
-                     recv_message_or.status().message());
+                LOGI("AcceptAndHandleClientLoop: ReceiveMessage failed: %.*s",
+                     static_cast<int>(recv_message.status().message().length()),
+                     recv_message.status().message().data());
                 m_handler->OnDisconnect();
                 ResetClientConnection();
             }
             else
             {
-                m_handler->HandleMessage(std::move(recv_message_or.value()),
-                                         m_client_connection.get());
+                m_handler->HandleMessage(*std::move(recv_message), m_client_connection.get());
             }
         }
     }
+
     LOGI("AcceptAndHandleClientLoop: Exiting loop.");
     m_is_running.store(false);
     m_wait_cv.notify_one();

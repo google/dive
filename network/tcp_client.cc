@@ -153,7 +153,7 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
     }
 
     auto response = std::move(receive_or.value());
-    if (response->GetMessageType() != static_cast<uint32_t>(MessageType::PM4_CAPTURE_RESPONSE))
+    if (response->GetMessageType() != MessageType::PM4_CAPTURE_RESPONSE)
     {
         return absl::FailedPreconditionError(
         absl::StrCat("StartPm4Capture: Unexpected message type in Capture response "
@@ -211,7 +211,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
     }
 
     auto response = std::move(receive_or.value());
-    if (response->GetMessageType() != static_cast<uint32_t>(MessageType::DOWNLOAD_FILE_RESPONSE))
+    if (response->GetMessageType() != MessageType::DOWNLOAD_FILE_RESPONSE)
     {
         return absl::FailedPreconditionError(
         absl::StrCat("DownloadFileFromServer: Unexpected message type in Download response "
@@ -297,7 +297,7 @@ absl::Status TcpClient::PingServer()
     }
 
     auto response = std::move(receive_or.value());
-    if (response->GetMessageType() != static_cast<uint32_t>(MessageType::PONG_MESSAGE))
+    if (response->GetMessageType() != MessageType::PONG_MESSAGE)
     {
         return absl::FailedPreconditionError(
         absl::StrCat("PingServer: Unexpected message type in Ping response "
@@ -353,7 +353,7 @@ absl::Status TcpClient::PerformHandshake()
     }
 
     auto response = std::move(receive_or.value());
-    if (response->GetMessageType() != static_cast<uint32_t>(MessageType::HANDSHAKE_RESPONSE))
+    if (response->GetMessageType() != MessageType::HANDSHAKE_RESPONSE)
     {
         return absl::FailedPreconditionError(
         absl::StrCat("PerformHandshake: Unexpected message type in Handshake response "

@@ -88,6 +88,9 @@ else()
               trace_mgr.cc
               ${COMMAND_UTILS_SRC})
 endif()
+target_include_directories(service PRIVATE
+  ${CMAKE_SOURCE_DIR}/common
+)
 target_link_libraries(service PRIVATE
                       dive_grpc_proto
                       absl::flags
@@ -132,6 +135,9 @@ else()
     )
 
   add_library(device_mgr device_mgr.cc ${COMMAND_UTILS_SRC} android_application.cc)
+  target_include_directories(device_mgr PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+  )
   target_link_libraries(device_mgr 
     absl::flags
     absl::flags_parse

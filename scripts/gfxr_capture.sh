@@ -27,11 +27,12 @@ ACTIVITY="$2"
 
 REMOTE_TEMP_DIR=/data/local/tmp
 GFXR_CAPTURE_REMOTE_DIR=/sdcard/Download/gfxr_capture
+GFXR_CAPTURE_LIB=libVkLayer_gfxreconstruct.so
 
 # Install GFXR layer.
 # Adapted from https://developer.android.com/ndk/guides/graphics/validation-layer.
-adb push ./install/gfxr_layer/jni/arm64-v8a/libVkLayer_gfxreconstruct.so "${REMOTE_TEMP_DIR}"
-adb shell run-as "${PACKAGE}" cp "${REMOTE_TEMP_DIR}/libVkLayer_gfxreconstruct.so" .
+adb push "./install/gfxr_layer/jni/arm64-v8a/${GFXR_CAPTURE_LIB}" "${REMOTE_TEMP_DIR}"
+adb shell run-as "${PACKAGE}" cp "${REMOTE_TEMP_DIR}/${GFXR_CAPTURE_LIB}" .
 adb shell settings put global enable_gpu_debug_layers 1
 adb shell settings put global gpu_debug_app "${PACKAGE}"
 adb shell settings put global gpu_debug_layers VK_LAYER_LUNARG_gfxreconstruct
@@ -48,20 +49,41 @@ adb shell appops set "${PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
 
 adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}"
 
-# Let the user dictate which frame they want the capture.
-echo "Press any key to trigger capture"
-read
-adb shell setprop debug.gfxrecon.capture_android_trigger true
+while true; do
+  # Let the user dictate which frame they want the capture.
+  echo "Press key g+enter to trigger a capture and g+enter to retrieve the capture."
+  echo "Press any other key+enter to stop the application."
+  read reply
+  if [ "${reply}" != "g" ]; then
+    break
+  fi
 
-# Don't know when the capture has finished so defer to the user.
-# Ideally, they have `adb logcat -s gfxrecon` running in another terminal.
-echo "Press any key to retrieve capture"
-read
-adb shell setprop debug.gfxrecon.capture_android_trigger false
-# List the dir so that the output contains the names of the files that we're pulling.
-adb shell ls "${GFXR_CAPTURE_REMOTE_DIR}"
-# Since timestamp is added, we can't predict the filename. Just pull the entire dir.
-adb pull "${GFXR_CAPTURE_REMOTE_DIR}"
+  adb shell setprop debug.gfxrecon.capture_android_trigger true
+
+  # Don't know when the capture has finished so defer to the user.
+  # Ideally, they have `adb logcat -s gfxrecon` running in another terminal.
+  echo "Press any key to retrieve capture"
+  read
+  adb shell setprop debug.gfxrecon.capture_android_trigger false
+  # List the dir so that the output contains the names of the files that we're pulling.
+  adb shell ls "${GFXR_CAPTURE_REMOTE_DIR}"
+  # Since timestamp is added, we can't predict the filename. Just pull the entire dir.
+  adb pull "${GFXR_CAPTURE_REMOTE_DIR}"
+done
 
 # Clean up so that we're not constantly pulling the same files.
 adb shell rm -rf "${GFXR_CAPTURE_REMOTE_DIR}"
+
+# Next launch should not use GFXR
+adb shell setprop debug.gfxrecon.capture_file '""'
+adb shell setprop debug.gfxrecon.capture_trigger_frames '""'
+adb shell setprop debug.gfxrecon.capture_android_trigger '""'
+adb shell setprop debug.gfxrecon.capture_use_asset_file '""'
+adb shell settings delete global enable_gpu_debug_layers
+adb shell settings delete global gpu_debug_app
+adb shell settings delete global gpu_debug_layers
+adb shell settings delete global gpu_debug_layer_app
+adb shell rm -f "${REMOTE_TEMP_DIR}/${GFXR_CAPTURE_LIB}"
+adb shell run-as "${PACKAGE}" rm -f "${GFXR_CAPTURE_LIB}"
+
+adb shell am force-stop "${PACKAGE}"

@@ -70,7 +70,6 @@ while true; do
   # Clean up so that we're not constantly pulling the same files.
   # Also causes names to be printed to output so the user knows.
   for file in $(adb shell ls "${GFXR_CAPTURE_REMOTE_DIR}"); do  
-    # Clean up so that we're not constantly pulling the same files.
     adb shell rm "${GFXR_CAPTURE_REMOTE_DIR}/${file}"
   done
 done

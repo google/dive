@@ -74,6 +74,8 @@ while true; do
   done
 done
 
+adb shell am force-stop "${PACKAGE}"
+
 adb shell rm -rf "${GFXR_CAPTURE_REMOTE_DIR}"
 
 # Next launch should not use GFXR
@@ -87,5 +89,3 @@ adb shell settings delete global gpu_debug_layers
 adb shell settings delete global gpu_debug_layer_app
 adb shell rm -f "${REMOTE_TEMP_DIR}/${GFXR_CAPTURE_LIB}"
 adb shell run-as "${PACKAGE}" rm -f "${GFXR_CAPTURE_LIB}"
-
-adb shell am force-stop "${PACKAGE}"

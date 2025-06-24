@@ -21,7 +21,11 @@ target_include_directories(gfxr_dump_resources_lib PRIVATE ..)
 target_link_libraries(gfxr_dump_resources_lib PRIVATE gfxr_decode_ext_lib)
 
 add_executable(gfxr_dump_resources main.cpp)
-target_link_libraries(gfxr_dump_resources gfxr_dump_resources_lib)
+target_include_directories(gfxr_dump_resources PRIVATE ..)
+target_link_libraries(gfxr_dump_resources PRIVATE
+  gfxr_dump_resources_lib
+  gfxr_decode_ext_lib
+)
 
 enable_testing()
 add_test(NAME GfxrDumpResourcesTest

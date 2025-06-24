@@ -17,7 +17,8 @@
 #include "state_machine.h"
 
 #include <functional>
-#include <iostream>
+
+#include "third_party/gfxreconstruct/framework/util/logging.h"
 
 namespace Dive::gfxr
 {
@@ -54,12 +55,12 @@ void StateMachine::Done()
 {
     if (dump_entry_.IsComplete())
     {
-        std::cerr << "Accept! ID=" << command_buffer_ << '\n';
+        GFXRECON_LOG_DEBUG("Accept! ID=%lu", command_buffer_);
         accept_(std::move(dump_entry_));
     }
     else
     {
-        std::cerr << "Reject! ID=" << command_buffer_ << '\n';
+        GFXRECON_LOG_DEBUG("Reject! ID=%lu", command_buffer_);
         reject_();
     }
 }

@@ -21,12 +21,15 @@
 #include "dump_entry.h"
 #include "gfxr_dump_resources.h"
 
+#include "third_party/gfxreconstruct/framework/util/logging.h"
+
 namespace
 {
 
 using Dive::gfxr::DumpEntry;
 using Dive::gfxr::FindDumpableResources;
 using Dive::gfxr::SaveAsJsonFile;
+using gfxrecon::util::Log;
 
 }  // namespace
 
@@ -40,6 +43,12 @@ int main(int argc, char** argv)
 
     const char* input_filename = argv[1];
     const char* output_filename = argv[2];
+
+#ifdef NDEBUG
+    Log::Init(Log::kInfoSeverity);
+#else
+    Log::Init(Log::kDebugSeverity);
+#endif
 
     std::optional<std::vector<DumpEntry>> dumpables = FindDumpableResources(input_filename);
     if (!dumpables.has_value())

@@ -16,8 +16,9 @@
 
 #include "dump_resources_builder_consumer.h"
 
-#include <iostream>
 #include "state_machine.h"
+
+#include "third_party/gfxreconstruct/framework/util/logging.h"
 
 namespace Dive::gfxr
 {
@@ -35,8 +36,7 @@ gfxrecon::format::HandleId           commandBuffer,
 gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
 pBeginInfo)
 {
-    std::cerr << "Process_vkBeginCommandBuffer: commandBuffer=" << commandBuffer << '\n';
-
+    GFXRECON_LOG_DEBUG("Process_vkBeginCommandBuffer: commandBuffer=%lu", commandBuffer);
     auto [it, inserted] = incomplete_dumps_
                           .insert_or_assign(commandBuffer,
                                             std::make_unique<StateMachine>(
@@ -50,8 +50,8 @@ pBeginInfo)
                                             }));
     if (!inserted)
     {
-        std::cerr << "Command buffer " << commandBuffer
-                  << " never submitted! Discarding previous state...\n";
+        GFXRECON_LOG_DEBUG("Command buffer %lu never submitted! Discarding previous state...",
+                           commandBuffer);
     }
 
     StateMachine& state_machine = *it->second;
@@ -68,7 +68,7 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeg
                   pRenderPassBegin,
 VkSubpassContents contents)
 {
-    std::cerr << "Process_vkCmdBeginRenderPass: commandBuffer=" << commandBuffer << '\n';
+    GFXRECON_LOG_DEBUG("Process_vkCmdBeginRenderPass: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
         consumer.Process_vkCmdBeginRenderPass(call_info, commandBuffer, pRenderPassBegin, contents);
     });
@@ -81,7 +81,7 @@ void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::Api
                                                      uint32_t                   firstVertex,
                                                      uint32_t                   firstInstance)
 {
-    std::cerr << "Process_vkCmdDraw: commandBuffer=" << commandBuffer << '\n';
+    GFXRECON_LOG_DEBUG("Process_vkCmdDraw: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
         consumer.Process_vkCmdDraw(call_info,
                                    commandBuffer,
@@ -101,7 +101,7 @@ uint32_t                             firstIndex,
 int32_t                              vertexOffset,
 uint32_t                             firstInstance)
 {
-    std::cerr << "Process_vkCmdDrawIndexed: commandBuffer=" << commandBuffer << '\n';
+    GFXRECON_LOG_DEBUG("Process_vkCmdDrawIndexed: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
         consumer.Process_vkCmdDrawIndexed(call_info,
                                           commandBuffer,
@@ -117,7 +117,7 @@ void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass(
 const gfxrecon::decode::ApiCallInfo& call_info,
 gfxrecon::format::HandleId           commandBuffer)
 {
-    std::cerr << "Process_vkCmdEndRenderPass: commandBuffer=" << commandBuffer << '\n';
+    GFXRECON_LOG_DEBUG("Process_vkCmdEndRenderPass: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
         consumer.Process_vkCmdEndRenderPass(call_info, commandBuffer);
     });
@@ -131,7 +131,7 @@ uint32_t                                                                        
 gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
 gfxrecon::format::HandleId                                                      fence)
 {
-    std::cerr << "Process_vkQueueSubmit\n";
+    GFXRECON_LOG_DEBUG("Process_vkQueueSubmit");
     for (uint32_t submit_index = 0; submit_index < submitCount; submit_index++)
     {
         const gfxrecon::decode::Decoded_VkSubmitInfo&
@@ -142,7 +142,7 @@ gfxrecon::format::HandleId                                                      
         {
             gfxrecon::format::HandleId command_buffer_id = submit.pCommandBuffers
                                                            .GetPointer()[command_buffer_index];
-            std::cerr << "... for commandBuffer=" << command_buffer_id << '\n';
+            GFXRECON_LOG_DEBUG("... for commandBuffer=%lu", command_buffer_id);
             InvokeIfFound(command_buffer_id, [&](gfxrecon::decode::VulkanConsumer& consumer) {
                 consumer
                 .Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
@@ -158,7 +158,7 @@ const std::function<void(gfxrecon::decode::VulkanConsumer&)>& function)
     auto it = incomplete_dumps_.find(command_buffer);
     if (it == incomplete_dumps_.end())
     {
-        std::cerr << "Command buffer " << command_buffer << " never started! Ignoring...\n";
+        GFXRECON_LOG_DEBUG("Command buffer %lu never started! Ignoring...", command_buffer);
         return;
     }
 

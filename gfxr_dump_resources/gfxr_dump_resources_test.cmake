@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-# Launches gfxr_dump_resources compares the output to a golden file.
+# Launches gfxr_dump_resources and compares the output to a golden file.
 #
 # Designed for use with add_test() like so:
 #
@@ -24,6 +24,7 @@
 #   )
 #
 # TEST_EXECUTABLE will be run with INPUT_GFXR. The test will pass if TEST_EXECUTABLE returns 0 exit code and the contents of the output json match the contents of GOLDEN_FILE.
+# TEST_NAME should match the NAME given to add_test(). This is mainly used to ensure that temp files are unique to the test (to support running tests in parallel).
 
 execute_process(
   COMMAND ${TEST_EXECUTABLE} ${INPUT_GFXR} ${TEST_NAME}.json

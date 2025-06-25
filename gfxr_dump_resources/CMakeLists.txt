@@ -30,7 +30,7 @@ target_link_libraries(gfxr_dump_resources PRIVATE
 enable_testing()
 
 # Creates a test called `testName` that runs gfxr_dump_resources given `inputGfxr` file and compares the JSON output to `goldenFile`.
-# This is a wrapper for gfxr_dump_resources_test.cmake that makes tests simpler to define. It helps ensure that OUTPUT_JSON is unique for the test.
+# This is a wrapper for gfxr_dump_resources_test.cmake that makes tests simpler to define.
 function(add_gfxr_dump_resources_test testName inputGfxr goldenFile)
   add_test(NAME ${testName}
     COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=${testName} -DINPUT_GFXR=${inputGfxr} -DGOLDEN_FILE=${goldenFile} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
@@ -45,4 +45,3 @@ add_gfxr_dump_resources_test(GfxrDumpResourcesRenderPassKHR2
   ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/vulkan_samples_fragment_shading_rate_20250625T104744.gfxr
   ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vulkan_samples_fragment_shading_rate_20250625T104744_dump_resources.json
 )
-

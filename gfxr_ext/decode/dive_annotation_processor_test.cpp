@@ -17,17 +17,18 @@
 #include "dive_annotation_processor.h"
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+using ::testing::SizeIs;
 
 namespace gfxrecon::decode
 {
 namespace
 {
 
-class DiveAnnotationProcessorTestFixture : public testing::Test
+class DiveAnnotationProcessorTest : public testing::Test
 {
 protected:
-    DiveAnnotationProcessor processor_;
-
     // Helper function to compare VulkanCommandInfo
     bool AreVulkanCommandInfoEqual(const DiveAnnotationProcessor::VulkanCommandInfo& actual,
                                    const std::string&                                expected_name,
@@ -48,28 +49,60 @@ protected:
     }
 };
 
-TEST_F(DiveAnnotationProcessorTestFixture, WriteBlockEndSingleSubmit)
+TEST_F(DiveAnnotationProcessorTest, WriteBlockEnd_SingleSubmit_CreatesOneSubmitWithNoCommands)
 {
-    gfxrecon::util::DiveFunctionData data("vkQueueSubmit", 0, 1, { { "arg1", 1 } });
-    processor_.WriteBlockEnd(data);
+    DiveAnnotationProcessor processor_;
+    processor_.WriteBlockEnd(gfxrecon::util::DiveFunctionData("vkQueueSubmit",
+                                                              /*cmd_buffer_index=*/0,
+                                                              /*block_index=*/1,
+                                                              {}));
 
     auto submits = processor_.getSubmits();
-    ASSERT_EQ(submits.size(), 1);
+    ASSERT_THAT(submits, SizeIs(1));
     EXPECT_TRUE(AreSubmitInfoEqual(submits[0].get(), "vkQueueSubmit", 0));
     EXPECT_TRUE(submits[0]->GetVulkanCommands().empty());
 }
 
-TEST_F(DiveAnnotationProcessorTestFixture, WriteBlockEndMultipleSubmits)
+TEST_F(DiveAnnotationProcessorTest,
+       WriteBlockEnd_MultipleSubmitsWithCommands_CreatesSubmitsWithCorrectCommands)
 {
-    gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer", 0, 6, {});
-    gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdDraw", 1, 7, {});
-    gfxrecon::util::DiveFunctionData cmd_data_3("vkCmdDispatch", 2, 9, {});
-    gfxrecon::util::DiveFunctionData cmd_data_4("vkEndCommandBuffer", 0, 8, {});
-    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 8, { { "arg1", 1 } });
-    gfxrecon::util::DiveFunctionData cmd_data_5("vkBeginCommandBuffer", 0, 6, {});
-    gfxrecon::util::DiveFunctionData cmd_data_6("vkCmdCopyBuffer", 1, 9, {});
-    gfxrecon::util::DiveFunctionData cmd_data_7("vkEndCommandBuffer", 0, 6, {});
-    gfxrecon::util::DiveFunctionData submit_data_2("vkQueueSubmit", 0, 10, { { "arg2", 2 } });
+    DiveAnnotationProcessor          processor_;
+    gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/6,
+                                                {});
+    gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdDraw",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/7,
+                                                {});
+    gfxrecon::util::DiveFunctionData cmd_data_3("vkCmdDispatch",
+                                                /*cmd_buffer_index=*/2,
+                                                /*block_index=*/9,
+                                                {});
+    gfxrecon::util::DiveFunctionData cmd_data_4("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/8,
+                                                {});
+    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit",
+                                                   /*cmd_buffer_index=*/0,
+                                                   /*block_index=*/8,
+                                                   { { "arg1", 1 } });
+    gfxrecon::util::DiveFunctionData cmd_data_5("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/6,
+                                                {});
+    gfxrecon::util::DiveFunctionData cmd_data_6("vkCmdCopyBuffer",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/9,
+                                                {});
+    gfxrecon::util::DiveFunctionData cmd_data_7("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/6,
+                                                {});
+    gfxrecon::util::DiveFunctionData submit_data_2("vkQueueSubmit",
+                                                   /*cmd_buffer_index=*/0,
+                                                   /*block_index=*/10,
+                                                   { { "arg2", 2 } });
 
     processor_.WriteBlockEnd(cmd_data_1);
     processor_.WriteBlockEnd(cmd_data_2);
@@ -82,23 +115,25 @@ TEST_F(DiveAnnotationProcessorTestFixture, WriteBlockEndMultipleSubmits)
     processor_.WriteBlockEnd(submit_data_2);
 
     auto submits = processor_.getSubmits();
-    ASSERT_EQ(submits.size(), 2);
-    EXPECT_TRUE(AreSubmitInfoEqual(submits[0].get(), "vkQueueSubmit", 1));
-    ASSERT_EQ(submits[0]->GetVulkanCommands().size(), 4);
+    ASSERT_THAT(submits, SizeIs(2));
+    EXPECT_TRUE(AreSubmitInfoEqual(submits[0].get(),
+                                   submit_data_1.GetFunctionName(),
+                                   /*expected_command_buffer_count=*/1));
+    ASSERT_THAT(submits[0]->GetVulkanCommands(), SizeIs(4));
     EXPECT_TRUE(AreVulkanCommandInfoEqual(submits[0]->GetVulkanCommands()[1],
-                                          "vkCmdDraw",
-                                          1,
+                                          cmd_data_2.GetFunctionName(),
+                                          /*expected_index=*/1,
                                           nlohmann::ordered_json()));
     EXPECT_TRUE(AreVulkanCommandInfoEqual(submits[0]->GetVulkanCommands()[2],
-                                          "vkCmdDispatch",
-                                          2,
+                                          cmd_data_3.GetFunctionName(),
+                                          /*expected_index=*/2,
                                           nlohmann::ordered_json()));
 
-    EXPECT_TRUE(AreSubmitInfoEqual(submits[1].get(), "vkQueueSubmit", 1));
-    ASSERT_EQ(submits[1]->GetVulkanCommands().size(), 3);
+    EXPECT_TRUE(AreSubmitInfoEqual(submits[1].get(), submit_data_2.GetFunctionName(), 1));
+    ASSERT_THAT(submits[1]->GetVulkanCommands(), SizeIs(3));
     EXPECT_TRUE(AreVulkanCommandInfoEqual(submits[1]->GetVulkanCommands()[1],
-                                          "vkCmdCopyBuffer",
-                                          1,
+                                          cmd_data_6.GetFunctionName(),
+                                          /*expected_index=*/1,
                                           nlohmann::ordered_json()));
 }
 }  // namespace

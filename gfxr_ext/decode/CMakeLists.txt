@@ -59,6 +59,7 @@ if(WIN32)
   )
   target_link_libraries(gfxr_decode_ext_lib_test PRIVATE
     gfxr_decode_ext_lib
+    gmock
     gtest
     gtest_main
   )

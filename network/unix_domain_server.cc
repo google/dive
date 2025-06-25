@@ -131,8 +131,7 @@ absl::Status UnixDomainServer::Start(const std::string& server_address)
                                          conn_status.message()));
     }
 
-    m_listen_connection = std::unique_ptr<SocketConnection, SocketConnectionDeleter>(
-    (*std::move(connection)).release());
+    m_listen_connection = *std::move(connection);
     m_is_running.store(true);
     m_server_thread = std::thread(&UnixDomainServer::AcceptAndHandleClientLoop, this);
     return absl::OkStatus();
@@ -189,8 +188,7 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
 
             {
                 std::lock_guard<std::mutex> lk(m_client_mutex);
-                m_client_connection = std::unique_ptr<SocketConnection, SocketConnectionDeleter>(
-                (*std::move(acc_connection)).release());
+                m_client_connection = *std::move(acc_connection);
             }
             LOGI("AcceptAndHandleClientLoop: New client accepted.");
             m_handler->OnConnect();

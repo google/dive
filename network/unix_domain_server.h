@@ -71,9 +71,9 @@ private:
     void ResetClientConnection();
 
     // Server connection.
-    std::unique_ptr<SocketConnection, SocketConnectionDeleter> m_listen_connection;
+    std::unique_ptr<SocketConnection> m_listen_connection;
     // The only one client connection at a time.
-    std::unique_ptr<SocketConnection, SocketConnectionDeleter> m_client_connection;
+    std::unique_ptr<SocketConnection> m_client_connection;
     // The thread that accepts and handles the only one client connection at a time.
     std::thread m_server_thread;
 

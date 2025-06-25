@@ -63,18 +63,16 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
                                                                  connection_or.status()
                                                                  .message())));
     }
-    auto new_connection = std::move(connection_or.value());
-    auto conn_status = new_connection->Connect(host, port);
+    m_connection = std::move(connection_or.value());
+    auto conn_status = m_connection->Connect(host, port);
     if (!conn_status.ok())
     {
+        m_connection.reset();
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::Status(conn_status.code(),
                                                     absl::StrCat("Connect: Connect fail: ",
                                                                  conn_status.message())));
     }
-
-    m_connection = std::unique_ptr<SocketConnection, SocketConnectionDeleter>(
-    new_connection.release());
     SetClientStatus(ClientStatus::CONNECTED);
 
     std::cout << "Client: Connected & handshaking." << std::endl;

@@ -33,7 +33,7 @@ enable_testing()
 # This is a wrapper for gfxr_dump_resources_test.cmake that makes tests simpler to define. It helps ensure that OUTPUT_JSON is unique for the test.
 function(add_gfxr_dump_resources_test testName inputGfxr goldenFile)
   add_test(NAME ${testName}
-    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DINPUT_GFXR=${inputGfxr} -DOUTPUT_JSON=${CMAKE_CURRENT_BINARY_DIR}/${testName}.json -DGOLDEN_FILE=${goldenFile} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
+    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=${testName} -DINPUT_GFXR=${inputGfxr} -DGOLDEN_FILE=${goldenFile} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
   )
 endfunction()
 

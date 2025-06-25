@@ -53,6 +53,7 @@ if(WIN32)
   enable_testing()
   include(GoogleTest)
   add_executable(gfxr_decode_ext_lib_test 
+    dive_annotation_processor_test.cpp
     dive_block_data_test.cpp
     dive_file_processor_test.cpp
   )

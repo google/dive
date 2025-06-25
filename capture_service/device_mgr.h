@@ -54,6 +54,8 @@ inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs)
 struct DeviceState
 {
     std::string m_enforce;
+    bool        m_root_access_requested = false;
+    bool        m_is_root_shell = false;
 };
 
 class AndroidDevice
@@ -67,6 +69,11 @@ public:
 
     absl::Status Init();
     absl::Status ForwardFirstAvailablePort();
+
+    // Only legacy PM4 capture should request root access. Anything related to GFXR doesn't require
+    // root access thus should not request it. Will remove the requirement of need root access once
+    // we fully transit to using GFXR replay.
+    absl::Status RequestRootAccess();
     absl::Status SetupDevice();
     absl::Status CleanupDevice();
     absl::Status CleanupPackage(const std::string &package);

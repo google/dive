@@ -63,18 +63,33 @@ AndroidDevice::~AndroidDevice()
 
 absl::Status AndroidDevice::Init()
 {
-    RETURN_IF_ERROR(Adb().Run("root"));
-    RETURN_IF_ERROR(Adb().Run("wait-for-device"));
-
-    ASSIGN_OR_RETURN(m_original_state.m_enforce, Adb().RunAndGetResult("shell getenforce"));
     m_dev_info.m_serial = m_serial;
     ASSIGN_OR_RETURN(m_dev_info.m_model, Adb().RunAndGetResult("shell getprop ro.product.model"));
     ASSIGN_OR_RETURN(m_dev_info.m_manufacturer,
                      Adb().RunAndGetResult("shell getprop ro.product.manufacturer"));
 
-    LOGD("enforce: %s\n", m_original_state.m_enforce.c_str());
     LOGD("select: %s\n", GetDeviceDisplayName().c_str());
     LOGD("AndroidDevice created.\n");
+    // Determine if the adb was running in root.
+    m_original_state.m_is_root_shell = false;
+    auto res = Adb().RunAndGetResult("shell whoami");
+    if (res.ok())
+    {
+        m_original_state.m_is_root_shell = (*res == "root");
+    }
+
+    return absl::OkStatus();
+}
+
+absl::Status AndroidDevice::RequestRootAccess()
+{
+    RETURN_IF_ERROR(Adb().Run("root"));
+    RETURN_IF_ERROR(Adb().Run("wait-for-device"));
+    m_original_state.m_root_access_requested = true;
+
+    ASSIGN_OR_RETURN(m_original_state.m_enforce, Adb().RunAndGetResult("shell getenforce"));
+
+    RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
 
     return absl::OkStatus();
 }
@@ -200,14 +215,13 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
 
 absl::Status AndroidDevice::SetupDevice()
 {
-    RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
-    RETURN_IF_ERROR(Adb().Run("shell getenforce"));
     RETURN_IF_ERROR(
     Adb().Run(absl::StrFormat("push %s %s",
                               ResolveAndroidLibPath(kWrapLibName, "").generic_string(),
                               kTargetPath)));
     if (!m_gfxr_enabled)
     {
+        RETURN_IF_ERROR(RequestRootAccess());
         RETURN_IF_ERROR(
         Adb().Run(absl::StrFormat("push %s %s",
                                   ResolveAndroidLibPath(kVkLayerLibName, "").generic_string(),
@@ -228,16 +242,23 @@ absl::Status AndroidDevice::SetupDevice()
 absl::Status AndroidDevice::CleanupDevice()
 {
     LOGD("Cleanup device %s\n", m_serial.c_str());
-    const auto &enforce = m_original_state.m_enforce;
-    if (enforce.find("Enforcing") != enforce.npos)
+    if (m_original_state.m_root_access_requested)
     {
-        LOGD("restore Enforcing to Enforcing\n");
-        Adb().Run("shell setenforce 1").IgnoreError();
-    }
-    else if (enforce.find("Permissive") != enforce.npos)
-    {
-        LOGD("restore Enforcing to Permissive\n");
-        Adb().Run("shell setenforce 0").IgnoreError();
+        const auto &enforce = m_original_state.m_enforce;
+        if (enforce.find("Enforcing") != enforce.npos)
+        {
+            LOGD("restore Enforcing to Enforcing\n");
+            Adb().Run("shell setenforce 1").IgnoreError();
+        }
+        else if (enforce.find("Permissive") != enforce.npos)
+        {
+            LOGD("restore Enforcing to Permissive\n");
+            Adb().Run("shell setenforce 0").IgnoreError();
+        }
+        if (!m_original_state.m_is_root_shell)
+        {
+            Adb().Run("unroot").IgnoreError();
+        }
     }
 
     Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kWrapLibName)).IgnoreError();

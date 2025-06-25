@@ -170,8 +170,6 @@ absl::Status VulkanApplication::Setup()
 {
     LOGD("Setup Vulkan application: %s\n", m_package.c_str());
     RETURN_IF_ERROR(GrantAllFilesAccess());
-    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     Stop().IgnoreError();
     if (m_gfxr_enabled)
     {
@@ -201,8 +199,6 @@ absl::Status VulkanApplication::Setup()
 absl::Status VulkanApplication::Cleanup()
 {
     LOGD("Cleanup Vulkan application %s\n", m_package.c_str());
-    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
@@ -321,9 +317,6 @@ absl::Status OpenXRApplication::Setup()
 {
     LOGD("OpenXRApplication %s Setup\n", m_package.c_str());
     RETURN_IF_ERROR(GrantAllFilesAccess());
-    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
@@ -331,6 +324,7 @@ absl::Status OpenXRApplication::Setup()
     }
     else
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
         RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath)));
         RETURN_IF_ERROR(m_dev.Adb().Run(
         absl::StrFormat("push %s %s",
@@ -349,9 +343,6 @@ absl::Status OpenXRApplication::Setup()
 absl::Status OpenXRApplication::Cleanup()
 {
     LOGD("OpenXRApplication %s cleanup.\n", m_package.c_str());
-    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
@@ -367,6 +358,7 @@ absl::Status OpenXRApplication::Cleanup()
     }
     else
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
         RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell rm -r %s", kManifestFilePath)));
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", m_package)));
@@ -400,8 +392,6 @@ VulkanCliApplication::~VulkanCliApplication()
 absl::Status VulkanCliApplication::Setup()
 {
     RETURN_IF_ERROR(GrantAllFilesAccess());
-    RETURN_IF_ERROR(m_dev.Adb().Run("root"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("wait-for-device"));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));
     RETURN_IF_ERROR(
     m_dev.Adb().Run(absl::StrFormat("push %s %s",

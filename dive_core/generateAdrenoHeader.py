@@ -474,8 +474,8 @@ try:
   pm4_packet_file_h.close();
 
   # lint
-  print("formatting " + "clang-format-18 -i -style=file " + sys.argv[3])
-  os.system("clang-format-18 -i -style=file " + sys.argv[3])
+  print("formatting " + "clang-format -i -style=file " + sys.argv[3])
+  os.system("clang-format -i -style=file " + sys.argv[3])
 
 except IOError as e:
     errno, strerror = e.args

@@ -42,6 +42,6 @@ add_gfxr_dump_resources_test(GfxrDumpResourcesBasic
   ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json
 )
 add_gfxr_dump_resources_test(GfxrDumpResourcesRenderPassKHR2
-  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/vulkan_samples_fragment_shading_rate_20250625T104744.gfxr
-  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vulkan_samples_fragment_shading_rate_20250625T104744_dump_resources.json
+  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445.gfxr
+  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445_dump_resources.json
 )

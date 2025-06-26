@@ -14,15 +14,20 @@
 # limitations under the License.
 #
 
-# Usage in CMakeLists.txt:
+# Launches gfxr_dump_resources and compares the output to a golden file.
 #
-# enable_testing()
-# add_test(NAME MyTest
-#   COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DPROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
-# )
+# Designed for use with add_test() like so:
+#
+#   enable_testing()
+#   add_test(NAME MyTest
+#     COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=MyTest -DINPUT_GFXR=${PROJECT_SOURCE_DIR}/my_capture.gfxr -DGOLDEN_FILE=${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
+#   )
+#
+# TEST_EXECUTABLE will be run with INPUT_GFXR. The test will pass if TEST_EXECUTABLE returns 0 exit code and the contents of the output json match the contents of GOLDEN_FILE.
+# TEST_NAME should match the NAME given to add_test(). This is mainly used to ensure that temp files are unique to the test (to support running tests in parallel).
 
 execute_process(
-  COMMAND ${TEST_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110.gfxr test_output.json
+  COMMAND ${TEST_EXECUTABLE} ${INPUT_GFXR} ${TEST_NAME}.json
   RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
@@ -33,11 +38,11 @@ endif()
 # Since git lets users specify newline style, normalize both input and output to compare_files.
 # This is required so that compare_files works regardless of platform and setting.
 # In CMake 3.14+, prefer compare_files --ignore-eol (more succinct)
-configure_file(test_output.json test_output_unix_newline.json NEWLINE_STYLE UNIX)
-configure_file(${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json golden_unix_newline.json NEWLINE_STYLE UNIX)
+configure_file(${TEST_NAME}.json ${TEST_NAME}_output_unixeol.json NEWLINE_STYLE UNIX)
+configure_file(${GOLDEN_FILE} ${TEST_NAME}_golden_unixeol.json NEWLINE_STYLE UNIX)
 
 execute_process(
-  COMMAND ${CMAKE_COMMAND} -E compare_files golden_unix_newline.json test_output_unix_newline.json
+  COMMAND ${CMAKE_COMMAND} -E compare_files ${TEST_NAME}_output_unixeol.json ${TEST_NAME}_golden_unixeol.json
   RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)

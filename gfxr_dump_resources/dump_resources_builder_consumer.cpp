@@ -74,6 +74,23 @@ VkSubpassContents contents)
     });
 }
 
+void DumpResourcesBuilderConsumer::Process_vkCmdBeginRenderPass2KHR(
+const gfxrecon::decode::ApiCallInfo& call_info,
+gfxrecon::format::HandleId           commandBuffer,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+pRenderPassBegin,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+pSubpassBeginInfo)
+{
+    GFXRECON_LOG_DEBUG("Process_vkCmdBeginRenderPass2KHR: commandBuffer=%lu", commandBuffer);
+    InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+        consumer.Process_vkCmdBeginRenderPass2KHR(call_info,
+                                                  commandBuffer,
+                                                  pRenderPassBegin,
+                                                  pSubpassBeginInfo);
+    });
+}
+
 void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
                                                      gfxrecon::format::HandleId commandBuffer,
                                                      uint32_t                   vertexCount,
@@ -120,6 +137,17 @@ gfxrecon::format::HandleId           commandBuffer)
     GFXRECON_LOG_DEBUG("Process_vkCmdEndRenderPass: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
         consumer.Process_vkCmdEndRenderPass(call_info, commandBuffer);
+    });
+}
+
+void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass2KHR(
+const gfxrecon::decode::ApiCallInfo&                                                call_info,
+gfxrecon::format::HandleId                                                          commandBuffer,
+gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+{
+    GFXRECON_LOG_DEBUG("Process_vkCmdEndRenderPass2KHR: commandBuffer=%lu", commandBuffer);
+    InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
+        consumer.Process_vkCmdEndRenderPass2KHR(call_info, commandBuffer, pSubpassEndInfo);
     });
 }
 

@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+using ::testing::IsEmpty;
 using ::testing::SizeIs;
 
 namespace gfxrecon::decode
@@ -26,47 +27,40 @@ namespace gfxrecon::decode
 namespace
 {
 
-class DiveAnnotationProcessorTest : public testing::Test
+MATCHER_P3(VulkanCommandInfoEqual, expected_name, expected_index, expected_args, "")
 {
-protected:
-    // Helper function to compare VulkanCommandInfo
-    bool AreVulkanCommandInfoEqual(const DiveAnnotationProcessor::VulkanCommandInfo& actual,
-                                   const std::string&                                expected_name,
-                                   uint32_t                                          expected_index,
-                                   const nlohmann::ordered_json&                     expected_args)
-    {
-        return actual.GetVkCmdName() == expected_name && actual.GetVkCmdIndex() == expected_index &&
-               actual.GetArgs() == expected_args;
-    }
-
-    // Helper function to compare SubmitInfo
-    bool AreSubmitInfoEqual(const DiveAnnotationProcessor::SubmitInfo* actual,
-                            const std::string&                         expected_name,
-                            uint32_t expected_command_buffer_count)
-    {
-        return actual != nullptr && actual->GetSubmitText() == expected_name &&
-               actual->GetCommandBufferCount() == expected_command_buffer_count;
-    }
-};
-
-TEST_F(DiveAnnotationProcessorTest, WriteBlockEnd_SingleSubmit_CreatesOneSubmitWithNoCommands)
-{
-    DiveAnnotationProcessor processor_;
-    processor_.WriteBlockEnd(gfxrecon::util::DiveFunctionData("vkQueueSubmit",
-                                                              /*cmd_buffer_index=*/0,
-                                                              /*block_index=*/1,
-                                                              {}));
-
-    auto submits = processor_.getSubmits();
-    ASSERT_THAT(submits, SizeIs(1));
-    EXPECT_TRUE(AreSubmitInfoEqual(submits[0].get(), "vkQueueSubmit", 0));
-    EXPECT_TRUE(submits[0]->GetVulkanCommands().empty());
+    EXPECT_EQ(arg.GetVkCmdName(), expected_name);
+    EXPECT_EQ(arg.GetVkCmdIndex(), expected_index);
+    EXPECT_EQ(arg.GetArgs(), expected_args);
+    return true;
 }
 
-TEST_F(DiveAnnotationProcessorTest,
-       WriteBlockEnd_MultipleSubmitsWithCommands_CreatesSubmitsWithCorrectCommands)
+MATCHER_P2(SubmitInfoEq, expected_name, expected_command_buffer_count, "")
 {
-    DiveAnnotationProcessor          processor_;
+    return arg->GetSubmitText() == expected_name &&
+           arg->GetCommandBufferCount() == expected_command_buffer_count;
+}
+
+class DiveAnnotationProcessorTest : public testing::Test
+{};
+
+TEST(WriteBlockEndTest, SingleSubmitCreatesOneSubmitWithNoCommands)
+{
+    DiveAnnotationProcessor processor;
+    processor.WriteBlockEnd(gfxrecon::util::DiveFunctionData("vkQueueSubmit",
+                                                             /*cmd_buffer_index=*/0,
+                                                             /*block_index=*/1,
+                                                             {}));
+
+    auto submits = processor.getSubmits();
+    ASSERT_THAT(submits, SizeIs(1));
+    EXPECT_THAT(submits[0].get(), SubmitInfoEq("vkQueueSubmit", 0));
+    EXPECT_THAT(submits[0]->GetVulkanCommands(), IsEmpty());
+}
+
+TEST(WriteBlockEndTest, MultipleSubmitsWithCommandsCreatesSubmitsWithCorrectCommands)
+{
+    DiveAnnotationProcessor          processor;
     gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
                                                 /*cmd_buffer_index=*/0,
                                                 /*block_index=*/6,
@@ -104,37 +98,36 @@ TEST_F(DiveAnnotationProcessorTest,
                                                    /*block_index=*/10,
                                                    { { "arg2", 2 } });
 
-    processor_.WriteBlockEnd(cmd_data_1);
-    processor_.WriteBlockEnd(cmd_data_2);
-    processor_.WriteBlockEnd(cmd_data_3);
-    processor_.WriteBlockEnd(cmd_data_4);
-    processor_.WriteBlockEnd(submit_data_1);
-    processor_.WriteBlockEnd(cmd_data_5);
-    processor_.WriteBlockEnd(cmd_data_6);
-    processor_.WriteBlockEnd(cmd_data_7);
-    processor_.WriteBlockEnd(submit_data_2);
+    processor.WriteBlockEnd(cmd_data_1);
+    processor.WriteBlockEnd(cmd_data_2);
+    processor.WriteBlockEnd(cmd_data_3);
+    processor.WriteBlockEnd(cmd_data_4);
+    processor.WriteBlockEnd(submit_data_1);
+    processor.WriteBlockEnd(cmd_data_5);
+    processor.WriteBlockEnd(cmd_data_6);
+    processor.WriteBlockEnd(cmd_data_7);
+    processor.WriteBlockEnd(submit_data_2);
 
-    auto submits = processor_.getSubmits();
+    auto submits = processor.getSubmits();
     ASSERT_THAT(submits, SizeIs(2));
-    EXPECT_TRUE(AreSubmitInfoEqual(submits[0].get(),
-                                   submit_data_1.GetFunctionName(),
-                                   /*expected_command_buffer_count=*/1));
+    EXPECT_THAT(submits[0].get(),
+                SubmitInfoEq(submit_data_1.GetFunctionName(), /*expected_command_buffer_count=*/1));
     ASSERT_THAT(submits[0]->GetVulkanCommands(), SizeIs(4));
-    EXPECT_TRUE(AreVulkanCommandInfoEqual(submits[0]->GetVulkanCommands()[1],
-                                          cmd_data_2.GetFunctionName(),
-                                          /*expected_index=*/1,
-                                          nlohmann::ordered_json()));
-    EXPECT_TRUE(AreVulkanCommandInfoEqual(submits[0]->GetVulkanCommands()[2],
-                                          cmd_data_3.GetFunctionName(),
-                                          /*expected_index=*/2,
-                                          nlohmann::ordered_json()));
+    EXPECT_THAT(submits[0]->GetVulkanCommands()[1],
+                VulkanCommandInfoEqual(cmd_data_2.GetFunctionName(),
+                                       /*expected_index=*/1,
+                                       nlohmann::ordered_json()));
+    EXPECT_THAT(submits[0]->GetVulkanCommands()[2],
+                VulkanCommandInfoEqual(cmd_data_3.GetFunctionName(),
+                                       /*expected_index=*/2,
+                                       nlohmann::ordered_json()));
 
-    EXPECT_TRUE(AreSubmitInfoEqual(submits[1].get(), submit_data_2.GetFunctionName(), 1));
+    EXPECT_THAT(submits[1].get(), SubmitInfoEq(submit_data_2.GetFunctionName(), 1));
     ASSERT_THAT(submits[1]->GetVulkanCommands(), SizeIs(3));
-    EXPECT_TRUE(AreVulkanCommandInfoEqual(submits[1]->GetVulkanCommands()[1],
-                                          cmd_data_6.GetFunctionName(),
-                                          /*expected_index=*/1,
-                                          nlohmann::ordered_json()));
+    EXPECT_THAT(submits[1]->GetVulkanCommands()[1],
+                VulkanCommandInfoEqual(cmd_data_6.GetFunctionName(),
+                                       /*expected_index=*/1,
+                                       nlohmann::ordered_json()));
 }
 }  // namespace
 }  // namespace gfxrecon::decode

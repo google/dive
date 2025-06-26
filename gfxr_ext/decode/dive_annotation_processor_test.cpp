@@ -41,9 +41,6 @@ MATCHER_P2(SubmitInfoEq, expected_name, expected_command_buffer_count, "")
            arg->GetCommandBufferCount() == expected_command_buffer_count;
 }
 
-class DiveAnnotationProcessorTest : public testing::Test
-{};
-
 TEST(WriteBlockEndTest, SingleSubmitCreatesOneSubmitWithNoCommands)
 {
     DiveAnnotationProcessor processor;

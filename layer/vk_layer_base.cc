@@ -28,7 +28,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "capture_service/log.h"
+#include "common/log.h"
 #include "capture_service/server.h"
 #include "layer_common.h"
 #include "vk_dispatch.h"

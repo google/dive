@@ -36,18 +36,6 @@ enum class ClientStatus
     CONNECTION_FAILED
 };
 
-struct SocketConnectionDeleter
-{
-    void operator()(SocketConnection* conn) const
-    {
-        if (conn)
-        {
-            conn->Close();
-            delete conn;
-        }
-    }
-};
-
 class TcpClient
 {
 public:
@@ -93,10 +81,10 @@ private:
     void         SetClientStatus(ClientStatus status);
     absl::Status SetStatusAndReturnError(ClientStatus status, const absl::Status& error_status);
 
-    std::unique_ptr<SocketConnection, SocketConnectionDeleter> m_connection;
-    std::mutex                                                 m_connection_mutex;
-    ClientStatus                                               m_status;
-    mutable std::mutex                                         m_status_mutex;
+    std::unique_ptr<SocketConnection> m_connection;
+    std::mutex                        m_connection_mutex;
+    ClientStatus                      m_status;
+    mutable std::mutex                m_status_mutex;
 
     // KeepAlive is used to check the connection with the server periodically via a ping-pong
     // mechanism.

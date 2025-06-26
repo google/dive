@@ -35,6 +35,8 @@ add_library(gfxr_decode_ext_lib
   dive_block_data.cpp
   dive_file_processor.h
   dive_file_processor.cpp
+  dive_vulkan_replay_consumer.h
+  dive_vulkan_replay_consumer.cpp
 )
 target_link_libraries(gfxr_decode_ext_lib
   gfxrecon_decode

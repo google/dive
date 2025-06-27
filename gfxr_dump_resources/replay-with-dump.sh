@@ -55,6 +55,10 @@ python "$GFXRECON" replay \
     --dump-resources-dump-depth-attachment \
     "$PUSH_DIR/$GFXR_BASENAME"
 
+# gfxrecon.py replay does not wait for the app to start so.
+# In order to use pidof to determine when the replay is done, we need to give it time to launch first.
+sleep 5
+# We can infer that replay is finished when the replay app process is gone.
 while adb shell pidof com.lunarg.gfxreconstruct.replay
 do
     sleep 1

@@ -57,6 +57,11 @@ else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
 endif()
 
+# Add NOMINMAX definition for Windows builds to prevent min/max macro conflicts
+if (MSVC)
+  target_compile_definitions(${PROJECT_NAME}_lib PRIVATE NOMINMAX)
+endif()
+
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
 target_link_libraries(${PROJECT_NAME} PRIVATE dl)
 target_link_libraries(${PROJECT_NAME} PRIVATE pthread)

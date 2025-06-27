@@ -32,6 +32,8 @@ DUMP_DIR="$REMOTE_TEMP_DIR/dump"
 GFXR_DUMP_RESOURCES=$(find "$BUILD_DIR" -name gfxr_dump_resources -executable -type f)
 GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
 
+python "$GFXRECON" install-apk ./install/gfxr-replay.apk
+
 adb logcat -c
 
 $GFXR_DUMP_RESOURCES "$GFXR" "$JSON"

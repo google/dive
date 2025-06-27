@@ -61,12 +61,10 @@ bool DataCore::CreateCommandHierarchy()
     uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
     // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator(*state_tracker);
-    if (!cmd_hier_creator.CreateTrees(&m_capture_metadata.m_command_hierarchy,
-                                      m_capture_data,
-                                      true,
-                                      reserve_size,
-                                      m_log_ptr))
+    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
+                                             m_capture_data,
+                                             *state_tracker);
+    if (!cmd_hier_creator.CreateTrees(true, reserve_size, m_log_ptr))
     {
         return false;
     }

@@ -1717,4 +1717,11 @@ std::string CaptureData::GetFileFormatVersion() const
     return os.str();
 }
 
+//--------------------------------------------------------------------------------------------------
+void CaptureData::Clear()
+{
+    m_progress_tracker = NULL;
+    m_log_ptr = &LogNull::GetInstance();
+}
+
 }  // namespace Dive

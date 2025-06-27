@@ -445,12 +445,12 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
         break;
     }
 
-    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
-    Dive::CommandHierarchyCreator        cmd_hier_creator(*state_tracker);
     Dive::CommandHierarchy               command_hierarchy;
-    Dive::LogConsole                     log;
-    if (!cmd_hier_creator.CreateTrees(&command_hierarchy,
-                                      engine_type,
+    CaptureData                          capture_data;
+    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+    Dive::CommandHierarchyCreator cmd_hier_creator(command_hierarchy, capture_data, *state_tracker);
+    Dive::LogConsole              log;
+    if (!cmd_hier_creator.CreateTrees(engine_type,
                                       queue_type,
                                       (uint32_t*)buffer.data(),
                                       (uint32_t)(size / sizeof(uint32_t)),

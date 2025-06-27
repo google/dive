@@ -388,6 +388,9 @@ public:
     // recorded in m_gfxr_capture_block_data
     bool WriteModifiedGfxrFile(const char *new_file_name);
 
+    // Clears the internal structures.
+    void Clear();
+
 private:
     LoadResult LoadCaptureFile(const char *file_name);
     LoadResult LoadAdrenoRdFile(const char *file_name);

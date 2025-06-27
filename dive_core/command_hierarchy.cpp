@@ -473,26 +473,25 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, Syn
 // =================================================================================================
 // CommandHierarchyCreator
 // =================================================================================================
-CommandHierarchyCreator::CommandHierarchyCreator(EmulateStateTracker &state_tracker) :
+CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy    &command_hierarchy,
+                                                 const CaptureData   &capture_data,
+                                                 EmulateStateTracker &state_tracker) :
+    m_command_hierarchy(command_hierarchy),
+    m_capture_data(capture_data),
     m_state_tracker(state_tracker)
 {
     m_state_tracker.Reset();
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierarchy_ptr,
-                                          const CaptureData      &capture_data,
-                                          bool                    flatten_chain_nodes,
+bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_nodes,
                                           std::optional<uint64_t> reserve_size,
                                           ILog                   *log_ptr)
 {
     m_log_ptr = log_ptr;
 
-    m_command_hierarchy_ptr = command_hierarchy_ptr;
-    m_capture_data_ptr = &capture_data;
-
     // Clear/Reset internal data structures, just in case
-    *m_command_hierarchy_ptr = CommandHierarchy();
+    m_command_hierarchy = CommandHierarchy();
 
     // Optional: Reserve the internal vectors based on passed-in value. Overguessing means more
     // memory used during creation, and potentially more memory used while the capture is loaded.
@@ -509,10 +508,10 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
             m_node_children[topology][0].reserve(*reserve_size);
             m_node_children[topology][1].reserve(*reserve_size);
 
-            m_command_hierarchy_ptr->m_nodes.m_node_type.reserve(*reserve_size);
-            m_command_hierarchy_ptr->m_nodes.m_description.reserve(*reserve_size);
-            m_command_hierarchy_ptr->m_nodes.m_aux_info.reserve(*reserve_size);
-            m_command_hierarchy_ptr->m_nodes.m_event_node_indices.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_node_type.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_description.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_aux_info.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_event_node_indices.reserve(*reserve_size);
         }
     }
 
@@ -523,7 +522,7 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
     m_num_events = 0;
     m_flatten_chain_nodes = flatten_chain_nodes;
 
-    if (!ProcessSubmits(capture_data.GetSubmits(), capture_data.GetMemoryManager()))
+    if (!ProcessSubmits(m_capture_data.GetSubmits(), m_capture_data.GetMemoryManager()))
     {
         return false;
     }
@@ -535,12 +534,11 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy       *command_hierar
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_ptr,
-                                          EngineType        engine_type,
-                                          QueueType         queue_type,
-                                          uint32_t         *command_dwords,
-                                          uint32_t          size_in_dwords,
-                                          ILog             *log_ptr)
+bool CommandHierarchyCreator::CreateTrees(EngineType engine_type,
+                                          QueueType  queue_type,
+                                          uint32_t  *command_dwords,
+                                          uint32_t   size_in_dwords,
+                                          ILog      *log_ptr)
 {
     // Note: This function is mostly a copy/paste from the main CreateTrees() function, but with
     // workarounds to handle a case where there is no marker_data or capture_data
@@ -593,11 +591,8 @@ bool CommandHierarchyCreator::CreateTrees(CommandHierarchy *command_hierarchy_pt
 
     m_log_ptr = log_ptr;
 
-    m_command_hierarchy_ptr = command_hierarchy_ptr;
-    m_capture_data_ptr = nullptr;
-
     // Clear/Reset internal data structures, just in case
-    *m_command_hierarchy_ptr = CommandHierarchy();
+    m_command_hierarchy = CommandHierarchy();
 
     // Add a dummy root node for easier management
     uint64_t root_node_index = AddNode(NodeType::kRootNode, "", 0);
@@ -751,7 +746,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
         for (size_t i = m_ib_stack.size() - 1; i != SIZE_MAX; i--)
         {
             uint64_t index = m_ib_stack[i];
-            IbType   cur_type = m_command_hierarchy_ptr->GetIbNodeType(index);
+            IbType   cur_type = m_command_hierarchy.GetIbNodeType(index);
             if (cur_type != IbType::kChain)
             {
                 parent_node_index = index;
@@ -806,12 +801,12 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
     // because the emulator does not keep track of IBs in an internal stack. So start by
     // popping all consecutive CHAIN IBs
     IbType type;
-    type = m_command_hierarchy_ptr->GetIbNodeType(m_ib_stack.back());
+    type = m_command_hierarchy.GetIbNodeType(m_ib_stack.back());
     while (!m_ib_stack.empty() && type == IbType::kChain)
     {
         m_ib_stack.pop_back();
         start_node_stack.pop_back();
-        type = m_command_hierarchy_ptr->GetIbNodeType(m_ib_stack.back());
+        type = m_command_hierarchy.GetIbNodeType(m_ib_stack.back());
     }
 
     m_ib_stack.pop_back();
@@ -1034,25 +1029,24 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             if (marker == RM6_BINNING)
             {
                 m_tracking_first_tile_pass_start = true;
-                m_command_hierarchy_ptr
-                ->AddToFilterExcludeIndexList(m_render_marker_index,
-                                              CommandHierarchy::kFirstTilePassOnly);
+                m_command_hierarchy
+                .AddToFilterExcludeIndexList(m_render_marker_index,
+                                             CommandHierarchy::kFirstTilePassOnly);
             }
 
             if ((marker == RM6_GMEM) || (marker == RM6_RESOLVE))
             {
-                m_command_hierarchy_ptr
-                ->AddToFilterExcludeIndexList(m_render_marker_index,
-                                              CommandHierarchy::kBinningPassOnly);
+                m_command_hierarchy.AddToFilterExcludeIndexList(m_render_marker_index,
+                                                                CommandHierarchy::kBinningPassOnly);
 
                 if (!m_tracking_first_tile_pass_start)
                 {
-                    m_command_hierarchy_ptr
-                    ->AddToFilterExcludeIndexList(m_render_marker_index,
-                                                  CommandHierarchy::kFirstTilePassOnly);
-                    m_command_hierarchy_ptr
-                    ->AddToFilterExcludeIndexList(m_render_marker_index,
-                                                  CommandHierarchy::kBinningAndFirstTilePass);
+                    m_command_hierarchy
+                    .AddToFilterExcludeIndexList(m_render_marker_index,
+                                                 CommandHierarchy::kFirstTilePassOnly);
+                    m_command_hierarchy
+                    .AddToFilterExcludeIndexList(m_render_marker_index,
+                                                 CommandHierarchy::kBinningAndFirstTilePass);
                 }
                 if (m_tracking_first_tile_pass_start && (marker == RM6_RESOLVE))
                 {
@@ -1141,48 +1135,45 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
     std::sort(submit_children.begin(),
               submit_children.end(),
               [&](uint64_t lhs, uint64_t rhs) -> bool {
-                  uint8_t lhs_index = m_command_hierarchy_ptr->GetIbNodeIndex(lhs);
-                  uint8_t rhs_index = m_command_hierarchy_ptr->GetIbNodeIndex(rhs);
+                  uint8_t lhs_index = m_command_hierarchy.GetIbNodeIndex(lhs);
+                  uint8_t rhs_index = m_command_hierarchy.GetIbNodeIndex(rhs);
                   return lhs_index < rhs_index;
               });
 
     // Insert present node to event topology, when appropriate
-    if (m_capture_data_ptr != nullptr)
+    for (uint32_t i = 0; i < m_capture_data.GetNumPresents(); ++i)
     {
-        for (uint32_t i = 0; i < m_capture_data_ptr->GetNumPresents(); ++i)
+        const PresentInfo &present_info = m_capture_data.GetPresentInfo(i);
+
+        // Check if present exists right after this submit
+        if (submit_index != (present_info.GetSubmitIndex()))
+            continue;
+
+        std::ostringstream present_string_stream;
+        if (present_info.HasValidData())
         {
-            const PresentInfo &present_info = m_capture_data_ptr->GetPresentInfo(i);
-
-            // Check if present exists right after this submit
-            if (submit_index != (present_info.GetSubmitIndex()))
-                continue;
-
-            std::ostringstream present_string_stream;
-            if (present_info.HasValidData())
-            {
-                const char *format_string = GetVkFormatString(present_info.GetSurfaceVkFormat());
-                DIVE_ASSERT(format_string != nullptr);
-                uint32_t    vk_color_space = present_info.GetSurfaceVkColorSpaceKHR();
-                const char *color_space_string = GetVkColorSpaceKhrString(vk_color_space);
-                DIVE_ASSERT(color_space_string != nullptr);
-                present_string_stream
-                << "Present: " << i << ", FullScreen: " << present_info.IsFullScreen()
-                << ", Engine: " << kEngineTypeStrings[(uint32_t)present_info.GetEngineType()]
-                << ", Queue: " << kQueueTypeStrings[(uint32_t)present_info.GetQueueType()]
-                << ", SurfaceAddr: 0x" << std::hex << present_info.GetSurfaceAddr() << std::dec
-                << ", SurfaceSize: " << present_info.GetSurfaceSize()
-                << ", VkFormat: " << format_string << ", VkColorSpaceKHR: " << color_space_string;
-            }
-            else
-            {
-                present_string_stream << "Present: " << i;
-            }
-            uint64_t present_node_index = AddNode(NodeType::kPresentNode,
-                                                  present_string_stream.str());
-            AddChild(CommandHierarchy::kAllEventTopology,
-                     Topology::kRootNodeIndex,
-                     present_node_index);
+            const char *format_string = GetVkFormatString(present_info.GetSurfaceVkFormat());
+            DIVE_ASSERT(format_string != nullptr);
+            uint32_t    vk_color_space = present_info.GetSurfaceVkColorSpaceKHR();
+            const char *color_space_string = GetVkColorSpaceKhrString(vk_color_space);
+            DIVE_ASSERT(color_space_string != nullptr);
+            present_string_stream << "Present: " << i
+                                  << ", FullScreen: " << present_info.IsFullScreen() << ", Engine: "
+                                  << kEngineTypeStrings[(uint32_t)present_info.GetEngineType()]
+                                  << ", Queue: "
+                                  << kQueueTypeStrings[(uint32_t)present_info.GetQueueType()]
+                                  << ", SurfaceAddr: 0x" << std::hex
+                                  << present_info.GetSurfaceAddr() << std::dec
+                                  << ", SurfaceSize: " << present_info.GetSurfaceSize()
+                                  << ", VkFormat: " << format_string
+                                  << ", VkColorSpaceKHR: " << color_space_string;
         }
+        else
+        {
+            present_string_stream << "Present: " << i;
+        }
+        uint64_t present_node_index = AddNode(NodeType::kPresentNode, present_string_stream.str());
+        AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, present_node_index);
     }
 }
 
@@ -1405,11 +1396,11 @@ uint32_t CommandHierarchyCreator::GetMarkerSize(const uint8_t *marker_ptr, size_
 //--------------------------------------------------------------------------------------------------
 bool CommandHierarchyCreator::IsBeginDebugMarkerNode(uint64_t node_index)
 {
-    NodeType node_type = m_command_hierarchy_ptr->GetNodeType(node_index);
+    NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
     if (node_type == NodeType::kMarkerNode && m_last_user_push_parent_node != UINT64_MAX)
     {
-        CommandHierarchy::MarkerType marker_type = m_command_hierarchy_ptr->GetMarkerNodeType(
+        CommandHierarchy::MarkerType marker_type = m_command_hierarchy.GetMarkerNodeType(
         node_index);
         if (marker_type == CommandHierarchy::MarkerType::kBeginEnd)
         {
@@ -2129,7 +2120,7 @@ uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
                                           std::string             &&desc,
                                           CommandHierarchy::AuxInfo aux_info)
 {
-    uint64_t node_index = m_command_hierarchy_ptr->AddNode(type, std::move(desc), aux_info);
+    uint64_t node_index = m_command_hierarchy.AddNode(type, std::move(desc), aux_info);
     for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; ++i)
     {
         DIVE_ASSERT(m_node_children[i][0].size() == node_index);
@@ -2150,7 +2141,7 @@ uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
 //--------------------------------------------------------------------------------------------------
 void CommandHierarchyCreator::AppendEventNodeIndex(uint64_t node_index)
 {
-    m_command_hierarchy_ptr->m_nodes.m_event_node_indices.push_back(node_index);
+    m_command_hierarchy.m_nodes.m_event_node_indices.push_back(node_index);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2230,7 +2221,7 @@ void CommandHierarchyCreator::CreateTopologies()
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
         size_t    num_nodes = m_node_children[topology][0].size();
-        Topology &cur_topology = m_command_hierarchy_ptr->m_topology[topology];
+        Topology &cur_topology = m_command_hierarchy.m_topology[topology];
         cur_topology.SetNumNodes(num_nodes);
 
         // Optional loop: Pre-reserve to prevent the resize() from allocating memory later
@@ -2264,12 +2255,12 @@ void CommandHierarchyCreator::CreateTopologies()
 bool CommandHierarchyCreator::EventNodeHelper(uint64_t                      node_index,
                                               std::function<bool(uint32_t)> callback) const
 {
-    NodeType node_type = m_command_hierarchy_ptr->GetNodeType(node_index);
+    NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
     if (node_type == NodeType::kMarkerNode)
     {
-        CommandHierarchy::MarkerType type = m_command_hierarchy_ptr->GetMarkerNodeType(node_index);
+        CommandHierarchy::MarkerType type = m_command_hierarchy.GetMarkerNodeType(node_index);
         if (type == CommandHierarchy::MarkerType::kDiveMetadata)
-            return callback(m_command_hierarchy_ptr->GetMarkerNodeId(node_index));
+            return callback(m_command_hierarchy.GetMarkerNodeId(node_index));
     }
     return false;
 }

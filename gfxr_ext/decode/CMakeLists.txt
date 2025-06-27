@@ -29,6 +29,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # -------------------
 # gfxr_decode_ext_lib
 add_library(gfxr_decode_ext_lib
+  dive_annotation_processor.h
+  dive_annotation_processor.cpp
   dive_block_data.h
   dive_block_data.cpp
   dive_file_processor.h
@@ -51,11 +53,13 @@ if(WIN32)
   enable_testing()
   include(GoogleTest)
   add_executable(gfxr_decode_ext_lib_test 
+    dive_annotation_processor_test.cpp
     dive_block_data_test.cpp
     dive_file_processor_test.cpp
   )
   target_link_libraries(gfxr_decode_ext_lib_test PRIVATE
     gfxr_decode_ext_lib
+    gmock
     gtest
     gtest_main
   )

@@ -67,3 +67,4 @@ done
 adb logcat -d -s gfxrecon
 adb pull "$DUMP_DIR"
 adb shell rm -rf "$DUMP_DIR"
+adb shell rm -rf "$PUSH_DIR"

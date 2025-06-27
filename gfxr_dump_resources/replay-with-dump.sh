@@ -31,13 +31,18 @@ GFXR_BASENAME=$(basename "$GFXR")
 BUILD_DIR=build
 JSON_BASENAME=dump.json
 JSON="$BUILD_DIR/$JSON_BASENAME"
-REMOTE_TEMP_DIR=/data/local/tmp
+# Fairly reliable directory on remote device, as long as app has MANAGE_EXTERNAL_STORAGE permissions.
+# /data/local/tmp doesn't work on all devices tested.
+REMOTE_TEMP_DIR=/sdcard/Download
 PUSH_DIR="$REMOTE_TEMP_DIR/replay"
 DUMP_DIR="$REMOTE_TEMP_DIR/dump"
 GFXR_DUMP_RESOURCES=$(find "$BUILD_DIR" -name gfxr_dump_resources -executable -type f)
 GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
 
 python "$GFXRECON" install-apk ./install/gfxr-replay.apk
+# Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
+# was not required on all devices tested but doesn't hurt.
+adb shell appops set com.lunarg.gfxreconstruct.replay MANAGE_EXTERNAL_STORAGE allow
 
 adb logcat -c
 

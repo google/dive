@@ -14,15 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Usage: replay-with-dump.sh GFXR GFXA
+# Usage: replay-with-dump.sh GFXR [GFXA]
 #
-# If you have more than one adb device, set ANDROID_SERIAL
+# If you have more than one adb device, set ANDROID_SERIAL.
+# GFXR is required. If the capture doesn't use the asset file, GFXA is optional
 
 set -eux
 
+if [ $# -lt 1 ]; then
+    echo "Usage: replay-with-dump.sh GFXR [GFXA]"
+    exit 1
+fi
+
 GFXR=$1
 GFXR_BASENAME=$(basename "$GFXR")
-GFXA=$2
 BUILD_DIR=build
 JSON_BASENAME=dump.json
 JSON="$BUILD_DIR/$JSON_BASENAME"
@@ -39,7 +44,11 @@ adb logcat -c
 $GFXR_DUMP_RESOURCES "$GFXR" "$JSON"
 adb shell mkdir -p "$PUSH_DIR"
 adb shell mkdir -p "$DUMP_DIR"
-adb push "$GFXR" "$GFXA" "$JSON" "$PUSH_DIR"
+adb push "$GFXR" "$JSON" "$PUSH_DIR"
+if [ $# -eq 2 ]; then
+    GFXA="$2"
+    adb push "$GFXA" "$PUSH_DIR"
+fi
 python "$GFXRECON" replay \
     --dump-resources "$PUSH_DIR/$JSON_BASENAME" \
     --dump-resources-dir "$DUMP_DIR" \

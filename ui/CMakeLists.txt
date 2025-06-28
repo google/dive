@@ -85,6 +85,9 @@ if (MSVC)
   # 4201: prevent nameless struct/union
   # 4127: "conditional expression is constant" warnings
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127)
+
+  # Add NOMINMAX definition for Windows builds to prevent min/max macro conflicts
+  target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-inconsistent-missing-override)
 endif()

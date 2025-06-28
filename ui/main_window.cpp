@@ -540,7 +540,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     m_shader_view->Reset();
     m_text_file_view->Reset();
     m_prev_command_view_mode = QString();
-    Dive::CaptureData::LoadResult load_res = m_data_core->LoadCaptureData(file_name);
+    Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
         HideOverlay();
@@ -556,7 +556,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     }
 
     m_command_hierarchy_model->BeginResetModel();
-    if (!m_data_core->ParseCaptureData())
+    if (!m_data_core->ParsePm4CaptureData())
     {
         HideOverlay();
         QMessageBox::critical(this,
@@ -1145,7 +1145,7 @@ void MainWindow::UpdateTabAvailability()
 {
     m_overview_tab_view->UpdateTabAvailability();
 
-    bool has_text = m_data_core->GetCaptureData().GetNumText() > 0;
+    bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
     SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, has_text);
 
     SetTabAvailable(m_tab_widget, m_event_state_view_tab_index, true);
@@ -1178,7 +1178,7 @@ void MainWindow::OnFileLoaded()
 {
     UpdateTabAvailability();
 
-    if (m_data_core->GetCaptureData().HasPm4Data())
+    if (m_data_core->GetPm4CaptureData().HasPm4Data())
         m_overview_tab_view->Update(&m_log_record);
 }
 

@@ -97,7 +97,8 @@ static constexpr uint32_t kShaderEnableBitCount = 3;
 class IEmulateCallbacks
 {
 public:
-    bool ProcessSubmits(const DiveVector<SubmitInfo> &submits, const IMemoryManager &mem_manager);
+    bool ProcessPm4Submits(const DiveVector<SubmitInfo> &submits,
+                           const IMemoryManager         &mem_manager);
 
     // Callback on an IB start. Also called for all call/chain IBs
     // A return value of false indicates to the emulator to skip parsing this IB

@@ -487,7 +487,7 @@ std::string CleanFilename(const std::string &in)
 // FIXME pointers?
 void ExtractAssets(const char                   *dir,
                    const char                   *capture_filename,
-                   const Dive::CaptureData      &capture_data,
+                   const Dive::Pm4CaptureData   &capture_data,
                    const Dive::CommandHierarchy *command_hierarchy)
 {
     auto dir_path = std::filesystem::path(dir);
@@ -532,12 +532,12 @@ void ExtractAssets(const char                   *dir,
 
 //--------------------------------------------------------------------------------------------------
 bool ParseCapture(const char                              *filename,
-                  std::unique_ptr<Dive::CaptureData>      *out_capture_data,
+                  std::unique_ptr<Dive::Pm4CaptureData>   *out_capture_data,
                   std::unique_ptr<Dive::CommandHierarchy> *out_command_hierarchy)
 {
-    std::unique_ptr<Dive::CaptureData> &capture_data = *out_capture_data;
-    capture_data = std::make_unique<Dive::CaptureData>();
-    if (capture_data->LoadFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
+    std::unique_ptr<Dive::Pm4CaptureData> &capture_data = *out_capture_data;
+    capture_data = std::make_unique<Dive::Pm4CaptureData>();
+    if (capture_data->LoadCaptureFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         capture_data.reset();
         std::cerr << "Not able to open: " << filename << std::endl;
@@ -561,8 +561,8 @@ bool ParseCapture(const char                              *filename,
 //--------------------------------------------------------------------------------------------------
 int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 {
-    Dive::CaptureData *capture_data_ptr = new Dive::CaptureData();
-    if (capture_data_ptr->LoadFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
+    Dive::Pm4CaptureData *capture_data_ptr = new Dive::Pm4CaptureData();
+    if (capture_data_ptr->LoadCaptureFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cerr << "Not able to open: " << filename << std::endl;
         return EXIT_FAILURE;
@@ -570,7 +570,7 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 
     std::unique_ptr<Dive::CommandHierarchy>    command_hierarchy_ptr(new Dive::CommandHierarchy());
     std::unique_ptr<Dive::EmulateStateTracker> state_tracker(new EmulateStateTracker);
-    Dive::CommandHierarchyCreator              creator(*command_hierarchy_ptr,
+    Dive::CommandHierarchyCreator              creator(*command_hierarchy_ptr.get(),
                                           *capture_data_ptr,
                                           *state_tracker);
     if (!creator.CreateTrees(true, std::nullopt))
@@ -611,14 +611,14 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 int ExtractCapture(const char *filename, const char *extract_assets)
 {
     std::unique_ptr<Dive::DataCore> data = std::make_unique<Dive::DataCore>();
-    if (data->LoadCaptureData(filename) != Dive::CaptureData::LoadResult::kSuccess)
+    if (data->LoadPm4CaptureData(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cerr << "Load capture failed." << std::endl;
         return EXIT_FAILURE;
     }
 
     const Dive::CommandHierarchy *command_hierarchy = nullptr;
-    if (data->ParseCaptureData())
+    if (data->ParsePm4CaptureData())
     {
         command_hierarchy = &data->GetCommandHierarchy();
     }
@@ -628,7 +628,7 @@ int ExtractCapture(const char *filename, const char *extract_assets)
         return EXIT_FAILURE;
     }
 
-    ExtractAssets(extract_assets, filename, data->GetCaptureData(), command_hierarchy);
+    ExtractAssets(extract_assets, filename, data->GetPm4CaptureData(), command_hierarchy);
 
     return EXIT_SUCCESS;
 }

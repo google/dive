@@ -472,11 +472,11 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, Syn
 // =================================================================================================
 // CommandHierarchyCreator
 // =================================================================================================
-CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy    &command_hierarchy,
-                                                 const CaptureData   &capture_data,
-                                                 EmulateStateTracker &state_tracker) :
+CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+                                                 const Pm4CaptureData &capture_data,
+                                                 EmulateStateTracker  &state_tracker) :
     m_command_hierarchy(command_hierarchy),
-    m_capture_data(capture_data),
+    m_pm4_capture_data(capture_data),
     m_state_tracker(state_tracker)
 {
     m_state_tracker.Reset();
@@ -518,7 +518,7 @@ bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_
     m_num_events = 0;
     m_flatten_chain_nodes = flatten_chain_nodes;
 
-    if (!ProcessSubmits(m_capture_data.GetSubmits(), m_capture_data.GetMemoryManager()))
+    if (!ProcessPm4Submits(m_pm4_capture_data.GetSubmits(), m_pm4_capture_data.GetMemoryManager()))
     {
         return false;
     }
@@ -605,7 +605,7 @@ bool CommandHierarchyCreator::CreateTrees(EngineType             engine_type,
 
     DiveVector<SubmitInfo> submits{ submit_info };
     TempMemoryManager      mem_manager(command_dwords, size_in_dwords);
-    if (!ProcessSubmits(submits, mem_manager))
+    if (!ProcessPm4Submits(submits, mem_manager))
     {
         return false;
     }
@@ -1135,9 +1135,9 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
               });
 
     // Insert present node to event topology, when appropriate
-    for (uint32_t i = 0; i < m_capture_data.GetNumPresents(); ++i)
+    for (uint32_t i = 0; i < m_pm4_capture_data.GetNumPresents(); ++i)
     {
-        const PresentInfo &present_info = m_capture_data.GetPresentInfo(i);
+        const PresentInfo &present_info = m_pm4_capture_data.GetPresentInfo(i);
 
         // Check if present exists right after this submit
         if (submit_index != (present_info.GetSubmitIndex()))

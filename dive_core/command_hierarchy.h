@@ -26,7 +26,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "capture_data.h"
+#include "pm4_capture_data.h"
 #include "capture_event_info.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
@@ -41,7 +41,7 @@ namespace Dive
 {
 
 // Forward declarations
-class CaptureData;
+class Pm4CaptureData;
 class GFRData;
 class MemoryManager;
 class SubmitInfo;
@@ -389,9 +389,9 @@ private:
 class CommandHierarchyCreator : public IEmulateCallbacks
 {
 public:
-    CommandHierarchyCreator(CommandHierarchy    &command_hierarchy,
-                            const CaptureData   &capture_data,
-                            EmulateStateTracker &state_tracker);
+    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+                            const Pm4CaptureData &capture_data,
+                            EmulateStateTracker  &state_tracker);
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
@@ -548,8 +548,8 @@ private:
         uint64_t m_group_addr;
     };
 
-    CommandHierarchy  &m_command_hierarchy;  // Reference to class being created
-    const CaptureData &m_capture_data;
+    CommandHierarchy     &m_command_hierarchy;  // Reference to class being created
+    const Pm4CaptureData &m_pm4_capture_data;
 
     // Parsing State
     DiveVector<uint64_t>

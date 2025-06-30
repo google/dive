@@ -397,14 +397,13 @@ public:
     // deep tree of chain nodes when a capture chains together tons of IBs.
     // Optional: Passing a reserve_size will allow the creator to pre-reserve the memory needed and
     // potentially speed up the creation
-    bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size, ILog *log_ptr);
+    bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
     bool CreateTrees(EngineType engine_type,
                      QueueType  queue_type,
                      uint32_t  *command_dwords,
-                     uint32_t   size_in_dwords,
-                     ILog      *log_ptr);
+                     uint32_t   size_in_dwords);
 
     virtual bool OnIbStart(uint32_t                  submit_index,
                            uint32_t                  ib_index,
@@ -612,8 +611,6 @@ private:
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
-
-    ILog *m_log_ptr = nullptr;
 
     EmulateStateTracker &m_state_tracker;
 };

@@ -28,7 +28,6 @@
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 
 #include "dive_strings.h"
-#include "log.h"
 #include "pm4_info.h"
 
 namespace Dive
@@ -485,11 +484,8 @@ CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy    &command_hi
 
 //--------------------------------------------------------------------------------------------------
 bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_nodes,
-                                          std::optional<uint64_t> reserve_size,
-                                          ILog                   *log_ptr)
+                                          std::optional<uint64_t> reserve_size)
 {
-    m_log_ptr = log_ptr;
-
     // Clear/Reset internal data structures, just in case
     m_command_hierarchy = CommandHierarchy();
 
@@ -537,8 +533,7 @@ bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_
 bool CommandHierarchyCreator::CreateTrees(EngineType engine_type,
                                           QueueType  queue_type,
                                           uint32_t  *command_dwords,
-                                          uint32_t   size_in_dwords,
-                                          ILog      *log_ptr)
+                                          uint32_t   size_in_dwords)
 {
     // Note: This function is mostly a copy/paste from the main CreateTrees() function, but with
     // workarounds to handle a case where there is no marker_data or capture_data
@@ -588,8 +583,6 @@ bool CommandHierarchyCreator::CreateTrees(EngineType engine_type,
         uint32_t *m_command_dwords;
         uint32_t  m_size_in_dwords;
     };
-
-    m_log_ptr = log_ptr;
 
     // Clear/Reset internal data structures, just in case
     m_command_hierarchy = CommandHierarchy();

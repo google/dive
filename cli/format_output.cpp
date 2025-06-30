@@ -535,9 +535,8 @@ bool ParseCapture(const char                              *filename,
                   std::unique_ptr<Dive::CaptureData>      *out_capture_data,
                   std::unique_ptr<Dive::CommandHierarchy> *out_command_hierarchy)
 {
-    Dive::LogConsole                    log;
     std::unique_ptr<Dive::CaptureData> &capture_data = *out_capture_data;
-    capture_data = std::make_unique<Dive::CaptureData>(&log);
+    capture_data = std::make_unique<Dive::CaptureData>();
     if (capture_data->LoadFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         capture_data.reset();
@@ -549,7 +548,7 @@ bool ParseCapture(const char                              *filename,
     command_hierarchy = std::make_unique<Dive::CommandHierarchy>();
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
     Dive::CommandHierarchyCreator        creator(*command_hierarchy, *capture_data, *state_tracker);
-    if (!creator.CreateTrees(true, std::nullopt, &log))
+    if (!creator.CreateTrees(true, std::nullopt))
     {
         command_hierarchy.reset();
         std::cerr << "Error parsing capture!" << std::endl;
@@ -562,8 +561,7 @@ bool ParseCapture(const char                              *filename,
 //--------------------------------------------------------------------------------------------------
 int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 {
-    Dive::LogConsole   log;
-    Dive::CaptureData *capture_data_ptr = new Dive::CaptureData(&log);
+    Dive::CaptureData *capture_data_ptr = new Dive::CaptureData();
     if (capture_data_ptr->LoadFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cerr << "Not able to open: " << filename << std::endl;
@@ -575,7 +573,7 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
     Dive::CommandHierarchyCreator              creator(*command_hierarchy_ptr,
                                           *capture_data_ptr,
                                           *state_tracker);
-    if (!creator.CreateTrees(true, std::nullopt, &log))
+    if (!creator.CreateTrees(true, std::nullopt))
     {
         std::cerr << "Error parsing capture!" << std::endl;
         return EXIT_FAILURE;
@@ -612,8 +610,7 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 //--------------------------------------------------------------------------------------------------
 int ExtractCapture(const char *filename, const char *extract_assets)
 {
-    Dive::LogConsole                log;
-    std::unique_ptr<Dive::DataCore> data = std::make_unique<Dive::DataCore>(&log);
+    std::unique_ptr<Dive::DataCore> data = std::make_unique<Dive::DataCore>();
     if (data->LoadCaptureData(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cerr << "Load capture failed." << std::endl;

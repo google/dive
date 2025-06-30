@@ -24,26 +24,23 @@ namespace Dive
 // =================================================================================================
 // DataCore
 // =================================================================================================
-DataCore::DataCore(ILog *log_ptr) :
+DataCore::DataCore() :
     m_progress_tracker(NULL),
-    m_capture_data(log_ptr),
-    m_log_ptr(log_ptr)
+    m_capture_data()
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-DataCore::DataCore(ProgressTracker *progress_tracker, ILog *log_ptr) :
+DataCore::DataCore(ProgressTracker *progress_tracker) :
     m_progress_tracker(progress_tracker),
-    m_capture_data(log_ptr),
-    m_log_ptr(log_ptr)
+    m_capture_data()
 {
 }
 
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 {
-    m_capture_data = CaptureData(m_progress_tracker,
-                                 m_log_ptr);  // Clear any previously loaded data
+    m_capture_data = CaptureData(m_progress_tracker);  // Clear any previously loaded data
     m_capture_metadata = CaptureMetadata();
     return m_capture_data.LoadFile(file_name);
 }
@@ -64,7 +61,7 @@ bool DataCore::CreateCommandHierarchy()
     CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
                                              m_capture_data,
                                              *state_tracker);
-    if (!cmd_hier_creator.CreateTrees(true, reserve_size, m_log_ptr))
+    if (!cmd_hier_creator.CreateTrees(true, reserve_size))
     {
         return false;
     }

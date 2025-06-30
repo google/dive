@@ -35,7 +35,7 @@ set(NETWORK_HDRS
   unix_domain_server.h
 )
 
-add_library(network SHARED ${NETWORK_SRCS} ${NETWORK_HDRS})
+add_library(network STATIC ${NETWORK_SRCS} ${NETWORK_HDRS})
 
 set(NETWORK_LINK_LIBS
   absl::status

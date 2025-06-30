@@ -20,7 +20,7 @@ limitations under the License.
 
 namespace
 {
-constexpr uint32_t kKeepAliveIntervalSec = 5;
+constexpr uint32_t kKeepAliveIntervalSec = 2;
 constexpr uint32_t kPingTimeoutMs = 5000;
 constexpr uint32_t kHandshakeMajorVersion = 1;
 constexpr uint32_t kHandshakeMinorVersion = 0;
@@ -174,8 +174,9 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
     return pm4_response->GetString();
 }
 
-absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_path,
-                                               const std::string& local_save_path)
+absl::Status TcpClient::DownloadFileFromServer(const std::string&          remote_file_path,
+                                               const std::string&          local_save_path,
+                                               std::function<void(size_t)> progress_callback)
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);
     if (!IsConnected())
@@ -250,7 +251,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
                      e.what()));
     }
 
-    auto recv_status = m_connection->ReceiveFile(local_save_path, file_size);
+    auto recv_status = m_connection->ReceiveFile(local_save_path, file_size, progress_callback);
     if (!recv_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
@@ -263,6 +264,78 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
     std::cout << "Client: File from server '" << download_request.GetString()
               << "' downloaded successfully to '" << local_save_path << "'." << std::endl;
     return absl::OkStatus();
+}
+
+absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_file_path)
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return absl::FailedPreconditionError("GetCaptureFileSize: Client is not connected.");
+    }
+
+    FileSizeRequest file_size_request;
+    file_size_request.SetString(remote_file_path);
+    std::cout << "Client: Requesting file size of " << remote_file_path << std::endl;
+    auto send_status = SendMessage(m_connection.get(), file_size_request);
+    if (!send_status.ok())
+    {
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(send_status.code(),
+                                                    absl::StrCat("GetCaptureFileSize: "
+                                                                 "SendMessage fail: ",
+                                                                 send_status.message())));
+    }
+
+    auto receive_or = ReceiveMessage(m_connection.get());
+    if (!receive_or.ok())
+    {
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       absl::Status(receive_or.status().code(),
+                                                    absl::StrCat("GetCaptureFileSize: "
+                                                                 "ReceiveMessage fail: ",
+                                                                 receive_or.status().message())));
+    }
+
+    auto response = std::move(receive_or.value());
+    if (response->GetMessageType() != MessageType::FILE_SIZE_RESPONSE)
+    {
+        return absl::FailedPreconditionError(
+        absl::StrCat("GetCaptureFileSize: Unexpected message type in response "
+                     "(Expected: ",
+                     MessageType::FILE_SIZE_RESPONSE,
+                     ", Got: ",
+                     response->GetMessageType(),
+                     ")."));
+    }
+
+    auto* file_size_response = dynamic_cast<FileSizeResponse*>(response.get());
+    if (!file_size_response)
+    {
+        return absl::InternalError(
+        "GetCaptureFileSize: Failed to cast received message to FileSizeResponse.");
+    }
+    if (!file_size_response->GetFound())
+    {
+        return absl::NotFoundError(
+        absl::StrCat("GetCaptureFileSize: Server could not find file. Reason: ",
+                     file_size_response->GetErrorReason()));
+    }
+
+    size_t file_size = 0;
+    try
+    {
+        file_size = std::stoull(file_size_response->GetFileSizeStr());
+    }
+    catch (const std::exception& e)
+    {
+        return absl::InvalidArgumentError(
+        absl::StrCat("GetCaptureFileSize: Invalid file size from server: '",
+                     file_size_response->GetFileSizeStr(),
+                     "'. Message error: ",
+                     e.what()));
+    }
+    return file_size;
 }
 
 absl::Status TcpClient::PingServer()

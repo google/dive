@@ -43,7 +43,9 @@ enum class MessageType : uint32_t
     PM4_CAPTURE_REQUEST = 5,
     PM4_CAPTURE_RESPONSE = 6,
     DOWNLOAD_FILE_REQUEST = 7,
-    DOWNLOAD_FILE_RESPONSE = 8
+    DOWNLOAD_FILE_RESPONSE = 8,
+    FILE_SIZE_REQUEST = 9,
+    FILE_SIZE_RESPONSE = 10
 };
 
 class HandShakeMessage : public ISerializable
@@ -177,6 +179,43 @@ private:
     std::string m_file_size_str;
 
     const MessageType m_type = MessageType::DOWNLOAD_FILE_RESPONSE;
+};
+
+class FileSizeRequest : public StringMessage
+{
+public:
+    MessageType GetMessageType() const override { return m_type; }
+
+private:
+    const MessageType m_type = MessageType::FILE_SIZE_REQUEST;
+};
+
+class FileSizeResponse : public ISerializable
+{
+public:
+    MessageType  GetMessageType() const override { return m_type; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    bool GetFound() const { return m_found; }
+    void SetFound(bool found) { m_found = found; }
+
+    const std::string& GetErrorReason() const { return m_error_reason; }
+    void SetErrorReason(std::string error_reason) { m_error_reason = std::move(error_reason); }
+
+    const std::string& GetFileSizeStr() const { return m_file_size_str; }
+    void SetFileSizeStr(std::string file_size_str) { m_file_size_str = std::move(file_size_str); }
+
+private:
+    // Flag indicating whether the file was found on the server.
+    bool m_found;
+    // A description of the error. Empty if successful.
+    std::string m_error_reason;
+    // A string representation of the downloaded file's size.
+    // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
+    std::string m_file_size_str;
+
+    const MessageType m_type = MessageType::FILE_SIZE_RESPONSE;
 };
 
 // Message Helper Functions (TLV Framing).

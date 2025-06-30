@@ -146,7 +146,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     absl::StatusOr<std::string> error_reason_or = ReadStringFromBuffer(src, offset);
     if (!error_reason_or.ok())
     {
-        return error_reason_or.status();  // Forward the error
+        return error_reason_or.status();
     }
     m_error_reason = std::move(error_reason_or.value());
 
@@ -156,6 +156,51 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
         return file_path_or.status();
     }
     m_file_path = std::move(file_path_or.value());
+
+    absl::StatusOr<std::string> file_size_or = ReadStringFromBuffer(src, offset);
+    if (!file_size_or.ok())
+    {
+        return file_size_or.status();
+    }
+    m_file_size_str = std::move(file_size_or.value());
+
+    // Final check for trailing data.
+    if (offset != src.size())
+    {
+        return absl::InvalidArgumentError("Message has unexpected trailing data.");
+    }
+
+    return absl::OkStatus();
+}
+
+absl::Status FileSizeResponse::Serialize(Buffer& dest) const
+{
+    dest.push_back(static_cast<uint8_t>(m_found));
+    WriteStringToBuffer(m_error_reason, dest);
+    WriteStringToBuffer(m_file_size_str, dest);
+
+    return absl::OkStatus();
+}
+
+absl::Status FileSizeResponse::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+
+    // Deserialize the 'found' boolean.
+    if (src.size() < offset + sizeof(uint8_t))
+    {
+        return absl::InvalidArgumentError("Buffer too small for 'found' field.");
+    }
+    m_found = (src[offset] != 0);
+    offset += sizeof(uint8_t);
+
+    // Deserialize the strings using the StatusOr-returning helper
+    absl::StatusOr<std::string> error_reason_or = ReadStringFromBuffer(src, offset);
+    if (!error_reason_or.ok())
+    {
+        return error_reason_or.status();
+    }
+    m_error_reason = std::move(error_reason_or.value());
 
     absl::StatusOr<std::string> file_size_or = ReadStringFromBuffer(src, offset);
     if (!file_size_or.ok())
@@ -270,6 +315,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* 
         break;
     case MessageType::DOWNLOAD_FILE_RESPONSE:
         message = std::make_unique<DownloadFileResponse>();
+        break;
+    case MessageType::FILE_SIZE_REQUEST:
+        message = std::make_unique<FileSizeRequest>();
+        break;
+    case MessageType::FILE_SIZE_RESPONSE:
+        message = std::make_unique<FileSizeResponse>();
         break;
     default:
         conn->Close();

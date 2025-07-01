@@ -343,4 +343,38 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     return string_stream.str();
 }
 
+//--------------------------------------------------------------------------------------------------
+uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
+                             uint32_t              submit_index,
+                             uint64_t              va_addr,
+                             uint32_t              opcode,
+                             uint32_t              dword_count)
+{
+    uint32_t index_count = 0;
+
+    // Not handling indirect draws:
+    //  CP_DRAW_INDIRECT
+    //  CP_DRAW_INDX_INDIRECT
+    //  CP_DRAW_INDIRECT_MULTI
+
+    if (opcode == CP_DRAW_INDX)
+    {
+        PM4_CP_DRAW_INDX packet;
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
+        index_count += packet.bitfields2.NUM_INDICES;
+    }
+    else if (opcode == CP_DRAW_INDX_OFFSET)
+    {
+        // This packet is used for indexed and non-indexed draws.
+        // Non-indexed draws do not need to fill out entire packet
+        PM4_CP_DRAW_INDX_OFFSET packet;
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                                   submit_index,
+                                                   va_addr,
+                                                   dword_count * sizeof(uint32_t)))
+        index_count += packet.bitfields2.NUM_INDICES;
+    }
+    return index_count;
+}
+
 }  // namespace Dive

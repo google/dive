@@ -95,6 +95,7 @@ if(NOT ANDROID)
     add_subdirectory(cli)
     add_subdirectory(host_cli)
     add_subdirectory(lrz_validator)
+    add_subdirectory(trace_stats)
 
     if (NOT DIVE_NO_DISASSEMBLY)
         add_subdirectory(ui)

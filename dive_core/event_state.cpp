@@ -50,8 +50,9 @@ typename EventStateInfo::Id::basic_type new_cap)
 
     // Allocate new buffer as an array of `max_align_t`, to make sure the buffer
     // is sufficiently aligned for the type of any possible field.
-    auto new_buffer = std::unique_ptr<std::max_align_t[]>(
-    new std::max_align_t[(num_bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t)]);
+    size_t new_buffer_size = (num_bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
+    auto   new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[new_buffer_size]);
+    memset(new_buffer.get(), 0, sizeof(std::max_align_t) * new_buffer_size);
 
     auto old_topology_ptr = TopologyPtr();
     auto old_prim_restart_enabled_ptr = PrimRestartEnabledPtr();

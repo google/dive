@@ -24,6 +24,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <span>
 #include <vector>
 
 #include "capture_data.h"
@@ -400,10 +401,9 @@ public:
     bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
-    bool CreateTrees(EngineType engine_type,
-                     QueueType  queue_type,
-                     uint32_t  *command_dwords,
-                     uint32_t   size_in_dwords);
+    bool CreateTrees(EngineType             engine_type,
+                     QueueType              queue_type,
+                     std::vector<uint32_t> &command_dwords);
 
     virtual bool OnIbStart(uint32_t                  submit_index,
                            uint32_t                  ib_index,

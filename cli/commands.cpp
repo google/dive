@@ -433,6 +433,9 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
     if (!raw_file.read(buffer.data(), size))
         return false;
 
+    std::vector<uint32_t> dword_buffer(size / sizeof(uint32_t));
+    memcpy(dword_buffer.data(), buffer.data(), size);
+
     Dive::EngineType engine_type = Dive::EngineType::kUniversal;
     Dive::QueueType  queue_type = Dive::QueueType::kUniversal;
     switch (raw_cmd_buffer_type)
@@ -449,10 +452,7 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
     CaptureData                          capture_data;
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
     Dive::CommandHierarchyCreator cmd_hier_creator(command_hierarchy, capture_data, *state_tracker);
-    if (!cmd_hier_creator.CreateTrees(engine_type,
-                                      queue_type,
-                                      (uint32_t*)buffer.data(),
-                                      (uint32_t)(size / sizeof(uint32_t))))
+    if (!cmd_hier_creator.CreateTrees(engine_type, queue_type, dword_buffer))
         return false;
 
     const Dive::Topology* topology_ptr = &command_hierarchy.GetSubmitHierarchyTopology();

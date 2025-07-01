@@ -532,15 +532,17 @@ bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_
 //--------------------------------------------------------------------------------------------------
 bool CommandHierarchyCreator::CreateTrees(EngineType             engine_type,
                                           QueueType              queue_type,
-                                          std::vector<uint32_t> &command_dwords)
+                                          std::vector<uint32_t> &command_dwords,
+                                          uint32_t               size_in_dwords)
 {
     // Note: This function is mostly a copy/paste from the main CreateTrees() function, but with
     // workarounds to handle a case where there is no marker_data or capture_data
     class TempMemoryManager : public IMemoryManager
     {
     public:
-        TempMemoryManager(std::vector<uint32_t> &command_dwords) :
-            m_command_dwords(command_dwords)
+        TempMemoryManager(std::vector<uint32_t> &command_dwords, uint32_t size_in_dwords) :
+            m_command_dwords(command_dwords),
+            m_size_in_dwords(size_in_dwords)
         {
         }
 
@@ -550,7 +552,7 @@ bool CommandHierarchyCreator::CreateTrees(EngineType             engine_type,
                                         uint64_t va_addr,
                                         uint64_t size) const
         {
-            if ((va_addr + size) > (m_command_dwords.size() * sizeof(uint32_t)))
+            if ((va_addr + size) > (m_size_in_dwords * sizeof(uint32_t)))
                 return false;
 
             // Treat the va_addr as an offset
@@ -579,7 +581,8 @@ bool CommandHierarchyCreator::CreateTrees(EngineType             engine_type,
 
     private:
         std::vector<uint32_t> &m_command_dwords;
-        // uint32_t *m_command_dwords;
+        uint32_t               m_size_in_dwords;
+        ;
     };
 
     // Clear/Reset internal data structures, just in case
@@ -594,14 +597,14 @@ bool CommandHierarchyCreator::CreateTrees(EngineType             engine_type,
 
     Dive::IndirectBufferInfo ib_info;
     ib_info.m_va_addr = 0x0;
-    ib_info.m_size_in_dwords = command_dwords.size();
+    ib_info.m_size_in_dwords = size_in_dwords;
     ib_info.m_skip = false;
     DiveVector<IndirectBufferInfo> ib_array;
     ib_array.push_back(ib_info);
     const Dive::SubmitInfo submit_info(engine_type, queue_type, 0, false, std::move(ib_array));
 
     DiveVector<SubmitInfo> submits{ submit_info };
-    TempMemoryManager      mem_manager(command_dwords);
+    TempMemoryManager      mem_manager(command_dwords, size_in_dwords);
     if (!ProcessSubmits(submits, mem_manager))
     {
         return false;

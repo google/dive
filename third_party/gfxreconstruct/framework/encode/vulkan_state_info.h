@@ -171,7 +171,7 @@ enum PipelineBindPoints
     kBindPoint_count
 };
 
-static PipelineBindPoints VkPipelinePointToPipelinePoint(VkPipelineBindPoint bind_point)
+[[maybe_unused]] static PipelineBindPoints VkPipelinePointToPipelinePoint(VkPipelineBindPoint bind_point)
 {
     switch (bind_point)
     {
@@ -188,7 +188,7 @@ static PipelineBindPoints VkPipelinePointToPipelinePoint(VkPipelineBindPoint bin
     }
 }
 
-static void VkShaderStageFlagsToPipelinePoint(VkShaderStageFlags stage_flags, std::vector<PipelineBindPoints>& points)
+[[maybe_unused]] static void VkShaderStageFlagsToPipelinePoint(VkShaderStageFlags stage_flags, std::vector<PipelineBindPoints>& points)
 {
     if (((stage_flags & VK_SHADER_STAGE_VERTEX_BIT) == VK_SHADER_STAGE_VERTEX_BIT) ||
         ((stage_flags & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) ||

@@ -2532,9 +2532,14 @@ void VulkanStateWriter::ProcessImageMemoryWithAssetFile(const vulkan_wrappers::D
         {
             if (output_stream_ != nullptr)
             {
-                assert((*asset_file_offsets_).find(image_wrapper->handle_id) != (*asset_file_offsets_).end());
-                const int64_t offset = (*asset_file_offsets_)[image_wrapper->handle_id];
-                WriteExecuteFromFile(asset_file_name_, 1, offset);
+                // It is possible that an image could not be dumped in the asset file (i.e. multisampled).
+                // We will still clear its flag to false but there won't be an entry in the offsets map
+                const auto& asset_file_offset_entry = asset_file_offsets_->find(image_wrapper->handle_id);
+                if (asset_file_offset_entry != asset_file_offsets_->end())
+                {
+                    const int64_t offset = asset_file_offset_entry->second;
+                    WriteExecuteFromFile(asset_file_name_, 1, offset);
+                }
             }
         }
     }

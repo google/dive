@@ -100,15 +100,18 @@ IF %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
-if NOT "%~2"=="" (
-    SET GFXA=%~2
-    adb push "%GFXA%" ""%PUSH_DIR%"
-    IF %ERRORLEVEL% NEQ 0 (
-        echo Error pushing GFXA to device.
-        exit /b %ERRORLEVEL%
-    )
+if "%~2"=="" (
+    goto REPLAY
 )
 
+SET GFXA=%~2
+adb push "%GFXA%" "%PUSH_DIR%"
+IF %ERRORLEVEL% NEQ 0 (
+    echo Error pushing GFXA to device.
+    exit /b %ERRORLEVEL%
+)
+
+:REPLAY
 :: This is to make sure pushing is finished
 timeout /t 10 /nobreak >nul
 

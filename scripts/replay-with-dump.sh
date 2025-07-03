@@ -38,11 +38,12 @@ PUSH_DIR="$REMOTE_TEMP_DIR/replay"
 DUMP_DIR="$REMOTE_TEMP_DIR/dump"
 GFXR_DUMP_RESOURCES=$(find "$BUILD_DIR" -name gfxr_dump_resources -executable -type f)
 GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
+REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
 
 python "$GFXRECON" install-apk ./install/gfxr-replay.apk
 # Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
 # was not required on all devices tested but doesn't hurt.
-adb shell appops set com.lunarg.gfxreconstruct.replay MANAGE_EXTERNAL_STORAGE allow
+adb shell appops set "$REPLAY_PACKAGE" MANAGE_EXTERNAL_STORAGE allow
 
 adb logcat -c
 
@@ -64,7 +65,7 @@ python "$GFXRECON" replay \
 # In order to use pidof to determine when the replay is done, we need to give it time to launch first.
 sleep 5
 # We can infer that replay is finished when the replay app process is gone.
-while adb shell pidof com.lunarg.gfxreconstruct.replay
+while adb shell pidof "$REPLAY_PACKAGE"
 do
     sleep 1
 done

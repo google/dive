@@ -23,7 +23,6 @@ IF "%~1"=="" (
 )
 
 SET GFXR=%~1
-SET GFXA=%~2
 
 IF NOT "%GFXR:~-5%"==".gfxr" (
     echo Error: First argument GFXR must have a .gfxr extension.
@@ -34,6 +33,8 @@ FOR %%i IN ("%GFXR%") DO SET GFXR_BASENAME=%%~nxi
 SET BUILD_DIR=../build
 SET JSON_BASENAME=dump.json
 SET JSON=%BUILD_DIR%/%JSON_BASENAME%
+:: Fairly reliable directory on remote device, as long as app has MANAGE_EXTERNAL_STORAGE permissions.
+:: /data/local/tmp doesn't work on all devices tested.
 SET REMOTE_TEMP_DIR=/sdcard/Download
 SET PUSH_DIR=%REMOTE_TEMP_DIR%/replay
 SET DUMP_DIR=%REMOTE_TEMP_DIR%/dump
@@ -61,7 +62,13 @@ exit /b 1
 :GFXR_DUMP_RESOURCES_FOUND
 echo Debug: Found gfxr_dump_resources.exe at: "%GFXR_DUMP_RESOURCES%"
 
-SET GFXRECON=../third_party/gfxreconstruct/android/scripts/gfxrecon.py 
+SET GFXRECON=../third_party/gfxreconstruct/android/scripts/gfxrecon.py
+SET REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
+
+python "$GFXRECON" install-apk ./install/gfxr-replay.apk
+:: Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
+:: was not required on all devices tested but doesn't hurt.
+adb shell appops set "%REPLAY_PACKAGE%" MANAGE_EXTERNAL_STORAGE allow
 
 adb logcat -c
 
@@ -77,10 +84,19 @@ adb shell rm -rf "%PUSH_DIR%"
 
 adb shell mkdir -p "%PUSH_DIR%"
 adb shell mkdir -p "%DUMP_DIR%"
-adb push "%GFXR%" "%GFXA%" "%JSON%" "%PUSH_DIR%"
+adb push "%GFXR%" "%JSON%" "%PUSH_DIR%"
 IF %ERRORLEVEL% NEQ 0 (
     echo Error pushing files to device.
     exit /b %ERRORLEVEL%
+)
+
+if NOT "%~2"=="" (
+    SET GFXA=%~2
+    adb push "%GFXA%" ""%PUSH_DIR%"
+    IF %ERRORLEVEL% NEQ 0 (
+        echo Error pushing GFXA to device.
+        exit /b %ERRORLEVEL%
+    )
 )
 
 :: This is to make sure pushing is finished
@@ -100,7 +116,7 @@ IF %ERRORLEVEL% NEQ 0 (
 timeout /t 10 /nobreak >nul
 
 :WAIT_FOR_REPLAY
-adb shell pidof com.lunarg.gfxreconstruct.replay >nul 2>&1
+adb shell pidof "%REPLAY_PACKAGE%" >nul 2>&1
 IF %ERRORLEVEL% EQU 0 (
     timeout /t 1 /nobreak >nul
     GOTO :WAIT_FOR_REPLAY
@@ -111,7 +127,11 @@ adb logcat -d -s gfxrecon
 adb pull "%DUMP_DIR%"
 IF %ERRORLEVEL% NEQ 0 (
     echo Error pulling replay dumped resources.
+    exit /b %ERRORLEVEL%
 )
+
+adb shell rm -rf "%DUMP_DIR%"
+adb shell rm -rf "%PUSH_DIR%"
 
 endlocal
 EXIT /b 0

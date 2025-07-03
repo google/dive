@@ -65,7 +65,17 @@ echo Debug: Found gfxr_dump_resources.exe at: "%GFXR_DUMP_RESOURCES%"
 SET GFXRECON=../third_party/gfxreconstruct/android/scripts/gfxrecon.py
 SET REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
 
-python "$GFXRECON" install-apk ./install/gfxr-replay.apk
+:: Uninstall first since install can fail if the APK has a different cert from the one installed (i.e. it was built on another machine)
+adb shell pm path "%REPLAY_PACKAGE%" >nul
+if %ERRORLEVEL% EQU 0 (
+    adb uninstall "%REPLAY_PACKAGE%"
+)
+python "%GFXRECON%" install-apk ../install/gfxr-replay.apk
+IF %ERRORLEVEL% NEQ 0 (
+    echo Could not install replay APK.
+    exit /b %ERRORLEVEL%
+)
+
 :: Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
 :: was not required on all devices tested but doesn't hurt.
 adb shell appops set "%REPLAY_PACKAGE%" MANAGE_EXTERNAL_STORAGE allow

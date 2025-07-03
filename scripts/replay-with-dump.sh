@@ -40,6 +40,8 @@ GFXR_DUMP_RESOURCES=$(find "$BUILD_DIR" -name gfxr_dump_resources -executable -t
 GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
 REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
 
+# Uninstall first since install can fail if the APK has a different cert from the one installed (i.e. it was built on another machine)
+adb shell pm path "$REPLAY_PACKAGE" && adb uninstall "$REPLAY_PACKAGE"
 python "$GFXRECON" install-apk ./install/gfxr-replay.apk
 # Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
 # was not required on all devices tested but doesn't hurt.

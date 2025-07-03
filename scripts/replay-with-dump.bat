@@ -18,7 +18,7 @@
 setlocal
 
 IF "%~1"=="" (
-    echo Usage: replay-with-dump.bat GFXR GFXA
+    echo Usage: replay-with-dump.bat GFXR [GFXA]
     exit /b 1
 )
 

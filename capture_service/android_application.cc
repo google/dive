@@ -319,7 +319,6 @@ absl::Status OpenXRApplication::Setup()
     RETURN_IF_ERROR(GrantAllFilesAccess());
     if (m_gfxr_enabled)
     {
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
         RETURN_IF_ERROR(GfxrSetup());
     }
     else

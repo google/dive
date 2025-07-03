@@ -313,6 +313,12 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
     else if (type == ApplicationType::OPENXR_APK)
     {
         m_app = std::make_unique<OpenXRApplication>(*this, package, command_args);
+        if (m_gfxr_enabled)
+        {
+            // Need root to set openxr.enable_frame_delimiter
+            RETURN_IF_ERROR(RequestRootAccess());
+            RETURN_IF_ERROR(Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
+        }
     }
     if (m_app == nullptr)
     {

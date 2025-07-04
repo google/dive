@@ -23,27 +23,39 @@ set(target_name VkLayer_rt_dive)
 
 set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"
                 "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.h"
+                "${CMAKE_SOURCE_DIR}/gpu_time/gpu_time.h"
 )
 
 set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_base.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_android.cc"
+    "${CMAKE_SOURCE_DIR}/gpu_time/gpu_time.cpp"
 )
 
 include_directories(${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include)
+    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
+    ${CMAKE_SOURCE_DIR}/gpu_time
+    ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/abseil-cpp/
+)
 
 add_library(${target_name} SHARED ${HDR_FILES}
                                 ${SRC_FILES})
 
+target_link_libraries(${target_name}
+    absl::status
+    absl::strings
+)
+
 if(ANDROID)
     add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-    target_link_libraries(${target_name} 
+    target_link_libraries(${target_name}
         -lm
         -ldl
         -llog
-        -landroid)
+        -landroid
+        vulkan
+    )
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -53,7 +65,8 @@ endif()
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union
-  target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
+  # 4127: conditional expression is constant
+  target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201 /wd4127)
 else()
   target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
 endif()

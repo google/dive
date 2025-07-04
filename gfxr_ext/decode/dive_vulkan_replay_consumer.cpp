@@ -134,7 +134,7 @@ const VulkanReplayOptions&                options) :
     allocator_(nullptr),
     query_pool_(VK_NULL_HANDLE),
     device_(VK_NULL_HANDLE),
-    frame_index_(false),
+    frame_index_(0),
     timestamp_counter_(0),
     timestamp_period_(0.0f)
 {
@@ -143,6 +143,77 @@ const VulkanReplayOptions&                options) :
 DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer()
 {
     DestroyQueryPool();
+}
+
+void DiveVulkanReplayConsumer::Process_vkCreateDevice(
+const ApiCallInfo&                                   call_info,
+VkResult                                             returnValue,
+format::HandleId                                     physicalDevice,
+StructPointerDecoder<Decoded_VkDeviceCreateInfo>*    pCreateInfo,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+HandlePointerDecoder<VkDevice>*                      pDevice)
+{
+    VulkanReplayConsumer::Process_vkCreateDevice(call_info,
+                                                 returnValue,
+                                                 physicalDevice,
+                                                 pCreateInfo,
+                                                 pAllocator,
+                                                 pDevice);
+
+    if (returnValue != VK_SUCCESS)
+    {
+        return;
+    }
+
+    // Create a query pool for timestamps
+    VkQueryPoolCreateInfo queryPoolInfo{};
+    queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryPoolInfo.queryCount = kQueryCount;
+
+    device_ = MapHandle<VulkanDeviceInfo>(*(pDevice->GetPointer()),
+                                          &CommonObjectInfoTable::GetVkDeviceInfo);
+    allocator_ = pAllocator->GetPointer();
+    VkResult result = GetDeviceTable(device_)->CreateQueryPool(device_,
+                                                               &queryPoolInfo,
+                                                               allocator_,
+                                                               &query_pool_);
+    auto     in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
+    VkPhysicalDeviceProperties deviceProperties;
+    GetInstanceTable(in_physicalDevice->handle)
+    ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
+    timestamp_period_ = deviceProperties.limits.timestampPeriod;
+    std::cout << "Device Name: " << deviceProperties.deviceName << std::endl;
+    std::cout << "Device Type: "
+              << (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ?
+                  "Discrete GPU" :
+                  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ?
+                  "Integrated GPU" :
+                  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ?
+                  "Virtual GPU" :
+                  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "CPU" :
+                                                                               "Other")
+              << std::endl;
+    std::cout << "API Version: " << VK_VERSION_MAJOR(deviceProperties.apiVersion) << "."
+              << VK_VERSION_MINOR(deviceProperties.apiVersion) << "."
+              << VK_VERSION_PATCH(deviceProperties.apiVersion) << std::endl;
+
+    GetDeviceTable(device_)->ResetQueryPool(device_, query_pool_, 0, kQueryCount);
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyDevice(
+const ApiCallInfo&                                   call_info,
+format::HandleId                                     device,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device,
+                                                     &CommonObjectInfoTable::GetVkDeviceInfo);
+    assert(in_device == device_);
+
+    DestroyQueryPool();
+
+    device_ = VK_NULL_HANDLE;
+    VulkanReplayConsumer::Process_vkDestroyDevice(call_info, device, pAllocator);
 }
 
 void DiveVulkanReplayConsumer::Process_vkDestroyCommandPool(
@@ -324,82 +395,11 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
 
     GetDeviceTable(in_commandBuffer)
     ->CmdWriteTimestamp(in_commandBuffer,
-                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                         query_pool_,
                         cmds_[in_commandBuffer].timestamp_offset + 1);
 
     VulkanReplayConsumer::Process_vkEndCommandBuffer(call_info, returnValue, commandBuffer);
-}
-
-void DiveVulkanReplayConsumer::Process_vkCreateDevice(
-const ApiCallInfo&                                   call_info,
-VkResult                                             returnValue,
-format::HandleId                                     physicalDevice,
-StructPointerDecoder<Decoded_VkDeviceCreateInfo>*    pCreateInfo,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-HandlePointerDecoder<VkDevice>*                      pDevice)
-{
-    VulkanReplayConsumer::Process_vkCreateDevice(call_info,
-                                                 returnValue,
-                                                 physicalDevice,
-                                                 pCreateInfo,
-                                                 pAllocator,
-                                                 pDevice);
-
-    if (returnValue != VK_SUCCESS)
-    {
-        return;
-    }
-
-    // Create a query pool for timestamps
-    VkQueryPoolCreateInfo queryPoolInfo{};
-    queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryPoolInfo.queryCount = kQueryCount;
-
-    device_ = MapHandle<VulkanDeviceInfo>(*(pDevice->GetPointer()),
-                                          &CommonObjectInfoTable::GetVkDeviceInfo);
-    allocator_ = pAllocator->GetPointer();
-    VkResult result = GetDeviceTable(device_)->CreateQueryPool(device_,
-                                                               &queryPoolInfo,
-                                                               allocator_,
-                                                               &query_pool_);
-    auto     in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
-    VkPhysicalDeviceProperties deviceProperties;
-    GetInstanceTable(in_physicalDevice->handle)
-    ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
-    timestamp_period_ = deviceProperties.limits.timestampPeriod;
-    std::cout << "Device Name: " << deviceProperties.deviceName << std::endl;
-    std::cout << "Device Type: "
-              << (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ?
-                  "Discrete GPU" :
-                  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ?
-                  "Integrated GPU" :
-                  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ?
-                  "Virtual GPU" :
-                  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "CPU" :
-                                                                               "Other")
-              << std::endl;
-    std::cout << "API Version: " << VK_VERSION_MAJOR(deviceProperties.apiVersion) << "."
-              << VK_VERSION_MINOR(deviceProperties.apiVersion) << "."
-              << VK_VERSION_PATCH(deviceProperties.apiVersion) << std::endl;
-
-    GetDeviceTable(device_)->ResetQueryPool(device_, query_pool_, 0, kQueryCount);
-}
-
-void DiveVulkanReplayConsumer::Process_vkDestroyDevice(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     device,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
-{
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device,
-                                                     &CommonObjectInfoTable::GetVkDeviceInfo);
-    assert(in_device == device_);
-
-    DestroyQueryPool();
-
-    device_ = VK_NULL_HANDLE;
-    VulkanReplayConsumer::Process_vkDestroyDevice(call_info, device, pAllocator);
 }
 
 void DiveVulkanReplayConsumer::DestroyQueryPool()
@@ -413,10 +413,6 @@ void DiveVulkanReplayConsumer::DestroyQueryPool()
         }
         queues_.clear();
 
-        for (auto& q : queues_)
-        {
-            GetDeviceTable(device_)->QueueWaitIdle(q);
-        }
         GetDeviceTable(device_)->DestroyQueryPool(device_, query_pool_, allocator_);
         query_pool_ = VK_NULL_HANDLE;
         allocator_ = nullptr;

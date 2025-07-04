@@ -25,6 +25,8 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "gpu_time.h"
+
 namespace DiveLayer
 {
 
@@ -146,63 +148,8 @@ public:
                                   const VkDebugUtilsLabelEXT*       pLabelInfo);
 
 private:
-    struct CommandBufferInfo
-    {
-        void Reset()
-        {
-            is_frameboundary = false;
-            usage_one_submit = false;
-        }
-        const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
-
-        VkCommandPool pool = VK_NULL_HANDLE;
-        uint32_t      timestamp_offset = kInvalidTimeStampOffset;
-        bool          is_frameboundary = false;
-        bool          usage_one_submit = false;
-    };
-
-    void UpdateFrameMetrics(VkDevice device);
-
-    class FrameMetrics
-    {
-    public:
-        struct Stats
-        {
-            double average = 0.0;
-            double median = 0.0;
-            double min = std::numeric_limits<double>::max();
-            double max = std::numeric_limits<double>::lowest();
-            double stddev = 0.0;
-        };
-
-        FrameMetrics() = default;
-        void AddFrameTime(double time);
-
-        Stats GetStatistics() const;
-
-        void PrintStats(const Stats& stats);
-
-    private:
-        double CalculateAverage() const;
-        double CalculateMedian() const;
-        double CalculateStdDev(double average) const;
-
-        std::deque<double> m_frame_data;
-    };
-
-    FrameMetrics m_metrics;
-
-    std::set<VkQueue>                                      m_queues;
-    std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
-    std::vector<VkCommandBuffer>                           m_frame_cmds;
-
+    Dive::GPUTime m_gpu_time;
     PFN_vkGetDeviceProcAddr      m_device_proc_addr;
-    const VkAllocationCallbacks* m_allocator = nullptr;
-    VkQueryPool                  m_query_pool = VK_NULL_HANDLE;
-    VkDevice                     m_device = VK_NULL_HANDLE;
-    uint64_t                     m_frame_index = 0;
-    uint32_t                     m_timestamp_counter = 0;
-    float                        m_timestamp_period = 0.f;
 };
 
 }  // namespace DiveLayer

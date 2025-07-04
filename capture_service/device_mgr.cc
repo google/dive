@@ -320,7 +320,12 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
     }
     if (m_gfxr_enabled)
     {
-        m_app->SetArchitecture(device_architecture);
+        std::string cpu_abi = device_architecture;
+        if (cpu_abi.empty())
+        {
+            ASSIGN_OR_RETURN(cpu_abi, Adb().RunAndGetResult("shell getprop ro.product.cpu.abi"));
+        }
+        m_app->SetArchitecture(cpu_abi);
         m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
         m_app->SetGfxrEnabled(true);
     }

@@ -56,3 +56,17 @@ target_include_directories(network PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/common
 )
+
+if(NOT ANDROID)
+  enable_testing()
+  include(GoogleTest)
+  add_executable(messages_test messages_test.cc)
+  target_link_libraries(messages_test PRIVATE
+    network
+    gtest
+    gtest_main
+    absl::status
+    absl::statusor
+  )
+  gtest_discover_tests(messages_test)
+endif()

@@ -55,12 +55,7 @@ absl::StatusOr<size_t> GetFileSize(std::string file_path)
 absl::Status SendPong(Network::SocketConnection *client_conn)
 {
     Network::PongMessage response;
-    auto                 status = Network::SendMessage(client_conn, response);
-    if (!status.ok())
-    {
-        return status;
-    }
-    return absl::OkStatus();
+    return Network::SendMessage(client_conn, response);
 }
 
 absl::Status HandShake(Network::HandShakeRequest *request, Network::SocketConnection *client_conn)
@@ -68,12 +63,7 @@ absl::Status HandShake(Network::HandShakeRequest *request, Network::SocketConnec
     Network::HandShakeResponse response;
     response.SetMajorVersion(request->GetMajorVersion());
     response.SetMinorVersion(request->GetMinorVersion());
-    auto status = Network::SendMessage(client_conn, response);
-    if (!status.ok())
-    {
-        return status;
-    }
-    return absl::OkStatus();
+    return Network::SendMessage(client_conn, response);
 }
 
 absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
@@ -84,12 +74,7 @@ absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
 
     Network::Pm4CaptureResponse response;
     response.SetString(capture_file_path);
-    auto status = Network::SendMessage(client_conn, response);
-    if (!status.ok())
-    {
-        return status;
-    }
-    return absl::OkStatus();
+    return Network::SendMessage(client_conn, response);
 }
 
 absl::Status DownloadFile(Network::DownloadFileRequest *request,
@@ -121,13 +106,7 @@ absl::Status DownloadFile(Network::DownloadFileRequest *request,
     {
         return absl::NotFoundError(response.GetErrorReason());
     }
-
-    status = client_conn->SendFile(file_path);
-    if (!status.ok())
-    {
-        return status;
-    }
-    return absl::OkStatus();
+    return client_conn->SendFile(file_path);
 }
 
 absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn)
@@ -147,13 +126,7 @@ absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConne
         std::string error_reason(file_size.status().message());
         response.SetErrorReason(error_reason);
     }
-
-    auto status = Network::SendMessage(client_conn, response);
-    if (!status.ok())
-    {
-        return status;
-    }
-    return absl::OkStatus();
+    return Network::SendMessage(client_conn, response);
 }
 
 void ServerMessageHandler::OnConnect()

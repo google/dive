@@ -54,16 +54,15 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
     m_connection.reset();
 
     SetClientStatus(ClientStatus::CONNECTING);
-    auto connection_or = SocketConnection::Create();
-    if (!connection_or.ok())
+    auto connection = SocketConnection::Create();
+    if (!connection.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::Status(connection_or.status().code(),
+                                       absl::Status(connection.status().code(),
                                                     absl::StrCat("Connect: ",
-                                                                 connection_or.status()
-                                                                 .message())));
+                                                                 connection.status().message())));
     }
-    m_connection = std::move(connection_or.value());
+    m_connection = *std::move(connection);
     auto conn_status = m_connection->Connect(host, port);
     if (!conn_status.ok())
     {
@@ -140,17 +139,17 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
                                                            send_status.message())));
     }
 
-    auto receive_or = ReceiveMessage(m_connection.get());
-    if (!receive_or.ok())
+    auto receive = ReceiveMessage(m_connection.get());
+    if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::
-                                       Status(receive_or.status().code(),
+                                       Status(receive.status().code(),
                                               absl::StrCat("StartPm4Capture: ReceiveMessage fail: ",
-                                                           receive_or.status().message())));
+                                                           receive.status().message())));
     }
 
-    auto response = std::move(receive_or.value());
+    auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::PM4_CAPTURE_RESPONSE)
     {
         return absl::FailedPreconditionError(
@@ -199,17 +198,17 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string&          remot
                                                                  send_status.message())));
     }
 
-    auto receive_or = ReceiveMessage(m_connection.get());
-    if (!receive_or.ok())
+    auto receive = ReceiveMessage(m_connection.get());
+    if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::Status(receive_or.status().code(),
+                                       absl::Status(receive.status().code(),
                                                     absl::StrCat("DownloadFileFromServer: "
                                                                  "ReceiveMessage fail: ",
-                                                                 receive_or.status().message())));
+                                                                 receive.status().message())));
     }
 
-    auto response = std::move(receive_or.value());
+    auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::DOWNLOAD_FILE_RESPONSE)
     {
         return absl::FailedPreconditionError(
@@ -287,17 +286,17 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
                                                                  send_status.message())));
     }
 
-    auto receive_or = ReceiveMessage(m_connection.get());
-    if (!receive_or.ok())
+    auto receive = ReceiveMessage(m_connection.get());
+    if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::Status(receive_or.status().code(),
+                                       absl::Status(receive.status().code(),
                                                     absl::StrCat("GetCaptureFileSize: "
                                                                  "ReceiveMessage fail: ",
-                                                                 receive_or.status().message())));
+                                                                 receive.status().message())));
     }
 
-    auto response = std::move(receive_or.value());
+    auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::FILE_SIZE_RESPONSE)
     {
         return absl::FailedPreconditionError(
@@ -357,17 +356,17 @@ absl::Status TcpClient::PingServer()
                                                                  send_status.message())));
     }
 
-    auto receive_or = ReceiveMessage(m_connection.get(), kPingTimeoutMs);
-    if (!receive_or.ok())
+    auto receive = ReceiveMessage(m_connection.get(), kPingTimeoutMs);
+    if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::
-                                       Status(receive_or.status().code(),
+                                       Status(receive.status().code(),
                                               absl::StrCat("PingServer: ReceiveMessage fail: ",
-                                                           receive_or.status().message())));
+                                                           receive.status().message())));
     }
 
-    auto response = std::move(receive_or.value());
+    auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::PONG_MESSAGE)
     {
         return absl::FailedPreconditionError(
@@ -413,17 +412,17 @@ absl::Status TcpClient::PerformHandshake()
                                                            send_status.message())));
     }
 
-    auto receive_or = ReceiveMessage(m_connection.get());
-    if (!receive_or.ok())
+    auto receive = ReceiveMessage(m_connection.get());
+    if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::Status(receive_or.status().code(),
+                                       absl::Status(receive.status().code(),
                                                     absl::StrCat("PerformHandshake: ReceiveMessage "
                                                                  "fail: ",
-                                                                 receive_or.status().message())));
+                                                                 receive.status().message())));
     }
 
-    auto response = std::move(receive_or.value());
+    auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::HANDSHAKE_RESPONSE)
     {
         return absl::FailedPreconditionError(

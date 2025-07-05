@@ -844,22 +844,13 @@ const std::map<std::string, uint32_t> &RegisterInfo::GetRegisters() const
 // CaptureData
 // =================================================================================================
 CaptureData::CaptureData() :
-    m_progress_tracker(NULL),
-    m_log_ptr(&LogNull::GetInstance())
+    m_progress_tracker(NULL)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::CaptureData(ILog *log_ptr) :
-    m_progress_tracker(NULL),
-    m_log_ptr(log_ptr)
-{
-}
-
-//--------------------------------------------------------------------------------------------------
-CaptureData::CaptureData(ProgressTracker *progress_tracker, ILog *log_ptr) :
-    m_progress_tracker(progress_tracker),
-    m_log_ptr(log_ptr)
+CaptureData::CaptureData(ProgressTracker *progress_tracker) :
+    m_progress_tracker(progress_tracker)
 {
 }
 
@@ -1715,6 +1706,12 @@ std::string CaptureData::GetFileFormatVersion() const
     os << m_data_header.m_major_version << "." << m_data_header.m_minor_version << "."
        << m_data_header.m_revision;
     return os.str();
+}
+
+//--------------------------------------------------------------------------------------------------
+void CaptureData::Clear()
+{
+    m_progress_tracker = NULL;
 }
 
 }  // namespace Dive

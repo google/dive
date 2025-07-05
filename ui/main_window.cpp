@@ -103,7 +103,7 @@ MainWindow::MainWindow()
     m_log_compound.AddLog(&m_log_record);
     m_log_compound.AddLog(&m_log_console);
 
-    m_data_core = new Dive::DataCore(&m_progress_tracker, &m_log_compound);
+    m_data_core = new Dive::DataCore(&m_progress_tracker);
 
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
@@ -532,7 +532,6 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
 bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
 {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    m_log_record.Reset();
 
     // Reset before loading, since the overlay may cause the UI to update with outdated data
     m_command_tab_view->ResetModel();

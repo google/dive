@@ -16,7 +16,6 @@
 
 #include "data_core_wrapper.h"
 
-#include "dive_core/log.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/data_core.h"
 
@@ -26,7 +25,7 @@ namespace Dive::HostCli
 DataCoreWrapper::DataCoreWrapper()
 {
     // Initialize DataCore
-    m_data_core = std::make_unique<Dive::DataCore>(&m_log);
+    m_data_core = std::make_unique<Dive::DataCore>();
 }
 
 bool DataCoreWrapper::IsGfxrLoaded() const

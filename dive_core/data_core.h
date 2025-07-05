@@ -59,9 +59,9 @@ protected:
     ProgressTracker *m_progress_tracker;
 
 public:
-    DataCore(ILog *log_ptr);
+    DataCore();
 
-    DataCore(ProgressTracker *progress_tracker, ILog *log_ptr);
+    DataCore(ProgressTracker *progress_tracker);
 
     // Load the capture file
     CaptureData::LoadResult LoadCaptureData(const char *file_name);
@@ -90,9 +90,6 @@ private:
 
     // Metadata for the capture data in m_capture_data
     CaptureMetadata m_capture_metadata;
-
-    // Handle to the logging system for error/warning output
-    ILog *m_log_ptr;
 };
 
 #if defined(ENABLE_CAPTURE_BUFFERS)

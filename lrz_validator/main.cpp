@@ -160,8 +160,7 @@ int main(int argc, char **argv)
     }
 
     // Load capture
-    Dive::LogCompound               log_compound;
-    std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>(&log_compound);
+    std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
     Dive::CaptureData::LoadResult   load_res = data_core->LoadCaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {

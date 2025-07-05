@@ -33,6 +33,7 @@ limitations under the License.
 #include "command_utils.h"
 #include "constants.h"
 #include "device_mgr.h"
+#include "tcp_client.h"
 
 using namespace std::chrono_literals;
 
@@ -304,42 +305,42 @@ bool trigger_capture(Dive::DeviceManager& mgr)
         return false;
     }
 
-    std::string target_str = absl::StrFormat("localhost:%d", mgr.GetDevice()->Port());
-    std::string download_path = absl::GetFlag(FLAGS_download_path);
-    std::string input;
+    std::string        download_path = absl::GetFlag(FLAGS_download_path);
+    Network::TcpClient client;
+    std::string        host = "127.0.0.1";
+    int                port = mgr.GetDevice()->Port();
+    auto               status = client.Connect(host, port);
+    if (!status.ok())
+    {
+        std::cout << "Connection failed: " << status.message() << std::endl;
+        return false;
+    }
+    auto capture_file_path = client.StartPm4Capture();
+    if (!capture_file_path.ok())
+    {
+        std::cout << capture_file_path.status().message() << std::endl;
+        return false;
+    }
 
-    Dive::DiveClient client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
-    absl::StatusOr<std::string> reply = client.TestConnection();
-    if (reply.ok())
-        std::cout << *reply << std::endl;
-    else
-        std::cout << "TestConnection failed with " << reply.status() << std::endl;
-
-    absl::StatusOr<std::string> trace_file_path = client.RequestStartTrace();
-    if (trace_file_path.ok())
-        std::cout << "Trigger capture: " << *trace_file_path << std::endl;
-    else
-        std::cout << "Failed to trigger capture: " << trace_file_path.status() << std::endl;
-
-    std::filesystem::path p(*trace_file_path);
+    std::filesystem::path p(*capture_file_path);
     std::filesystem::path target_download_path(download_path);
     if (!std::filesystem::exists(target_download_path))
     {
         std::error_code ec;
         if (!std::filesystem::create_directories(target_download_path, ec))
         {
-            std::cout << "error create directory: " << ec << std::endl;
+            std::cout << "Error creating directory: " << ec << std::endl;
         }
     }
     target_download_path /= p.filename();
-    auto ret = mgr.GetDevice()->RetrieveTrace(*trace_file_path,
-                                              target_download_path.generic_string());
-    if (ret.ok())
-        std::cout << "Capture saved at " << target_download_path << std::endl;
-    else
-        std::cout << "Failed to retrieve capture file" << std::endl;
-
-    return ret.ok();
+    status = client.DownloadFileFromServer(*capture_file_path, target_download_path.string());
+    if (!status.ok())
+    {
+        std::cout << status.message() << std::endl;
+        return false;
+    }
+    std::cout << "Capture saved at " << target_download_path << std::endl;
+    return true;
 }
 
 absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,

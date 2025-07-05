@@ -66,7 +66,9 @@ public:
     absl::Status                SendString(const std::string& s);
     absl::StatusOr<std::string> ReceiveString();
     absl::Status                SendFile(const std::string& file_path);
-    absl::Status                ReceiveFile(const std::string& file_path, size_t file_size);
+    absl::Status                ReceiveFile(const std::string&          file_path,
+                                            size_t                      file_size,
+                                            std::function<void(size_t)> progress_callback = nullptr);
 
     void Close();
     bool IsOpen() const;

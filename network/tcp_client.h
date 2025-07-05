@@ -58,8 +58,12 @@ public:
     absl::StatusOr<std::string> StartPm4Capture();
 
     // Downloads a file from the server to a local path.
-    absl::Status DownloadFileFromServer(const std::string& remote_file_path,
-                                        const std::string& local_save_path);
+    absl::Status DownloadFileFromServer(const std::string&          remote_file_path,
+                                        const std::string&          local_save_path,
+                                        std::function<void(size_t)> progress_callback = nullptr);
+
+    // Gets the capture file size from the server.
+    absl::StatusOr<size_t> GetCaptureFileSize(const std::string& remote_file_path);
 
 private:
     // Performs a ping-pong check with the server.

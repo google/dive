@@ -92,6 +92,7 @@ target_include_directories(service PRIVATE
   ${CMAKE_SOURCE_DIR}/common
 )
 target_link_libraries(service PRIVATE
+                      network
                       dive_grpc_proto
                       absl::flags
                       absl::flags_parse
@@ -148,6 +149,7 @@ else()
 
   add_executable(dive_client_cli dive_client_cli.cc )
   target_link_libraries(dive_client_cli
+    network
     dive_grpc_proto
     device_mgr
     client

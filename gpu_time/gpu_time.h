@@ -16,7 +16,6 @@ limitations under the License.
 
 #pragma once
 
-#include "absl/status/status.h"
 #include "vulkan/vulkan_core.h"
 #include <set>
 #include <string>
@@ -27,53 +26,60 @@ limitations under the License.
 namespace Dive
 {
 
+
 class GPUTime
 {
 public:
+    struct Status
+    {
+        std::string message;
+        bool        success = true;
+    };
+
     GPUTime();
     ~GPUTime();
 
     VkDevice GetDevice() const { return m_device; }
 
-    absl::Status OnCreateDevice(VkDevice                     device,
+    Status OnCreateDevice(VkDevice                     device,
                                 const VkAllocationCallbacks* allocator,
                                 float                        timestampPeriod,
                                 PFN_vkCreateQueryPool        pfnCreateQueryPool,
                                 PFN_vkResetQueryPool         pfnResetQueryPool);
 
-    absl::Status OnDestroyDevice(VkDevice               device,
+    Status OnDestroyDevice(VkDevice               device,
                                  PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
                                  PFN_vkDestroyQueryPool pfnDestroyQueryPool);
 
-    absl::Status OnDestroyCommandPool(VkCommandPool commandPool);
+    Status OnDestroyCommandPool(VkCommandPool commandPool);
 
-    absl::Status OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
+    Status OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
                                           VkCommandBuffer*                   pCommandBuffers);
 
-    absl::Status OnFreeCommandBuffers(uint32_t               commandBufferCount,
+    Status OnFreeCommandBuffers(uint32_t               commandBufferCount,
                                       const VkCommandBuffer* pCommandBuffers);
 
-    absl::Status OnResetCommandBuffer(VkCommandBuffer commandBuffer);
+    Status OnResetCommandBuffer(VkCommandBuffer commandBuffer);
 
-    absl::Status OnResetCommandPool(VkCommandPool commandPool);
+    Status OnResetCommandPool(VkCommandPool commandPool);
 
-    absl::Status OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
+    Status OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
                                       VkCommandBufferUsageFlags flags,
                                       PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp);
 
-    absl::Status OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
+    Status OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
                                     PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
 
-    absl::Status OnQueueSubmit(uint32_t                  submitCount,
+    Status OnQueueSubmit(uint32_t                  submitCount,
                                const VkSubmitInfo*       pSubmits,
                                PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
                                PFN_vkResetQueryPool      pfnResetQueryPool,
                                PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
 
-    absl::Status OnGetDeviceQueue2(VkQueue* pQueue);
-    absl::Status OnGetDeviceQueue(VkQueue* pQueue);
+    Status OnGetDeviceQueue2(VkQueue* pQueue);
+    Status OnGetDeviceQueue(VkQueue* pQueue);
 
-    absl::Status OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
+    Status OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
                                                const VkDebugUtilsLabelEXT* pLabelInfo);
 
     struct Stats
@@ -120,7 +126,7 @@ private:
         bool          usage_one_submit = false;
     };
 
-    absl::Status UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    Status UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
 
     FrameMetrics m_metrics;
 

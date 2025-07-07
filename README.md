@@ -251,6 +251,7 @@ git merge -s subtree --squash -X subtree=third_party/gfxreconstruct --allow-unre
     - third_party/gfxreconstruct/tools/optimize/CMakeLists.txt
     - third_party/gfxreconstruct/tools/replay/CMakeLists.txt
     - third_party/gfxreconstruct/tools/tocpp/CMakeLists.txt
+    - third_party/gfxreconstruct/tools/replay/android_main.cpp
 5. Stage the files.
 6. Create the commit: 
 ```

@@ -15,14 +15,14 @@ limitations under the License.
 */
 
 #include "gpu_time.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 
+#include <iomanip>
 #include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <limits>
+#include <sstream> 
 
 static constexpr uint32_t kQueryCount = 256;
 static constexpr uint32_t kFrameMetricsLimit = 1000;
@@ -62,17 +62,14 @@ GPUTime::Stats GPUTime::FrameMetrics::GetStatistics() const
 
 std::string GPUTime::FrameMetrics::GetStatsString(const Stats& stats)
 {
-    return absl::StrFormat("FrameMetrics:\n"
-                           "  Min: %.2f ms \n"
-                           "  Max: %.2f ms \n"
-                           "  Mean: %.2f ms \n"
-                           "  Median: %.2f ms \n"
-                           "  Std: %.2f ms ",
-                           stats.min,
-                           stats.max,
-                           stats.average,
-                           stats.median,
-                           stats.stddev);
+    std::stringstream ss;
+    ss << "FrameMetrics:\n"
+       << std::fixed << std::setprecision(2) << "  Min: " << stats.min << " ms\n"
+       << "  Max: " << stats.max << " ms\n"
+       << "  Mean: " << stats.average << " ms\n"
+       << "  Median: " << stats.median << " ms\n"
+       << "  Std: " << stats.stddev << " ms";
+    return ss.str();
 }
 
 double GPUTime::FrameMetrics::CalculateAverage() const
@@ -147,15 +144,13 @@ GPUTime::~GPUTime() {}
 
 std::string GPUTime::GetStatsString()
 {
-    std::string message = absl::StrCat("Frame ",
-                                       m_frame_index,
-                                       " processed successfully.\n",
-                                       m_metrics.GetStatsString(GetStats()));
+    std::string message = "Frame " + std::to_string(m_frame_index) + " processed successfully.\n" +
+                          m_metrics.GetStatsString(GetStats());
     return message;
 }
 
 
-absl::Status GPUTime::OnCreateDevice(VkDevice               device,
+GPUTime::Status GPUTime::OnCreateDevice(VkDevice               device,
                              const VkAllocationCallbacks* allocator,
                              float                  timestampPeriod,
                              PFN_vkCreateQueryPool  pfnCreateQueryPool,
@@ -163,7 +158,7 @@ absl::Status GPUTime::OnCreateDevice(VkDevice               device,
 {
     if (device == VK_NULL_HANDLE)
     {
-        return absl::UnknownError("Need to pass in a valid device!");
+        return GPUTime::Status{ "Need to pass in a valid device!", false };
     }
     m_allocator = allocator;
     m_device = device;
@@ -178,27 +173,29 @@ absl::Status GPUTime::OnCreateDevice(VkDevice               device,
     VkResult result = pfnCreateQueryPool(m_device, &queryPoolInfo, m_allocator, &m_query_pool);
     if (result != VK_SUCCESS)
     {
-        return absl::UnknownError(absl::StrCat("vkCreateQueryPool failed with VkResult: ", result));
+        return GPUTime::Status{ "vkCreateQueryPool failed with VkResult: " +
+                                std::to_string(static_cast<int>(result)),
+                                false };
     }
 
     pfnResetQueryPool(m_device, m_query_pool, 0, kQueryCount);
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnDestroyDevice(VkDevice               device,
+GPUTime::Status GPUTime::OnDestroyDevice(VkDevice               device,
                               PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
                               PFN_vkDestroyQueryPool pfnDestroyQueryPool)
 {
     if (device != m_device)
     {
-        return absl::UnknownError("Not destroying the cached device!");
+        return GPUTime::Status{ "Not destroying the cached device!" };
     }
 
     if ((m_device != VK_NULL_HANDLE) && (m_query_pool != VK_NULL_HANDLE))
     {
         if (m_queues.empty())
         {
-            return absl::UnknownError("vk queue is empty!");
+            return GPUTime::Status{ "vk queue is empty!" };
         }
 
         for (auto& q : m_queues)
@@ -212,15 +209,15 @@ absl::Status GPUTime::OnDestroyDevice(VkDevice               device,
         m_allocator = nullptr;
     }
     m_device = VK_NULL_HANDLE;
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnDestroyCommandPool(VkCommandPool commandPool)
+GPUTime::Status GPUTime::OnDestroyCommandPool(VkCommandPool commandPool)
 {
     if (commandPool == VK_NULL_HANDLE)
     {
         // it is valid to have null command pool as input
-        return absl::OkStatus();
+        return GPUTime::Status();
     }
 
     auto it = m_cmds.begin();
@@ -235,57 +232,57 @@ absl::Status GPUTime::OnDestroyCommandPool(VkCommandPool commandPool)
             ++it;
         }
     }
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
+GPUTime::Status GPUTime::OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
                                        VkCommandBuffer*                   pCommandBuffers)
 {
     for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i)
     {
         if (m_cmds.find(pCommandBuffers[i]) != m_cmds.end())
         {
-            return absl::UnknownError(
-            absl::StrCat(absl::StrFormat("%p", static_cast<void*>(pCommandBuffers[i])),
-                         " has been already added!"));
+            std::stringstream ss;
+            ss << static_cast<void*>(pCommandBuffers[i]) << " has been already added!";
+            return GPUTime::Status{ ss.str(), false};
         }
         m_cmds.insert(
         { pCommandBuffers[i], { pAllocateInfo->commandPool, m_timestamp_counter, false } });
         // 1 at vkBeginCommandBuffer and 1 at vkEndCommandBuffer
         m_timestamp_counter += 2;
     }
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnFreeCommandBuffers(uint32_t               commandBufferCount,
+GPUTime::Status GPUTime::OnFreeCommandBuffers(uint32_t               commandBufferCount,
                                    const VkCommandBuffer* pCommandBuffers)
 {
     for (uint32_t i = 0; i < commandBufferCount; ++i)
     {
         if (m_cmds.find(pCommandBuffers[i]) == m_cmds.end())
         {
-            return absl::UnknownError(
-            absl::StrCat(absl::StrFormat("%p", static_cast<void*>(pCommandBuffers[i])),
-                         " is not in the cmd cache!"));
+            std::stringstream ss;
+            ss << static_cast<void*>(pCommandBuffers[i]) << " is not in the cmd cache!";
+            return GPUTime::Status{ ss.str(), false };
         }
         m_cmds.erase(pCommandBuffers[i]);
     }
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnResetCommandBuffer(VkCommandBuffer commandBuffer)
+GPUTime::Status GPUTime::OnResetCommandBuffer(VkCommandBuffer commandBuffer)
 {
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
-        return absl::UnknownError(
-        absl::StrCat(absl::StrFormat("%p", static_cast<void*>(commandBuffer)),
-                     " is not in the cmd cache!"));
+        std::stringstream ss;
+        ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
+        return GPUTime::Status{ ss.str(), false };
     }
     m_cmds[commandBuffer].Reset();
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnResetCommandPool(VkCommandPool commandPool)
+GPUTime::Status GPUTime::OnResetCommandPool(VkCommandPool commandPool)
 {
     for (auto& cmd : m_cmds)
     {
@@ -295,18 +292,18 @@ absl::Status GPUTime::OnResetCommandPool(VkCommandPool commandPool)
             cmd.second.Reset();
         }
     }
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
+GPUTime::Status GPUTime::OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
                                    VkCommandBufferUsageFlags flags,
                                    PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp)
 {
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
-        return absl::UnknownError(
-        absl::StrCat(absl::StrFormat("%p", static_cast<void*>(commandBuffer)),
-                     " is not in the cmd cache!"));
+        std::stringstream ss;
+        ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
+        return GPUTime::Status{ ss.str(), false };
     }
 
     if (m_cmds[commandBuffer].usage_one_submit)
@@ -323,27 +320,27 @@ absl::Status GPUTime::OnBeginCommandBuffer(VkCommandBuffer           commandBuff
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          m_query_pool,
                          m_cmds[commandBuffer].timestamp_offset);
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
+GPUTime::Status GPUTime::OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
                                  PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
-        return absl::UnknownError(
-        absl::StrCat(absl::StrFormat("%p", static_cast<void*>(commandBuffer)),
-                     " is not in the cmd cache!"));
+        std::stringstream ss;
+        ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
+        return GPUTime::Status{ ss.str(), false };
     }
 
     pfnCmdWriteTimestamp(commandBuffer,
                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                          m_query_pool,
                          m_cmds[commandBuffer].timestamp_offset + 1);
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
+GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
 {
     // Get the timestamp results
     // *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
@@ -369,59 +366,58 @@ absl::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPo
                                         VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_PARTIAL_BIT |
                                         VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
 
-    if (result == VK_SUCCESS)
+    if (result != VK_SUCCESS)
     {
-        double frame_time = 0.0;
-        bool   valid_frame_time = true;
+        return GPUTime::Status{ "vkGetQueryPoolResults failed with VkResult: " +
+                                std::to_string(static_cast<int>(result)),
+                                false };
+    }
+    
+    double frame_time = 0.0;
+    bool   valid_frame_time = true;
 
-        for (const auto& cmd : m_frame_cmds)
+    for (const auto& cmd : m_frame_cmds)
+    {
+        // cmd may not be in the m_cmds when some cmds got deleted before submitting the frame
+        // boundary cmd
+        if (m_cmds.find(cmd) != m_cmds.end())
         {
-            // cmd may not be in the m_cmds when some cmds got deleted before submitting the frame
-            // boundary cmd
-            if (m_cmds.find(cmd) != m_cmds.end())
+            const uint32_t timestamp_offset = m_cmds[cmd].timestamp_offset;
+
+            uint64_t
+            availability_end = timestamps_with_availability[(timestamp_offset + 1) * 2 + 1];
+            uint64_t
+            availability_begin = timestamps_with_availability[timestamp_offset * 2 + 1];
+
+            if ((availability_begin != 0) && (availability_end != 0))
             {
-                const uint32_t timestamp_offset = m_cmds[cmd].timestamp_offset;
-
+                // Calculate the elapsed time in nanoseconds
                 uint64_t
-                availability_end = timestamps_with_availability[(timestamp_offset + 1) * 2 + 1];
-                uint64_t
-                availability_begin = timestamps_with_availability[timestamp_offset * 2 + 1];
-
-                if ((availability_begin != 0) && (availability_end != 0))
-                {
-                    // Calculate the elapsed time in nanoseconds
-                    uint64_t
-                    elapsed_time = timestamps_with_availability[(timestamp_offset + 1) * 2] -
-                                   timestamps_with_availability[timestamp_offset * 2];
-                    double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
-                    frame_time += elapsed_time_in_ms;
-                }
-                else
-                {
-                    frame_time = 0.0;
-                    valid_frame_time = false;
-                    return absl::UnknownError(
-                    absl::StrCat("Query result is not available for cmd ", absl::StrFormat("%p", static_cast<void*>(cmd))));
-                    break;
-                }
+                elapsed_time = timestamps_with_availability[(timestamp_offset + 1) * 2] -
+                                timestamps_with_availability[timestamp_offset * 2];
+                double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
+                frame_time += elapsed_time_in_ms;
+            }
+            else
+            {
+                frame_time = 0.0;
+                valid_frame_time = false;
+                std::stringstream ss;
+                ss << "Query result is not available for cmd " << static_cast<void*>(cmd);
+                return GPUTime::Status{ ss.str(), false };
             }
         }
-
-        if (valid_frame_time)
-        {
-            m_metrics.AddFrameTime(frame_time);
-        }
-
-        return absl::OkStatus();
     }
-    else
+
+    if (valid_frame_time)
     {
-        return absl::UnknownError(
-        absl::StrCat("vkGetQueryPoolResults failed with VkResult: ", result));
+        m_metrics.AddFrameTime(frame_time);
     }
+
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
+GPUTime::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
                             const VkSubmitInfo*       pSubmits,
                             PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
                             PFN_vkResetQueryPool      pfnResetQueryPool,
@@ -440,11 +436,9 @@ absl::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
                 const auto& cmd = pSubmits->pCommandBuffers[c];
                 if (m_cmds.find(cmd) == m_cmds.end())
                 {
-                    cmds_not_in_cache_message = absl::
-                    StrCat(cmds_not_in_cache_message, absl::StrFormat("%p",
-                                                                              static_cast<void*>(
-                                                                              cmd)),
-                                                              " is not in the cmd cache!\n");
+                    std::stringstream ss;
+                    ss << static_cast<void*>(cmd) << " is not in the cmd cache!";
+                    cmds_not_in_cache_message += ss.str();
                     continue;
                 }
                 if (m_cmds[cmd].is_frameboundary)
@@ -462,15 +456,15 @@ absl::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
         {
             m_frame_cmds.clear();
         }
-        return absl::Status(absl::StatusCode::kUnknown, cmds_not_in_cache_message);
+        return GPUTime::Status{cmds_not_in_cache_message, false};
     }
 
     if (is_frame_boundary)
     {
         //  force sync to make sure the gpu is done with this frame
         pfnDeviceWaitIdle(m_device);
-        absl::Status update_status = UpdateFrameMetrics(pfnGetQueryPoolResults);
-        if (!update_status.ok())
+        GPUTime::Status update_status = UpdateFrameMetrics(pfnGetQueryPoolResults);
+        if (!update_status.success)
         {
             return update_status;  
         }
@@ -480,40 +474,40 @@ absl::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
 
         pfnResetQueryPool(m_device, m_query_pool, 0, kQueryCount);
     }
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)
+GPUTime::Status GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)
 {
     m_queues.insert(*pQueue);
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnGetDeviceQueue(VkQueue* pQueue)
+GPUTime::Status GPUTime::OnGetDeviceQueue(VkQueue* pQueue)
 {
     m_queues.insert(*pQueue);
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
-absl::Status GPUTime::OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
+GPUTime::Status GPUTime::OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
                                             const VkDebugUtilsLabelEXT* pLabelInfo)
 {
     if (pLabelInfo == nullptr)
     {
-        return absl::UnknownError("pLabelInfo cannot be nullptr!");
+        return GPUTime::Status{ "pLabelInfo cannot be nullptr!", false };
     }
 
     if (strcmp("vr-marker,frame_end,type,application", pLabelInfo->pLabelName) == 0)
     {
         if (m_cmds.find(commandBuffer) == m_cmds.end())
         {
-            return absl::UnknownError(
-            absl::StrCat(absl::StrFormat("%p", static_cast<void*>(commandBuffer)),
-                         " is not in the cmd cache!"));
+            std::stringstream ss;
+            ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
+            return GPUTime::Status{ ss.str(), false };
         }
         m_cmds[commandBuffer].is_frameboundary = true;
     }
-    return absl::OkStatus();
+    return GPUTime::Status();
 }
 
 }  // namespace Dive

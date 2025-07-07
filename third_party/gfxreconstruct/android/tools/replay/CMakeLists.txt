@@ -5,11 +5,6 @@ cmake_minimum_required(VERSION 3.4.1)
 
 project(gfxrecon-replay)
 
-# GOOGLE: Point CMake to the directory containing abslConfig.cmake
-set(absl_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../prebuild/grpc/lib/cmake/absl)
-# GOOGLE: Find and load the Abseil package, which defines the absl::* targets
-find_package(absl REQUIRED)
-
 get_filename_component(GFXRECON_SOURCE_DIR ../../.. ABSOLUTE)
 
 add_library(native_app_glue STATIC

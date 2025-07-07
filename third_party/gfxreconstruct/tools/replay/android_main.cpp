@@ -28,6 +28,7 @@
 
 // GOOGLE: Custom file processor for Dive
 #include "gfxr_ext/decode/dive_file_processor.h"
+#include "gfxr_ext/decode/dive_vulkan_replay_consumer.h"
 
 #include "decode/file_processor.h"
 #include "decode/preload_file_processor.h"
@@ -200,8 +201,8 @@ void android_main(struct android_app* app)
                 file_processor->SetPrintBlockInfoFlag(replay_options.enable_print_block_info,
                                                       replay_options.block_index_from,
                                                       replay_options.block_index_to);
-
-                gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
+                // GOOGLE: replace VulkanReplayConsumer with dive specific DiveVulkanReplayConsumer
+                gfxrecon::decode::DiveVulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
                 gfxrecon::decode::VulkanDecoder        vulkan_decoder;
 
                 RunVulkanPreProcessConsumer(filename, replay_options, vulkan_replay_consumer);

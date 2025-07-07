@@ -71,16 +71,16 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
     GetInstanceTable(in_physicalDevice->handle)
     ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
 
-    absl::Status
+    Dive::GPUTime::Status
     status = m_gpu_time.OnCreateDevice(device,
                              pAllocator->GetPointer(),
                              deviceProperties.limits.timestampPeriod,
                              CreateQueryPool,
                              ResetQueryPool);
 
-    if (!status.ok())
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
 
@@ -96,10 +96,10 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
     PFN_vkDestroyQueryPool DestroyQueryPool = reinterpret_cast<PFN_vkDestroyQueryPool>(
     GetDeviceTable(m_gpu_time.GetDevice())->DestroyQueryPool);
 
-    absl::Status status = m_gpu_time.OnDestroyDevice(in_device, QueueWaitIdle, DestroyQueryPool);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnDestroyDevice(in_device, QueueWaitIdle, DestroyQueryPool);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
     VulkanReplayConsumer::Process_vkDestroyDevice(call_info, device, pAllocator);
 }
@@ -117,10 +117,10 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
         return;
     }
 
-    absl::Status status = m_gpu_time.OnDestroyCommandPool(pool_handle);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnDestroyCommandPool(pool_handle);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
     VulkanReplayConsumer::Process_vkDestroyCommandPool(call_info, device, commandPool, pAllocator);
@@ -144,11 +144,11 @@ HandlePointerDecoder<VkCommandBuffer>*                     pCommandBuffers)
         return;
     }
 
-    absl::Status status = m_gpu_time.OnAllocateCommandBuffers(pAllocateInfo->GetPointer(),
+    Dive::GPUTime::Status status = m_gpu_time.OnAllocateCommandBuffers(pAllocateInfo->GetPointer(),
                                                               pCommandBuffers->GetHandlePointer());
-    if (!status.ok())
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
 
@@ -159,11 +159,11 @@ format::HandleId                       commandPool,
 uint32_t                               commandBufferCount,
 HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
 {
-    absl::Status status = m_gpu_time.OnFreeCommandBuffers(commandBufferCount,
+    Dive::GPUTime::Status status = m_gpu_time.OnFreeCommandBuffers(commandBufferCount,
                                                           pCommandBuffers->GetHandlePointer());
-    if (!status.ok())
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
     VulkanReplayConsumer::Process_vkFreeCommandBuffers(call_info,
@@ -180,10 +180,10 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandBuffer(const ApiCallInfo&  
 {
     auto in_commandBuffer = GetObjectInfoTable().GetVkCommandBufferInfo(commandBuffer)->handle;
 
-    absl::Status status = m_gpu_time.OnResetCommandBuffer(in_commandBuffer);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnResetCommandBuffer(in_commandBuffer);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
     VulkanReplayConsumer::Process_vkResetCommandBuffer(call_info,
@@ -199,15 +199,15 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandPool(const ApiCallInfo&    
                                                           VkCommandPoolResetFlags flags)
 {
     auto in_commandPool = GetObjectInfoTable().GetVkCommandPoolInfo(commandPool)->handle;
-    if (in_commandPool == nullptr)
+    if (in_commandPool == VK_NULL_HANDLE)
     {
         return;
     }
 
-    absl::Status status = m_gpu_time.OnResetCommandPool(in_commandPool);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnResetCommandPool(in_commandPool);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
     VulkanReplayConsumer::Process_vkResetCommandPool(call_info,
@@ -233,12 +233,12 @@ StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
     PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
     GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
 
-    absl::Status status = m_gpu_time.OnBeginCommandBuffer(in_commandBuffer,
+    Dive::GPUTime::Status status = m_gpu_time.OnBeginCommandBuffer(in_commandBuffer,
                                                           pBeginInfo->GetPointer()->flags,
                                                           CmdWriteTimestamp);
-    if (!status.ok())
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
 
@@ -252,10 +252,10 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
     PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
     GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
 
-    absl::Status status = m_gpu_time.OnEndCommandBuffer(in_commandBuffer, CmdWriteTimestamp);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnEndCommandBuffer(in_commandBuffer, CmdWriteTimestamp);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
     VulkanReplayConsumer::Process_vkEndCommandBuffer(call_info, returnValue, commandBuffer);
@@ -286,14 +286,14 @@ format::HandleId                            fence)
     GetDeviceTable(m_gpu_time.GetDevice())->GetQueryPoolResults);
 
     const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
-    absl::Status        status = m_gpu_time.OnQueueSubmit(submitCount,
+    Dive::GPUTime::Status        status = m_gpu_time.OnQueueSubmit(submitCount,
                                                    submit_infos,
                                                    DeviceWaitIdle,
                                                    ResetQueryPool,
                                                    GetQueryPoolResults);
-    if (!status.ok())
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
     else
     {
@@ -309,10 +309,10 @@ HandlePointerDecoder<VkQueue>*                    pQueue)
 {
     VulkanReplayConsumer::Process_vkGetDeviceQueue2(call_info, device, pQueueInfo, pQueue);
     VkQueue* queue = pQueue->GetHandlePointer();
-    absl::Status status = m_gpu_time.OnGetDeviceQueue2(queue);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnGetDeviceQueue2(queue);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
 
@@ -328,10 +328,10 @@ void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue(const ApiCallInfo& call_
                                                    queueIndex,
                                                    pQueue);
     VkQueue*     queue = pQueue->GetHandlePointer();
-    absl::Status status = m_gpu_time.OnGetDeviceQueue(queue);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnGetDeviceQueue(queue);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
 
@@ -349,10 +349,10 @@ StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo)
 
     const VkDebugUtilsLabelEXT* in_pLabelInfo = pLabelInfo->GetPointer();
 
-    absl::Status status = m_gpu_time.OnCmdInsertDebugUtilsLabelEXT(in_commandBuffer, in_pLabelInfo);
-    if (!status.ok())
+    Dive::GPUTime::Status status = m_gpu_time.OnCmdInsertDebugUtilsLabelEXT(in_commandBuffer, in_pLabelInfo);
+    if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message().data());
+        GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
 

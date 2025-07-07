@@ -42,8 +42,6 @@ add_library(gfxr_decode_ext_lib
 )
 target_link_libraries(gfxr_decode_ext_lib
   gfxrecon_decode
-  absl::status
-  absl::strings
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if (WIN32)
@@ -52,7 +50,6 @@ endif()
 target_include_directories(gfxr_decode_ext_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
   ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time
-  ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/abseil-cpp/
 )
 
 if (MSVC)

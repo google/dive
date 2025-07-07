@@ -37,8 +37,8 @@ add_library(gfxr_decode_ext_lib
   dive_file_processor.cpp
   dive_vulkan_replay_consumer.h
   dive_vulkan_replay_consumer.cpp
-  ${CMAKE_SOURCE_DIR}/gpu_time/gpu_time.h
-  ${CMAKE_SOURCE_DIR}/gpu_time/gpu_time.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time/gpu_time.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time/gpu_time.cpp
 )
 target_link_libraries(gfxr_decode_ext_lib
   gfxrecon_decode
@@ -51,15 +51,26 @@ if (WIN32)
 endif()
 target_include_directories(gfxr_decode_ext_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
-  ${CMAKE_SOURCE_DIR}/gpu_time
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time
   ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/abseil-cpp/
 )
 
 if (MSVC)
+  # 4100: unreferenced formal parameter
   # 4127: conditional expression is constant
-  target_compile_options(gfxr_decode_ext_lib PRIVATE /W4 /WX /wd4127)
+  # 4505: unreferenced function with internal linkage has been removed
+  target_compile_options(gfxr_decode_ext_lib PRIVATE /W4 /WX /wd4100 /wd4127 /wd4505)
 else()
-  target_compile_options(gfxr_decode_ext_lib PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+  target_compile_options(gfxr_decode_ext_lib PRIVATE 
+    -Wall
+    -Wextra
+    -Werror
+    -Wno-unused-parameter
+    -Wno-missing-braces
+    -Wno-missing-field-initializers
+    -Wno-reorder-ctor
+    -Wno-unused-function
+  )
 endif()
 
 # ------------------------

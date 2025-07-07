@@ -80,7 +80,7 @@ class IDiveBlock
 {
 public:
     IDiveBlock() {}
-    ~IDiveBlock() {}
+    virtual ~IDiveBlock() {}
     virtual bool Accept(BlockVisitor& visitor) const = 0;
 };
 
@@ -93,7 +93,7 @@ public:
         offset_(offset)
     {
     }
-    ~DiveOriginalBlock() {}
+    virtual ~DiveOriginalBlock() {}
     bool Accept(BlockVisitor& visitor) const override { return visitor.Visit(*this); }
 
     uint64_t offset_ = 0;
@@ -111,7 +111,7 @@ public:
         blob_ptr_(blob_ptr)
     {
     }
-    ~DiveModificationBlock() {}
+    virtual ~DiveModificationBlock() {}
     bool Accept(BlockVisitor& visitor) const override { return visitor.Visit(*this); }
 
     std::shared_ptr<std::vector<char>> blob_ptr_ = nullptr;

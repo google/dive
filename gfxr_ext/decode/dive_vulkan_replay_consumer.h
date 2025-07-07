@@ -18,54 +18,12 @@ limitations under the License.
 #define GFXRECON_DECODE_VULKAN_DIVE_CONSUMER_H
 
 #include "generated/generated_vulkan_replay_consumer.h"
+#include "gpu_time.h"
 #include <set>
+#include <vector>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
-#include <vector>
-
-class FrameMetrics
-{
-public:
-    struct Stats
-    {
-        double average = 0.0;
-        double median = 0.0;
-        double min = std::numeric_limits<double>::max();
-        double max = std::numeric_limits<double>::lowest();
-        double stddev = 0.0;
-    };
-
-    FrameMetrics() = default;
-    void AddFrameTime(double time);
-
-    Stats GetStatistics() const;
-
-    void PrintStats(const Stats& stats);
-
-private:
-    double CalculateAverage() const;
-    double CalculateMedian() const;
-    double CalculateStdDev(double average) const;
-
-    std::deque<double> m_frame_data;
-};
-
-struct CommandBufferInfo
-{
-    void Reset()
-    {
-        is_frameboundary = false;
-        usage_one_submit = false;
-    }
-    const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
-
-    VkCommandPool pool = VK_NULL_HANDLE;
-    uint32_t      timestamp_offset = kInvalidTimeStampOffset;
-    bool          is_frameboundary = false;
-    bool          usage_one_submit = false;
-};
 
 class DiveVulkanReplayConsumer : public VulkanReplayConsumer
 {
@@ -154,22 +112,7 @@ public:
     StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo) override;
 
 private:
-    // Helper function to destroy the query pool
-    void DestroyQueryPool();
-    void UpdateFrameMetrics(VkDevice device);
-
-    FrameMetrics metrics_;
-
-    std::set<VkQueue>                                      queues_;
-    std::unordered_map<VkCommandBuffer, CommandBufferInfo> cmds_;
-    std::vector<VkCommandBuffer>                           frame_cmds_;
-
-    VkAllocationCallbacks* allocator_;
-    VkQueryPool            query_pool_;
-    VkDevice               device_;
-    uint64_t               frame_index_ = 0;
-    uint32_t               timestamp_counter_;
-    float                  timestamp_period_;
+    Dive::GPUTime m_gpu_time;
 };
 
 GFXRECON_END_NAMESPACE(decode)

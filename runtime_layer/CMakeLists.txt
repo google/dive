@@ -72,3 +72,21 @@ set_target_properties(${target_name}
 if(ANDROID)
     install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
+
+if(WIN32)
+  enable_testing()
+  include(GoogleTest)
+  add_executable(gpu_time_test
+    ${CMAKE_SOURCE_DIR}/gpu_time/gpu_time.h
+    ${CMAKE_SOURCE_DIR}/gpu_time/gpu_time.cpp
+    ${CMAKE_SOURCE_DIR}/gpu_time/gpu_time_test.cpp
+  )
+  
+  target_include_directories(gpu_time_test PRIVATE ${CMAKE_SOURCE_DIR}/gpu_time)
+  
+  target_link_libraries(gpu_time_test PRIVATE
+    gtest
+    gtest_main
+  )
+  gtest_discover_tests(gpu_time_test)
+endif()

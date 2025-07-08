@@ -59,7 +59,7 @@ protected:
     ProgressTracker *m_progress_tracker;
 
 public:
-    DataCore();
+    DataCore() = default;
 
     DataCore(ProgressTracker *progress_tracker);
 

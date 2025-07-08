@@ -561,7 +561,7 @@ bool ParseCapture(const char                              *filename,
 //--------------------------------------------------------------------------------------------------
 int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 {
-    Dive::CaptureData *capture_data_ptr = new Dive::CaptureData();
+    std::unique_ptr<Dive::CaptureData> capture_data_ptr = std::make_unique<Dive::CaptureData>();
     if (capture_data_ptr->LoadFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cerr << "Not able to open: " << filename << std::endl;

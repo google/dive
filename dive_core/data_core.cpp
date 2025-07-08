@@ -24,16 +24,10 @@ namespace Dive
 // =================================================================================================
 // DataCore
 // =================================================================================================
-DataCore::DataCore() :
-    m_progress_tracker(NULL),
-    m_capture_data()
-{
-}
 
 //--------------------------------------------------------------------------------------------------
 DataCore::DataCore(ProgressTracker *progress_tracker) :
-    m_progress_tracker(progress_tracker),
-    m_capture_data()
+    m_progress_tracker(progress_tracker)
 {
 }
 

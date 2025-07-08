@@ -1707,11 +1707,4 @@ std::string CaptureData::GetFileFormatVersion() const
        << m_data_header.m_revision;
     return os.str();
 }
-
-//--------------------------------------------------------------------------------------------------
-void CaptureData::Clear()
-{
-    m_progress_tracker = NULL;
-}
-
 }  // namespace Dive

@@ -30,7 +30,7 @@
 #include "adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "dive_core/stl_replacement.h"
-#include "dive_core/common/dive_annotation_processor.h"
+#include "gfxr_ext/decode/dive_annotation_processor.h"
 #include "gpudefs.h"
 
 namespace Dive

@@ -18,6 +18,7 @@
 // =====================================================================================================================
 
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/common/emulate_pm4.h"
 
 namespace Dive
 {

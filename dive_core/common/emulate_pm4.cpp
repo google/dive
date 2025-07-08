@@ -943,8 +943,7 @@ const IMemoryManager                                                    &mem_man
 
         OnGfxrSubmit(submit_index, submit_info);
 
-        EmulatePM4                                             emu;
-        DiveVector<DiveAnnotationProcessor::VulkanCommandInfo> vkcmds;
+        EmulatePM4 emu;
         if (!emu.ExecuteGfxrSubmit(*this,
                                    mem_manager,
                                    submit_index,

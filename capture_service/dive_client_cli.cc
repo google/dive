@@ -331,7 +331,7 @@ bool trigger_capture(Dive::DeviceManager& mgr)
         }
     }
     std::filesystem::path p(*capture_file_path);
-    std::string           download_file_path = target_download_dir / p.filename();
+    std::string           download_file_path = (target_download_dir / p.filename()).string();
     status = client.DownloadFileFromServer(*capture_file_path, download_file_path);
     if (!status.ok())
     {

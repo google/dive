@@ -399,7 +399,6 @@ class CommandHierarchyCreator : public IEmulateCallbacks
 {
 public:
     CommandHierarchyCreator(EmulateStateTracker &state_tracker);
-    CommandHierarchyCreator();
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.

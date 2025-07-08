@@ -12,7 +12,6 @@
 */
 
 #include "gfxr_vulkan_command_hierarchy.h"
-#include "dive_core/common/emulate_pm4.h"
 #include "dive_strings.h"
 
 namespace Dive

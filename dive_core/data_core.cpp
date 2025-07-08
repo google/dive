@@ -50,6 +50,7 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
         {
             return false;
         }
+        return true;
     }
     else
     {

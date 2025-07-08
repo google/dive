@@ -52,9 +52,8 @@ target_link_libraries(
   ${NETWORK_LINK_LIBS}
 )
 
-target_include_directories(network PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/common
+target_include_directories(network PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 if(NOT ANDROID)

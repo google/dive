@@ -24,7 +24,8 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "constants.h"
 #include "device_mgr.h"
-#include "log.h"
+#include "common/log.h"
+#include "common/macros.h"
 
 namespace Dive
 {

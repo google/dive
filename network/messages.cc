@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 #include "messages.h"
+#include "common/macros.h"
 
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 
@@ -48,13 +49,8 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
 
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset)
 {
-    absl::StatusOr<uint32_t> val = ReadUint32FromBuffer(src, offset);
-    if (!val.ok())
-    {
-        return val.status();
-    }
-
-    uint32_t len = *val;
+    uint32_t len;
+    ASSIGN_OR_RETURN(len, ReadUint32FromBuffer(src, offset));
     if (src.size() < offset + len)
     {
         return absl::InvalidArgumentError("Buffer too small for declared string length.");
@@ -74,21 +70,9 @@ absl::Status HandShakeMessage::Serialize(Buffer& dest) const
 
 absl::Status HandShakeMessage::Deserialize(const Buffer& src)
 {
-    size_t                   offset = 0;
-    absl::StatusOr<uint32_t> major = ReadUint32FromBuffer(src, offset);
-    if (!major.ok())
-    {
-        return major.status();
-    }
-    m_major_version = *major;
-
-    absl::StatusOr<uint32_t> minor = ReadUint32FromBuffer(src, offset);
-    if (!minor.ok())
-    {
-        return minor.status();
-    }
-    m_minor_version = *minor;
-
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_major_version, ReadUint32FromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_minor_version, ReadUint32FromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("Handshake message has unexpected trailing data.");
@@ -105,14 +89,8 @@ absl::Status StringMessage::Serialize(Buffer& dest) const
 
 absl::Status StringMessage::Deserialize(const Buffer& src)
 {
-    size_t                      offset = 0;
-    absl::StatusOr<std::string> str = ReadStringFromBuffer(src, offset);
-    if (!str.ok())
-    {
-        return str.status();
-    }
-
-    m_str = *std::move(str);
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("String message has unexpected trailing data.");
@@ -133,7 +111,6 @@ absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
 absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-
     // Deserialize the 'found' boolean.
     if (src.size() < offset + sizeof(uint8_t))
     {
@@ -142,34 +119,13 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     m_found = (src[offset] != 0);
     offset += sizeof(uint8_t);
 
-    // Deserialize the strings using the StatusOr-returning helper
-    absl::StatusOr<std::string> error_reason = ReadStringFromBuffer(src, offset);
-    if (!error_reason.ok())
-    {
-        return error_reason.status();
-    }
-    m_error_reason = *std::move(error_reason);
-
-    absl::StatusOr<std::string> file_path = ReadStringFromBuffer(src, offset);
-    if (!file_path.ok())
-    {
-        return file_path.status();
-    }
-    m_file_path = *std::move(file_path);
-
-    absl::StatusOr<std::string> file_size = ReadStringFromBuffer(src, offset);
-    if (!file_size.ok())
-    {
-        return file_size.status();
-    }
-    m_file_size_str = *std::move(file_size);
-
-    // Final check for trailing data.
+    ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_path, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("Message has unexpected trailing data.");
     }
-
     return absl::OkStatus();
 }
 
@@ -185,7 +141,6 @@ absl::Status FileSizeResponse::Serialize(Buffer& dest) const
 absl::Status FileSizeResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-
     // Deserialize the 'found' boolean.
     if (src.size() < offset + sizeof(uint8_t))
     {
@@ -194,27 +149,12 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     m_found = (src[offset] != 0);
     offset += sizeof(uint8_t);
 
-    // Deserialize the strings using the StatusOr-returning helper
-    absl::StatusOr<std::string> error_reason = ReadStringFromBuffer(src, offset);
-    if (!error_reason.ok())
-    {
-        return error_reason.status();
-    }
-    m_error_reason = *std::move(error_reason);
-
-    absl::StatusOr<std::string> file_size = ReadStringFromBuffer(src, offset);
-    if (!file_size.ok())
-    {
-        return file_size.status();
-    }
-    m_file_size_str = *std::move(file_size);
-
-    // Final check for trailing data.
+    ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("Message has unexpected trailing data.");
     }
-
     return absl::OkStatus();
 }
 

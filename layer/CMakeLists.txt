@@ -52,7 +52,6 @@ add_library(${target_name} SHARED ${HDR_FILES}
 add_definitions(-DLAYERNAME=Dive)
 
 set(TARGET_LINK_LIBS PRIVATE    
-        dive_grpc_proto
         service
         ${_GRPC_GRPCPP}
         ${_PROTOBUF_LIBPROTOBUF})

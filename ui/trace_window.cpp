@@ -46,10 +46,9 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "capture_service/android_application.h"
-#include "capture_service/client.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
-#include "tcp_client.h"
+#include "network/tcp_client.h"
 
 namespace
 {
@@ -605,7 +604,7 @@ void TraceWorker::run()
     }
 
     Network::TcpClient client;
-    std::string        host = "127.0.0.1";
+    const std::string  host = "127.0.0.1";
     int                port = device->Port();
     auto               status = client.Connect(host, port);
     if (!status.ok())

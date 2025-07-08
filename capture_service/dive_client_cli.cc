@@ -29,11 +29,10 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "android_application.h"
-#include "client.h"
 #include "command_utils.h"
 #include "constants.h"
 #include "device_mgr.h"
-#include "tcp_client.h"
+#include "network/tcp_client.h"
 
 using namespace std::chrono_literals;
 
@@ -138,9 +137,9 @@ ABSL_FLAG(std::string,
           "\n\t`vulkan_cli` for command line Vulkan application.");
 ABSL_FLAG(
 std::string,
-download_path,
+download_dir,
 ".",
-"specify the full path to download the capture on the host, default to current directory.");
+"specify the directory path on the host to download the capture, default to current directory.");
 
 ABSL_FLAG(std::string,
           device_architecture,
@@ -305,41 +304,41 @@ bool trigger_capture(Dive::DeviceManager& mgr)
         return false;
     }
 
-    std::string        download_path = absl::GetFlag(FLAGS_download_path);
+    std::string        download_dir = absl::GetFlag(FLAGS_download_dir);
     Network::TcpClient client;
-    std::string        host = "127.0.0.1";
+    const std::string  host = "127.0.0.1";
     int                port = mgr.GetDevice()->Port();
-    auto               status = client.Connect(host, port);
+    absl::Status       status = client.Connect(host, port);
     if (!status.ok())
     {
         std::cout << "Connection failed: " << status.message() << std::endl;
         return false;
     }
-    auto capture_file_path = client.StartPm4Capture();
+    absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture();
     if (!capture_file_path.ok())
     {
         std::cout << capture_file_path.status().message() << std::endl;
         return false;
     }
 
-    std::filesystem::path p(*capture_file_path);
-    std::filesystem::path target_download_path(download_path);
-    if (!std::filesystem::exists(target_download_path))
+    std::filesystem::path target_download_dir(download_dir);
+    if (!std::filesystem::is_directory(target_download_dir))
     {
         std::error_code ec;
-        if (!std::filesystem::create_directories(target_download_path, ec))
+        if (!std::filesystem::create_directories(target_download_dir, ec))
         {
             std::cout << "Error creating directory: " << ec << std::endl;
         }
     }
-    target_download_path /= p.filename();
-    status = client.DownloadFileFromServer(*capture_file_path, target_download_path.string());
+    std::filesystem::path p(*capture_file_path);
+    std::string           download_file_path = target_download_dir / p.filename();
+    status = client.DownloadFileFromServer(*capture_file_path, download_file_path);
     if (!status.ok())
     {
         std::cout << status.message() << std::endl;
         return false;
     }
-    std::cout << "Capture saved at " << target_download_path << std::endl;
+    std::cout << "Capture saved at " << target_download_dir << std::endl;
     return true;
 }
 
@@ -371,20 +370,20 @@ absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
 
 bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
-    std::filesystem::path download_path = absl::GetFlag(FLAGS_download_path);
-    std::filesystem::path target_download_path(
-    absl::StrCat(download_path.string(), "/", gfxr_capture_directory));
+    std::filesystem::path download_dir = absl::GetFlag(FLAGS_download_dir);
+    std::filesystem::path target_download_dir(
+    absl::StrCat(download_dir.string(), "/", gfxr_capture_directory));
     std::filesystem::path on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
                                                                      "/",
                                                                      gfxr_capture_directory);
 
     std::cout << "Retrieving capture..." << std::endl;
     // Check if the target directory already exists on the local machine.
-    if (!std::filesystem::exists(target_download_path))
+    if (!std::filesystem::exists(target_download_dir))
     {
 
         std::error_code ec;
-        if (!std::filesystem::create_directories(target_download_path, ec))
+        if (!std::filesystem::create_directories(target_download_dir, ec))
         {
             std::cout << "Error creating directory: " << ec << std::endl;
             return false;
@@ -398,7 +397,7 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
         std::filesystem::path newDirPath;
         while (true)
         {
-            newDirPath = std::filesystem::path(target_download_path.generic_string() + "_" +
+            newDirPath = std::filesystem::path(target_download_dir.generic_string() + "_" +
                                                std::to_string(counter));
             if (!std::filesystem::exists(newDirPath))
             {
@@ -409,7 +408,7 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
                     std::cout << "Error creating directory: " << ec << std::endl;
                     return false;
                 }
-                target_download_path = newDirPath;
+                target_download_dir = newDirPath;
                 break;
             }
             counter++;
@@ -439,7 +438,7 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
             file.pop_back();
         }
 
-        std::string target_file = absl::StrCat(target_download_path.string(), "/", file.data());
+        std::string target_file = absl::StrCat(target_download_dir.string(), "/", file.data());
         std::string source_file = absl::StrCat(on_device_capture_directory.string(),
                                                "/",
                                                file.data());
@@ -452,7 +451,7 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
         }
     }
 
-    std::cout << "Capture sucessfully saved at " << target_download_path << std::endl;
+    std::cout << "Capture sucessfully saved at " << target_download_dir << std::endl;
     return true;
 }
 
@@ -682,13 +681,13 @@ bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr,
         return false;
     }
 
-    std::string pm4_capture_download_path = absl::GetFlag(FLAGS_download_path);
+    std::string pm4_capture_download_dir = absl::GetFlag(FLAGS_download_dir);
 
     // Running replay for on-device capture
     ret = mgr.RunReplayApk(gfxr_replay_capture,
                            gfxr_replay_flags,
                            dump_pm4,
-                           pm4_capture_download_path);
+                           pm4_capture_download_dir);
     return ret.ok();
 }
 

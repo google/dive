@@ -16,12 +16,11 @@ limitations under the License.
 
 #pragma once
 
-#include "unix_domain_server.h"
+#include "network/unix_domain_server.h"
 #include "absl/status/status.h"
 
 namespace Dive
 {
-absl::StatusOr<size_t> GetFileSize(std::string file_path);
 
 absl::Status SendPong(Network::SocketConnection *client_conn);
 

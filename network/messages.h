@@ -64,29 +64,11 @@ private:
     uint32_t m_minor_version;
 };
 
-class HandShakeRequest : public HandShakeMessage
-{
-public:
-    MessageType GetMessageType() const override { return MessageType::HANDSHAKE_REQUEST; }
-};
-
-class HandShakeResponse : public HandShakeMessage
-{
-public:
-    MessageType GetMessageType() const override { return MessageType::HANDSHAKE_RESPONSE; }
-};
-
 class EmptyMessage : public ISerializable
 {
 public:
     absl::Status Serialize(Buffer& dest) const override { return absl::OkStatus(); }
     absl::Status Deserialize(const Buffer& src) override { return absl::OkStatus(); }
-};
-
-class Pm4CaptureRequest : public EmptyMessage
-{
-public:
-    MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_REQUEST; }
 };
 
 class StringMessage : public ISerializable
@@ -102,6 +84,25 @@ private:
     std::string m_str;
 };
 
+class HandShakeRequest : public HandShakeMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::HANDSHAKE_REQUEST; }
+};
+
+class HandShakeResponse : public HandShakeMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::HANDSHAKE_RESPONSE; }
+};
+
+class Pm4CaptureRequest : public EmptyMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_REQUEST; }
+};
+
+// Pm4CaptureResponse uses the string message as the capture file path.
 class Pm4CaptureResponse : public StringMessage
 {
 public:
@@ -120,12 +121,15 @@ public:
     MessageType GetMessageType() const override { return MessageType::PONG_MESSAGE; }
 };
 
+// DownloadFileRequest uses the string message as the file path to download.
 class DownloadFileRequest : public StringMessage
 {
 public:
     MessageType GetMessageType() const override { return MessageType::DOWNLOAD_FILE_REQUEST; }
 };
 
+// If successful, DownloadFileResponse returns the file path and size of the requested capture;
+// otherwise, it returns an error.
 class DownloadFileResponse : public ISerializable
 {
 public:
@@ -158,12 +162,15 @@ private:
     std::string m_file_size_str;
 };
 
+// FileSizeRequest uses the string message as the file path for which we want to determine the size.
 class FileSizeRequest : public StringMessage
 {
 public:
     MessageType GetMessageType() const override { return MessageType::FILE_SIZE_REQUEST; }
 };
 
+// If successful, FileSizeResponse returns the file size of the requested capture; otherwise, it
+// returns an error.
 class FileSizeResponse : public ISerializable
 {
 public:

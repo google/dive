@@ -20,7 +20,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
-#include "log.h"
+#include "common/log.h"
 #ifndef WIN32
 #    error "Build this for Win32 platform only"
 #endif

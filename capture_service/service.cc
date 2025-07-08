@@ -14,43 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "service.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
 
-#include "service.h"
 #include "constants.h"
-#include "log.h"
+#include "common/log.h"
 #include "trace_mgr.h"
 
 namespace Dive
 {
-
-absl::StatusOr<size_t> GetFileSize(std::string file_path)
-{
-    std::ifstream f(file_path, std::ios::binary | std::ios::ate);
-    if (f.is_open())
-    {
-        std::streamsize file_size = f.tellg();
-        f.close();
-        if (file_size >= 0)
-        {
-            return file_size;
-        }
-        else
-        {
-            return absl::NotFoundError(
-            absl::StrCat("Could not determine file size.", " File_path: ", file_path));
-        }
-    }
-    else
-    {
-        return absl::NotFoundError(
-        absl::StrCat("File not found or access denied.", " File_path: ", file_path));
-    }
-}
 
 absl::Status SendPong(Network::SocketConnection *client_conn)
 {
@@ -83,18 +60,18 @@ absl::Status DownloadFile(Network::DownloadFileRequest *request,
     Network::DownloadFileResponse response;
     std::string                   file_path = request->GetString();
 
-    auto file_size = GetFileSize(file_path);
-    if (file_size.ok())
+    std::error_code ec;
+    auto            file_size = std::filesystem::file_size(file_path, ec);
+    if (!ec)
     {
         response.SetFound(true);
         response.SetFilePath(file_path);
-        response.SetFileSizeStr(std::to_string(*file_size));
+        response.SetFileSizeStr(std::to_string(file_size));
     }
     else
     {
         response.SetFound(false);
-        std::string error_reason(file_size.status().message());
-        response.SetErrorReason(error_reason);
+        response.SetErrorReason(ec.message());
     }
 
     auto status = Network::SendMessage(client_conn, response);
@@ -114,17 +91,17 @@ absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConne
     Network::FileSizeResponse response;
     std::string               file_path = request->GetString();
 
-    auto file_size = GetFileSize(file_path);
-    if (file_size.ok())
+    std::error_code ec;
+    auto            file_size = std::filesystem::file_size(file_path, ec);
+    if (!ec)
     {
         response.SetFound(true);
-        response.SetFileSizeStr(std::to_string(*file_size));
+        response.SetFileSizeStr(std::to_string(file_size));
     }
     else
     {
         response.SetFound(false);
-        std::string error_reason(file_size.status().message());
-        response.SetErrorReason(error_reason);
+        response.SetErrorReason(ec.message());
     }
     return Network::SendMessage(client_conn, response);
 }

@@ -93,7 +93,7 @@ public:
         offset_(offset)
     {
     }
-    virtual ~DiveOriginalBlock() {}
+    ~DiveOriginalBlock() override {}
     bool Accept(BlockVisitor& visitor) const override { return visitor.Visit(*this); }
 
     uint64_t offset_ = 0;
@@ -111,7 +111,7 @@ public:
         blob_ptr_(blob_ptr)
     {
     }
-    virtual ~DiveModificationBlock() {}
+    ~DiveModificationBlock() override {}
     bool Accept(BlockVisitor& visitor) const override { return visitor.Visit(*this); }
 
     std::shared_ptr<std::vector<char>> blob_ptr_ = nullptr;

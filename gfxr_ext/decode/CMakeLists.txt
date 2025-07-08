@@ -52,24 +52,6 @@ target_include_directories(gfxr_decode_ext_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time
 )
 
-if (MSVC)
-  # 4100: unreferenced formal parameter
-  # 4127: conditional expression is constant
-  # 4505: unreferenced function with internal linkage has been removed
-  target_compile_options(gfxr_decode_ext_lib PRIVATE /W4 /WX /wd4100 /wd4127 /wd4505)
-else()
-  target_compile_options(gfxr_decode_ext_lib PRIVATE 
-    -Wall
-    -Wextra
-    -Werror
-    -Wno-unused-parameter
-    -Wno-missing-braces
-    -Wno-missing-field-initializers
-    -Wno-reorder-ctor
-    -Wno-unused-function
-  )
-endif()
-
 # ------------------------
 # gfxr_decode_ext_lib_test
 # TODO: Figure out a way to build the unit tests on Linux while avoiding X11/Xlib.h preprocessor macro collisions with gtest

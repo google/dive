@@ -112,7 +112,7 @@ public:
     StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo) override;
 
 private:
-    Dive::GPUTime m_gpu_time;
+    Dive::GPUTime gpu_time_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include <gtest/gtest.h>
-#include "gpu_time.h"  // The header for the code we are testing
+#include "gpu_time.h"
 
 namespace Dive
 {
@@ -195,7 +195,7 @@ TEST_F(GPUTimeTest, ResetCommandPool)
 
     // Set a frame boundary on it
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = "vr-marker,frame_end,type,application";
+    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label);
 
     // Reset the pool
@@ -221,7 +221,7 @@ TEST_F(GPUTimeTest, SingleCommandBufferFrame)
 
     // Set the frame boundary label
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = "vr-marker,frame_end,type,application";
+    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
     status = gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label);
     ASSERT_TRUE(status.success);
 
@@ -258,7 +258,7 @@ TEST_F(GPUTimeTest, MultiCommandBufferSingleFrame)
 
     // Mark the second one as the frame boundary
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = "vr-marker,frame_end,type,application";
+    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_2, &label);
 
     // Submit both in one go
@@ -292,7 +292,7 @@ TEST_F(GPUTimeTest, MultipleFramesUpdateMetrics)
     gpuTime.OnAllocateCommandBuffers(&allocInfo, cmdBufs);
 
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = "vr-marker,frame_end,type,application";
+    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
     VkSubmitInfo submitInfo = {};
     submitInfo.commandBufferCount = 1;
 

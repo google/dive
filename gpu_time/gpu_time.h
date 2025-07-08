@@ -22,15 +22,17 @@ limitations under the License.
 #include <vector>
 #include <deque>
 #include <unordered_map>
+#include <limits>
 
 namespace Dive
 {
 
-
 class GPUTime
 {
 public:
-    struct Status
+    static constexpr const char*
+    kVulkanVrFrameDelimiterString = "vr-marker,frame_end,type,application";
+    struct GpuTimeStatus
     {
         std::string message;
         bool        success = true;
@@ -41,46 +43,46 @@ public:
 
     VkDevice GetDevice() const { return m_device; }
 
-    Status OnCreateDevice(VkDevice                     device,
-                                const VkAllocationCallbacks* allocator,
-                                float                        timestampPeriod,
-                                PFN_vkCreateQueryPool        pfnCreateQueryPool,
-                                PFN_vkResetQueryPool         pfnResetQueryPool);
+    GpuTimeStatus OnCreateDevice(VkDevice                     device,
+                                 const VkAllocationCallbacks* allocator,
+                                 float                        timestampPeriod,
+                                 PFN_vkCreateQueryPool        pfnCreateQueryPool,
+                                 PFN_vkResetQueryPool         pfnResetQueryPool);
 
-    Status OnDestroyDevice(VkDevice               device,
-                                 PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
-                                 PFN_vkDestroyQueryPool pfnDestroyQueryPool);
+    GpuTimeStatus OnDestroyDevice(VkDevice               device,
+                                  PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
+                                  PFN_vkDestroyQueryPool pfnDestroyQueryPool);
 
-    Status OnDestroyCommandPool(VkCommandPool commandPool);
+    GpuTimeStatus OnDestroyCommandPool(VkCommandPool commandPool);
 
-    Status OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
-                                          VkCommandBuffer*                   pCommandBuffers);
+    GpuTimeStatus OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
+                                           VkCommandBuffer*                   pCommandBuffers);
 
-    Status OnFreeCommandBuffers(uint32_t               commandBufferCount,
-                                      const VkCommandBuffer* pCommandBuffers);
+    GpuTimeStatus OnFreeCommandBuffers(uint32_t               commandBufferCount,
+                                       const VkCommandBuffer* pCommandBuffers);
 
-    Status OnResetCommandBuffer(VkCommandBuffer commandBuffer);
+    GpuTimeStatus OnResetCommandBuffer(VkCommandBuffer commandBuffer);
 
-    Status OnResetCommandPool(VkCommandPool commandPool);
+    GpuTimeStatus OnResetCommandPool(VkCommandPool commandPool);
 
-    Status OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
-                                      VkCommandBufferUsageFlags flags,
-                                      PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp);
+    GpuTimeStatus OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
+                                       VkCommandBufferUsageFlags flags,
+                                       PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp);
 
-    Status OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
-                                    PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
+    GpuTimeStatus OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
+                                     PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
 
-    Status OnQueueSubmit(uint32_t                  submitCount,
-                               const VkSubmitInfo*       pSubmits,
-                               PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
-                               PFN_vkResetQueryPool      pfnResetQueryPool,
-                               PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    GpuTimeStatus OnQueueSubmit(uint32_t                  submitCount,
+                                const VkSubmitInfo*       pSubmits,
+                                PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
+                                PFN_vkResetQueryPool      pfnResetQueryPool,
+                                PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
 
-    Status OnGetDeviceQueue2(VkQueue* pQueue);
-    Status OnGetDeviceQueue(VkQueue* pQueue);
+    GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue);
+    GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue);
 
-    Status OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
-                                               const VkDebugUtilsLabelEXT* pLabelInfo);
+    GpuTimeStatus OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
+                                                const VkDebugUtilsLabelEXT* pLabelInfo);
 
     struct Stats
     {
@@ -100,7 +102,7 @@ private:
         FrameMetrics() = default;
         void AddFrameTime(double time);
 
-        Stats GetStatistics() const;
+        Stats       GetStatistics() const;
         std::string GetStatsString(const Stats& stats);
 
     private:
@@ -126,7 +128,7 @@ private:
         bool          usage_one_submit = false;
     };
 
-    Status UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
 
     FrameMetrics m_metrics;
 

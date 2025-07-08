@@ -22,7 +22,8 @@ limitations under the License.
 #include <cmath>
 #include <numeric>
 #include <limits>
-#include <sstream> 
+#include <sstream>
+#include <cstring>
 
 static constexpr uint32_t kQueryCount = 256;
 static constexpr uint32_t kFrameMetricsLimit = 1000;
@@ -149,16 +150,15 @@ std::string GPUTime::GetStatsString()
     return message;
 }
 
-
-GPUTime::Status GPUTime::OnCreateDevice(VkDevice               device,
-                             const VkAllocationCallbacks* allocator,
-                             float                  timestampPeriod,
-                             PFN_vkCreateQueryPool  pfnCreateQueryPool,
-                             PFN_vkResetQueryPool   pfnResetQueryPool)
+GPUTime::GpuTimeStatus GPUTime::OnCreateDevice(VkDevice                     device,
+                                               const VkAllocationCallbacks* allocator,
+                                               float                        timestampPeriod,
+                                               PFN_vkCreateQueryPool        pfnCreateQueryPool,
+                                               PFN_vkResetQueryPool         pfnResetQueryPool)
 {
     if (device == VK_NULL_HANDLE)
     {
-        return GPUTime::Status{ "Need to pass in a valid device!", false };
+        return GPUTime::GpuTimeStatus{ "Need to pass in a valid device!", false };
     }
     m_allocator = allocator;
     m_device = device;
@@ -173,29 +173,29 @@ GPUTime::Status GPUTime::OnCreateDevice(VkDevice               device,
     VkResult result = pfnCreateQueryPool(m_device, &queryPoolInfo, m_allocator, &m_query_pool);
     if (result != VK_SUCCESS)
     {
-        return GPUTime::Status{ "vkCreateQueryPool failed with VkResult: " +
-                                std::to_string(static_cast<int>(result)),
-                                false };
+        return GPUTime::GpuTimeStatus{ "vkCreateQueryPool failed with VkResult: " +
+                                       std::to_string(static_cast<int>(result)),
+                                       false };
     }
 
     pfnResetQueryPool(m_device, m_query_pool, 0, kQueryCount);
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnDestroyDevice(VkDevice               device,
-                              PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
-                              PFN_vkDestroyQueryPool pfnDestroyQueryPool)
+GPUTime::GpuTimeStatus GPUTime::OnDestroyDevice(VkDevice               device,
+                                                PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
+                                                PFN_vkDestroyQueryPool pfnDestroyQueryPool)
 {
     if (device != m_device)
     {
-        return GPUTime::Status{ "Not destroying the cached device!" };
+        return GPUTime::GpuTimeStatus{ "Not destroying the cached device!" };
     }
 
     if ((m_device != VK_NULL_HANDLE) && (m_query_pool != VK_NULL_HANDLE))
     {
         if (m_queues.empty())
         {
-            return GPUTime::Status{ "vk queue is empty!" };
+            return GPUTime::GpuTimeStatus{ "vk queue is empty!" };
         }
 
         for (auto& q : m_queues)
@@ -209,15 +209,15 @@ GPUTime::Status GPUTime::OnDestroyDevice(VkDevice               device,
         m_allocator = nullptr;
     }
     m_device = VK_NULL_HANDLE;
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnDestroyCommandPool(VkCommandPool commandPool)
+GPUTime::GpuTimeStatus GPUTime::OnDestroyCommandPool(VkCommandPool commandPool)
 {
     if (commandPool == VK_NULL_HANDLE)
     {
         // it is valid to have null command pool as input
-        return GPUTime::Status();
+        return GPUTime::GpuTimeStatus();
     }
 
     auto it = m_cmds.begin();
@@ -232,30 +232,36 @@ GPUTime::Status GPUTime::OnDestroyCommandPool(VkCommandPool commandPool)
             ++it;
         }
     }
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
-                                       VkCommandBuffer*                   pCommandBuffers)
+GPUTime::GpuTimeStatus GPUTime::OnAllocateCommandBuffers(
+const VkCommandBufferAllocateInfo* pAllocateInfo,
+VkCommandBuffer*                   pCommandBuffers)
 {
+    if (m_timestamp_counter + pAllocateInfo->commandBufferCount * 2 > kQueryCount)
+    {
+        return GPUTime::GpuTimeStatus{ "Exceeded maximum number of query slots.", false };
+    }
+
     for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i)
     {
         if (m_cmds.find(pCommandBuffers[i]) != m_cmds.end())
         {
             std::stringstream ss;
             ss << static_cast<void*>(pCommandBuffers[i]) << " has been already added!";
-            return GPUTime::Status{ ss.str(), false};
+            return GPUTime::GpuTimeStatus{ ss.str(), false };
         }
         m_cmds.insert(
         { pCommandBuffers[i], { pAllocateInfo->commandPool, m_timestamp_counter, false } });
         // 1 at vkBeginCommandBuffer and 1 at vkEndCommandBuffer
         m_timestamp_counter += 2;
     }
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnFreeCommandBuffers(uint32_t               commandBufferCount,
-                                   const VkCommandBuffer* pCommandBuffers)
+GPUTime::GpuTimeStatus GPUTime::OnFreeCommandBuffers(uint32_t               commandBufferCount,
+                                                     const VkCommandBuffer* pCommandBuffers)
 {
     for (uint32_t i = 0; i < commandBufferCount; ++i)
     {
@@ -263,26 +269,26 @@ GPUTime::Status GPUTime::OnFreeCommandBuffers(uint32_t               commandBuff
         {
             std::stringstream ss;
             ss << static_cast<void*>(pCommandBuffers[i]) << " is not in the cmd cache!";
-            return GPUTime::Status{ ss.str(), false };
+            return GPUTime::GpuTimeStatus{ ss.str(), false };
         }
         m_cmds.erase(pCommandBuffers[i]);
     }
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnResetCommandBuffer(VkCommandBuffer commandBuffer)
+GPUTime::GpuTimeStatus GPUTime::OnResetCommandBuffer(VkCommandBuffer commandBuffer)
 {
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
         std::stringstream ss;
         ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
-        return GPUTime::Status{ ss.str(), false };
+        return GPUTime::GpuTimeStatus{ ss.str(), false };
     }
     m_cmds[commandBuffer].Reset();
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnResetCommandPool(VkCommandPool commandPool)
+GPUTime::GpuTimeStatus GPUTime::OnResetCommandPool(VkCommandPool commandPool)
 {
     for (auto& cmd : m_cmds)
     {
@@ -292,18 +298,18 @@ GPUTime::Status GPUTime::OnResetCommandPool(VkCommandPool commandPool)
             cmd.second.Reset();
         }
     }
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
-                                   VkCommandBufferUsageFlags flags,
-                                   PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp)
+GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
+                                                     VkCommandBufferUsageFlags flags,
+                                                     PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp)
 {
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
         std::stringstream ss;
         ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
-        return GPUTime::Status{ ss.str(), false };
+        return GPUTime::GpuTimeStatus{ ss.str(), false };
     }
 
     if (m_cmds[commandBuffer].usage_one_submit)
@@ -320,27 +326,27 @@ GPUTime::Status GPUTime::OnBeginCommandBuffer(VkCommandBuffer           commandB
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          m_query_pool,
                          m_cmds[commandBuffer].timestamp_offset);
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
-                                 PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
+GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
+                                                   PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
         std::stringstream ss;
         ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
-        return GPUTime::Status{ ss.str(), false };
+        return GPUTime::GpuTimeStatus{ ss.str(), false };
     }
 
     pfnCmdWriteTimestamp(commandBuffer,
                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                          m_query_pool,
                          m_cmds[commandBuffer].timestamp_offset + 1);
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
+GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
 {
     // Get the timestamp results
     // *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
@@ -348,7 +354,7 @@ GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQuer
 
     // VK_QUERY_RESULT_PARTIAL_BIT is used instead of VK_QUERY_RESULT_WAIT_BIT since some of the
     // timestamps may not be finished. we have some pre-recorded cmds that may not be replayed, but
-    // the counter slot is reserved VK_QUERY_RESULT_WITH_AVAILABILITY_BIT is used so that we can
+    // the counter slot is reserved. VK_QUERY_RESULT_WITH_AVAILABILITY_BIT is used so that we can
     // check for individual ones to make sure the value is valid
 
     constexpr size_t data_per_query = sizeof(uint64_t);          // For the result itself
@@ -357,22 +363,28 @@ GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQuer
     constexpr VkDeviceSize stride = data_per_query + availability_per_query;
 
     VkResult result = pfnGetQueryPoolResults(m_device,
-                                        m_query_pool,
-                                        0,
-                                        m_timestamp_counter,
-                                        data_size,
-                                        timestamps_with_availability,
-                                        stride,
-                                        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_PARTIAL_BIT |
-                                        VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+                                             m_query_pool,
+                                             0,
+                                             m_timestamp_counter,
+                                             data_size,
+                                             timestamps_with_availability,
+                                             stride,
+                                             VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_PARTIAL_BIT |
+                                             VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
 
     if (result != VK_SUCCESS)
     {
-        return GPUTime::Status{ "vkGetQueryPoolResults failed with VkResult: " +
-                                std::to_string(static_cast<int>(result)),
-                                false };
+        return GPUTime::GpuTimeStatus{ "vkGetQueryPoolResults failed with VkResult: " +
+                                       std::to_string(static_cast<int>(result)),
+                                       false };
     }
-    
+
+    // TODO(wangra): Currently we calculating the frame time by accumulating command buffer time
+    // this is NOT correct since the works between command buffers might overlapping with each other
+    // (if there is no sync between them)
+    // In the future, we could keep command buffer gpu time or render pass gpu time separately
+    // but this requires all frames have the same commandbuffers and renderpasses which might
+    // not be true for the runtime layer case
     double frame_time = 0.0;
     bool   valid_frame_time = true;
 
@@ -386,15 +398,13 @@ GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQuer
 
             uint64_t
             availability_end = timestamps_with_availability[(timestamp_offset + 1) * 2 + 1];
-            uint64_t
-            availability_begin = timestamps_with_availability[timestamp_offset * 2 + 1];
+            uint64_t availability_begin = timestamps_with_availability[timestamp_offset * 2 + 1];
 
             if ((availability_begin != 0) && (availability_end != 0))
             {
                 // Calculate the elapsed time in nanoseconds
-                uint64_t
-                elapsed_time = timestamps_with_availability[(timestamp_offset + 1) * 2] -
-                                timestamps_with_availability[timestamp_offset * 2];
+                uint64_t elapsed_time = timestamps_with_availability[(timestamp_offset + 1) * 2] -
+                                        timestamps_with_availability[timestamp_offset * 2];
                 double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
                 frame_time += elapsed_time_in_ms;
             }
@@ -404,7 +414,7 @@ GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQuer
                 valid_frame_time = false;
                 std::stringstream ss;
                 ss << "Query result is not available for cmd " << static_cast<void*>(cmd);
-                return GPUTime::Status{ ss.str(), false };
+                return GPUTime::GpuTimeStatus{ ss.str(), false };
             }
         }
     }
@@ -414,17 +424,16 @@ GPUTime::Status GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQuer
         m_metrics.AddFrameTime(frame_time);
     }
 
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
-                            const VkSubmitInfo*       pSubmits,
-                            PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
-                            PFN_vkResetQueryPool      pfnResetQueryPool,
-                            PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
+GPUTime::GpuTimeStatus GPUTime::OnQueueSubmit(uint32_t                  submitCount,
+                                              const VkSubmitInfo*       pSubmits,
+                                              PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
+                                              PFN_vkResetQueryPool      pfnResetQueryPool,
+                                              PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
 {
     bool is_frame_boundary = false;
-    std::string cmds_not_in_cache_message;
 
     if ((pSubmits != nullptr) && (pSubmits->pCommandBuffers != nullptr))
     {
@@ -438,8 +447,11 @@ GPUTime::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
                 {
                     std::stringstream ss;
                     ss << static_cast<void*>(cmd) << " is not in the cmd cache!";
-                    cmds_not_in_cache_message += ss.str();
-                    continue;
+                    if (is_frame_boundary)
+                    {
+                        m_frame_cmds.clear();
+                    }
+                    return GPUTime::GpuTimeStatus{ ss.str(), false };
                 }
                 if (m_cmds[cmd].is_frameboundary)
                 {
@@ -450,23 +462,14 @@ GPUTime::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
         }
     }
 
-    if (!cmds_not_in_cache_message.empty())
-    {
-        if (is_frame_boundary)
-        {
-            m_frame_cmds.clear();
-        }
-        return GPUTime::Status{cmds_not_in_cache_message, false};
-    }
-
     if (is_frame_boundary)
     {
         //  force sync to make sure the gpu is done with this frame
         pfnDeviceWaitIdle(m_device);
-        GPUTime::Status update_status = UpdateFrameMetrics(pfnGetQueryPoolResults);
+        GPUTime::GpuTimeStatus update_status = UpdateFrameMetrics(pfnGetQueryPoolResults);
         if (!update_status.success)
         {
-            return update_status;  
+            return update_status;
         }
 
         m_frame_index++;
@@ -474,40 +477,41 @@ GPUTime::Status GPUTime::OnQueueSubmit(uint32_t                  submitCount,
 
         pfnResetQueryPool(m_device, m_query_pool, 0, kQueryCount);
     }
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)
+GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)
 {
     m_queues.insert(*pQueue);
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnGetDeviceQueue(VkQueue* pQueue)
+GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue(VkQueue* pQueue)
 {
     m_queues.insert(*pQueue);
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::Status GPUTime::OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
-                                            const VkDebugUtilsLabelEXT* pLabelInfo)
+GPUTime::GpuTimeStatus GPUTime::OnCmdInsertDebugUtilsLabelEXT(
+VkCommandBuffer             commandBuffer,
+const VkDebugUtilsLabelEXT* pLabelInfo)
 {
-    if (pLabelInfo == nullptr)
+    if (pLabelInfo == nullptr || pLabelInfo->pLabelName == nullptr)
     {
-        return GPUTime::Status{ "pLabelInfo cannot be nullptr!", false };
+        return GPUTime::GpuTimeStatus{ "pLabelInfo cannot be nullptr!", false };
     }
 
-    if (strcmp("vr-marker,frame_end,type,application", pLabelInfo->pLabelName) == 0)
+    if (strcmp(kVulkanVrFrameDelimiterString, pLabelInfo->pLabelName) == 0)
     {
         if (m_cmds.find(commandBuffer) == m_cmds.end())
         {
             std::stringstream ss;
             ss << static_cast<void*>(commandBuffer) << " is not in the cmd cache!";
-            return GPUTime::Status{ ss.str(), false };
+            return GPUTime::GpuTimeStatus{ ss.str(), false };
         }
         m_cmds[commandBuffer].is_frameboundary = true;
     }
-    return GPUTime::Status();
+    return GPUTime::GpuTimeStatus();
 }
 
 }  // namespace Dive

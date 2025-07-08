@@ -59,8 +59,7 @@ endif()
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union
-  # 4127: conditional expression is constant
-  target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201 /wd4127)
+  target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
 else()
   target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
 endif()

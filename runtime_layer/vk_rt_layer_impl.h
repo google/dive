@@ -148,8 +148,8 @@ public:
                                   const VkDebugUtilsLabelEXT*       pLabelInfo);
 
 private:
-    Dive::GPUTime m_gpu_time;
-    PFN_vkGetDeviceProcAddr      m_device_proc_addr;
+    Dive::GPUTime           m_gpu_time;
+    PFN_vkGetDeviceProcAddr m_device_proc_addr;
 };
 
 }  // namespace DiveLayer

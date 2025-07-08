@@ -33,9 +33,7 @@ const VulkanReplayOptions&                options) :
 {
 }
 
-DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer()
-{
-}
+DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer() {}
 
 void DiveVulkanReplayConsumer::Process_vkCreateDevice(
 const ApiCallInfo&                                   call_info,
@@ -60,23 +58,23 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
     VkDevice device = MapHandle<VulkanDeviceInfo>(*(pDevice->GetPointer()),
                                                   &CommonObjectInfoTable::GetVkDeviceInfo);
 
-    PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(GetDeviceTable(device)
-                                                                    ->CreateQueryPool);
+    PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(
+    GetDeviceTable(device)->CreateQueryPool);
 
-    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(GetDeviceTable(device)
-                                                                 ->ResetQueryPool);
+    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
+    GetDeviceTable(device)->ResetQueryPool);
 
     auto in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
     VkPhysicalDeviceProperties deviceProperties;
     GetInstanceTable(in_physicalDevice->handle)
     ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
 
-    Dive::GPUTime::Status
-    status = m_gpu_time.OnCreateDevice(device,
-                             pAllocator->GetPointer(),
-                             deviceProperties.limits.timestampPeriod,
-                             CreateQueryPool,
-                             ResetQueryPool);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_
+                                          .OnCreateDevice(device,
+                                                          pAllocator->GetPointer(),
+                                                          deviceProperties.limits.timestampPeriod,
+                                                          CreateQueryPool,
+                                                          ResetQueryPool);
 
     if (!status.success)
     {
@@ -89,14 +87,16 @@ const ApiCallInfo&                                   call_info,
 format::HandleId                                     device,
 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device,
+    VkDevice            in_device = MapHandle<VulkanDeviceInfo>(device,
                                                      &CommonObjectInfoTable::GetVkDeviceInfo);
     PFN_vkQueueWaitIdle QueueWaitIdle = reinterpret_cast<PFN_vkQueueWaitIdle>(
-    GetDeviceTable(m_gpu_time.GetDevice())->QueueWaitIdle);
+    GetDeviceTable(gpu_time_.GetDevice())->QueueWaitIdle);
     PFN_vkDestroyQueryPool DestroyQueryPool = reinterpret_cast<PFN_vkDestroyQueryPool>(
-    GetDeviceTable(m_gpu_time.GetDevice())->DestroyQueryPool);
+    GetDeviceTable(gpu_time_.GetDevice())->DestroyQueryPool);
 
-    Dive::GPUTime::Status status = m_gpu_time.OnDestroyDevice(in_device, QueueWaitIdle, DestroyQueryPool);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyDevice(in_device,
+                                                                    QueueWaitIdle,
+                                                                    DestroyQueryPool);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -117,7 +117,7 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
         return;
     }
 
-    Dive::GPUTime::Status status = m_gpu_time.OnDestroyCommandPool(pool_handle);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyCommandPool(pool_handle);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -144,8 +144,9 @@ HandlePointerDecoder<VkCommandBuffer>*                     pCommandBuffers)
         return;
     }
 
-    Dive::GPUTime::Status status = m_gpu_time.OnAllocateCommandBuffers(pAllocateInfo->GetPointer(),
-                                                              pCommandBuffers->GetHandlePointer());
+    Dive::GPUTime::GpuTimeStatus
+    status = gpu_time_.OnAllocateCommandBuffers(pAllocateInfo->GetPointer(),
+                                                pCommandBuffers->GetHandlePointer());
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -159,8 +160,9 @@ format::HandleId                       commandPool,
 uint32_t                               commandBufferCount,
 HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
 {
-    Dive::GPUTime::Status status = m_gpu_time.OnFreeCommandBuffers(commandBufferCount,
-                                                          pCommandBuffers->GetHandlePointer());
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnFreeCommandBuffers(commandBufferCount,
+                                                                         pCommandBuffers
+                                                                         ->GetHandlePointer());
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -180,7 +182,7 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandBuffer(const ApiCallInfo&  
 {
     auto in_commandBuffer = GetObjectInfoTable().GetVkCommandBufferInfo(commandBuffer)->handle;
 
-    Dive::GPUTime::Status status = m_gpu_time.OnResetCommandBuffer(in_commandBuffer);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnResetCommandBuffer(in_commandBuffer);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -204,7 +206,7 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandPool(const ApiCallInfo&    
         return;
     }
 
-    Dive::GPUTime::Status status = m_gpu_time.OnResetCommandPool(in_commandPool);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnResetCommandPool(in_commandPool);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -233,9 +235,10 @@ StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
     PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
     GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
 
-    Dive::GPUTime::Status status = m_gpu_time.OnBeginCommandBuffer(in_commandBuffer,
-                                                          pBeginInfo->GetPointer()->flags,
-                                                          CmdWriteTimestamp);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_
+                                          .OnBeginCommandBuffer(in_commandBuffer,
+                                                                pBeginInfo->GetPointer()->flags,
+                                                                CmdWriteTimestamp);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -252,7 +255,8 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
     PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
     GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
 
-    Dive::GPUTime::Status status = m_gpu_time.OnEndCommandBuffer(in_commandBuffer, CmdWriteTimestamp);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnEndCommandBuffer(in_commandBuffer,
+                                                                       CmdWriteTimestamp);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -277,27 +281,27 @@ format::HandleId                            fence)
                                                 fence);
 
     PFN_vkDeviceWaitIdle DeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
-    GetDeviceTable(m_gpu_time.GetDevice())->DeviceWaitIdle);
+    GetDeviceTable(gpu_time_.GetDevice())->DeviceWaitIdle);
 
     PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
-    GetDeviceTable(m_gpu_time.GetDevice())->ResetQueryPool);
+    GetDeviceTable(gpu_time_.GetDevice())->ResetQueryPool);
 
     PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
-    GetDeviceTable(m_gpu_time.GetDevice())->GetQueryPoolResults);
+    GetDeviceTable(gpu_time_.GetDevice())->GetQueryPoolResults);
 
-    const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
-    Dive::GPUTime::Status        status = m_gpu_time.OnQueueSubmit(submitCount,
-                                                   submit_infos,
-                                                   DeviceWaitIdle,
-                                                   ResetQueryPool,
-                                                   GetQueryPoolResults);
+    const VkSubmitInfo*          submit_infos = pSubmits->GetPointer();
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnQueueSubmit(submitCount,
+                                                                  submit_infos,
+                                                                  DeviceWaitIdle,
+                                                                  ResetQueryPool,
+                                                                  GetQueryPoolResults);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
     else
     {
-        GFXRECON_LOG_INFO(m_gpu_time.GetStatsString().c_str());
+        GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
     }
 }
 
@@ -308,8 +312,8 @@ StructPointerDecoder<Decoded_VkDeviceQueueInfo2>* pQueueInfo,
 HandlePointerDecoder<VkQueue>*                    pQueue)
 {
     VulkanReplayConsumer::Process_vkGetDeviceQueue2(call_info, device, pQueueInfo, pQueue);
-    VkQueue* queue = pQueue->GetHandlePointer();
-    Dive::GPUTime::Status status = m_gpu_time.OnGetDeviceQueue2(queue);
+    VkQueue*                     queue = pQueue->GetHandlePointer();
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnGetDeviceQueue2(queue);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -327,8 +331,8 @@ void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue(const ApiCallInfo& call_
                                                    queueFamilyIndex,
                                                    queueIndex,
                                                    pQueue);
-    VkQueue*     queue = pQueue->GetHandlePointer();
-    Dive::GPUTime::Status status = m_gpu_time.OnGetDeviceQueue(queue);
+    VkQueue*                     queue = pQueue->GetHandlePointer();
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnGetDeviceQueue(queue);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -349,7 +353,8 @@ StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo)
 
     const VkDebugUtilsLabelEXT* in_pLabelInfo = pLabelInfo->GetPointer();
 
-    Dive::GPUTime::Status status = m_gpu_time.OnCmdInsertDebugUtilsLabelEXT(in_commandBuffer, in_pLabelInfo);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdInsertDebugUtilsLabelEXT(in_commandBuffer,
+                                                                                  in_pLabelInfo);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());

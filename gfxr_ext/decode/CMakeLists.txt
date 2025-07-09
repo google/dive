@@ -25,9 +25,12 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+if(NOT TARGET gpu_time)
+  add_subdirectory(../../gpu_time gpu_time)
+endif()
+
 # -------------------
 # gfxr_decode_ext_lib
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time)
 add_library(gfxr_decode_ext_lib
   dive_annotation_processor.h
   dive_annotation_processor.cpp
@@ -47,7 +50,9 @@ if (WIN32)
   target_link_libraries(gfxr_decode_ext_lib psapi)
 endif()
 target_include_directories(gfxr_decode_ext_lib PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time
+  )
 
 # ------------------------
 # gfxr_decode_ext_lib_test

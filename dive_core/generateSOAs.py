@@ -138,7 +138,7 @@ def generate(spec: Dict, gen_name: str) -> None:
         Path(os.path.dirname(path)).mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             tmpl = ''.join(
-                ['{% import 'struct_of_arrays.jinja' as macros %}', macro])
+                ["{% import 'struct_of_arrays.jinja' as macros %}", macro])
             env.from_string(tmpl).stream(**kwargs).dump(f)
         if path.endswith('.h') or path.endswith('.cpp'):
             clang_format(path)

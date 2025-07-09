@@ -24,32 +24,34 @@ namespace Dive
 // =================================================================================================
 // DataCore
 // =================================================================================================
-DataCore::DataCore(ILog *log_ptr) :
-    m_progress_tracker(NULL),
-    m_capture_data(log_ptr),
-    m_log_ptr(log_ptr)
+DataCore::DataCore() :
+    m_progress_tracker(NULL)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-DataCore::DataCore(ProgressTracker *progress_tracker, ILog *log_ptr) :
-    m_progress_tracker(progress_tracker),
-    m_capture_data(log_ptr),
-    m_log_ptr(log_ptr)
+DataCore::DataCore(ProgressTracker *progress_tracker) :
+    m_progress_tracker(progress_tracker)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
+CaptureData::LoadResult DataCore::LoadPm4CaptureData(const char *file_name)
 {
-    m_capture_data = CaptureData(m_progress_tracker,
-                                 m_log_ptr);  // Clear any previously loaded data
+    m_pm4_capture_data = Pm4CaptureData(m_progress_tracker);  // Clear any previously loaded data
     m_capture_metadata = CaptureMetadata();
-    return m_capture_data.LoadFile(file_name);
+    return m_pm4_capture_data.LoadCaptureFile(file_name);
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateCommandHierarchy()
+CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const char *file_name)
+{
+    m_gfxr_capture_data = GfxrCaptureData();
+    return m_gfxr_capture_data.LoadCaptureFile(file_name);
+}
+
+//--------------------------------------------------------------------------------------------------
+bool DataCore::CreatePm4CommandHierarchy()
 {
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
 
@@ -61,12 +63,10 @@ bool DataCore::CreateCommandHierarchy()
     uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
     // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator(*state_tracker);
-    if (!cmd_hier_creator.CreateTrees(&m_capture_metadata.m_command_hierarchy,
-                                      m_capture_data,
-                                      true,
-                                      reserve_size,
-                                      m_log_ptr))
+    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
+                                             m_pm4_capture_data,
+                                             *state_tracker);
+    if (!cmd_hier_creator.CreateTrees(true, reserve_size))
     {
         return false;
     }
@@ -78,8 +78,8 @@ bool DataCore::CreateMetaData()
 {
     std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
     CaptureMetadataCreator               metadata_creator(m_capture_metadata, *state_tracker);
-    if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
-                                         m_capture_data.GetMemoryManager()))
+    if (!metadata_creator.ProcessPm4Submits(m_pm4_capture_data.GetSubmits(),
+                                            m_pm4_capture_data.GetMemoryManager()))
     {
         return false;
     }
@@ -87,7 +87,7 @@ bool DataCore::CreateMetaData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseCaptureData()
+bool DataCore::ParsePm4CaptureData()
 {
     if (m_progress_tracker)
     {
@@ -99,7 +99,7 @@ bool DataCore::ParseCaptureData()
         return false;
     }
 
-    if (!CreateCommandHierarchy())
+    if (!CreatePm4CommandHierarchy())
     {
         return false;
     }
@@ -108,14 +108,39 @@ bool DataCore::ParseCaptureData()
 }
 
 //--------------------------------------------------------------------------------------------------
-const CaptureData &DataCore::GetCaptureData() const
+bool DataCore::ParseGfxrCaptureData()
 {
-    return m_capture_data;
+    if (m_progress_tracker)
+    {
+        m_progress_tracker->sendMessage("Processing gfxr commands...");
+    }
+
+    // TODO(gcommodore): Add Creation of Gfxr Command Hierarchy
+
+    return true;
 }
 
-CaptureData &DataCore::GetMutableCaptureData()
+//--------------------------------------------------------------------------------------------------
+const Pm4CaptureData &DataCore::GetPm4CaptureData() const
 {
-    return m_capture_data;
+    return m_pm4_capture_data;
+}
+
+CaptureData &DataCore::GetMutablePm4CaptureData()
+{
+    return m_pm4_capture_data;
+}
+
+//--------------------------------------------------------------------------------------------------
+const GfxrCaptureData &DataCore::GetGfxrCaptureData() const
+{
+    return m_gfxr_capture_data;
+}
+
+//--------------------------------------------------------------------------------------------------
+GfxrCaptureData &DataCore::GetMutableGfxrCaptureData()
+{
+    return m_gfxr_capture_data;
 }
 
 //--------------------------------------------------------------------------------------------------

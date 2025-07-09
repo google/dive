@@ -16,7 +16,10 @@
 
 #include <assert.h>
 
+#include "adreno.h"
 #include "capture_event_info.h"
+#include "dive_core/common/emulate_pm4.h"
+#include "dive_core/common/memory_manager_base.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 
 namespace Dive

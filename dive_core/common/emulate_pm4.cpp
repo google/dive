@@ -22,7 +22,7 @@
 #include "adreno.h"
 #include "common.h"
 #include "dive_capture_format.h"
-#include "dive_core/capture_data.h"
+#include "dive_core/pm4_capture_data.h"
 #include "dive_core/stl_replacement.h"
 #include "emulate_pm4.h"
 #include "memory_manager_base.h"
@@ -882,8 +882,8 @@ uint32_t GetPacketSize(Pm4Header header)
 // IEmulateCallbacks
 // =================================================================================================
 
-bool IEmulateCallbacks::ProcessSubmits(const DiveVector<SubmitInfo> &submits,
-                                       const IMemoryManager         &mem_manager)
+bool IEmulateCallbacks::ProcessPm4Submits(const DiveVector<SubmitInfo> &submits,
+                                          const IMemoryManager         &mem_manager)
 {
     for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
     {

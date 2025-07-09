@@ -141,7 +141,7 @@ void BufferView::OnEventSelected(uint32_t event_index)
             */
             // Column 8
             // Find preferred heap
-            const Dive::CaptureData          &capture_data = m_data_core.GetCaptureData();
+            const Dive::Pm4CaptureData       &capture_data = m_data_core.GetPm4CaptureData();
             const Dive::MemoryManager        &memory = capture_data.GetMemoryManager();
             const Dive::MemoryAllocationInfo &mem_alloc_info = memory.GetMemoryAllocationInfo();
             const Dive::MemoryAllocationData *mem_alloc_ptr;
@@ -205,9 +205,9 @@ void BufferView::OnBufferSelectionChanged()
     // Grab all the data
     std::vector<uint32_t> buffer_memory;
     buffer_memory.resize(num_dwords);
-    const Dive::EventInfo     &event_info = metadata.m_event_info[m_event_index];
-    const Dive::CaptureData   &capture_data = m_data_core.GetCaptureData();
-    const Dive::MemoryManager &mem_manager = capture_data.GetMemoryManager();
+    const Dive::EventInfo      &event_info = metadata.m_event_info[m_event_index];
+    const Dive::Pm4CaptureData &capture_data = m_data_core.GetPm4CaptureData();
+    const Dive::MemoryManager  &mem_manager = capture_data.GetMemoryManager();
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&buffer_memory[0],
                                                event_info.m_submit_index,
                                                buffer_info.m_addr,

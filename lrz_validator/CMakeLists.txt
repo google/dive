@@ -48,6 +48,9 @@ if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union
   target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
+
+  # Add NOMINMAX definition for Windows builds to prevent min/max macro conflicts
+  target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
 else()
   target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
 endif()

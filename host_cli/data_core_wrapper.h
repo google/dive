@@ -37,7 +37,6 @@ public:
     absl::Status WriteNewGfxrFile(const std::string& new_gfxr_file_path);
 
 private:
-    Dive::LogConsole                m_log;
     std::unique_ptr<Dive::DataCore> m_data_core = nullptr;
 };
 

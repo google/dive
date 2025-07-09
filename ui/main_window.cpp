@@ -103,7 +103,7 @@ MainWindow::MainWindow()
     m_log_compound.AddLog(&m_log_record);
     m_log_compound.AddLog(&m_log_console);
 
-    m_data_core = new Dive::DataCore(&m_progress_tracker, &m_log_compound);
+    m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
 
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
@@ -180,7 +180,7 @@ MainWindow::MainWindow()
 
         m_command_hierarchy_model = new CommandModel(m_data_core->GetCommandHierarchy());
         m_command_hierarchy_view = new DiveTreeView(m_data_core->GetCommandHierarchy());
-        m_command_hierarchy_view->SetDataCore(m_data_core);
+        m_command_hierarchy_view->SetDataCore(m_data_core.get());
         m_event_search_bar->setTreeView(m_command_hierarchy_view);
 
         m_filter_model = new DiveFilterModel(m_data_core->GetCommandHierarchy(), this);
@@ -386,7 +386,7 @@ MainWindow::MainWindow()
     // Set default view mode
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
-    m_hover_help->SetDataCore(m_data_core);
+    m_hover_help->SetDataCore(m_data_core.get());
     setAccessibleName("DiveMainWindow");
 
     m_plugin_manager = std::unique_ptr<Dive::PluginLoader>(new Dive::PluginLoader(*this));
@@ -532,7 +532,6 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
 bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
 {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    m_log_record.Reset();
 
     // Reset before loading, since the overlay may cause the UI to update with outdated data
     m_command_tab_view->ResetModel();

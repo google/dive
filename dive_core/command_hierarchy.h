@@ -389,25 +389,21 @@ private:
 class CommandHierarchyCreator : public IEmulateCallbacks
 {
 public:
-    CommandHierarchyCreator(EmulateStateTracker &state_tracker);
+    CommandHierarchyCreator(CommandHierarchy    &command_hierarchy,
+                            const CaptureData   &capture_data,
+                            EmulateStateTracker &state_tracker);
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
     // Optional: Passing a reserve_size will allow the creator to pre-reserve the memory needed and
     // potentially speed up the creation
-    bool CreateTrees(CommandHierarchy       *command_hierarchy_ptr,
-                     const CaptureData      &capture_data,
-                     bool                    flatten_chain_nodes,
-                     std::optional<uint64_t> reserve_size,
-                     ILog                   *log_ptr);
+    bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
-    bool CreateTrees(CommandHierarchy *command_hierarchy_ptr,
-                     EngineType        engine_type,
-                     QueueType         queue_type,
-                     uint32_t         *command_dwords,
-                     uint32_t          size_in_dwords,
-                     ILog             *log_ptr);
+    bool CreateTrees(EngineType             engine_type,
+                     QueueType              queue_type,
+                     std::vector<uint32_t> &command_dwords,
+                     uint32_t               size_in_dwords);
 
     virtual bool OnIbStart(uint32_t                  submit_index,
                            uint32_t                  ib_index,
@@ -552,8 +548,8 @@ private:
         uint64_t m_group_addr;
     };
 
-    CommandHierarchy  *m_command_hierarchy_ptr = nullptr;  // Pointer to class being created
-    const CaptureData *m_capture_data_ptr = nullptr;
+    CommandHierarchy  &m_command_hierarchy;  // Reference to class being created
+    const CaptureData &m_capture_data;
 
     // Parsing State
     DiveVector<uint64_t>
@@ -615,8 +611,6 @@ private:
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
-
-    ILog *m_log_ptr = nullptr;
 
     EmulateStateTracker &m_state_tracker;
 };

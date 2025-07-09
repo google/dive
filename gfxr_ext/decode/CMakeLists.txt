@@ -1,4 +1,3 @@
-#
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +27,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # -------------------
 # gfxr_decode_ext_lib
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time)
 add_library(gfxr_decode_ext_lib
   dive_annotation_processor.h
   dive_annotation_processor.cpp
@@ -35,9 +35,12 @@ add_library(gfxr_decode_ext_lib
   dive_block_data.cpp
   dive_file_processor.h
   dive_file_processor.cpp
+  dive_vulkan_replay_consumer.h
+  dive_vulkan_replay_consumer.cpp
 )
 target_link_libraries(gfxr_decode_ext_lib
   gfxrecon_decode
+  gpu_time
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if (WIN32)
@@ -52,7 +55,7 @@ target_include_directories(gfxr_decode_ext_lib PUBLIC
 if(WIN32)
   enable_testing()
   include(GoogleTest)
-  add_executable(gfxr_decode_ext_lib_test 
+  add_executable(gfxr_decode_ext_lib_test
     dive_annotation_processor_test.cpp
     dive_block_data_test.cpp
     dive_file_processor_test.cpp

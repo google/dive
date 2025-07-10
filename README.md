@@ -249,7 +249,6 @@ git merge -s subtree --squash -X subtree=third_party/gfxreconstruct --allow-unre
     - third_party/gfxreconstruct/tools/extract/CMakeLists.txt
     - third_party/gfxreconstruct/tools/info/CMakeLists.txt
     - third_party/gfxreconstruct/tools/optimize/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/replay/android_main.cpp
     - third_party/gfxreconstruct/tools/replay/CMakeLists.txt
     - third_party/gfxreconstruct/tools/tocpp/CMakeLists.txt
 5. Stage the files.

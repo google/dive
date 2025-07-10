@@ -17,3 +17,21 @@ add_library(gpu_time STATIC
     gpu_time.h
 )
 target_include_directories(gpu_time PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
+
+if(WIN32)
+  enable_testing()
+  include(GoogleTest)
+  add_executable(gpu_time_test
+    gpu_time.h
+    gpu_time.cpp
+    gpu_time_test.cpp
+  )
+
+  target_include_directories(gpu_time_test PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
+
+  target_link_libraries(gpu_time_test PRIVATE
+    gtest
+    gtest_main
+  )
+  gtest_discover_tests(gpu_time_test)
+endif()

@@ -25,10 +25,6 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-if(NOT TARGET gpu_time)
-  add_subdirectory(../../gpu_time gpu_time)
-endif()
-
 # -------------------
 # gfxr_decode_ext_lib
 add_library(gfxr_decode_ext_lib
@@ -38,21 +34,16 @@ add_library(gfxr_decode_ext_lib
   dive_block_data.cpp
   dive_file_processor.h
   dive_file_processor.cpp
-  dive_vulkan_replay_consumer.h
-  dive_vulkan_replay_consumer.cpp
 )
 target_link_libraries(gfxr_decode_ext_lib
   gfxrecon_decode
-  gpu_time
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if (WIN32)
   target_link_libraries(gfxr_decode_ext_lib psapi)
 endif()
 target_include_directories(gfxr_decode_ext_lib PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../gpu_time
-  )
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework)
 
 # ------------------------
 # gfxr_decode_ext_lib_test
@@ -60,7 +51,7 @@ target_include_directories(gfxr_decode_ext_lib PUBLIC
 if(WIN32)
   enable_testing()
   include(GoogleTest)
-  add_executable(gfxr_decode_ext_lib_test
+  add_executable(gfxr_decode_ext_lib_test 
     dive_annotation_processor_test.cpp
     dive_block_data_test.cpp
     dive_file_processor_test.cpp

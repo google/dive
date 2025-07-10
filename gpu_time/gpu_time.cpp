@@ -44,17 +44,17 @@ void GPUTime::FrameMetrics::AddFrameTime(double time)
 GPUTime::Stats GPUTime::FrameMetrics::GetStatistics() const
 {
     Stats stats;
-    stats.min = std::numeric_limits<double>::max();     // Initialize min to max value
-    stats.max = std::numeric_limits<double>::lowest();  // Initialize max to lowest value
+    stats.min = std::numeric_limits<double>::max();
+    stats.max = std::numeric_limits<double>::lowest();
 
     for (const auto& frame : m_frame_data)
     {
         double time = frame;
-        stats.min = std::min(stats.min, time);  // Update min
-        stats.max = std::max(stats.max, time);  // Update max
+        stats.min = std::min(stats.min, time);
+        stats.max = std::max(stats.max, time);
     }
 
-    stats.average = CalculateAverage();  // Call CalculateAverage directly
+    stats.average = CalculateAverage();
     stats.median = CalculateMedian();
     stats.stddev = CalculateStdDev(stats.average);
 

@@ -37,39 +37,10 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
 endif()
 
+add_subdirectory(third_party/abseil-cpp)
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
-    find_program(_PROTOBUF_PROTOC protoc PATHS ${CMAKE_SOURCE_DIR}/bin)
-    find_program(_GRPC_CPP_PLUGIN grpc_cpp_plugin PATHS ${CMAKE_SOURCE_DIR}/bin)
 endif()
-if(MSVC)
-    option(BUILD_GRPC "Build gRPC from source" "OFF")
-else()
-    option(BUILD_GRPC "Build gRPC from source" "ON")
-endif()
-if(BUILD_GRPC)
-    set(GRPC_AS_SUBMODULE "ON")
-else()
-    if(MSVC)
-        # Unzip certain large debug gRPC libraries
-        # If changed, please update .gitignore!
-        execute_process(
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpcd.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc_unsecured.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc_unsecure.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/grpc_authorization_providerd.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/libprotocd.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/libprotoc.tar.gz
-        COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib/libprotobufd.tar.gz
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/grpc/lib
-        )
-    endif()
-    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/grpc/")
-    link_directories(${CMAKE_SOURCE_DIR}/prebuild/grpc/lib)
-endif()
-
-include(grpc.cmake)
 
 # `dive_core/common.h` is used in more places other than dive_core now
 add_definitions(-DDIVE_GUI_TOOL)

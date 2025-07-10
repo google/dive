@@ -18,6 +18,7 @@ limitations under the License.
 #include <fstream>
 #include <string>
 #include <vector>
+#include "absl/strings/str_cat.h"
 
 namespace Network
 {

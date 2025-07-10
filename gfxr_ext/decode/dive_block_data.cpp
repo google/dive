@@ -20,25 +20,14 @@ limitations under the License.
 #include "dive_block_data.h"
 
 #include "util/logging.h"
-#include "absl/status/status.h"
-
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
-absl::Status test(int block_size)
-{
-    if (block_size < kDiveBlockBufferSize)
-        return absl::OkStatus();
-
-    return absl::AbortedError("error");
-}
 
 bool TestBlockVisitor::Visit(const DiveOriginalBlock& block)
 {
     std::string descrip = "original, offset:" + std::to_string(block.offset_) +
                           ", size:" + std::to_string(block.size_);
-    test(block.size_).IgnoreError();
     traversed_.push_back(descrip);
     return true;
 }

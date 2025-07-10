@@ -19,7 +19,6 @@ limitations under the License.
 #include "common/log.h"
 #include "absl/strings/str_cat.h"
 
-
 namespace Network
 {
 

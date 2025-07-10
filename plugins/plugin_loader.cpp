@@ -19,7 +19,6 @@
 #include "plugin_loader.h"
 #include "absl/strings/str_cat.h"
 
-
 namespace Dive
 {
 using CreatePluginFunc = IDivePlugin* (*)();

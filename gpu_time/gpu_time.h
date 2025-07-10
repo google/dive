@@ -93,7 +93,7 @@ public:
         double stddev = 0.0;
     };
     Stats       GetStats() const { return m_metrics.GetStatistics(); }
-    std::string GetStatsString();
+    std::string GetStatsString() const;
 
 private:
     class FrameMetrics
@@ -103,7 +103,7 @@ private:
         void AddFrameTime(double time);
 
         Stats       GetStatistics() const;
-        std::string GetStatsString(const Stats& stats);
+        std::string GetStatsString(const Stats& stats) const;
 
     private:
         double CalculateAverage() const;

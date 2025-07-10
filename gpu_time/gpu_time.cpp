@@ -61,7 +61,7 @@ GPUTime::Stats GPUTime::FrameMetrics::GetStatistics() const
     return stats;
 }
 
-std::string GPUTime::FrameMetrics::GetStatsString(const Stats& stats)
+std::string GPUTime::FrameMetrics::GetStatsString(const Stats& stats) const
 {
     std::stringstream ss;
     ss << "FrameMetrics:\n"
@@ -143,7 +143,7 @@ GPUTime::GPUTime() :
 
 GPUTime::~GPUTime() {}
 
-std::string GPUTime::GetStatsString()
+std::string GPUTime::GetStatsString() const
 {
     std::string message = "Frame " + std::to_string(m_frame_index) + " processed successfully.\n" +
                           m_metrics.GetStatsString(GetStats());

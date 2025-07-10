@@ -16,6 +16,4 @@ add_library(gpu_time STATIC
     gpu_time.cpp
     gpu_time.h
 )
-target_include_directories(gpu_time PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
+target_include_directories(gpu_time PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)

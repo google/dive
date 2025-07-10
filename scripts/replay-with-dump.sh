@@ -60,7 +60,6 @@ fi
 python "$GFXRECON" replay \
     --dump-resources "$PUSH_DIR/$JSON_BASENAME" \
     --dump-resources-dir "$DUMP_DIR" \
-    --dump-resources-dump-depth-attachment \
     "$PUSH_DIR/$GFXR_BASENAME"
 
 # gfxrecon.py replay does not wait for the app to start so.

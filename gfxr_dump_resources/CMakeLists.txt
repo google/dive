@@ -31,19 +31,23 @@ target_link_libraries(gfxr_dump_resources PRIVATE
 
 enable_testing()
 
-# Creates a test called `testName` that runs gfxr_dump_resources given `inputGfxr` file and compares the JSON output to `goldenFile`.
+# Creates a test with the given NAME that runs gfxr_dump_resources given INPUT_GFXR file and compares the JSON output to GOLDEN_FILE.
 # This is a wrapper for gfxr_dump_resources_test.cmake that makes tests simpler to define.
-function(add_gfxr_dump_resources_test testName inputGfxr goldenFile)
-  add_test(NAME ${testName}
-    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=${testName} -DINPUT_GFXR=${inputGfxr} -DGOLDEN_FILE=${goldenFile} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
+function(add_gfxr_dump_resources_test)
+  set(oneValueArgs NAME INPUT_GFXR GOLDEN_FILE)
+  cmake_parse_arguments(PARSE_ARGV 0 arg
+      "" "${oneValueArgs}" ""
+  )
+  add_test(NAME ${arg_NAME}
+    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=${arg_NAME} -DINPUT_GFXR=${arg_INPUT_GFXR} -DGOLDEN_FILE=${arg_GOLDEN_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
   )
 endfunction()
 
-add_gfxr_dump_resources_test(GfxrDumpResourcesBasic
-  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110.gfxr
-  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json
+add_gfxr_dump_resources_test(NAME GfxrDumpResourcesBasic
+  INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/vs_triangle_300_20221211T232110.gfxr
+  GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json
 )
-add_gfxr_dump_resources_test(GfxrDumpResourcesRenderPassKHR2
-  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445.gfxr
-  ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445_dump_resources.json
+add_gfxr_dump_resources_test(NAME GfxrDumpResourcesRenderPassKHR2
+  INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445.gfxr
+  GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445_dump_resources.json
 )

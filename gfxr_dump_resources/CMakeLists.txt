@@ -25,6 +25,7 @@ target_include_directories(gfxr_dump_resources PRIVATE ..)
 target_link_libraries(gfxr_dump_resources PRIVATE
   gfxr_dump_resources_lib
   gfxr_decode_ext_lib
+  absl::flags
   absl::flags_parse
   absl::flags_usage
 )
@@ -32,14 +33,16 @@ target_link_libraries(gfxr_dump_resources PRIVATE
 enable_testing()
 
 # Creates a test with the given NAME that runs gfxr_dump_resources given INPUT_GFXR file and compares the JSON output to GOLDEN_FILE.
+# ADDITIONAL_ARGUMENTS are provided to gfxr_dump_resources when it is run.
 # This is a wrapper for gfxr_dump_resources_test.cmake that makes tests simpler to define.
 function(add_gfxr_dump_resources_test)
   set(oneValueArgs NAME INPUT_GFXR GOLDEN_FILE)
+  set(multiValueArgs ADDITIONAL_ARGUMENTS)
   cmake_parse_arguments(PARSE_ARGV 0 arg
-      "" "${oneValueArgs}" ""
+      "" "${oneValueArgs}" "${multiValueArgs}"
   )
   add_test(NAME ${arg_NAME}
-    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=${arg_NAME} -DINPUT_GFXR=${arg_INPUT_GFXR} -DGOLDEN_FILE=${arg_GOLDEN_FILE} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
+    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=${arg_NAME} -DINPUT_GFXR=${arg_INPUT_GFXR} -DGOLDEN_FILE=${arg_GOLDEN_FILE} -DADDITIONAL_ARGUMENTS=${arg_ADDITIONAL_ARGUMENTS} -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
   )
 endfunction()
 
@@ -50,4 +53,9 @@ add_gfxr_dump_resources_test(NAME GfxrDumpResourcesBasic
 add_gfxr_dump_resources_test(NAME GfxrDumpResourcesRenderPassKHR2
   INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445.gfxr
   GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445_dump_resources.json
+)
+add_gfxr_dump_resources_test(NAME GfxrDumpResourcesLastDrawOnly
+  INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445.gfxr
+  GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445_dump_resources_last_draw_only.json
+  ADDITIONAL_ARGUMENTS --last_draw_only
 )

@@ -20,14 +20,14 @@
 #
 #   enable_testing()
 #   add_test(NAME MyTest
-#     COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=MyTest -DINPUT_GFXR=${PROJECT_SOURCE_DIR}/my_capture.gfxr -DGOLDEN_FILE=${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
+#     COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=MyTest -DINPUT_GFXR=${PROJECT_SOURCE_DIR}/my_capture.gfxr -DGOLDEN_FILE=${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json -DADDITIONAL_ARGUMENTS="" -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
 #   )
 #
 # TEST_EXECUTABLE will be run with INPUT_GFXR. The test will pass if TEST_EXECUTABLE returns 0 exit code and the contents of the output json match the contents of GOLDEN_FILE.
 # TEST_NAME should match the NAME given to add_test(). This is mainly used to ensure that temp files are unique to the test (to support running tests in parallel).
 
 execute_process(
-  COMMAND ${TEST_EXECUTABLE} ${INPUT_GFXR} ${TEST_NAME}.json
+  COMMAND ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} ${INPUT_GFXR} ${TEST_NAME}.json
   RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)

@@ -21,6 +21,8 @@
 #include "dump_entry.h"
 #include "gfxr_dump_resources.h"
 
+#include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
 #include "third_party/gfxreconstruct/framework/util/logging.h"
 
 namespace
@@ -35,14 +37,16 @@ using gfxrecon::util::Log;
 
 int main(int argc, char** argv)
 {
-    if (argc != 3)
+    absl::SetProgramUsageMessage("Usage: gfxr_dump_resources FILE.GFXR OUTPUT.JSON");
+    std::vector<char*> positional_args = absl::ParseCommandLine(argc, argv);
+    if (positional_args.size() != 3)
     {
-        std::cerr << "Usage: gfxr_dump_resources FILE.GFXR OUTPUT.JSON\n";
+        std::cerr << absl::ProgramUsageMessage() << '\n';
         return 1;
     }
 
-    const char* input_filename = argv[1];
-    const char* output_filename = argv[2];
+    const char* input_filename = positional_args[1];
+    const char* output_filename = positional_args[2];
 
 #ifdef NDEBUG
     Log::Init(Log::kInfoSeverity);

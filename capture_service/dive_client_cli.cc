@@ -125,7 +125,11 @@ ABSL_FLAG(Command,
           Command::kNone,
           "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay \n\tlist_package "
           "\n\trun \n\tcapture \n\tcleanup");
-ABSL_FLAG(std::string, device, "", "Device serial");
+ABSL_FLAG(
+std::string,
+device,
+"",
+"Device serial. If not specified and only one device is plugged in then that device is used.");
 ABSL_FLAG(std::string, package, "", "Package on the device");
 ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli application to run");
 ABSL_FLAG(std::string, vulkan_command_args, "", "the arguments for vulkan cli application to run");
@@ -143,9 +147,9 @@ download_dir,
 
 ABSL_FLAG(std::string,
           device_architecture,
-          "x86",
+          "",
           "specify the device architecture to capture with gfxr (arm64-v8, armeabi-v7a, x86, or "
-          "x86_64). If not specified, the default is x86.");
+          "x86_64). If not specified, the default is the architecture of --device.");
 ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
           "gfxr_capture",
@@ -223,6 +227,7 @@ bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
 }
 
 bool run_package(Dive::DeviceManager& mgr,
+                 const std::string&   serial,
                  const std::string&   app_type,
                  const std::string&   package,
                  const std::string&   command,
@@ -231,8 +236,6 @@ bool run_package(Dive::DeviceManager& mgr,
                  const std::string&   gfxr_capture_directory,
                  bool                 is_gfxr_capture)
 {
-    std::string serial = absl::GetFlag(FLAGS_device);
-
     if (serial.empty() || (package.empty() && command.empty()))
     {
         std::cout << "Missing required options." << std::endl;
@@ -555,6 +558,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
 }
 
 bool run_and_capture(Dive::DeviceManager& mgr,
+                     const std::string&   serial,
                      const std::string&   app_type,
                      const std::string&   package,
                      const std::string&   command,
@@ -564,6 +568,7 @@ bool run_and_capture(Dive::DeviceManager& mgr,
                      const bool           is_gfxr_capture)
 {
     if (!run_package(mgr,
+                     serial,
                      app_type,
                      package,
                      command,
@@ -598,10 +603,10 @@ bool run_and_capture(Dive::DeviceManager& mgr,
     return true;
 }
 
-bool clean_up_app_and_device(Dive::DeviceManager& mgr, const std::string& package)
+bool clean_up_app_and_device(Dive::DeviceManager& mgr,
+                             const std::string&   serial,
+                             const std::string&   package)
 {
-    std::string serial = absl::GetFlag(FLAGS_device);
-
     if (serial.empty())
     {
         std::cout << "Please run with `--device [serial]` and `--package [package]` options."
@@ -711,6 +716,12 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    if (serial.empty() && list.size() == 1)
+    {
+        serial = list.front().m_serial;
+        std::cout << "--device unspecified, using " << serial << '\n';
+    }
+
     bool res = false;
 
     switch (cmd)
@@ -718,6 +729,7 @@ int main(int argc, char** argv)
     case Command::kGfxrCapture:
     {
         run_and_capture(mgr,
+                        serial,
                         app_type,
                         package,
                         vulkan_command,
@@ -750,7 +762,15 @@ int main(int argc, char** argv)
 
     case Command::kRunPackage:
     {
-        if (run_package(mgr, app_type, package, vulkan_command, vulkan_command_args, "", "", false))
+        if (run_package(mgr,
+                        serial,
+                        app_type,
+                        package,
+                        vulkan_command,
+                        vulkan_command_args,
+                        "",
+                        "",
+                        false))
         {
             res = process_input(mgr);
         }
@@ -761,6 +781,7 @@ int main(int argc, char** argv)
     case Command::kRunAndCapture:
     {
         res = run_and_capture(mgr,
+                              serial,
                               app_type,
                               package,
                               vulkan_command,
@@ -772,7 +793,7 @@ int main(int argc, char** argv)
     }
     case Command::kCleanup:
     {
-        res = clean_up_app_and_device(mgr, package);
+        res = clean_up_app_and_device(mgr, serial, package);
         break;
     }
     case Command::kNone:

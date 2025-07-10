@@ -1024,8 +1024,6 @@ void TraceDialog::OnPackageListFilterApplied(QSet<QString> filters)
 
 void TraceDialog::ShowGfxrFields()
 {
-    m_args_label->hide();
-    m_args_input_box->hide();
     m_capture_button->hide();
     m_gfxr_capture_button->show();
     m_gfxr_capture_file_on_device_directory_label->show();
@@ -1036,8 +1034,6 @@ void TraceDialog::ShowGfxrFields()
 
 void TraceDialog::HideGfxrFields()
 {
-    m_args_label->show();
-    m_args_input_box->show();
     m_capture_button->show();
     m_gfxr_capture_button->hide();
     m_gfxr_capture_file_on_device_directory_label->hide();

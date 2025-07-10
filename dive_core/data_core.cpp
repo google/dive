@@ -24,26 +24,17 @@ namespace Dive
 // =================================================================================================
 // DataCore
 // =================================================================================================
-DataCore::DataCore(ILog *log_ptr) :
-    m_progress_tracker(NULL),
-    m_capture_data(log_ptr),
-    m_log_ptr(log_ptr)
-{
-}
 
 //--------------------------------------------------------------------------------------------------
-DataCore::DataCore(ProgressTracker *progress_tracker, ILog *log_ptr) :
-    m_progress_tracker(progress_tracker),
-    m_capture_data(log_ptr),
-    m_log_ptr(log_ptr)
+DataCore::DataCore(ProgressTracker *progress_tracker) :
+    m_progress_tracker(progress_tracker)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 {
-    m_capture_data = CaptureData(m_progress_tracker,
-                                 m_log_ptr);  // Clear any previously loaded data
+    m_capture_data = CaptureData(m_progress_tracker);  // Clear any previously loaded data
     m_capture_metadata = CaptureMetadata();
     return m_capture_data.LoadFile(file_name);
 }
@@ -61,12 +52,10 @@ bool DataCore::CreateCommandHierarchy()
     uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
     // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator(*state_tracker);
-    if (!cmd_hier_creator.CreateTrees(&m_capture_metadata.m_command_hierarchy,
-                                      m_capture_data,
-                                      true,
-                                      reserve_size,
-                                      m_log_ptr))
+    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
+                                             m_capture_data,
+                                             *state_tracker);
+    if (!cmd_hier_creator.CreateTrees(true, reserve_size))
     {
         return false;
     }

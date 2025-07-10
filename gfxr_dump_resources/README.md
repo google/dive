@@ -24,7 +24,7 @@ adb pull /sdcard/Download/dump
 `replay-with-dump.sh` is a helper script which performs all the steps mentioned above:
 
 ```sh
-./gfxr_dump_resources/replay-with-dump.sh in_capture.gfxr in_capture.gfxa
+./scripts/replay-with-dump.sh in_capture.gfxr in_capture.gfxa
 ```
 
 ## Using as a Library

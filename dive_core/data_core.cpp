@@ -42,8 +42,6 @@ CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreateCommandHierarchy()
 {
-    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
-
     // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
     // This is an educated guess that each PM4 packet results in x number of associated
     // field/register nodes. Overguessing means more memory used during creation. Underguessing
@@ -53,8 +51,7 @@ bool DataCore::CreateCommandHierarchy()
 
     // Command hierarchy tree creation
     CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                             m_capture_data,
-                                             *state_tracker);
+                                             m_capture_data);
     if (!cmd_hier_creator.CreateTrees(true, reserve_size))
     {
         return false;
@@ -65,8 +62,7 @@ bool DataCore::CreateCommandHierarchy()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreateMetaData()
 {
-    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
-    CaptureMetadataCreator               metadata_creator(m_capture_metadata, *state_tracker);
+    CaptureMetadataCreator metadata_creator(m_capture_metadata);
     if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
                                          m_capture_data.GetMemoryManager()))
     {
@@ -122,10 +118,8 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 // =================================================================================================
 // CaptureMetadataCreator
 // =================================================================================================
-CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata     &capture_metadata,
-                                               EmulateStateTracker &state_tracker) :
-    m_capture_metadata(capture_metadata),
-    m_state_tracker(state_tracker)
+CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
+    m_capture_metadata(capture_metadata)
 {
     m_state_tracker.Reset();
     m_capture_metadata.m_num_pm4_packets = 0;
@@ -150,7 +144,7 @@ bool CaptureMetadataCreator::OnIbStart(uint32_t                  submit_index,
                                        const IndirectBufferInfo &ib_info,
                                        IbType                    type)
 {
-    m_state_tracker.PushEnableMask(ib_info.m_enable_mask);
+    EmulateCallbacksBase::OnIbStart(submit_index, ib_index, ib_info, type);
     return true;
 }
 
@@ -159,7 +153,7 @@ bool CaptureMetadataCreator::OnIbEnd(uint32_t                  submit_index,
                                      uint32_t                  ib_index,
                                      const IndirectBufferInfo &ib_info)
 {
-    m_state_tracker.PopEnableMask();
+    EmulateCallbacksBase::OnIbEnd(submit_index, ib_index, ib_info);
     return true;
 }
 
@@ -171,7 +165,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                       Pm4Header             header)
 {
     m_capture_metadata.m_num_pm4_packets++;
-    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
+    if (!EmulateCallbacksBase::OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
         return false;
 
     if (header.type != 7)

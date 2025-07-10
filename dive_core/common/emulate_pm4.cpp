@@ -322,7 +322,7 @@ void EmulateStateTracker::UpdateUserDataRegsSetSinceLastEvent(ShaderStage stage,
 EmulatePM4::EmulatePM4() {}
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
+bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase     &callbacks,
                                const IMemoryManager     &mem_manager,
                                uint32_t                  submit_index,
                                uint32_t                  num_ibs,
@@ -405,7 +405,7 @@ bool EmulatePM4::ExecuteSubmit(IEmulateCallbacks        &callbacks,
 //--------------------------------------------------------------------------------------------------
 bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                            EmulateState         *emu_state_ptr,
-                           IEmulateCallbacks    &callbacks,
+                           EmulateCallbacksBase &callbacks,
                            Pm4Header             header) const
 {
     // Note: CP_COND_INDIRECT_BUFFER_PFE is not parsed here because it isn't used by Turnip.
@@ -680,7 +680,7 @@ bool EmulatePM4::QueueIB(uint64_t      ib_addr,
 //--------------------------------------------------------------------------------------------------
 bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
                                    EmulateState         *emu_state,
-                                   IEmulateCallbacks    &callbacks) const
+                                   EmulateCallbacksBase &callbacks) const
 {
     // Grab current stack level info
     EmulateState::IbStack *prev_ib_level = emu_state->GetCurIb();
@@ -769,7 +769,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager,
 //--------------------------------------------------------------------------------------------------
 bool EmulatePM4::CheckAndAdvanceIB(const IMemoryManager &mem_manager,
                                    EmulateState         *emu_state,
-                                   IEmulateCallbacks    &callbacks) const
+                                   EmulateCallbacksBase &callbacks) const
 {
     // Could be pointing to an IB that needs to be "skipped", or reached the end of current IB.
     // Loop until pointing to a "valid" IB.
@@ -795,7 +795,7 @@ void EmulatePM4::AdvancePacket(EmulateState *emu_state, Pm4Header header) const
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, IEmulateCallbacks &callbacks) const
+bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, EmulateCallbacksBase &callbacks) const
 {
     EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
 
@@ -879,11 +879,11 @@ uint32_t GetPacketSize(Pm4Header header)
 }
 
 // =================================================================================================
-// IEmulateCallbacks
+// EmulateCallbacksBase
 // =================================================================================================
 
-bool IEmulateCallbacks::ProcessSubmits(const DiveVector<SubmitInfo> &submits,
-                                       const IMemoryManager         &mem_manager)
+bool EmulateCallbacksBase::ProcessSubmits(const DiveVector<SubmitInfo> &submits,
+                                          const IMemoryManager         &mem_manager)
 {
     for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
     {

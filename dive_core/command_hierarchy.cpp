@@ -472,12 +472,10 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, Syn
 // =================================================================================================
 // CommandHierarchyCreator
 // =================================================================================================
-CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy    &command_hierarchy,
-                                                 const CaptureData   &capture_data,
-                                                 EmulateStateTracker &state_tracker) :
+CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy  &command_hierarchy,
+                                                 const CaptureData &capture_data) :
     m_command_hierarchy(command_hierarchy),
-    m_capture_data(capture_data),
-    m_state_tracker(state_tracker)
+    m_capture_data(capture_data)
 {
     m_state_tracker.Reset();
 }
@@ -621,7 +619,7 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t                  submit_index,
                                         const IndirectBufferInfo &ib_info,
                                         IbType                    type)
 {
-    m_state_tracker.PushEnableMask(ib_info.m_enable_mask);
+    EmulateCallbacksBase::OnIbStart(submit_index, ib_index, ib_info, type);
     m_cur_ib_level = ib_info.m_ib_level;
 
     // Make all subsequent shared node parent the actual IB-packet
@@ -763,7 +761,7 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t                  submit_index,
                                       uint32_t                  ib_index,
                                       const IndirectBufferInfo &ib_info)
 {
-    m_state_tracker.PopEnableMask();
+    EmulateCallbacksBase::OnIbEnd(submit_index, ib_index, ib_info);
     DIVE_ASSERT(!m_ib_stack.empty());
 
     // Setup root & range of shared children that this IB encompasses
@@ -817,7 +815,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                        uint64_t              va_addr,
                                        Pm4Header             header)
 {
-    if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
+    if (!EmulateCallbacksBase::OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
         return false;
     // THIS IS TEMPORARY! Only deal with typ4 & type7 packets for now
     if ((header.type != 4) && (header.type != 7))

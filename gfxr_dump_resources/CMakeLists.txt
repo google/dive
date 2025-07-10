@@ -20,11 +20,13 @@ target_include_directories(gfxr_dump_resources_lib PRIVATE ..)
 # GFXR doesn't need to be PUBLIC since the tool's "public" headers don't expose GFXR constructs
 target_link_libraries(gfxr_dump_resources_lib PRIVATE gfxr_decode_ext_lib)
 
-add_executable(gfxr_dump_resources main.cpp)
+add_executable(gfxr_dump_resources gfxr_dump_resources_main.cpp)
 target_include_directories(gfxr_dump_resources PRIVATE ..)
 target_link_libraries(gfxr_dump_resources PRIVATE
   gfxr_dump_resources_lib
   gfxr_decode_ext_lib
+  absl::flags_parse
+  absl::flags_usage
 )
 
 enable_testing()

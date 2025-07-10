@@ -21,9 +21,16 @@
 #include "dump_entry.h"
 #include "gfxr_dump_resources.h"
 
+#include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "third_party/gfxreconstruct/framework/util/logging.h"
+
+ABSL_FLAG(bool,
+          last_draw_only,
+          false,
+          "If specified, only dump the final draw call for a render pass. This should speed up "
+          "dumping without but still provide a useful result.");
 
 namespace
 {
@@ -59,6 +66,22 @@ int main(int argc, char** argv)
     {
         std::cerr << "Failed to find resources in " << input_filename << '\n';
         return 1;
+    }
+
+    if (absl::GetFlag(FLAGS_last_draw_only))
+    {
+        // Only keep the final draw call. This should represent the image presented to the user.
+        // For validation purposes, this is typically fine and saves a lot of time (since each draw
+        // call can take 2-3 seconds to dump).
+        for (DumpEntry& dumpable : *dumpables)
+        {
+            std::vector<uint64_t>& draws = dumpable.draws;
+            if (draws.size() == 1)
+            {
+                continue;
+            }
+            draws.erase(draws.begin(), draws.end() - 1);
+        }
     }
 
     if (!SaveAsJsonFile(*dumpables, output_filename))

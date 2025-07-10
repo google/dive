@@ -36,12 +36,16 @@ add_library(gfxr_decode_ext_lib
   dive_file_processor.h
   dive_file_processor.cpp
 )
-target_link_libraries(gfxr_decode_ext_lib
+target_link_libraries(gfxr_decode_ext_lib PUBLIC
   gfxrecon_decode
+  gfxrecon_util
+  absl::status
+  absl::strings
 )
-# gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
+# gfxrecon_util has a psapi dependency on Windows. Ideally, gfxrecon_util should
+# declare this dependency in its CMakeLists.txt
 if (WIN32)
-  target_link_libraries(gfxr_decode_ext_lib psapi)
+  target_link_libraries(gfxr_decode_ext_lib PUBLIC psapi)
 endif()
 target_include_directories(gfxr_decode_ext_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework)

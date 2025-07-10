@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 #include "messages.h"
+#include "common/macros.h"
 
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 
@@ -48,13 +49,8 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
 
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset)
 {
-    absl::StatusOr<uint32_t> len_or = ReadUint32FromBuffer(src, offset);
-    if (!len_or.ok())
-    {
-        return len_or.status();
-    }
-
-    uint32_t len = len_or.value();
+    uint32_t len;
+    ASSIGN_OR_RETURN(len, ReadUint32FromBuffer(src, offset));
     if (src.size() < offset + len)
     {
         return absl::InvalidArgumentError("Buffer too small for declared string length.");
@@ -74,21 +70,9 @@ absl::Status HandShakeMessage::Serialize(Buffer& dest) const
 
 absl::Status HandShakeMessage::Deserialize(const Buffer& src)
 {
-    size_t                   offset = 0;
-    absl::StatusOr<uint32_t> major_or = ReadUint32FromBuffer(src, offset);
-    if (!major_or.ok())
-    {
-        return major_or.status();
-    }
-    m_major_version = major_or.value();
-
-    absl::StatusOr<uint32_t> minor_or = ReadUint32FromBuffer(src, offset);
-    if (!minor_or.ok())
-    {
-        return minor_or.status();
-    }
-    m_minor_version = minor_or.value();
-
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_major_version, ReadUint32FromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_minor_version, ReadUint32FromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("Handshake message has unexpected trailing data.");
@@ -105,14 +89,8 @@ absl::Status StringMessage::Serialize(Buffer& dest) const
 
 absl::Status StringMessage::Deserialize(const Buffer& src)
 {
-    size_t                      offset = 0;
-    absl::StatusOr<std::string> str_or = ReadStringFromBuffer(src, offset);
-    if (!str_or.ok())
-    {
-        return str_or.status();
-    }
-
-    m_str = std::move(str_or.value());
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("String message has unexpected trailing data.");
@@ -133,7 +111,6 @@ absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
 absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-
     // Deserialize the 'found' boolean.
     if (src.size() < offset + sizeof(uint8_t))
     {
@@ -142,34 +119,42 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     m_found = (src[offset] != 0);
     offset += sizeof(uint8_t);
 
-    // Deserialize the strings using the StatusOr-returning helper
-    absl::StatusOr<std::string> error_reason_or = ReadStringFromBuffer(src, offset);
-    if (!error_reason_or.ok())
-    {
-        return error_reason_or.status();  // Forward the error
-    }
-    m_error_reason = std::move(error_reason_or.value());
-
-    absl::StatusOr<std::string> file_path_or = ReadStringFromBuffer(src, offset);
-    if (!file_path_or.ok())
-    {
-        return file_path_or.status();
-    }
-    m_file_path = std::move(file_path_or.value());
-
-    absl::StatusOr<std::string> file_size_or = ReadStringFromBuffer(src, offset);
-    if (!file_size_or.ok())
-    {
-        return file_size_or.status();
-    }
-    m_file_size_str = std::move(file_size_or.value());
-
-    // Final check for trailing data.
+    ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_path, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
         return absl::InvalidArgumentError("Message has unexpected trailing data.");
     }
+    return absl::OkStatus();
+}
 
+absl::Status FileSizeResponse::Serialize(Buffer& dest) const
+{
+    dest.push_back(static_cast<uint8_t>(m_found));
+    WriteStringToBuffer(m_error_reason, dest);
+    WriteStringToBuffer(m_file_size_str, dest);
+
+    return absl::OkStatus();
+}
+
+absl::Status FileSizeResponse::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+    // Deserialize the 'found' boolean.
+    if (src.size() < offset + sizeof(uint8_t))
+    {
+        return absl::InvalidArgumentError("Buffer too small for 'found' field.");
+    }
+    m_found = (src[offset] != 0);
+    offset += sizeof(uint8_t);
+
+    ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
+    if (offset != src.size())
+    {
+        return absl::InvalidArgumentError("Message has unexpected trailing data.");
+    }
     return absl::OkStatus();
 }
 
@@ -182,14 +167,14 @@ absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size,
     size_t total_received = 0;
     while (total_received < size)
     {
-        absl::StatusOr<size_t> received_or = conn->Recv(buffer + total_received,
-                                                        size - total_received,
-                                                        timeout_ms);
-        if (!received_or.ok())
+        absl::StatusOr<size_t> received = conn->Recv(buffer + total_received,
+                                                     size - total_received,
+                                                     timeout_ms);
+        if (!received.ok())
         {
-            return received_or.status();
+            return received.status();
         }
-        total_received += received_or.value();
+        total_received += *received;
     }
     return absl::OkStatus();
 }
@@ -270,6 +255,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* 
         break;
     case MessageType::DOWNLOAD_FILE_RESPONSE:
         message = std::make_unique<DownloadFileResponse>();
+        break;
+    case MessageType::FILE_SIZE_REQUEST:
+        message = std::make_unique<FileSizeRequest>();
+        break;
+    case MessageType::FILE_SIZE_RESPONSE:
+        message = std::make_unique<FileSizeResponse>();
         break;
     default:
         conn->Close();

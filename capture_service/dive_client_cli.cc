@@ -324,11 +324,8 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     std::filesystem::path target_download_dir(download_dir);
     if (!std::filesystem::is_directory(target_download_dir))
     {
-        std::error_code ec;
-        if (!std::filesystem::create_directories(target_download_dir, ec))
-        {
-            std::cout << "Error creating directory: " << ec << std::endl;
-        }
+        std::cout << "Invalid download directory: " << target_download_dir << std::endl;
+        return false;
     }
     std::filesystem::path p(*capture_file_path);
     std::string           download_file_path = (target_download_dir / p.filename()).string();
@@ -338,7 +335,7 @@ bool trigger_capture(Dive::DeviceManager& mgr)
         std::cout << status.message() << std::endl;
         return false;
     }
-    std::cout << "Capture saved at " << target_download_dir << std::endl;
+    std::cout << "Capture saved at " << download_file_path << std::endl;
     return true;
 }
 

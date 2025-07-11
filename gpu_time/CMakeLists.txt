@@ -22,14 +22,13 @@ if(WIN32)
   enable_testing()
   include(GoogleTest)
   add_executable(gpu_time_test
-    gpu_time.h
-    gpu_time.cpp
     gpu_time_test.cpp
   )
 
   target_include_directories(gpu_time_test PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 
   target_link_libraries(gpu_time_test PRIVATE
+    gpu_time
     gtest
     gtest_main
   )

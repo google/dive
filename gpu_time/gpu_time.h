@@ -38,8 +38,8 @@ public:
         bool        success = true;
     };
 
-    GPUTime();
-    ~GPUTime();
+    GPUTime() = default;
+    ~GPUTime() = default;
 
     VkDevice GetDevice() const { return m_device; }
 
@@ -102,8 +102,7 @@ private:
         FrameMetrics() = default;
         void AddFrameTime(double time);
 
-        Stats       GetStatistics() const;
-        std::string GetStatsString(const Stats& stats) const;
+        Stats GetStatistics() const;
 
     private:
         double CalculateAverage() const;

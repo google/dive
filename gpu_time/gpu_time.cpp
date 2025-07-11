@@ -31,7 +31,6 @@ static constexpr uint32_t kFrameMetricsLimit = 1000;
 namespace Dive
 {
 
-// FrameMetrics
 void GPUTime::FrameMetrics::AddFrameTime(double time)
 {
     if (m_frame_data.size() == kFrameMetricsLimit)
@@ -59,18 +58,6 @@ GPUTime::Stats GPUTime::FrameMetrics::GetStatistics() const
     stats.stddev = CalculateStdDev(stats.average);
 
     return stats;
-}
-
-std::string GPUTime::FrameMetrics::GetStatsString(const Stats& stats) const
-{
-    std::stringstream ss;
-    ss << "FrameMetrics:\n"
-       << std::fixed << std::setprecision(2) << "  Min: " << stats.min << " ms\n"
-       << "  Max: " << stats.max << " ms\n"
-       << "  Mean: " << stats.average << " ms\n"
-       << "  Median: " << stats.median << " ms\n"
-       << "  Std: " << stats.stddev << " ms";
-    return ss.str();
 }
 
 double GPUTime::FrameMetrics::CalculateAverage() const
@@ -104,7 +91,7 @@ double GPUTime::FrameMetrics::CalculateMedian() const
     if (size % 2 == 0)
     {
         // Even number of elements: average of the two middle elements
-        double mid1 = sorted_data[size / 2 - 1];
+        double mid1 = sorted_data[(size / 2) - 1];
         double mid2 = sorted_data[size / 2];
         return (mid1 + mid2) / 2.0;
     }
@@ -131,22 +118,19 @@ double GPUTime::FrameMetrics::CalculateStdDev(double average) const
     return std::sqrt(variance);
 }
 
-GPUTime::GPUTime() :
-    m_device(VK_NULL_HANDLE),
-    m_allocator(nullptr),
-    m_query_pool(VK_NULL_HANDLE),
-    m_frame_index(0),
-    m_timestamp_counter(0),
-    m_timestamp_period(0.0f)
-{
-}
-
-GPUTime::~GPUTime() {}
-
 std::string GPUTime::GetStatsString() const
 {
+    const Stats&      stats = GetStats();
+    std::stringstream ss;
+    ss << "FrameMetrics:\n"
+       << std::fixed << std::setprecision(2) << "  Min: " << stats.min << " ms\n"
+       << "  Max: " << stats.max << " ms\n"
+       << "  Mean: " << stats.average << " ms\n"
+       << "  Median: " << stats.median << " ms\n"
+       << "  Std: " << stats.stddev << " ms";
+
     std::string message = "Frame " + std::to_string(m_frame_index) + " processed successfully.\n" +
-                          m_metrics.GetStatsString(GetStats());
+                          ss.str();
     return message;
 }
 
@@ -400,15 +384,7 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
             availability_end = timestamps_with_availability[(timestamp_offset + 1) * 2 + 1];
             uint64_t availability_begin = timestamps_with_availability[timestamp_offset * 2 + 1];
 
-            if ((availability_begin != 0) && (availability_end != 0))
-            {
-                // Calculate the elapsed time in nanoseconds
-                uint64_t elapsed_time = timestamps_with_availability[(timestamp_offset + 1) * 2] -
-                                        timestamps_with_availability[timestamp_offset * 2];
-                double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
-                frame_time += elapsed_time_in_ms;
-            }
-            else
+            if ((availability_begin == 0) || (availability_end == 0))
             {
                 frame_time = 0.0;
                 valid_frame_time = false;
@@ -416,6 +392,12 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
                 ss << "Query result is not available for cmd " << static_cast<void*>(cmd);
                 return GPUTime::GpuTimeStatus{ ss.str(), false };
             }
+
+            // Calculate the elapsed time in nanoseconds
+            uint64_t elapsed_time = timestamps_with_availability[(timestamp_offset + 1) * 2] -
+                                    timestamps_with_availability[timestamp_offset * 2];
+            double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
+            frame_time += elapsed_time_in_ms;
         }
     }
 

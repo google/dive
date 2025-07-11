@@ -75,6 +75,7 @@ add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)
 add_subdirectory(runtime_layer)
+add_subdirectory(gpu_time)
 
 # For generated headers
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)

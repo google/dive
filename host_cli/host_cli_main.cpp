@@ -92,7 +92,7 @@ int main(int argc, char **argv)
                  "\nlibrary for utility and for testing. Currently it supports"
                  "\nmanipulation of .gfxr files. Sample usage:\n\n",
                  argv[0],
-                 " --helpfull"));
+                 " --help"));
     absl::ParseCommandLine(argc, argv);
 
     // Early termination flags

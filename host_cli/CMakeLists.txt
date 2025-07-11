@@ -46,7 +46,7 @@ target_include_directories(data_core_wrapper_lib PUBLIC
 
 # --------
 # host_cli
-add_executable(host_cli "main.cpp")
+add_executable(host_cli "host_cli_main.cpp")
 target_link_libraries(host_cli PUBLIC 
   data_core_wrapper_lib 
   absl::flags

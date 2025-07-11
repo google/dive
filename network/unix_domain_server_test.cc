@@ -25,7 +25,7 @@ namespace
 
 const std::string kTestServerAddress = "test_server_socket";
 
-// The tests assume the client and server are running on a PC (Windows/Linux), as we are not using
+// The tests assume the client and server are running on a PC (Linux), as we are not using
 // an Android device. However, this creates a limitation: we cannot directly test the TcpClient
 // against the UnixDomainServer because they use incompatible communication protocols. The TcpClient
 // uses TCP/IP sockets, while the UnixDomainServer uses Unix domain sockets (UDS). To test the
@@ -98,7 +98,7 @@ TEST_F(UnixDomainServerTest, ClientConnectAndDisconnect)
     EXPECT_FALSE((*client_conn)->IsOpen());
 }
 
-TEST_F(UnixDomainServerTest, Handshake)
+TEST_F(UnixDomainServerTest, HandShakeSuccess)
 {
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
     absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
@@ -124,7 +124,25 @@ TEST_F(UnixDomainServerTest, Handshake)
     EXPECT_EQ(response->GetMinorVersion(), request.GetMinorVersion());
 }
 
-TEST_F(UnixDomainServerTest, PingPong)
+TEST_F(UnixDomainServerTest, HandShakeFails)
+{
+    ASSERT_TRUE(server->Start(kTestServerAddress).ok());
+    absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
+    ASSERT_TRUE(client_conn.ok());
+
+    // Client sends ping message rather than HandShakeRequest.
+    PingMessage request;
+    ASSERT_TRUE(SendMessage((*client_conn).get(), request).ok());
+
+    // Client receives pong message rather than HandShakeResponse.
+    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveMessage(
+    (*client_conn).get());
+    ASSERT_TRUE(response_msg.ok());
+    ASSERT_NE(*response_msg, nullptr);
+    ASSERT_NE((*response_msg)->GetMessageType(), MessageType::HANDSHAKE_RESPONSE);
+}
+
+TEST_F(UnixDomainServerTest, PingPongSuccess)
 {
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
     auto client_conn = ConnectClient();
@@ -139,6 +157,23 @@ TEST_F(UnixDomainServerTest, PingPong)
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
     ASSERT_EQ((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);
+}
+
+TEST_F(UnixDomainServerTest, PingPongFails)
+{
+    ASSERT_TRUE(server->Start(kTestServerAddress).ok());
+    auto client_conn = ConnectClient();
+    ASSERT_TRUE(client_conn.ok());
+
+    // Client sends HandShakeRequest rather than ping message.
+    HandShakeRequest ping;
+    ASSERT_TRUE(SendMessage((*client_conn).get(), ping).ok());
+
+    // Client receives HandShakeResponse rather than pong message.
+    auto response_msg = ReceiveMessage((*client_conn).get());
+    ASSERT_TRUE(response_msg.ok());
+    ASSERT_NE(*response_msg, nullptr);
+    ASSERT_NE((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);
 }
 
 }  // namespace

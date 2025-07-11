@@ -15,8 +15,11 @@ limitations under the License.
 */
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "gpu_time.h"
 
+namespace Dive
+{
 namespace
 {
 
@@ -28,16 +31,16 @@ namespace
 
 // Use custom non-zero pointer values for handles to simulate real ones.
 // Using reinterpret_cast to create opaque handles from integer values.
-#define MOCK_HANDLE(name, type, val) \
+#define MOCK_HANDLE(type, name, val) \
     const type name = reinterpret_cast<type>(static_cast<uintptr_t>(val));
 
-MOCK_HANDLE(MOCK_DEVICE, VkDevice, 0x1);
-MOCK_HANDLE(MOCK_QUEUE, VkQueue, 0x2);
-MOCK_HANDLE(MOCK_COMMAND_POOL, VkCommandPool, 0x3);
-MOCK_HANDLE(MOCK_COMMAND_BUFFER_1, VkCommandBuffer, 0x10);
-MOCK_HANDLE(MOCK_COMMAND_BUFFER_2, VkCommandBuffer, 0x20);
-MOCK_HANDLE(MOCK_COMMAND_BUFFER_3, VkCommandBuffer, 0x30);
-MOCK_HANDLE(MOCK_QUERY_POOL, VkQueryPool, 0x4);
+MOCK_HANDLE(VkDevice, MOCK_DEVICE, 0x1);
+MOCK_HANDLE(VkQueue, MOCK_QUEUE, 0x2);
+MOCK_HANDLE(VkCommandPool, MOCK_COMMAND_POOL, 0x3);
+MOCK_HANDLE(VkCommandBuffer, MOCK_COMMAND_BUFFER_1, 0x10);
+MOCK_HANDLE(VkCommandBuffer, MOCK_COMMAND_BUFFER_2, 0x20);
+MOCK_HANDLE(VkCommandBuffer, MOCK_COMMAND_BUFFER_3, 0x30);
+MOCK_HANDLE(VkQueryPool, MOCK_QUERY_POOL, 0x4);
 
 constexpr float kMockTimestampPeriod = 1.0f;
 
@@ -126,7 +129,7 @@ VKAPI_ATTR VkResult VKAPI_CALL MockDeviceWaitIdle(VkDevice device)
     return VK_SUCCESS;
 }
 
-void CreateGPUTime(Dive::GPUTime& gpuTime, float timestamp_period)
+void CreateGPUTime(GPUTime& gpuTime, float timestamp_period)
 {
     ASSERT_TRUE(gpuTime
                 .OnCreateDevice(MOCK_DEVICE,
@@ -137,7 +140,7 @@ void CreateGPUTime(Dive::GPUTime& gpuTime, float timestamp_period)
                 .success);
 }
 
-void DestroyGPUTime(Dive::GPUTime& gpuTime)
+void DestroyGPUTime(GPUTime& gpuTime)
 {
     VkQueue queue = MOCK_QUEUE;
     gpuTime.OnGetDeviceQueue(&queue);
@@ -145,99 +148,93 @@ void DestroyGPUTime(Dive::GPUTime& gpuTime)
     gpuTime.OnDestroyDevice(MOCK_DEVICE, MockQueueWaitIdle, MockDestroyQueryPool).success);
 }
 
-void ExpectStatsEq(const Dive::GPUTime::Stats& stats,
-                   double                      expected_average,
-                   double                      expected_median,
-                   double                      expected_min,
-                   double                      expected_max,
-                   double                      expected_stddev)
+MATCHER_P(StatsEq, expected, "")
 {
-    EXPECT_DOUBLE_EQ(stats.average, expected_average);
-    EXPECT_DOUBLE_EQ(stats.median, expected_median);
-    EXPECT_DOUBLE_EQ(stats.min, expected_min);
-    EXPECT_DOUBLE_EQ(stats.max, expected_max);
-    EXPECT_DOUBLE_EQ(stats.stddev, expected_stddev);
+    EXPECT_DOUBLE_EQ(arg.average, expected.average);
+    EXPECT_DOUBLE_EQ(arg.median, expected.median);
+    EXPECT_DOUBLE_EQ(arg.min, expected.min);
+    EXPECT_DOUBLE_EQ(arg.max, expected.max);
+    EXPECT_DOUBLE_EQ(arg.stddev, expected.stddev);
+    return true;
 }
 
 // --- GPUTime Tests ---
 // Test that a newly created object returns default statistics.
 TEST(GPUTimeTest, InitialStateReturnsDefaultStats)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
-    auto stats = gpuTime.GetStats();
-    ExpectStatsEq(stats,
-                  /* average */ 0.0,
-                  /* median */ 0.0,
-                  /* min */ std::numeric_limits<double>::max(),
-                  /* max */ std::numeric_limits<double>::lowest(),
-                  /* stddev */ 0.0);
+    auto           stats = gpuTime.GetStats();
+    GPUTime::Stats expected_stats;
+    expected_stats.average = 0.0;
+    expected_stats.median = 0.0;
+    expected_stats.min = std::numeric_limits<double>::max();
+    expected_stats.max = std::numeric_limits<double>::lowest();
+    expected_stats.stddev = 0.0;
+    EXPECT_THAT(stats, StatsEq(expected_stats));
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test that a command buffer can be successfully allocated.
 TEST(GPUTimeTest, AllocateCommandBufferSucceeds)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
     allocInfo.commandBufferCount = 1;
     VkCommandBuffer cmdBuf = MOCK_COMMAND_BUFFER_1;
 
-    auto status = gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf).success);
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test that attempting to allocate the same command buffer again fails.
 TEST(GPUTimeTest, AllocateSameCommandBufferTwiceFails)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
     allocInfo.commandBufferCount = 1;
     VkCommandBuffer cmdBuf = MOCK_COMMAND_BUFFER_1;
 
-    gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
+    ASSERT_TRUE(gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf).success);
 
     // Second allocation of the same buffer should fail
-    auto status = gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
-    ASSERT_FALSE(status.success);
+    ASSERT_FALSE(gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf).success);
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test that a command buffer can be successfully freed.
 TEST(GPUTimeTest, FreeCommandBufferSucceeds)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
     allocInfo.commandBufferCount = 1;
     VkCommandBuffer cmdBuf = MOCK_COMMAND_BUFFER_1;
 
-    gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
+    ASSERT_TRUE(gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf).success);
 
-    auto status = gpuTime.OnFreeCommandBuffers(1, &cmdBuf);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(gpuTime.OnFreeCommandBuffers(1, &cmdBuf).success);
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test that attempting to free the same command buffer again fails.
 TEST(GPUTimeTest, FreeSameCommandBufferTwiceFails)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
@@ -247,17 +244,16 @@ TEST(GPUTimeTest, FreeSameCommandBufferTwiceFails)
     gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
     gpuTime.OnFreeCommandBuffers(1, &cmdBuf);
 
-    auto status = gpuTime.OnFreeCommandBuffers(1, &cmdBuf);
-    ASSERT_FALSE(status.success);
+    ASSERT_FALSE(gpuTime.OnFreeCommandBuffers(1, &cmdBuf).success);
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test that resetting a command pool correctly resets the state of command buffers from that pool.
 TEST(GPUTimeTest, ResetCommandPoolAllowsReinsertingFrameDelimiter)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
@@ -266,69 +262,64 @@ TEST(GPUTimeTest, ResetCommandPoolAllowsReinsertingFrameDelimiter)
     gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
 
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
+    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label);
 
-    auto status = gpuTime.OnResetCommandPool(MOCK_COMMAND_POOL);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(gpuTime.OnResetCommandPool(MOCK_COMMAND_POOL).success);
 
     // Check that the command buffer state was reset by trying to mark it as a frame boundary again.
     // This primarily ensures the function runs without errors and doesn't crash on lookup.
-    status = gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label).success);
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test that submitting a single command buffer marked as a frame boundary updates the metrics.
 TEST(GPUTimeTest, SingleCommandBufferFrameUpdatesMetricsCorrectly)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
     allocInfo.commandBufferCount = 1;
     VkCommandBuffer cmdBuf = MOCK_COMMAND_BUFFER_1;
-    auto            status = gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf).success);
 
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
-    status = gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label);
-    ASSERT_TRUE(status.success);
+    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
+    ASSERT_TRUE(gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmdBuf, &label).success);
 
     // This should trigger the frame boundary logic.
     VkSubmitInfo submitInfo = {};
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmdBuf;
 
-    status = gpuTime.OnQueueSubmit(1,
-                                   &submitInfo,
-                                   MockDeviceWaitIdle,
-                                   MockResetQueryPool,
-                                   MockGetQueryPoolResults);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
 
     // After a frame boundary submit, metrics should be updated.
     // Our mock provides a 10ms duration for the first command buffer.
     // (1010000000 - 1000000000) * 1.0f (timestamp_period) * 0.000001 = 10.0
-    auto stats = gpuTime.GetStats();
-    ExpectStatsEq(stats,
-                  /* average */ 10.0,
-                  /* median */ 10.0,
-                  /* min */ 10.0,
-                  /* max */ 10.0,
-                  /* stddev */ 0.0);
+    auto           stats = gpuTime.GetStats();
+    GPUTime::Stats expected_stats;
+    expected_stats.average = 10.0;
+    expected_stats.median = 10.0;
+    expected_stats.min = 10.0;
+    expected_stats.max = 10.0;
+    expected_stats.stddev = 0.0;
+    EXPECT_THAT(stats, StatsEq(expected_stats));
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test submitting multiple command buffers in a single frame, where the total time is aggregated.
 TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
@@ -337,38 +328,37 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
     gpuTime.OnAllocateCommandBuffers(&allocInfo, cmdBufs);
 
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
+    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_2, &label);
 
     VkSubmitInfo submitInfo = {};
     submitInfo.commandBufferCount = 2;
     submitInfo.pCommandBuffers = cmdBufs;
 
-    auto status = gpuTime.OnQueueSubmit(1,
-                                        &submitInfo,
-                                        MockDeviceWaitIdle,
-                                        MockResetQueryPool,
-                                        MockGetQueryPoolResults);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
 
     // The total frame time should be the sum of durations from both command buffers.
     // From our mock function: 10ms + 20ms = 30ms.
-    auto stats = gpuTime.GetStats();
-    ExpectStatsEq(stats,
-                  /* average */ 30.0,
-                  /* median */ 30.0,
-                  /* min */ 30.0,
-                  /* max */ 30.0,
-                  /* stddev */ 0.0);
+    auto           stats = gpuTime.GetStats();
+    GPUTime::Stats expected_stats;
+    expected_stats.average = 30.0;
+    expected_stats.median = 30.0;
+    expected_stats.min = 30.0;
+    expected_stats.max = 30.0;
+    expected_stats.stddev = 0.0;
+    EXPECT_THAT(stats, StatsEq(expected_stats));
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 // Test submitting multiple, separate frames to see how statistics accumulate.
 TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
 {
-    Dive::GPUTime gpuTime;
-    CreateGPUTime(gpuTime, kMockTimestampPeriod);
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.commandPool = MOCK_COMMAND_POOL;
@@ -379,40 +369,34 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     gpuTime.OnAllocateCommandBuffers(&allocInfo, cmdBufs);
 
     VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = Dive::GPUTime::kVulkanVrFrameDelimiterString;
+    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
     VkSubmitInfo submitInfo = {};
     submitInfo.commandBufferCount = 1;
-    Dive::GPUTime::GpuTimeStatus status;
+    GPUTime::GpuTimeStatus status;
 
     // --- Submit Frame 1 (10ms) ---
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_1, &label);
     submitInfo.pCommandBuffers = &MOCK_COMMAND_BUFFER_1;
-    status = gpuTime.OnQueueSubmit(1,
-                                   &submitInfo,
-                                   MockDeviceWaitIdle,
-                                   MockResetQueryPool,
-                                   MockGetQueryPoolResults);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
 
     // --- Submit Frame 2 (20ms) ---
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_2, &label);
     submitInfo.pCommandBuffers = &MOCK_COMMAND_BUFFER_2;
-    status = gpuTime.OnQueueSubmit(1,
-                                   &submitInfo,
-                                   MockDeviceWaitIdle,
-                                   MockResetQueryPool,
-                                   MockGetQueryPoolResults);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
 
     // --- Submit Frame 3 (30ms) ---
     gpuTime.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_3, &label);
     submitInfo.pCommandBuffers = &MOCK_COMMAND_BUFFER_3;
-    status = gpuTime.OnQueueSubmit(1,
-                                   &submitInfo,
-                                   MockDeviceWaitIdle,
-                                   MockResetQueryPool,
-                                   MockGetQueryPoolResults);
-    ASSERT_TRUE(status.success);
+    ASSERT_TRUE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
 
     // Check stats after three frames (10ms, 20ms, and 30ms)
     auto stats = gpuTime.GetStats();
@@ -421,14 +405,16 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     // Min: 10.0, Max: 30.0
     // Stddev: sqrt(((10-20)^2 + (20-20)^2 + (30-20)^2) / (3-1))
     //       = sqrt((100 + 0 + 100) / 2) = sqrt(100) = 10.0
-    ExpectStatsEq(stats,
-                  /* average */ 20.0,
-                  /* median */ 20.0,
-                  /* min */ 10.0,
-                  /* max */ 30.0,
-                  /* stddev */ 10.0);
+    GPUTime::Stats expected_stats;
+    expected_stats.average = 20.0;
+    expected_stats.median = 20.0;
+    expected_stats.min = 10.0;
+    expected_stats.max = 30.0;
+    expected_stats.stddev = 10.0;
+    EXPECT_THAT(stats, StatsEq(expected_stats));
 
-    DestroyGPUTime(gpuTime);
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
 }  // namespace
+}  // namespace Dive

@@ -29,51 +29,51 @@ using ::absl_testing::IsOkAndHolds;
 
 TEST(MessagesTest, WriteAndReadUint32)
 {
-    Buffer   buf;
-    uint32_t write_value = 123456703;
-    WriteUint32ToBuffer(write_value, buf);
+    Buffer         buf;
+    const uint32_t write_value_1 = 123456703;
+    WriteUint32ToBuffer(write_value_1, buf);
     size_t offset = 0;
-    auto   read_value = ReadUint32FromBuffer(buf, offset);
-    ASSERT_TRUE(read_value.ok());
-    ASSERT_EQ(write_value, *read_value);
+    auto   read_value_1 = ReadUint32FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value_1.ok());
+    ASSERT_EQ(write_value_1, *read_value_1);
 
     buf.clear();
-    write_value = 0;
-    WriteUint32ToBuffer(write_value, buf);
+    const uint32_t write_value_2 = 0;
+    WriteUint32ToBuffer(write_value_2, buf);
     offset = 0;
-    read_value = ReadUint32FromBuffer(buf, offset);
-    ASSERT_TRUE(read_value.ok());
-    ASSERT_EQ(write_value, *read_value);
+    auto read_value_2 = ReadUint32FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value_2.ok());
+    ASSERT_EQ(write_value_2, *read_value_2);
 
     buf.clear();
-    write_value = std::numeric_limits<uint32_t>::max();
-    WriteUint32ToBuffer(write_value, buf);
+    const uint32_t write_value_3 = std::numeric_limits<uint32_t>::max();
+    WriteUint32ToBuffer(write_value_3, buf);
     offset = 0;
-    read_value = ReadUint32FromBuffer(buf, offset);
-    ASSERT_TRUE(read_value.ok());
-    ASSERT_EQ(write_value, *read_value);
+    auto read_value_3 = ReadUint32FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value_3.ok());
+    ASSERT_EQ(write_value_3, *read_value_3);
 }
 
 TEST(MessagesTest, WriteAndReadString)
 {
-    Buffer      buf;
-    std::string write_str = "Hello Dive!";
-    WriteStringToBuffer(write_str, buf);
+    Buffer            buf;
+    const std::string write_str_1 = "Hello Dive!";
+    WriteStringToBuffer(write_str_1, buf);
     size_t offset = 0;
-    auto   read_str = ReadStringFromBuffer(buf, offset);
-    ASSERT_TRUE(read_str.ok());
-    ASSERT_EQ(write_str, *read_str);
+    auto   read_str_1 = ReadStringFromBuffer(buf, offset);
+    ASSERT_TRUE(read_str_1.ok());
+    ASSERT_EQ(write_str_1, *read_str_1);
 
     buf.clear();
-    write_str = "";
-    WriteStringToBuffer(write_str, buf);
+    const std::string write_str_2 = "";
+    WriteStringToBuffer(write_str_2, buf);
     offset = 0;
-    read_str = ReadStringFromBuffer(buf, offset);
-    ASSERT_TRUE(read_str.ok());
-    ASSERT_EQ(write_str, *read_str);
+    auto read_str_2 = ReadStringFromBuffer(buf, offset);
+    ASSERT_TRUE(read_str_2.ok());
+    ASSERT_EQ(write_str_2, *read_str_2);
 }
 
-TEST(MessagesTest, HandShakeMessage)
+TEST(MessagesTest, SerializeAndDeserializeHandShakeMessage)
 {
 <<<<<<< HEAD
     Network::HandshakeRequest request;
@@ -100,7 +100,7 @@ TEST(MessagesTest, HandShakeMessage)
     ASSERT_EQ(request.GetMinorVersion(), response.GetMinorVersion());
 }
 
-TEST(MessagesTest, PingPongMessage)
+TEST(MessagesTest, SerializeAndDeserializePingPongMessage)
 {
     PingMessage ping;
     Buffer      buf;
@@ -114,7 +114,7 @@ TEST(MessagesTest, PingPongMessage)
     ASSERT_EQ(pong.GetMessageType(), MessageType::PONG_MESSAGE);
 }
 
-TEST(MessagesTest, Pm4CaptureMessage)
+TEST(MessagesTest, SerializeAndDeserializePm4CaptureMessage)
 {
     Pm4CaptureRequest request;
     Buffer            buf;
@@ -137,7 +137,7 @@ TEST(MessagesTest, Pm4CaptureMessage)
     ASSERT_EQ(res_serialize.GetString(), res_deserialize.GetString());
 }
 
-TEST(MessagesTest, DownloadFileMessage)
+TEST(MessagesTest, SerializeAndDeserializeDownloadFileMessage)
 {
     DownloadFileRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/dive_capture_0456.rd");
@@ -164,13 +164,13 @@ TEST(MessagesTest, DownloadFileMessage)
     status = res_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(res_deserialize.GetMessageType(), MessageType::DOWNLOAD_FILE_RESPONSE);
-    ASSERT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
-    ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
-    ASSERT_EQ(res_serialize.GetFilePath(), res_deserialize.GetFilePath());
-    ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
+    EXPECT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
+    EXPECT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
+    EXPECT_EQ(res_serialize.GetFilePath(), res_deserialize.GetFilePath());
+    EXPECT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
 }
 
-TEST(MessagesTest, FileSizeMessage)
+TEST(MessagesTest, SerializeAndDeserializeFileSizeMessage)
 {
     FileSizeRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/dive_capture_0222.rd");
@@ -196,9 +196,9 @@ TEST(MessagesTest, FileSizeMessage)
     status = res_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(res_deserialize.GetMessageType(), MessageType::FILE_SIZE_RESPONSE);
-    ASSERT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
-    ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
-    ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
+    EXPECT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
+    EXPECT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
+    EXPECT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
 }
 
 }  // namespace

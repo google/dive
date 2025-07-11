@@ -26,16 +26,21 @@ namespace Network
 namespace
 {
 
-const std::string kTestHost = "127.0.0.1";
-const int         kTestPort = 54321;
-const std::string kTestFileContent = "This is a test file for download.";
-const std::string kTempDir = std::filesystem::temp_directory_path().string();
-const std::string kServerSideFileName = (std::filesystem::path(kTempDir) / "test_server_file.tmp")
-                                        .string();
-const std::string kClientSideFileName = (std::filesystem::path(kTempDir) / "test_client_file.tmp")
-                                        .string();
+constexpr std::string_view kTestHost = "127.0.0.1";
+constexpr int              kTestPort = 54321;
+constexpr std::string_view kTestFileContent = "This is a test file for download.";
 
-// The tests assume the client and server are running on a PC (Windows/Linux), as we are not using
+std::string GetServerSideFileName()
+{
+    return (std::filesystem::temp_directory_path() / "test_server_file.tmp").string();
+}
+
+std::string GetClientSideFileName()
+{
+    return (std::filesystem::temp_directory_path() / "test_client_file.tmp").string();
+}
+
+// The tests assume the client and server are running on a PC (Linux), as we are not using
 // an Android device. However, this creates a limitation: we cannot directly test the TcpClient
 // against the UnixDomainServer because they use incompatible communication protocols. The TcpClient
 // uses TCP/IP sockets, while the UnixDomainServer uses Unix domain sockets (UDS). To test the
@@ -146,15 +151,15 @@ private:
             if ((*msg)->GetMessageType() == MessageType::PM4_CAPTURE_REQUEST)
             {
                 Pm4CaptureResponse response;
-                response.SetString(kServerSideFileName);
+                response.SetString(GetServerSideFileName());
                 ASSERT_TRUE(SendMessage(client_conn.get(), response).ok());
             }
             else if ((*msg)->GetMessageType() == MessageType::FILE_SIZE_REQUEST)
             {
                 auto*            req = dynamic_cast<FileSizeRequest*>((*msg).get());
                 FileSizeResponse response;
-                if (req->GetString() == kServerSideFileName &&
-                    std::filesystem::exists(kServerSideFileName))
+                if (req->GetString() == GetServerSideFileName() &&
+                    std::filesystem::exists(GetServerSideFileName()))
                 {
                     response.SetFound(true);
                     response.SetFileSizeStr(std::to_string(kTestFileContent.size()));
@@ -170,13 +175,13 @@ private:
             {
                 auto*                req = dynamic_cast<DownloadFileRequest*>((*msg).get());
                 DownloadFileResponse response;
-                if (req->GetString() == kServerSideFileName &&
-                    std::filesystem::exists(kServerSideFileName))
+                if (req->GetString() == GetServerSideFileName() &&
+                    std::filesystem::exists(GetServerSideFileName()))
                 {
                     response.SetFound(true);
                     response.SetFileSizeStr(std::to_string(kTestFileContent.size()));
                     ASSERT_TRUE(SendMessage(client_conn.get(), response).ok());
-                    ASSERT_TRUE(client_conn->SendFile(kServerSideFileName).ok());
+                    ASSERT_TRUE(client_conn->SendFile(GetServerSideFileName()).ok());
                 }
                 else
                 {
@@ -204,19 +209,19 @@ protected:
     void SetUp() override
     {
         // Create a dummy file for the server to serve.
-        std::ofstream ofs(kServerSideFileName);
+        std::ofstream ofs(GetServerSideFileName());
         ofs << kTestFileContent;
         ofs.close();
         ASSERT_TRUE(server.Start(kTestPort).ok());
-        ASSERT_TRUE(client.Connect(kTestHost, kTestPort).ok());
+        ASSERT_TRUE(client.Connect(std::string(kTestHost), kTestPort).ok());
     }
 
     void TearDown() override
     {
         client.Disconnect();
         server.Stop();
-        std::filesystem::remove(kServerSideFileName);
-        std::filesystem::remove(kClientSideFileName);
+        std::filesystem::remove(GetServerSideFileName());
+        std::filesystem::remove(GetClientSideFileName());
     }
 
     TestTcpServer server;
@@ -234,7 +239,7 @@ TEST_F(TcpClientTest, ConnectionFails)
 {
     TcpClient new_client;
     // Connecting to a port where no one is listening.
-    auto status = new_client.Connect(kTestHost, kTestPort + 1);
+    auto status = new_client.Connect(std::string(kTestHost), kTestPort + 1);
     EXPECT_FALSE(status.ok());
 }
 
@@ -242,12 +247,12 @@ TEST_F(TcpClientTest, StartPm4Capture)
 {
     auto result = client.StartPm4Capture();
     ASSERT_TRUE(result.ok());
-    EXPECT_EQ(*result, kServerSideFileName);
+    EXPECT_EQ(*result, GetServerSideFileName());
 }
 
 TEST_F(TcpClientTest, GetCaptureFileSize)
 {
-    auto result = client.GetCaptureFileSize(kServerSideFileName);
+    auto result = client.GetCaptureFileSize(GetServerSideFileName());
     ASSERT_TRUE(result.ok());
     EXPECT_EQ(*result, kTestFileContent.size());
 }
@@ -261,10 +266,10 @@ TEST_F(TcpClientTest, GetCaptureFileSizeNotFound)
 
 TEST_F(TcpClientTest, DownloadFileFromServer)
 {
-    auto status = client.DownloadFileFromServer(kServerSideFileName, kClientSideFileName);
+    auto status = client.DownloadFileFromServer(GetServerSideFileName(), GetClientSideFileName());
     ASSERT_TRUE(status.ok());
 
-    std::ifstream ifs(kClientSideFileName);
+    std::ifstream ifs(GetClientSideFileName());
     ASSERT_TRUE(ifs.good());
     std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     EXPECT_EQ(content, kTestFileContent);
@@ -272,7 +277,7 @@ TEST_F(TcpClientTest, DownloadFileFromServer)
 
 TEST_F(TcpClientTest, DownloadFileNotFound)
 {
-    auto status = client.DownloadFileFromServer("nonexistent.file", kClientSideFileName);
+    auto status = client.DownloadFileFromServer("nonexistent.file", GetClientSideFileName());
     ASSERT_FALSE(status.ok());
     EXPECT_EQ(status.code(), absl::StatusCode::kNotFound);
 }

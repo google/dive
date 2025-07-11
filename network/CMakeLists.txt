@@ -80,7 +80,8 @@ if(NOT ANDROID)
       absl::status
       absl::statusor
     )
-    gtest_discover_tests(unix_domain_server_test)
+    add_test(NAME unix_domain_server_test COMMAND unix_domain_server_test)
+    set_tests_properties(unix_domain_server_test PROPERTIES TIMEOUT 2)
 
     add_executable(tcp_client_test tcp_client_test.cc)
     target_link_libraries(tcp_client_test PRIVATE
@@ -90,6 +91,7 @@ if(NOT ANDROID)
       absl::status
       absl::statusor
     )
-    gtest_discover_tests(tcp_client_test)
+    add_test(NAME tcp_client_test COMMAND tcp_client_test)
+    set_tests_properties(tcp_client_test PROPERTIES TIMEOUT 2)
   endif()
 endif()

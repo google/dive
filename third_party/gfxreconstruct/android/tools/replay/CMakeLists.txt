@@ -11,7 +11,7 @@ get_filename_component(GFXRECON_SOURCE_DIR ../../.. ABSOLUTE)
 # us setting CMAKE_PREFIX_PATH.  So just set the package DIR directly.
 set(nlohmann_json_DIR "${GFXRECON_SOURCE_DIR}/external/nlohmann-json/share/cmake/nlohmann_json")
 find_package(nlohmann_json REQUIRED CONFIG PATHS "${nlohmann_json_DIR}" NO_DEFAULT_PATH)
-
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../third_party/abseil-cpp/ ${CMAKE_CURRENT_BINARY_DIR}/abseil-cpp)
 include(../../framework/cmake-config/PlatformConfig.cmake)
 add_subdirectory(../../framework/util ${PROJECT_SOURCE_DIR}/../../framework/util/build/tools/replay/${ANDROID_ABI})
 add_subdirectory(../../framework/graphics ${PROJECT_SOURCE_DIR}/../../framework/graphics/build/tools/replay/${ANDROID_ABI})

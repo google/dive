@@ -20,6 +20,8 @@ limitations under the License.
 #include <iostream>
 #include "messages.h"
 
+namespace Network
+{
 namespace
 {
 
@@ -27,62 +29,72 @@ using ::absl_testing::IsOkAndHolds;
 
 TEST(MessagesTest, WriteAndReadUint32)
 {
-    Network::Buffer buf;
-    uint32_t        write_value = 123456703;
-    Network::WriteUint32ToBuffer(write_value, buf);
+    Buffer   buf;
+    uint32_t write_value = 123456703;
+    WriteUint32ToBuffer(write_value, buf);
     size_t offset = 0;
-    ASSERT_THAT(Network::ReadUint32FromBuffer(buf, offset), IsOkAndHolds(write_value));
+    auto   read_value = ReadUint32FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value.ok());
+    ASSERT_EQ(write_value, *read_value);
 
     buf.clear();
     write_value = 0;
-    Network::WriteUint32ToBuffer(write_value, buf);
+    WriteUint32ToBuffer(write_value, buf);
     offset = 0;
-    auto read_value = Network::ReadUint32FromBuffer(buf, offset);
+    read_value = ReadUint32FromBuffer(buf, offset);
     ASSERT_TRUE(read_value.ok());
     ASSERT_EQ(write_value, *read_value);
 
     buf.clear();
     write_value = std::numeric_limits<uint32_t>::max();
-    Network::WriteUint32ToBuffer(write_value, buf);
+    WriteUint32ToBuffer(write_value, buf);
     offset = 0;
-    read_value = Network::ReadUint32FromBuffer(buf, offset);
+    read_value = ReadUint32FromBuffer(buf, offset);
     ASSERT_TRUE(read_value.ok());
     ASSERT_EQ(write_value, *read_value);
 }
 
 TEST(MessagesTest, WriteAndReadString)
 {
-    Network::Buffer buf;
-    std::string     write_str = "Hello Dive!";
-    Network::WriteStringToBuffer(write_str, buf);
+    Buffer      buf;
+    std::string write_str = "Hello Dive!";
+    WriteStringToBuffer(write_str, buf);
     size_t offset = 0;
-    auto   read_str = Network::ReadStringFromBuffer(buf, offset);
+    auto   read_str = ReadStringFromBuffer(buf, offset);
     ASSERT_TRUE(read_str.ok());
     ASSERT_EQ(write_str, *read_str);
 
     buf.clear();
     write_str = "";
-    Network::WriteStringToBuffer(write_str, buf);
+    WriteStringToBuffer(write_str, buf);
     offset = 0;
-    read_str = Network::ReadStringFromBuffer(buf, offset);
+    read_str = ReadStringFromBuffer(buf, offset);
     ASSERT_TRUE(read_str.ok());
     ASSERT_EQ(write_str, *read_str);
 }
 
 TEST(MessagesTest, HandShakeMessage)
 {
+<<<<<<< HEAD
     Network::HandshakeRequest request;
+=======
+    HandShakeRequest  request;
+>>>>>>> fb7b93d0 (Dive communication protocol: Adds unit tests to TcpClient and UnixDomainServer)
     request.SetMajorVersion(345612);
     request.SetMinorVersion(567348);
-    Network::Buffer buf;
-    auto            status = request.Serialize(buf);
+    Buffer buf;
+    auto   status = request.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(request.GetMessageType(), Network::MessageType::HANDSHAKE_REQUEST);
+    ASSERT_EQ(request.GetMessageType(), MessageType::HANDSHAKE_REQUEST);
 
+<<<<<<< HEAD
     Network::HandshakeResponse response;
+=======
+    HandShakeResponse response;
+>>>>>>> fb7b93d0 (Dive communication protocol: Adds unit tests to TcpClient and UnixDomainServer)
     status = response.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(response.GetMessageType(), Network::MessageType::HANDSHAKE_RESPONSE);
+    ASSERT_EQ(response.GetMessageType(), MessageType::HANDSHAKE_RESPONSE);
 
     ASSERT_EQ(request.GetMajorVersion(), response.GetMajorVersion());
     ASSERT_EQ(request.GetMinorVersion(), response.GetMinorVersion());
@@ -90,56 +102,56 @@ TEST(MessagesTest, HandShakeMessage)
 
 TEST(MessagesTest, PingPongMessage)
 {
-    Network::PingMessage ping;
-    Network::Buffer      buf;
-    auto                 status = ping.Serialize(buf);
+    PingMessage ping;
+    Buffer      buf;
+    auto        status = ping.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(ping.GetMessageType(), Network::MessageType::PING_MESSAGE);
+    ASSERT_EQ(ping.GetMessageType(), MessageType::PING_MESSAGE);
 
-    Network::PongMessage pong;
+    PongMessage pong;
     status = pong.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(pong.GetMessageType(), Network::MessageType::PONG_MESSAGE);
+    ASSERT_EQ(pong.GetMessageType(), MessageType::PONG_MESSAGE);
 }
 
 TEST(MessagesTest, Pm4CaptureMessage)
 {
-    Network::Pm4CaptureRequest request;
-    Network::Buffer            buf;
-    auto                       status = request.Serialize(buf);
+    Pm4CaptureRequest request;
+    Buffer            buf;
+    auto              status = request.Serialize(buf);
     ASSERT_TRUE(status.ok());
     status = request.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(request.GetMessageType(), Network::MessageType::PM4_CAPTURE_REQUEST);
+    ASSERT_EQ(request.GetMessageType(), MessageType::PM4_CAPTURE_REQUEST);
 
-    Network::Pm4CaptureResponse res_serialize;
+    Pm4CaptureResponse res_serialize;
     res_serialize.SetString("/sdcard/captures/dive_capture_0001.rd");
     buf.clear();
     status = res_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::PM4_CAPTURE_RESPONSE);
-    Network::Pm4CaptureResponse res_deserialize;
+    ASSERT_EQ(res_serialize.GetMessageType(), MessageType::PM4_CAPTURE_RESPONSE);
+    Pm4CaptureResponse res_deserialize;
     status = res_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(res_deserialize.GetMessageType(), Network::MessageType::PM4_CAPTURE_RESPONSE);
+    ASSERT_EQ(res_deserialize.GetMessageType(), MessageType::PM4_CAPTURE_RESPONSE);
     ASSERT_EQ(res_serialize.GetString(), res_deserialize.GetString());
 }
 
 TEST(MessagesTest, DownloadFileMessage)
 {
-    Network::DownloadFileRequest req_serialize;
+    DownloadFileRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/dive_capture_0456.rd");
-    Network::Buffer buf;
-    auto            status = req_serialize.Serialize(buf);
+    Buffer buf;
+    auto   status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::DOWNLOAD_FILE_REQUEST);
-    Network::DownloadFileRequest req_deserialize;
+    ASSERT_EQ(req_serialize.GetMessageType(), MessageType::DOWNLOAD_FILE_REQUEST);
+    DownloadFileRequest req_deserialize;
     status = req_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(req_deserialize.GetMessageType(), Network::MessageType::DOWNLOAD_FILE_REQUEST);
+    ASSERT_EQ(req_deserialize.GetMessageType(), MessageType::DOWNLOAD_FILE_REQUEST);
     ASSERT_EQ(req_serialize.GetString(), req_deserialize.GetString());
 
-    Network::DownloadFileResponse res_serialize;
+    DownloadFileResponse res_serialize;
     res_serialize.SetFound(false);
     res_serialize.SetErrorReason("File not found!");
     res_serialize.SetFilePath("/sdcard/captures/other_capture_0456.rd");
@@ -147,11 +159,11 @@ TEST(MessagesTest, DownloadFileMessage)
     buf.clear();
     status = res_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::DOWNLOAD_FILE_RESPONSE);
-    Network::DownloadFileResponse res_deserialize;
+    ASSERT_EQ(res_serialize.GetMessageType(), MessageType::DOWNLOAD_FILE_RESPONSE);
+    DownloadFileResponse res_deserialize;
     status = res_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(res_deserialize.GetMessageType(), Network::MessageType::DOWNLOAD_FILE_RESPONSE);
+    ASSERT_EQ(res_deserialize.GetMessageType(), MessageType::DOWNLOAD_FILE_RESPONSE);
     ASSERT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
     ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
     ASSERT_EQ(res_serialize.GetFilePath(), res_deserialize.GetFilePath());
@@ -160,33 +172,34 @@ TEST(MessagesTest, DownloadFileMessage)
 
 TEST(MessagesTest, FileSizeMessage)
 {
-    Network::FileSizeRequest req_serialize;
+    FileSizeRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/dive_capture_0222.rd");
-    Network::Buffer buf;
-    auto            status = req_serialize.Serialize(buf);
+    Buffer buf;
+    auto   status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::FILE_SIZE_REQUEST);
-    Network::FileSizeRequest req_deserialize;
+    ASSERT_EQ(req_serialize.GetMessageType(), MessageType::FILE_SIZE_REQUEST);
+    FileSizeRequest req_deserialize;
     status = req_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(req_deserialize.GetMessageType(), Network::MessageType::FILE_SIZE_REQUEST);
+    ASSERT_EQ(req_deserialize.GetMessageType(), MessageType::FILE_SIZE_REQUEST);
     ASSERT_EQ(req_serialize.GetString(), req_deserialize.GetString());
 
-    Network::FileSizeResponse res_serialize;
+    FileSizeResponse res_serialize;
     res_serialize.SetFound(false);
     res_serialize.SetErrorReason("File not found!");
     res_serialize.SetFileSizeStr("256000000000000");
     buf.clear();
     status = res_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::FILE_SIZE_RESPONSE);
-    Network::FileSizeResponse res_deserialize;
+    ASSERT_EQ(res_serialize.GetMessageType(), MessageType::FILE_SIZE_RESPONSE);
+    FileSizeResponse res_deserialize;
     status = res_deserialize.Deserialize(buf);
     ASSERT_TRUE(status.ok());
-    ASSERT_EQ(res_deserialize.GetMessageType(), Network::MessageType::FILE_SIZE_RESPONSE);
+    ASSERT_EQ(res_deserialize.GetMessageType(), MessageType::FILE_SIZE_RESPONSE);
     ASSERT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
     ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
     ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
 }
 
 }  // namespace
+}  // namespace Network

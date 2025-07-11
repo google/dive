@@ -72,6 +72,8 @@ public:
 
     void Close();
     bool IsOpen() const;
+    void SetIsListening(bool is_listening) { m_is_listening = is_listening; }
+    bool IsListening() const { return m_is_listening; }
 
 private:
     explicit SocketConnection(SocketType initial_socket_value);

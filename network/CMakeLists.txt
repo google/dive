@@ -59,6 +59,7 @@ target_include_directories(network PRIVATE
 if(NOT ANDROID)
   enable_testing()
   include(GoogleTest)
+
   add_executable(messages_test messages_test.cc)
   target_link_libraries(messages_test PRIVATE
     network
@@ -69,4 +70,26 @@ if(NOT ANDROID)
     absl::status_matchers
   )
   gtest_discover_tests(messages_test)
+
+  if(NOT WIN32)
+    add_executable(unix_domain_server_test unix_domain_server_test.cc)
+    target_link_libraries(unix_domain_server_test PRIVATE
+      network
+      gtest
+      gtest_main
+      absl::status
+      absl::statusor
+    )
+    gtest_discover_tests(unix_domain_server_test)
+
+    add_executable(tcp_client_test tcp_client_test.cc)
+    target_link_libraries(tcp_client_test PRIVATE
+      network
+      gtest
+      gtest_main
+      absl::status
+      absl::statusor
+    )
+    gtest_discover_tests(tcp_client_test)
+  endif()
 endif()

@@ -50,12 +50,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
-#include gRPC headers
-include_directories(
-"${CMAKE_BINARY_DIR}/capture_service"
-"${CMAKE_SOURCE_DIR}/third_party/grpc/include"
-"${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/protobuf/src/"
-)
+
 # Tell CMake to create the Dive executable
 add_executable(${PROJECT_NAME} WIN32 ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} resources.qrc)
 

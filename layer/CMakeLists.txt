@@ -43,18 +43,14 @@ set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.cc"
 
 include_directories(${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
-    ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/abseil-cpp/
-    ${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/protobuf/src/)
+    ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp/)
 
 add_library(${target_name} SHARED ${HDR_FILES}
                                 ${SRC_FILES})
 
 add_definitions(-DLAYERNAME=Dive)
 
-set(TARGET_LINK_LIBS PRIVATE    
-        service
-        ${_GRPC_GRPCPP}
-        ${_PROTOBUF_LIBPROTOBUF})
+set(TARGET_LINK_LIBS PRIVATE service)
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 list(APPEND TARGET_LINK_LIBS

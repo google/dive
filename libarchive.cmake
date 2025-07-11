@@ -36,7 +36,7 @@ else()
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH_PRE})
         # Enable find_package uses of <PackageName>_ROOT variables.
         cmake_policy(SET CMP0074 NEW)
-        set(ZLIB_ROOT  ${THIRDPARTY_DIRECTORY}/grpc/third_party/zlib)
+        set(ZLIB_ROOT  ${THIRDPARTY_DIRECTORY}/zlib)
         if(EXISTS "${ZLIB_ROOT}/CMakeLists.txt")
             include_directories("${ZLIB_ROOT}")
             add_subdirectory(${ZLIB_ROOT} third_party/zlib)

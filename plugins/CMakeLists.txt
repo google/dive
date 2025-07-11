@@ -52,7 +52,7 @@ endif()
 target_link_libraries(dive_plugin_loader PRIVATE
     absl::status
     absl::statusor
-    absl::strings 
+    absl::strings
 )
 
 # For each new plugin, you can add an add_subdirectory call here.

@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.4.1)
 project(gfxrecon-replay)
 
 get_filename_component(GFXRECON_SOURCE_DIR ../../.. ABSOLUTE)
-
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../third_party/abseil-cpp/ ${CMAKE_CURRENT_BINARY_DIR}/abseil-cpp)
 add_library(native_app_glue STATIC
         ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c)
 

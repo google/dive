@@ -33,6 +33,7 @@ limitations under the License.
 #include "constants.h"
 #include "device_mgr.h"
 #include "network/tcp_client.h"
+#include "absl/strings/str_cat.h"
 
 using namespace std::chrono_literals;
 

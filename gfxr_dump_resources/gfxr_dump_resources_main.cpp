@@ -30,7 +30,7 @@ ABSL_FLAG(bool,
           last_draw_only,
           false,
           "If specified, only dump the final draw call for a render pass. This should speed up "
-          "dumping without but still provide a useful result.");
+          "dumping while still providing a useful result.");
 
 namespace
 {

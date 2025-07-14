@@ -65,8 +65,8 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 
         // Command hierarchy tree creation
         CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                                m_capture_data,
-                                                *state_tracker);
+                                                 m_capture_data,
+                                                 *state_tracker);
         if (!cmd_hier_creator.CreateTrees(true, reserve_size))
         {
             return false;

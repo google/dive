@@ -317,8 +317,12 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
         if (m_gfxr_enabled)
         {
             // Need root to set openxr.enable_frame_delimiter
+            // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
+            // `debug.openxr.enable_frame_delimiter`
             RETURN_IF_ERROR(RequestRootAccess());
             RETURN_IF_ERROR(Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
+            // New prop is prefixed with debug.
+            RETURN_IF_ERROR(Adb().Run("shell setprop debug.openxr.enable_frame_delimiter true"));
         }
     }
     if (m_app == nullptr)

@@ -352,7 +352,10 @@ absl::Status OpenXRApplication::Cleanup()
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
+        // `debug.openxr.enable_frame_delimiter`
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false"));
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }

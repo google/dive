@@ -88,11 +88,6 @@ if(MSVC)
   set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 endif()
 
-# Add NOMINMAX definition for Windows builds to prevent min/max macro conflicts
-if (MSVC)
-  target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
-endif()
-
 # Collect 3rd party licenses
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/catch2/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/catch2/)

@@ -25,6 +25,7 @@
 #
 # TEST_EXECUTABLE will be run with INPUT_GFXR. The test will pass if TEST_EXECUTABLE returns 0 exit code and the contents of the output json match the contents of GOLDEN_FILE.
 # TEST_NAME should match the NAME given to add_test(). This is mainly used to ensure that temp files are unique to the test (to support running tests in parallel).
+# ADDITIONAL_ARGUMENTS will be passed to TEST_EXECUTABLE in addition to the normal command-line. This is where you can specify options and parameters.
 
 execute_process(
   COMMAND ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} ${INPUT_GFXR} ${TEST_NAME}.json

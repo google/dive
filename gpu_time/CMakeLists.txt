@@ -19,19 +19,19 @@ add_library(gpu_time STATIC
 target_include_directories(gpu_time PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 
 if (NOT ANDROID)
-	enable_testing()
-	include(GoogleTest)
-	add_executable(gpu_time_test
-	gpu_time_test.cpp
-	)
+    enable_testing()
+    include(GoogleTest)
+    add_executable(gpu_time_test
+        gpu_time_test.cpp
+    )
 	
-	target_include_directories(gpu_time_test PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
+    target_include_directories(gpu_time_test PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 	
-	target_link_libraries(gpu_time_test PRIVATE
-	gpu_time
-	gtest
-	gtest_main
-	gmock
-	)
-	gtest_discover_tests(gpu_time_test)
+    target_link_libraries(gpu_time_test PRIVATE
+        gpu_time
+        gtest
+        gtest_main
+        gmock
+    )
+    gtest_discover_tests(gpu_time_test)
 endif()

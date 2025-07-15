@@ -75,11 +75,7 @@ TEST(MessagesTest, WriteAndReadString)
 
 TEST(MessagesTest, SerializeAndDeserializeHandShakeMessage)
 {
-<<<<<<< HEAD
-    Network::HandshakeRequest request;
-=======
-    HandShakeRequest  request;
->>>>>>> fb7b93d0 (Dive communication protocol: Adds unit tests to TcpClient and UnixDomainServer)
+    HandshakeRequest request;
     request.SetMajorVersion(345612);
     request.SetMinorVersion(567348);
     Buffer buf;
@@ -87,11 +83,7 @@ TEST(MessagesTest, SerializeAndDeserializeHandShakeMessage)
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(request.GetMessageType(), MessageType::HANDSHAKE_REQUEST);
 
-<<<<<<< HEAD
-    Network::HandshakeResponse response;
-=======
     HandShakeResponse response;
->>>>>>> fb7b93d0 (Dive communication protocol: Adds unit tests to TcpClient and UnixDomainServer)
     status = response.Deserialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(response.GetMessageType(), MessageType::HANDSHAKE_RESPONSE);

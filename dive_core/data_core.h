@@ -121,10 +121,10 @@ public:
 
 //--------------------------------------------------------------------------------------------------
 // Handles creation of much of the metadata "info" from the capture
-class CaptureMetadataCreator : public IEmulateCallbacks
+class CaptureMetadataCreator : public EmulateCallbacksBase
 {
 public:
-    CaptureMetadataCreator(CaptureMetadata &capture_metadata, EmulateStateTracker &state_tracker);
+    CaptureMetadataCreator(CaptureMetadata &capture_metadata);
     ~CaptureMetadataCreator();
 
     virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
@@ -166,9 +166,8 @@ private:
     // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
     std::map<uint64_t, uint32_t> m_buffer_addrs;
 
-    CaptureMetadata     &m_capture_metadata;
-    EmulateStateTracker &m_state_tracker;
-    RenderModeType       m_current_render_mode = RenderModeType::kUnknown;
+    CaptureMetadata &m_capture_metadata;
+    RenderModeType   m_current_render_mode = RenderModeType::kUnknown;
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
     // SRDCallbacks is a friend class, since it is essentially doing part of

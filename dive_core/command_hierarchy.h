@@ -386,12 +386,10 @@ private:
 };
 
 //--------------------------------------------------------------------------------------------------
-class CommandHierarchyCreator : public IEmulateCallbacks
+class CommandHierarchyCreator : public EmulateCallbacksBase
 {
 public:
-    CommandHierarchyCreator(CommandHierarchy    &command_hierarchy,
-                            const CaptureData   &capture_data,
-                            EmulateStateTracker &state_tracker);
+    CommandHierarchyCreator(CommandHierarchy &command_hierarchy, const CaptureData &capture_data);
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
@@ -611,8 +609,6 @@ private:
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
-
-    EmulateStateTracker &m_state_tracker;
 };
 
 class Util

@@ -121,7 +121,6 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
 {
-    m_state_tracker.Reset();
     m_capture_metadata.m_num_pm4_packets = 0;
 }
 

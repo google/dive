@@ -567,8 +567,9 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
         return EXIT_FAILURE;
     }
 
-    std::unique_ptr<Dive::CommandHierarchy> command_hierarchy_ptr(new Dive::CommandHierarchy());
-    Dive::CommandHierarchyCreator           creator(*command_hierarchy_ptr, *capture_data_ptr);
+    std::unique_ptr<Dive::CommandHierarchy> command_hierarchy_ptr(
+    std::make_unique<Dive::CommandHierarchy>());
+    Dive::CommandHierarchyCreator creator(*command_hierarchy_ptr, *capture_data_ptr);
     if (!creator.CreateTrees(true, std::nullopt))
     {
         std::cerr << "Error parsing capture!" << std::endl;

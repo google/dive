@@ -46,7 +46,8 @@ struct IndirectBufferInfo
     uint8_t  m_ib_level;
     uint32_t m_enable_mask;
 
-    // Set to true to avoid emulating this IB, probably because it was not captured
+    // Set to true to avoid emulating this Indirect Buffer (IB), probably because it was not
+    // captured
     bool m_skip;
 };
 

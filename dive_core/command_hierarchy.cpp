@@ -477,7 +477,6 @@ CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy  &command_hier
     m_command_hierarchy(command_hierarchy),
     m_capture_data(capture_data)
 {
-    m_state_tracker.Reset();
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -49,7 +49,7 @@ adb shell appops set "$REPLAY_PACKAGE" MANAGE_EXTERNAL_STORAGE allow
 
 adb logcat -c
 
-$GFXR_DUMP_RESOURCES "$GFXR" "$JSON"
+$GFXR_DUMP_RESOURCES --last_draw_only "$GFXR" "$JSON"
 adb shell mkdir -p "$PUSH_DIR"
 adb shell mkdir -p "$DUMP_DIR"
 adb push "$GFXR" "$JSON" "$PUSH_DIR"

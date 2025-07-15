@@ -8,6 +8,8 @@ Usage:
 ./build/gfxr_dump_resources/gfxr_dump_resources in_capture.gfxr out_dump_resources.json
 ```
 
+See `--help` for all options.
+
 The capture and JSON can then be pushed to the device and replayed using `--dump-resources`:
 
 ```sh

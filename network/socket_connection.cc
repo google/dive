@@ -18,6 +18,7 @@ limitations under the License.
 #include <fstream>
 #include <string>
 #include <vector>
+#include "absl/strings/str_cat.h"
 
 namespace Network
 {
@@ -347,11 +348,11 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
         ssize_t received;
 #ifdef WIN32
         received = ::recv(static_cast<SOCKET>(m_socket),
-                          reinterpret_cast<char*>(data),
-                          static_cast<int>(size),
+                          reinterpret_cast<char*>(data) + total_received,
+                          static_cast<int>(size - total_received),
                           0);
 #else
-        received = ::recv(m_socket, data, size, 0);
+        received = ::recv(m_socket, data + total_received, size - total_received, 0);
 #endif
         if (received == -1)
         {
@@ -484,7 +485,9 @@ absl::Status SocketConnection::SendFile(const std::string& file_path)
     return absl::OkStatus();
 }
 
-absl::Status SocketConnection::ReceiveFile(const std::string& file_path, size_t file_size)
+absl::Status SocketConnection::ReceiveFile(const std::string&          file_path,
+                                           size_t                      file_size,
+                                           std::function<void(size_t)> progress_callback)
 {
     std::ofstream file_stream(file_path, std::ios::binary | std::ios::trunc);
     if (!file_stream)
@@ -516,6 +519,10 @@ absl::Status SocketConnection::ReceiveFile(const std::string& file_path, size_t 
             absl::StrCat("ReceiveFile: Failed to write to file '", file_path, "'"));
         }
         total_received += current_received;
+        if (progress_callback)
+        {
+            progress_callback(total_received);
+        }
     }
     file_stream.close();
     return absl::OkStatus();

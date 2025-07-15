@@ -43,7 +43,9 @@ enum class MessageType : uint32_t
     PM4_CAPTURE_REQUEST = 5,
     PM4_CAPTURE_RESPONSE = 6,
     DOWNLOAD_FILE_REQUEST = 7,
-    DOWNLOAD_FILE_RESPONSE = 8
+    DOWNLOAD_FILE_RESPONSE = 8,
+    FILE_SIZE_REQUEST = 9,
+    FILE_SIZE_RESPONSE = 10
 };
 
 class HandShakeMessage : public ISerializable
@@ -62,38 +64,11 @@ private:
     uint32_t m_minor_version;
 };
 
-class HandShakeRequest : public HandShakeMessage
-{
-public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::HANDSHAKE_REQUEST;
-};
-
-class HandShakeResponse : public HandShakeMessage
-{
-public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::HANDSHAKE_RESPONSE;
-};
-
 class EmptyMessage : public ISerializable
 {
 public:
     absl::Status Serialize(Buffer& dest) const override { return absl::OkStatus(); }
     absl::Status Deserialize(const Buffer& src) override { return absl::OkStatus(); }
-};
-
-class Pm4CaptureRequest : public EmptyMessage
-{
-public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::PM4_CAPTURE_REQUEST;
 };
 
 class StringMessage : public ISerializable
@@ -109,46 +84,56 @@ private:
     std::string m_str;
 };
 
+class HandShakeRequest : public HandShakeMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::HANDSHAKE_REQUEST; }
+};
+
+class HandShakeResponse : public HandShakeMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::HANDSHAKE_RESPONSE; }
+};
+
+class Pm4CaptureRequest : public EmptyMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_REQUEST; }
+};
+
+// Pm4CaptureResponse uses the string message as the capture file path.
 class Pm4CaptureResponse : public StringMessage
 {
 public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::PM4_CAPTURE_RESPONSE;
+    MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_RESPONSE; }
 };
 
 class PingMessage : public EmptyMessage
 {
 public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::PING_MESSAGE;
+    MessageType GetMessageType() const override { return MessageType::PING_MESSAGE; }
 };
 
 class PongMessage : public EmptyMessage
 {
 public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::PONG_MESSAGE;
+    MessageType GetMessageType() const override { return MessageType::PONG_MESSAGE; }
 };
 
+// DownloadFileRequest uses the string message as the file path to download.
 class DownloadFileRequest : public StringMessage
 {
 public:
-    MessageType GetMessageType() const override { return m_type; }
-
-private:
-    const MessageType m_type = MessageType::DOWNLOAD_FILE_REQUEST;
+    MessageType GetMessageType() const override { return MessageType::DOWNLOAD_FILE_REQUEST; }
 };
 
+// If successful, DownloadFileResponse returns the file path and size of the requested capture;
+// otherwise, it returns an error.
 class DownloadFileResponse : public ISerializable
 {
 public:
-    MessageType  GetMessageType() const override { return m_type; }
+    MessageType  GetMessageType() const override { return MessageType::DOWNLOAD_FILE_RESPONSE; }
     absl::Status Serialize(Buffer& dest) const override;
     absl::Status Deserialize(const Buffer& src) override;
 
@@ -166,7 +151,7 @@ public:
 
 private:
     // Flag indicating whether the requested file was found on the server.
-    bool m_found;
+    bool m_found = false;
     // A description of the error if the download failed. Empty if successful.
     std::string m_error_reason;
     // The local path where the downloaded file has been saved on the server.
@@ -175,8 +160,41 @@ private:
     // A string representation of the downloaded file's size.
     // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
     std::string m_file_size_str;
+};
 
-    const MessageType m_type = MessageType::DOWNLOAD_FILE_RESPONSE;
+// FileSizeRequest uses the string message as the file path for which we want to determine the size.
+class FileSizeRequest : public StringMessage
+{
+public:
+    MessageType GetMessageType() const override { return MessageType::FILE_SIZE_REQUEST; }
+};
+
+// If successful, FileSizeResponse returns the file size of the requested capture; otherwise, it
+// returns an error.
+class FileSizeResponse : public ISerializable
+{
+public:
+    MessageType  GetMessageType() const override { return MessageType::FILE_SIZE_RESPONSE; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    bool GetFound() const { return m_found; }
+    void SetFound(bool found) { m_found = found; }
+
+    const std::string& GetErrorReason() const { return m_error_reason; }
+    void SetErrorReason(std::string error_reason) { m_error_reason = std::move(error_reason); }
+
+    const std::string& GetFileSizeStr() const { return m_file_size_str; }
+    void SetFileSizeStr(std::string file_size_str) { m_file_size_str = std::move(file_size_str); }
+
+private:
+    // Flag indicating whether the file was found on the server.
+    bool m_found = false;
+    // A description of the error. Empty if successful.
+    std::string m_error_reason;
+    // A string representation of the downloaded file's size.
+    // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
+    std::string m_file_size_str;
 };
 
 // Message Helper Functions (TLV Framing).

@@ -149,13 +149,13 @@ private:
     };
     QAction *m_recent_file_actions[MaxRecentFiles];
 
-    ProgressTrackerCallback m_progress_tracker;
-    Dive::DataCore         *m_data_core;
-    QString                 m_capture_file;
-    QString                 m_last_file_path;
-    Dive::LogRecord         m_log_record;
-    Dive::LogConsole        m_log_console;
-    Dive::LogCompound       m_log_compound;
+    ProgressTrackerCallback         m_progress_tracker;
+    std::unique_ptr<Dive::DataCore> m_data_core;
+    QString                         m_capture_file;
+    QString                         m_last_file_path;
+    Dive::LogRecord                 m_log_record;
+    Dive::LogConsole                m_log_console;
+    Dive::LogCompound               m_log_compound;
 
     QStatusBar *m_status_bar;
 

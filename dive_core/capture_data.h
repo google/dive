@@ -339,8 +339,7 @@ public:
         kVersionError
     };
     CaptureData();
-    CaptureData(ILog *log_ptr);
-    CaptureData(ProgressTracker *progress_tracker, ILog *log_ptr);
+    CaptureData(ProgressTracker *progress_tracker);
     virtual ~CaptureData() = default;
 
     LoadResult LoadFile(const char *file_name);
@@ -357,7 +356,6 @@ public:
     const RegisterInfo                     &GetRegisterInfo() const;
     inline uint32_t                         GetNumText() const { return (uint32_t)m_text.size(); }
     inline const TextInfo                  &GetText(uint32_t index) const { return m_text[index]; }
-    inline ILog                            &GetLog() const { return *m_log_ptr; }
     inline const VulkanMetadataBlockHeader &GetVulkanMetadataVersion() const
     {
         return m_vulkan_metadata_header;
@@ -424,7 +422,6 @@ private:
     VulkanMetadataBlockHeader      m_vulkan_metadata_header;
     MemoryManager                  m_memory;
     ProgressTracker               *m_progress_tracker;
-    ILog                          *m_log_ptr;
     std::string                    m_cur_capture_file;
     CaptureDataHeader              m_data_header;
 

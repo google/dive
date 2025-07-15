@@ -45,8 +45,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     memstream capture_file(data, size);
 
-    Dive::LogConsole                   log;
-    std::unique_ptr<Dive::CaptureData> capture_data_ptr = std::make_unique<Dive::CaptureData>(&log);
+    std::unique_ptr<Dive::CaptureData> capture_data_ptr = std::make_unique<Dive::CaptureData>();
     Dive::CaptureData::LoadResult      result = capture_data_ptr->LoadCaptureFile(capture_file);
 
     if (result != Dive::CaptureData::LoadResult::kSuccess)

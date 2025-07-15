@@ -1027,8 +1027,9 @@ void {{soa.name}}T<{{template_args}}>::Reserve(typename {{concrete_soa}}::Id::ba
 
     // Allocate new buffer as an array of `max_align_t`, to make sure the buffer
     // is sufficiently aligned for the type of any possible field.
-    auto new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[
-        (num_bytes + sizeof(std::max_align_t)-1) / sizeof(std::max_align_t)]);
+    uint32_t new_buffer_size = (num_bytes + sizeof(std::max_align_t)-1) / sizeof(std::max_align_t);
+    auto new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[new_buffer_size]);
+    memset(new_buffer.get(), 0, sizeof(std::max_align_t)*new_buffer_size);
 
     {% for field in soa.fields %}
         {{ begin_field_guard(field) -}}

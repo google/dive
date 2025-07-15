@@ -17,6 +17,7 @@
 #include <iostream>
 #include <string>
 #include "plugin_loader.h"
+#include "absl/strings/str_cat.h"
 
 namespace Dive
 {

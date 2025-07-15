@@ -35,7 +35,7 @@ set(NETWORK_HDRS
   unix_domain_server.h
 )
 
-add_library(network SHARED ${NETWORK_SRCS} ${NETWORK_HDRS})
+add_library(network STATIC ${NETWORK_SRCS} ${NETWORK_HDRS})
 
 set(NETWORK_LINK_LIBS
   absl::status
@@ -52,7 +52,20 @@ target_link_libraries(
   ${NETWORK_LINK_LIBS}
 )
 
-target_include_directories(network PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/common
+target_include_directories(network PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
+
+if(NOT ANDROID)
+  enable_testing()
+  include(GoogleTest)
+  add_executable(messages_test messages_test.cc)
+  target_link_libraries(messages_test PRIVATE
+    network
+    gtest
+    gtest_main
+    absl::status
+    absl::statusor
+  )
+  gtest_discover_tests(messages_test)
+endif()

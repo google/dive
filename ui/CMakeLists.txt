@@ -50,19 +50,14 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
-#include gRPC headers
-include_directories(
-"${CMAKE_BINARY_DIR}/capture_service"
-"${CMAKE_SOURCE_DIR}/third_party/grpc/include"
-"${CMAKE_SOURCE_DIR}/third_party/grpc/third_party/protobuf/src/"
-)
+
 # Tell CMake to create the Dive executable
 add_executable(${PROJECT_NAME} WIN32 ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} resources.qrc)
 
 # Use the Widgets module from Qt 5
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
-target_link_libraries(${PROJECT_NAME} dive_core device_mgr client dive_plugin_loader)
+target_link_libraries(${PROJECT_NAME} network dive_core device_mgr dive_plugin_loader)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)

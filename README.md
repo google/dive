@@ -14,7 +14,6 @@ git submodule update --init --recursive
  - CMake
  - Ninja
  - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.
- - gRPC [dependencies](https://github.com/grpc/grpc/blob/master/BUILDING.md#pre-requisites)
  - Android NDK (currently we are using 25.2.9519653). Set the `ANDROID_NDK_HOME` environment variable.
   ```
     export ANDROID_NDK_HOME=~/android_sdk/ndk/25.2.9519653
@@ -53,7 +52,6 @@ Host tool:
 ```
 
 ### Building Dive host tool on Windows
-To build with prebuilt gRPC libraries: 
 ```
 REM Assumes QTDIR is set to msvc directory (eg. C:\Qt\5.11.2\msvc2017_64)
 set CMAKE_PREFIX_PATH=%QTDIR%
@@ -77,31 +75,10 @@ Host tool:
 <dive_path>/build/bin/<build_type>/dive_client_cli.exe
 ```
 
-#### Build without prebuilt libraries
-
-Or you can build without using the prebuilt libraries with `-DBUILD_GRPC=ON`
-
-```
-cmake -G "Visual Studio 17 2022" -DBUILD_GRPC=ON ..
-```
-
-Or you can build with Ninja, which is much faster:
-Open Developer Command Prompt for VS 2022(or 2019) and run:
-```
-cd build
-cmake -G "Ninja" -DBUILD_GRPC=ON ..
-ninja
-```
-
-Note this requires build dependencies for gRPC, which requires to install prerequisite listed at [gRPC website](https://github.com/grpc/grpc/blob/master/BUILDING.md#windows). It's mostly about install the [NASM](https://www.nasm.us/). If you don't have `choco` installed, you can download the binary from [NASM website](https://www.nasm.us/) and add its path to the `PATH` environment variable. 
-
-#### Update prebuilt libraries
-Currently, the gRPC binaries are prebuilt under the folder `prebuild``. In case there's build error with the prebuilt libraries, you can run regenerate the libraries with following steps:
- - Open Developer Command Prompt for VS 2022(or 2019)
- - Run `scripts/build_grpc.bat`
 
 
 ### Building Android Libraries
+
 
 - Download the Android NDK (e.g. 25.2.9519653)
 - Set the environment variable `ANDROID_NDK_HOME` (e.g. export ANDROID_NDK_HOME=~/andriod_sdk/ndk/25.2.9519653)

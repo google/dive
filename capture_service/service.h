@@ -16,32 +16,30 @@ limitations under the License.
 
 #pragma once
 
-#include "dive_service.grpc.pb.h"
+#include "network/unix_domain_server.h"
+#include "absl/status/status.h"
 
 namespace Dive
 {
 
-class DiveServiceImpl final : public DiveService::Service
+absl::Status SendPong(Network::SocketConnection *client_conn);
+
+absl::Status HandShake(Network::HandShakeRequest *request, Network::SocketConnection *client_conn);
+
+absl::Status StartPm4Capture(Network::SocketConnection *client_conn);
+
+absl::Status DownloadFile(Network::DownloadFileRequest *request,
+                          Network::SocketConnection    *client_conn);
+
+absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn);
+
+class ServerMessageHandler : public Network::IMessageHandler
 {
-    grpc::Status StartTrace(grpc::ServerContext *context,
-                            const TraceRequest  *request,
-                            TraceReply          *reply) override;
-
-    grpc::Status TestConnection(grpc::ServerContext *context,
-                                const TestRequest   *request,
-                                TestReply           *reply) override;
-
-    grpc::Status RunCommand(grpc::ServerContext     *context,
-                            const RunCommandRequest *request,
-                            RunCommandReply         *reply) override;
-
-    grpc::Status GetTraceFileMetaData(grpc::ServerContext       *context,
-                                      const FileMetaDataRequest *request,
-                                      FileMetaDataReply         *response) override;
-
-    grpc::Status DownloadFile(grpc::ServerContext             *context,
-                              const DownLoadRequest           *request,
-                              grpc::ServerWriter<FileContent> *writer) override;
+public:
+    void OnConnect() override;
+    void OnDisconnect() override;
+    void HandleMessage(std::unique_ptr<Network::ISerializable> message,
+                       Network::SocketConnection              *client_conn) override;
 };
 
 }  // namespace Dive

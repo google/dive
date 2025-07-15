@@ -556,7 +556,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     }
 
     m_command_hierarchy_model->BeginResetModel();
-    if (!m_data_core->ParseCaptureData())
+    if (!m_data_core->ParseCaptureData(false))
     {
         HideOverlay();
         QMessageBox::critical(this,

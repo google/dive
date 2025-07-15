@@ -82,7 +82,7 @@ adb shell appops set "%REPLAY_PACKAGE%" MANAGE_EXTERNAL_STORAGE allow
 
 adb logcat -c
 
-call "%GFXR_DUMP_RESOURCES%" "%GFXR%" "%JSON%"
+call "%GFXR_DUMP_RESOURCES%" --last_draw_only "%GFXR%" "%JSON%"
 IF %ERRORLEVEL% NEQ 0 (
     echo Error running gfxr_dump_resources.
     exit /b %ERRORLEVEL%

@@ -49,6 +49,7 @@ if (NOT ANDROID)
     set(ABSL_BUILD_TEST_HELPERS ON CACHE BOOL "")
     # Tell TESTONLY libs that we provide gtest via submodule
     set(ABSL_USE_EXTERNAL_GOOGLETEST ON CACHE BOOL "")
+    set(ABSL_FIND_GOOGLETEST OFF CACHE BOOL "")
 endif()
 add_subdirectory(third_party/abseil-cpp)
 

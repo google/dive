@@ -37,7 +37,21 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
 endif()
 
+# Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
+if (NOT ANDROID)
+    # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/googletest)
+endif()
+
+# When building unit tests, make sure we have access to some TESTONLY libs like status_matcher
+if (NOT ANDROID)
+    set(ABSL_BUILD_TEST_HELPERS ON CACHE BOOL "")
+    # Tell TESTONLY libs that we provide gtest via submodule
+    set(ABSL_USE_EXTERNAL_GOOGLETEST ON CACHE BOOL "")
+endif()
 add_subdirectory(third_party/abseil-cpp)
+
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
 endif()
@@ -64,12 +78,6 @@ endif()
 
 option(DIVE_ENABLE_PERFETTO, "Enable functionality to get perfetto trace." OFF)
 include(perfetto.cmake)
-
-if (NOT ANDROID)
-    # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    add_subdirectory(third_party/googletest)
-endif()
 
 add_subdirectory(network)
 add_subdirectory(capture_service)

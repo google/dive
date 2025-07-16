@@ -66,6 +66,7 @@ if(NOT ANDROID)
     gtest_main
     absl::status
     absl::statusor
+    absl::status_matchers
   )
   gtest_discover_tests(messages_test)
 endif()

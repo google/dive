@@ -1,0 +1,156 @@
+{
+  "functions": {
+    "CreateDXGIFactory2": "OverrideCreateDXGIFactory2",
+    "D3D12CreateDevice": "OverrideD3D12CreateDevice",
+    "D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary": "OverrideD3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary"
+  },
+  "classmethods": {
+    "IUnknown": {
+      "AddRef": "OverrideAddRef",
+      "Release": "OverrideRelease"
+    },
+    "ID3D12Debug": {
+      "EnableDebugLayer": "OverrideEnableDebugLayer"
+    },
+    "ID3D12DeviceRemovedExtendedDataSettings": {
+      "SetAutoBreadcrumbsEnablement": "OverrideSetAutoBreadcrumbsEnablement",
+      "SetPageFaultEnablement": "OverrideSetPageFaultEnablement"
+    },
+    "ID3D12DeviceRemovedExtendedDataSettings1": {
+      "SetBreadcrumbContextEnablement": "OverrideSetBreadcrumbContextEnablement"
+    },
+    "ID3D12DeviceFactory": {
+      "CreateDevice": "OverrideD3D12DeviceFactoryCreateDevice"
+    },
+    "ID3D12Device": {
+      "CreateCommandQueue": "OverrideCreateCommandQueue",
+      "CreateDescriptorHeap": "OverrideCreateDescriptorHeap",
+      "CreateCommittedResource": "OverrideCreateCommittedResource",
+      "CreatePlacedResource": "OverrideCreatePlacedResource",
+      "CreateFence": "OverrideCreateFence",
+      "GetDescriptorHandleIncrementSize": "OverrideGetDescriptorHandleIncrementSize",
+      "CreateHeap": "OverrideCreateHeap",
+      "CreateReservedResource": "OverrideCreateReservedResource",
+      "CreateGraphicsPipelineState": "OverrideCreateGraphicsPipelineState",
+      "CreateComputePipelineState": "OverrideCreateComputePipelineState",
+      "CreateCommandSignature": "OverrideCreateCommandSignature",
+      "CreateCommandList": "OverrideCreateCommandList",
+      "CreateRootSignature": "OverrideCreateRootSignature"
+    },
+    "ID3D12Device1": {
+      "CreatePipelineLibrary": "OverrideCreatePipelineLibrary"
+    },
+    "ID3D12Device2": {
+      "CreatePipelineState": "OverrideCreatePipelineState"
+    },
+    "ID3D12Device3": {
+      "EnqueueMakeResident": "OverrideEnqueueMakeResident",
+      "OpenExistingHeapFromAddress": "OverrideOpenExistingHeapFromAddress"
+    },
+    "ID3D12Device4": {
+      "CreateReservedResource1": "OverrideCreateReservedResource1",
+      "CreateCommittedResource1": "OverrideCreateCommittedResource1",
+      "CreateCommandList1": "OverrideCreateCommandList1",
+      "CreateHeap1": "OverrideCreateHeap1"
+    },
+    "ID3D12Device5": {
+      "CreateStateObject": "OverrideCreateStateObject",
+      "GetRaytracingAccelerationStructurePrebuildInfo": "OverrideGetRaytracingAccelerationStructurePrebuildInfo",
+      "CreateMetaCommand": "OverrideCreateMetaCommand"
+    },
+    "ID3D12Device7": {
+      "AddToStateObject": "OverrideAddToStateObject"
+    },
+    "ID3D12Device8": {
+      "CreateCommittedResource2": "OverrideCreateCommittedResource2",
+      "CreatePlacedResource1": "OverrideCreatePlacedResource1"
+    },
+    "ID3D12Device9": {
+      "CreateCommandQueue1": "OverrideCreateCommandQueue1"
+    },
+    "ID3D12Device10": {
+      "CreateCommittedResource3": "OverrideCreateCommittedResource3",
+      "CreatePlacedResource2": "OverrideCreatePlacedResource2",
+      "CreateReservedResource2": "OverrideCreateReservedResource2"
+    },
+    "ID3D12DescriptorHeap": {
+      "GetCPUDescriptorHandleForHeapStart": "OverrideGetCPUDescriptorHandleForHeapStart",
+      "GetGPUDescriptorHandleForHeapStart": "OverrideGetGPUDescriptorHandleForHeapStart"
+    },
+    "ID3D12Resource": {
+      "GetGPUVirtualAddress": "OverrideGetGpuVirtualAddress",
+      "Map": "OverrideResourceMap",
+      "Unmap": "OverrideResourceUnmap",
+      "ReadFromSubresource": "OverrideReadFromSubresource"
+    },
+    "ID3D12CommandQueue": {
+      "ExecuteCommandLists": "OverrideExecuteCommandLists",
+      "Signal": "OverrideCommandQueueSignal",
+      "Wait": "OverrideCommandQueueWait"
+    },
+    "ID3D12Fence": {
+      "GetCompletedValue": "OverrideGetCompletedValue",
+      "SetEventOnCompletion": "OverrideSetEventOnCompletion",
+      "Signal": "OverrideFenceSignal"
+    },
+    "ID3D12PipelineLibrary": {
+      "LoadComputePipeline": "OverrideLoadComputePipeline",
+      "LoadGraphicsPipeline": "OverrideLoadGraphicsPipeline"
+    },
+    "ID3D12PipelineLibrary1": {
+      "LoadPipeline": "OverrideLoadPipeline"
+    },
+    "ID3D12StateObjectProperties": {
+      "GetShaderIdentifier": "OverrideGetShaderIdentifier"
+    },
+    "ID3D12GraphicsCommandList": {
+      "CopyBufferRegion": "OverrideCopyBufferRegion",
+      "CopyResource": "OverrideCopyResource",
+      "ExecuteIndirect": "OverrideExecuteIndirect",
+      "Reset": "OverrideCommandListReset",
+      "CopyTextureRegion": "OverrideCopyTextureRegion",
+      "IASetIndexBuffer": "OverrideIASetIndexBuffer",
+      "IASetVertexBuffers": "OverrideIASetVertexBuffers",
+      "ExecuteBundle": "OverrideExecuteBundle"
+    },
+    "ID3D12GraphicsCommandList4": {
+      "BuildRaytracingAccelerationStructure": "OverrideBuildRaytracingAccelerationStructure",
+      "DispatchRays": "OverrideDispatchRays",
+      "SetPipelineState1": "OverrideSetPipelineState1",
+      "BeginRenderPass": "OverrideBeginRenderPass",
+      "InitializeMetaCommand": "OverrideInitializeMetaCommand",
+      "ExecuteMetaCommand": "OverrideExecuteMetaCommand"
+    },
+    "ID3D12GraphicsCommandList10": {
+      "SetProgram": "OverrideSetProgram",
+      "DispatchGraph": "OverrideDispatchGraph"
+    },    
+    "IDXGIFactory": {
+      "CreateSwapChain": "OverrideCreateSwapChain"
+    },
+    "IDXGIFactory2": {
+      "CreateSwapChain": "OverrideCreateSwapChain",
+      "CreateSwapChainForHwnd": "OverrideCreateSwapChainForHwnd",
+      "CreateSwapChainForComposition": "OverrideCreateSwapChainForComposition",
+      "CreateSwapChainForCoreWindow": "OverrideCreateSwapChainForCoreWindow"
+    },
+    "IDXGIFactory4": {
+      "EnumAdapterByLuid": "OverrideEnumAdapterByLuid"
+    },
+    "IDXGISwapChain": {
+      "GetBuffer": "OverrideGetBuffer",
+      "ResizeBuffers": "OverrideResizeBuffers",
+      "Present": "OverridePresent",
+      "SetFullscreenState": "OverrideSetFullscreenState"
+    },
+    "IDXGISwapChain1": {
+      "Present1": "OverridePresent1"
+    },
+    "IDXGISwapChain3": {
+      "ResizeBuffers1": "OverrideResizeBuffers1"
+    },
+    "ID3D12Object": {
+      "SetName": "OverrideSetName"
+    }
+  }
+}

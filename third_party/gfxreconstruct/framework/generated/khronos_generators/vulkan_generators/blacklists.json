@@ -1,0 +1,50 @@
+{
+  "functions-all": [
+    "vkGetInstanceProcAddr",
+    "vkGetDeviceProcAddr",
+    "vkEnumerateInstanceLayerProperties",
+    "vkEnumerateDeviceLayerProperties",
+    "vkEnumerateInstanceExtensionProperties",
+    "vkEnumerateDeviceExtensionProperties",
+    "vkEnumerateInstanceVersion",
+    "vkUpdateDescriptorSetWithTemplate",
+    "vkUpdateDescriptorSetWithTemplateKHR",
+    "vkCmdPushDescriptorSetWithTemplate",
+    "vkCmdPushDescriptorSetWithTemplateKHR",
+    "vkCmdPushDescriptorSetWithTemplate2",
+    "vkCmdPushDescriptorSetWithTemplate2KHR",
+    "vkBuildAccelerationStructuresKHR",
+    "vkCopyAccelerationStructureKHR",
+    "vkCreateRayTracingPipelinesKHR",
+    "vkCreateExternalComputeQueueNV",
+    "vkDestroyExternalComputeQueueNV",
+    "vkGetExternalComputeQueueDataNV"
+  ],
+  "functions-encoder": [
+    "vkCreateComputePipelines",
+    "vkCreateGraphicsPipelines",
+    "vkCreateRayTracingPipelinesNV",
+    "vkCreateRayTracingPipelinesKHR"
+  ],
+  "functions-decoder": [
+    "vkDeferredOperationJoinKHR"
+  ],
+  "structures": [
+    "VkBaseOutStructure",
+    "VkBaseInStructure",
+    "VkDescriptorImageInfo",
+    "VkWriteDescriptorSet",
+    "VkPerformanceValueINTEL",
+    "VkPushDescriptorSetWithTemplateInfo",
+    "VkAccelerationStructureGeometryKHR",
+    "VkAccelerationStructureMotionInstanceNV",
+    "VkIndirectExecutionSetInfoEXT",
+    "VkIndirectExecutionSetCreateInfoEXT",
+    "VkIndirectCommandsTokenDataEXT",
+    "VkIndirectCommandsLayoutTokenEXT",
+    "VkCopyMemoryToImageInfo",
+    "VkMemoryToImageCopy",
+    "VkCopyImageToMemoryInfo",
+    "VkImageToMemoryCopy"
+  ]
+}

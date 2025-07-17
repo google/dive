@@ -348,13 +348,29 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       if pm4_type_packet is not None: # Add prefix for PM4 packets only
         packet_name = "PM4_" + packet_name
       if stripe:
+        reg_variant_dict = {}
+
         for element in variant[1]:
           is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
           is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
           if is_reg_32 or is_reg_64:
             offset = int(element.attrib['offset'],0)
+
             if not (offset in reg_dict):
               reg_dict[offset] = element
+
+          # If it is a chip variant and the variant ends in '-' (e.g. A6XX-), then
+          # this is the most current version of the field, so override existing fields
+          # But even within variant there are duplicates, so make sure to add first-encountered
+          if 'variants' in stripe.attrib:
+            variant_string = stripe.attrib['variants']
+            if re.search(r"A\dXX-", variant_string):
+              if not (offset in reg_variant_dict):
+                reg_variant_dict[offset] = element
+
+        for element in reg_variant_dict:
+          reg_dict.update(reg_variant_dict)
+
         # Add a postfix to the packet_name if it is a non-chip stripe
         if 'varset' in stripe.attrib:
           varset = stripe.attrib['varset']

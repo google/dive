@@ -23,7 +23,7 @@ limitations under the License.
 namespace
 {
 
-using absl_testing::IsOkAndHolds;
+using ::absl_testing::IsOkAndHolds;
 
 TEST(MessagesTest, WriteAndReadUint32)
 {

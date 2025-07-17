@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "absl/status/status_matchers.h"
 #include <gtest/gtest.h>
 #include <limits>
 #include <iostream>
@@ -22,21 +23,21 @@ limitations under the License.
 namespace
 {
 
+using ::absl_testing::IsOkAndHolds;
+
 TEST(MessagesTest, WriteAndReadUint32)
 {
     Network::Buffer buf;
     uint32_t        write_value = 123456703;
     Network::WriteUint32ToBuffer(write_value, buf);
     size_t offset = 0;
-    auto   read_value = Network::ReadUint32FromBuffer(buf, offset);
-    ASSERT_TRUE(read_value.ok());
-    ASSERT_EQ(write_value, *read_value);
+    ASSERT_THAT(Network::ReadUint32FromBuffer(buf, offset), IsOkAndHolds(write_value));
 
     buf.clear();
     write_value = 0;
     Network::WriteUint32ToBuffer(write_value, buf);
     offset = 0;
-    read_value = Network::ReadUint32FromBuffer(buf, offset);
+    auto read_value = Network::ReadUint32FromBuffer(buf, offset);
     ASSERT_TRUE(read_value.ok());
     ASSERT_EQ(write_value, *read_value);
 

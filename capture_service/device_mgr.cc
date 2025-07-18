@@ -234,9 +234,6 @@ absl::Status AndroidDevice::SetupDevice()
         RETURN_IF_ERROR(ForwardFirstAvailablePort());
     }
 
-#if defined(DIVE_ENABLE_PERFETTO)
-    RETURN_IF_ERROR(Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 1"));
-#endif
     return absl::OkStatus();
 }
 
@@ -283,10 +280,6 @@ absl::Status AndroidDevice::CleanupDevice()
     Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
     Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
     Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
-
-#if defined(DIVE_ENABLE_PERFETTO)
-    Adb().Run("shell setprop debug.graphics.gpu.profiler.perfetto 0").IgnoreError();
-#endif
 
     LOGD("Cleanup device %s done\n", m_serial.c_str());
     return absl::OkStatus();

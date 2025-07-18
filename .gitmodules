@@ -1,34 +1,20 @@
-[submodule "third_party/pybind11"]
-	path = third_party/pybind11
-	url = https://github.com/pybind/pybind11
-[submodule "third_party/catch2"]
-	path = third_party/catch2
-	url = https://github.com/catchorg/Catch2
-
-[submodule "third_party/Vulkan-Headers"]
-	path = third_party/Vulkan-Headers
+[submodule "external/Vulkan-Headers"]
+	path = external/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
-[submodule "third_party/OpenXR-SDK"]
-	path = third_party/OpenXR-SDK
-	url = https://github.com/KhronosGroup/OpenXR-SDK.git
-[submodule "third_party/libarchive"]
-	path = third_party/libarchive
-	url = https://github.com/libarchive/libarchive.git
-[submodule "third_party/perfetto"]
-	path = third_party/perfetto
-	url = https://android.googlesource.com/platform/external/perfetto
-[submodule "third_party/gfxreconstruct/external/SPIRV-Headers"]
-	path = third_party/gfxreconstruct/external/SPIRV-Headers
+	shallow = true
+[submodule "external/SPIRV-Headers"]
+	path = external/SPIRV-Headers
 	url = https://github.com/KhronosGroup/SPIRV-Headers.git
-[submodule "third_party/gfxreconstruct/external/SPIRV-Reflect"]
-	path = third_party/gfxreconstruct/external/SPIRV-Reflect
+	shallow = true
+[submodule "external/SPIRV-Reflect"]
+	path = external/SPIRV-Reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
-[submodule "third_party/gfxreconstruct/external/Vulkan-Headers"]
-	path = third_party/gfxreconstruct/external/Vulkan-Headers
-	url = https://github.com/KhronosGroup/Vulkan-Headers.git
-[submodule "third_party/googletest"]
-	path = third_party/googletest
-	url = https://github.com/google/googletest.git
-[submodule "third_party/abseil-cpp"]
-	path = third_party/abseil-cpp
-	url = https://github.com/abseil/abseil-cpp.git
+	shallow = true
+[submodule "external/OpenXR-SDK"]
+	path = external/OpenXR-SDK
+	url = https://github.com/KhronosGroup/OpenXR-SDK.git
+	shallow = true
+[submodule "external/OpenXR-Docs"]
+	path = external/OpenXR-Docs
+	url = https://github.com/KhronosGroup/OpenXR-Docs.git
+	shallow = true

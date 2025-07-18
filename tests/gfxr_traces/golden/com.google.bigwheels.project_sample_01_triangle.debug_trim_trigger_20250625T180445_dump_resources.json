@@ -1,6 +1,0 @@
-{
-  "BeginCommandBuffer": [162],
-  "RenderPass": [[[164,199]]],
-  "Draw": [[169,185,188,191,194,197]],
-  "QueueSubmit": [202]
-}

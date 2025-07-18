@@ -1,31 +1,15 @@
-# Vim swap files
-*.swp
-
-# Other swap files
-*.swo
-
-# Visual Studio Code configuration files
+build*/
+dbuild*/
+Debug/
+Release/
+__pycache__/
+.vs/
 .vscode/
-
-# clangd index files
-/compile_commands.json
-/.cache/
-
-# Build-related directories
-build/
-build_android/
-driver/xgl/builds
-third_party/freedreno/libs/
-third_party/freedreno/obj
-build_android/
-# Amdvlk auto-generated files
+*.db
 *.pyc
-g_*.h
-g_*.cpp
-
-.ipynb_checkpoints/
-local_notebooks/*.ipynb
-
-.env
-
-install/
+*.rdbg
+._*
+.cache
+.DS_Store
+external/wayland-protocols/
+android/layer/assets/

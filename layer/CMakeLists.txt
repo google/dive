@@ -1,109 +1,178 @@
+###############################################################################
+# Copyright (c) 2018-2020 LunarG, Inc.
+# Copyright (c) 2020-2023 Advanced Micro Devices, Inc.
+# All rights reserved
 #
-# Copyright 2025 Google LLC
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to
+# deal in the Software without restriction, including without limitation the
+# rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+# sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
-# http://www.apache.org/licenses/LICENSE-2.0
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+# IN THE SOFTWARE.
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
+# Author: LunarG Team
+# Author: AMD Developer Tools Team
+# Description: CMake script for layer target
+###############################################################################
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
+set(CMAKE_CXX_VISIBILITY_PRESET "hidden")
+set(CMAKE_VISIBILITY_INLINES_HIDDEN "YES")
 
-if (ANDROID)
-    message("Build diveCaptureLayer for Android.")
+if (D3D12_SUPPORT)
+    set (LINK_ARCH "x64")
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        set (LINK_ARCH "x86")
+    endif()
+    add_subdirectory(d3d12_capture)
+    add_subdirectory(d3d12)
+    add_subdirectory(dxgi)
+    if (${BUILD_LAUNCHER_AND_INTERCEPTOR})
+        add_subdirectory(gfxrecon_interceptor)
+    endif()
+
+    if (${GFXRECON_AGS_SUPPORT_FINAL})
+      add_subdirectory(ags_capture)
+    endif()
+endif()
+
+add_library(VkLayer_gfxreconstruct SHARED "")
+
+target_sources(VkLayer_gfxreconstruct
+               PRIVATE
+                   ${CMAKE_CURRENT_LIST_DIR}/dll_main.cpp
+                   ${CMAKE_CURRENT_LIST_DIR}/layer_vulkan_entry.h
+                   ${CMAKE_CURRENT_LIST_DIR}/layer_vulkan_entry.cpp
+                   ${PROJECT_SOURCE_DIR}/framework/encode/custom_vulkan_layer_func_table.h
+                   ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_layer_func_table.h
+              )
+
+target_include_directories(VkLayer_gfxreconstruct
+                           PUBLIC
+                               ${CMAKE_BINARY_DIR}
+                               ${PROJECT_SOURCE_DIR})
+
+target_link_libraries(VkLayer_gfxreconstruct
+                        gfxrecon_encode
+                        gfxrecon_graphics
+                        gfxrecon_format
+                        gfxrecon_util
+                        vulkan_registry
+                        $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:OpenXR>
+                        platform_specific)
+
+# Limit what symbols are exported
+if(MSVC)
+    target_sources(VkLayer_gfxreconstruct
+                    PRIVATE
+                        ${PROJECT_SOURCE_DIR}/version.rc
+                  )
+
+    target_link_options(VkLayer_gfxreconstruct
+                        PRIVATE
+                            /DEF:${CMAKE_CURRENT_LIST_DIR}/VkLayer_gfxreconstruct.def
+                       )
+elseif(APPLE)
+    # Both Apple and IOS
+    target_link_options(VkLayer_gfxreconstruct
+                        PRIVATE
+                            -exported_symbols_list ${CMAKE_CURRENT_LIST_DIR}/VkLayer_gfxreconstruct.exp
+                       )
 else()
-    message("Not Android platform.")
-    return()
+    target_link_options(VkLayer_gfxreconstruct
+                        PRIVATE
+                            LINKER:--version-script=${CMAKE_CURRENT_LIST_DIR}/VkLayer_gfxreconstruct.map
+                       )
 endif()
 
-project(diveCaptureLayer)
+common_build_directives(VkLayer_gfxreconstruct)
 
-set(CMAKE_CXX_STANDARD 17)
-set(target_name VkLayer_dive)
+# The json output file needs Unix "/" separators or Windows "\" separators
+# On top of that, Windows separators actually need to be doubled because the json format uses backslash escapes
+file(TO_NATIVE_PATH "./" RELATIVE_PATH_PREFIX)
+string(REPLACE "\\" "\\\\" RELATIVE_PATH_PREFIX "${RELATIVE_PATH_PREFIX}")
+include("GenerateLayerJson")
 
-set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.h"
-)
+# Generate the Vulkan JSON file that will be generated into the build directory
+GENERATE_LAYER_JSON_FILE(VkLayer_gfxreconstruct_json
+        "${RELATIVE_PATH_PREFIX}"
+        $<TARGET_FILE_NAME:VkLayer_gfxreconstruct>
+        ${CMAKE_CURRENT_SOURCE_DIR}/json/VkLayer_gfxreconstruct.json.in
+        $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/VkLayer_gfxreconstruct.json
+        )
 
-set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_base.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_android.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
-)
-
-include_directories(${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
-    ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp/)
-
-add_library(${target_name} SHARED ${HDR_FILES}
-                                ${SRC_FILES})
-
-add_definitions(-DLAYERNAME=Dive)
-
-set(TARGET_LINK_LIBS PRIVATE service)
-
-add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-list(APPEND TARGET_LINK_LIBS
-    PRIVATE -lm
-    PRIVATE -ldl
-    PRIVATE -llog
-    PRIVATE -landroid
-    PRIVATE wrap)
-
-target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
-target_link_directories(${target_name} 
-    PRIVATE ${CMAKE_SOURCE_DIR}/capture_service)
-
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
+if (OPENXR_SUPPORT_ENABLED)
+    # Generate the OpenXR JSON file that will be generated into the build directory
+    GENERATE_LAYER_JSON_FILE(XrLayer_gfxreconstruct_json
+            "${RELATIVE_PATH_PREFIX}"
+            $<TARGET_FILE_NAME:VkLayer_gfxreconstruct>
+            ${CMAKE_CURRENT_SOURCE_DIR}/json/XrLayer_gfxreconstruct.json.in
+            $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/XrLayer_gfxreconstruct.json
+            )
 endif()
 
-if (MSVC)
-  # 4100: unreferenced formal parameter
-  # 4201: prevent nameless struct/union
-  target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
+if(UNIX)
+        # Generate a Vulkan JSON file that can be installed into system directories (w/o the "./" prefix in the library_path)
+        set(RELATIVE_PATH_PREFIX "")
+        GENERATE_LAYER_JSON_FILE(VkLayer_gfxreconstruct_json-staging
+                "${RELATIVE_PATH_PREFIX}"
+                $<TARGET_FILE_NAME:VkLayer_gfxreconstruct>
+                ${CMAKE_CURRENT_SOURCE_DIR}/json/VkLayer_gfxreconstruct.json.in
+                $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/staging-json/VkLayer_gfxreconstruct.json
+                )
+
+        if (OPENXR_SUPPORT_ENABLED)
+                # Generate an OpenXR JSON file that can be installed into system directories (w/o the "./" prefix in the library_path)
+                set(RELATIVE_PATH_PREFIX "")
+                GENERATE_LAYER_JSON_FILE(XrLayer_gfxreconstruct_json-staging
+                        "${RELATIVE_PATH_PREFIX}"
+                        $<TARGET_FILE_NAME:VkLayer_gfxreconstruct>
+                        ${CMAKE_CURRENT_SOURCE_DIR}/json/XrLayer_gfxreconstruct.json.in
+                        $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/staging-json/XrLayer_gfxreconstruct.json
+                        )
+        endif()
+
+endif()
+
+install(TARGETS VkLayer_gfxreconstruct RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+if (UNIX)
+    install(FILES $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/staging-json/VkLayer_gfxreconstruct.json DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/vulkan/explicit_layer.d)
+    if (OPENXR_SUPPORT_ENABLED)
+        install(FILES $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/staging-json/XrLayer_gfxreconstruct.json DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/openxr/1/api_layers/explicit_layer.d)
+    endif()
 else()
-    target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+    install(FILES $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/VkLayer_gfxreconstruct.json DESTINATION ${CMAKE_INSTALL_BINDIR})
+    if (OPENXR_SUPPORT_ENABLED)
+        install(FILES $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/XrLayer_gfxreconstruct.json DESTINATION ${CMAKE_INSTALL_BINDIR})
+    endif()
 endif()
 
-set_target_properties(${target_name}
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
-)
-configure_file("manifest/XrApiLayer_dive.json" "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json" COPYONLY)
-install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})
+if (${RUN_TESTS})
+    add_executable(VkLayer_gfxreconstruct_test "")
 
-set(target_name XrApiLayer_dive)
-set(XR_LAYER_SRC_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
-    "${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/xr_generated_dispatch_table.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
-    )
-
-add_library(${target_name} SHARED ${XR_LAYER_SRC_FILES})
-set_target_properties(${target_name}
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
-)
-target_include_directories(${target_name} PUBLIC 
-    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/include
-    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
-    ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
-)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
+    target_sources(VkLayer_gfxreconstruct_test PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/test/main.cpp
+            ${CMAKE_CURRENT_LIST_DIR}/../tools/platform_debug_helper.cpp)
+    target_link_libraries(VkLayer_gfxreconstruct_test PRIVATE VkLayer_gfxreconstruct)
+    if (MSVC)
+        # Force inclusion of "gfxrecon_disable_popup_result" variable in linking.
+        # On 32-bit windows, MSVC prefixes symbols with "_" but on 64-bit windows it doesn't.
+        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+            target_link_options(VkLayer_gfxreconstruct_test PUBLIC "LINKER:/Include:_gfxrecon_disable_popup_result")
+        else()
+            target_link_options(VkLayer_gfxreconstruct_test PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
+        endif()
+    endif()
+    common_build_directives(VkLayer_gfxreconstruct_test)
+    common_test_directives(VkLayer_gfxreconstruct_test)
 endif()
-target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
-
-install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json" DESTINATION ${CMAKE_INSTALL_PREFIX})

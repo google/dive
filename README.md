@@ -1,236 +1,137 @@
-### Checkout the code
+# Project Components
 
-```
-git clone --recursive https://github.com/google/dive.git
-```
+The GFXReconstruct project provides tools for the capture and replay of graphics
+API calls, allowing the graphics commands executed by an application
+to be recorded to a file that may later be replayed to reconstruct the
+graphics-specific behavior of the captured application. The replay code has
+been organized with a framework design to make it easy to create additional
+tools for processing capture files.
 
-If the code has been checked out without `--recursive` or you're pulling from the main branch later, please run following command to make sure the submodules are retrieved properly.
-```
-git submodule update --init --recursive
-```
+The GFXReconstruct components currently provided with this repository are:
 
-### Prerequisite
+* The `VK_LAYER_LUNARG_gfxreconstruct` Vulkan layer for capturing
+  Vulkan application commands.
+* The D3D12 capture libraries for capturing D3D12 application commands.
+* The `gfxrecon-replay` tool to replay GFXReconstruct capture files.
+* The `gfxrecon-info` tool to print information describing GFXReconstruct
+  capture files.
+* The `gfxrecon-compress` tool to compress/decompress GFXReconstruct
+  capture files.
+    * **NOTE:** The gfxrecon-compress tool requires LZ4, Zstandard, and/or
+      zlib, which are currently optional build dependencies.
+* The `gfxrecon-extract` tool to extract SPIR-V binaries from
+  GFXReconstruct capture files.
+* The `gfxrecon-convert` tool to convert GFXReconstruct capture files to
+  a [JSON Lines](https://jsonlines.org/) listing of API calls. (experimental
+  for D3D12 captures)
+* The `gfxrecon-optimize` tool to produce new capture files with
+  improved replay performance.
 
- - CMake
- - Ninja
- - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.
- - Android NDK (currently we are using 25.2.9519653). Set the `ANDROID_NDK_HOME` environment variable.
-  ```
-    export ANDROID_NDK_HOME=~/android_sdk/ndk/25.2.9519653
-  ``` 
- - Python is installed with `python` in your PATH. It is recommended to use a virtual environment such as virtualenv or pipenv. Alternatively, on Debian, you can `sudo apt install python-is-python3`.
- - Mako Templates for Python: can be installed with following commandline
-  ```
-    pip install Mako
-  ```
- - gfxreconstruct [dependencies](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#android-development-requirements), if targetting Android. Specifically:
-   - Android Studio. Make sure to install an SDK and accept the licenses.
-   - Java 17. Because it uses an older version of Gradle. Set the `JAVA_HOME` environment variable before building:
-     ```
-     export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-     ```
+## Experimental OpenXR Support
 
-### Building Dive host tool on Linux
-```
-# Assumes QTDIR is set to gcc_64 directory (eg. ~/Qt/5.11.2/gcc_64)
-export CMAKE_PREFIX_PATH=$QTDIR
-export PATH=$QTDIR:$PATH
-cd <dive_path>
-git submodule update --init --recursive
-mkdir build
-cd build
-cmake -GNinja ..
-ninja
-```
+OpenXR support in GFXReconstruct is experimental and is recommended only for
+developer use for evaluation!
+Only a subset of features and a very small number of apps are supported.
+See [USAGE_desktop_OpenXR](USAGE_desktop_OpenXR.md) and the
+"Supported Capabilities" table below for more detail.
 
-You can specify the build type for debug/release as well
-with `-DCMAKE_BUILD_TYPE=Debug` or `-DCMAKE_BUILD_TYPE=Release` when running cmake.
+Because OpenXR support is considered a Proof-of-Concept, it is not enabled
+in the SDK built version of GFXReconstruct.
+If OpenXR support is desired, please pull the source down from the
+GitHub repo and build manually.
 
-Host tool:
-```
-<dive_path>/build/bin/dive_client_cli
-```
+## Contributing
 
-### Building Dive host tool on Windows
-```
-REM Assumes QTDIR is set to msvc directory (eg. C:\Qt\5.11.2\msvc2017_64)
-set CMAKE_PREFIX_PATH=%QTDIR%
-set PATH=%QTDIR%\bin;%PATH%
-cd <dive_path>
-git submodule update --init --recursive
-mkdir build
-cd build
-cmake -G "Visual Studio 17 2022" ..
-```
+If you intend to contribute, the preferred work flow is for you to develop
+your contribution in a fork of this repo in your GitHub account and then
+submit a pull request.
+Please see the [CONTRIBUTING](CONTRIBUTING.md) file in this repository for
+more details
 
-Open `dive.sln` and build in Debug or Release 
-Or run:
-```
-cmake --build . --config Debug
-cmake --build . --config Release
-```
+## Supported Capabilities
 
-Host tool:
-```
-<dive_path>/build/bin/<build_type>/dive_client_cli.exe
-```
+| Capability     |   Windows  |  Linux  |  Mac  |   Android   |  Meta Quest |
+| -------------- | :--------: | :-----: | :-------: | :-----: | :---------: |
+| **Vulkan Support** ||||||
+| Capture | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :construction:  |
+| Replay  | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :construction:  |
+| gfxrecon-compress | :white_check_mark: | :white_check_mark: | :white_check_mark: | :large_orange_diamond: | :large_orange_diamond: |
+| gfxrecon-convert | :white_check_mark: | :white_check_mark: | :white_check_mark: | :large_orange_diamond: | :large_orange_diamond: |
+| gfxrecon-info | :white_check_mark: | :white_check_mark: | :white_check_mark: | :large_orange_diamond: | :large_orange_diamond: |
+| gfxrecon-optimize | :white_check_mark: | :white_check_mark: | :white_check_mark: | :large_orange_diamond: | :x: |
+| gfxrecon-tocpp | :x: | :construction: | :x: | :construction:  | :x: |
+| **D3D12 Support** ||||||
+| Capture  | :white_check_mark: | :x: | :x: | :x: | :x: |
+| Replay   | :white_check_mark: | :x: | :x: | :x: | :x: |
+| gfxrecon-compress | :white_check_mark: | :x: | :x: | :x: | :x: |
+| gfxrecon-convert | :white_check_mark: | :x: | :x: | :x: | :x: |
+| gfxrecon-info | :white_check_mark: | :x: | :x: | :x: | :x: |
+| gfxrecon-optimize | :white_check_mark: | :x: | :x: | :x: | :x: |
+| **OpenXR (Vulkan Graphics API only)** ||||||
+| Capture | :construction: | :construction: | :x: | :construction: | :construction:  |
+| Replay  | :construction: | :construction: | :x: | :construction: | :construction:  |
+| gfxrecon-compress | :construction: | :construction: | :x: | :large_orange_diamond: | :large_orange_diamond: |
+| gfxrecon-convert | :construction: | :construction: | :x: | :large_orange_diamond: | :large_orange_diamond:  |
+| gfxrecon-info | :construction: | :construction: | :x: | :large_orange_diamond: | :large_orange_diamond:  |
+| gfxrecon-optimize | :x: | :x: | :x: | :x: | :x: |
+| gfxrecon-tocpp | :x: | :x: | :x: | :x:  | :x: |
+
+**Legend**
+* :white_check_mark: : Supported
+* :x: : Not Suported
+* :large_orange_diamond: : Not supported on Android/Meta Quest, but Desktop tools support modifying the resulting captures
+* :construction: : Early Preview / Alpha / Beta
+
+### Cross-Platform Capture/Replay Support
+
+The table above only represents replay on the same platform and driver
+version on which the file was captured.
+
+It is possible in some circumstances to replay on one operating system a
+trace that was captured on another operating system.
+However this is not currently supported unless specified.
+
+For example, a Windows capture may replay on Linux, and vice versa,
+if:
+  * Certain settings are forced in the replay application
+     * Overriding the windowing system used
+     * Disabling unknown extensions
+     * Rebinding memory
+  * Compability libraries are enabled to expose operating system behavior
+     * Such as Wine.
 
 
+## Building
 
-### Building Android Libraries
+Instructions for building the contents of this repository can be found in
+the [BUILD.md](BUILD.md) documentation.
 
+## Usage
 
-- Download the Android NDK (e.g. 25.2.9519653)
-- Set the environment variable `ANDROID_NDK_HOME` (e.g. export ANDROID_NDK_HOME=~/andriod_sdk/ndk/25.2.9519653)
-- On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
+Instructions for using the GFXReconstruct capture and replay tools can be
+found at the following locations:
 
-Run the script 
+* [Desktop Usage - Vulkan](USAGE_desktop_Vulkan.md)
+* [Desktop Usage - D3D12](USAGE_desktop_D3D12.md)
+* [Android Usage](USAGE_android.md)
 
-On Linux, run: 
-```
-./scripts/build_android.sh Debug
-```
-And on Windows, Open Developer Command Prompt for VS 2022(or 2019) and run 
+## Testing
 
-```
-scripts\build_android.bat Debug
-```
+In addition to unit tests, there are several [test apps](TESTING_test_apps.md) included that can 
+be used to verify GFXReconstruct output.  These test apps execute small graphics workloads which
+result in small, known .gfxr outputs.
 
-This script will:
-- Build the debug version of the libraries under `build_android` folder.
-  - To build release version, replace parameter with `Release`. 
-  - To build both versions, do not pass a parameter.
-- Trigger gradle to rebuild gfxreconstruct binaries under `third_party/gfxreconstruct/android/...` and copy them to under `build_android`.
-- Place the relevant files under `install` in preparation for deployment to the Android device.
+## License
 
-Troubleshooting tips:
-- Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
-- Delete build folders for a clean build
-  - `third_party/gfxreconstruct/android/layer/build`
-  - `third_party/gfxreconstruct/android/tools/replay/build`
-  - `build_android`
-- If incremental builds are slow, try building only one version (Debug or Release) and not both
+This work is licensed under the terms of the MIT License; see
+[LICENSE](LICENSE.txt) for more information.
 
-### CLI Tool for Android applications
-The command-line tool `dive_client_cli` currently supports capturing OpenXR and Vulkan applications on Android. To capture, please follow the instructions in the sections above to check out the code and build the Android libraries.
+## Appropriate Use
 
-To build the CLI tool on Linux, see [Building Dive host tool on Linux](#building-dive-host-tool-on-linux).
-
-To build the CLI tool on Windows, see [Building Dive host tool on Windows](#building-dive-host-tool-on-windows).
-
-To build the Android libraries, see [Building Android Libraries](#building-android-libraries).
-
-You can find out the device serial by run `adb devices` or by `./dive_client_cli --command list_device`
-
-Run `./dive_client_cli --help` for help.
-
-#### Standalone PM4 Capture
-
-Examples:
- - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
- ```
- ./dive_client_cli --device 9A221FFAZ004TL --command capture --package de.saschawillems.vulkanBloom --type vulkan --trigger_capture_after 5 --download_path "/path/to/save/captures"
- ```
-
- - Install the dependencies on device and start the package
- ```
- ./dive_client_cli --device 9A221FFAZ004TL --command run --package com.google.bigwheels.project_cube_xr.debug --type openxr --download_path "/path/to/save/captures"
- ```
-Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
-
-The capture files will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
-
-#### GFXR Capture
-GFXR capturing can be triggered in the ui or within the cli.
-
-To begin a GFXR capture in the ui, either press key `F6` or click `Capture` at the top left corner and select `GFXR Capture` from the dropdown menu.
-
-To begin a GFXR capture with the cli, first ensure you know the correct architecture for the device you are attempting to capture on. This is required when intiating a GFXR capture.
-
-Examples:
- - Install the dependencies on device, start the package, and initiate a GFXR capture.
- ```
- ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_capture --package com.google.bigwheels.project_cube_xr.debug --type vulkan --device_architecture arm64-v8a --gfxr_capture_file_dir gfxr_bigwheels_capture --download_path "/path/to/save/captures"
- ```
-
-Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.
-
-The capture file directory will be saved at the path specified with the `--download_path` option or the current directory if this option not specified. 
-
-#### Modifying GFXR File
-Modifications to the GFXR file can be made using the Dive Host Tool `host_cli`
-
-Example:
- ```
- ./host_cli --input_file_path original/file.gfxr --output_gfxr_path new/file.gfxr
- ```
-
-#### GFXR Replay
-
-First, push the GFXR capture to the device or find the path where it is located on the device.
-
-If multiple Android Devices are connected, set the enviroment variable `ANDROID_SERIAL` to the device serial in preparation for the GFXR replay script.
-
-Using the `gfxr-replay` command will install the `gfxr-replay.apk` found in the `install` dir, and then replay the specified capture.
-
-Example:
-```
-./dive_client_cli --device 9A221FFAZ004TL --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr
-```
-
-For a capture that is a single frame, it can be replayed in a loop. Omit the `--loop-single-frame-count` flag for infinite looping.
-
-Example:
-```
-./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_flags "--loop-single-frame --loop-single-frame-count 300"
-```
-
-#### Cleanup
-
-The command line tool will clean up the device and application automatically at exit. If somehow it crashed and left the device in a uncleaned state, you can run following command to clean it up
-
-```
-./dive_client_cli --command cleanup --package de.saschawillems.vulkanBloom --device 9A221FFAZ004TL
-```
-This will remove all the libraries installed and the settings that had been setup by Dive for the package.
-
-### Updating Dive's gfxreconstruct subtree
-
-1. Create a branch to contain the merge
-2. Add the remote: 
-```
-git remote add -f gfxreconstruct-remote https://github.com/LunarG/gfxreconstruct.git
-```
-3. Run the merge command: 
-```
-git merge -s subtree --squash -X subtree=third_party/gfxreconstruct --allow-unrelated-histories --no-commit gfxreconstruct-remote/dev
-```
-4. Resolve the conflicts that arise in the following files and ensure dive-specific changes are included. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE:
-    - third_party/gfxrreconstruct/CMakeLists.txt
-    - third_party/gfxreconstruct/cmake/AgilitySDK.cmake
-    - third_party/gfxreconstruct/cmake/FindVulkanVersion.cmake
-    - third_party/gfxreconstruct/cmake/AgilitySDK.cmake
-    - third_party/gfxreconstruct/framework/decode/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/encode/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/format/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/graphics/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/util/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/ags_capture/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/d3d12/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/d3d12_capture/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/dxgi/CMakeLists.txt
-    - third_party/gfxreconstruct/scripts/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/compress/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/convert/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/extract/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/info/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/optimize/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/replay/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/tocpp/CMakeLists.txt
-5. Stage the files.
-6. Create the commit: 
-```
-git add third_party/gfxreconstruct, git commit -m "Import gfxreconstruct updates"
-```
-7. Create a pull request for the updates.
+GFXReconstruct is a suite of tools intended for the purpose of
+improving application and platform quality by allowing the analysis
+of capture and replay of graphics command streams. Use cases
+include, for example, regression testing, silicon and platform
+bringup, and reporting bugs. Using GFXReconstruct to extract assets
+from an application or game for which you don’t have an appropriate
+license may violate copyrights or software licenses.

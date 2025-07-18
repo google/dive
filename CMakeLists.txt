@@ -77,9 +77,6 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
-option(DIVE_ENABLE_PERFETTO, "Enable functionality to get perfetto trace." OFF)
-include(perfetto.cmake)
-
 add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)

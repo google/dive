@@ -15,7 +15,7 @@
 #define DIVE_FUNCTION_DATA_H
 
 #include "util/defines.h"
-#include "../../external/nlohmann/include/nlohmann/json.hpp"
+#include "../../external/nlohmann-json/include/nlohmann/json.hpp"
 #include <cstdint>
 #include <string>
 

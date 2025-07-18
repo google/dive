@@ -32,6 +32,9 @@ add_subdirectory(../../framework/decode ${PROJECT_SOURCE_DIR}/../../framework/de
 add_subdirectory(../../framework/application ${PROJECT_SOURCE_DIR}/../../framework/application/build/tools/quest_replay/${ANDROID_ABI})
 add_subdirectory(${GFXRECON_SOURCE_DIR}/external/OpenXR-SDK ${PROJECT_SOURCE_DIR}/../../framework/application/build/tools/quest_replay_openxr/${ANDROID_ABI})
 
+# GOOGLE: Add subdirectories for gfxr_ext, putting binaries into the same dir as their base counterparts
+add_subdirectory(../../../../../gfxr_ext/decode ${CMAKE_SOURCE_DIR}/../../framework/decode_ext/build/tools/quest-replay/${ANDROID_ABI})
+
 add_library(gfxrecon-quest-replay
             SHARED
                 ${GFXRECON_SOURCE_DIR}/tools/tool_settings.h
@@ -40,19 +43,23 @@ add_library(gfxrecon-quest-replay
                 ${GFXRECON_SOURCE_DIR}/tools/replay/replay_settings.h
                 ${GFXRECON_SOURCE_DIR}/tools/replay/android_main.cpp)
 
+# GOOGLE: Add dive root folder
 target_include_directories(gfxrecon-quest-replay
                            PUBLIC
                                ${GFXRECON_SOURCE_DIR}/external/precompiled/android/include
-                               ${CMAKE_BINARY_DIR})
+                               ${CMAKE_BINARY_DIR}
+                               ${GFXRECON_SOURCE_DIR}/../..)
 
 target_include_directories(gfxrecon-quest-replay PUBLIC ${GFXRECON_SOURCE_DIR}/external/OpenXR-SDK/include)
 target_compile_definitions(gfxrecon-quest-replay PUBLIC ENABLE_OPENXR_SUPPORT=1)
 
+# GOOGLE: Add gfxr_decode_ext_lib
 target_link_libraries(
         gfxrecon-quest-replay
         nlohmann_json
         gfxrecon_application
         gfxrecon_decode
+        gfxr_decode_ext_lib
         gfxrecon_graphics
         gfxrecon_format
         platform_specific

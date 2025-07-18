@@ -62,7 +62,8 @@ if (MSVC)
       target_link_options(gfxrecon-replay PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
     endif()
     # GOOGLE: Add folder organization for windows build in dive.
-    set_target_properties(gfxrecon-replay PROPERTIES FOLDER "gfxreconstruct") 
+    set_target_properties(gfxrecon-replay PROPERTIES FOLDER "gfxreconstruct")
+    target_compile_options(gfxrecon-replay PRIVATE /wd4018 /wd4099)
 endif()
 
 # A multithreaded Vulkan driver loaded through dlopen() mechanism

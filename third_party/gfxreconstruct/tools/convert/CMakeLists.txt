@@ -27,7 +27,7 @@ add_executable(gfxrecon-convert "")
 
 # GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
-    target_compile_options(gfxrecon-convert PRIVATE /wd4244)
+    target_compile_options(gfxrecon-convert PRIVATE /wd4244 /wd4996)
     target_link_libraries(gfxrecon-convert psapi.lib)
     set_target_properties(gfxrecon-convert PROPERTIES FOLDER "gfxreconstruct") 
 endif()

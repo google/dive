@@ -84,7 +84,8 @@ if(MSVC)
                        )
     # GOOGLE: Add folder organization for windows build in dive.
     target_link_libraries(VkLayer_gfxreconstruct psapi.lib)
-    set_target_properties(VkLayer_gfxreconstruct PROPERTIES FOLDER "gfxreconstruct")                   
+    set_target_properties(VkLayer_gfxreconstruct PROPERTIES FOLDER "gfxreconstruct")
+    target_compile_options(VkLayer_gfxreconstruct PRIVATE /wd4244)                  
 elseif(APPLE)
     # Both Apple and IOS
     target_link_options(VkLayer_gfxreconstruct

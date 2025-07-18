@@ -63,6 +63,7 @@ struct ReplayOptions
     bool                         force_windowed_origin{ false };
     int32_t                      window_topleft_x{ 0 };
     int32_t                      window_topleft_y{ 0 };
+    std::string                  cpu_mask;
     int32_t                      override_gpu_index{ -1 };
     std::string                  capture_filename;
     bool                         enable_print_block_info{ false };
@@ -72,9 +73,11 @@ struct ReplayOptions
     bool                         remove_unsupported_features{ false };
     util::ScreenshotFormat       screenshot_format{ util::ScreenshotFormat::kBmp };
     std::vector<ScreenshotRange> screenshot_ranges;
+    uint32_t                     screenshot_interval{ 1 };
     std::string                  screenshot_dir;
     std::string                  screenshot_file_prefix{ kDefaultScreenshotFilePrefix };
     uint32_t                     screenshot_width, screenshot_height;
+    bool                         screenshot_ignore_frameBoundaryAndroid{ false };
     int32_t                      num_pipeline_creation_jobs{ 0 };
     std::string                  asset_file_path;
     bool                         enable_dump_resources{ false };
@@ -83,6 +86,7 @@ struct ReplayOptions
     bool                         dump_resources_modifiable_state_only;
     DumpResourcesTarget          dump_resources_target{};
     bool                         using_dump_resources_target{ false };
+    bool                         do_device_deduplication{ false };
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2020,2022 Valve Corporation
 ** Copyright (c) 2018-2020,2022 LunarG, Inc.
-** Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -141,6 +141,10 @@ bool FileProcessor::ProcessNextFrame()
 
     if (success)
     {
+        for (ApiDecoder* decoder : decoders_)
+        {
+            decoder->SetCurrentFrameNumber(current_frame_number_);
+        }
         success = ProcessBlocks();
     }
     else
@@ -1107,6 +1111,79 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                     if (decoder->SupportsMetaDataId(meta_data_id))
                     {
                         decoder->DispatchCreateHardwareBufferCommand(header.thread_id,
+                                                                     0u,
+                                                                     header.memory_id,
+                                                                     header.buffer_id,
+                                                                     header.format,
+                                                                     header.width,
+                                                                     header.height,
+                                                                     header.stride,
+                                                                     header.usage,
+                                                                     header.layers,
+                                                                     entries);
+                    }
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read create hardware buffer meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData,
+                                         "Failed to read create hardware buffer meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read create hardware buffer meta-data block header");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kCreateHardwareBufferCommand_deprecated2)
+    {
+        format::CreateHardwareBufferCommandHeader_deprecated2 header;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
+        success = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
+        success = success && ReadBytes(&header.format, sizeof(header.format));
+        success = success && ReadBytes(&header.width, sizeof(header.width));
+        success = success && ReadBytes(&header.height, sizeof(header.height));
+        success = success && ReadBytes(&header.stride, sizeof(header.stride));
+        success = success && ReadBytes(&header.usage, sizeof(header.usage));
+        success = success && ReadBytes(&header.layers, sizeof(header.layers));
+        success = success && ReadBytes(&header.planes, sizeof(header.planes));
+
+        if (success)
+        {
+            std::vector<format::HardwareBufferPlaneInfo> entries;
+
+            for (uint64_t i = 0; i < header.planes; ++i)
+            {
+                format::HardwareBufferPlaneInfo entry;
+
+                if (!ReadBytes(&entry, sizeof(entry)))
+                {
+                    success = false;
+                    break;
+                }
+
+                entries.emplace_back(std::move(entry));
+            }
+
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchCreateHardwareBufferCommand(header.thread_id,
+                                                                     0u,
                                                                      header.memory_id,
                                                                      header.buffer_id,
                                                                      header.format,
@@ -1144,6 +1221,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
         format::CreateHardwareBufferCommandHeader header;
 
         success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.device_id, sizeof(header.device_id));
         success = success && ReadBytes(&header.memory_id, sizeof(header.memory_id));
         success = success && ReadBytes(&header.buffer_id, sizeof(header.buffer_id));
         success = success && ReadBytes(&header.format, sizeof(header.format));
@@ -1178,6 +1256,7 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
                     if (decoder->SupportsMetaDataId(meta_data_id))
                     {
                         decoder->DispatchCreateHardwareBufferCommand(header.thread_id,
+                                                                     header.device_id,
                                                                      header.memory_id,
                                                                      header.buffer_id,
                                                                      header.format,
@@ -2092,6 +2171,99 @@ bool FileProcessor::ProcessMetaData(const format::BlockHeader& block_header, for
             HandleBlockReadError(kErrorReadingBlockData, "Failed to read runtime info meta-data block");
         }
     }
+    else if (meta_data_type == format::MetaDataType::kViewRelativeLocation)
+    {
+        // This command does not support compression.
+        assert(block_header.type != format::BlockType::kCompressedMetaDataBlock);
+
+        format::ViewRelativeLocation Location;
+        format::ThreadId             thread_id;
+        success = ReadBytes(&thread_id, sizeof(thread_id));
+
+        format::ViewRelativeLocation location;
+        if (success)
+        {
+            success = ReadBytes(&location, sizeof(location));
+        }
+
+        if (success)
+        {
+            for (auto decoder : decoders_)
+            {
+                if (decoder->SupportsMetaDataId(meta_data_id))
+                {
+                    decoder->DispatchViewRelativeLocation(thread_id, location);
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader, "Failed to ViewRelativeLocation meta-data block");
+        }
+    }
+    else if (meta_data_type == format::MetaDataType::kInitializeMetaCommand)
+    {
+        format::InitializeMetaCommand header;
+
+        success = ReadBytes(&header.thread_id, sizeof(header.thread_id));
+        success = success && ReadBytes(&header.capture_id, sizeof(header.capture_id));
+        success = success && ReadBytes(&header.block_index, sizeof(header.block_index));
+        success = success && ReadBytes(&header.total_number_of_initializemetacommand,
+                                       sizeof(header.total_number_of_initializemetacommand));
+        success = success && ReadBytes(&header.initialization_parameters_data_size,
+                                       sizeof(header.initialization_parameters_data_size));
+
+        if (success)
+        {
+            GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, header.initialization_parameters_data_size);
+            if (header.initialization_parameters_data_size > 0)
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    size_t uncompressed_size = 0;
+                    size_t compressed_size   = static_cast<size_t>(block_header.size) -
+                                             (sizeof(header) - sizeof(header.meta_header.block_header));
+
+                    success =
+                        ReadCompressedParameterBuffer(compressed_size,
+                                                      static_cast<size_t>(header.initialization_parameters_data_size),
+                                                      &uncompressed_size);
+                }
+                else
+                {
+                    success = ReadParameterBuffer(static_cast<size_t>(header.initialization_parameters_data_size));
+                }
+            }
+            if (success)
+            {
+                for (auto decoder : decoders_)
+                {
+                    if (decoder->SupportsMetaDataId(meta_data_id))
+                    {
+                        decoder->DispatchInitializeMetaCommand(header, parameter_buffer_.data());
+                    }
+                }
+            }
+            else
+            {
+                if (format::IsBlockCompressed(block_header.type))
+                {
+                    HandleBlockReadError(kErrorReadingCompressedBlockData,
+                                         "Failed to read init subresource data meta-data block");
+                }
+                else
+                {
+                    HandleBlockReadError(kErrorReadingBlockData,
+                                         "Failed to read init subresource data meta-data block");
+                }
+            }
+        }
+        else
+        {
+            HandleBlockReadError(kErrorReadingBlockHeader,
+                                 "Failed to read init subresource data meta-data block header");
+        }
+    }
     else
     {
         if ((meta_data_type == format::MetaDataType::kReserved23) ||
@@ -2278,7 +2450,8 @@ bool FileProcessor::IsFrameDelimiter(format::ApiCallId call_id) const
         return ((call_id == format::ApiCallId::ApiCall_vkQueuePresentKHR) ||
                 (call_id == format::ApiCallId::ApiCall_vkFrameBoundaryANDROID) ||
                 (call_id == format::ApiCallId::ApiCall_IDXGISwapChain_Present) ||
-                (call_id == format::ApiCallId::ApiCall_IDXGISwapChain1_Present1));
+                (call_id == format::ApiCallId::ApiCall_IDXGISwapChain1_Present1) ||
+                (call_id == format::ApiCallId::ApiCall_xrEndFrame));
     }
 }
 

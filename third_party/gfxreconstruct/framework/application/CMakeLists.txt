@@ -72,7 +72,7 @@ target_sources(gfxrecon_application
 
 target_include_directories(gfxrecon_application
                            PUBLIC
-                               $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>)
+                               $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 
 target_link_libraries(gfxrecon_application
                       gfxrecon_decode
@@ -80,6 +80,7 @@ target_link_libraries(gfxrecon_application
                       gfxrecon_format
                       gfxrecon_util
                       vulkan_registry
+                      OpenXR
                       platform_specific
                      )
 

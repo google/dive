@@ -107,6 +107,7 @@ class VulkanDecoderBase : public ApiDecoder
 
     virtual void
     DispatchCreateHardwareBufferCommand(format::ThreadId                                    thread_id,
+                                        format::HandleId                                    device_id,
                                         format::HandleId                                    memory_id,
                                         uint64_t                                            buffer_id,
                                         uint32_t                                            format,
@@ -199,6 +200,8 @@ class VulkanDecoderBase : public ApiDecoder
                                                         const char*                             env_string) override;
 
     virtual void SetCurrentBlockIndex(uint64_t block_index) override;
+
+    virtual void SetCurrentFrameNumber(uint64_t frame_number) override;
 
     void DispatchVulkanAccelerationStructuresBuildMetaCommand(const uint8_t* parameter_buffer,
                                                               size_t         buffer_size) override;

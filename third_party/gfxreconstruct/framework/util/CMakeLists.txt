@@ -34,7 +34,6 @@ if(MSVC)
     set_target_properties(gfxrecon_util PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
-# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(gfxrecon_util
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/alignment_utils.h
@@ -115,9 +114,12 @@ target_sources(gfxrecon_util
                     ${CMAKE_CURRENT_LIST_DIR}/thread_data.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/custom_common_to_string.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_common_to_string.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_enum_to_string.h
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_enum_to_string.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_stype_util.h
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_enum_to_string.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_enum_to_string.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_type_util.h>
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_string.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_string.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_stype_util.h
                     $<$<BOOL:${XCB_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xcb_loader.h>
                     $<$<BOOL:${XCB_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xcb_loader.cpp>
                     $<$<BOOL:${XCB_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xcb_keysyms_loader.h>
@@ -126,13 +128,13 @@ target_sources(gfxrecon_util
                     $<$<BOOL:${X11_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/xlib_loader.cpp>
                     $<$<BOOL:${WAYLAND_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/wayland_loader.h>
                     $<$<BOOL:${WAYLAND_FOUND}>:${CMAKE_CURRENT_LIST_DIR}/wayland_loader.cpp>
-                    $<$<BOOL:${WAYLAND_FOUND}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_wayland_xdg_shell.h>
+                    $<$<BOOL:${WAYLAND_FOUND}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_wayland_xdg_shell.h>
 )
 
-# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
+
 target_include_directories(gfxrecon_util
                            PUBLIC
-                               ${CMAKE_CURRENT_SOURCE_DIR}/..
+                               ${PROJECT_SOURCE_DIR}/framework
                                $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 target_link_libraries(gfxrecon_util platform_specific vulkan_registry spirv_registry spirv-reflect-static nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 target_link_libraries(gfxrecon_util $<$<BOOL:${WIN32}>:version.lib>)
@@ -201,15 +203,19 @@ if (TARGET ZLIB::ZLIB)
                                    $<$<BOOL:${WIN32}>:ZLIB_WINAPI>)
     target_link_libraries(gfxrecon_util ZLIB::ZLIB)
 
-    # GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
     target_include_directories(gfxrecon_util
                                SYSTEM PUBLIC
-                                   ${CMAKE_CURRENT_SOURCE_DIR}/../../external/stb)
+                                   ${PROJECT_SOURCE_DIR}/external/stb)
 endif()
 
 if (TARGET ZSTD::ZSTD)
     target_compile_definitions(gfxrecon_util PUBLIC GFXRECON_ENABLE_ZSTD_COMPRESSION)
     target_link_libraries(gfxrecon_util ZSTD::ZSTD)
+endif()
+
+if (OPENXR_SUPPORT_ENABLED)
+    target_include_directories(gfxrecon_util PUBLIC ${PROJECT_SOURCE_DIR}/external/OpenXR-SDK/include)
+    target_compile_definitions(gfxrecon_util PUBLIC ENABLE_OPENXR_SUPPORT=1)
 endif()
 
 common_build_directives(gfxrecon_util)

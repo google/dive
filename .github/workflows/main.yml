@@ -89,7 +89,8 @@ jobs:
             libsystemd-dev \
             libbsd-dev \
             ninja-build \
-            python3-mako
+            python3-mako \
+            libxcb-glx0-dev
           which gcc-14
           which clang-14
       - name: Generate build files with cmake
@@ -126,7 +127,8 @@ jobs:
             libsystemd-dev \
             libbsd-dev \
             ninja-build \
-            python3-mako
+            python3-mako \
+            libxcb-glx0-dev
           which gcc-14
           which clang-14
       - name: Generate build files with cmake
@@ -162,7 +164,8 @@ jobs:
           libsystemd-dev \
           libbsd-dev \
           ninja-build \
-          python3-mako
+          python3-mako \
+          libxcb-glx0-dev
           which clang-14
       - name: Generate build files with cmake
         run: |
@@ -197,7 +200,8 @@ jobs:
           libsystemd-dev \
           libbsd-dev \
           ninja-build \
-          python3-mako
+          python3-mako \
+          libxcb-glx0-dev
           which clang-14
       - name: Generate build files with cmake
         run: |
@@ -233,6 +237,7 @@ jobs:
           sudo apt-get update --yes
           sudo apt-get install --yes cmake ninja-build
           sudo apt-get install python3-mako --yes
+          sudo apt-get install libxcb-glx0-dev
       - uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:

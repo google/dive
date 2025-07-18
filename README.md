@@ -201,36 +201,16 @@ This will remove all the libraries installed and the settings that had been setu
 ```
 git remote add -f gfxreconstruct-remote https://github.com/LunarG/gfxreconstruct.git
 ```
-3. Run the merge command: 
+3. Run the pull command: 
 ```
-git merge -s subtree --squash -X subtree=third_party/gfxreconstruct --allow-unrelated-histories --no-commit gfxreconstruct-remote/dev
+git subtree pull --prefix=third_party/gfxreconstruct gfxreconstruct-remote dev --squash
 ```
-4. Resolve the conflicts that arise in the following files and ensure dive-specific changes are included. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE:
-    - third_party/gfxrreconstruct/CMakeLists.txt
-    - third_party/gfxreconstruct/cmake/AgilitySDK.cmake
-    - third_party/gfxreconstruct/cmake/FindVulkanVersion.cmake
-    - third_party/gfxreconstruct/cmake/AgilitySDK.cmake
-    - third_party/gfxreconstruct/framework/decode/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/encode/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/format/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/graphics/CMakeLists.txt
-    - third_party/gfxreconstruct/framework/util/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/ags_capture/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/d3d12/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/d3d12_capture/CMakeLists.txt
-    - third_party/gfxreconstruct/layer/dxgi/CMakeLists.txt
-    - third_party/gfxreconstruct/scripts/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/compress/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/convert/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/extract/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/info/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/optimize/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/replay/CMakeLists.txt
-    - third_party/gfxreconstruct/tools/tocpp/CMakeLists.txt
+4. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE.
+
 5. Stage the files.
 6. Create the commit: 
 ```
 git add third_party/gfxreconstruct, git commit -m "Import gfxreconstruct updates"
 ```
 7. Create a pull request for the updates.
+8. Ensure the commit is not squash merged so that git can find the subtree updates.

@@ -26,8 +26,6 @@
 
 #include "format/format.h"
 #include "util/defines.h"
-// GOOGLE: Include dive function data.
-#include "util/dive_function_data.h"
 
 #include <string>
 
@@ -43,9 +41,6 @@ class AnnotationHandler
                                    format::AnnotationType type,
                                    const std::string&     label,
                                    const std::string&     data) = 0;
-
-    // GOOGLE: Adds overridable function definition for custom dive annotation processor.
-    virtual void WriteBlockEnd(const util::DiveFunctionData& function_data){}
 };
 
 GFXRECON_END_NAMESPACE(decode)

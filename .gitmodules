@@ -32,3 +32,7 @@
 [submodule "third_party/abseil-cpp"]
 	path = third_party/abseil-cpp
 	url = https://github.com/abseil/abseil-cpp.git
+[submodule "third_party/gfxreconstruct/external/OpenXR-Docs"]
+	path = third_party/gfxreconstruct/external/OpenXR-Docs
+	url = https://github.com/KhronosGroup/OpenXR-Docs.git
+	shallow = true

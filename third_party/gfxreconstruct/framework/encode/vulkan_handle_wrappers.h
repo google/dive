@@ -29,7 +29,10 @@
 #include "encode/handle_unwrap_memory.h"
 #include "format/format.h"
 #include "generated/generated_vulkan_dispatch_table.h"
+#include "graphics/vulkan_util.h"
 #include "graphics/vulkan_device_util.h"
+#include "graphics/vulkan_instance_util.h"
+#include "graphics/vulkan_resources_util.h"
 #include "util/defines.h"
 #include "util/memory_output_stream.h"
 #include "util/page_guard_manager.h"
@@ -44,6 +47,7 @@
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 #include <optional>
 
@@ -127,9 +131,9 @@ struct DisplayKHRWrapper : public HandleWrapper<VkDisplayKHR>
 // handle wrapper, which will filter duplicate handle retrievals and ensure that the wrapper is destroyed.
 struct PhysicalDeviceWrapper : public HandleWrapper<VkPhysicalDevice>
 {
-    VulkanInstanceTable*            layer_table_ref{ nullptr };
-    std::vector<DisplayKHRWrapper*> child_displays;
-    uint32_t                        instance_api_version{ 0 };
+    graphics::VulkanInstanceTable*   layer_table_ref{ nullptr };
+    std::vector<DisplayKHRWrapper*>  child_displays;
+    graphics::VulkanInstanceUtilInfo instance_info{};
 
     // Track memory types for use when creating snapshots of buffer and image resource memory content.
     VkPhysicalDeviceMemoryProperties memory_properties{};
@@ -149,7 +153,7 @@ struct PhysicalDeviceWrapper : public HandleWrapper<VkPhysicalDevice>
 
 struct InstanceWrapper : public HandleWrapper<VkInstance>
 {
-    VulkanInstanceTable                 layer_table;
+    graphics::VulkanInstanceTable       layer_table;
     std::vector<PhysicalDeviceWrapper*> child_physical_devices;
     bool                                have_device_properties{ false };
     uint32_t                            api_version{ VK_MAKE_VERSION(1, 0, 0) };
@@ -157,18 +161,19 @@ struct InstanceWrapper : public HandleWrapper<VkInstance>
 
 struct QueueWrapper : public HandleWrapper<VkQueue>
 {
-    VulkanDeviceTable* layer_table_ref{ nullptr };
+    graphics::VulkanDeviceTable* layer_table_ref{ nullptr };
 };
 
 struct DeviceWrapper : public HandleWrapper<VkDevice>
 {
-    VulkanDeviceTable          layer_table;
-    PhysicalDeviceWrapper*     physical_device{ nullptr };
-    std::vector<QueueWrapper*> child_queues;
+    graphics::VulkanDeviceTable layer_table;
+    PhysicalDeviceWrapper*      physical_device{ nullptr };
+    std::vector<QueueWrapper*>  child_queues;
 
     // Physical device property & feature state at device creation
     graphics::VulkanDevicePropertyFeatureInfo              property_feature_info;
     std::unordered_map<uint32_t, VkDeviceQueueCreateFlags> queue_family_creation_flags;
+    std::vector<uint32_t>                                  queue_family_indices;
 };
 
 struct FenceWrapper : public HandleWrapper<VkFence>
@@ -210,23 +215,51 @@ struct BufferWrapper : public HandleWrapper<VkBuffer>, AssetWrapperBase
     VkBufferUsageFlags usage{ 0 };
 
     std::set<BufferViewWrapper*> buffer_views;
+
+    DeviceWrapper*             bind_device{ nullptr };
+    const void*                bind_pnext{ nullptr };
+    std::unique_ptr<uint8_t[]> bind_pnext_memory;
+
+    bool                                       is_sparse_buffer{ false };
+    std::map<VkDeviceSize, VkSparseMemoryBind> sparse_memory_bind_map;
+    VkQueue                                    sparse_bind_queue;
+
+    format::HandleId bind_memory_id{ format::kNullHandleId };
+    VkDeviceSize     bind_offset{ 0 };
+    uint32_t         queue_family_index{ 0 };
+    VkDeviceSize     created_size{ 0 };
 };
 
 struct ImageViewWrapper;
 struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
 {
-    VkImageType              image_type{ VK_IMAGE_TYPE_2D };
-    VkFormat                 format{ VK_FORMAT_UNDEFINED };
-    bool                     external_format{ false };
-    VkExtent3D               extent{ 0, 0, 0 };
-    uint32_t                 mip_levels{ 0 };
-    uint32_t                 array_layers{ 0 };
-    VkSampleCountFlagBits    samples{};
-    VkImageTiling            tiling{};
-    VkImageLayout            current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
-    bool                     is_swapchain_image{ false };
+    VkImageType           image_type{ VK_IMAGE_TYPE_2D };
+    VkFormat              format{ VK_FORMAT_UNDEFINED };
+    bool                  external_format{ false };
+    bool                  external_memory_android{ false };
+    VkExtent3D            extent{ 0, 0, 0 };
+    uint32_t              mip_levels{ 0 };
+    uint32_t              array_layers{ 0 };
+    VkSampleCountFlagBits samples{};
+    VkImageTiling         tiling{};
+    VkImageLayout         current_layout{ VK_IMAGE_LAYOUT_UNDEFINED };
+    bool                  is_swapchain_image{ false };
 
     std::set<ImageViewWrapper*> image_views;
+
+    DeviceWrapper*             bind_device{ nullptr };
+    const void*                bind_pnext{ nullptr };
+    std::unique_ptr<uint8_t[]> bind_pnext_memory;
+
+    bool                                                is_sparse_image{ false };
+    std::map<VkDeviceSize, VkSparseMemoryBind>          sparse_opaque_memory_bind_map;
+    graphics::VulkanSubresourceSparseImageMemoryBindMap sparse_subresource_memory_bind_map;
+    VkQueue                                             sparse_bind_queue;
+
+    format::HandleId         bind_memory_id{ format::kNullHandleId };
+    VkDeviceSize             bind_offset{ 0 };
+    uint32_t                 queue_family_index{ 0 };
+    std::set<VkSwapchainKHR> parent_swapchains;
 };
 
 struct SamplerWrapper : public HandleWrapper<VkSampler>
@@ -241,7 +274,7 @@ struct DeviceMemoryWrapper : public HandleWrapper<VkDeviceMemory>
     // This is the device which was used to allocate the memory.
     // Spec states if the memory can be mapped, the mapping device must be this device.
     // The device wrapper will be initialized when allocating the memory. Some handling
-    // like StateTracker::TrackTlasToBlasDependencies may use it before mapping
+    // like StateTracker::TrackCommandBuffersSubmision may use it before mapping
     // the memory.
     DeviceWrapper*   parent_device{ nullptr };
     const void*      mapped_data{ nullptr };
@@ -391,7 +424,7 @@ struct AccelerationStructureKHRWrapper;
 struct CommandPoolWrapper;
 struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
 {
-    VulkanDeviceTable* layer_table_ref{ nullptr };
+    graphics::VulkanDeviceTable* layer_table_ref{ nullptr };
 
     // Members for general wrapper support.
     // Pool from which command buffer was allocated. The command buffer must be removed from the pool's allocation list
@@ -402,6 +435,20 @@ struct CommandBufferWrapper : public HandleWrapper<VkCommandBuffer>
     VkCommandBufferLevel       level{ VK_COMMAND_BUFFER_LEVEL_PRIMARY };
     util::MemoryOutputStream   command_data;
     std::set<format::HandleId> command_handles[vulkan_state_info::CommandHandleType::NumHandleTypes];
+
+    enum CommandBufferState
+    {
+        kInitial = 0,
+        kRecording,
+        kExecutable,
+        kInvalid
+    };
+
+    CommandBufferState state{ kInitial };
+
+    // This is set to true when a command buffer is began with VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    // Used to track command buffer life cycle
+    bool one_time_submission{ false };
 
     // Image layout info tracked for image barriers recorded to the command buffer. To be updated on calls to
     // vkCmdPipelineBarrier and vkCmdEndRenderPass and applied to the image wrapper on calls to vkQueueSubmit. To be
@@ -474,6 +521,13 @@ struct CommandPoolWrapper : public HandleWrapper<VkCommandPool>
 // For vkGetPhysicalDeviceSurfaceCapabilitiesKHR
 struct SurfaceCapabilities
 {
+    VkSurfaceKHR             surface;
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+};
+
+// For vkGetPhysicalDeviceSurfaceCapabilities2KHR
+struct SurfaceCapabilities2
+{
     VkPhysicalDeviceSurfaceInfo2KHR surface_info;
     std::unique_ptr<uint8_t[]>      surface_info_pnext_memory;
 
@@ -483,6 +537,13 @@ struct SurfaceCapabilities
 
 // For vkGetPhysicalDeviceSurfaceFormatsKHR
 struct SurfaceFormats
+{
+    VkSurfaceKHR                    surface{ VK_NULL_HANDLE };
+    std::vector<VkSurfaceFormatKHR> surface_formats;
+};
+
+// For vkGetPhysicalDeviceSurfaceFormats2KHR
+struct SurfaceFormats2
 {
     VkPhysicalDeviceSurfaceInfo2KHR surface_info;
     std::unique_ptr<uint8_t[]>      surface_info_pnext_memory;
@@ -513,10 +574,10 @@ struct SurfaceKHRWrapper : public HandleWrapper<VkSurfaceKHR>
     // Track results from calls to vkGetPhysicalDeviceSurfaceSupportKHR to write to the state snapshot after surface
     // creation. The call is only written to the state snapshot if it was previously called by the application.
     // Keys are the VkPhysicalDevice handle ID.
-    std::unordered_map<format::HandleId, std::unordered_map<uint32_t, VkBool32>> surface_support;
-    std::unordered_map<format::HandleId, SurfaceCapabilities>                    surface_capabilities;
-    std::unordered_map<format::HandleId, SurfaceFormats>                         surface_formats;
-    std::unordered_map<format::HandleId, SurfacePresentModes>                    surface_present_modes;
+    std::unordered_map<format::HandleId, std::unordered_map<uint32_t, VkBool32>>                  surface_support;
+    std::unordered_map<format::HandleId, std::variant<SurfaceCapabilities, SurfaceCapabilities2>> surface_capabilities;
+    std::unordered_map<format::HandleId, std::variant<SurfaceFormats, SurfaceFormats2>>           surface_formats;
+    std::unordered_map<format::HandleId, SurfacePresentModes>                                     surface_present_modes;
 
     // Keys are the VkDevice handle ID.
     std::unordered_map<format::HandleId, GroupSurfacePresentModes> group_surface_present_modes;
@@ -542,6 +603,10 @@ struct SwapchainKHRWrapper : public HandleWrapper<VkSwapchainKHR>
     bool                                              release_full_screen_exclusive_mode{ false };
     bool                                              using_local_dimming_AMD{ false };
     VkBool32                                          local_dimming_enable_AMD{ false };
+
+    // This's for checking if WaitForPresent should or shouldn't be written. Its QueuePresent could be not written since
+    // it's before trim frame range. In this case, skip writing the WaitForPresent.
+    std::unordered_set<graphics::PresentId> record_queue_present_ids_not_written;
 };
 
 struct AccelerationStructureKHRWrapper : public HandleWrapper<VkAccelerationStructureKHR>

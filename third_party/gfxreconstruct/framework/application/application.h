@@ -46,7 +46,10 @@ class Application final
   public:
     Application(const std::string& name, decode::FileProcessor* file_processor);
 
-    Application(const std::string& name, const std::string& cli_wsi_extension, decode::FileProcessor* file_processor);
+    Application(const std::string&     name,
+                decode::FileProcessor* file_processor,
+                const std::string&     cli_wsi_extension,
+                void*                  platform_specific_wsi_data);
 
     ~Application();
 
@@ -84,9 +87,7 @@ class Application final
 
     void StopRunning() { running_ = false; }
 
-    // GOOGLE: fix a warning of possible loss of data
-    // file_processor_->GetCurrentFrameNumber() returns a uint64_t
-    uint64_t GetCurrentFrameNumber() const
+    uint32_t GetCurrentFrameNumber() const
     {
         return file_processor_->GetCurrentFrameNumber();
     }

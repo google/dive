@@ -29,10 +29,15 @@ class KhronosStructEncodersBodyGenerator():
     """KhronosStructEncodersBodyGenerator.
     Generates C++ functions for encoding Khronos API structures.
     """
+    def skip_struct_type(self, struct_type):
+        """Override as needed"""
+        return False
 
     def write_encoder_content(self):
         api_data = self.get_api_data()
         for struct in self.get_all_filtered_struct_names():
+            if self.skip_struct_type(struct):
+                continue
             self.generate_struct_bodies(api_data, struct, self.all_struct_members[struct])
 
     def generate_struct_bodies(self, api_data, struct, struct_members):
@@ -61,8 +66,8 @@ class KhronosStructEncodersBodyGenerator():
         write(body, file=self.outFile)
 
     def make_child_struct_cast_switch(self, parent_struct, value, struct_type_var):
-        default_case = 'GFXRECON_LOG_WARNING("EncodeStruct: unrecognized child structure type %d", {}.{});'.format(
-            value, struct_type_var
+        default_case = 'GFXRECON_LOG_WARNING("EncodeStruct({}): unrecognized child structure type %d", {}.{});'.format(
+            parent_struct, value, struct_type_var
         )
         break_string = 'break;'
         switch_expression = 'value.{}'.format(struct_type_var)

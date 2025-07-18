@@ -29,6 +29,7 @@
 #include "generated/generated_dx12_decoder.h"
 #endif
 #include "decode/file_processor.h"
+
 #include "decode/vulkan_default_allocator.h"
 #include "decode/vulkan_realign_allocator.h"
 #include "decode/vulkan_rebind_allocator.h"
@@ -37,11 +38,20 @@
 #include "decode/vulkan_resource_tracking_consumer.h"
 #include "decode/vulkan_tracked_object_info_table.h"
 #include "generated/generated_vulkan_decoder.h"
+
+#if ENABLE_OPENXR_SUPPORT
+#include "generated/generated_openxr_decoder.h"
+#endif
+
 #include "util/argument_parser.h"
 #include "util/logging.h"
 #include "util/platform.h"
 #include "util/options.h"
 #include "util/strings.h"
+
+#if ENABLE_OPENXR_SUPPORT
+#include "openxr/openxr.h"
+#endif
 
 #include "vulkan/vulkan_core.h"
 
@@ -61,9 +71,12 @@ const char kHelpShortOption[]                    = "-h";
 const char kHelpLongOption[]                     = "--help";
 const char kVersionOption[]                      = "--version";
 const char kLogLevelArgument[]                   = "--log-level";
+const char kLogTimestampsOption[]                = "--log-timestamps";
+const char kDebugMessageSeverityArgument[]       = "--debug-messenger-level";
 const char kLogFileArgument[]                    = "--log-file";
 const char kLogDebugView[]                       = "--log-debugview";
 const char kNoDebugPopup[]                       = "--no-debug-popup";
+const char kCpuMaskArgument[]                    = "--cpu-mask";
 const char kOverrideGpuArgument[]                = "--gpu";
 const char kOverrideGpuGroupArgument[]           = "--gpu-group";
 const char kPausedOption[]                       = "--paused";
@@ -91,6 +104,7 @@ const char kAllowedMessages[]                    = "--allowed-messages";
 const char kShaderReplaceArgument[]              = "--replace-shaders";
 const char kScreenshotAllOption[]                = "--screenshot-all";
 const char kScreenshotRangeArgument[]            = "--screenshots";
+const char kScreenshotIntervalArgument[]         = "--screenshot-interval";
 const char kScreenshotFormatArgument[]           = "--screenshot-format";
 const char kScreenshotDirArgument[]              = "--screenshot-dir";
 const char kScreenshotFilePrefixArgument[]       = "--screenshot-prefix";
@@ -118,6 +132,7 @@ const char kFormatArgument[]                      = "--format";
 const char kIncludeBinariesOption[]               = "--include-binaries";
 const char kExpandFlagsOption[]                   = "--expand-flags";
 const char kFilePerFrameOption[]                  = "--file-per-frame";
+const char kFrameRange[]                          = "--frame-range";
 const char kSkipGetFenceStatus[]                  = "--skip-get-fence-status";
 const char kSkipGetFenceRanges[]                  = "--skip-get-fence-ranges";
 const char kWaitBeforePresent[]                   = "--wait-before-present";
@@ -128,6 +143,10 @@ const char kPreloadMeasurementRangeOption[]       = "--preload-measurement-range
 const char kSavePipelineCacheArgument[]           = "--save-pipeline-cache";
 const char kLoadPipelineCacheArgument[]           = "--load-pipeline-cache";
 const char kCreateNewPipelineCacheOption[]        = "--add-new-pipeline-caches";
+const char kDeduplicateDevice[]                   = "--deduplicate-device";
+
+const char kScreenshotIgnoreFrameBoundaryArgument[] = "--screenshot-ignore-FrameBoundaryANDROID";
+
 #if defined(WIN32)
 const char kDxTwoPassReplay[]             = "--dx12-two-pass-replay";
 const char kDxOverrideObjectNames[]       = "--dx12-override-object-names";
@@ -135,24 +154,21 @@ const char kDxAgsMarkRenderPasses[]       = "--dx12-ags-inject-markers";
 const char kBatchingMemoryUsageArgument[] = "--batching-memory-usage";
 #endif
 
-const char kDumpResourcesArgument[]               = "--dump-resources";
-const char kDumpResourcesBeforeDrawOption[]       = "--dump-resources-before-draw";
-const char kDumpResourcesImageFormat[]            = "--dump-resources-image-format";
-const char kDumpResourcesScaleArgument[]          = "--dump-resources-scale";
-const char kDumpResourcesDepth[]                  = "--dump-resources-dump-depth-attachment";
-const char kDumpResourcesDirArgument[]            = "--dump-resources-dir";
-const char kDumpResourcesModifiableStateOnly[]    = "--dump-resources-modifiable-state-only";
-const char kDumpResourcesColorAttIdxArg[]         = "--dump-resources-dump-color-attachment-index";
-const char kDumpResourcesDumpVertexIndexBuffers[] = "--dump-resources-dump-vertex-index-buffers";
-const char kDumpResourcesJsonPerCommand[]         = "--dump-resources-json-output-per-command";
-const char kDumpResourcesDumpImmutableResources[] = "--dump-resources-dump-immutable-resources";
-const char kDumpResourcesDumpImageSubresources[]  = "--dump-resources-dump-all-image-subresources";
-const char kDumpResourcesDumpRawImages[]          = "--dump-resources-dump-raw-images";
-const char kDumpResourcesDumpSeparateAlpha[]      = "--dump-resources-dump-separate-alpha";
-
-// GOOGLE: [single-frame-looping]
-const char kLoopSingleFrame[]       = "--loop-single-frame";
-const char kLoopSingleFrameCount[]  = "--loop-single-frame-count";
+const char kDumpResourcesArgument[]                 = "--dump-resources";
+const char kDumpResourcesBeforeDrawOption[]         = "--dump-resources-before-draw";
+const char kDumpResourcesImageFormat[]              = "--dump-resources-image-format";
+const char kDumpResourcesScaleArgument[]            = "--dump-resources-scale";
+const char kDumpResourcesDepth[]                    = "--dump-resources-dump-depth-attachment";
+const char kDumpResourcesDirArgument[]              = "--dump-resources-dir";
+const char kDumpResourcesModifiableStateOnly[]      = "--dump-resources-modifiable-state-only";
+const char kDumpResourcesColorAttIdxArg[]           = "--dump-resources-dump-color-attachment-index";
+const char kDumpResourcesDumpVertexIndexBuffers[]   = "--dump-resources-dump-vertex-index-buffers";
+const char kDumpResourcesJsonPerCommand[]           = "--dump-resources-json-output-per-command";
+const char kDumpResourcesDumpImmutableResources[]   = "--dump-resources-dump-immutable-resources";
+const char kDumpResourcesDumpImageSubresources[]    = "--dump-resources-dump-all-image-subresources";
+const char kDumpResourcesDumpRawImages[]            = "--dump-resources-dump-raw-images";
+const char kDumpResourcesDumpSeparateAlpha[]        = "--dump-resources-dump-separate-alpha";
+const char kDumpResourcesDumpUnusedVertexBindings[] = "--dump-resources-dump-unused-vertex-bindigs";
 
 enum class WsiPlatform
 {
@@ -183,12 +199,6 @@ const char kMemoryTranslationRebind[]  = "rebind";
 const char kSwapchainVirtual[]   = "virtual";
 const char kSwapchainCaptured[]  = "captured";
 const char kSwapchainOffscreen[] = "offscreen";
-
-#if defined(WIN32)
-const char kApiFamilyVulkan[] = "vulkan";
-const char kApiFamilyD3D12[]  = "d3d12";
-const char kApiFamilyAll[]    = "all";
-#endif
 
 const char kScreenshotFormatBmp[] = "bmp";
 const char kScreenshotFormatPng[] = "png";
@@ -395,10 +405,16 @@ static WsiPlatform GetWsiPlatform(const gfxrecon::util::ArgumentParser& arg_pars
     return wsi_platform;
 }
 
-static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
+/// @brief Selects the WSI extension name based on the WSI platform.
+/// @param wsi_platform The WSI platform to select the extension name for.
+/// @return If WsiPlatform::kAuto, returns the first available WSI extension name.
+///         Otherwise, returns the WSI extension name for the specified platform.
+static std::string GetFirstWsiExtensionName(WsiPlatform wsi_platform)
 {
     switch (wsi_platform)
     {
+        // Return the first available WSI extension name
+        case WsiPlatform::kAuto:
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
         case WsiPlatform::kWin32:
         {
@@ -443,7 +459,27 @@ static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
 #endif
         default:
         {
+            GFXRECON_ASSERT(false && "Failed to get WSI extension name");
             return std::string();
+        }
+    }
+}
+
+/// @brief Selects the WSI extension name based on the WSI platform.
+/// @param wsi_platform The WSI platform to select the extension name for.
+/// @return If WsiPlatform::kAuto, returns an empty string.
+///         Otherwise, returns the WSI extension name for the specified platform.
+static std::string GetWsiExtensionName(WsiPlatform wsi_platform)
+{
+    switch (wsi_platform)
+    {
+        case WsiPlatform::kAuto:
+        {
+            return std::string();
+        }
+        default:
+        {
+            return GetFirstWsiExtensionName(wsi_platform);
         }
     }
 }
@@ -500,6 +536,7 @@ static void GetLogSettings(const gfxrecon::util::ArgumentParser& arg_parser,
 
     // Update settings
     log_settings.min_severity              = log_level;
+    log_settings.output_timestamps         = arg_parser.IsOptionSet(kLogTimestampsOption);
     log_settings.file_name                 = arg_parser.GetArgumentValue(kLogFileArgument);
     log_settings.output_to_os_debug_string = arg_parser.IsOptionSet(kLogDebugView);
 }
@@ -891,27 +928,6 @@ static std::vector<int32_t> GetFilteredMsgs(const gfxrecon::util::ArgumentParser
     return msgs;
 }
 
-// GOOGLE: [single-frame-looping] Parse value for flag "--loop-single-frame-count"
-static uint32_t GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_parser)
-{
-    const auto& value = arg_parser.GetArgumentValue(kLoopSingleFrameCount);
-
-    uint32_t n = 0;
-
-    if (!value.empty())
-    {
-        try
-        {
-            n = std::stoi(value);
-        }
-        catch (std::exception&)
-        {
-            GFXRECON_LOG_WARNING("Ignoring invalid '%s' value: %s", kLoopSingleFrameCount, value.c_str());
-        }
-    }
-    return n;
-}
-
 static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
                              const gfxrecon::util::ArgumentParser& arg_parser,
                              const std::string&                    filename)
@@ -980,6 +996,20 @@ static void GetReplayOptions(gfxrecon::decode::ReplayOptions&      options,
     if (arg_parser.IsArgumentSet(kNumPipelineCreationJobs))
     {
         options.num_pipeline_creation_jobs = std::stoi(arg_parser.GetArgumentValue(kNumPipelineCreationJobs));
+    }
+
+    options.cpu_mask = arg_parser.GetArgumentValue(kCpuMaskArgument);
+    if (!options.cpu_mask.empty())
+    {
+        if (gfxrecon::util::platform::SetCpuAffinity(options.cpu_mask))
+        {
+            GFXRECON_LOG_INFO("CPU mask successfully set: %s", gfxrecon::util::platform::GetCpuAffinity().c_str());
+        }
+        else
+        {
+            GFXRECON_LOG_ERROR("Failed to set CPU mask: %s", options.cpu_mask.c_str());
+            GFXRECON_LOG_ERROR("Resuming with CPU mask: %s", gfxrecon::util::platform::GetCpuAffinity().c_str());
+        }
     }
 
     const auto& override_gpu = arg_parser.GetArgumentValue(kOverrideGpuArgument);
@@ -1076,16 +1106,60 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         replay_options.virtual_swapchain_skip_blit = true;
     }
 
+    const std::string debug_severity_string = arg_parser.GetArgumentValue(kDebugMessageSeverityArgument);
+    if (!debug_severity_string.empty())
+    {
+        if (gfxrecon::util::platform::StringCompareNoCase("debug", debug_severity_string.c_str()))
+        {
+            replay_options.debug_message_severity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase("info", debug_severity_string.c_str()))
+        {
+            replay_options.debug_message_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase("warning", debug_severity_string.c_str()))
+        {
+            replay_options.debug_message_severity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        }
+        else if (gfxrecon::util::platform::StringCompareNoCase("error", debug_severity_string.c_str()))
+        {
+            replay_options.debug_message_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        }
+        else
+        {
+            GFXRECON_LOG_WARNING("Ignoring unrecognized debug messenger severity option value \"%s\"",
+                                 debug_severity_string.c_str());
+        }
+    }
+
     replay_options.replace_shader_dir = arg_parser.GetArgumentValue(kShaderReplaceArgument);
     replay_options.create_resource_allocator =
         GetCreateResourceAllocatorFunc(arg_parser, filename, replay_options, tracked_object_info_table);
 
-    replay_options.screenshot_ranges      = GetScreenshotRanges(arg_parser);
+    replay_options.screenshot_ranges = GetScreenshotRanges(arg_parser);
+    if (arg_parser.IsArgumentSet(kScreenshotIntervalArgument))
+    {
+        replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
+        if (replay_options.screenshot_interval == 0)
+        {
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
+        }
+    }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
     replay_options.screenshot_dir         = GetScreenshotDir(arg_parser);
     replay_options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);
     GetScreenshotSize(arg_parser, replay_options.screenshot_width, replay_options.screenshot_height);
     replay_options.screenshot_scale = GetScreenshotScale(arg_parser);
+    if (arg_parser.IsOptionSet(kScreenshotIgnoreFrameBoundaryArgument))
+    {
+        replay_options.screenshot_ignore_frameBoundaryAndroid = true;
+    }
 
     if (arg_parser.IsOptionSet(kQuitAfterMeasurementRangeOption))
     {
@@ -1178,6 +1252,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
         arg_parser.IsOptionSet(kDumpResourcesDumpImageSubresources);
     replay_options.dump_resources_dump_raw_images     = arg_parser.IsOptionSet(kDumpResourcesDumpRawImages);
     replay_options.dump_resources_dump_separate_alpha = arg_parser.IsOptionSet(kDumpResourcesDumpSeparateAlpha);
+    replay_options.dump_resources_dump_unused_vertex_bindings =
+        arg_parser.IsOptionSet(kDumpResourcesDumpUnusedVertexBindings);
 
     std::string dr_color_att_idx = arg_parser.GetArgumentValue(kDumpResourcesColorAttIdxArg);
     if (!dr_color_att_idx.empty())
@@ -1188,26 +1264,7 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.save_pipeline_cache_filename = arg_parser.GetArgumentValue(kSavePipelineCacheArgument);
     replay_options.load_pipeline_cache_filename = arg_parser.GetArgumentValue(kLoadPipelineCacheArgument);
     replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
-
-    // GOOGLE: [single-frame-looping] Parse additional parameters
-    if (arg_parser.IsOptionSet(kLoopSingleFrame))
-    {
-        replay_options.loop_single_frame = true;
-    }
-
-    if ((replay_options.preload_measurement_range) && (replay_options.loop_single_frame))
-    {
-        GFXRECON_LOG_FATAL("Flag '%s' cannot be used with '%s'. Closing the program.", kPreloadMeasurementRangeOption, kLoopSingleFrame);
-        abort();
-    }
-
-    replay_options.loop_single_frame_count = GetLoopSingleFrameCount(arg_parser);
-    
-    if ((replay_options.loop_single_frame_count > 0) && (!replay_options.loop_single_frame))
-    {
-        GFXRECON_LOG_FATAL("Flag '%s' must be used with '%s'. Closing the program.", kLoopSingleFrameCount, kLoopSingleFrame);
-        abort();
-    }
+    replay_options.do_device_deduplication      = arg_parser.IsOptionSet(kDeduplicateDevice);
 
     return replay_options;
 }
@@ -1285,7 +1342,16 @@ static gfxrecon::decode::DxReplayOptions GetDxReplayOptions(const gfxrecon::util
         }
     }
 
-    replay_options.screenshot_ranges      = GetScreenshotRanges(arg_parser);
+    replay_options.screenshot_ranges = GetScreenshotRanges(arg_parser);
+    if (arg_parser.IsArgumentSet(kScreenshotIntervalArgument))
+    {
+        replay_options.screenshot_interval = std::stoi(arg_parser.GetArgumentValue(kScreenshotIntervalArgument));
+        if (replay_options.screenshot_interval == 0)
+        {
+            GFXRECON_LOG_WARNING("A screenshot interval of 0 is invalid. Using default value of 1.");
+            replay_options.screenshot_interval = 1;
+        }
+    }
     replay_options.screenshot_format      = GetScreenshotFormat(arg_parser);
     replay_options.screenshot_dir         = GetScreenshotDir(arg_parser);
     replay_options.screenshot_file_prefix = arg_parser.GetArgumentValue(kScreenshotFilePrefixArgument);
@@ -1311,6 +1377,13 @@ static bool CheckOptionPrintVersion(const char* exe_name, const gfxrecon::util::
                                VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE),
                                VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
                                VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE));
+
+#if ENABLE_OPENXR_SUPPORT
+        GFXRECON_WRITE_CONSOLE("  OpenXR Header Version %u.%u.%u",
+                               XR_VERSION_MAJOR(XR_CURRENT_API_VERSION),
+                               XR_VERSION_MINOR(XR_CURRENT_API_VERSION),
+                               XR_VERSION_PATCH(XR_CURRENT_API_VERSION));
+#endif
 
         return true;
     }

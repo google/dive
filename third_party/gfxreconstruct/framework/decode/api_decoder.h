@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2020 Valve Corporation
 ** Copyright (c) 2018-2020 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -106,6 +107,7 @@ class ApiDecoder
 
     virtual void
     DispatchCreateHardwareBufferCommand(format::ThreadId                                    thread_id,
+                                        format::HandleId                                    device_id,
                                         format::HandleId                                    memory_id,
                                         uint64_t                                            buffer_id,
                                         uint32_t                                            format,
@@ -197,6 +199,9 @@ class ApiDecoder
 
     virtual void SetCurrentBlockIndex(uint64_t block_index){};
 
+    // Expects zero-based frame_number to match the way FileProcessor::current_frame_number_ works
+    virtual void SetCurrentFrameNumber(uint64_t frame_number){};
+
     virtual void SetCurrentApiCallId(format::ApiCallId api_call_id){};
 
     virtual void DispatchSetTlasToBlasDependencyCommand(format::HandleId                     tlas,
@@ -213,6 +218,11 @@ class ApiDecoder
 
     virtual void DispatchVulkanAccelerationStructuresWritePropertiesMetaCommand(const uint8_t* parameter_buffer,
                                                                                 size_t         buffer_size){};
+
+    virtual void DispatchViewRelativeLocation(format::ThreadId thread_id, format::ViewRelativeLocation& location){};
+
+    virtual void DispatchInitializeMetaCommand(format::InitializeMetaCommand& header,
+                                               const uint8_t*                 initialization_parameters_data){};
 };
 
 GFXRECON_END_NAMESPACE(decode)

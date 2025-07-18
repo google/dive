@@ -31,18 +31,11 @@ target_sources(ags_capture PRIVATE
                 ${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64.def
                 ${CMAKE_CURRENT_LIST_DIR}/hook_ags.h
                 ${CMAKE_CURRENT_LIST_DIR}/hook_ags.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/../..//version.rc)
+                ${PROJECT_SOURCE_DIR}/version.rc)
 target_include_directories(ags_capture PUBLIC 
                            ${CMAKE_BINARY_DIR} 
-                           ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+                           ${PROJECT_SOURCE_DIR})
 target_link_libraries(ags_capture gfxrecon_util ${LINK_AGS_OUTPUT})
-
-# GOOGLE: Add folder organization for windows build in dive.
-if(MSVC)
-    target_link_libraries(ags_capture psapi.lib)
-    set_target_properties(ags_capture PROPERTIES FOLDER "gfxreconstruct")
-endif()
-
 add_custom_command(TARGET ags_capture PRE_BUILD
                     COMMAND lib /def:${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def /out:${LINK_AGS_OUTPUT} /machine:${LINK_ARCH}
                     DEPENDS ${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def)

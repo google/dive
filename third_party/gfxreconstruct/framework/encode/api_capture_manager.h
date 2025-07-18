@@ -59,6 +59,8 @@ class ApiCaptureManager
     format::ApiFamilyId GetApiFamily() const { return api_family_; }
     bool                IsCaptureModeTrack() const { return common_manager_->IsCaptureModeTrack(); }
     bool                IsCaptureModeWrite() const { return common_manager_->IsCaptureModeWrite(); }
+    bool                IsCaptureModeDisabled() const { return common_manager_->IsCaptureModeDisabled(); }
+    bool IsCaptureSkippingCurrentThread() const { return common_manager_->IsCaptureSkippingCurrentThread(); }
 
     bool IsPageGuardMemoryModeDisabled() const
     {
@@ -80,6 +82,7 @@ class ApiCaptureManager
     typedef uint32_t CaptureMode;
 
     // Forwarded Common Methods
+    auto                AcquireCallLock() { return common_manager_->AcquireCallLock(); }
     HandleUnwrapMemory* GetHandleUnwrapMemory() { return common_manager_->GetHandleUnwrapMemory(); }
     ParameterEncoder*   BeginTrackedApiCallCapture(format::ApiCallId call_id)
     {
@@ -103,9 +106,21 @@ class ApiCaptureManager
 
     void WriteFrameMarker(format::MarkerType marker_type) { common_manager_->WriteFrameMarker(marker_type); }
 
-    void EndFrame(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock)
+    void EndFrame(CommonCaptureManager::ApiSharedLockT& current_lock)
     {
         common_manager_->EndFrame(api_family_, current_lock);
+    }
+    void EndFrame(CommonCaptureManager::ApiCallLock& current_lock)
+    {
+        if (current_lock.IsShared())
+        {
+            EndFrame(current_lock.GetSharedRef());
+        }
+        else
+        {
+            CommonCaptureManager::ApiSharedLockT empty_lock;
+            EndFrame(empty_lock);
+        }
     }
 
     // Pre/PostQueueSubmit to be called immediately before and after work is submitted to the GPU by vkQueueSubmit for
@@ -164,6 +179,7 @@ class ApiCaptureManager
     auto GetForceCommandSerialization() const { return common_manager_->GetForceCommandSerialization(); }
     auto GetQueueZeroOnly() const { return common_manager_->GetQueueZeroOnly(); }
     auto GetAllowPipelineCompileRequired() const { return common_manager_->GetAllowPipelineCompileRequired(); }
+    auto GetSkipThreadsWithInvalidData() const { return common_manager_->GetSkipThreadsWithInvalidData(); }
 
     bool     IsAnnotated() const { return common_manager_->IsAnnotated(); }
     uint16_t GetGPUVAMask() const { return common_manager_->GetGPUVAMask(); }
@@ -188,7 +204,7 @@ class ApiCaptureManager
     uint32_t                          GetCurrentFrame() const { return common_manager_->GetCurrentFrame(); }
     CommonCaptureManager::CaptureMode GetCaptureMode() const { return common_manager_->GetCaptureMode(); }
     void SetCaptureMode(CommonCaptureManager::CaptureMode mode) { common_manager_->SetCaptureMode(mode); }
-    bool                              GetDebugLayerSetting() const { return common_manager_->GetDebugLayerSetting(); }
+    bool GetDebugLayerSetting() const { return common_manager_->GetDebugLayerSetting(); }
     bool GetDebugDeviceLostSetting() const { return common_manager_->GetDebugDeviceLostSetting(); }
     bool GetDisableDxrSetting() const { return common_manager_->GetDisableDxrSetting(); }
     auto GetAccelStructPaddingSetting() const { return common_manager_->GetAccelStructPaddingSetting(); }
@@ -234,6 +250,7 @@ class ApiCaptureManager
     auto                   GetTrimDrawCalls() const { return common_manager_->GetTrimDrawCalls(); }
     bool                   GetUseAssetFile() const { return common_manager_->GetUseAssetFile(); }
     CommandWriter*         GetCommandWriter() { return common_manager_->GetCommandWriter(); }
+    bool GetIgnoreFrameBoundaryAndroid() const { return common_manager_->GetIgnoreFrameBoundaryAndroid(); }
 
   protected:
     const format::ApiFamilyId api_family_;

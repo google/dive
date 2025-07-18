@@ -3,25 +3,37 @@ set(VULKAN_VERSION_MAJOR "")
 set(VULKAN_VERSION_MINOR "")
 set(VULKAN_VERSION_PATCH "")
 
-# GOOGLE: Change path to vulkan headers so that gfxr compiles in dive.
+# Save away a copy of the script's directory
+set(FIND_VULKAN_DIR ${CMAKE_CURRENT_LIST_DIR})
+
 # First, determine which header we need to grab the version information from.
 # Starting with Vulkan 1.1, we should use vulkan_core.h, but prior to that,
 # the information was in vulkan.h.
+
 find_file (VULKAN_HEADER
             vulkan_core.h
             HINTS
-                ${CMAKE_CURRENT_SOURCE_DIR}/../Vulkan-Headers/include/vulkan)
+                external/Vulkan-Headers/include/vulkan
+		${FIND_VULKAN_DIR}/../external/Vulkan-Headers/include/vulkan
+		${FIND_VULKAN_DIR}/../../external/Vulkan-Headers/include/vulkan
+	    NO_DEFAULT_PATH
+	    NO_CMAKE_FIND_ROOT_PATH
+	)
 
 MESSAGE(STATUS "Vulkan Header = ${VULKAN_HEADER}")
 
-# GOOGLE: Change path to vulkan.h so that gfxr compiles in dive.
 if (EXISTS ${VULKAN_HEADER})
     set(VulkanHeaders_main_header ${VULKAN_HEADER})
 else()
     find_file(VULKAN_HEADER
                 vulkan.h
                 HINTS
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../Vulkan-Headers/include/vulkan)
+                    external/Vulkan-Headers/include/vulkan
+		    ${FIND_VULKAN_DIR}/../external/Vulkan-Headers/include/vulkan
+		    ${FIND_VULKAN_DIR}/../../external/Vulkan-Headers/include/vulkan
+	        NO_DEFAULT_PATH
+	        NO_CMAKE_FIND_ROOT_PATH
+	)
     set(VulkanHeaders_main_header ${VULKAN_HEADER})
 endif()
 
@@ -71,3 +83,9 @@ MESSAGE(STATUS
         "Detected Vulkan Version ${VULKAN_VERSION_MAJOR}."
         "${VULKAN_VERSION_MINOR}."
         "${VULKAN_VERSION_PATCH}")
+
+# Restore the sysroot and prefix path CMake variables
+#set(CMAKE_SYSROOT ${OLD_CMAKE_SYSROOT})
+#set(CMAKE_PREFIX_PATH ${OLD_CMAKE_PREFIX_PATH})
+#set(CMAKE_FIND_ROOT_PATH ${OLD_CMAKE_FIND_ROOT_PATH})
+#set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ${OLD_CMAKE_FIND_ROOT_PATH_MODE_LIBRARY})

@@ -85,6 +85,8 @@ class Dx12StructDecodersToJsonBodyGenerator(Dx12JsonCommonGenerator):
     def beginFile(self, gen_opts):
         Dx12BaseGenerator.beginFile(self, gen_opts)
         code = format_cpp_code('''
+            #if defined(D3D12_SUPPORT)
+
             #include "generated_dx12_struct_decoders_to_json.h"
             #include "generated_dx12_enum_to_json.h"
             #include "decode/custom_dx12_struct_decoders.h"
@@ -807,6 +809,110 @@ class Dx12StructDecodersToJsonBodyGenerator(Dx12JsonCommonGenerator):
                     }
                 }
                 '''
+            case "D3D12_SHADER_NODE":
+                field_to_json = '''
+                switch(decoded_value.OverridesType)
+                {
+                    case D3D12_NODE_OVERRIDES_TYPE_BROADCASTING_LAUNCH:
+                    {
+                        FieldToJson(jdata["pBroadcastingLaunchOverrides"], meta_struct.broadcasting_launch_overrides, options);
+                        break;
+                    }
+                    case D3D12_NODE_OVERRIDES_TYPE_COALESCING_LAUNCH:
+                    {
+                        FieldToJson(jdata["pCoalescingLaunchOverrides"], meta_struct.coalescing_launch_overrides, options);
+                        break;
+                    }
+                    case D3D12_NODE_OVERRIDES_TYPE_THREAD_LAUNCH:
+                    {
+                        FieldToJson(jdata["pThreadLaunchOverrides"], meta_struct.thread_launch_overrides, options);
+                        break;
+                    }
+                    case D3D12_NODE_OVERRIDES_TYPE_COMMON_COMPUTE:
+                    {
+                        FieldToJson(jdata["pCommonComputeNodeOverrides"], meta_struct.common_compute_node_overrides, options);
+                        break;
+                    }
+                    default:
+                    {
+                        FieldToJson(jdata[format::kNameWarning], "Unknown D3D12_NODE_OVERRIDES_TYPE in D3D12_SHADER_NODE.", options);
+                        break;
+                    }
+                }
+                '''
+            case "D3D12_NODE":
+                field_to_json = '''
+                switch(decoded_value.NodeType)
+                {
+                    case D3D12_NODE_TYPE_SHADER:
+                    {
+                        FieldToJson(jdata["Shader"], meta_struct.shader, options);
+                        break;
+                    }
+                    default:
+                    {
+                        FieldToJson(jdata[format::kNameWarning], "Unknown D3D12_NODE_TYPE in D3D12_NODE.", options);
+                        break;
+                    }
+                }
+                '''            
+            case "D3D12_SET_PROGRAM_DESC":
+                field_to_json = '''
+                switch(decoded_value.Type)
+                {
+                    case D3D12_PROGRAM_TYPE_GENERIC_PIPELINE:
+                    {
+                        FieldToJson(jdata["GenericPipeline"], meta_struct.generic_pipeline, options);
+                        break;
+                    }
+                    case D3D12_PROGRAM_TYPE_RAYTRACING_PIPELINE:
+                    {
+                        FieldToJson(jdata["RaytracingPipeline"], meta_struct.raytracing_pipeline, options);
+                        break;
+                    }
+                    case D3D12_PROGRAM_TYPE_WORK_GRAPH:
+                    {
+                        FieldToJson(jdata["WorkGraph"], meta_struct.work_graph, options);
+                        break;
+                    }
+                    default:
+                    {
+                        FieldToJson(jdata[format::kNameWarning], "Unknown D3D12_PROGRAM_TYPE in D3D12_SET_PROGRAM_DESC.", options);
+                        break;
+                    }
+                }
+                '''
+            case "D3D12_DISPATCH_GRAPH_DESC":
+                field_to_json = '''
+                switch(decoded_value.Mode)
+                {
+                    case D3D12_DISPATCH_MODE_NODE_CPU_INPUT:
+                    {
+                        FieldToJson(jdata["NodeCPUInput"], meta_struct.node_cpu_input, options);
+                        break;
+                    }
+                    case D3D12_DISPATCH_MODE_NODE_GPU_INPUT:
+                    {
+                        FieldToJson(jdata["NodeGPUInput"], decoded_value.NodeGPUInput, options);
+                        break;
+                    }
+                    case D3D12_DISPATCH_MODE_MULTI_NODE_CPU_INPUT:
+                    {
+                        FieldToJson(jdata["MultiNodeCPUInput"], meta_struct.multi_node_cpu_input, options);
+                        break;
+                    }
+                    case D3D12_DISPATCH_MODE_MULTI_NODE_GPU_INPUT:
+                    {
+                        FieldToJson(jdata["MultiNodeGPUInput"], decoded_value.MultiNodeGPUInput, options);
+                        break;
+                    }
+                    default:
+                    {
+                        FieldToJson(jdata[format::kNameWarning], "Unknown D3D12_DISPATCH_MODE in D3D12_DISPATCH_GRAPH_DESC.", options);
+                        break;
+                    }
+                }
+                '''
             case _:
                 print(message)
         return format_cpp_code(field_to_json, 2)
@@ -952,9 +1058,15 @@ class Dx12StructDecodersToJsonBodyGenerator(Dx12JsonCommonGenerator):
 
             /** @} */
         ''') + '\n'
-        write(custom_impls, file=self.outFile)
-        write('GFXRECON_END_NAMESPACE(decode)', file=self.outFile)
-        write('GFXRECON_END_NAMESPACE(gfxrecon)', file=self.outFile)
+
+        code = custom_impls
+        code += '\n'
+        code += 'GFXRECON_END_NAMESPACE(decode)\n'
+        code += 'GFXRECON_END_NAMESPACE(gfxrecon)\n' 
+        code += '\n'
+        code += '#endif // defined(D3D12_SUPPORT)' 
+
+        write(code, file=self.outFile)
 
         # Finish processing in superclass
         Dx12BaseGenerator.endFile(self)

@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2018-2023 Valve Corporation
 ** Copyright (c) 2018-2023 LunarG, Inc.
+** Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -47,7 +48,8 @@ class MetadataConsumerBase
     virtual void
     ProcessResizeWindowCommand2(format::HandleId surface_id, uint32_t width, uint32_t height, uint32_t pre_transform)
     {}
-    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                    memory_id,
+    virtual void ProcessCreateHardwareBufferCommand(format::HandleId                                    device_id,
+                                                    format::HandleId                                    memory_id,
                                                     uint64_t                                            buffer_id,
                                                     uint32_t                                            format,
                                                     uint32_t                                            width,
@@ -105,10 +107,7 @@ class MetadataConsumerBase
     virtual void ProcessInitSubresourceCommand(const format::InitSubresourceCommandHeader& command_header,
                                                const uint8_t*                              data)
     {}
-    virtual void ProcessExecuteBlocksFromFile(uint32_t           n_blocks,
-                                              int64_t            offset,
-                                              const std::string& filename)
-    {}
+    virtual void ProcessExecuteBlocksFromFile(uint32_t n_blocks, int64_t offset, const std::string& filename) {}
 
     virtual void SetCurrentBlockIndex(uint64_t block_index) {}
 
@@ -125,6 +124,12 @@ class MetadataConsumerBase
 
     virtual void ProcessVulkanAccelerationStructuresWritePropertiesMetaCommand(
         format::HandleId device_id, VkQueryType query_type, format::HandleId acceleration_structure_id)
+    {}
+
+    virtual void ProcessViewRelativeLocation(format::ThreadId thread_id, format::ViewRelativeLocation& location){};
+
+    virtual void ProcessInitializeMetaCommand(const format::InitializeMetaCommand& command_header,
+                                              const uint8_t*                       parameters_data)
     {}
 
   protected:

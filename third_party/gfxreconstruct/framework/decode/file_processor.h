@@ -155,6 +155,11 @@ class FileProcessor
 
     void HandleBlockReadError(Error error_code, const char* error_message);
 
+    bool
+    ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
+
+    bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
+
     bool ProcessAnnotation(const format::BlockHeader& block_header, format::AnnotationType annotation_type);
 
     void PrintBlockInfo() const;
@@ -217,6 +222,8 @@ class FileProcessor
 
     bool SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin);
 
+    bool SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
+
     bool SetActiveFile(const std::string& filename, bool execute_till_eof);
 
     bool SetActiveFile(const std::string&             filename,
@@ -275,19 +282,6 @@ class FileProcessor
 
         return file_stack_.back();
     }
-
-    // GOOGLE: Access modifications for derived FileProcessor classes
-  protected:
-    uint64_t GetFirstFrame() const { return first_frame_; }
-    void     SetUsesFrameMarkers(bool uses_frame_markers) { capture_uses_frame_markers_ = uses_frame_markers; }
-    bool     SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
-    int64_t  TellActiveFile();
-    virtual bool
-    ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
-    virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
-    virtual void StoreBlockInfo() {}
-
-    bool run_without_decoders_ = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)

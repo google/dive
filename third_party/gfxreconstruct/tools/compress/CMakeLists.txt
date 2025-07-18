@@ -28,6 +28,7 @@
 
 add_executable(gfxrecon-compress "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_compile_options(gfxrecon-compress PRIVATE /wd4244)
     set_target_properties(gfxrecon-compress PROPERTIES FOLDER "gfxreconstruct")

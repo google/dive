@@ -37,6 +37,7 @@ target_include_directories(ags_capture PUBLIC
                            ${PROJECT_SOURCE_DIR})
 target_link_libraries(ags_capture gfxrecon_util ${LINK_AGS_OUTPUT})
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_link_libraries(ags_capture psapi.lib)
     set_target_properties(ags_capture PROPERTIES FOLDER "gfxreconstruct")

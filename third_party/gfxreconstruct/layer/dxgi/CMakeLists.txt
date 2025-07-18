@@ -37,6 +37,7 @@ target_sources(dxgi PRIVATE
 target_include_directories(dxgi PUBLIC ${CMAKE_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 target_link_libraries(dxgi gfxrecon_encode gfxrecon_util ${LINK_DXGI_OUTPUT})
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_link_libraries(dxgi psapi.lib)
     set_target_properties(dxgi PROPERTIES FOLDER "gfxreconstruct")

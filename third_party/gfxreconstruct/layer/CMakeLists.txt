@@ -82,6 +82,7 @@ if(MSVC)
                         PRIVATE
                             /DEF:${CMAKE_CURRENT_LIST_DIR}/VkLayer_gfxreconstruct.def
                        )
+    # GOOGLE: Add folder organization for windows build in dive.
     target_link_libraries(VkLayer_gfxreconstruct psapi.lib)
     set_target_properties(VkLayer_gfxreconstruct PROPERTIES FOLDER "gfxreconstruct")                   
 elseif(APPLE)
@@ -113,7 +114,6 @@ GENERATE_LAYER_JSON_FILE(VkLayer_gfxreconstruct_json
         $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/VkLayer_gfxreconstruct.json
         )
 
-<<<<<<< HEAD
 if (OPENXR_SUPPORT_ENABLED)
     # Generate the OpenXR JSON file that will be generated into the build directory
     GENERATE_LAYER_JSON_FILE(XrLayer_gfxreconstruct_json
@@ -122,10 +122,11 @@ if (OPENXR_SUPPORT_ENABLED)
             ${CMAKE_CURRENT_SOURCE_DIR}/json/XrLayer_gfxreconstruct.json.in
             $<TARGET_FILE_DIR:VkLayer_gfxreconstruct>/XrLayer_gfxreconstruct.json
             )
-=======
+endif()
+
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     set_target_properties(VkLayer_gfxreconstruct_json PROPERTIES FOLDER "gfxreconstruct")
->>>>>>> 8bafc2569ae (Creates folders for gfxr and freedreno in dive solution (#151))
 endif()
 
 if(UNIX)

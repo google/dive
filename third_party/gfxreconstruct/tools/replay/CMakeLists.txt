@@ -61,6 +61,7 @@ if (MSVC)
     else()
       target_link_options(gfxrecon-replay PUBLIC "LINKER:/Include:gfxrecon_disable_popup_result")
     endif()
+    # GOOGLE: Add folder organization for windows build in dive.
     set_target_properties(gfxrecon-replay PROPERTIES FOLDER "gfxreconstruct") 
 endif()
 

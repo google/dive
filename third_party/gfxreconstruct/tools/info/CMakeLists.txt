@@ -28,6 +28,7 @@
 
 add_executable(gfxrecon-info "")
 
+# GOOGLE: Add folder organization for windows build in dive.
 if(MSVC)
     target_compile_options(gfxrecon-info PRIVATE /wd4244)
     target_link_libraries(gfxrecon-info psapi.lib)

@@ -29,22 +29,13 @@ else()
 endif()
 
 if(ANDROID)
-if(DIVE_ENABLE_PERFETTO)
-  set(PERFETTO_DIVE_IMP_SRC perfetto_trace.cc)
-else()
-  set(PERFETTO_DIVE_IMP_SRC perfetto_trace_empty.cc)
-endif()
   add_library(service
               service.cc
               trace_mgr.cc
               android_trace_mgr.cc
-              ${PERFETTO_DIVE_IMP_SRC}
               ${COMMAND_UTILS_SRC})
 
   target_link_libraries(service PRIVATE  log)
-  if(DIVE_ENABLE_PERFETTO)
-    target_link_libraries(service PRIVATE  perfetto)
-  endif()
 else()
   add_library(service
               service.cc

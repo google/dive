@@ -224,10 +224,7 @@ if(WIN32)
 endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LibArchive_LIBRARIES} ${PEFFETTO_TRACE_READER_LIB})
 
-include_directories(${LibArchive_INCLUDE_DIRS} 
-  "${THIRDPARTY_DIRECTORY}/perfetto/" 
-  "${THIRDPARTY_DIRECTORY}/perfetto/include"
-  ${PERFETTO_BUILD_HEADER_DIR})
+include_directories(${LibArchive_INCLUDE_DIRS})
 if (MSVC)
   # 4100: unreferenced formal parameter
   # 4201: prevent nameless struct/union

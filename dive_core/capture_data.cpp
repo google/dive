@@ -26,9 +26,6 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "freedreno_dev_info.h"
-#if defined(DIVE_ENABLE_PERFETTO)
-#    include "perfetto_trace/trace_reader.h"
-#endif
 #include "pm4_info.h"
 #include "gfxr_ext/decode/dive_file_processor.h"
 
@@ -866,25 +863,8 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
     }
     else if (file_extension.compare(".rd") == 0)
     {
-#if defined(DIVE_ENABLE_PERFETTO)
-        auto perfetto_trace_path = std::filesystem::path(file_name_ + ".perfetto");
-        if (std::filesystem::exists(perfetto_trace_path))
-        {
-            CaptureData::LoadResult res = LoadPerfettoFile(perfetto_trace_path.string().c_str());
-            if (res != CaptureData::LoadResult::kSuccess)
-            {
-                return res;
-            }
-        }
-#endif
         return LoadAdrenoRdFile(file_name);
     }
-#if defined(DIVE_ENABLE_PERFETTO)
-    else if (file_extension.compare(".perfetto") == 0)
-    {
-        return LoadPerfettoFile(file_name);
-    }
-#endif
     else if (file_extension.compare(".gfxr") == 0)
     {
         return LoadGfxrFile(file_name);
@@ -965,21 +945,6 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
 
     return result;
 }
-
-#if defined(DIVE_ENABLE_PERFETTO)
-//--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadPerfettoFile(const char *file_name)
-{
-    std::string name(file_name);
-    TraceReader reader(name);
-    if (reader.LoadTraceFile())
-    {
-        return LoadResult::kSuccess;
-    }
-
-    return LoadResult::kFileIoError;
-}
-#endif
 
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)

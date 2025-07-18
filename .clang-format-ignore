@@ -3,7 +3,6 @@
 ./third_party/Vulkan-Headers/*
 ./third_party/catch2/*
 ./third_party/libarchive/*
-./third_party/perfetto/*
 ./third_party/pybind11/*
 
 # ignore third_party subtree code from clang-format checks

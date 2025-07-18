@@ -28,14 +28,6 @@
 
 add_executable(gfxrecon-optimize "")
 
-# GOOGLE: Add folder organization for windows build in dive.
-if(MSVC)
-    target_compile_options(gfxrecon-optimize PRIVATE /wd4244)
-    target_link_libraries(gfxrecon-optimize psapi.lib)
-    set_target_properties(gfxrecon-optimize PROPERTIES FOLDER "gfxreconstruct")
-endif()
-
-# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_sources(gfxrecon-optimize
                PRIVATE
                    ${CMAKE_CURRENT_LIST_DIR}/main.cpp
@@ -50,7 +42,7 @@ target_sources(gfxrecon-optimize
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.h>
                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/block_skipping_file_processor.cpp>
                    ${CMAKE_CURRENT_LIST_DIR}/../platform_debug_helper.cpp
-                   $<$<BOOL:WIN32>:${CMAKE_CURRENT_SOURCE_DIR}/../../version.rc>
+                   $<$<BOOL:WIN32>:${PROJECT_SOURCE_DIR}/version.rc>
               )
 
 if (MSVC)
@@ -70,7 +62,6 @@ target_link_libraries(gfxrecon-optimize
                           gfxrecon_decode
                           gfxrecon_graphics
                           gfxrecon_format
-                          gfxrecon_util
                           platform_specific
                           $<$<BOOL:${D3D12_SUPPORT}>:d3d12.lib>
                           $<$<BOOL:${D3D12_SUPPORT}>:dxgi.lib>
@@ -78,8 +69,7 @@ target_link_libraries(gfxrecon-optimize
 
 common_build_directives(gfxrecon-optimize)
 
-# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/AgilitySDK.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/InstallDXC.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/AgilitySDK.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/InstallDXC.cmake)
 
 install(TARGETS gfxrecon-optimize RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

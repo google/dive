@@ -28,11 +28,6 @@ if (D3D12_SUPPORT)
 
     add_custom_target(gfxrecon-optimize-renamed.py ALL)
 
-    # GOOGLE: Add folder organization for windows build in dive.
-    if(MSVC)
-        set_target_properties(gfxrecon-optimize-renamed.py PROPERTIES FOLDER "gfxreconstruct")
-    endif()
-
     add_custom_command(TARGET gfxrecon-optimize-renamed.py
                        DEPENDS ${CMAKE_SOURCE_SOURCE_DIR}/gfxrecon-optimize-renamed.py
                        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/gfxrecon-optimize-renamed.py ${CMAKE_CURRENT_BINARY_DIR}/gfxrecon-optimize-renamed.py)
@@ -41,11 +36,6 @@ if (D3D12_SUPPORT)
             OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
     add_custom_target(gfxrecon-replay-renamed.py ALL)
-
-    # GOOGLE: Add folder organization for windows build in dive.
-    if(MSVC)
-        set_target_properties(gfxrecon-replay-renamed.py PROPERTIES FOLDER "gfxreconstruct")
-    endif()
 
     add_custom_command(TARGET gfxrecon-replay-renamed.py
                        DEPENDS ${CMAKE_SOURCE_SOURCE_DIR}/gfxrecon-replay-renamed.py

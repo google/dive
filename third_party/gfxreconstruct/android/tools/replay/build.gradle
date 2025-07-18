@@ -20,7 +20,7 @@ android {
             } else if (project.hasProperty("x86_64")) {
                 abiFilters 'x86_64'
             } else {
-                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+                abiFilters 'arm64-v8a', 'x86_64'
             }
         }
         externalNativeBuild {
@@ -41,17 +41,14 @@ android {
             path "CMakeLists.txt"
         }
     }
-    // Google: add wrap.sh
-    sourceSets {
-        main {
-            jniLibs.srcDirs = ['src/main/jniLibs']
-        }
+    androidResources {
+        ignoreAssetsPattern "XrLayer_gfxreconstruct.json"
     }
 }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'com.android.support:appcompat-v7:27.1.1'
-    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.0'
     implementation project(':layer')
 }

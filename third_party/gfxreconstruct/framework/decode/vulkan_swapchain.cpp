@@ -46,18 +46,18 @@ void VulkanSwapchain::Clean()
     }
 }
 
-VkResult VulkanSwapchain::CreateSurface(VkResult                            original_result,
-                                        VulkanInstanceInfo*                 instance_info,
-                                        const std::string&                  wsi_extension,
-                                        VkFlags                             flags,
-                                        HandlePointerDecoder<VkSurfaceKHR>* surface,
-                                        const encode::VulkanInstanceTable*  instance_table,
-                                        application::Application*           application,
-                                        const int32_t                       xpos,
-                                        const int32_t                       ypos,
-                                        const uint32_t                      width,
-                                        const uint32_t                      height,
-                                        bool                                force_windowed)
+VkResult VulkanSwapchain::CreateSurface(VkResult                             original_result,
+                                        VulkanInstanceInfo*                  instance_info,
+                                        const std::string&                   wsi_extension,
+                                        VkFlags                              flags,
+                                        HandlePointerDecoder<VkSurfaceKHR>*  surface,
+                                        const graphics::VulkanInstanceTable* instance_table,
+                                        application::Application*            application,
+                                        const int32_t                        xpos,
+                                        const int32_t                        ypos,
+                                        const uint32_t                       width,
+                                        const uint32_t                       height,
+                                        bool                                 force_windowed)
 {
     assert(instance_info != nullptr);
 
@@ -95,6 +95,9 @@ VkResult VulkanSwapchain::CreateSurface(VkResult                            orig
             GFXRECON_LOG_FATAL("Failed to create a window for use with surface creation.  Replay cannot continue.");
             return VK_ERROR_UNKNOWN;
         }
+
+        window_factory->created_window_.emplace(window, window_index_);
+        ++window_index_;
 
         result = window->CreateSurface(instance_table_, instance, flags, replay_surface);
 

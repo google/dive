@@ -1,6 +1,7 @@
 /*
 ** Copyright (c) 2021-2022 LunarG, Inc.
 ** Copyright (c) 2021-2025 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2023-2025 Qualcomm Technologies, Inc. and/or its subsidiaries.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -112,6 +113,9 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
         const format::InitDx12AccelerationStructureCommandHeader&       command_header,
         std::vector<format::InitDx12AccelerationStructureGeometryDesc>& geometry_descs,
         const uint8_t*                                                  build_inputs_data) override;
+
+    virtual void ProcessInitializeMetaCommand(const format::InitializeMetaCommand& command_header,
+                                              const uint8_t*                       parameters_data) override;
 
     virtual void Process_ID3D12Device_CheckFeatureSupport(format::HandleId object_id,
                                                           HRESULT          original_result,
@@ -299,6 +303,10 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void MapGpuDescriptorHandles(D3D12_GPU_DESCRIPTOR_HANDLE* handles, size_t handles_len);
 
+    void MapCpuDescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE& handle);
+
+    void MapCpuDescriptorHandle(uint8_t* dst_handle_ptr, const uint8_t* src_handle_ptr);
+
     void MapGpuVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS& address);
 
     void MapGpuVirtualAddress(uint8_t* dst_address_ptr, const uint8_t* src_address_ptr);
@@ -430,6 +438,8 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void CheckReplayResult(const char* call_name, HRESULT capture_result, HRESULT replay_result);
 
+    FARPROC GetReplayCallback(uint64_t callback_id, format::ApiCallId call_id, const char* call_name);
+
     void* PreProcessExternalObject(uint64_t object_id, format::ApiCallId call_id, const char* call_name);
 
     void PostProcessExternalObject(
@@ -550,28 +560,33 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
         auto resource_object_info = GetObjectInfo(*resource->GetPointer());
 
-        GFXRECON_ASSERT(resource_object_info != nullptr);
-
-        if (resource_object_info->extra_info == nullptr)
+        // GetObjectInfo() can return a null pointer if resource creation succeeded at replay but failed at capture. For
+        // this case, the created resource will not have a valid capture ID and will be released instead of being added
+        // to the object table.
+        if (resource_object_info != nullptr)
         {
-            auto resource_info               = std::make_unique<D3D12ResourceInfo>();
-            resource_object_info->extra_info = std::move(resource_info);
+
+            if (resource_object_info->extra_info == nullptr)
+            {
+                auto resource_info               = std::make_unique<D3D12ResourceInfo>();
+                resource_object_info->extra_info = std::move(resource_info);
+            }
+
+            auto extra_info = reinterpret_cast<D3D12ResourceInfo*>(resource_object_info->extra_info.get());
+
+            extra_info->desc.Dimension        = desc->GetPointer()->Dimension;
+            extra_info->desc.Alignment        = desc->GetPointer()->Alignment;
+            extra_info->desc.Width            = desc->GetPointer()->Width;
+            extra_info->desc.Height           = desc->GetPointer()->Height;
+            extra_info->desc.DepthOrArraySize = desc->GetPointer()->DepthOrArraySize;
+            extra_info->desc.MipLevels        = desc->GetPointer()->MipLevels;
+            extra_info->desc.Format           = desc->GetPointer()->Format;
+            extra_info->desc.SampleDesc       = desc->GetPointer()->SampleDesc;
+            extra_info->desc.Layout           = desc->GetPointer()->Layout;
+            extra_info->desc.Flags            = desc->GetPointer()->Flags;
+
+            SetResourceSamplerFeedbackMipRegion(extra_info->desc, desc->GetPointer());
         }
-
-        auto extra_info = reinterpret_cast<D3D12ResourceInfo*>(resource_object_info->extra_info.get());
-
-        extra_info->desc.Dimension        = desc->GetPointer()->Dimension;
-        extra_info->desc.Alignment        = desc->GetPointer()->Alignment;
-        extra_info->desc.Width            = desc->GetPointer()->Width;
-        extra_info->desc.Height           = desc->GetPointer()->Height;
-        extra_info->desc.DepthOrArraySize = desc->GetPointer()->DepthOrArraySize;
-        extra_info->desc.MipLevels        = desc->GetPointer()->MipLevels;
-        extra_info->desc.Format           = desc->GetPointer()->Format;
-        extra_info->desc.SampleDesc       = desc->GetPointer()->SampleDesc;
-        extra_info->desc.Layout           = desc->GetPointer()->Layout;
-        extra_info->desc.Flags            = desc->GetPointer()->Flags;
-
-        SetResourceSamplerFeedbackMipRegion(extra_info->desc, desc->GetPointer());
     };
 
     HRESULT OverrideCreateCommittedResource(DxObjectInfo*                                        replay_object_info,
@@ -988,6 +1003,39 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     void OverrideExecuteBundle(DxObjectInfo* replay_object_info, DxObjectInfo* command_list_object_info);
 
+    HRESULT OverrideD3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(
+        HRESULT                          return_value,
+        PointerDecoder<uint8_t>*         pSrcData,
+        SIZE_T                           SrcDataSizeInBytes,
+        WStringDecoder*                  RootSignatureSubobjectName,
+        Decoded_GUID                     pRootSignatureDeserializerInterface,
+        PointerDecoder<uint64_t, void*>* ppRootSignatureDeserializer);
+
+    void OverrideSetProgram(DxObjectInfo*                                         replay_object_info,
+                            StructPointerDecoder<Decoded_D3D12_SET_PROGRAM_DESC>* pDesc);
+
+    void OverrideDispatchGraph(DxObjectInfo*                                            replay_object_info,
+                               StructPointerDecoder<Decoded_D3D12_DISPATCH_GRAPH_DESC>* pDesc);
+
+    HRESULT OverrideCreateMetaCommand(DxObjectInfo*                device5_object_info,
+                                      HRESULT                      original_result,
+                                      Decoded_GUID                 command_Id,
+                                      UINT                         node_mask,
+                                      PointerDecoder<uint8_t>*     parameters_data,
+                                      SIZE_T                       parameters_data_sizeinbytes,
+                                      Decoded_GUID                 riid,
+                                      HandlePointerDecoder<void*>* meta_command);
+
+    void OverrideInitializeMetaCommand(DxObjectInfo*            command_list4_object_info,
+                                       DxObjectInfo*            meta_command,
+                                       PointerDecoder<uint8_t>* parameters_data,
+                                       SIZE_T                   parameters_data_sizeinbytes);
+
+    void OverrideExecuteMetaCommand(DxObjectInfo*            command_list4_object_info,
+                                    DxObjectInfo*            meta_command,
+                                    PointerDecoder<uint8_t>* parameters_data,
+                                    SIZE_T                   parameters_data_sizeinbytes);
+
     const Dx12ObjectInfoTable& GetObjectInfoTable() const { return object_info_table_; }
 
     Dx12ObjectInfoTable& GetObjectInfoTable() { return object_info_table_; }
@@ -1092,6 +1140,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     {
         void*            data_pointer{ 0 };
         format::HandleId resource_id{ format::kNullHandleId };
+        uint32_t         ref_count{ 0 };
     };
 
     struct ResourceInitInfo
@@ -1214,6 +1263,12 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
 
     std::wstring ConstructObjectName(format::HandleId capture_id, format::ApiCallId call_id);
 
+    void MapMetaCommandParameters(ID3D12Device5*                     device5,
+                                  const GUID&                        meta_command_guid,
+                                  D3D12_META_COMMAND_PARAMETER_STAGE stage,
+                                  uint8_t*                           parameters_data,
+                                  uint8_t                            parameters_data_sizeinbytes);
+
     std::unique_ptr<graphics::DX12ImageRenderer>          frame_buffer_renderer_;
     Dx12ObjectInfoTable                                   object_info_table_;
     std::shared_ptr<application::Application>             application_;
@@ -1247,6 +1302,7 @@ class Dx12ReplayConsumerBase : public Dx12Consumer
     std::unique_ptr<ScreenshotHandlerBase>                screenshot_handler_;
     std::unordered_map<ID3D12Resource*, ResourceInitInfo> resource_init_infos_;
     uint64_t                                              frame_end_marker_count_;
+    std::unordered_map<ID3D12MetaCommand*, GUID>          meta_command_guids_;
 
 #ifdef GFXRECON_AGS_SUPPORT
     graphics::Dx12AgsMarkerInjector* ags_marker_injector_{ nullptr };

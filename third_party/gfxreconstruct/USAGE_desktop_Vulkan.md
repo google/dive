@@ -284,6 +284,7 @@ option values.
 | Capture File Compression Type                  | GFXRECON_CAPTURE_COMPRESSION_TYPE                       | STRING  | Compression format to use with the capture file.  Valid values are: `LZ4`, `ZLIB`, `ZSTD`, and `NONE`. Default is: `LZ4`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Capture File Timestamp                         | GFXRECON_CAPTURE_FILE_TIMESTAMP                         | BOOL    | Add a timestamp to the capture file as described by [Timestamps](#timestamps).  Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Capture File Flush After Write                 | GFXRECON_CAPTURE_FILE_FLUSH                             | BOOL    | Flush output stream after each packet is written to the capture file.  Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Capture Environment | GFXRECON_CAPTURE_ENVIRONMENT | STRING | Comma delimited list of environment variables to store in the capture file. These can optionally be restored during replay to their capture-time values with the `gfxrecon-replay-renamed.py` utility.
 | Log Level                                      | GFXRECON_LOG_LEVEL                                      | STRING  | Specify the highest level message to log.  Options are: `debug`, `info`, `warning`, `error`, and `fatal`.  The specified level and all levels listed after it will be enabled for logging.  For example, choosing the `warning` level will also enable the `error` and `fatal` levels. Default is: `info`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Log Output to Console                          | GFXRECON_LOG_OUTPUT_TO_CONSOLE                          | BOOL    | Log messages will be written to stdout. Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Log File                                       | GFXRECON_LOG_FILE                                       | STRING  | When set, log messages will be written to a file at the specified path. Default is: Empty string (file logging disabled).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -306,6 +307,8 @@ option values.
 | Force Command Serialization                    | GFXRECON_FORCE_COMMAND_SERIALIZATION                    | BOOL    | Sets exclusive locks(unique_lock) for every ApiCall. It can avoid external multi-thread to cause captured issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Queue Zero Only                                | GFXRECON_QUEUE_ZERO_ONLY                                | BOOL    | Forces to using only QueueFamilyIndex: 0 and queueCount: 1 on capturing to avoid replay error for unavailble VkQueue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Allow Pipeline Compile Required                | GFXRECON_ALLOW_PIPELINE_COMPILE_REQUIRED                | BOOL    | The default behaviour forces VK_PIPELINE_COMPILE_REQUIRED to be returned from Create*Pipelines calls which have VK_PIPELINE_CREATE_FAIL_ON_PIPELINE_COMPILE_REQUIRED_BIT set, and skips dispatching and recording the calls. This forces applications to fallback to recompiling pipelines without caching, the Vulkan calls for which will be captured. Enabling this option causes capture to record the application's calls and implementation's return values unmodified, but the resulting captures are fragile to changes in Vulkan implementations if they use pipeline caching.                                                                                                                                                                                                                                                                                                                                                                                     |
+| Stop Recording Calls in Threads With Invalid Data | GFXRECON_SKIP_THREADS_WITH_INVALID_DATA | BOOL | When a thread is encountered which contains data that is unexpected, skip the data and mark the thread as skippable.  This is important especially in OpenXR where other API commands (such as Vulkan) may be generated inside of the OpenXR commands, but may still be referenced in some fashion outside of the OpenXR commands.  This results in issues during replay.  So, this option prevents those commands, and the threads containing those commands from being recorded to the capture file.  Default is `false` and it is only valid when OpenXR capture is enabled.                                               |
+
 #### Memory Tracking Known Issues
 
 ### Capture Limitations
@@ -475,6 +478,7 @@ usage: gfxrecon-capture-vulkan.py [-h]
                                   [--compression-type {LZ4,ZLIB,ZSTD,NONE}]
                                   [--file-flush]
                                   [--log-level {debug,info,warn,error,fatal}]
+                                  [--log-timestamps]
                                   [--log-file <file>]
                                   [--memory-tracking-mode {page_guard,assisted,unassisted}]
                                   <program> [<programArgs>]
@@ -505,6 +509,7 @@ optional arguments:
                         capture file
   --log-level {debug,info,warn,error,fatal}
                         Specify highest level message to log, default is info
+  --log-timestamps      Output a timestamp in front of each log message.
   --log-file <logFile>  Write log messages to a file at the specified path.
                         Default is: Empty string (file logging disabled)
   --memory-tracking-mode {page_guard,assisted,unassisted}
@@ -546,11 +551,12 @@ The `gfxrecon-replay` tool for desktop accepts the following command line
 arguments:
 
 ```text
-gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
+gfxrecon-replay         [-h | --help] [--version] [--cpu-mask <binary-mask>] [--gpu <index>]
                         [--pause-frame <N>] [--paused] [--sync] [--screenshot-all]
                         [--screenshots <N1(-N2),...>] [--screenshot-format <format>]
                         [--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]
                         [--screenshot-scale SCALE] [--screenshot-size WIDTHxHEIGHT]
+                        [--screenshot-interval <N>]
                         [--sfa | --skip-failed-allocations] [--replace-shaders <dir>]
                         [--opcd | --omit-pipeline-cache-data] [--wsi <platform>]
                         [--surface-index <N>] [--remove-unsupported] [--validate]
@@ -561,6 +567,7 @@ gfxrecon-replay         [-h | --help] [--version] [--gpu <index>]
                         [--measurement-file <file>] [--quit-after-measurement-range]
                         [--flush-measurement-range]
                         [--log-level <level>] [--log-file <file>] [--log-debugview]
+                        [--debug-messenger-level <level>]
                         [--no-debug-popup] [--use-colorspace-fallback]
                         [--wait-before-present]
                         [--dump-resources <submit-index,command-index,draw-call-index>]
@@ -588,9 +595,22 @@ Optional arguments:
   --version             Print version information and exit.
   --log-level <level>   Specify highest level message to log. Options are:
                         debug, info, warning, error, and fatal. Default is info.
+  --log-timestamps      Output a timestamp in front of each log message.
   --log-file <file>     Write log messages to a file at the specified path.
                         Default is: Empty string (file logging disabled).
   --log-debugview       Log messages with OutputDebugStringA. Windows only.
+  --debug-messenger-level <level>
+                        Specify highest debug messenger severity level. Options
+                        are: debug, info, warning, and error. Default is
+                        warning.
+  --cpu-mask <binary-mask>
+                        Set of CPU cores used by the replayer.
+                        `binary-mask` is a succession of '0' and '1' read from left
+                        to right that specifies used/unused cores.
+                        For example '10010' activates the first and
+                        fourth cores and deactivate all other cores.
+                        If the option is not set, all cores can be used. If the option
+                        is set only for some cores, the other cores are not used.
   --gpu <index>         Use the specified device for replay, where index
                         is the zero-based index to the array of physical devices
                         returned by vkEnumeratePhysicalDevices.  Replay may fail
@@ -617,6 +637,12 @@ Optional arguments:
                         ascending order and cannot overlap.  Note that frame
                         numbering is 1-based (i.e. the first frame is frame 1).
                         Example: 200,301-305 will generate six screenshots.
+  --screenshot-interval <N>
+                        Specifies the number of frames between two screenshots
+                        within a screenshot range.
+                        Example: If screenshot range is 10-15 and interval is 2,
+                        screenshot will be generated for frames 10, 12 and 14.
+                        Default is 1.
   --screenshot-format <format>
                         Image file format to use for screenshot generation.
                         Available formats are:
@@ -651,7 +677,8 @@ Optional arguments:
                         vkGetPipelineCacheData (same as
                         --omit-pipeline-cache-data).
   --wsi <platform>      Force replay to use the specified wsi platform.
-                        Available platforms are: auto,win32,xlib,xcb,wayland
+                        Available platforms are:
+                        auto,display,headless,metal,wayland,win32,xcb,xlib
   --surface-index <N>   Restrict rendering to the Nth surface object created.
                         Used with captures that include multiple surfaces.  Default
                         is -1 (render to all surfaces).

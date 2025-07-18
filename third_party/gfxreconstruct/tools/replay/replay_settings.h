@@ -26,7 +26,6 @@
 #ifndef GFXRECON_REPLAY_SETTINGS_H
 #define GFXRECON_REPLAY_SETTINGS_H
 
-// GOOGLE: [single-frame-looping] Adding flags to usage message
 const char kOptions[] =
     "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--sfa|--skip-failed-allocations,--opcd|--"
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
@@ -38,17 +37,18 @@ const char kOptions[] =
     "--dump-resources-json-output-per-command,--dump-resources-dump-immutable-resources,"
     "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
     "separate-alpha,--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,"
-    "--add-new-pipeline-caches,--loop-single-frame";
+    "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--dump-resources-dump-unused-vertex-bindings,--"
+    "deduplicate-device,--log-timestamps";
 const char kArguments[] =
-    "--log-level,--log-file,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
-    "--replace-shaders,--screenshots,--denied-messages,--allowed-messages,--screenshot-format,--"
+    "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
+    "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--fw|--"
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
     "get-fence-status,--sgfr|--"
     "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-"
     "image-format,--dump-resources-dir,"
     "--dump-resources-dump-color-attachment-index,--pbis,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-"
-    "pipeline-cache,--quit-after-frame,--loop-single-frame-count";
+    "pipeline-cache,--quit-after-frame";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -62,12 +62,13 @@ static void PrintUsage(const char* exe_name)
 
     GFXRECON_WRITE_CONSOLE("\n%s - A tool to replay GFXReconstruct capture files.\n", app_name.c_str());
     GFXRECON_WRITE_CONSOLE("Usage:");
-    GFXRECON_WRITE_CONSOLE("  %s\t[-h | --help] [--version] [--gpu <index>] [--gpu-group <index>]", app_name.c_str());
+    GFXRECON_WRITE_CONSOLE("  %s\t[-h | --help] [--version]", app_name.c_str());
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--cpu-mask <binary-mask>] [--gpu <index>] [--gpu-group <index>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--pause-frame <N>] [--paused] [--sync] [--screenshot-all]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshots <N1(-N2),...>] [--screenshot-format <format>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-size <width>x<height>]");
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-scale <scale>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--screenshot-scale <scale>] [--screenshot-interval <N>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--sfa | --skip-failed-allocations] [--replace-shaders <dir>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--opcd | --omit-pipeline-cache-data] [--wsi <platform>]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--use-cached-psos] [--surface-index <N>]");
@@ -96,10 +97,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-json-output-per-command]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dump-immutable-resources]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-dump-all-image-subresources]");
-
-    // GOOGLE: [single-frame-looping] Usage message
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--loop-single-frame] [--loop-single-frame-count <n>]");
-
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--debug-messenger-level <level>]");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-modifiable-state-only]");
     GFXRECON_WRITE_CONSOLE("\t\t\t[--fwo <x,y> | --force-windowed-origin <x,y>]");
@@ -120,11 +118,15 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --version\t\tPrint version information and exit.");
     GFXRECON_WRITE_CONSOLE("  --log-level <level>\tSpecify highest level message to log. Options are:");
     GFXRECON_WRITE_CONSOLE("          \t\tdebug, info, warning, error, and fatal. Default is info.");
+    GFXRECON_WRITE_CONSOLE("  --log-timestamps\tOutput a timestamp in front of each log message.");
     GFXRECON_WRITE_CONSOLE("  --log-file <file>\tWrite log messages to a file at the specified path.")
     GFXRECON_WRITE_CONSOLE("          \t\tDefault is: Empty string (file logging disabled).");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("  --log-debugview\tLog messages with OutputDebugStringA.");
 #endif
+    GFXRECON_WRITE_CONSOLE(
+        "  --debug-messenger-level <level>\tSpecify highest debug messenger severity level. Options are:")
+    GFXRECON_WRITE_CONSOLE("          \t\tdebug, info, warning, and error. Default is warning.");
     GFXRECON_WRITE_CONSOLE("  --pause-frame <N>\tPause after replaying frame number N.");
     GFXRECON_WRITE_CONSOLE("  --paused\t\tPause after replaying the first frame (same");
     GFXRECON_WRITE_CONSOLE("          \t\tas --pause-frame 1).");
@@ -141,6 +143,12 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tascending order and cannot overlap.  Note that frame");
     GFXRECON_WRITE_CONSOLE("          \t\tnumbering is 1-based (i.e. the first frame is frame 1).");
     GFXRECON_WRITE_CONSOLE("          \t\tExample: 200,301-305 will generate six screenshots.");
+    GFXRECON_WRITE_CONSOLE("  --screenshot-interval <N>");
+    GFXRECON_WRITE_CONSOLE("          \t\tSpecifies the number of frames between two screenshots");
+    GFXRECON_WRITE_CONSOLE("          \t\twithin a screenshot range.");
+    GFXRECON_WRITE_CONSOLE("          \t\tExample: If screenshot range is 10-15 and interval is 2,");
+    GFXRECON_WRITE_CONSOLE("          \t\tscreenshot will be generated for frames 10, 12 and 14.");
+    GFXRECON_WRITE_CONSOLE("          \t\tDefault is 1.");
     GFXRECON_WRITE_CONSOLE("  --screenshot-format <format>");
     GFXRECON_WRITE_CONSOLE("          \t\tImage file format to use for screenshot generation.");
     GFXRECON_WRITE_CONSOLE("          \t\tAvailable formats are:");
@@ -165,6 +173,14 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --validate\t\tEnable the Khronos Vulkan validation layer when replaying a");
     GFXRECON_WRITE_CONSOLE("            \t\tVulkan capture or the Direct3D debug layer when replaying a");
     GFXRECON_WRITE_CONSOLE("            \t\tDirect3D 12 capture.");
+    GFXRECON_WRITE_CONSOLE("  --cpu-mask <binary-mask>");
+    GFXRECON_WRITE_CONSOLE("          \t\tSet of CPU cores used by the replayer.");
+    GFXRECON_WRITE_CONSOLE("          \t\t`binary-mask` is a succession of '0' and '1' read from left to right");
+    GFXRECON_WRITE_CONSOLE("          \t\tthat specifies used/unused cores.");
+    GFXRECON_WRITE_CONSOLE("          \t\tFor example '10010' activates the first and");
+    GFXRECON_WRITE_CONSOLE("          \t\tfourth cores and deactivate all other cores.");
+    GFXRECON_WRITE_CONSOLE("          \t\tIf the option is not set, all cores can be used. If the option");
+    GFXRECON_WRITE_CONSOLE("          \t\tis set only for some cores, the other cores are not used.");
     GFXRECON_WRITE_CONSOLE("  --gpu <index>\t\tUse the specified device for replay, where index");
     GFXRECON_WRITE_CONSOLE("          \t\tis the zero-based index to the array of physical devices");
     GFXRECON_WRITE_CONSOLE("          \t\treturned by vkEnumeratePhysicalDevices or IDXGIFactory1::EnumAdapters1.");
@@ -185,16 +201,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --dump-resources-dir <dir>");
     GFXRECON_WRITE_CONSOLE("          \t\tDirectory to write dump resources output files.");
     GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
-
-    // GOOGLE: [single-frame-looping] Usage message details
-    GFXRECON_WRITE_CONSOLE("  --loop-single-frame");
-    GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, replay will loop the first frame.");
-    GFXRECON_WRITE_CONSOLE("          \t\tShould only be used when the capture file is 1 frame long.");
-    GFXRECON_WRITE_CONSOLE("  --loop-single-frame-count <n>");
-    GFXRECON_WRITE_CONSOLE("          \t\t(Only used with --loop-single-frame). Specifies the number of frames");
-    GFXRECON_WRITE_CONSOLE("          \t\tto loop, after which replay will be terminated.");
-    GFXRECON_WRITE_CONSOLE("          \t\tDefault is 0 (infinite looping).");
-
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("Windows only:")
@@ -349,6 +355,8 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tDump immutable shader resources.");
     GFXRECON_WRITE_CONSOLE("  --dump-resources-dump-all-image-subresources");
     GFXRECON_WRITE_CONSOLE("          \t\tDump all available mip levels and layers when dumping images.");
+    GFXRECON_WRITE_CONSOLE("  --dump-resources-dump-unused-vertex-bindings");
+    GFXRECON_WRITE_CONSOLE("          \t\tDump a vertex binding even if no vertex attributes references it.");
     GFXRECON_WRITE_CONSOLE("  --pipeline-creation-jobs <num_jobs>");
     GFXRECON_WRITE_CONSOLE("          \t\tSpecify the number of asynchronous pipeline-creation jobs as integer.");
     GFXRECON_WRITE_CONSOLE("          \t\tIf <num_jobs> is negative it will be added to the number of cpu-cores");
@@ -366,6 +374,11 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\twhen it encounters a pipeline created without cache. This option can");
     GFXRECON_WRITE_CONSOLE("          \t\tbe used in coordination with `--save-pipeline-cache` and");
     GFXRECON_WRITE_CONSOLE("          \t\t`--load-pipeline-cache`.");
+    GFXRECON_WRITE_CONSOLE("  --screenshot-ignore-FrameBoundaryANDROID");
+    GFXRECON_WRITE_CONSOLE("          \t\tIf set, frames switced with vkFrameBoundANDROID will be ignored from");
+    GFXRECON_WRITE_CONSOLE("          \t\tthe screenshot handler.");
+    GFXRECON_WRITE_CONSOLE("  --deduplicate-device");
+    GFXRECON_WRITE_CONSOLE("          \t\tIf set, at most one VkDevice will be created for each VkPhysicalDevice.");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("D3D12 only:")

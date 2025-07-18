@@ -32,26 +32,23 @@ if (${D3D12_SUPPORT})
        set(GFXR_ARM_WINDOWS_BUILD TRUE)
    endif()
 
-    # GOOGLE: Change paths so that gfxr compiles in dive.
     # Setup src 64-bit binaries
-    set(AGILITY_SDK_CONFIG_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/x64/d3dconfig.exe)
-    set(AGILITY_SDK_LAYERS_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/x64/d3d12SDKLayers.dll)
-    set(AGILITY_SDK_RUNTIME_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/x64/D3D12Core.dll)
+    set(AGILITY_SDK_CONFIG_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/x64/d3dconfig.exe)
+    set(AGILITY_SDK_LAYERS_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/x64/d3d12SDKLayers.dll)
+    set(AGILITY_SDK_RUNTIME_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/x64/D3D12Core.dll)
 
-    # GOOGLE: Change paths so that gfxr compiles in dive.
     # Use 32-bit binaries if needed
     if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-        set(AGILITY_SDK_CONFIG_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/win32/d3dconfig.exe)
-        set(AGILITY_SDK_LAYERS_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/win32/d3d12SDKLayers.dll)
-        set(AGILITY_SDK_RUNTIME_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/win32/D3D12Core.dll)
+        set(AGILITY_SDK_CONFIG_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/win32/d3dconfig.exe)
+        set(AGILITY_SDK_LAYERS_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/win32/d3d12SDKLayers.dll)
+        set(AGILITY_SDK_RUNTIME_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/win32/D3D12Core.dll)
     endif()
 
-    # GOOGLE: Change paths so that gfxr compiles in dive.
     # Use ARM 64-bit binaries if needed
     if(GFXR_ARM_WINDOWS_BUILD)
-        set(AGILITY_SDK_CONFIG_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/arm64/d3dconfig.exe)
-        set(AGILITY_SDK_LAYERS_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/arm64/d3d12SDKLayers.dll)
-        set(AGILITY_SDK_RUNTIME_SRC ${CMAKE_SOURCE_DIR}/third_party/gfxreconstruct/external/AgilitySDK/bin/arm64/D3D12Core.dll)
+        set(AGILITY_SDK_CONFIG_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/arm64/d3dconfig.exe)
+        set(AGILITY_SDK_LAYERS_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/arm64/d3d12SDKLayers.dll)
+        set(AGILITY_SDK_RUNTIME_SRC ${PROJECT_SOURCE_DIR}/external/AgilitySDK/bin/arm64/D3D12Core.dll)
     endif()
 
     # Setup dst folders for each build config

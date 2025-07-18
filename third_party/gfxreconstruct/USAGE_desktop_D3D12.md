@@ -114,6 +114,7 @@ Capture Specific Draw Calls | GFXRECON_CAPTURE_DRAW_CALLS | STRING | Specify one
 Capture File Compression Type | GFXRECON_CAPTURE_COMPRESSION_TYPE | STRING | Compression format to use with the capture file.  Valid values are: `LZ4`, `ZLIB`, `ZSTD`, and `NONE`. Default is: `LZ4`
 Capture File Timestamp | GFXRECON_CAPTURE_FILE_TIMESTAMP | BOOL | Add a timestamp to the capture file as described by [Timestamps](#timestamps).  Default is: `true`
 Capture File Flush After Write | GFXRECON_CAPTURE_FILE_FLUSH | BOOL | Flush output stream after each packet is written to the capture file.  Default is: `false`
+Capture Environment | GFXRECON_CAPTURE_ENVIRONMENT | STRING | Comma delimited list of environment variables to store in the capture file. These can optionally be restored during replay to their capture-time values with the `gfxrecon-replay-renamed.py` utility.
 Log Level | GFXRECON_LOG_LEVEL | STRING | Specify the highest level message to log.  Options are: `debug`, `info`, `warning`, `error`, and `fatal`.  The specified level and all levels listed after it will be enabled for logging.  For example, choosing the `warning` level will also enable the `error` and `fatal` levels. Default is: `info`
 Log Output to Console | GFXRECON_LOG_OUTPUT_TO_CONSOLE | BOOL | Log messages will be written to stdout. Default is: `true`
 Log File | GFXRECON_LOG_FILE | STRING | When set, log messages will be written to a file at the specified path. Default is: Empty string (file logging disabled).
@@ -197,11 +198,12 @@ The `gfxrecon-replay` tool accepts the following command line arguments:
 gfxrecon-replay.exe - A tool to replay GFXReconstruct capture files.
 
 Usage:
-  gfxrecon-replay.exe   [-h | --help] [--version] [--gpu <index>]
+  gfxrecon-replay.exe   [-h | --help] [--version] [--cpu-mask <binary-mask>] [--gpu <index>]
                         [--pause-frame <N>] [--paused] [--sync] [--screenshot-all]
                         [--screenshots <N1(-N2),...>] [--screenshot-format <format>]
                         [--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]
                         [--screenshot-scale SCALE] [--screenshot-size WIDTHxHEIGHT]
+                        [--screenshot-interval <N>]
                         [--sfa | --skip-failed-allocations] [--replace-shaders <dir>]
                         [--opcd | --omit-pipeline-cache-data] [--wsi <platform>]
                         [--use-cached-psos] [--surface-index <N>]
@@ -227,6 +229,7 @@ Optional arguments:
   --version             Print version information and exit.
   --log-level <level>   Specify highest level message to log. Options are:
                         debug, info, warning, error, and fatal. Default is info.
+  --log-timestamps      Output a timestamp in front of each log message.
   --log-file <file>     Write log messages to a file at the specified path.
                         Default is: Empty string (file logging disabled).
   --log-debugview       Log messages with OutputDebugStringA.
@@ -246,6 +249,12 @@ Optional arguments:
                         ascending order and cannot overlap.  Note that frame
                         numbering is 1-based (i.e. the first frame is frame 1).
                         Example: 200,301-305 will generate six screenshots.
+  --screenshot-interval <N>
+                        Specifies the number of frames between two screenshots
+                        within a screenshot range.
+                        Example: If screenshot range is 10-15 and interval is 2,
+                        screenshot will be generated for frames 10, 12 and 14.
+                        Default is 1.
   --screenshot-format <format>
                         Image file format to use for screenshot generation.
                         Available formats are:
@@ -271,6 +280,14 @@ Optional arguments:
   --validate            Enables the Khronos Vulkan validation layer when replaying a
                         Vulkan capture or the Direct3D debug layer when replaying a
                         Direct3D 12 capture.
+  --cpu-mask <binary-mask>
+                        Set of CPU cores used by the replayer.
+                        `binary-mask` is a succession of '0' and '1' read from left
+                        to right that specifies used/unused cores.
+                        For example '10010' activates the first and
+                        fourth cores and deactivate all other cores.
+                        If the option is not set, all cores can be used. If the option
+                        is set only for some cores, the other cores are not used.
   --gpu <index>         Use the specified device for replay, where index
                         is the zero-based index to the array of physical devices
                         returned by vkEnumeratePhysicalDevices or IDXGIFactory1::EnumAdapters1.

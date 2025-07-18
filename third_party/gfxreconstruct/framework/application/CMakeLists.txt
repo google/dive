@@ -28,12 +28,6 @@
 
 add_library(gfxrecon_application STATIC "")
 
-# GOOGLE: Add folder organization for windows build in dive.
-if(MSVC)
-    target_compile_options(gfxrecon_application PRIVATE /wd4244 /wd4018)
-    set_target_properties(gfxrecon_application PROPERTIES FOLDER "gfxreconstruct")
-endif()
-
 target_sources(gfxrecon_application
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/application.h
@@ -72,7 +66,7 @@ target_sources(gfxrecon_application
 
 target_include_directories(gfxrecon_application
                            PUBLIC
-                               $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>)
+                               $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 
 target_link_libraries(gfxrecon_application
                       gfxrecon_decode
@@ -80,6 +74,7 @@ target_link_libraries(gfxrecon_application
                       gfxrecon_format
                       gfxrecon_util
                       vulkan_registry
+                      OpenXR
                       platform_specific
                      )
 

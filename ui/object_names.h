@@ -18,3 +18,6 @@
 
 const QString kCommandBufferSearchBarName = "command_buffer_search_bar";
 const QString kCommandBufferSearchButtonName = "command_buffer_search_button";
+const QString kGfxrVulkanCommandArgumentsSearchBarName = "gfxr_vulkan_command_arguments_search_bar";
+const QString
+kGfxrVulkanCommandArgumentsSearchButtonName = "gfxr_vulkan_command_arguments_search_button";

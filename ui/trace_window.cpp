@@ -915,6 +915,7 @@ void GfxrCaptureWorker::run()
 
     int64_t size = 0;
 
+    std::string gfxr_capture_file;
     // Retrieve each file in the capture directory (capture file and asset file).
     for (std::string file : m_file_list)
     {
@@ -931,6 +932,11 @@ void GfxrCaptureWorker::run()
             return;
         }
 
+        if (target_file.find(".gfxr") != std::string::npos)
+        {
+            gfxr_capture_file = target_file;
+        }
+
         size += static_cast<int64_t>(std::filesystem::file_size(target_file));
         emit DownloadedSize(size);
     }
@@ -941,8 +947,9 @@ void GfxrCaptureWorker::run()
     qDebug() << "Time used to download the gfxr capture directory is "
              << (time_used_to_load_ms / 1000.0) << " seconds.";
 
-    QString capture_saved_path(m_target_capture_path.generic_string().c_str());
-    emit    GfxrCaptureAvailable(capture_saved_path);
+    QString capture_saved_path(gfxr_capture_file.c_str());
+
+    emit GfxrCaptureAvailable(capture_saved_path);
 }
 
 void TraceDialog::OnDevListRefresh()
@@ -1157,6 +1164,5 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
     std::string success_msg = "Capture successfully saved at " + capture_path.toStdString();
     qDebug() << success_msg.c_str();
     ShowErrorMessage(success_msg);
-    // TODO: Load gfxr capture properly
-    // emit TraceAvailable(capture_path);
+    emit TraceAvailable(capture_path);
 }

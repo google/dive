@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -21,12 +21,16 @@
 #include <QSortFilterProxyModel>
 #include <QStyledItemDelegate>
 #include <QTreeView>
+#include <qabstractitemmodel.h>
+#include <qsortfilterproxymodel.h>
 
 // Forward declarations
 class CommandModel;
 class DiveTreeView;
 class HoverHelp;
 class QWidget;
+class GfxrVulkanCommandFilterProxyModel;
+class GfxrVulkanCommandArgumentsFilterProxyModel;
 
 namespace Dive
 {
@@ -131,8 +135,8 @@ private:
     void SetAndScrollToNode(QModelIndex &proxy_model_idx);
     int  GetNearestSearchNode(uint64_t source_node_idx);
 
-    CommandModel *GetCommandModel();
-    QModelIndex   GetNodeSourceModelIndex(const QModelIndex &proxy_model_index) const;
+    QAbstractItemModel *GetCommandModel();
+    QModelIndex         GetNodeSourceModelIndex(const QModelIndex &proxy_model_index) const;
 
     QModelIndex                  m_curr_node_selected;
     QList<QModelIndex>           m_search_indexes;

@@ -22,7 +22,7 @@
 
 namespace Dive
 {
-class GfxrVulkanCommandHierarchyCreator : public IEmulateCallbacks
+class GfxrVulkanCommandHierarchyCreator
 {
 public:
     GfxrVulkanCommandHierarchyCreator(CommandHierarchy &command_hierarchy,
@@ -42,6 +42,10 @@ private:
                       uint64_t                       node_index,
                       uint64_t                       child_node_index);
     void OnCommand(uint32_t submit_index, DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info);
+    bool ExecuteGfxrSubmit(uint32_t submit_index,
+                           const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds);
+    bool ProcessGfxrSubmits(
+    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &submits);
     uint64_t          m_cur_submit_node_index = 0;
     uint64_t          m_cur_command_buffer_node_index = 0;
     CommandHierarchy &m_command_hierarchy;

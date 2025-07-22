@@ -64,7 +64,7 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 
         // Command hierarchy tree creation
         CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                             m_capture_data);
+                                                 m_capture_data);
         if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
         {
             return false;
@@ -80,7 +80,7 @@ bool DataCore::CreateMetaData(bool is_gfxr_capture)
     {
         CaptureMetadataCreator metadata_creator(m_capture_metadata);
         if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
-                                         m_capture_data.GetMemoryManager()))
+                                             m_capture_data.GetMemoryManager()))
         {
             return false;
         }

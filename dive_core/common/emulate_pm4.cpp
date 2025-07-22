@@ -403,21 +403,6 @@ bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase     &callbacks,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::ExecuteGfxrSubmit(
-IEmulateCallbacks                                             &callbacks,
-const IMemoryManager                                          &mem_manager,
-uint32_t                                                       submit_index,
-const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds)
-{
-    for (uint32_t i = 0; i < vkCmds.size(); ++i)
-    {
-        DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info = vkCmds[i];
-        callbacks.OnCommand(submit_index, vk_cmd_info);
-    }
-    return true;
-}
-
-//--------------------------------------------------------------------------------------------------
 bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                            EmulateState         *emu_state_ptr,
                            EmulateCallbacksBase &callbacks,
@@ -931,28 +916,4 @@ bool EmulateCallbacksBase::ProcessSubmits(const DiveVector<SubmitInfo> &submits,
     }
     return true;
 }
-
-//--------------------------------------------------------------------------------------------------
-bool IEmulateCallbacks::ProcessGfxrSubmits(
-const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &submits,
-const IMemoryManager                                                    &mem_manager)
-{
-    for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
-    {
-        const DiveAnnotationProcessor::SubmitInfo &submit_info = *submits[submit_index];
-
-        OnGfxrSubmit(submit_index, submit_info);
-
-        EmulatePM4 emu;
-        if (!emu.ExecuteGfxrSubmit(*this,
-                                   mem_manager,
-                                   submit_index,
-                                   submit_info.GetVulkanCommands()))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 }  // namespace Dive

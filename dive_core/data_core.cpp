@@ -843,6 +843,24 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
             event_state_it->SetBuffersLocation(buffers_location);
         }
     }
+    uint32_t gras_sc_window_scissor_tl_reg_offset = GetRegOffsetByName("GRAS_SC_WINDOW_SCISSOR_TL");
+    if (m_state_tracker.IsRegSet(gras_sc_window_scissor_tl_reg_offset))
+    {
+        GRAS_SC_WINDOW_SCISSOR_TL gras_sc_window_scissor_tl;
+        gras_sc_window_scissor_tl.u32All = m_state_tracker.GetRegValue(
+        gras_sc_window_scissor_tl_reg_offset);
+        event_state_it->SetWindowScissorTLX(gras_sc_window_scissor_tl.bitfields.X);
+        event_state_it->SetWindowScissorTLY(gras_sc_window_scissor_tl.bitfields.Y);
+    }
+    uint32_t gras_sc_window_scissor_br_reg_offset = GetRegOffsetByName("GRAS_SC_WINDOW_SCISSOR_BR");
+    if (m_state_tracker.IsRegSet(gras_sc_window_scissor_br_reg_offset))
+    {
+        GRAS_SC_WINDOW_SCISSOR_BR gras_sc_window_scissor_br;
+        gras_sc_window_scissor_br.u32All = m_state_tracker.GetRegValue(
+        gras_sc_window_scissor_br_reg_offset);
+        event_state_it->SetWindowScissorBRX(gras_sc_window_scissor_br.bitfields.X);
+        event_state_it->SetWindowScissorBRY(gras_sc_window_scissor_br.bitfields.Y);
+    }
 
     // helper lane related
     uint32_t sp_fs_ctrl_reg_offset = GetRegOffsetByName("SP_FS_CTRL_REG0");

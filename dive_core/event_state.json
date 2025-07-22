@@ -311,6 +311,30 @@
                     "desc": "Bin Height"
                 },
                 {
+                    "name": "WindowScissorTLX",
+                    "ty": "uint16_t",
+                    "category": "GPU-specific",
+                    "desc": "Window scissor Top Left X-coordinate"
+                },
+                {
+                    "name": "WindowScissorTLY",
+                    "ty": "uint16_t",
+                    "category": "GPU-specific",
+                    "desc": "Window scissor Top Left Y-coordinate"
+                },
+                {
+                    "name": "WindowScissorBRX",
+                    "ty": "uint16_t",
+                    "category": "GPU-specific",
+                    "desc": "Window scissor Bottom Right X-coordinate"
+                },
+                {
+                    "name": "WindowScissorBRY",
+                    "ty": "uint16_t",
+                    "category": "GPU-specific",
+                    "desc": "Window scissor Bottom Right Y-coordinate"
+                },
+                {
                     "name": "RenderMode",
                     "ty": "a6xx_render_mode",
                     "category": "GPU-specific",

@@ -23,17 +23,19 @@
 #include "dive_core/data_core.h"
 #include "pm4_info.h"
 
-#define CHECK_AND_TRACK_STATE_1(stats_enum, state) \
-    if (event_state_it->Is##state##Set())          \
+#define CHECK_AND_TRACK_STATE_1(stats_enum, state)                   \
+    if (event_state_it->Is##state##Set() && event_state_it->state()) \
         stats_list[stats_enum]++;
 
-#define CHECK_AND_TRACK_STATE_2(stats_enum, state1, state2)                     \
-    if (event_state_it->Is##state1##Set() && event_state_it->Is##state2##Set()) \
+#define CHECK_AND_TRACK_STATE_2(stats_enum, state1, state2)                       \
+    if (event_state_it->Is##state1##Set() && event_state_it->Is##state2##Set() && \
+        event_state_it->state1() && event_state_it->state2())                     \
         stats_list[stats_enum]++;
 
 #define CHECK_AND_TRACK_STATE_3(stats_enum, state1, state2, state3)               \
     if (event_state_it->Is##state1##Set() && event_state_it->Is##state2##Set() && \
-        event_state_it->Is##state3##Set())                                        \
+        event_state_it->Is##state3##Set() && event_state_it->state1() &&          \
+        event_state_it->state2() && event_state_it->state3())                     \
         stats_list[stats_enum]++;
 
 #define CHECK_AND_TRACK_STATE_EQUAL(stats_enum, state, state_value) \
@@ -174,7 +176,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     }
 #endif
 
-    // Wrapper around a VkViewport with an operator< so that it can be stored in a set
+    // Wrappers with an operator< so that they can be stored in an std::set
     struct Viewport
     {
         VkViewport m_vk_viewport;
@@ -193,6 +195,27 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             return m_vk_viewport.maxDepth < other.m_vk_viewport.maxDepth;
         }
     };
+    struct WindowScissor
+    {
+        uint32_t m_tl_x;
+        uint32_t m_tl_y;
+        uint32_t m_br_x;
+        uint32_t m_br_y;
+        bool     operator<(const WindowScissor &other) const
+        {
+            uint32_t area = (m_br_x - m_tl_x) * (m_br_y - m_tl_y);
+            uint32_t other_area = (other.m_br_x - other.m_tl_x) * (other.m_br_y - other.m_tl_y);
+            if (area != other_area)
+                return area < other_area;
+            if (m_tl_y != other.m_tl_y)
+                return m_tl_y < other.m_tl_y;
+            if (m_tl_x != other.m_tl_x)
+                return m_tl_x < other.m_tl_x;
+            if (m_br_y != other.m_br_y)
+                return m_br_y < other.m_br_y;
+            return m_br_x < other.m_br_x;
+        }
+    };
 
     uint64_t stats_list[kNumStats] = {};
 
@@ -201,6 +224,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     std::vector<uint32_t>           event_num_indices;
     std::set<Dive::ShaderReference> shader_ref_set;
     std::set<Viewport>              viewports;
+    std::set<WindowScissor>         window_scissors;
 
     for (size_t i = 0; i < event_count; ++i)
     {
@@ -259,6 +283,17 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
                 viewports.insert(viewport);
             }
         }
+
+        if (event_state_it->IsWindowScissorTLXSet() && event_state_it->IsWindowScissorTLYSet() &&
+            event_state_it->IsWindowScissorBRXSet() && event_state_it->IsWindowScissorBRYSet())
+        {
+            WindowScissor window_scissor;
+            window_scissor.m_tl_x = event_state_it->WindowScissorTLX();
+            window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
+            window_scissor.m_br_x = event_state_it->WindowScissorBRX();
+            window_scissor.m_br_y = event_state_it->WindowScissorBRY();
+            window_scissors.insert(window_scissor);
+        }
     }
 
     GATHER_TOTAL_MIN_MAX_MEDIAN(event_num_indices, Indices);
@@ -304,6 +339,20 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             ostream << "\t" << "height: " << viewport.m_vk_viewport.height << ", ";
             ostream << "\t" << "minDepth: " << viewport.m_vk_viewport.minDepth << ", ";
             ostream << "\t" << "maxDepth: " << viewport.m_vk_viewport.maxDepth << std::endl;
+        }
+    }
+    // Print out all unique window scissors (i.e. tiles)
+    {
+        ostream << "Window scissors:" << std::endl;
+        for (const WindowScissor &window_scissor : window_scissors)
+        {
+            ostream << "\t" << "tl_x: " << window_scissor.m_tl_x << ", ";
+            ostream << "\t" << "br_x: " << window_scissor.m_br_x << ", ";
+            ostream << "\t" << "tl_y: " << window_scissor.m_tl_y << ", ";
+            ostream << "\t" << "br_y: " << window_scissor.m_br_y << ", ";
+            ostream << "\t" << "Width: " << window_scissor.m_br_x - window_scissor.m_tl_x << ", ";
+            ostream << "\t" << "Height: " << window_scissor.m_br_y - window_scissor.m_tl_y;
+            ostream << std::endl;
         }
     }
 }

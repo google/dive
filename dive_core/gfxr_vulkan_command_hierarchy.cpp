@@ -29,6 +29,66 @@ CaptureData      &capture_data) :
 }
 
 //--------------------------------------------------------------------------------------------------
+void GfxrVulkanCommandHierarchyCreator::OnCommand(
+uint32_t                                   parent_index,
+DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
+{
+    std::ostringstream vk_cmd_string_stream;
+    vk_cmd_string_stream << vk_cmd_info.GetVkCmdName();
+    if (vk_cmd_info.GetVkCmdName() == "vkBeginCommandBuffer" ||
+        vk_cmd_info.GetVkCmdName() == "vkEndCommandBuffer")
+    {
+        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
+                                            vk_cmd_string_stream.str());
+        m_cur_command_buffer_node_index = cmd_buffer_index;
+        GetArgs(vk_cmd_info.GetArgs(), m_cur_command_buffer_node_index, "");
+        AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
+                 m_cur_submit_node_index,
+                 cmd_buffer_index);
+    }
+    else
+    {
+        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
+                                        vk_cmd_string_stream.str());
+        GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
+        AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
+                 m_cur_command_buffer_node_index,
+                 vk_cmd_index);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+bool GfxrVulkanCommandHierarchyCreator::ExecuteGfxrSubmit(
+uint32_t                                                       submit_index,
+const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds)
+{
+    for (uint32_t i = 0; i < vkCmds.size(); ++i)
+    {
+        DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info = vkCmds[i];
+        OnCommand(submit_index, vk_cmd_info);
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(
+const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &submits)
+{
+    for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
+    {
+        const DiveAnnotationProcessor::SubmitInfo &submit_info = *submits[submit_index];
+
+        OnGfxrSubmit(submit_index, submit_info);
+
+        if (!ExecuteGfxrSubmit(submit_index, submit_info.GetVulkanCommands()))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
 bool GfxrVulkanCommandHierarchyCreator::CreateTrees()
 {
     // Clear/Reset internal data structures, just in case
@@ -38,7 +98,7 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees()
     uint64_t root_node_index = AddNode(NodeType::kRootNode, "");
     DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
 
-    if (!ProcessGfxrSubmits(m_capture_data.GetGfxrSubmits(), m_capture_data.GetMemoryManager()))
+    if (!ProcessGfxrSubmits(m_capture_data.GetGfxrSubmits()))
     {
         return false;
     }
@@ -173,35 +233,6 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                 AddChild(CommandHierarchy::TopologyType::kSubmitTopology, curr_index, arg_index);
             }
         }
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandHierarchyCreator::OnCommand(
-uint32_t                                   parent_index,
-DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
-{
-    std::ostringstream vk_cmd_string_stream;
-    vk_cmd_string_stream << vk_cmd_info.GetVkCmdName();
-    if (vk_cmd_info.GetVkCmdName() == "vkBeginCommandBuffer" ||
-        vk_cmd_info.GetVkCmdName() == "vkEndCommandBuffer")
-    {
-        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
-                                            vk_cmd_string_stream.str());
-        m_cur_command_buffer_node_index = cmd_buffer_index;
-        GetArgs(vk_cmd_info.GetArgs(), m_cur_command_buffer_node_index, "");
-        AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
-                 m_cur_submit_node_index,
-                 cmd_buffer_index);
-    }
-    else
-    {
-        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
-                                        vk_cmd_string_stream.str());
-        GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-        AddChild(CommandHierarchy::TopologyType::kSubmitTopology,
-                 m_cur_command_buffer_node_index,
-                 vk_cmd_index);
     }
 }
 

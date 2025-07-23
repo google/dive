@@ -2465,10 +2465,17 @@ void FileProcessor::PrintBlockInfo() const
     }
 }
 
-// GOOGLE: [single-frame-looping] Active file tell utility
-int64_t FileProcessor::TellActiveFile()
+// GOOGLE: Retrieve name of current active file
+std::string FileProcessor::GetActiveFilename()
 {
-    auto file_entry = active_files_.find(file_stack_.back().filename);
+    GFXRECON_ASSERT(!file_stack_.empty());
+    return file_stack_.back().filename;
+}
+
+// GOOGLE: [single-frame-looping] Active file tell utility
+int64_t FileProcessor::TellFile(const std::string& filename)
+{
+    auto file_entry = active_files_.find(filename);
     assert(file_entry != active_files_.end());
 
     return util::platform::FileTell(file_entry->second.fd);

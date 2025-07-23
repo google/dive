@@ -100,7 +100,8 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
             GFXRECON_LOG_INFO("Looped %d frames, terminating replay asap", current_frame_number_);
             return success;
         }
-        SeekActiveFile(state_end_marker_file_offset_, util::platform::FileSeekSet);
+        GFXRECON_ASSERT(!gfxr_file_name_.empty());
+        SeekActiveFile(gfxr_file_name_, state_end_marker_file_offset_, util::platform::FileSeekSet);
         should_break = false;
     }
     return success;
@@ -114,7 +115,8 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
     if ((success) && (marker_type == format::kEndMarker))
     {
         // Store state end marker offset
-        state_end_marker_file_offset_ = TellActiveFile();
+        GFXRECON_ASSERT(!gfxr_file_name_.empty());
+        state_end_marker_file_offset_ = TellFile(gfxr_file_name_);
         GFXRECON_LOG_INFO("Stored state end marker offset %d", state_end_marker_file_offset_);
         GFXRECON_LOG_INFO("Single frame number %d", GetFirstFrame());
     }
@@ -129,7 +131,13 @@ void DiveFileProcessor::StoreBlockInfo()
         return;
     }
 
-    int64_t offset = TellActiveFile();
+    if (gfxr_file_name_.empty())
+    {
+        // Assuming that the first time StoreBlockInfo() is called, the active file is .gfxr file
+        gfxr_file_name_ = GetActiveFilename();
+    }
+
+    int64_t offset = TellFile(gfxr_file_name_);
     GFXRECON_ASSERT(offset > 0);
     dive_block_data_->AddOriginalBlock(block_index_, static_cast<uint64_t>(offset));
 }

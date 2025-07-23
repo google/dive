@@ -215,7 +215,7 @@ class FileProcessor
 
     bool OpenFile(const std::string& filename);
 
-    bool SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin);
+    bool SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
 
     bool SetActiveFile(const std::string& filename, bool execute_till_eof);
 
@@ -256,9 +256,9 @@ class FileProcessor
 
     struct ActiveFileContext
     {
-        ActiveFileContext(std::string filename_) : filename(std::move(filename_)){};
+        ActiveFileContext(std::string filename_) : filename(std::move(filename_)) {};
         ActiveFileContext(std::string filename_, bool execute_till_eof_) :
-            filename(std::move(filename_)), execute_till_eof(execute_till_eof_){};
+            filename(std::move(filename_)), execute_till_eof(execute_till_eof_) {};
 
         std::string filename;
         uint32_t    remaining_commands{ 0 };
@@ -278,10 +278,11 @@ class FileProcessor
 
     // GOOGLE: Access modifications for derived FileProcessor classes
   protected:
-    uint64_t GetFirstFrame() const { return first_frame_; }
-    void     SetUsesFrameMarkers(bool uses_frame_markers) { capture_uses_frame_markers_ = uses_frame_markers; }
-    bool     SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
-    int64_t  TellActiveFile();
+    uint64_t    GetFirstFrame() const { return first_frame_; }
+    void        SetUsesFrameMarkers(bool uses_frame_markers) { capture_uses_frame_markers_ = uses_frame_markers; }
+    std::string GetActiveFilename();
+    bool        SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin);
+    int64_t     TellFile(const std::string& filename);
     virtual bool
     ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
     virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);

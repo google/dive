@@ -66,3 +66,27 @@ target_link_libraries(data_core_wrapper_test PRIVATE
   gtest_main
 )
 gtest_discover_tests(data_core_wrapper_test)
+
+# Creates a test with the given NAME that runs host_cli given INPUT_GFXR file and compares the new modified gfxr output to GOLDEN_FILE.
+# This is a wrapper for modify_gfxr_test.cmake that makes tests simpler to define.
+function(add_modify_gfxr_test)
+  set(oneValueArgs NAME INPUT_GFXR GOLDEN_FILE)
+  set(multiValueArgs ADDITIONAL_ARGUMENTS)
+  cmake_parse_arguments(PARSE_ARGV 0 arg
+      "" "${oneValueArgs}" "${multiValueArgs}"
+  )
+  add_test(NAME ${arg_NAME}
+    COMMAND ${CMAKE_COMMAND} 
+    -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli> 
+    -DTEST_NAME=${arg_NAME} 
+    -DINPUT_GFXR=${arg_INPUT_GFXR} 
+    -DGOLDEN_FILE=${arg_GOLDEN_FILE} 
+    -DADDITIONAL_ARGUMENTS=${arg_ADDITIONAL_ARGUMENTS} 
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/modify_gfxr_test.cmake
+  )
+endfunction()
+
+add_modify_gfxr_test(NAME ModifyGfxrSeparateAssetsNoOpTest
+  INPUT_GFXR ${CMAKE_CURRENT_SOURCE_DIR}/../tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+  GOLDEN_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+)

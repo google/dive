@@ -260,6 +260,8 @@ struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
     VkDeviceSize             bind_offset{ 0 };
     uint32_t                 queue_family_index{ 0 };
     std::set<VkSwapchainKHR> parent_swapchains;
+
+    bool is_fdm{ false };
 };
 
 struct SamplerWrapper : public HandleWrapper<VkSampler>

@@ -2094,6 +2094,13 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyImage(
 {
     VulkanCaptureManager* manager = VulkanCaptureManager::Get();
     GFXRECON_ASSERT(manager != nullptr);
+    auto wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageWrapper>(image);
+    if (!wrapper) return;
+    if (wrapper->is_fdm)
+    {
+        GFXRECON_LOG_WARNING("vkDestroyImage: %p - refusing to destroy FDM given known unity bugs", image);
+        return;
+    }
     auto force_command_serialization = manager->GetForceCommandSerialization();
     std::shared_lock<CommonCaptureManager::ApiCallMutexT> shared_api_call_lock;
     std::unique_lock<CommonCaptureManager::ApiCallMutexT> exclusive_api_call_lock;

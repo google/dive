@@ -653,6 +653,11 @@ inline void InitializeState<VkDevice, vulkan_wrappers::ImageWrapper, VkImageCrea
         wrapper->is_sparse_image = true;
     }
 
+    if ((create_info->usage & VK_IMAGE_USAGE_FRAGMENT_DENSITY_MAP_BIT_EXT) != 0)
+    {
+        wrapper->is_fdm = true;
+    }
+
     // TODO: Do we need to track the queue family that the image is actually used with?
     if ((create_info->queueFamilyIndexCount > 0) && (create_info->pQueueFamilyIndices != nullptr))
     {

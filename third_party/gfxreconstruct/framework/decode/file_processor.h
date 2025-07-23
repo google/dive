@@ -256,9 +256,9 @@ class FileProcessor
 
     struct ActiveFileContext
     {
-        ActiveFileContext(std::string filename_) : filename(std::move(filename_)) {};
+        ActiveFileContext(std::string filename_) : filename(std::move(filename_)){};
         ActiveFileContext(std::string filename_, bool execute_till_eof_) :
-            filename(std::move(filename_)), execute_till_eof(execute_till_eof_) {};
+            filename(std::move(filename_)), execute_till_eof(execute_till_eof_){};
 
         std::string filename;
         uint32_t    remaining_commands{ 0 };

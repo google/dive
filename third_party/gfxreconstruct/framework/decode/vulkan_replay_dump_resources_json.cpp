@@ -54,6 +54,7 @@ VulkanReplayDumpResourcesJson::VulkanReplayDumpResourcesJson(const VulkanReplayO
     dr_options["dumpResourcesDumpAllImageSubresources"] = options.dump_resources_dump_all_image_subresources;
     dr_options["dumpResourcesDumpRawImages"]            = options.dump_resources_dump_raw_images;
     dr_options["dumpResourcesDumpSeparateAlpha"]        = options.dump_resources_dump_separate_alpha;
+    dr_options["dumpResourcesDumpUnusedVertexBindings"] = options.dump_resources_dump_unused_vertex_bindings;
 };
 
 bool VulkanReplayDumpResourcesJson::InitializeFile(const std::string& filename)
@@ -161,23 +162,18 @@ nlohmann::ordered_json& VulkanReplayDumpResourcesJson::GetCurrentSubEntry()
     return current_entry != nullptr ? *current_entry : json_data_;
 }
 
-void VulkanReplayDumpResourcesJson::InsertImageInfo(nlohmann::ordered_json& json_entry,
-                                                    VkFormat                image_format,
-                                                    VkImageType             image_type,
-                                                    format::HandleId        image_id,
-                                                    const VkExtent3D&       extent,
-                                                    const std::string&      filename,
-                                                    VkImageAspectFlagBits   aspect,
-                                                    bool                    scale_failed,
-                                                    uint32_t                mip_level,
-                                                    uint32_t                array_layer,
-                                                    bool                    separate_alpha,
-                                                    const std::string*      filename_before)
+void VulkanReplayDumpResourcesJson::InsertImageSubresourceInfo(nlohmann::ordered_json& json_entry,
+                                                               VkFormat                image_format,
+                                                               VkImageType             image_type,
+                                                               format::HandleId        image_id,
+                                                               const VkExtent3D&       extent,
+                                                               const std::string&      filename,
+                                                               VkImageAspectFlagBits   aspect,
+                                                               uint32_t                mip_level,
+                                                               uint32_t                array_layer,
+                                                               bool                    separate_alpha,
+                                                               const std::string*      filename_before)
 {
-    json_entry["imageId"] = image_id;
-    json_entry["format"]  = util::ToString<VkFormat>(image_format);
-    json_entry["type"]    = util::ToString<VkImageType>(image_type);
-
     const std::string aspect_str_whole(util::ToString<VkImageAspectFlagBits>(aspect));
     const std::string aspect_str(aspect_str_whole.begin() + 16, aspect_str_whole.end() - 4);
     json_entry["aspect"] = aspect_str;
@@ -188,11 +184,6 @@ void VulkanReplayDumpResourcesJson::InsertImageInfo(nlohmann::ordered_json& json
 
     json_entry["mipLevel"]   = mip_level;
     json_entry["arrayLayer"] = array_layer;
-
-    if (scale_failed)
-    {
-        json_entry["scaleFailed"] = true;
-    }
 
     const bool raw_image = !util::filepath::GetFilenameExtension(filename).compare(".bin");
 
@@ -224,16 +215,6 @@ void VulkanReplayDumpResourcesJson::InsertImageInfo(nlohmann::ordered_json& json
             json_entry["file"] = filename;
         }
     }
-}
-
-void VulkanReplayDumpResourcesJson::InsertBufferInfo(nlohmann::ordered_json& json_entry,
-                                                     const VulkanBufferInfo* buffer_info,
-                                                     const std::string&      filename)
-{
-    assert(buffer_info != nullptr);
-
-    json_entry["bufferId"] = buffer_info->capture_id;
-    json_entry["file"]     = filename;
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

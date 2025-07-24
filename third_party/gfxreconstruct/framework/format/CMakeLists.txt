@@ -42,11 +42,12 @@ target_sources(gfxrecon_format
                     ${CMAKE_CURRENT_LIST_DIR}/format_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/format_util.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/platform_types.h
+                    ${CMAKE_CURRENT_LIST_DIR}/platform_types_d3d_overrides.h
               )
 
 target_include_directories(gfxrecon_format
                            PUBLIC
-                               ${CMAKE_SOURCE_DIR}/framework
+                               ${PROJECT_SOURCE_DIR}/framework
                                $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 
 target_link_libraries(gfxrecon_format gfxrecon_util vulkan_registry platform_specific)

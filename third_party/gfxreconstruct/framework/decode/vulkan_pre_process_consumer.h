@@ -37,6 +37,7 @@ const std::string DUMP_ARG_END_RENDER_PASS      = "EndRenderPass";
 const std::string DUMP_ARG_DISPATCH             = "Dispatch";
 const std::string DUMP_ARG_TRACE_RAYS           = "TraceRays";
 const std::string DUMP_ARG_QUEUE_SUBMIT         = "QueueSubmit";
+const std::string DUMP_ARG_EXECUTE_COMMANDS     = "ExecuteCommands";
 
 enum class VkDumpDrawCallType
 {
@@ -83,13 +84,6 @@ struct VkTrackDumpCommandBuffer
 // It runs tasks that need to be completed before replay.
 class VulkanPreProcessConsumer : public VulkanConsumer
 {
-
-#define CHECK_VULKAN_CONSUMER_USAGE() \
-    if (!vulkan_consumer_usage_)      \
-    {                                 \
-        return;                       \
-    }
-
   public:
     VulkanPreProcessConsumer() {}
 
@@ -179,7 +173,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                      StructPointerDecoder<Decoded_VkCommandBufferAllocateInfo>* pAllocateInfo,
                                      HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         auto                     cmd_buf_handle_id = pCommandBuffers->GetPointer();
         VkTrackDumpCommandBuffer cmd_buf_info{};
         track_cmd_buf_infos_[*cmd_buf_handle_id] = cmd_buf_info;
@@ -190,7 +183,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                               format::HandleId          commandBuffer,
                                               VkCommandBufferResetFlags flags) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         auto it = track_cmd_buf_infos_.find(commandBuffer);
         if (it != track_cmd_buf_infos_.end())
         {
@@ -204,7 +196,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                  format::HandleId                                        commandBuffer,
                                  StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         auto it = track_cmd_buf_infos_.find(commandBuffer);
         if (it != track_cmd_buf_infos_.end())
         {
@@ -217,7 +208,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                               StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
                                               VkSubpassContents                                    contents) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         BeginRenderPass(commandBuffer, call_info.index);
     }
 
@@ -227,14 +217,11 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                   StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
                                   StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         BeginRenderPass(commandBuffer, call_info.index);
     }
 
     virtual void Process_vkCmdEndRenderPass(const ApiCallInfo& call_info, format::HandleId commandBuffer) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
-
         EndRenderPass(commandBuffer, call_info.index);
     }
 
@@ -242,7 +229,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                              format::HandleId                                commandBuffer,
                                              StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         EndRenderPass(commandBuffer, call_info.index);
     }
 
@@ -250,7 +236,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                           format::HandleId   commandBuffer,
                                           VkSubpassContents  contents) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         NextSubpass(commandBuffer, call_info.index);
     }
 
@@ -259,7 +244,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                            StructPointerDecoder<Decoded_VkSubpassBeginInfo>* pSubpassBeginInfo,
                                            StructPointerDecoder<Decoded_VkSubpassEndInfo>*   pSubpassEndInfo) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         NextSubpass(commandBuffer, call_info.index);
     }
 
@@ -270,7 +254,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                        StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
                                        format::HandleId                            fence) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         std::vector<format::HandleId> cmd_bufs;
         auto                          submit_info_data = pSubmits->GetMetaStructPointer();
         for (auto i = 0; i < submitCount; ++i)
@@ -292,7 +275,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                         StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
                                         format::HandleId                             fence) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         std::vector<format::HandleId> cmd_bufs;
         auto                          submit_info_data = pSubmits->GetMetaStructPointer();
         for (auto i = 0; i < submitCount; ++i)
@@ -314,7 +296,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                            StructPointerDecoder<Decoded_VkSubmitInfo2>* pSubmits,
                                            format::HandleId                             fence) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         std::vector<format::HandleId> cmd_bufs;
         auto                          submit_info_data = pSubmits->GetMetaStructPointer();
         for (auto i = 0; i < submitCount; ++i)
@@ -336,7 +317,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                    uint32_t           firstVertex,
                                    uint32_t           firstInstance) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -348,7 +328,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                           int32_t            vertexOffset,
                                           uint32_t           firstInstance) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -359,7 +338,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                            uint32_t           drawCount,
                                            uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -370,7 +348,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                   uint32_t           drawCount,
                                                   uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -383,7 +360,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                 uint32_t           maxDrawCount,
                                                 uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -396,7 +372,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                    uint32_t           maxDrawCount,
                                                    uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -409,7 +384,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                        uint32_t           maxDrawCount,
                                                        uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -422,7 +396,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                           uint32_t           maxDrawCount,
                                                           uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -435,7 +408,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                        uint32_t           counterOffset,
                                                        uint32_t           vertexStride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -448,7 +420,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                    uint32_t           maxDrawCount,
                                                    uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -461,7 +432,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                           uint32_t           maxDrawCount,
                                                           uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -471,7 +441,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                uint32_t           groupCountY,
                                                uint32_t           groupCountZ) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -480,7 +449,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                               uint32_t           taskCount,
                                               uint32_t           firstTask) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -491,7 +459,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                        uint32_t           drawCount,
                                                        uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -502,7 +469,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                       uint32_t           drawCount,
                                                       uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -515,7 +481,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                             uint32_t           maxDrawCount,
                                                             uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -528,7 +493,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                            uint32_t           maxDrawCount,
                                                            uint32_t           stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -540,7 +504,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                            uint32_t                                          firstInstance,
                                            uint32_t                                          stride) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -553,7 +516,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                   uint32_t                 stride,
                                                   PointerDecoder<int32_t>* pVertexOffset) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -563,7 +525,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                 uint32_t           groupCountY,
                                                 uint32_t           groupCountZ) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -572,7 +533,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                         format::HandleId   buffer,
                                                         VkDeviceSize       offset) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDraw);
     }
 
@@ -582,7 +542,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                        uint32_t           groupCountY,
                                        uint32_t           groupCountZ) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDispatch);
     }
 
@@ -591,7 +550,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                format::HandleId   buffer,
                                                VkDeviceSize       offset) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDispatch);
     }
 
@@ -604,7 +562,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                            uint32_t           groupCountY,
                                            uint32_t           groupCountZ) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDispatch);
     }
 
@@ -617,7 +574,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                               uint32_t           groupCountY,
                                               uint32_t           groupCountZ) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kDispatch);
     }
 
@@ -632,7 +588,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
         uint32_t                                                       height,
         uint32_t                                                       depth) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kTraceRays);
     }
 
@@ -653,7 +608,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                           uint32_t           height,
                                           uint32_t           depth) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kTraceRays);
     }
 
@@ -666,7 +620,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
         StructPointerDecoder<Decoded_VkStridedDeviceAddressRegionKHR>* pCallableShaderBindingTable,
         VkDeviceAddress                                                indirectDeviceAddress) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kTraceRays);
     }
 
@@ -674,7 +627,6 @@ class VulkanPreProcessConsumer : public VulkanConsumer
                                                     format::HandleId   commandBuffer,
                                                     VkDeviceAddress    indirectDeviceAddress) override
     {
-        CHECK_VULKAN_CONSUMER_USAGE();
         DrawCall(commandBuffer, call_info.index, VkDumpDrawCallType::kTraceRays);
     }
 

@@ -31,10 +31,10 @@ target_sources(ags_capture PRIVATE
                 ${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64.def
                 ${CMAKE_CURRENT_LIST_DIR}/hook_ags.h
                 ${CMAKE_CURRENT_LIST_DIR}/hook_ags.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/../..//version.rc)
+                ${PROJECT_SOURCE_DIR}/version.rc)
 target_include_directories(ags_capture PUBLIC 
                            ${CMAKE_BINARY_DIR} 
-                           ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+                           ${PROJECT_SOURCE_DIR})
 target_link_libraries(ags_capture gfxrecon_util ${LINK_AGS_OUTPUT})
 
 # GOOGLE: Add folder organization for windows build in dive.

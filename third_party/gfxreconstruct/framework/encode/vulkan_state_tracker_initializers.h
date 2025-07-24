@@ -608,6 +608,13 @@ inline void InitializeState<VkDevice, vulkan_wrappers::BufferWrapper, VkBufferCr
     wrapper->create_call_id    = create_call_id;
     wrapper->create_parameters = std::move(create_parameters);
 
+    wrapper->created_size = create_info->size;
+
+    if ((create_info->flags & VK_BUFFER_CREATE_SPARSE_BINDING_BIT) != 0)
+    {
+        wrapper->is_sparse_buffer = true;
+    }
+
     // TODO: Do we need to track the queue family that the buffer is actually used with?
     if ((create_info->queueFamilyIndexCount > 0) && (create_info->pQueueFamilyIndices != nullptr))
     {
@@ -641,21 +648,34 @@ inline void InitializeState<VkDevice, vulkan_wrappers::ImageWrapper, VkImageCrea
     wrapper->samples      = create_info->samples;
     wrapper->tiling       = create_info->tiling;
 
+    if ((create_info->flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) != 0)
+    {
+        wrapper->is_sparse_image = true;
+    }
+
     // TODO: Do we need to track the queue family that the image is actually used with?
     if ((create_info->queueFamilyIndexCount > 0) && (create_info->pQueueFamilyIndices != nullptr))
     {
         wrapper->queue_family_index = create_info->pQueueFamilyIndices[0];
     }
 
-    auto* external_format_android = graphics::vulkan_struct_get_pnext<VkExternalFormatANDROID>(create_info);
-    if (external_format_android != nullptr && external_format_android->externalFormat != 0)
+    auto* external_memory = graphics::vulkan_struct_get_pnext<VkExternalMemoryImageCreateInfo>(create_info);
+    wrapper->external_memory_android =
+        (external_memory != nullptr) &&
+        ((external_memory->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID) ==
+         VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID);
+
+    auto* external_format    = graphics::vulkan_struct_get_pnext<VkExternalFormatANDROID>(create_info);
+    wrapper->external_format = (external_format != nullptr) && (external_format->externalFormat != 0);
+
+    if (wrapper->external_memory_android || wrapper->external_format)
     {
-        wrapper->external_format = true;
-        wrapper->size            = 0;
+        // Can not get image memory requirements before binding memory
+        wrapper->size = 0;
     }
     else
     {
-        const VulkanDeviceTable* device_table = vulkan_wrappers::GetDeviceTable(parent_handle);
+        const graphics::VulkanDeviceTable* device_table = vulkan_wrappers::GetDeviceTable(parent_handle);
         VkMemoryRequirements     image_mem_reqs;
         assert(wrapper->handle != VK_NULL_HANDLE);
         device_table->GetImageMemoryRequirements(parent_handle, wrapper->handle, &image_mem_reqs);
@@ -829,7 +849,7 @@ inline void InitializePoolObjectState(VkDevice                               par
     wrapper->create_call_id    = create_call_id;
     wrapper->create_parameters = std::move(create_parameters);
 
-    wrapper->level = alloc_info->level;
+    // Some CommandBufferWrapper's info is initialized in OverrideAllocateCommandBuffers.
 }
 
 inline void InitializePoolObjectState(VkDevice                               parent_handle,

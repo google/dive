@@ -26,33 +26,15 @@
 #include "util/buffer_writer.h"
 #include "generated/generated_vulkan_enum_to_string.h"
 #include "graphics/vulkan_resources_util.h"
+#include "util/to_string.h"
 #include "vulkan/vulkan_core.h"
 #include "Vulkan-Utility-Libraries/vk_format_utils.h"
 
 #include <algorithm>
+#include <sstream>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
-PipelineBindPoints VkPipelineBindPointToPipelineBindPoint(VkPipelineBindPoint bind_point)
-{
-    switch (bind_point)
-    {
-        case VK_PIPELINE_BIND_POINT_GRAPHICS:
-            return kBindPoint_graphics;
-
-        case VK_PIPELINE_BIND_POINT_COMPUTE:
-            return kBindPoint_compute;
-
-        case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:
-            return kBindPoint_ray_tracing;
-
-        default:
-            GFXRECON_LOG_ERROR("Unrecognized pipeline bind point (%d)", bind_point);
-            assert(0);
-            return kBindPoint_count;
-    }
-}
 
 static util::imagewriter::DataFormats VkFormatToImageWriterDataFormat(VkFormat format)
 {
@@ -150,7 +132,7 @@ uint32_t GetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memory_prope
 }
 
 VkResult CloneImage(CommonObjectInfoTable&                  object_info_table,
-                    const encode::VulkanDeviceTable*        device_table,
+                    const graphics::VulkanDeviceTable*      device_table,
                     const VkPhysicalDeviceMemoryProperties* replay_device_phys_mem_props,
                     const VulkanImageInfo*                  image_info,
                     VkImage*                                new_image,
@@ -221,7 +203,7 @@ VkResult CloneImage(CommonObjectInfoTable&                  object_info_table,
 }
 
 VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
-                     const encode::VulkanDeviceTable*        device_table,
+                     const graphics::VulkanDeviceTable*      device_table,
                      const VkPhysicalDeviceMemoryProperties* replay_device_phys_mem_props,
                      const VulkanBufferInfo*                 buffer_info,
                      VkBuffer*                               new_buffer,
@@ -270,8 +252,17 @@ VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
 
     mem_alloc_info.memoryTypeIndex = index;
 
+    VkMemoryAllocateFlagsInfo mem_alloc_flags_info = {};
+    mem_alloc_flags_info.sType                     = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    if (ci.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+    {
+        mem_alloc_flags_info.flags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    }
+    mem_alloc_info.pNext = &mem_alloc_flags_info;
+
     assert(new_buffer_memory);
     res = device_table->AllocateMemory(device, &mem_alloc_info, nullptr, new_buffer_memory);
+
     if (res != VK_SUCCESS)
     {
         GFXRECON_LOG_ERROR("AllocateMemory failed with %s", util::ToString<VkResult>(res).c_str());
@@ -284,7 +275,6 @@ VkResult CloneBuffer(CommonObjectInfoTable&                  object_info_table,
         GFXRECON_LOG_ERROR("BindBufferMemory failed with %s", util::ToString<VkResult>(res).c_str());
         return res;
     }
-
     return VK_SUCCESS;
 }
 
@@ -309,19 +299,19 @@ uint32_t VkIndexTypeToBytes(VkIndexType type)
     }
 }
 
-std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data,
-                                                      uint32_t                    index_count,
-                                                      uint32_t                    first_index,
-                                                      int32_t                     vertex_offset,
-                                                      VkIndexType                 type)
+MinMaxVertexIndex FindMinMaxVertexIndices(const std::vector<uint8_t>& index_data,
+                                          uint32_t                    index_count,
+                                          uint32_t                    first_index,
+                                          int32_t                     vertex_offset,
+                                          VkIndexType                 type)
 {
     switch (type)
     {
         case VK_INDEX_TYPE_UINT8_EXT:
         {
-            const uint8_t  restart_index = 0xff;
-            const uint8_t* indices       = static_cast<const uint8_t*>(index_data.data());
-            uint32_t       i             = 0;
+            const uint8_t restart_index = 0xff;
+            const auto*   indices       = static_cast<const uint8_t*>(index_data.data());
+            uint32_t      i             = 0;
             while (indices[first_index + i] == restart_index && i < index_count)
             {
                 ++i;
@@ -329,7 +319,7 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
 
             if (i == index_count)
             {
-                return std::make_pair(0, 0);
+                return MinMaxVertexIndex({ 0, 0 });
             }
 
             uint8_t min = indices[first_index + i];
@@ -341,28 +331,20 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
                 {
                     continue;
                 }
-
-                if (indices[first_index + i] > max)
-                {
-                    max = indices[first_index + i];
-                }
-
-                if (indices[first_index + i] < min)
-                {
-                    min = indices[first_index + i];
-                }
+                min = std::min(min, indices[first_index + i]);
+                max = std::max(max, indices[first_index + i]);
             }
 
-            return std::make_pair(static_cast<uint32_t>(min) + vertex_offset,
-                                  static_cast<uint32_t>(max) + vertex_offset);
+            return MinMaxVertexIndex{ static_cast<uint32_t>(min) + vertex_offset,
+                                      static_cast<uint32_t>(max) + vertex_offset };
         }
         break;
 
         case VK_INDEX_TYPE_UINT16:
         {
-            const uint16_t  restart_index = 0xffff;
-            const uint16_t* indices       = reinterpret_cast<const uint16_t*>(index_data.data());
-            uint32_t        i             = 0;
+            const uint16_t restart_index = 0xffff;
+            const auto*    indices       = reinterpret_cast<const uint16_t*>(index_data.data());
+            uint32_t       i             = 0;
             while (indices[first_index + i] == restart_index && i < index_count)
             {
                 ++i;
@@ -370,7 +352,7 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
 
             if (i == index_count)
             {
-                return std::make_pair(0, 0);
+                return MinMaxVertexIndex{ 0, 0 };
             }
 
             uint16_t min = indices[first_index + i];
@@ -382,28 +364,20 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
                 {
                     continue;
                 }
-
-                if (indices[first_index + i] > max)
-                {
-                    max = indices[first_index + i];
-                }
-
-                if (indices[first_index + i] < min)
-                {
-                    min = indices[first_index + i];
-                }
+                min = std::min(min, indices[first_index + i]);
+                max = std::max(max, indices[first_index + i]);
             }
 
-            return std::make_pair(static_cast<uint32_t>(min) + vertex_offset,
-                                  static_cast<uint32_t>(max) + vertex_offset);
+            return MinMaxVertexIndex{ static_cast<uint32_t>(min) + vertex_offset,
+                                      static_cast<uint32_t>(max) + vertex_offset };
         }
         break;
 
         case VK_INDEX_TYPE_UINT32:
         {
-            const uint32_t  restart_index = 0xffffffff;
-            const uint32_t* indices       = reinterpret_cast<const uint32_t*>(index_data.data());
-            uint32_t        i             = 0;
+            const uint32_t restart_index = 0xffffffff;
+            const auto*    indices       = reinterpret_cast<const uint32_t*>(index_data.data());
+            uint32_t       i             = 0;
             while (indices[first_index + i] == restart_index && i < index_count)
             {
                 ++i;
@@ -411,7 +385,7 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
 
             if (i == index_count)
             {
-                return std::make_pair(0, 0);
+                return MinMaxVertexIndex{ 0, 0 };
             }
 
             uint32_t min = indices[first_index + i];
@@ -423,19 +397,10 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
                 {
                     continue;
                 }
-
-                if (indices[first_index + i] > max)
-                {
-                    max = indices[first_index + i];
-                }
-
-                if (indices[first_index + i] < min)
-                {
-                    min = indices[first_index + i];
-                }
+                min = std::min(min, indices[first_index + i]);
+                max = std::max(max, indices[first_index + i]);
             }
-
-            return std::make_pair(min + vertex_offset, max + vertex_offset);
+            return MinMaxVertexIndex{ min + vertex_offset, max + vertex_offset };
         }
         break;
 
@@ -444,24 +409,24 @@ std::pair<uint32_t, uint32_t> FindMinMaxVertexIndices(const std::vector<uint8_t>
             GFXRECON_LOG_ERROR("%s() Unrecognized/unhandled index type (%u)", __func__, static_cast<uint32_t>(type));
             assert(0);
 
-            return std::make_pair(0, 0);
+            return MinMaxVertexIndex{ 0, 0 };
             break;
     }
 }
 
-VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
-                         const VulkanDeviceInfo*            device_info,
-                         const encode::VulkanDeviceTable*   device_table,
-                         const encode::VulkanInstanceTable* instance_table,
-                         CommonObjectInfoTable&             object_info_table,
-                         const std::vector<std::string>&    filenames,
-                         float                              scale,
-                         std::vector<bool>&                 scaling_supported,
-                         util::ScreenshotFormat             image_file_format,
-                         bool                               dump_all_subresources,
-                         bool                               dump_image_raw,
-                         bool                               dump_separate_alpha,
-                         VkImageLayout                      layout)
+VkResult DumpImageToFile(const VulkanImageInfo*               image_info,
+                         const VulkanDeviceInfo*              device_info,
+                         const graphics::VulkanDeviceTable*   device_table,
+                         const graphics::VulkanInstanceTable* instance_table,
+                         CommonObjectInfoTable&               object_info_table,
+                         const std::vector<std::string>&      filenames,
+                         float                                scale,
+                         bool&                                scaling_supported,
+                         util::ScreenshotFormat               image_file_format,
+                         bool                                 dump_all_subresources,
+                         bool                                 dump_image_raw,
+                         bool                                 dump_separate_alpha,
+                         VkImageLayout                        layout)
 {
     assert(image_info != nullptr);
     assert(device_info != nullptr);
@@ -474,7 +439,6 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
     const uint32_t total_files =
         dump_all_subresources ? (aspects.size() * image_info->layer_count * image_info->level_count) : aspects.size();
     assert(total_files == filenames.size());
-    assert(scaling_supported.size() == total_files);
 
     const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
@@ -495,41 +459,76 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
         std::vector<uint8_t>  data;
         std::vector<uint64_t> subresource_offsets;
         std::vector<uint64_t> subresource_sizes;
-        bool                  scaled;
 
-        VkResult res = resource_util.ReadFromImageResourceStaging(
-            image_info->handle,
-            image_info->format,
-            image_info->type,
-            image_info->extent,
-            image_info->level_count,
-            image_info->layer_count,
-            image_info->tiling,
-            image_info->sample_count,
-            (layout == VK_IMAGE_LAYOUT_MAX_ENUM) ? image_info->intermediate_layout : layout,
-            image_info->queue_family_index,
-            image_info->external_format,
-            image_info->size,
-            aspect,
-            data,
-            subresource_offsets,
-            subresource_sizes,
-            scaled,
-            false,
-            scale,
-            dst_format);
+        graphics::VulkanResourcesUtil::ImageResource image_resource = {};
+        image_resource.image                                        = image_info->handle;
+        image_resource.format                                       = image_info->format;
+        image_resource.type                                         = image_info->type;
+        image_resource.extent                                       = image_info->extent;
+        image_resource.level_count                                  = image_info->level_count;
+        image_resource.layer_count                                  = image_info->layer_count;
+        image_resource.tiling                                       = image_info->tiling;
+        image_resource.sample_count                                 = image_info->sample_count;
+        image_resource.layout = (layout == VK_IMAGE_LAYOUT_MAX_ENUM) ? image_info->intermediate_layout : layout;
+        image_resource.queue_family_index   = image_info->queue_family_index;
+        image_resource.external_format      = image_info->external_format;
+        image_resource.size                 = image_info->size;
+        image_resource.level_sizes          = &subresource_sizes;
+        image_resource.aspect               = aspect;
+        image_resource.scale                = scale;
+        image_resource.dst_format           = dst_format;
+        image_resource.all_layers_per_level = false;
 
-        assert(!subresource_offsets.empty());
-        assert(!subresource_sizes.empty());
+        scaling_supported = resource_util.IsScalingSupported(image_resource.format,
+                                                             image_resource.tiling,
+                                                             dst_format,
+                                                             image_resource.type,
+                                                             image_resource.extent,
+                                                             scale);
+        const bool blit_supported =
+            resource_util.IsBlitSupported(image_resource.format, image_resource.tiling, dst_format);
+        const bool use_blit = (image_resource.format != dst_format && blit_supported) ||
+                              (image_resource.scale != 1.0f && scaling_supported);
 
-        scaling_supported[i] = scaled;
+        VkExtent3D scaled_extent = {
+            static_cast<uint32_t>(std::max(static_cast<float>(image_resource.extent.width) * scale, 1.0f)),
+            static_cast<uint32_t>(std::max(static_cast<float>(image_resource.extent.height) * scale, 1.0f)),
+            static_cast<uint32_t>(std::max(static_cast<float>(image_resource.extent.depth) * scale, 1.0f))
+        };
 
-        if (res != VK_SUCCESS)
+        image_resource.resource_size =
+            resource_util.GetImageResourceSizesOptimal(image_resource.image,
+                                                       use_blit ? dst_format : image_resource.format,
+                                                       image_resource.type,
+                                                       use_blit ? scaled_extent : image_resource.extent,
+                                                       image_resource.level_count,
+                                                       image_resource.layer_count,
+                                                       image_resource.tiling,
+                                                       aspect,
+                                                       &subresource_offsets,
+                                                       &subresource_sizes,
+                                                       image_resource.all_layers_per_level);
+
+        if (!image_resource.resource_size)
+        {
+            GFXRECON_LOG_ERROR("Unsupported format. Image cannot be dumped");
+            // This should not prohibit us from dumping other images though. Treat it as a no error
+            return VK_SUCCESS;
+        }
+
+        if (subresource_offsets.empty() || subresource_sizes.empty())
+        {
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        VkResult result = resource_util.ReadImageResource(image_resource, data);
+
+        if (result != VK_SUCCESS)
         {
             GFXRECON_LOG_ERROR("Reading from image resource %" PRIu64 " failed (%s)",
                                image_info->capture_id,
-                               util::ToString<VkResult>(res).c_str())
-            return res;
+                               util::ToString<VkResult>(result).c_str())
+            return result;
         }
 
         const DumpedImageFormat output_image_format = GetDumpedImageFormat(device_info,
@@ -546,7 +545,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
         {
             for (uint32_t layer = 0; layer < image_info->layer_count; ++layer)
             {
-                std::string filename = filenames[f++];
+                const std::string& filename = filenames[f++];
 
                 // We don't support stencil output yet
                 if (aspects[i] == VK_IMAGE_ASPECT_STENCIL_BIT)
@@ -562,8 +561,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
                         VkFormatToImageWriterDataFormat(dst_format);
                     assert(image_writer_format != util::imagewriter::DataFormats::kFormat_UNSPECIFIED);
 
-                    VkExtent3D scaled_extent;
-                    if (scale != 1.0f && scaled)
+                    if (scale != 1.0f && scaling_supported)
                     {
                         scaled_extent.width  = std::max(image_info->extent.width * scale, 1.0f);
                         scaled_extent.height = std::max(image_info->extent.height * scale, 1.0f);
@@ -652,44 +650,7 @@ VkResult DumpImageToFile(const VulkanImageInfo*             image_info,
     }
 
     assert(f == total_files);
-
     return VK_SUCCESS;
-}
-
-bool CheckDescriptorCompatibility(VkDescriptorType desc_type_a, VkDescriptorType desc_type_b)
-{
-    switch (desc_type_a)
-    {
-        case VK_DESCRIPTOR_TYPE_SAMPLER:
-        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
-        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-        case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
-        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
-        case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
-        case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
-        case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
-        case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
-        case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-            return desc_type_a == desc_type_b;
-
-        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-            return desc_type_b == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
-                   desc_type_b == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-                   desc_type_b == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER ||
-                   desc_type_b == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
-
-        default:
-            assert(0);
-            GFXRECON_LOG_ERROR(
-                "%s() Unrecognized/unhandled index type (%u)", __func__, static_cast<uint32_t>(desc_type_a));
-            return false;
-    }
 }
 
 std::string ShaderStageToStr(VkShaderStageFlagBits shader_stage)
@@ -747,7 +708,7 @@ std::string IndexTypeToStr(VkIndexType type)
 }
 
 VkResult CreateVkBuffer(VkDeviceSize                            size,
-                        const encode::VulkanDeviceTable*        device_table,
+                        const graphics::VulkanDeviceTable*      device_table,
                         VkDevice                                parent_device,
                         VkBaseInStructure*                      pNext,
                         const VkPhysicalDeviceMemoryProperties* replay_device_phys_mem_props,
@@ -829,15 +790,15 @@ void GetFormatAspects(VkFormat format, std::vector<VkImageAspectFlagBits>& aspec
     }
 }
 
-DumpedImageFormat GetDumpedImageFormat(const VulkanDeviceInfo*            device_info,
-                                       const encode::VulkanDeviceTable*   device_table,
-                                       const encode::VulkanInstanceTable* instance_table,
-                                       VulkanObjectInfoTable&             object_info_table,
-                                       VkFormat                           src_format,
-                                       VkImageTiling                      src_image_tiling,
-                                       VkImageType                        type,
-                                       util::ScreenshotFormat             image_file_format,
-                                       bool                               dump_raw)
+DumpedImageFormat GetDumpedImageFormat(const VulkanDeviceInfo*              device_info,
+                                       const graphics::VulkanDeviceTable*   device_table,
+                                       const graphics::VulkanInstanceTable* instance_table,
+                                       VulkanObjectInfoTable&               object_info_table,
+                                       VkFormat                             src_format,
+                                       VkImageTiling                        src_image_tiling,
+                                       VkImageType                          type,
+                                       util::ScreenshotFormat               image_file_format,
+                                       bool                                 dump_raw)
 {
     const VulkanPhysicalDeviceInfo* phys_dev_info = object_info_table.GetVkPhysicalDeviceInfo(device_info->parent_id);
     assert(phys_dev_info);
@@ -877,6 +838,303 @@ DumpedImageFormat GetDumpedImageFormat(const VulkanDeviceInfo*            device
     }
 
     return KFormatRaw;
+}
+
+std::string ShaderStageFlagsToString(VkShaderStageFlags flags)
+{
+    if (flags == static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_ALL))
+    {
+        return util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_ALL);
+    }
+
+    if (flags == static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_ALL_GRAPHICS))
+    {
+        return util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_ALL_GRAPHICS);
+    }
+
+    std::stringstream flags_string_stream;
+    bool              first_stage = true;
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_VERTEX_BIT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_VERTEX_BIT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_VERTEX_BIT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_GEOMETRY_BIT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_GEOMETRY_BIT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_GEOMETRY_BIT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_FRAGMENT_BIT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_FRAGMENT_BIT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_FRAGMENT_BIT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_COMPUTE_BIT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_COMPUTE_BIT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_COMPUTE_BIT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_RAYGEN_BIT_KHR)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_RAYGEN_BIT_KHR))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_RAYGEN_BIT_KHR);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_ANY_HIT_BIT_KHR)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_ANY_HIT_BIT_KHR))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_ANY_HIT_BIT_KHR);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_MISS_BIT_KHR)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_MISS_BIT_KHR))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_MISS_BIT_KHR);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_INTERSECTION_BIT_KHR)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_INTERSECTION_BIT_KHR))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_INTERSECTION_BIT_KHR);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_CALLABLE_BIT_KHR)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_CALLABLE_BIT_KHR))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_CALLABLE_BIT_KHR);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_TASK_BIT_EXT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_TASK_BIT_EXT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_TASK_BIT_EXT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_MESH_BIT_EXT)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_MESH_BIT_EXT))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_MESH_BIT_EXT);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_CLUSTER_CULLING_BIT_HUAWEI)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_CLUSTER_CULLING_BIT_HUAWEI))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_CLUSTER_CULLING_BIT_HUAWEI);
+        first_stage = false;
+    }
+
+    if ((flags & static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_RAYGEN_BIT_NV)) ==
+        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_RAYGEN_BIT_NV))
+    {
+        if (!first_stage)
+        {
+            flags_string_stream << " | ";
+        }
+
+        flags_string_stream << util::ToString<VkShaderStageFlagBits>(VK_SHADER_STAGE_RAYGEN_BIT_NV);
+        first_stage = false;
+    }
+
+    return flags_string_stream.str();
+}
+
+void ShaderStageFlagsToStageNames(VkShaderStageFlags flags, std::vector<std::string>& stage_names)
+{
+    stage_names.clear();
+
+    if ((flags & VK_SHADER_STAGE_VERTEX_BIT) == VK_SHADER_STAGE_VERTEX_BIT)
+    {
+        stage_names.push_back("vertex");
+    }
+
+    if ((flags & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT)
+    {
+        stage_names.push_back("tessellation_control");
+    }
+
+    if ((flags & VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)
+    {
+        stage_names.push_back("tessellation_evaluation");
+    }
+
+    if ((flags & VK_SHADER_STAGE_GEOMETRY_BIT) == VK_SHADER_STAGE_GEOMETRY_BIT)
+    {
+        stage_names.push_back("geometry");
+    }
+
+    if ((flags & VK_SHADER_STAGE_FRAGMENT_BIT) == VK_SHADER_STAGE_FRAGMENT_BIT)
+    {
+        stage_names.push_back("fragment");
+    }
+
+    if ((flags & VK_SHADER_STAGE_COMPUTE_BIT) == VK_SHADER_STAGE_COMPUTE_BIT)
+    {
+        stage_names.push_back("compute");
+    }
+
+    if ((flags & VK_SHADER_STAGE_RAYGEN_BIT_KHR) == VK_SHADER_STAGE_RAYGEN_BIT_KHR)
+    {
+        stage_names.push_back("raygen");
+    }
+
+    if ((flags & VK_SHADER_STAGE_ANY_HIT_BIT_KHR) == VK_SHADER_STAGE_ANY_HIT_BIT_KHR)
+    {
+        stage_names.push_back("any_hit");
+    }
+
+    if ((flags & VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR) == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+    {
+        stage_names.push_back("closest_hit");
+    }
+
+    if ((flags & VK_SHADER_STAGE_MISS_BIT_KHR) == VK_SHADER_STAGE_MISS_BIT_KHR)
+    {
+        stage_names.push_back("miss");
+    }
+
+    if ((flags & VK_SHADER_STAGE_INTERSECTION_BIT_KHR) == VK_SHADER_STAGE_INTERSECTION_BIT_KHR)
+    {
+        stage_names.push_back("intersection");
+    }
+
+    if ((flags & VK_SHADER_STAGE_CALLABLE_BIT_KHR) == VK_SHADER_STAGE_CALLABLE_BIT_KHR)
+    {
+        stage_names.push_back("callable");
+    }
+
+    if ((flags & VK_SHADER_STAGE_TASK_BIT_EXT) == VK_SHADER_STAGE_TASK_BIT_EXT)
+    {
+        stage_names.push_back("task");
+    }
+
+    if ((flags & VK_SHADER_STAGE_MESH_BIT_EXT) == VK_SHADER_STAGE_MESH_BIT_EXT)
+    {
+        stage_names.push_back("mesh");
+    }
 }
 
 GFXRECON_END_NAMESPACE(gfxrecon)

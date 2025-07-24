@@ -242,13 +242,14 @@ For Ubuntu, the required packages can be installed with the following command:
 
 ```bash
 sudo apt-get install git cmake build-essential libx11-xcb-dev libxcb-keysyms1-dev \
-        libwayland-dev libxrandr-dev zlib1g-dev liblz4-dev libzstd-dev
+        libwayland-dev libxrandr-dev zlib1g-dev liblz4-dev libzstd-dev libxcb-glx0-dev
 ```
 
 For 32-bit builds (DXVK might require 32-bit):
 ```bash
 sudo apt-get install g++-multilib libx11-xcb-dev:i386 libxcb-keysyms1-dev:i386 \
-        libwayland-dev:i386 libxrandr-dev:i386 zlib1g-dev:i386 liblz4-dev:i386 libzstd-dev:i386
+        libwayland-dev:i386 libxrandr-dev:i386 zlib1g-dev:i386 liblz4-dev:i386 \
+        libzstd-dev:i386 libxcb-glx0-dev:i386
 ```
 
 For arm64 builds (cross compilation):
@@ -392,6 +393,18 @@ codesign -dvvv libVkLayer_gfxreconstruct.dylib`
 Apple's developer information about code-signing can be found here:
 https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Introduction/Introduction.html
 
+### Disabling OpenXR Inclusion For Desktop Builds
+
+If there are any concerns about using the OpenXR content in the resulting components of GFXReconstruct,
+it may be disabled during CMake build target generation by setting the following CMake option:
+
+```bash
+-DGFXRECON_ENABLE_OPENXR=OFF
+```
+
+This causes the code generation to skip over any OpenXR specific files, and not define the
+environment variables used to enable OpenXR code in files that are included.
+
 ## Building for Android
 
 ### Android Development Requirements
@@ -441,6 +454,16 @@ On Linux:
 ```
 
 To perform a release build, replace the `assembleDebug` task name with `assembleRelease`.
+
+##### Disabling OpenXR support in Gradle
+
+It is also possible to disable OpenXR support in the GFXReconstruct layer when
+building Gradle.
+This can be done by defining the Gradle property `DisableOpenXR` to `true`.
+The Gradle property can be provided either in the command line of the
+build, or defined in the gradle.properties file.
+The later is most useful if the layer is included in a separate external application
+build.
 
 #### Building with Android Studio
 

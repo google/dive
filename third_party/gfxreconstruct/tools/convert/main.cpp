@@ -31,6 +31,10 @@
 #include "util/file_path.h"
 #include "util/platform.h"
 
+#if ENABLE_OPENXR_SUPPORT
+#include "generated/generated_openxr_json_consumer.h"
+#endif
+
 #include "generated/generated_vulkan_json_consumer.h"
 #include "decode/marker_json_consumer.h"
 #include "decode/metadata_json_consumer.h"
@@ -39,15 +43,23 @@
 #endif
 
 using gfxrecon::util::JsonFormat;
+
+#if ENABLE_OPENXR_SUPPORT
+using OpenXrJsonConsumer = gfxrecon::decode::MetadataJsonConsumer<
+    gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::OpenXrExportJsonConsumer>>;
+#endif
+
 using VulkanJsonConsumer = gfxrecon::decode::MetadataJsonConsumer<
     gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::VulkanExportJsonConsumer>>;
+
 #if defined(D3D12_SUPPORT)
 using Dx12JsonConsumer =
     gfxrecon::decode::MetadataJsonConsumer<gfxrecon::decode::MarkerJsonConsumer<gfxrecon::decode::Dx12JsonConsumer>>;
 #endif
+
 const char kOptions[] = "-h|--help,--version,--no-debug-popup,--file-per-frame,--include-binaries,--expand-flags";
 
-const char kArguments[] = "--output,--format,--log-level";
+const char kArguments[] = "--output,--format,--log-level,--frame-range";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -82,6 +94,14 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE(
         "  --file-per-frame\tCreates a new file for every frame processed. Frame number is added as a suffix");
     GFXRECON_WRITE_CONSOLE("                  \tto the output file name.");
+    GFXRECON_WRITE_CONSOLE("  --frame-range <N1[-N2][,...]>");
+    GFXRECON_WRITE_CONSOLE("                  \tFrame ranges to be converted. In order to retrieve trim trace state,"
+                           " frame 0 has to be in frame range.");
+    GFXRECON_WRITE_CONSOLE("                  \tFrame ranges should be specified in ascending order and cannot "
+                           "overlap. Frame numbering is zero-indexed and inclusive.");
+    GFXRECON_WRITE_CONSOLE("                  \tExample: 0-2,5,8-10 will generate data for 7 frames.");
+    GFXRECON_WRITE_CONSOLE("  --log-level <level>\tSpecify highest level message to log. Options are:");
+    GFXRECON_WRITE_CONSOLE("                  \t\tdebug, info, warning, error, and fatal. Default is info.");
 
 #if defined(WIN32) && defined(_DEBUG)
     GFXRECON_WRITE_CONSOLE("  --no-debug-popup\tDisable the 'Abort, Retry, Ignore' message box");
@@ -121,6 +141,36 @@ static gfxrecon::util::JsonFormat GetOutputFormat(const gfxrecon::util::Argument
         return gfxrecon::util::get_json_format(output_format);
     }
     return JsonFormat::JSON;
+}
+
+static bool GetFrameIndices(const gfxrecon::util::ArgumentParser& arg_parser, std::vector<uint32_t>& indices)
+{
+    bool               indices_present = false;
+    const std::string& input_ranges    = arg_parser.GetArgumentValue(kFrameRange);
+    if (!input_ranges.empty())
+    {
+        std::vector<gfxrecon::util::UintRange> frame_ranges =
+            gfxrecon::util::GetUintRanges(input_ranges.c_str(), "frames to be converted", true);
+
+        for (uint32_t i = 0; i < frame_ranges.size(); ++i)
+        {
+            gfxrecon::util::UintRange& range = frame_ranges[i];
+
+            uint32_t diff = range.last - range.first + 1;
+
+            for (uint32_t j = 0; j < diff; ++j)
+            {
+                uint32_t frame_index = range.first + j;
+
+                indices.push_back(frame_index);
+            }
+        }
+
+        std::sort(indices.begin(), indices.end());
+        std::reverse(indices.begin(), indices.end());
+        indices_present = true;
+    }
+    return indices_present;
 }
 
 std::string FormatFrameNumber(uint32_t frame_number)
@@ -180,6 +230,9 @@ int main(int argc, const char** argv)
     bool        file_per_frame       = arg_parser.IsOptionSet(kFilePerFrameOption);
     bool        output_to_stdout     = output_filename == "stdout";
 
+    std::vector<uint32_t> frame_indices;
+    bool                  frame_range_option = GetFrameIndices(arg_parser, frame_indices);
+
     bool   is_asset_file = false;
     size_t last_dot_pos  = input_filename.find_last_of(".");
     if (last_dot_pos != std::string::npos)
@@ -195,7 +248,8 @@ int main(int argc, const char** argv)
 #ifndef D3D12_SUPPORT
     bool detected_d3d12  = false;
     bool detected_vulkan = false;
-    gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan);
+    bool detected_openxr = false;
+    gfxrecon::decode::DetectAPIs(input_filename, detected_d3d12, detected_vulkan, detected_openxr);
 
     if (!detected_vulkan && !is_asset_file)
     {
@@ -219,16 +273,23 @@ int main(int argc, const char** argv)
     {
         std::string json_filename;
         FILE*       out_file_handle = nullptr;
+        FILE*       tmp_file_handle = nullptr;
 
         if (file_per_frame)
         {
-            json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
-                output_filename, +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
+            uint32_t cur_frame_number = static_cast<uint32_t>(file_processor.GetCurrentFrameNumber());
+            if (frame_range_option)
+            {
+                cur_frame_number = frame_indices.back();
+            }
+            json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(output_filename,
+                                                                            +"_" + FormatFrameNumber(cur_frame_number));
         }
         else
         {
             json_filename = output_filename;
         }
+
         if (output_to_stdout)
         {
             out_file_handle = stdout;
@@ -246,12 +307,20 @@ int main(int argc, const char** argv)
         else
         {
             gfxrecon::util::FileNoLockOutputStream out_stream{ out_file_handle, false };
-            VulkanJsonConsumer                     json_consumer;
-            gfxrecon::util::JsonOptions            json_options;
-            gfxrecon::decode::VulkanDecoder        decoder;
-            decoder.AddConsumer(&json_consumer);
-            file_processor.AddDecoder(&decoder);
 
+            VulkanJsonConsumer              vulkan_json_consumer;
+            gfxrecon::decode::VulkanDecoder vulkan_decoder;
+            vulkan_decoder.AddConsumer(&vulkan_json_consumer);
+            file_processor.AddDecoder(&vulkan_decoder);
+
+#if ENABLE_OPENXR_SUPPORT
+            OpenXrJsonConsumer              openxr_json_consumer;
+            gfxrecon::decode::OpenXrDecoder openxr_decoder;
+            openxr_decoder.AddConsumer(&openxr_json_consumer);
+            file_processor.AddDecoder(&openxr_decoder);
+#endif
+
+            gfxrecon::util::JsonOptions json_options;
             json_options.root_dir      = output_dir;
             json_options.data_sub_dir  = filename_stem;
             json_options.format        = output_format;
@@ -265,11 +334,42 @@ int main(int argc, const char** argv)
             const std::string vulkan_version{ std::to_string(VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE)) + "." +
                                               std::to_string(VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE)) + "." +
                                               std::to_string(VK_VERSION_PATCH(VK_HEADER_VERSION_COMPLETE)) };
-            json_consumer.Initialize(&json_writer, vulkan_version);
+            vulkan_json_consumer.Initialize(&json_writer, vulkan_version);
+
+#if ENABLE_OPENXR_SUPPORT
+            const std::string openxr_version{ std::to_string(XR_VERSION_MAJOR(XR_CURRENT_API_VERSION)) + "." +
+                                              std::to_string(XR_VERSION_MINOR(XR_CURRENT_API_VERSION)) + "." +
+                                              std::to_string(XR_VERSION_PATCH(XR_CURRENT_API_VERSION)) };
+            openxr_json_consumer.Initialize(&json_writer, openxr_version);
+#endif
+
             json_writer.StartStream(&out_stream);
 
-            // If CONVERT_EXPERIMENTAL_D3D12 was set, then add DX12 consumer/decoder
+            if (frame_range_option)
+            {
+                tmp_file_handle = tmpfile();
+                if (tmp_file_handle == nullptr)
+                {
+                    ret_code = 1;
+                    success  = false;
+                    GFXRECON_LOG_ERROR("Failed to create temp file for storing non-dumped frame range info.");
+                }
+
+                // If we are supposed to start converting immediately, then direct the outputto the actual
+                // output file.  Otherwise, point it at a temporary file whose contents will be ignored.
+                if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
+                {
+                    out_stream.Reset(out_file_handle);
+                    frame_indices.pop_back();
+                }
+                else
+                {
+                    out_stream.Reset(tmp_file_handle);
+                }
+            }
+
 #ifdef D3D12_SUPPORT
+            // If D3D12_SUPPORT was set, then add DX12 consumer/decoder
             Dx12JsonConsumer              dx12_json_consumer;
             gfxrecon::decode::Dx12Decoder dx12_decoder;
 
@@ -283,35 +383,80 @@ int main(int argc, const char** argv)
             while (success)
             {
                 success = file_processor.ProcessNextFrame();
-                if (success && file_per_frame)
+
+                if (success)
                 {
-                    json_writer.EndStream();
-                    gfxrecon::util::platform::FileClose(out_file_handle);
-                    json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
-                        output_filename, +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
-                    gfxrecon::util::platform::FileOpen(&out_file_handle, json_filename.c_str(), "w");
-                    success = out_file_handle != nullptr;
-                    if (success)
+                    if (frame_range_option)
                     {
-                        out_stream.Reset(out_file_handle);
-                        json_writer.StartStream(&out_stream);
+                        if (frame_indices.empty())
+                        {
+                            break;
+                        }
+
+                        // If we are supposed to start converting, then direct the output to the actual
+                        // output file.  Otherwise, point it at a temporary file whose contents will be ignored.
+                        if (frame_indices.back() == file_processor.GetCurrentFrameNumber())
+                        {
+                            out_stream.Reset(out_file_handle);
+                            json_filename = gfxrecon::util::filepath::InsertFilenamePostfix(
+                                output_filename, +"_" + FormatFrameNumber(frame_indices.back()));
+                            frame_indices.pop_back();
+                        }
+                        else
+                        {
+                            out_stream.Reset(tmp_file_handle);
+                            continue;
+                        }
                     }
-                    else
+
+                    if (file_per_frame)
                     {
-                        GFXRECON_LOG_ERROR("Failed to create file: '%s'.", json_filename.c_str());
-                        ret_code = 1;
+                        json_writer.EndStream();
+                        gfxrecon::util::platform::FileClose(out_file_handle);
+
+                        json_filename = (frame_range_option)
+                                            ? json_filename
+                                            : gfxrecon::util::filepath::InsertFilenamePostfix(
+                                                  output_filename,
+                                                  +"_" + FormatFrameNumber(file_processor.GetCurrentFrameNumber()));
+
+                        gfxrecon::util::platform::FileOpen(&out_file_handle, json_filename.c_str(), "w");
+                        success = out_file_handle != nullptr;
+                        if (success)
+                        {
+                            out_stream.Reset(out_file_handle);
+                            json_writer.StartStream(&out_stream);
+                        }
+                        else
+                        {
+                            GFXRECON_LOG_ERROR("Failed to create file: '%s'.", json_filename.c_str());
+                            ret_code = 1;
+                        }
                     }
                 }
             }
-            json_consumer.Destroy();
+
+            vulkan_json_consumer.Destroy();
+
+#if ENABLE_OPENXR_SUPPORT
+            openxr_json_consumer.Destroy();
+#endif
+
             // If CONVERT_EXPERIMENTAL_D3D12 was set, then cleanup DX12 consumer
 #ifdef D3D12_SUPPORT
             dx12_json_consumer.Destroy();
 #endif
+
+            if (tmp_file_handle != nullptr)
+            {
+                gfxrecon::util::platform::FileClose(tmp_file_handle);
+            }
+
             if (!output_to_stdout)
             {
                 gfxrecon::util::platform::FileClose(out_file_handle);
             }
+
             if (file_processor.GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
             {
                 GFXRECON_LOG_ERROR("Failed to process trace.");

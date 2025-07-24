@@ -15,7 +15,10 @@
     "vkCmdPushDescriptorSetWithTemplate2KHR",
     "vkBuildAccelerationStructuresKHR",
     "vkCopyAccelerationStructureKHR",
-    "vkCreateRayTracingPipelinesKHR"
+    "vkCreateRayTracingPipelinesKHR",
+    "vkCreateExternalComputeQueueNV",
+    "vkDestroyExternalComputeQueueNV",
+    "vkGetExternalComputeQueueDataNV"
   ],
   "functions-encoder": [
     "vkCreateComputePipelines",
@@ -38,6 +41,10 @@
     "VkIndirectExecutionSetInfoEXT",
     "VkIndirectExecutionSetCreateInfoEXT",
     "VkIndirectCommandsTokenDataEXT",
-    "VkIndirectCommandsLayoutTokenEXT"
+    "VkIndirectCommandsLayoutTokenEXT",
+    "VkCopyMemoryToImageInfo",
+    "VkMemoryToImageCopy",
+    "VkCopyImageToMemoryInfo",
+    "VkImageToMemoryCopy"
   ]
 }

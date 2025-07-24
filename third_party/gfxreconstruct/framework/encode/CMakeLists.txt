@@ -44,6 +44,13 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/capture_settings.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/command_writer.h
                     ${CMAKE_CURRENT_LIST_DIR}/command_writer.cpp
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_encoder_commands.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_api_call_encoders.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_api_call_encoders.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_struct_encoders.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_struct_encoders.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_struct_handle_wrappers.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/custom_openxr_struct_handle_wrappers.cpp>
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_encoder_commands.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_api_call_encoders.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_api_call_encoders.cpp
@@ -61,6 +68,18 @@ target_sources(gfxrecon_encode
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/custom_dx12_struct_unwrappers.cpp>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/custom_dx12_command_list_util.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/custom_dx12_command_list_util.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_capture_manager.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_capture_manager.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_handle_wrappers.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_handle_wrapper_util.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_handle_wrapper_util.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_info.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_table_base.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_tracker.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_tracker_initializers.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_tracker.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_writer.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_state_writer.cpp>
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_struct_handle_wrappers.h
                     ${CMAKE_CURRENT_LIST_DIR}/custom_vulkan_struct_handle_wrappers.cpp
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/d3d12_capture_manager.h>
@@ -105,6 +124,8 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_capture_common.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_device_address_tracker.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_entry_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_entry_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrappers.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrapper_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_wrapper_util.cpp
@@ -116,31 +137,39 @@ target_sources(gfxrecon_encode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_writer.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_state_writer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_track_struct.h
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_api_call_encoders.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_api_call_encoders.cpp>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_struct_unwrappers.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_struct_wrappers.cpp>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_struct_wrappers.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_struct_unwrappers.cpp>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_wrappers.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_wrappers.cpp>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_wrapper_creators.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_wrapper_creators.cpp>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_add_entries.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_state_table.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_command_list_util.h>
-                    $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_dx12_command_list_util.cpp>
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_api_call_encoders.h
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_api_call_encoders.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_command_buffer_util.h
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_command_buffer_util.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_dispatch_table.h
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_pnext_struct_encoder.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_encoders.h
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_encoders.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_handle_wrappers.h
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_struct_handle_wrappers.cpp
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../generated/generated_vulkan_state_table.h
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_api_call_encoders.cpp>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_struct_unwrappers.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_struct_wrappers.cpp>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_struct_wrappers.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_struct_unwrappers.cpp>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_wrappers.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_wrappers.cpp>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_wrapper_creators.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_wrapper_creators.cpp>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_add_entries.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_state_table.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_command_list_util.h>
+                    $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_command_list_util.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_api_call_encoders.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_api_call_encoders.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_struct_encoders.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_struct_encoders.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_struct_handle_wrappers.h>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_struct_handle_wrappers.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_struct_next_encoder.cpp>
+                    $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_openxr_state_table.h>
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_api_call_encoders.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_api_call_encoders.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_command_buffer_util.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_command_buffer_util.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_dispatch_table.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_encoder.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_encoders.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_encoders.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_handle_wrappers.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_struct_handle_wrappers.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_state_table.h
 
 )
 
@@ -149,14 +178,26 @@ if (MSVC)
     target_compile_options(gfxrecon_encode PRIVATE /bigobj)
 endif()
 
-# GOOGLE: Change CMAKE_SOURCE_DIR to CMAKE_CURRENT_SOURCE_DIR so that gfxr compiles in dive.
 target_include_directories(gfxrecon_encode
                            PUBLIC
                                ${CMAKE_BINARY_DIR}
-                               ${CMAKE_CURRENT_SOURCE_DIR}/..
+                               ${PROJECT_SOURCE_DIR}/framework
                                $<$<BOOL:${D3D12_SUPPORT}>:${D3D12_INCLUDE_DIRECTORIES}>)
 
-target_link_libraries(gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific)
+target_link_libraries(gfxrecon_encode
+                      gfxrecon_graphics
+                      gfxrecon_format
+                      gfxrecon_util
+                      vulkan_registry
+                      OpenXR
+                      platform_specific)
+
+if (BSD)
+
+find_library(LIBBSD_LIBRARY NAMES bsd PATHS /usr/lib/x86_64-linux-gnu)
+target_link_libraries(gfxrecon_encode ${LIBBSD_LIBRARY})
+
+endif()
 
 common_build_directives(gfxrecon_encode)
 

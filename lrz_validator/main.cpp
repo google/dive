@@ -170,7 +170,7 @@ int main(int argc, char **argv)
     std::cout << "Capture file \"" << input_file_name << "\" is loaded!\n";
 
     // Create meta data
-    if (!data_core->CreateMetaData())
+    if (!data_core->CreateMetaData(false))
     {
         std::cout << "Failed to create meta data!";
         return 0;

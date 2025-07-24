@@ -995,9 +995,8 @@ void MainWindow::CreateToolBars()
     m_file_tool_bar->addSeparator();
 
     QToolButton *m_capture_button = new QToolButton();
-    m_capture_button->setPopupMode(QToolButton::MenuButtonPopup);
+    m_capture_button->setPopupMode(QToolButton::InstantPopup);
     m_capture_button->setMenu(m_capture_menu);
-    m_capture_button->setDefaultAction(m_pm4_capture_action);
     m_capture_button->setIcon(QIcon(":/images/capture.png"));
 
     m_file_tool_bar->addWidget(m_capture_button);

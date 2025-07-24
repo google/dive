@@ -400,6 +400,9 @@ uint64_t CommandHierarchy::Nodes::AddGfxrNode(NodeType type, std::string &&desc)
 
     m_node_type.push_back(type);
     m_description.push_back(std::move(desc));
+    // Adds a dummy AuxInfo object to ensure the m_node_type, m_description, and m_aux_info sizes
+    // stay the same.
+    m_aux_info.push_back(AuxInfo(0));
     return m_node_type.size() - 1;
 }
 

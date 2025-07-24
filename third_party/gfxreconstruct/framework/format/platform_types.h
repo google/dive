@@ -140,7 +140,7 @@ struct GUID
     UINT8  Data4[8];
 };
 
-static bool operator==(GUID guid1, GUID guid2)
+[[maybe_unused]] static bool operator==(GUID guid1, GUID guid2)
 {
     return !memcmp(&guid1, &guid2, sizeof(GUID));
 }

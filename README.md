@@ -197,20 +197,14 @@ This will remove all the libraries installed and the settings that had been setu
 ### Updating Dive's gfxreconstruct subtree
 
 1. Create a branch to contain the merge
-2. Add the remote: 
+2. Run the pull command: 
 ```
-git remote add -f gfxreconstruct-remote https://github.com/LunarG/gfxreconstruct.git
+git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
 ```
-3. Run the pull command: 
+3. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
 ```
-git subtree pull --prefix=third_party/gfxreconstruct gfxreconstruct-remote dev --squash
+git add third_party/gfxreconstruct
+git commit -m "Merge third_party/gfxreconstruct updates"
 ```
-4. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE.
-
-5. Stage the files.
-6. Create the commit: 
-```
-git add third_party/gfxreconstruct, git commit -m "Import gfxreconstruct updates"
-```
-7. Create a pull request for the updates.
-8. Ensure the commit is not squash merged so that git can find the subtree updates.
+4. Create a pull request for the updates.
+5. Ensure the commit is not squash merged so that git can find the subtree updates.

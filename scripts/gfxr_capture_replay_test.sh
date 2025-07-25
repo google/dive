@@ -73,9 +73,7 @@ BUILD_DIR=./build
 GFXR_DUMP_RESOURCES="${BUILD_DIR}/gfxr_dump_resources/gfxr_dump_resources"
 JSON_BASENAME=dump.json
 DUMP_DIR="${REMOTE_TEMP_DIR}/dump"
-# Needs to be high enough to skip over loading screens but not too high to trip the wait_for_logcat_line timeout.
-CAPTURE_FRAME=720
-GFXR_BASENAME="${PACKAGE}_frame_${CAPTURE_FRAME}.gfxr"
+GFXR_BASENAME="${PACKAGE}_trim_trigger.gfxr"
 GFXA_BASENAME="${PACKAGE}_asset_file.gfxa"
 GFXR_REPLAY_APK=./install/gfxr-replay.apk
 RESULTS_DIR="${PACKAGE}-$(date +%Y%m%d_%H%M%S)"
@@ -88,7 +86,10 @@ VALIDATION_LAYER_LIB=libVkLayer_khronos_validation.so
 REMOTE_TEMP_FILEPATH="/data/local/tmp/${VALIDATION_LAYER_LIB}"
 ARCH=$(adb shell getprop ro.product.cpu.abi)
 LOCAL_VALIDATION_LAYER_FILEPATH="${VALIDATION_LAYER_DIR}/${ARCH}/${VALIDATION_LAYER_LIB}"
-FRAME_DELIMITER_PROP=openxr.enable_frame_delimiter
+# The old prop requires root access
+OLD_FRAME_DELIMITER_PROP=openxr.enable_frame_delimiter
+# The new prop works with shell user (does not require root access)
+NEW_FRAME_DELIMITER_PROP=debug.openxr.enable_frame_delimiter
 
 #
 # Clear anything previously set (in case the script exited prematurely)
@@ -101,12 +102,15 @@ unset_vulkan_debug_settings
 # Ask OpenXR runtime to emit frame debug marker
 #
 
-# Only try if it's not set (to avoid having to root all the time)
-ENABLE_FRAME_DELIMITER="$(adb shell getprop ${FRAME_DELIMITER_PROP})"
+adb shell setprop "${NEW_FRAME_DELIMITER_PROP}" true
+
+# Since root/unroot disconnects the device and disrupts any host monitoring scripts (logcat, scrcpy), minimize the number of times it's called.
+# It's only required to set the old prop. We can check if it's already set to avoid root/unroot.
+ENABLE_FRAME_DELIMITER="$(adb shell getprop ${OLD_FRAME_DELIMITER_PROP})"
 if [ -z "${ENABLE_FRAME_DELIMITER}" ]
 then
     adb root
-    adb shell setprop ${FRAME_DELIMITER_PROP} true
+    adb shell setprop ${OLD_FRAME_DELIMITER_PROP} true
     adb unroot
 fi
 
@@ -202,17 +206,14 @@ adb shell settings put global gpu_debug_layer_app "${CAPTURE_DEBUG_LAYER_APPS}"
 # See //third_party/gfxreconstruct/USAGE_android.md for more options.
 adb shell mkdir -p "${REMOTE_TEMP_DIR}"
 adb shell setprop debug.gfxrecon.capture_file "${REMOTE_TEMP_DIR}/${PACKAGE}.gfxr"
-# NOTE: quit_after_capture_frames doesn't work with capture_android_trigger or capture_frames :(
-# Prefer capture_frames over trigger since it's more friendly to scripting. It knows better when the app is ready and producing frames compared to trigger capture (where we have to guess).
-# adb shell setprop debug.gfxrecon.capture_trigger_frames 1
-# adb shell setprop debug.gfxrecon.capture_android_trigger false
-adb shell setprop debug.gfxrecon.capture_frames "${CAPTURE_FRAME}"
-adb shell setprop debug.gfxrecon.capture_use_asset_file false # XXX asset file is known to have problems
-# Remove timestamp from capture filename so it's more predictable
+# Use trigger trim with asset file since it's what Dive prefers
+adb shell setprop debug.gfxrecon.capture_trigger_frames 1
+adb shell setprop debug.gfxrecon.capture_android_trigger false
+adb shell setprop debug.gfxrecon.capture_use_asset_file true
+# Remove timestamp from capture filename so it's more predictable.
+# Since we copy into a timestamped results folder, we don't end up overwriting pulled results.
 adb shell setprop debug.gfxrecon.capture_file_timestamp false
-# Try to write all packets, even when we crash
-adb shell setprop debug.gfxrecon.capture_file_flush true
-# More logging
+# Since we focused on "does this work?" the extra logging helps
 adb shell setprop debug.gfxrecon.log_level debug
 # Capture layer in PACKAGE needs permissions to read capture/asset file from storage.
 adb shell appops set "${PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
@@ -221,7 +222,7 @@ adb shell appops set "${PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
 # 4. Capture
 #
 
-# Clear logcat so that we can use it to determine when capture is done
+# Clear logcat so that we can use it to determine when capture is done based on logging.
 adb logcat -c
 
 if [ ${CAPTURE_DEBUG} -eq 1 ]
@@ -229,6 +230,7 @@ then
     adb shell am set-debug-app -w "${PACKAGE}"
 fi
 
+# Start app, wait for it to start
 adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}"
 
 # Given how long it takes to attach the debugger, etc, it is unlikely that you'll want the script to proceed.
@@ -237,8 +239,22 @@ then
     exit 0
 fi
 
+# Likely redundant, but wait for the capture layer to log that it's been loaded
+if ! wait_for_logcat_line gfxrecon "Initializing GFXReconstruct capture layer"
+then
+    adb bugreport
+fi
+
+# Trigger a capture after the app has enough time to load.
+# Use this over the capture_frame setting since Dive doesn't use capture_frame.
+# Unfortunately "the app is loaded" is not something we can determine so we need to sleep... This is where capture_frame could really help.
+# 20s is too short for some large Unity apps.
+sleep 30
+adb shell setprop debug.gfxrecon.capture_android_trigger true
+
 # Wait for capture to finish. Luckily, the app logs when it's done so use that as the signal to proceed.
 # This only works since we clear the logcat at the start of the test.
+# We prefer this over quit_after_capture_frames since that setting seems broken.
 if ! wait_for_logcat_line gfxrecon "Finished recording graphics API capture"
 then
     adb bugreport
@@ -247,8 +263,7 @@ adb shell am force-stop "${PACKAGE}"
 
 # Pull the GFXR/GFXA for gfxr_dump_resources
 adb pull "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}" "${RESULTS_DIR}"
-# TODO asset file was disabled for testing; re-enable
-# adb pull "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}" "${RESULTS_DIR}"
+adb pull "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}" "${RESULTS_DIR}"
 
 #
 # 5. Post-capture clean-up
@@ -256,7 +271,7 @@ adb pull "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}" "${RESULTS_DIR}"
 
 # NOTE: Don't clean up GFXA/GFXR since we can use it for replay. Saves having to push again.
 
-# Next launch should not use GFXR
+# Next launch of PACKAGE/ACTIVITY should not use GFXR
 unset_gfxr_props
 unset_vulkan_debug_settings
 
@@ -264,6 +279,7 @@ unset_vulkan_debug_settings
 # 6. Replay with dump-resources
 #
 
+# --last-draw-only saves time by only dumping the final draw call. This should represent what the user sees.
 "${GFXR_DUMP_RESOURCES}" --last_draw_only "${RESULTS_DIR}/${GFXR_BASENAME}" "${JSON}"
 adb shell mkdir -p "${DUMP_DIR}"
 adb push "${JSON}" "${REMOTE_TEMP_DIR}"
@@ -290,7 +306,7 @@ python "${GFXRECON}" replay \
 
 # `gfxrecon.py replay` does not wait for the app to start so. However, if it starts logging then we can assume that it has started.
 # This only works since we clear the logcat at the start of the test.
-if ! wait_for_logcat_line gfxrecon "Initializing GFXReconstruct capture layer"
+if ! wait_for_logcat_line gfxrecon "Loading state for captured frame"
 then
     adb bugreport
 fi
@@ -316,18 +332,23 @@ adb shell rm -rf "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}"
 adb shell rm -rf "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}"
 adb shell rm -rf "${REMOTE_TEMP_DIR}/${JSON_BASENAME}"
 
-# Next launch should not use GFXR
-
+# Next launch should not use GFXR. Likely redudant but doesn't hurt.
+unset_gfxr_props
+unset_vulkan_debug_settings
 
 #
 # 8. Collect results
 #
 
-# Show logcat for diagnostic purposes. Include DEBUG in case there was a crash.
+# Show logcat to the user for diagnostic purposes. Include DEBUG in case there was a crash.
 adb logcat -d -s gfxrecon,DEBUG
 
 # Convert BMP captures into JPG for convenience.
 find "${RESULTS_DIR}" -name "*.bmp" | xargs -P0 -I {} convert {} {}.jpg
 
+# Compress files to make them easier to share.
 tar czf "${RESULTS_DIR}.tgz" "${RESULTS_DIR}"
-echo "Results written to: ${RESULTS_DIR}"
+
+set +x
+echo "------------------------------------------"
+echo "Results written to: ${RESULTS_DIR}.tgz"

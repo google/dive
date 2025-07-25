@@ -238,22 +238,34 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         }
     }
 
-    if (IsDrawDispatchResolveSyncEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
+    if (Util::IsEvent(mem_manager, submit_index, va_addr, type7_header->opcode, m_state_tracker))
     {
         // Add a new event to the EventInfo metadata array
         EventInfo event_info;
         event_info.m_submit_index = submit_index;
         if (IsDrawEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDraw;
-        else if (IsResolveEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
-            event_info.m_type = EventInfo::EventType::kResolve;
         else if (IsDispatchEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDispatch;
+        else if (type7_header->opcode == CP_BLIT)
+            event_info.m_type = EventInfo::EventType::kBlit;
         else
         {
-            DIVE_ASSERT(GetSyncType(mem_manager, submit_index, va_addr, type7_header->opcode) !=
-                        SyncType::kNone);  // Sanity check
-            event_info.m_type = EventInfo::EventType::kSync;
+            SyncType sync_type = Util::GetSyncType(mem_manager,
+                                                   submit_index,
+                                                   va_addr,
+                                                   type7_header->opcode,
+                                                   m_state_tracker);
+
+            DIVE_ASSERT(sync_type != SyncType::kNone);  // Sanity check
+            if (sync_type == SyncType::kSysMemToGmemResolve)
+                event_info.m_type = EventInfo::EventType::kSysmemToGmemResolve;
+            else if (sync_type == SyncType::kGmemToSysMemResolve)
+                event_info.m_type = EventInfo::EventType::kGmemToSysmemResolve;
+            else if (sync_type == SyncType::kClearGmem)
+                event_info.m_type = EventInfo::EventType::kClearGmem;
+            else
+                event_info.m_type = EventInfo::EventType::kSync;
         }
 
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();
@@ -263,7 +275,8 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                                 submit_index,
                                                 va_addr,
                                                 type7_header->opcode,
-                                                type7_header->count);
+                                                type7_header->count,
+                                                m_state_tracker);
 
         m_capture_metadata.m_event_info.push_back(event_info);
 

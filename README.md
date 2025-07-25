@@ -206,14 +206,21 @@ git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/g
 git add third_party/gfxreconstruct
 git commit -m "Merge third_party/gfxreconstruct updates"
 ```
-5. Try to build. It's likely that you'll need to update your submodules. Common problems:
-    a. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+4. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+5. Update submodules:
 ```
 git submodule update --init --recursive
+```
+6. Regenerate GFXR Vulkan code:
+```
+cd third_party/gfxreconstruct/generated
+python generate_vulkan.py
+```
+7. Try to build. Fix any errors and commit.
+```
 cmake --build build
 ./scripts/build_android.sh Debug
 ```
-6. Fix any build errors
-7. Create a pull request for the updates.
-8. Monitor PR builds; you might need to fix the GitHub workflows.
-9. Ensure the commit is not squash merged so that git can find the subtree updates.
+8. Create a pull request for the updates.
+9. Monitor PR builds; you might need to fix the GitHub workflows.
+10. Ensure the commit is not squash merged so that git can find the subtree updates.

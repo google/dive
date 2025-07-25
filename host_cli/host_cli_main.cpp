@@ -123,7 +123,7 @@ int main(int argc, char **argv)
         }
 
         std::string output_gfxr_path = absl::GetFlag(FLAGS_output_gfxr_path);
-        if (!output_gfxr_path.empty())
+        if (output_gfxr_path.empty())
         {
             // Nothing further to do with the loaded .gfxr file
             return 0;

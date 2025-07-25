@@ -213,7 +213,7 @@ git submodule update --init --recursive
 ```
 6. Regenerate GFXR Vulkan code:
 ```
-cd third_party/gfxreconstruct/generated
+cd third_party/gfxreconstruct/framework/generated
 python generate_vulkan.py
 ```
 7. Try to build. Fix any errors and commit.

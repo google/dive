@@ -206,5 +206,14 @@ git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/g
 git add third_party/gfxreconstruct
 git commit -m "Merge third_party/gfxreconstruct updates"
 ```
-4. Create a pull request for the updates.
-5. Ensure the commit is not squash merged so that git can find the subtree updates.
+5. Try to build. It's likely that you'll need to update your submodules. Common problems:
+    a. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+```
+git submodule update --init --recursive
+cmake --build build
+./scripts/build_android.sh Debug
+```
+6. Fix any build errors
+7. Create a pull request for the updates.
+8. Monitor PR builds; you might need to fix the GitHub workflows.
+9. Ensure the commit is not squash merged so that git can find the subtree updates.

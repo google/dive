@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import sys
-from base_generator import BaseGenerator
 from vulkan_base_generator import VulkanBaseGenerator, VulkanBaseGeneratorOptions, write
 from khronos_dive_consumer_body_generator import KhronosExportDiveConsumerBodyGenerator
 from reformat_code import format_cpp_code, indent_cpp_code, remove_trailing_newlines
@@ -52,7 +51,7 @@ class VulkanExportDiveConsumerBodyGeneratorOptions(VulkanBaseGeneratorOptions, K
         self.begin_end_file_data.namespaces.extend(('gfxrecon', 'decode'))
 
 
-class VulkanExportDiveConsumerBodyGenerator(VulkanBaseGenerator, KhronosExportDiveConsumerBodyGenerator, BaseGenerator):
+class VulkanExportDiveConsumerBodyGenerator(VulkanBaseGenerator, KhronosExportDiveConsumerBodyGenerator):
     """VulkanExportDiveConsumerBodyGenerator - subclass of VulkanBaseGenerator.
     Generates C++ member definitions for the VulkanExportDiveConsumer class responsible for
     generating a textfile containing decoded Vulkan API call parameter data.

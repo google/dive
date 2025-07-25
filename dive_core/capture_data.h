@@ -366,9 +366,6 @@ public:
 
     LoadResult LoadCaptureFile(std::istream &capture_file);
     LoadResult LoadAdrenoRdFile(FileReader &capture_file);
-#if defined(DIVE_ENABLE_PERFETTO)
-    LoadResult LoadPerfettoFile(const char *file_name);
-#endif
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
     LoadResult LoadGfxrFile(const char *file_name);
 

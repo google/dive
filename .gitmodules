@@ -14,9 +14,6 @@
 [submodule "third_party/libarchive"]
 	path = third_party/libarchive
 	url = https://github.com/libarchive/libarchive.git
-[submodule "third_party/perfetto"]
-	path = third_party/perfetto
-	url = https://android.googlesource.com/platform/external/perfetto
 [submodule "third_party/gfxreconstruct/external/SPIRV-Headers"]
 	path = third_party/gfxreconstruct/external/SPIRV-Headers
 	url = https://github.com/KhronosGroup/SPIRV-Headers.git

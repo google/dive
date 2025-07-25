@@ -689,24 +689,6 @@ void TraceWorker::run()
         ShowErrorMessage(err_msg);
         return;
     }
-#if defined(DIVE_ENABLE_PERFETTO)
-    // Download perfetto trace file
-    std::string on_device_path = *capture_file_path;
-    on_device_path += ".perfetto";
-    std::string download_path = target_download_path.generic_string() + ".perfetto";
-    r = device->RetrieveTrace(on_device_path, download_path, false);
-    if (r.ok())
-    {
-        qDebug() << "Capture saved at " << download_path.c_str();
-    }
-    else
-    {
-        std::string err_msg = absl::StrCat("Failed to retrieve trace file, error: ", r.message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        return;
-    }
-#endif
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - begin)
                                    .count();

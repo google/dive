@@ -620,14 +620,4 @@ private:
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
 };
 
-class Util
-{
-public:
-    static std::string GetEventString(const IMemoryManager &mem_manager,
-                                      uint32_t              submit_index,
-                                      uint64_t              va_addr,
-                                      uint32_t              opcode,
-                                      uint32_t              dword_count);
-};
-
 }  // namespace Dive

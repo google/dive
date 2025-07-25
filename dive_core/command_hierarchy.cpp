@@ -362,6 +362,12 @@ uint64_t CommandHierarchy::AddNode(NodeType type, std::string &&desc, AuxInfo au
 }
 
 //--------------------------------------------------------------------------------------------------
+uint64_t CommandHierarchy::AddGfxrNode(NodeType type, std::string &&desc)
+{
+    return m_nodes.AddGfxrNode(type, std::move(desc));
+}
+
+//--------------------------------------------------------------------------------------------------
 size_t CommandHierarchy::GetEventIndex(uint64_t node_index) const
 {
     const DiveVector<uint64_t> &indices = m_nodes.m_event_node_indices;
@@ -384,6 +390,19 @@ uint64_t CommandHierarchy::Nodes::AddNode(NodeType type, std::string &&desc, Aux
     m_node_type.push_back(type);
     m_description.push_back(std::move(desc));
     m_aux_info.push_back(aux_info);
+    return m_node_type.size() - 1;
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t CommandHierarchy::Nodes::AddGfxrNode(NodeType type, std::string &&desc)
+{
+    DIVE_ASSERT(m_node_type.size() == m_description.size());
+
+    m_node_type.push_back(type);
+    m_description.push_back(std::move(desc));
+    // Adds a dummy AuxInfo object to ensure the m_node_type, m_description, and m_aux_info sizes
+    // stay the same.
+    m_aux_info.push_back(AuxInfo(0));
     return m_node_type.size() - 1;
 }
 

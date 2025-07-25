@@ -916,5 +916,4 @@ bool EmulateCallbacksBase::ProcessSubmits(const DiveVector<SubmitInfo> &submits,
     }
     return true;
 }
-
 }  // namespace Dive

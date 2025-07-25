@@ -2094,6 +2094,7 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyImage(
 {
     VulkanCaptureManager* manager = VulkanCaptureManager::Get();
     GFXRECON_ASSERT(manager != nullptr);
+    // GOOGLE: Leak fragment density maps to workaround a specific crash
     auto wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageWrapper>(image);
     if (!wrapper) return;
     if (wrapper->is_fdm)

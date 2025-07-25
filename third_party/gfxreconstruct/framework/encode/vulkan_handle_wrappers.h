@@ -261,6 +261,7 @@ struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
     uint32_t                 queue_family_index{ 0 };
     std::set<VkSwapchainKHR> parent_swapchains;
 
+    // GOOGLE: We leak fragment density maps to workaround a crash; need to track if it's an FDM.
     bool is_fdm{ false };
 };
 

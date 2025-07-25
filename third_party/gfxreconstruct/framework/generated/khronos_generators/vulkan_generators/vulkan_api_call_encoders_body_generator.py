@@ -166,7 +166,9 @@ class VulkanApiCallEncodersBodyGenerator(VulkanBaseGenerator, KhronosApiCallEnco
         if name == "vkCreateInstance":
             body += indent + 'auto api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();\n'
         else:
+            # GOOGLE: Leak fragment density maps to workaround a specific crash
             if name == "vkDestroyImage":
+                body += indent + '// GOOGLE: Leak fragment density maps to workaround a specific crash\n'
                 body += indent + 'auto wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageWrapper>(image);\n'
                 body += indent + 'if (!wrapper) return;\n'
                 body += indent + 'if (wrapper->is_fdm)\n'

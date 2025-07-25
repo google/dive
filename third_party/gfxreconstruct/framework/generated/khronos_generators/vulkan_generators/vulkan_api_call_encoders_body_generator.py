@@ -166,6 +166,16 @@ class VulkanApiCallEncodersBodyGenerator(VulkanBaseGenerator, KhronosApiCallEnco
         if name == "vkCreateInstance":
             body += indent + 'auto api_call_lock = VulkanCaptureManager::AcquireExclusiveApiCallLock();\n'
         else:
+            # GOOGLE: Leak fragment density maps to workaround a specific crash
+            if name == "vkDestroyImage":
+                body += indent + '// GOOGLE: Leak fragment density maps to workaround a specific crash\n'
+                body += indent + 'auto wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::ImageWrapper>(image);\n'
+                body += indent + 'if (!wrapper) return;\n'
+                body += indent + 'if (wrapper->is_fdm)\n'
+                body += indent + '{\n'
+                body += indent + '    GFXRECON_LOG_WARNING("vkDestroyImage: %p - refusing to destroy FDM given known unity bugs", image);\n'
+                body += indent + '    return;\n'
+                body += indent + '}\n'
             body += indent + 'auto force_command_serialization = manager->GetForceCommandSerialization();\n'
             body += indent + 'std::shared_lock<CommonCaptureManager::ApiCallMutexT> shared_api_call_lock;\n'
             body += indent + 'std::unique_lock<CommonCaptureManager::ApiCallMutexT> exclusive_api_call_lock;\n'

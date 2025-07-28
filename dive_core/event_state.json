@@ -26,13 +26,6 @@
     "natvis": {
         "path": "dive_core/event_state.natvis"
     },
-    "py_wrapper": {
-        "path": "pydive/py_event_statecpp",
-        "func": "py_event_state",
-        "includes": [
-            "dive_core/event_state.h"
-        ]
-    },
     "namespace": "Dive",
     "soa_types": [
         {

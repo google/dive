@@ -136,7 +136,6 @@ if(DIVE_PYTHON_BINDINGS)
     find_package(PythonLibs 3.7 REQUIRED)
     set(PYBIND11_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/pybind11")
     add_subdirectory(third_party/pybind11)
-    add_subdirectory(pydive)
 endif()
 
 enable_testing()

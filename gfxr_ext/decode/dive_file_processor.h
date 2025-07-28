@@ -57,6 +57,9 @@ private:
     // The DiveBlockData object that contains the metadata for the original GFXR file and
     // modifications
     std::shared_ptr<DiveBlockData> dive_block_data_ = nullptr;
+
+    // Need to store this because the active file is sometimes the .gfxa one
+    std::string gfxr_file_name_ = "";
 };
 
 GFXRECON_END_NAMESPACE(decode)

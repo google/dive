@@ -51,6 +51,11 @@ std::vector<std::string> TestBlockVisitor::GetTraversedPathString()
 
 bool WriterBlockVisitor::Visit(const DiveOriginalBlock& block)
 {
+    if (block.size_ == 0)
+    {
+        // Found empty block in original file, presumably a block in the asset file, no need to copy
+        return true;
+    }
     if (!util::platform::FileSeek(original_file_ptr_, block.offset_, util::platform::FileSeekSet))
     {
         GFXRECON_LOG_ERROR("Could not seek block at offset %d in original file", block.offset_);
@@ -130,7 +135,7 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
     {
         uint64_t current_block_start = original_blocks_map_[i]->offset_;
         uint64_t current_block_end = original_blocks_map_[i + 1]->offset_;
-        if (current_block_start >= current_block_end)
+        if (current_block_start > current_block_end)
         {
             GFXRECON_LOG_ERROR("Original block with id (%d) has invalid offsets (%d-%d)",
                                i,

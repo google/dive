@@ -16,6 +16,10 @@ add_library(gpu_time STATIC
     gpu_time.cpp
     gpu_time.h
 )
+
+# This is to fix build on Linux
+set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 target_include_directories(gpu_time PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 
 if (NOT ANDROID)

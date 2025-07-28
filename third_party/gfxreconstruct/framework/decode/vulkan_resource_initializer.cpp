@@ -365,6 +365,8 @@ VkResult VulkanResourceInitializer::TransitionImage(uint32_t              queue_
                                           1,
                                           &memory_barrier);
 
+        // GOOGLE: Flush the staging buffer as well so that InitializeImage will start recording.
+        FlushStagingBuffer();
         result = FlushCommandBuffer(queue_family_index);
     }
 
@@ -1375,6 +1377,8 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                                                level_count,
                                                level_copies);
 
+                    // GOOGLE: Flush the staging buffer as well so that InitializeImage will start recording.
+                    FlushStagingBuffer();
                     result = FlushCommandBuffer(queue_family_index);
                 }
 
@@ -1465,6 +1469,8 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                                     device_table_->CmdSetScissor(command_buffer, 0, 1, &scissor_rect);
                                     device_table_->CmdDraw(command_buffer, 3, 1, 0, 0);
                                     device_table_->CmdEndRenderPass(command_buffer);
+                                    // GOOGLE: Flush staging buffer so that InitializeImage will start recording.
+                                    FlushStagingBuffer();
                                     result = FlushCommandBuffer(queue_family_index);
                                 }
                             }
@@ -1530,9 +1536,8 @@ VkResult VulkanResourceInitializer::FlushRemainingResourcesInit()
 
 void VulkanResourceInitializer::FlushStagingBuffer()
 {
-    GFXRECON_ASSERT(staging_memory_ != VK_NULL_HANDLE || staging_buffer_offset_ == 0);
-
-    if (staging_memory_ != VK_NULL_HANDLE)
+    // GOOGLE: Use a runtime check to provide more flexibility in where this can be called.
+    if (staging_memory_ != VK_NULL_HANDLE && staging_buffer_offset_ != 0)
     {
         VkMappedMemoryRange memory_range;
         memory_range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;

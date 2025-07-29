@@ -1244,7 +1244,7 @@ const DiveVector<SubmitInfo> &CaptureData::GetSubmits() const
 const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &
 CaptureData::GetGfxrSubmits() const
 {
-    return std::move(m_gfxr_submits);
+    return m_gfxr_submits;
 }
 
 //--------------------------------------------------------------------------------------------------

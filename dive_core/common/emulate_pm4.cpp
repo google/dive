@@ -27,6 +27,7 @@
 #include "emulate_pm4.h"
 #include "memory_manager_base.h"
 #include "pm4_info.h"
+#include "gfxr_ext/decode/dive_annotation_processor.h"
 
 #include <stdarg.h>
 #include <cerrno>

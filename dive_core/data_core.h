@@ -71,7 +71,7 @@ public:
     bool ParseCaptureData(bool is_gfxr_capture);
 
     // Create meta data from the captured data
-    bool CreateMetaData(bool is_gfxr_capture);
+    bool CreateMetaData();
 
     // Get the capture data (includes access to raw command buffers and memory blocks)
     const CaptureData &GetCaptureData() const;

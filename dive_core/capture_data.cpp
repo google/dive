@@ -26,9 +26,9 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "freedreno_dev_info.h"
-#include "generated/generated_vulkan_dive_consumer.h"
 #include "pm4_info.h"
 #include "gfxr_ext/decode/dive_file_processor.h"
+#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_dive_consumer.h"
 #include "third_party/gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
 
 namespace Dive

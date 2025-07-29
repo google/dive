@@ -74,16 +74,13 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateMetaData(bool is_gfxr_capture)
+bool DataCore::CreateMetaData()
 {
-    if (!is_gfxr_capture)
+    CaptureMetadataCreator metadata_creator(m_capture_metadata);
+    if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
+                                         m_capture_data.GetMemoryManager()))
     {
-        CaptureMetadataCreator metadata_creator(m_capture_metadata);
-        if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
-                                             m_capture_data.GetMemoryManager()))
-        {
-            return false;
-        }
+        return false;
     }
     return true;
 }
@@ -96,9 +93,12 @@ bool DataCore::ParseCaptureData(bool is_gfxr_capture)
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (!CreateMetaData(is_gfxr_capture))
+    if (!is_gfxr_capture)
     {
-        return false;
+        if (!CreateMetaData())
+        {
+            return false;
+        }
     }
 
     if (!CreateCommandHierarchy(is_gfxr_capture))

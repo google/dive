@@ -53,22 +53,19 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
         }
         return true;
     }
-    else
-    {
-        // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
-        // This is an educated guess that each PM4 packet results in x number of associated
-        // field/register nodes. Overguessing means more memory used during creation. Underguessing
-        // means more allocations. For big captures, this is easily in the multi-millions, so
-        // pre-reserving the space is a signficiant performance win
-        uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
+    // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
+    // This is an educated guess that each PM4 packet results in x number of associated
+    // field/register nodes. Overguessing means more memory used during creation. Underguessing
+    // means more allocations. For big captures, this is easily in the multi-millions, so
+    // pre-reserving the space is a signficiant performance win
+    uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
-        // Command hierarchy tree creation
-        CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                                 m_capture_data);
-        if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
-        {
-            return false;
-        }
+    // Command hierarchy tree creation
+    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
+                                             m_capture_data);
+    if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
+    {
+        return false;
     }
     return true;
 }

@@ -34,6 +34,8 @@ add_subdirectory(${GFXRECON_SOURCE_DIR}/external/OpenXR-SDK ${PROJECT_SOURCE_DIR
 
 # GOOGLE: Add subdirectories for gfxr_ext, putting binaries into the same dir as their base counterparts
 add_subdirectory(../../../../../gfxr_ext/decode ${CMAKE_SOURCE_DIR}/../../framework/decode_ext/build/tools/quest-replay/${ANDROID_ABI})
+# GOOGLE: Add subdirectories for gpu_time
+add_subdirectory(../../../../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time_build)
 
 add_library(gfxrecon-quest-replay
             SHARED
@@ -63,7 +65,8 @@ target_link_libraries(
         gfxrecon_graphics
         gfxrecon_format
         platform_specific
-        OpenXR::openxr_loader)
+        OpenXR::openxr_loader
+        gpu_time)
 else()
     message(WARNING "OpenXR support disabled!")
 endif()

@@ -21,6 +21,8 @@ add_subdirectory(../../framework/application ${PROJECT_SOURCE_DIR}/../../framewo
 
 # GOOGLE: Add subdirectories for gfxr_ext, putting binaries into the same dir as their base counterparts
 add_subdirectory(../../../../../gfxr_ext/decode ${CMAKE_SOURCE_DIR}/../../framework/decode_ext/build/tools/replay/${ANDROID_ABI})
+# GOOGLE: Add subdirectories for gpu_time
+add_subdirectory(../../../../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time_build)
 
 add_library(gfxrecon-replay
             SHARED
@@ -47,4 +49,5 @@ target_link_libraries(
         gfxr_decode_ext_lib
         gfxrecon_graphics
         gfxrecon_format
-        platform_specific)
+        platform_specific
+        gpu_time)

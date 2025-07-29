@@ -62,7 +62,11 @@ enum class NodeType
     kRegNode,
     kFieldNode,
     kPresentNode,
-    kRenderMarkerNode
+    kRenderMarkerNode,
+    kGfxrVulkanSubmitNode,
+    kGfxrVulkanCommandBufferNode,
+    kGfxrVulkanCommandNode,
+    kGfxrVulkanCommandArgNode
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -106,6 +110,7 @@ public:
 private:
     friend class CommandHierarchy;
     friend class CommandHierarchyCreator;
+    friend class GfxrVulkanCommandHierarchyCreator;
 
     struct ChildrenInfo
     {
@@ -286,6 +291,7 @@ public:
 
 private:
     friend class CommandHierarchyCreator;
+    friend class GfxrVulkanCommandHierarchyCreator;
 
     enum TopologyType
     {
@@ -371,10 +377,13 @@ private:
         DiveVector<uint64_t>    m_event_node_indices;
 
         uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
+        uint64_t AddGfxrNode(NodeType type, std::string &&desc);
     };
 
     // Add a node and returns index of the added node
     uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
+    // Add a gfxr node and returns index of the added node
+    uint64_t AddGfxrNode(NodeType type, std::string &&desc);
     void     AddToFilterExcludeIndexList(uint64_t index, FilterListType filter_mode)
     {
         m_filter_exclude_indices_list[filter_mode].insert(index);

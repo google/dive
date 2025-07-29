@@ -16,6 +16,7 @@
 */
 #include "data_core.h"
 #include <assert.h>
+#include <optional>
 #include "pm4_info.h"
 
 namespace Dive
@@ -40,8 +41,18 @@ CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateCommandHierarchy()
+bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 {
+    if (is_gfxr_capture)
+    {
+        GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
+                                                         m_capture_data);
+        if (!vk_cmd_creator.CreateTrees())
+        {
+            return false;
+        }
+        return true;
+    }
     // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
     // This is an educated guess that each PM4 packet results in x number of associated
     // field/register nodes. Overguessing means more memory used during creation. Underguessing
@@ -52,7 +63,7 @@ bool DataCore::CreateCommandHierarchy()
     // Command hierarchy tree creation
     CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
                                              m_capture_data);
-    if (!cmd_hier_creator.CreateTrees(true, reserve_size))
+    if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
     {
         return false;
     }
@@ -72,19 +83,22 @@ bool DataCore::CreateMetaData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseCaptureData()
+bool DataCore::ParseCaptureData(bool is_gfxr_capture)
 {
     if (m_progress_tracker)
     {
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (!CreateMetaData())
+    if (!is_gfxr_capture)
     {
-        return false;
+        if (!CreateMetaData())
+        {
+            return false;
+        }
     }
 
-    if (!CreateCommandHierarchy())
+    if (!CreateCommandHierarchy(is_gfxr_capture))
     {
         return false;
     }

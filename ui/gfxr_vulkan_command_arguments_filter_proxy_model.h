@@ -27,7 +27,7 @@ public:
     QObject                      *parent = nullptr,
     const Dive::CommandHierarchy *command_hierarchy = nullptr);
 
-    Q_INVOKABLE void setTargetParentSourceIndex(const QModelIndex &sourceIndex);
+    Q_INVOKABLE void SetTargetParentSourceIndex(const QModelIndex &sourceIndex);
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 
@@ -36,7 +36,7 @@ protected:
 
 private:
     QPersistentModelIndex m_targetParentSourceIndex;
-    bool                  isDescendant(const QModelIndex &potentialDescendant,
+    bool                  IsDescendant(const QModelIndex &potentialDescendant,
                                        const QModelIndex &potentialAncestor) const;
 
     const Dive::CommandHierarchy *m_command_hierarchy;

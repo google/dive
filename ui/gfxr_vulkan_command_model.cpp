@@ -28,9 +28,9 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
 // GfxrVulkanCommandModel
 // =================================================================================================
 GfxrVulkanCommandModel::GfxrVulkanCommandModel(const Dive::CommandHierarchy &command_hierarchy) :
-    m_command_hierarchy(command_hierarchy)
+    m_command_hierarchy(command_hierarchy),
+    m_topology_ptr(nullptr)
 {
-    m_topology_ptr = nullptr;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -143,7 +143,7 @@ int GfxrVulkanCommandModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.column() > 0)
         return 0;
-    if (m_topology_ptr == nullptr || m_topology_ptr->GetNumNodes() == 0)
+    if (m_topology_ptr == nullptr || m_topology_ptr->Topology::GetNumNodes() == 0)
         return 0;
 
     uint64_t parent_node_index;

@@ -32,11 +32,6 @@ public:
     GfxrVulkanCommandFilterProxyModel(QObject                      *parent = nullptr,
                                       const Dive::CommandHierarchy *command_hierarchy = nullptr);
 
-    void refreshFilter()
-    {
-        invalidateFilter();  // Call the protected method from within your class
-    }
-
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 

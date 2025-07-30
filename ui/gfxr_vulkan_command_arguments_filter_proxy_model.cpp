@@ -24,7 +24,7 @@ const Dive::CommandHierarchy *command_hierarchy) :
 {
 }
 
-void GfxrVulkanCommandArgumentsFilterProxyModel::setTargetParentSourceIndex(
+void GfxrVulkanCommandArgumentsFilterProxyModel::SetTargetParentSourceIndex(
 const QModelIndex &sourceIndex)
 {
     if (m_targetParentSourceIndex != sourceIndex)
@@ -35,7 +35,7 @@ const QModelIndex &sourceIndex)
     }
 }
 
-bool GfxrVulkanCommandArgumentsFilterProxyModel::isDescendant(
+bool GfxrVulkanCommandArgumentsFilterProxyModel::IsDescendant(
 const QModelIndex &potentialDescendant,
 const QModelIndex &potentialAncestor) const
 {
@@ -77,7 +77,7 @@ QVariant GfxrVulkanCommandArgumentsFilterProxyModel::data(const QModelIndex &ind
             return QVariant(QColor(Qt::gray));
         }
 
-        if (isDescendant(sourceIndex, m_targetParentSourceIndex))
+        if (IsDescendant(sourceIndex, m_targetParentSourceIndex))
         {
             return QVariant(QColor(Qt::white));
         }
@@ -119,7 +119,7 @@ const QModelIndex &source_parent) const
 
     // Accept all descendants of the selected item. If it is an argument node,
     // accept the node.
-    if (isDescendant(currentSourceIndex, m_targetParentSourceIndex))
+    if (IsDescendant(currentSourceIndex, m_targetParentSourceIndex))
     {
         uint64_t current_node_index = currentSourceIndex.internalId();
 

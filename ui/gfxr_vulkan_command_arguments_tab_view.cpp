@@ -119,11 +119,11 @@ void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &in
 
     if (!source_index.isValid())
     {
-        m_arg_proxy_Model->setTargetParentSourceIndex(QModelIndex());
+        m_arg_proxy_Model->SetTargetParentSourceIndex(QModelIndex());
         return;
     }
 
-    m_arg_proxy_Model->setTargetParentSourceIndex(source_index);
+    m_arg_proxy_Model->SetTargetParentSourceIndex(source_index);
 
     m_command_hierarchy_view->expandAll();
 }

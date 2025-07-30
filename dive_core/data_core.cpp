@@ -16,6 +16,7 @@
 */
 #include "data_core.h"
 #include <assert.h>
+#include <optional>
 #include "pm4_info.h"
 
 namespace Dive
@@ -40,8 +41,18 @@ CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateCommandHierarchy()
+bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 {
+    if (is_gfxr_capture)
+    {
+        GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
+                                                         m_capture_data);
+        if (!vk_cmd_creator.CreateTrees())
+        {
+            return false;
+        }
+        return true;
+    }
     // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
     // This is an educated guess that each PM4 packet results in x number of associated
     // field/register nodes. Overguessing means more memory used during creation. Underguessing
@@ -52,7 +63,7 @@ bool DataCore::CreateCommandHierarchy()
     // Command hierarchy tree creation
     CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
                                              m_capture_data);
-    if (!cmd_hier_creator.CreateTrees(true, reserve_size))
+    if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
     {
         return false;
     }
@@ -72,19 +83,22 @@ bool DataCore::CreateMetaData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseCaptureData()
+bool DataCore::ParseCaptureData(bool is_gfxr_capture)
 {
     if (m_progress_tracker)
     {
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (!CreateMetaData())
+    if (!is_gfxr_capture)
     {
-        return false;
+        if (!CreateMetaData())
+        {
+            return false;
+        }
     }
 
-    if (!CreateCommandHierarchy())
+    if (!CreateCommandHierarchy(is_gfxr_capture))
     {
         return false;
     }
@@ -224,22 +238,34 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         }
     }
 
-    if (IsDrawDispatchResolveSyncEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
+    if (Util::IsEvent(mem_manager, submit_index, va_addr, type7_header->opcode, m_state_tracker))
     {
         // Add a new event to the EventInfo metadata array
         EventInfo event_info;
         event_info.m_submit_index = submit_index;
         if (IsDrawEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDraw;
-        else if (IsResolveEvent(mem_manager, submit_index, va_addr, type7_header->opcode))
-            event_info.m_type = EventInfo::EventType::kResolve;
         else if (IsDispatchEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDispatch;
+        else if (type7_header->opcode == CP_BLIT)
+            event_info.m_type = EventInfo::EventType::kBlit;
         else
         {
-            DIVE_ASSERT(GetSyncType(mem_manager, submit_index, va_addr, type7_header->opcode) !=
-                        SyncType::kNone);  // Sanity check
-            event_info.m_type = EventInfo::EventType::kSync;
+            SyncType sync_type = Util::GetSyncType(mem_manager,
+                                                   submit_index,
+                                                   va_addr,
+                                                   type7_header->opcode,
+                                                   m_state_tracker);
+
+            DIVE_ASSERT(sync_type != SyncType::kNone);  // Sanity check
+            if (sync_type == SyncType::kSysMemToGmemResolve)
+                event_info.m_type = EventInfo::EventType::kSysmemToGmemResolve;
+            else if (sync_type == SyncType::kGmemToSysMemResolve)
+                event_info.m_type = EventInfo::EventType::kGmemToSysmemResolve;
+            else if (sync_type == SyncType::kClearGmem)
+                event_info.m_type = EventInfo::EventType::kClearGmem;
+            else
+                event_info.m_type = EventInfo::EventType::kSync;
         }
 
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();
@@ -248,7 +274,9 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         event_info.m_str = Util::GetEventString(mem_manager,
                                                 submit_index,
                                                 va_addr,
-                                                type7_header->opcode);
+                                                type7_header->opcode,
+                                                type7_header->count,
+                                                m_state_tracker);
 
         m_capture_metadata.m_event_info.push_back(event_info);
 

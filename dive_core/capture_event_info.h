@@ -75,7 +75,10 @@ struct EventInfo
     {
         kDraw,
         kDispatch,
-        kResolve,
+        kBlit,
+        kSysmemToGmemResolve,
+        kGmemToSysmemResolve,
+        kClearGmem,
         kSync
     };
     EventType m_type;
@@ -92,6 +95,12 @@ enum class SyncType
     kEventWriteStart = vgt_event_type::VS_DEALLOC,
     kEventWriteEnd = vgt_event_type::CACHE_INVALIDATE7,
 
+    // Various configurations of a resolve/clear
+    // Interpreted versions of a vgt_event_type::CCU_RESOLVE
+    kSysMemToGmemResolve,
+    kGmemToSysMemResolve,
+    kClearGmem,
+
     kWaitMemWrites,
     kWaitForIdle,
     kWaitForMe,
@@ -99,23 +108,26 @@ enum class SyncType
     kNone
 };
 
-SyncType GetSyncType(const IMemoryManager &mem_manager,
-                     uint32_t              submit_index,
-                     uint64_t              addr,
-                     uint32_t              opcode);
+class Util
+{
+public:
+    static bool IsEvent(const IMemoryManager &mem_manager,
+                        uint32_t              submit_index,
+                        uint64_t              addr,
+                        uint32_t              opcode,
+                        EmulateStateTracker  &state_tracker);
 
-bool IsDrawDispatchResolveEvent(const IMemoryManager &mem_manager,
-                                uint32_t              submit_index,
-                                uint64_t              addr,
-                                uint32_t              opcode);
-
-bool IsDrawDispatchResolveSyncEvent(const IMemoryManager &mem_manager,
-                                    uint32_t              submit_index,
-                                    uint64_t              addr,
-                                    uint32_t              opcode);
-bool IsResolveEvent(const IMemoryManager &mem_manager,
-                    uint32_t              submit_index,
-                    uint64_t              addr,
-                    uint32_t              opcode);
+    static SyncType    GetSyncType(const IMemoryManager &mem_manager,
+                                   uint32_t              submit_index,
+                                   uint64_t              addr,
+                                   uint32_t              opcode,
+                                   EmulateStateTracker  &state_tracker);
+    static std::string GetEventString(const IMemoryManager &mem_manager,
+                                      uint32_t              submit_index,
+                                      uint64_t              va_addr,
+                                      uint32_t              opcode,
+                                      uint32_t              dword_count,
+                                      EmulateStateTracker  &state_tracker);
+};
 
 }  // namespace Dive

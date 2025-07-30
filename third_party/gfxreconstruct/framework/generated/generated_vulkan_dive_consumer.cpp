@@ -4303,6 +4303,15 @@ void VulkanExportDiveConsumer::Process_vkGetImageSubresourceLayout2KHR(
 {
 }
 
+void VulkanExportDiveConsumer::Process_vkWaitForPresent2KHR(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    format::HandleId                            swapchain,
+    StructPointerDecoder<Decoded_VkPresentWait2InfoKHR>* pPresentWait2Info)
+{
+}
+
 void VulkanExportDiveConsumer::Process_vkCreatePipelineBinariesKHR(
     const ApiCallInfo&                          call_info,
     VkResult                                    returnValue,
@@ -4347,6 +4356,14 @@ void VulkanExportDiveConsumer::Process_vkReleaseCapturedPipelineDataKHR(
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkReleaseCapturedPipelineDataInfoKHR>* pInfo,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+}
+
+void VulkanExportDiveConsumer::Process_vkReleaseSwapchainImagesKHR(
+    const ApiCallInfo&                          call_info,
+    VkResult                                    returnValue,
+    format::HandleId                            device,
+    StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo)
 {
 }
 
@@ -5291,7 +5308,7 @@ void VulkanExportDiveConsumer::Process_vkGetAccelerationStructureMemoryRequireme
     const ApiCallInfo&                          call_info,
     format::HandleId                            device,
     StructPointerDecoder<Decoded_VkAccelerationStructureMemoryRequirementsInfoNV>* pInfo,
-    StructPointerDecoder<Decoded_VkMemoryRequirements2KHR>* pMemoryRequirements)
+    StructPointerDecoder<Decoded_VkMemoryRequirements2>* pMemoryRequirements)
 {
 }
 
@@ -6125,7 +6142,7 @@ void VulkanExportDiveConsumer::Process_vkReleaseSwapchainImagesEXT(
     const ApiCallInfo&                          call_info,
     VkResult                                    returnValue,
     format::HandleId                            device,
-    StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoEXT>* pReleaseInfo)
+    StructPointerDecoder<Decoded_VkReleaseSwapchainImagesInfoKHR>* pReleaseInfo)
 {
 }
 
@@ -6273,6 +6290,48 @@ void VulkanExportDiveConsumer::Process_vkGetPrivateDataEXT(
     format::HandleId                            privateDataSlot,
     PointerDecoder<uint64_t>*                   pData)
 {
+}
+
+void VulkanExportDiveConsumer::Process_vkCmdDispatchTileQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkDispatchTileInfoQCOM>* pDispatchTileInfo)
+{
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    FieldToJson(args["pDispatchTileInfo"], pDispatchTileInfo, json_options);
+    util::DiveFunctionData function_data("vkCmdDispatchTileQCOM", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    WriteBlockEnd(function_data);
+}
+
+void VulkanExportDiveConsumer::Process_vkCmdBeginPerTileExecutionQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkPerTileBeginInfoQCOM>* pPerTileBeginInfo)
+{
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    FieldToJson(args["pPerTileBeginInfo"], pPerTileBeginInfo, json_options);
+    util::DiveFunctionData function_data("vkCmdBeginPerTileExecutionQCOM", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    WriteBlockEnd(function_data);
+}
+
+void VulkanExportDiveConsumer::Process_vkCmdEndPerTileExecutionQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkPerTileEndInfoQCOM>* pPerTileEndInfo)
+{
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    FieldToJson(args["pPerTileEndInfo"], pPerTileEndInfo, json_options);
+    util::DiveFunctionData function_data("vkCmdEndPerTileExecutionQCOM", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkCmdSetFragmentShadingRateEnumNV(
@@ -7529,6 +7588,20 @@ void VulkanExportDiveConsumer::Process_vkCmdSetAttachmentFeedbackLoopEnableEXT(
     WriteBlockEnd(function_data);
 }
 
+void VulkanExportDiveConsumer::Process_vkCmdBindTileMemoryQCOM(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkTileMemoryBindInfoQCOM>* pTileMemoryBindInfo)
+{
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    FieldToJson(args["pTileMemoryBindInfo"], pTileMemoryBindInfo, json_options);
+    util::DiveFunctionData function_data("vkCmdBindTileMemoryQCOM", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    WriteBlockEnd(function_data);
+}
+
 void VulkanExportDiveConsumer::Process_vkGetPartitionedAccelerationStructuresBuildSizesNV(
     const ApiCallInfo&                          call_info,
     format::HandleId                            device,
@@ -7671,6 +7744,20 @@ void VulkanExportDiveConsumer::Process_vkGetMemoryMetalHandlePropertiesEXT(
     uint64_t                                    pHandle,
     StructPointerDecoder<Decoded_VkMemoryMetalHandlePropertiesEXT>* pMemoryMetalHandleProperties)
 {
+}
+
+void VulkanExportDiveConsumer::Process_vkCmdEndRendering2EXT(
+    const ApiCallInfo&                          call_info,
+    format::HandleId                            commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderingEndInfoEXT>* pRenderingEndInfo)
+{
+    nlohmann::ordered_json dive_data;
+    const JsonOptions json_options;
+    auto& args = dive_data["args"];
+    HandleToJson(args["commandBuffer"], commandBuffer, json_options);
+    FieldToJson(args["pRenderingEndInfo"], pRenderingEndInfo, json_options);
+    util::DiveFunctionData function_data("vkCmdEndRendering2EXT", UpdateAndGetCommandBufferRecordIndex(commandBuffer), call_info.index, args);
+    WriteBlockEnd(function_data);
 }
 
 void VulkanExportDiveConsumer::Process_vkCreateAccelerationStructureKHR(

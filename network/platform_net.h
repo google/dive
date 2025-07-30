@@ -18,7 +18,9 @@ limitations under the License.
 
 #ifdef WIN32
 #    define _WINSOCK_DEPRECATED_NO_WARNINGS
-#    define NOMINMAX
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
 #    include <winsock2.h>
 #    include <ws2tcpip.h>
 #    pragma comment(lib, "Ws2_32.lib")

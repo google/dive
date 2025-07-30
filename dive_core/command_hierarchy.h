@@ -62,7 +62,11 @@ enum class NodeType
     kRegNode,
     kFieldNode,
     kPresentNode,
-    kRenderMarkerNode
+    kRenderMarkerNode,
+    kGfxrVulkanSubmitNode,
+    kGfxrVulkanCommandBufferNode,
+    kGfxrVulkanCommandNode,
+    kGfxrVulkanCommandArgNode
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -106,6 +110,7 @@ public:
 private:
     friend class CommandHierarchy;
     friend class CommandHierarchyCreator;
+    friend class GfxrVulkanCommandHierarchyCreator;
 
     struct ChildrenInfo
     {
@@ -286,6 +291,7 @@ public:
 
 private:
     friend class CommandHierarchyCreator;
+    friend class GfxrVulkanCommandHierarchyCreator;
 
     enum TopologyType
     {
@@ -371,10 +377,13 @@ private:
         DiveVector<uint64_t>    m_event_node_indices;
 
         uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
+        uint64_t AddGfxrNode(NodeType type, std::string &&desc);
     };
 
     // Add a node and returns index of the added node
     uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
+    // Add a gfxr node and returns index of the added node
+    uint64_t AddGfxrNode(NodeType type, std::string &&desc);
     void     AddToFilterExcludeIndexList(uint64_t index, FilterListType filter_mode)
     {
         m_filter_exclude_indices_list[filter_mode].insert(index);
@@ -609,15 +618,6 @@ private:
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
-};
-
-class Util
-{
-public:
-    static std::string GetEventString(const IMemoryManager &mem_manager,
-                                      uint32_t              submit_index,
-                                      uint64_t              va_addr,
-                                      uint32_t              opcode);
 };
 
 }  // namespace Dive

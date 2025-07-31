@@ -56,7 +56,7 @@ void CommandModel::EndResetModel()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::SetTopologyToView(const Dive::Topology *topology_ptr)
+void CommandModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
 {
     BeginResetModel();
     m_topology_ptr = topology_ptr;
@@ -202,9 +202,9 @@ QModelIndex CommandModel::findNode(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandModel::GetNodeUIId(uint64_t                      node_index,
-                                   const Dive::CommandHierarchy &command_hierarchy,
-                                   const Dive::Topology         *topology_ptr)
+QVariant CommandModel::GetNodeUIId(uint64_t                        node_index,
+                                   const Dive::CommandHierarchy   &command_hierarchy,
+                                   const Dive::SharedNodeTopology *topology_ptr)
 {
     return QVariant();
 }

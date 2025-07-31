@@ -54,5 +54,6 @@ private:
     // Once parsing is complete, we will create a topology from this
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount];
     DiveVector<uint64_t>             m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    Topology                         m_topology[CommandHierarchy::kTopologyTypeCount];
 };
 }  // namespace Dive

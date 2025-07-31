@@ -437,15 +437,21 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
     if (view_mode == tr(kViewModeStrings[0]))  // Submit
     {
-        const Dive::Topology &topology = command_hierarchy.GetSubmitHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
+        if (const auto *topology = dynamic_cast<const Dive::SharedNodeTopology *>(
+            &command_hierarchy.GetSubmitHierarchyTopology()))
+        {
+            m_command_hierarchy_model->SetTopologyToView(topology);
+            m_command_tab_view->SetTopologyToView(topology);
+        }
     }
     else  // All Vulkan Calls + GPU Events
     {
-        const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
+        if (const auto *topology = dynamic_cast<const Dive::SharedNodeTopology *>(
+            &command_hierarchy.GetAllEventHierarchyTopology()))
+        {
+            m_command_hierarchy_model->SetTopologyToView(topology);
+            m_command_tab_view->SetTopologyToView(topology);
+        }
 
         // Put EventID column to the left of the tree. This forces the expand/collapse icon to be
         // part of the 2nd column (originally 1st)

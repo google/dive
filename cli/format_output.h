@@ -30,11 +30,11 @@ typedef Dive::CaptureData::LoadResult LoadResult;
 
 LoadResult PrintCaptureFileBlocks(std::ostream &out, const char *file_name);
 
-void PrintNodes(std::ostream                 &out,
-                const Dive::CommandHierarchy *command_hierarchy_ptr,
-                const Dive::Topology         &topology,
-                uint64_t                      node_index,
-                bool                          verbose);
+void PrintNodes(std::ostream                   &out,
+                const Dive::CommandHierarchy   *command_hierarchy_ptr,
+                const Dive::SharedNodeTopology &topology,
+                uint64_t                        node_index,
+                bool                            verbose);
 
 bool ParseCapture(const char                              *filename,
                   std::unique_ptr<Dive::CaptureData>      *out_capture_data,

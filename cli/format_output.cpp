@@ -64,11 +64,11 @@ const char *CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type)
 }
 
 //--------------------------------------------------------------------------------------------------
-void PrintSharedNodes(std::ostream                 &out,
-                      const Dive::CommandHierarchy *command_hierarchy_ptr,
-                      const Dive::Topology         &topology,
-                      uint64_t                      node_index,
-                      uint32_t                      num_tabs)
+void PrintSharedNodes(std::ostream                   &out,
+                      const Dive::CommandHierarchy   *command_hierarchy_ptr,
+                      const Dive::SharedNodeTopology &topology,
+                      uint64_t                        node_index,
+                      uint32_t                        num_tabs)
 {
     for (uint64_t child = 0; child < topology.GetNumSharedChildren(node_index); ++child)
     {
@@ -117,11 +117,11 @@ void VisitNodes(const Dive::CommandHierarchy           *command_hierarchy_ptr,
 }
 
 //--------------------------------------------------------------------------------------------------
-void PrintNodes(std::ostream                 &out,
-                const Dive::CommandHierarchy *command_hierarchy_ptr,
-                const Dive::Topology         &topology,
-                uint64_t                      node_index,
-                bool                          verbose)
+void PrintNodes(std::ostream                   &out,
+                const Dive::CommandHierarchy   *command_hierarchy_ptr,
+                const Dive::SharedNodeTopology &topology,
+                uint64_t                        node_index,
+                bool                            verbose)
 {
     VisitNodes(command_hierarchy_ptr,
                topology,
@@ -450,9 +450,9 @@ LoadResult ReadCaptureDataHeader(const char *file_name, Dive::CaptureDataHeader 
 }
 
 //--------------------------------------------------------------------------------------------------
-void ExtractTopology(std::filesystem::path         path,
-                     const Dive::CommandHierarchy *command_hierarchy_ptr,
-                     const Dive::Topology         *topology_ptr)
+void ExtractTopology(std::filesystem::path           path,
+                     const Dive::CommandHierarchy   *command_hierarchy_ptr,
+                     const Dive::SharedNodeTopology *topology_ptr)
 {
     std::ofstream out(path);
     if (!out)
@@ -461,11 +461,13 @@ void ExtractTopology(std::filesystem::path         path,
         return;
     }
 
-    uint64_t root_num_children = topology_ptr->GetNumChildren(Dive::Topology::kRootNodeIndex);
+    uint64_t root_num_children = topology_ptr->GetNumChildren(
+    Dive::SharedNodeTopology::kRootNodeIndex);
     for (uint64_t child = 0; child < root_num_children; ++child)
     {
-        uint64_t child_node_index = topology_ptr->GetChildNodeIndex(Dive::Topology::kRootNodeIndex,
-                                                                    child);
+        uint64_t child_node_index = topology_ptr
+                                    ->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex,
+                                                        child);
         PrintNodes(out, command_hierarchy_ptr, *topology_ptr, child_node_index, true);
     }
 }
@@ -521,12 +523,17 @@ void ExtractAssets(const char                   *dir,
 
     if (command_hierarchy)
     {
-        ExtractTopology(dir_path / "submits.txt",
-                        command_hierarchy,
-                        &command_hierarchy->GetSubmitHierarchyTopology());
-        ExtractTopology(dir_path / "events.txt",
-                        command_hierarchy,
-                        &command_hierarchy->GetAllEventHierarchyTopology());
+        if (const auto *submit_topology = dynamic_cast<const Dive::SharedNodeTopology *>(
+            &command_hierarchy->GetSubmitHierarchyTopology()))
+        {
+            ExtractTopology(dir_path / "submits.txt", command_hierarchy, submit_topology);
+        }
+
+        if (const auto *events_topology = dynamic_cast<const Dive::SharedNodeTopology *>(
+            &command_hierarchy->GetAllEventHierarchyTopology()))
+        {
+            ExtractTopology(dir_path / "events.txt", command_hierarchy, events_topology);
+        }
     }
 }
 
@@ -576,24 +583,33 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
         return EXIT_FAILURE;
     }
 
-    const Dive::Topology *topology_ptr = nullptr;
+    const Dive::SharedNodeTopology *topology_ptr = nullptr;
     switch (topology)
     {
     case TopologyName::kTopologySubmit:
-        topology_ptr = &command_hierarchy_ptr->GetSubmitHierarchyTopology();
+        topology_ptr = dynamic_cast<const Dive::SharedNodeTopology *>(
+        &command_hierarchy_ptr->GetSubmitHierarchyTopology());
         break;
     case TopologyName::kTopologyEvent:
-        topology_ptr = &command_hierarchy_ptr->GetAllEventHierarchyTopology();
+        topology_ptr = dynamic_cast<const Dive::SharedNodeTopology *>(
+        &command_hierarchy_ptr->GetAllEventHierarchyTopology());
         break;
     default:
-        abort();  // This should be checked during args parsing.
+        abort();
     }
 
-    uint64_t root_num_children = topology_ptr->GetNumChildren(Dive::Topology::kRootNodeIndex);
+    if (topology_ptr == nullptr)
+    {
+        abort();
+    }
+
+    uint64_t root_num_children = topology_ptr->GetNumChildren(
+    Dive::SharedNodeTopology::kRootNodeIndex);
     for (uint64_t child = 0; child < root_num_children; ++child)
     {
-        uint64_t child_node_index = topology_ptr->GetChildNodeIndex(Dive::Topology::kRootNodeIndex,
-                                                                    child);
+        uint64_t child_node_index = topology_ptr
+                                    ->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex,
+                                                        child);
         PrintNodes(std::cout,
                    command_hierarchy_ptr.get(),
                    *topology_ptr,

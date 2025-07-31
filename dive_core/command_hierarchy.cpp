@@ -38,12 +38,8 @@ namespace Dive
 // =================================================================================================
 uint64_t Topology::GetNumNodes() const
 {
-    DIVE_ASSERT(m_node_children.size() == m_node_shared_children.size());
     DIVE_ASSERT(m_node_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_children.size() == m_node_child_index.size());
-    DIVE_ASSERT(m_node_children.size() == m_start_shared_child.size());
-    DIVE_ASSERT(m_node_children.size() == m_end_shared_child.size());
-    DIVE_ASSERT(m_node_children.size() == m_root_node_index.size());
     return m_node_children.size();
 }
 
@@ -94,47 +90,9 @@ uint64_t Topology::GetNextNodeIndex(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetNumSharedChildren(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_node_shared_children.size());
-    return m_node_shared_children[node_index].m_num_children;
-}
-//--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetSharedChildNodeIndex(uint64_t node_index, uint64_t child_index) const
-{
-    DIVE_ASSERT(node_index < m_node_shared_children.size());
-    DIVE_ASSERT(child_index < m_node_shared_children[node_index].m_num_children);
-    uint64_t child_list_index = m_node_shared_children[node_index].m_start_index + child_index;
-    DIVE_ASSERT(child_list_index < m_shared_children_list.size());
-    return m_shared_children_list[child_list_index];
-}
-
-//--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetStartSharedChildNodeIndex(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_start_shared_child.size());
-    return m_start_shared_child[node_index];
-}
-
-//--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetEndSharedChildNodeIndex(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_end_shared_child.size());
-    return m_end_shared_child[node_index];
-}
-
-//--------------------------------------------------------------------------------------------------
-uint64_t Topology::GetSharedChildRootNodeIndex(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_root_node_index.size());
-    return m_root_node_index[node_index];
-}
-
-//--------------------------------------------------------------------------------------------------
 void Topology::SetNumNodes(uint64_t num_nodes)
 {
     m_node_children.resize(num_nodes);
-    m_node_shared_children.resize(num_nodes);
     m_node_parent.resize(num_nodes, UINT64_MAX);
     m_node_child_index.resize(num_nodes, UINT64_MAX);
 }
@@ -169,8 +127,69 @@ void Topology::AddChildren(uint64_t node_index, const DiveVector<uint64_t> &chil
     }
 }
 
+// =================================================================================================
+// SharedNodeTopology
+// =================================================================================================
+uint64_t SharedNodeTopology::GetNumNodes() const
+{
+    DIVE_ASSERT(m_node_children.size() == m_node_shared_children.size());
+    DIVE_ASSERT(m_node_children.size() == m_node_parent.size());
+    DIVE_ASSERT(m_node_children.size() == m_node_child_index.size());
+    DIVE_ASSERT(m_node_children.size() == m_start_shared_child.size());
+    DIVE_ASSERT(m_node_children.size() == m_end_shared_child.size());
+    DIVE_ASSERT(m_node_children.size() == m_root_node_index.size());
+    return m_node_children.size();
+}
+
+uint64_t SharedNodeTopology::GetNumSharedChildren(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_node_shared_children.size());
+    return m_node_shared_children[node_index].m_num_children;
+}
 //--------------------------------------------------------------------------------------------------
-void Topology::AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children)
+uint64_t SharedNodeTopology::GetSharedChildNodeIndex(uint64_t node_index,
+                                                     uint64_t child_index) const
+{
+    DIVE_ASSERT(node_index < m_node_shared_children.size());
+    DIVE_ASSERT(child_index < m_node_shared_children[node_index].m_num_children);
+    uint64_t child_list_index = m_node_shared_children[node_index].m_start_index + child_index;
+    DIVE_ASSERT(child_list_index < m_shared_children_list.size());
+    return m_shared_children_list[child_list_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t SharedNodeTopology::GetStartSharedChildNodeIndex(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_start_shared_child.size());
+    return m_start_shared_child[node_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t SharedNodeTopology::GetEndSharedChildNodeIndex(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_end_shared_child.size());
+    return m_end_shared_child[node_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+uint64_t SharedNodeTopology::GetSharedChildRootNodeIndex(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_root_node_index.size());
+    return m_root_node_index[node_index];
+}
+
+//--------------------------------------------------------------------------------------------------
+void SharedNodeTopology::SetNumNodes(uint64_t num_nodes)
+{
+    m_node_children.resize(num_nodes);
+    m_node_shared_children.resize(num_nodes);
+    m_node_parent.resize(num_nodes, UINT64_MAX);
+    m_node_child_index.resize(num_nodes, UINT64_MAX);
+}
+
+//--------------------------------------------------------------------------------------------------
+void SharedNodeTopology::AddSharedChildren(uint64_t                    node_index,
+                                           const DiveVector<uint64_t> &children)
 {
     DIVE_ASSERT(m_node_shared_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_shared_children.size() == m_node_child_index.size());
@@ -2048,8 +2067,8 @@ void CommandHierarchyCreator::CreateTopologies()
     // Convert the m_node_children temporary structure into CommandHierarchy's topologies
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
-        size_t    num_nodes = m_node_children[topology][0].size();
-        Topology &cur_topology = m_command_hierarchy.m_topology[topology];
+        size_t              num_nodes = m_node_children[topology][0].size();
+        SharedNodeTopology &cur_topology = m_command_hierarchy.m_topology[topology];
         cur_topology.SetNumNodes(num_nodes);
 
         // Optional loop: Pre-reserve to prevent the resize() from allocating memory later

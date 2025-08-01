@@ -55,7 +55,7 @@ void CommandBufferModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::SetTopologyToView(const Dive::Topology *topology_ptr)
+void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
 {
     emit beginResetModel();
     m_topology_ptr = topology_ptr;

@@ -71,15 +71,12 @@ enum class NodeType
 
 //--------------------------------------------------------------------------------------------------
 // This is per-node graph topology info.
-// This is essentially a tree, but each node can also have a set of "shared" children - these are
-// children that have more than 1 parent, and are used for kPacketNodes (ie. these nodes can
-// simultaneously be children of kSubmitNodes, kMarkerNodes, kDrawDispatchDmaNode nodes, etc.)
 class Topology
 {
 public:
     const static uint64_t kRootNodeIndex = 0;
 
-    uint64_t GetNumNodes() const;
+    virtual uint64_t GetNumNodes() const;
 
     // Node-index of parent node
     uint64_t GetParentNodeIndex(uint64_t node_index) const;
@@ -91,6 +88,54 @@ public:
     uint64_t GetNumChildren(uint64_t node_index) const;
     uint64_t GetChildNodeIndex(uint64_t node_index, uint64_t child_index) const;
     uint64_t GetNextNodeIndex(uint64_t node_index) const;
+
+protected:
+    struct ChildrenInfo
+    {
+        uint64_t m_start_index = UINT64_MAX;
+        uint64_t m_num_children = 0;
+    };
+
+    // List of all children for all nodes.
+
+    // m_children_list contains the node_indexes of all the "normal" children throughout the entire
+    // command hierarchy for a specific TopologyType (e.g., kSubmitTopology or kAllEventTopology).
+    // It's a concatenated list of all direct children, ordered by the parent node they belong to.
+    // For example,
+    //  if node A has children(C1, C2) and node B has children(C3),
+    //  then m_children_list might look like[C1_index, C2_index, C3_index, ...]
+    //
+    // The m_node_children vector then contains ChildrenInfo structs for each parent node. Each
+    // ChildrenInfo struct has a m_start_index and m_num_children. These values tell you where in
+    // m_children_list to find the children for a specific parent node.
+    DiveVector<uint64_t> m_children_list;
+
+    // This vector points into the m_children_list to define the range of children for a particular
+    // node.
+    DiveVector<ChildrenInfo> m_node_children;
+
+    // Index of parent
+    DiveVector<uint64_t> m_node_parent;
+
+    // Index of child w.r.t. to its parent
+    DiveVector<uint64_t> m_node_child_index;
+
+    virtual void SetNumNodes(uint64_t num_nodes);
+    void         AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
+
+private:
+    friend class CommandHierarchy;
+    friend class GfxrVulkanCommandHierarchyCreator;
+};
+
+//--------------------------------------------------------------------------------------------------
+// This is per-node graph topology info but each node can also have a set of "shared" children -
+// these are children that have more than 1 parent, and are used for kPacketNodes (ie. these nodes
+// can simultaneously be children of kSubmitNodes, kMarkerNodes, kDrawDispatchDmaNode nodes, etc.)
+class SharedNodeTopology : public Topology
+{
+public:
+    uint64_t GetNumNodes() const override;
 
     // Used to get list of shared children for a top level root node
     // All children of this top level node share this alternate set of children
@@ -110,27 +155,8 @@ public:
 private:
     friend class CommandHierarchy;
     friend class CommandHierarchyCreator;
-    friend class GfxrVulkanCommandHierarchyCreator;
 
-    struct ChildrenInfo
-    {
-        uint64_t m_start_index = UINT64_MAX;
-        uint64_t m_num_children = 0;
-    };
-
-    // List of all children for all nodes
-
-    // m_children_list contains the node_indexes of all the "normal" children throughout the entire
-    // command hierarchy for a specific TopologyType (e.g., kSubmitTopology or kAllEventTopology).
-    // It's a concatenated list of all direct children, ordered by the parent node they belong to.
-    // For example,
-    //  if node A has children(C1, C2) and node B has children(C3),
-    //  then m_children_list might look like[C1_index, C2_index, C3_index, ...]
-    //
-    // The m_node_children vector then contains ChildrenInfo structs for each parent node. Each
-    // ChildrenInfo struct has a m_start_index and m_num_children. These values tell you where in
-    // m_children_list to find the children for a specific parent node.
-    DiveVector<uint64_t> m_children_list;
+    // List of all children for shared nodes.
 
     // m_shared_children_list contains the node_indexes of all the "shared" children throughout the
     // entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
@@ -140,16 +166,9 @@ private:
     // define the range of shared children belonging to a particular node.
     DiveVector<uint64_t> m_shared_children_list;
 
-    // This is a per-node pointer to m_children_list
-    // 2 sets of children per node
-    DiveVector<ChildrenInfo> m_node_children;
+    // This vector points into the m_shared_children_list to define the range of shared children for
+    // a particular node.
     DiveVector<ChildrenInfo> m_node_shared_children;
-
-    // Index of parent
-    DiveVector<uint64_t> m_node_parent;
-
-    // Index of child w.r.t. to its parent
-    DiveVector<uint64_t> m_node_child_index;
 
     // For each non-root node, indicate where the shared children start/end are, and
     // what the top level root node is
@@ -157,8 +176,7 @@ private:
     DiveVector<uint64_t> m_end_shared_child;
     DiveVector<uint64_t> m_root_node_index;
 
-    void SetNumNodes(uint64_t num_nodes);
-    void AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
+    void SetNumNodes(uint64_t num_nodes) override;
     void AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
 };
 
@@ -240,8 +258,8 @@ public:
     //  The Event hierarchy contains kRootNode -> kSubmitNodes/kPresentNodes -> (EventNodes)
     //      Where (EventNodes) == kMarkerNode/kDrawDispatchDmaNode/kSyncNode/kPostambleStateNode
     //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as shared children
-    const Topology &GetSubmitHierarchyTopology() const;
-    const Topology &GetAllEventHierarchyTopology() const;
+    const SharedNodeTopology &GetSubmitHierarchyTopology() const;
+    const SharedNodeTopology &GetAllEventHierarchyTopology() const;
 
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
@@ -391,7 +409,7 @@ private:
 
     Nodes                        m_nodes;
     std::unordered_set<uint64_t> m_filter_exclude_indices_list[kFilterListTypeCount];
-    Topology                     m_topology[kTopologyTypeCount];
+    SharedNodeTopology           m_topology[kTopologyTypeCount];
 };
 
 //--------------------------------------------------------------------------------------------------

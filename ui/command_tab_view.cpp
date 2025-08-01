@@ -76,7 +76,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandTabView::SetTopologyToView(const Dive::Topology *topology_ptr)
+void CommandTabView::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
 {
     m_command_buffer_model->SetTopologyToView(topology_ptr);
 }

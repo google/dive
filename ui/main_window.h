@@ -17,6 +17,7 @@
 #pragma once
 #include <memory>
 #include <QMainWindow>
+#include <qshortcut.h>
 #include "dive_core/cross_ref.h"
 #include "progress_tracker_callback.h"
 #include "dive_core/log.h"
@@ -33,6 +34,10 @@ class EventStateView;
 #ifndef NDEBUG
 class EventTimingView;
 #endif
+class GfxrVulkanCommandArgumentsTabView;
+class GfxrVulkanCommandArgumentsFilterProxyModel;
+class GfxrVulkanCommandFilterProxyModel;
+class GfxrVulkanCommandModel;
 class HoverHelp;
 class Overlay;
 class OverlayWidget;
@@ -70,7 +75,8 @@ public:
     MainWindow();
     ~MainWindow();
     bool LoadFile(const char *file_name, bool is_temp_file = false);
-
+    bool LoadDiveFile(const char *file_name);
+    bool LoadGfxrFile(const char *file_name);
     bool InitializePlugins();
 
 protected:
@@ -106,10 +112,13 @@ private slots:
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded();
     void OnTraceAvailable(const QString &);
-    void OnCommandBufferSearchBarVisibilityChange(bool isHidden);
+    void OnTabViewSearchBarVisibilityChange(bool isHidden);
     void OnTabViewChange();
+    void ConnectDiveFileTabs();
+    void ConnectGfxrFileTabs();
     void ConnectSearchBar();
     void DisconnectSearchBar();
+    void DisconnectAllTabs();
 
 private:
     void    CreateActions();
@@ -124,6 +133,7 @@ private:
     QString StrippedName(const QString &fullFileName);
     void    HideOverlay();
     void    UpdateTabAvailability();
+    void    ResetTabWidget();
 
     QMenu       *m_file_menu;
     QMenu       *m_recent_captures_menu;
@@ -166,22 +176,26 @@ private:
     QPushButton  *m_search_trigger_button;
     SearchBar    *m_event_search_bar = nullptr;
 
-    TreeViewComboBox    *m_view_mode_combo_box;
-    TreeViewComboBox    *m_filter_mode_combo_box;
-    QPushButton         *m_prev_event_button;
-    QPushButton         *m_next_event_button;
-    QList<QPushButton *> m_expand_to_lvl_buttons;
+    TreeViewComboBox                  *m_view_mode_combo_box;
+    TreeViewComboBox                  *m_filter_mode_combo_box;
+    QPushButton                       *m_prev_event_button;
+    QPushButton                       *m_next_event_button;
+    QList<QPushButton *>               m_expand_to_lvl_buttons;
+    GfxrVulkanCommandFilterProxyModel *m_gfxr_vulkan_commands_filter_proxy_model;
+    GfxrVulkanCommandModel            *m_gfxr_vulkan_command_hierarchy_model;
 
     // Right pane
-    QTabWidget      *m_tab_widget;
-    CommandTabView  *m_command_tab_view;
-    int              m_command_view_tab_index;
-    OverviewTabView *m_overview_tab_view;
-    int              m_overview_view_tab_index;
-    ShaderView      *m_shader_view;
-    int              m_shader_view_tab_index;
-    EventStateView  *m_event_state_view;
-    int              m_event_state_view_tab_index;
+    QTabWidget                        *m_tab_widget;
+    CommandTabView                    *m_command_tab_view;
+    int                                m_command_view_tab_index;
+    OverviewTabView                   *m_overview_tab_view;
+    int                                m_overview_view_tab_index;
+    ShaderView                        *m_shader_view;
+    int                                m_shader_view_tab_index;
+    EventStateView                    *m_event_state_view;
+    int                                m_event_state_view_tab_index;
+    GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view;
+    int                                m_gfxr_vulkan_command_arguments_view_tab_index;
 #if defined(ENABLE_CAPTURE_BUFFERS)
     BufferView *m_buffer_view;
 #endif
@@ -198,14 +212,24 @@ private:
     PropertyPanel *m_property_panel;
     HoverHelp     *m_hover_help;
 
+    // Shortcuts
+    QShortcut *m_search_shortcut = nullptr;
+    QShortcut *m_search_commands_shortcut = nullptr;
+    QShortcut *m_overview_tab_shortcut = nullptr;
+    QShortcut *m_command_tab_shortcut = nullptr;
+    QShortcut *m_shader_tab_shortcut = nullptr;
+    QShortcut *m_event_state_tab_shortcut = nullptr;
+
     std::string m_unsaved_capture_path;
     bool        m_capture_saved = false;
     int         m_capture_num = 0;
+    bool        m_gfxr_capture_loaded = false;
 
     EventSelection *m_event_selection;
 
     // Overlay to be displayed while capture
     Overlay *m_overlay;
 
-    std::unique_ptr<Dive::PluginLoader> m_plugin_manager;
+    std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
+    GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
 };

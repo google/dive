@@ -1,22 +1,23 @@
 /*
- Copyright 2019 Google LLC
-
+ Copyright 2025 Google LLC
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
-
  http://www.apache.org/licenses/LICENSE-2.0
-
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "command_model.h"
+
+#include "gfxr_vulkan_command_model.h"
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
+#include <cstdint>
+#include <iostream>
+#include <string>
 
 #include "dive_core/command_hierarchy.h"
 
@@ -24,19 +25,19 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
 // =================================================================================================
-// CommandModel
+// GfxrVulkanCommandModel
 // =================================================================================================
-CommandModel::CommandModel(const Dive::CommandHierarchy &command_hierarchy) :
-    m_command_hierarchy(command_hierarchy)
+GfxrVulkanCommandModel::GfxrVulkanCommandModel(const Dive::CommandHierarchy &command_hierarchy) :
+    m_command_hierarchy(command_hierarchy),
+    m_topology_ptr(nullptr)
 {
-    m_topology_ptr = nullptr;
 }
 
 //--------------------------------------------------------------------------------------------------
-CommandModel::~CommandModel() {}
+GfxrVulkanCommandModel::~GfxrVulkanCommandModel() {}
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::Reset()
+void GfxrVulkanCommandModel::Reset()
 {
     emit beginResetModel();
     m_topology_ptr = nullptr;
@@ -44,19 +45,19 @@ void CommandModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::BeginResetModel()
+void GfxrVulkanCommandModel::BeginResetModel()
 {
     emit beginResetModel();
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::EndResetModel()
+void GfxrVulkanCommandModel::EndResetModel()
 {
     emit endResetModel();
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
+void GfxrVulkanCommandModel::SetTopologyToView(const Dive::Topology *topology_ptr)
 {
     BeginResetModel();
     m_topology_ptr = topology_ptr;
@@ -65,48 +66,25 @@ void CommandModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_pt
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandModel::data(const QModelIndex &index, int role) const
+QVariant GfxrVulkanCommandModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid())
         return QVariant();
 
     uint64_t node_index = (uint64_t)(index.internalPointer());
-
     if (role == Qt::ForegroundRole)
     {
-        if (index.column() == 0)
-        {
-            Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
-
-            if (node_type == Dive::NodeType::kMarkerNode)
-            {
-                // Color debug markers in green
-                Dive::CommandHierarchy::MarkerType marker_type = m_command_hierarchy
-                                                                 .GetMarkerNodeType(node_index);
-                if (marker_type == Dive::CommandHierarchy::MarkerType::kInsert ||
-                    marker_type == Dive::CommandHierarchy::MarkerType::kBeginEnd)
-                {
-                    return QVariant(QBrush(QColor(85, 139, 47)));  // Shade of green
-                }
-            }
-        }
         return QVariant();
     }
     else if (role != Qt::DisplayRole)
         return QVariant();
-
-    // 2nd column shows event id (will be swapped via moveSection() to be visually the 1st column)
-    if (index.column() == 1)
-    {
-        return GetNodeUIId(node_index, m_command_hierarchy, m_topology_ptr);
-    }
 
     // 1st column
     return QString(m_command_hierarchy.GetNodeDesc(node_index));
 }
 
 //--------------------------------------------------------------------------------------------------
-Qt::ItemFlags CommandModel::flags(const QModelIndex &index) const
+Qt::ItemFlags GfxrVulkanCommandModel::flags(const QModelIndex &index) const
 {
     if (!index.isValid())
         return Qt::ItemFlags();
@@ -115,21 +93,15 @@ Qt::ItemFlags CommandModel::flags(const QModelIndex &index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandModel::headerData(int section, Qt::Orientation orientation, int role) const
+QVariant GfxrVulkanCommandModel::headerData(int             section,
+                                            Qt::Orientation orientation,
+                                            int             role) const
 {
-    if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
-    {
-        if (section == 1 && (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology()))
-        {
-            return QString(tr("Event"));
-        }
-    }
-
     return QVariant();
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex GfxrVulkanCommandModel::index(int row, int column, const QModelIndex &parent) const
 {
     if (!hasIndex(row, column, parent))
         return QModelIndex();
@@ -150,7 +122,7 @@ QModelIndex CommandModel::index(int row, int column, const QModelIndex &parent) 
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandModel::parent(const QModelIndex &index) const
+QModelIndex GfxrVulkanCommandModel::parent(const QModelIndex &index) const
 {
     if (!index.isValid())
         return QModelIndex();
@@ -167,11 +139,11 @@ QModelIndex CommandModel::parent(const QModelIndex &index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandModel::rowCount(const QModelIndex &parent) const
+int GfxrVulkanCommandModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.column() > 0)
         return 0;
-    if (m_topology_ptr == nullptr || m_topology_ptr->GetNumNodes() == 0)
+    if (m_topology_ptr == nullptr || m_topology_ptr->Topology::GetNumNodes() == 0)
         return 0;
 
     uint64_t parent_node_index;
@@ -184,15 +156,13 @@ int CommandModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandModel::columnCount(const QModelIndex &parent) const
+int GfxrVulkanCommandModel::columnCount(const QModelIndex &parent) const
 {
-    if (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology())
-        return 2;
     return 1;
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandModel::findNode(uint64_t node_index) const
+QModelIndex GfxrVulkanCommandModel::findNode(uint64_t node_index) const
 {
     if (m_node_lookup.size() != m_command_hierarchy.size())
         BuildNodeLookup();
@@ -202,33 +172,7 @@ QModelIndex CommandModel::findNode(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandModel::GetNodeUIId(uint64_t                        node_index,
-                                   const Dive::CommandHierarchy   &command_hierarchy,
-                                   const Dive::SharedNodeTopology *topology_ptr)
-{
-    return QVariant();
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CommandModel::EventNodeHasMarker(uint64_t node_index) const
-{
-    return false;
-}
-
-//--------------------------------------------------------------------------------------------------
-char CommandModel::GetEventNodeStream(uint64_t node_index) const
-{
-    return '\0';
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t node_index) const
-{
-    return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
+void GfxrVulkanCommandModel::BuildNodeLookup(const QModelIndex &parent) const
 {
     if (!parent.isValid())
     {
@@ -238,16 +182,17 @@ void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
     int n = rowCount(parent);
     for (int r = 0; r < n; ++r)
     {
-        auto     idx = index(r, 0, parent);
-        uint64_t node_index = (uint64_t)idx.internalPointer();
+        auto     ix = index(r, 0, parent);
+        uint64_t node_index = (uint64_t)ix.internalPointer();
         if (node_index < m_node_lookup.size())
-            m_node_lookup[node_index] = QPersistentModelIndex(idx);
-        BuildNodeLookup(idx);
+            m_node_lookup[node_index] = QPersistentModelIndex(ix);
+        BuildNodeLookup(ix);
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-QList<QModelIndex> CommandModel::search(const QModelIndex &start, const QVariant &value) const
+QList<QModelIndex> GfxrVulkanCommandModel::search(const QModelIndex &start,
+                                                  const QVariant    &value) const
 {
     QList<QModelIndex>  result;
     Qt::CaseSensitivity cs = Qt::CaseInsensitive;
@@ -276,4 +221,9 @@ QList<QModelIndex> CommandModel::search(const QModelIndex &start, const QVariant
     }
 
     return result;
+}
+
+uint64_t GfxrVulkanCommandModel::getNumNodes() const
+{
+    return m_command_hierarchy.size();
 }

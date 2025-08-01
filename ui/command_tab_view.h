@@ -27,7 +27,7 @@ class SearchBar;
 namespace Dive
 {
 class CommandHierarchy;
-class Topology;
+class SharedNodeTopology;
 };  // namespace Dive
 
 class CommandTabView : public QFrame
@@ -37,7 +37,7 @@ class CommandTabView : public QFrame
 public:
     CommandTabView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent = nullptr);
 
-    void SetTopologyToView(const Dive::Topology *topology_ptr);
+    void SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr);
 
     void ResetModel();
 

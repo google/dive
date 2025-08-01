@@ -457,12 +457,14 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
                                       static_cast<uint32_t>(dword_buffer.size())))
         return false;
 
-    const Dive::Topology* topology_ptr = &command_hierarchy.GetSubmitHierarchyTopology();
-    uint64_t root_num_children = topology_ptr->GetNumChildren(Dive::Topology::kRootNodeIndex);
+    const Dive::SharedNodeTopology* topology_ptr = &command_hierarchy.GetSubmitHierarchyTopology();
+    uint64_t                        root_num_children = topology_ptr->GetNumChildren(
+    Dive::SharedNodeTopology::kRootNodeIndex);
     for (uint64_t child = 0; child < root_num_children; ++child)
     {
-        uint64_t child_node_index = topology_ptr->GetChildNodeIndex(Dive::Topology::kRootNodeIndex,
-                                                                    child);
+        uint64_t child_node_index = topology_ptr
+                                    ->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex,
+                                                        child);
         PrintNodes(std::cout, &command_hierarchy, *topology_ptr, child_node_index, true);
     }
     return true;

@@ -22,7 +22,7 @@
 namespace Dive
 {
 class CommandHierarchy;
-class Topology;
+class SharedNodeTopology;
 };  // namespace Dive
 
 class CommandModel : public QAbstractItemModel
@@ -43,7 +43,7 @@ public:
     void Reset();
     void BeginResetModel();
     void EndResetModel();
-    void SetTopologyToView(const Dive::Topology *topology_ptr);
+    void SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr);
 
     QVariant      data(const QModelIndex &index, int role) const override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
@@ -58,9 +58,9 @@ public:
     int           columnCount(const QModelIndex &parent = QModelIndex()) const override;
     QModelIndex   findNode(uint64_t node_index) const;
 
-    static QVariant GetNodeUIId(uint64_t                      node_index,
-                                const Dive::CommandHierarchy &command_hierarchy,
-                                const Dive::Topology         *topology_ptr);
+    static QVariant GetNodeUIId(uint64_t                        node_index,
+                                const Dive::CommandHierarchy   &command_hierarchy,
+                                const Dive::SharedNodeTopology *topology_ptr);
 
     QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
 
@@ -77,6 +77,6 @@ private:
     void     BuildNodeLookup(const QModelIndex &parent = QModelIndex()) const;
 
     const Dive::CommandHierarchy              &m_command_hierarchy;
-    const Dive::Topology                      *m_topology_ptr;
+    const Dive::SharedNodeTopology            *m_topology_ptr;
     mutable std::vector<QPersistentModelIndex> m_node_lookup;
 };

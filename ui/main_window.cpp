@@ -437,13 +437,13 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
     if (view_mode == tr(kViewModeStrings[0]))  // Submit
     {
-        const Dive::Topology &topology = command_hierarchy.GetSubmitHierarchyTopology();
+        const Dive::SharedNodeTopology &topology = command_hierarchy.GetSubmitHierarchyTopology();
         m_command_hierarchy_model->SetTopologyToView(&topology);
         m_command_tab_view->SetTopologyToView(&topology);
     }
     else  // All Vulkan Calls + GPU Events
     {
-        const Dive::Topology &topology = command_hierarchy.GetAllEventHierarchyTopology();
+        const Dive::SharedNodeTopology &topology = command_hierarchy.GetAllEventHierarchyTopology();
         m_command_hierarchy_model->SetTopologyToView(&topology);
         m_command_tab_view->SetTopologyToView(&topology);
 

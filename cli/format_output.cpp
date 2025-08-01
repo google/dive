@@ -101,7 +101,7 @@ void PrintSharedNodes(std::ostream                   &out,
 
 //--------------------------------------------------------------------------------------------------
 void VisitNodes(const Dive::CommandHierarchy           *command_hierarchy_ptr,
-                const Dive::Topology                   &topology,
+                const Dive::SharedNodeTopology         &topology,
                 uint64_t                                node_index,
                 uint32_t                                depth,
                 std::function<bool(uint64_t, uint32_t)> visitor)
@@ -523,17 +523,12 @@ void ExtractAssets(const char                   *dir,
 
     if (command_hierarchy)
     {
-        if (const auto *submit_topology = dynamic_cast<const Dive::SharedNodeTopology *>(
-            &command_hierarchy->GetSubmitHierarchyTopology()))
-        {
-            ExtractTopology(dir_path / "submits.txt", command_hierarchy, submit_topology);
-        }
-
-        if (const auto *events_topology = dynamic_cast<const Dive::SharedNodeTopology *>(
-            &command_hierarchy->GetAllEventHierarchyTopology()))
-        {
-            ExtractTopology(dir_path / "events.txt", command_hierarchy, events_topology);
-        }
+        ExtractTopology(dir_path / "submits.txt",
+                        command_hierarchy,
+                        &command_hierarchy->GetSubmitHierarchyTopology());
+        ExtractTopology(dir_path / "events.txt",
+                        command_hierarchy,
+                        &command_hierarchy->GetAllEventHierarchyTopology());
     }
 }
 
@@ -587,20 +582,13 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
     switch (topology)
     {
     case TopologyName::kTopologySubmit:
-        topology_ptr = dynamic_cast<const Dive::SharedNodeTopology *>(
-        &command_hierarchy_ptr->GetSubmitHierarchyTopology());
+        topology_ptr = &command_hierarchy_ptr->GetSubmitHierarchyTopology();
         break;
     case TopologyName::kTopologyEvent:
-        topology_ptr = dynamic_cast<const Dive::SharedNodeTopology *>(
-        &command_hierarchy_ptr->GetAllEventHierarchyTopology());
+        topology_ptr = &command_hierarchy_ptr->GetAllEventHierarchyTopology();
         break;
     default:
-        abort();
-    }
-
-    if (topology_ptr == nullptr)
-    {
-        abort();
+        abort();  // This should be checked during args parsing.
     }
 
     uint64_t root_num_children = topology_ptr->GetNumChildren(

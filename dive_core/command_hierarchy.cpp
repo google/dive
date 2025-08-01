@@ -214,13 +214,13 @@ CommandHierarchy::CommandHierarchy() {}
 CommandHierarchy::~CommandHierarchy() {}
 
 //--------------------------------------------------------------------------------------------------
-const Topology &CommandHierarchy::GetSubmitHierarchyTopology() const
+const SharedNodeTopology &CommandHierarchy::GetSubmitHierarchyTopology() const
 {
     return m_topology[kSubmitTopology];
 }
 
 //--------------------------------------------------------------------------------------------------
-const Topology &CommandHierarchy::GetAllEventHierarchyTopology() const
+const SharedNodeTopology &CommandHierarchy::GetAllEventHierarchyTopology() const
 {
     return m_topology[kAllEventTopology];
 }

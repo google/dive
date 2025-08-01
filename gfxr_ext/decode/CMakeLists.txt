@@ -26,6 +26,13 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# The Android Gradle script invokes its own CMake, starting from gfxrecon-replay's CMakeLists.txt. 
+# This build system is isolated and does not see the gpu_time target defined in the root CMakeLists.txt. 
+# Add add_subdirectory for gpu_time only when building for Android
+if(ANDROID)
+    add_subdirectory(../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time_build)
+endif()
+
 # -------------------
 # gfxr_decode_ext_lib
 add_library(gfxr_decode_ext_lib
@@ -35,16 +42,21 @@ add_library(gfxr_decode_ext_lib
   dive_block_data.cpp
   dive_file_processor.h
   dive_file_processor.cpp
+  dive_vulkan_replay_consumer.h
+  dive_vulkan_replay_consumer.cpp
 )
 target_link_libraries(gfxr_decode_ext_lib
   gfxrecon_decode
+  gpu_time
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if (WIN32)
   target_link_libraries(gfxr_decode_ext_lib psapi)
 endif()
 target_include_directories(gfxr_decode_ext_lib PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
 
 # ------------------------
 # gfxr_decode_ext_lib_test

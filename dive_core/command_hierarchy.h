@@ -258,8 +258,8 @@ public:
     //  The Event hierarchy contains kRootNode -> kSubmitNodes/kPresentNodes -> (EventNodes)
     //      Where (EventNodes) == kMarkerNode/kDrawDispatchDmaNode/kSyncNode/kPostambleStateNode
     //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as shared children
-    const Topology &GetSubmitHierarchyTopology() const;
-    const Topology &GetAllEventHierarchyTopology() const;
+    const SharedNodeTopology &GetSubmitHierarchyTopology() const;
+    const SharedNodeTopology &GetAllEventHierarchyTopology() const;
 
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;

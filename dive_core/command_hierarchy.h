@@ -110,7 +110,8 @@ protected:
     // m_children_list to find the children for a specific parent node.
     DiveVector<uint64_t> m_children_list;
 
-    // This is a per-node pointer to m_children_list.
+    // This vector points into the m_children_list to define the range of children for a particular
+    // node.
     DiveVector<ChildrenInfo> m_node_children;
 
     // Index of parent
@@ -165,7 +166,8 @@ private:
     // define the range of shared children belonging to a particular node.
     DiveVector<uint64_t> m_shared_children_list;
 
-    // This is a per-node pointer to m_children_list containing the shared children.
+    // This vector points into the m_shared_children_list to define the range of shared children for
+    // a particular node.
     DiveVector<ChildrenInfo> m_node_shared_children;
 
     // For each non-root node, indicate where the shared children start/end are, and

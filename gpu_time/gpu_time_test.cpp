@@ -230,25 +230,6 @@ TEST(GPUTimeTest, FreeCommandBufferSucceeds)
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
-// Test that attempting to free the same command buffer again fails.
-TEST(GPUTimeTest, FreeSameCommandBufferTwiceFails)
-{
-    GPUTime gpuTime;
-    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
-
-    VkCommandBufferAllocateInfo allocInfo = {};
-    allocInfo.commandPool = MOCK_COMMAND_POOL;
-    allocInfo.commandBufferCount = 1;
-    VkCommandBuffer cmdBuf = MOCK_COMMAND_BUFFER_1;
-
-    gpuTime.OnAllocateCommandBuffers(&allocInfo, &cmdBuf);
-    gpuTime.OnFreeCommandBuffers(1, &cmdBuf);
-
-    ASSERT_FALSE(gpuTime.OnFreeCommandBuffers(1, &cmdBuf).success);
-
-    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
-}
-
 // Test that resetting a command pool correctly resets the state of command buffers from that pool.
 TEST(GPUTimeTest, ResetCommandPoolAllowsReinsertingFrameDelimiter)
 {

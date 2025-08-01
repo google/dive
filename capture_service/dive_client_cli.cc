@@ -372,54 +372,17 @@ absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
 bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
     std::filesystem::path download_dir = absl::GetFlag(FLAGS_download_dir);
-    std::filesystem::path target_download_dir(
-    absl::StrCat(download_dir.string(), "/", gfxr_capture_directory));
-    std::filesystem::path on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                                     "/",
-                                                                     gfxr_capture_directory);
+
+    // Need to explicitly use forward slash so that this works on Windows targetting Android
+    std::string on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
+                                                           "/",
+                                                           gfxr_capture_directory);
 
     std::cout << "Retrieving capture..." << std::endl;
-    // Check if the target directory already exists on the local machine.
-    if (!std::filesystem::exists(target_download_dir))
-    {
 
-        std::error_code ec;
-        if (!std::filesystem::create_directories(target_download_dir, ec))
-        {
-            std::cout << "Error creating directory: " << ec << std::endl;
-            return false;
-        }
-    }
-    else
-    {
-        // If the target directory already exists on the local machine, append a number to it to
-        // differentiate.
-        int                   counter = 1;
-        std::filesystem::path newDirPath;
-        while (true)
-        {
-            newDirPath = std::filesystem::path(target_download_dir.generic_string() + "_" +
-                                               std::to_string(counter));
-            if (!std::filesystem::exists(newDirPath))
-            {
-                std::error_code ec;
-
-                if (!std::filesystem::create_directories(newDirPath, ec))
-                {
-                    std::cout << "Error creating directory: " << ec << std::endl;
-                    return false;
-                }
-                target_download_dir = newDirPath;
-                break;
-            }
-            counter++;
-        }
-    }
-
-    // Retrieve the names of the files in the capture directory on the device.
-    std::string                 command = "shell ls " + on_device_capture_directory.string();
+    // Retrieve the list of files in the capture directory on the device.
+    std::string command = absl::StrFormat("shell ls %s", on_device_capture_directory);
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
-
     if (!output.ok())
     {
         std::cout << "Error getting capture_file name: " << output.status().message() << std::endl;
@@ -428,31 +391,37 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
 
     std::vector<std::string> file_list = absl::StrSplit(std::string(output->data()), '\n');
 
-    // Retrieve each file in the capture directory (capture file and asset file).
-    for (const auto& file_with_trailing : file_list)
+    // Check if on-device directory is empty
+    if ((file_list.empty()) || (file_list[0].empty()))
     {
-        std::string file = file_with_trailing;
-        // Windows-style line endings use \r\n. When absl::StrSplit splits by \n, the \r remains at
-        // the end of each line if the input string originated from a Windows-style line ending.
-        if (!file.empty() && file.back() == '\r')
-        {
-            file.pop_back();
-        }
-
-        std::string target_file = absl::StrCat(target_download_dir.string(), "/", file.data());
-        std::string source_file = absl::StrCat(on_device_capture_directory.string(),
-                                               "/",
-                                               file.data());
-        auto        ret = mgr.GetDevice()->RetrieveTrace(source_file, target_file);
-
-        if (!ret.ok())
-        {
-            std::cout << "Failed to retrieve capture: " << ret.message() << std::endl;
-            return false;
-        }
+        std::cout << "Error, captures not present on device at: " << on_device_capture_directory
+                  << std::endl;
+        return false;
     }
 
-    std::cout << "Capture sucessfully saved at " << target_download_dir << std::endl;
+    // Find name for new local target directory
+    std::filesystem::path full_target_download_dir = download_dir / gfxr_capture_directory;
+    bool local_target_dir_exists = std::filesystem::exists(full_target_download_dir);
+    int  suffix = 0;
+    while (local_target_dir_exists)
+    {
+        // Append numerical suffix to make a fresh dir
+        full_target_download_dir = download_dir / absl::StrFormat("%s_%s",
+                                                                  gfxr_capture_directory,
+                                                                  std::to_string(suffix));
+        suffix++;
+        local_target_dir_exists = std::filesystem::exists(full_target_download_dir);
+    }
+
+    command = absl::StrFormat("pull %s %s", on_device_capture_directory, full_target_download_dir.string());
+    output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    if (!output.ok())
+    {
+        std::cout << "Error pulling files: " << output.status().message() << std::endl;
+        return false;
+    }
+
+    std::cout << "Capture sucessfully saved at " << full_target_download_dir << std::endl;
     return true;
 }
 

@@ -362,6 +362,38 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
+            <Synthetic Name="WindowScissorTLX" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLXOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="WindowScissorTLY" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLYOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="WindowScissorBRX" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRXOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="WindowScissorBRY" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint16_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRYOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
             <Synthetic Name="RenderMode" >
                 <Expand>
                     <ArrayItems>
@@ -607,6 +639,18 @@
             <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="WindowScissorTLX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorTLY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLYOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRYOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
             <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
@@ -817,6 +861,18 @@
             </Item>
             <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorTLX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorTLY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLYOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRYOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
             <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
@@ -1029,6 +1085,18 @@
             <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="WindowScissorTLX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorTLY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLYOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRYOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
             <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
@@ -1239,6 +1307,18 @@
             </Item>
             <Item Name="BinH" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kBinHOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorTLX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorTLY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorTLYOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRX" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRXOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="WindowScissorBRY" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint16_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kWindowScissorBRYOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
             <Item Name="RenderMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((a6xx_render_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kRenderModeOffset * m_obj_ptr->m_cap))[m_id.m_id]

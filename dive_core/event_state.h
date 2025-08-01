@@ -2590,6 +2590,150 @@ public:
     }
 
     //-----------------------------------------------
+    // REF FIELD WindowScissorTLX: Window scissor Top Left X-coordinate
+
+    // `WindowScissorTLX()` returns the value of the WindowScissorTLX field of the referenced object
+    inline uint16_t WindowScissorTLX() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorTLX(m_id);
+    }
+
+    // `SetWindowScissorTLX(value)` sets the WindowScissorTLX field of the referenced object
+    inline const Ref& SetWindowScissorTLX(uint16_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetWindowScissorTLX(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsWindowScissorTLXSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorTLXSet(m_id);
+    }
+
+    inline const char* GetWindowScissorTLXName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLXName();
+    }
+
+    inline const char* GetWindowScissorTLXDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLXDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorTLY: Window scissor Top Left Y-coordinate
+
+    // `WindowScissorTLY()` returns the value of the WindowScissorTLY field of the referenced object
+    inline uint16_t WindowScissorTLY() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorTLY(m_id);
+    }
+
+    // `SetWindowScissorTLY(value)` sets the WindowScissorTLY field of the referenced object
+    inline const Ref& SetWindowScissorTLY(uint16_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetWindowScissorTLY(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsWindowScissorTLYSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorTLYSet(m_id);
+    }
+
+    inline const char* GetWindowScissorTLYName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLYName();
+    }
+
+    inline const char* GetWindowScissorTLYDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLYDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorBRX: Window scissor Bottom Right X-coordinate
+
+    // `WindowScissorBRX()` returns the value of the WindowScissorBRX field of the referenced object
+    inline uint16_t WindowScissorBRX() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorBRX(m_id);
+    }
+
+    // `SetWindowScissorBRX(value)` sets the WindowScissorBRX field of the referenced object
+    inline const Ref& SetWindowScissorBRX(uint16_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetWindowScissorBRX(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsWindowScissorBRXSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorBRXSet(m_id);
+    }
+
+    inline const char* GetWindowScissorBRXName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRXName();
+    }
+
+    inline const char* GetWindowScissorBRXDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRXDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorBRY: Window scissor Bottom Right Y-coordinate
+
+    // `WindowScissorBRY()` returns the value of the WindowScissorBRY field of the referenced object
+    inline uint16_t WindowScissorBRY() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorBRY(m_id);
+    }
+
+    // `SetWindowScissorBRY(value)` sets the WindowScissorBRY field of the referenced object
+    inline const Ref& SetWindowScissorBRY(uint16_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetWindowScissorBRY(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsWindowScissorBRYSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorBRYSet(m_id);
+    }
+
+    inline const char* GetWindowScissorBRYName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRYName();
+    }
+
+    inline const char* GetWindowScissorBRYDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRYDescription();
+    }
+
+    //-----------------------------------------------
     // REF FIELD RenderMode: Whether in binning pass or rendering pass
 
     // `RenderMode()` returns the value of the RenderMode field of the referenced object
@@ -4166,6 +4310,118 @@ public:
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
         return m_obj_ptr->GetBinHDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorTLX: Window scissor Top Left X-coordinate
+
+    // `WindowScissorTLX()` returns the value of the WindowScissorTLX field of the referenced object
+    inline uint16_t WindowScissorTLX() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorTLX(m_id);
+    }
+
+    inline bool IsWindowScissorTLXSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorTLXSet(m_id);
+    }
+
+    inline const char* GetWindowScissorTLXName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLXName();
+    }
+
+    inline const char* GetWindowScissorTLXDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLXDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorTLY: Window scissor Top Left Y-coordinate
+
+    // `WindowScissorTLY()` returns the value of the WindowScissorTLY field of the referenced object
+    inline uint16_t WindowScissorTLY() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorTLY(m_id);
+    }
+
+    inline bool IsWindowScissorTLYSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorTLYSet(m_id);
+    }
+
+    inline const char* GetWindowScissorTLYName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLYName();
+    }
+
+    inline const char* GetWindowScissorTLYDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorTLYDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorBRX: Window scissor Bottom Right X-coordinate
+
+    // `WindowScissorBRX()` returns the value of the WindowScissorBRX field of the referenced object
+    inline uint16_t WindowScissorBRX() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorBRX(m_id);
+    }
+
+    inline bool IsWindowScissorBRXSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorBRXSet(m_id);
+    }
+
+    inline const char* GetWindowScissorBRXName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRXName();
+    }
+
+    inline const char* GetWindowScissorBRXDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRXDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD WindowScissorBRY: Window scissor Bottom Right Y-coordinate
+
+    // `WindowScissorBRY()` returns the value of the WindowScissorBRY field of the referenced object
+    inline uint16_t WindowScissorBRY() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->WindowScissorBRY(m_id);
+    }
+
+    inline bool IsWindowScissorBRYSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsWindowScissorBRYSet(m_id);
+    }
+
+    inline const char* GetWindowScissorBRYName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRYName();
+    }
+
+    inline const char* GetWindowScissorBRYDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetWindowScissorBRYDescription();
     }
 
     //-----------------------------------------------
@@ -6997,6 +7253,250 @@ public:
     inline const char* GetBinHDescription() const { return "Bin Height"; }
 
     //-----------------------------------------------
+    // FIELD WindowScissorTLX: Window scissor Top Left X-coordinate
+
+    // `WindowScissorTLXPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorTLXPtr() const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLXOffset * m_cap);
+    }
+    inline uint16_t* WindowScissorTLXPtr()
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLXOffset * m_cap);
+    }
+    // `WindowScissorTLXPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorTLXPtr(Id id) const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLXOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint16_t* WindowScissorTLXPtr(Id id)
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLXOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `WindowScissorTLX(id)` retuns the `WindowScissorTLX` element of the object identified by `id`
+    inline uint16_t WindowScissorTLX(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *WindowScissorTLXPtr(id);
+    }
+
+    // `SetWindowScissorTLX(id,value)` sets the `WindowScissorTLX` element of the object identified
+    // by `id`
+    inline SOA& SetWindowScissorTLX(Id id, uint16_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *WindowScissorTLXPtr(id) = value;
+        MarkFieldSet(id, kWindowScissorTLXIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsWindowScissorTLXSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kWindowScissorTLXIndex);
+    }
+
+    inline const char* GetWindowScissorTLXName() const { return "WindowScissorTLX"; }
+
+    inline const char* GetWindowScissorTLXDescription() const
+    {
+        return "Window scissor Top Left X-coordinate";
+    }
+
+    //-----------------------------------------------
+    // FIELD WindowScissorTLY: Window scissor Top Left Y-coordinate
+
+    // `WindowScissorTLYPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorTLYPtr() const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLYOffset * m_cap);
+    }
+    inline uint16_t* WindowScissorTLYPtr()
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLYOffset * m_cap);
+    }
+    // `WindowScissorTLYPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorTLYPtr(Id id) const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLYOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint16_t* WindowScissorTLYPtr(Id id)
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorTLYOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `WindowScissorTLY(id)` retuns the `WindowScissorTLY` element of the object identified by `id`
+    inline uint16_t WindowScissorTLY(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *WindowScissorTLYPtr(id);
+    }
+
+    // `SetWindowScissorTLY(id,value)` sets the `WindowScissorTLY` element of the object identified
+    // by `id`
+    inline SOA& SetWindowScissorTLY(Id id, uint16_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *WindowScissorTLYPtr(id) = value;
+        MarkFieldSet(id, kWindowScissorTLYIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsWindowScissorTLYSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kWindowScissorTLYIndex);
+    }
+
+    inline const char* GetWindowScissorTLYName() const { return "WindowScissorTLY"; }
+
+    inline const char* GetWindowScissorTLYDescription() const
+    {
+        return "Window scissor Top Left Y-coordinate";
+    }
+
+    //-----------------------------------------------
+    // FIELD WindowScissorBRX: Window scissor Bottom Right X-coordinate
+
+    // `WindowScissorBRXPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorBRXPtr() const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRXOffset * m_cap);
+    }
+    inline uint16_t* WindowScissorBRXPtr()
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRXOffset * m_cap);
+    }
+    // `WindowScissorBRXPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorBRXPtr(Id id) const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRXOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint16_t* WindowScissorBRXPtr(Id id)
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRXOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `WindowScissorBRX(id)` retuns the `WindowScissorBRX` element of the object identified by `id`
+    inline uint16_t WindowScissorBRX(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *WindowScissorBRXPtr(id);
+    }
+
+    // `SetWindowScissorBRX(id,value)` sets the `WindowScissorBRX` element of the object identified
+    // by `id`
+    inline SOA& SetWindowScissorBRX(Id id, uint16_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *WindowScissorBRXPtr(id) = value;
+        MarkFieldSet(id, kWindowScissorBRXIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsWindowScissorBRXSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kWindowScissorBRXIndex);
+    }
+
+    inline const char* GetWindowScissorBRXName() const { return "WindowScissorBRX"; }
+
+    inline const char* GetWindowScissorBRXDescription() const
+    {
+        return "Window scissor Bottom Right X-coordinate";
+    }
+
+    //-----------------------------------------------
+    // FIELD WindowScissorBRY: Window scissor Bottom Right Y-coordinate
+
+    // `WindowScissorBRYPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorBRYPtr() const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRYOffset * m_cap);
+    }
+    inline uint16_t* WindowScissorBRYPtr()
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRYOffset * m_cap);
+    }
+    // `WindowScissorBRYPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint16_t* WindowScissorBRYPtr(Id id) const
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRYOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint16_t* WindowScissorBRYPtr(Id id)
+    {
+        return reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kWindowScissorBRYOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `WindowScissorBRY(id)` retuns the `WindowScissorBRY` element of the object identified by `id`
+    inline uint16_t WindowScissorBRY(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *WindowScissorBRYPtr(id);
+    }
+
+    // `SetWindowScissorBRY(id,value)` sets the `WindowScissorBRY` element of the object identified
+    // by `id`
+    inline SOA& SetWindowScissorBRY(Id id, uint16_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *WindowScissorBRYPtr(id) = value;
+        MarkFieldSet(id, kWindowScissorBRYIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsWindowScissorBRYSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kWindowScissorBRYIndex);
+    }
+
+    inline const char* GetWindowScissorBRYName() const { return "WindowScissorBRY"; }
+
+    inline const char* GetWindowScissorBRYDescription() const
+    {
+        return "Window scissor Bottom Right Y-coordinate";
+    }
+
+    //-----------------------------------------------
     // FIELD RenderMode: Whether in binning pass or rendering pass
 
     // `RenderModePtr()` returns a shared pointer to an array of `size()` elements
@@ -7992,6 +8492,42 @@ protected:
 #define PARTIAL_SIZE_EventStateInfo kBinHOffset + kBinHSize
 #undef PARTIAL_INDEX_EventStateInfo
 #define PARTIAL_INDEX_EventStateInfo kBinHIndex + 1
+    static_assert(alignof(uint16_t) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kWindowScissorTLXIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kWindowScissorTLXOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kWindowScissorTLXSize = sizeof(uint16_t);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kWindowScissorTLXOffset + kWindowScissorTLXSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kWindowScissorTLXIndex + 1
+    static_assert(alignof(uint16_t) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kWindowScissorTLYIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kWindowScissorTLYOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kWindowScissorTLYSize = sizeof(uint16_t);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kWindowScissorTLYOffset + kWindowScissorTLYSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kWindowScissorTLYIndex + 1
+    static_assert(alignof(uint16_t) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kWindowScissorBRXIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kWindowScissorBRXOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kWindowScissorBRXSize = sizeof(uint16_t);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kWindowScissorBRXOffset + kWindowScissorBRXSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kWindowScissorBRXIndex + 1
+    static_assert(alignof(uint16_t) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kWindowScissorBRYIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kWindowScissorBRYOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kWindowScissorBRYSize = sizeof(uint16_t);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kWindowScissorBRYOffset + kWindowScissorBRYSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kWindowScissorBRYIndex + 1
     static_assert(alignof(a6xx_render_mode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kRenderModeIndex = PARTIAL_INDEX_EventStateInfo;
@@ -8154,6 +8690,10 @@ protected:
     a6xx_ztest_mode*                     DBG_z_test_mode;
     uint32_t*                            DBG_bin_w;
     uint32_t*                            DBG_bin_h;
+    uint16_t*                            DBG_window_scissor_tlx;
+    uint16_t*                            DBG_window_scissor_tly;
+    uint16_t*                            DBG_window_scissor_brx;
+    uint16_t*                            DBG_window_scissor_bry;
     a6xx_render_mode*                    DBG_render_mode;
     a6xx_buffers_location*               DBG_buffers_location;
     a6xx_threadsize*                     DBG_thread_size;

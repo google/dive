@@ -50,8 +50,9 @@ typename EventStateInfo::Id::basic_type new_cap)
 
     // Allocate new buffer as an array of `max_align_t`, to make sure the buffer
     // is sufficiently aligned for the type of any possible field.
-    auto new_buffer = std::unique_ptr<std::max_align_t[]>(
-    new std::max_align_t[(num_bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t)]);
+    size_t new_buffer_size = (num_bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
+    auto   new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[new_buffer_size]);
+    memset(new_buffer.get(), 0, sizeof(std::max_align_t) * new_buffer_size);
 
     auto old_topology_ptr = TopologyPtr();
     auto old_prim_restart_enabled_ptr = PrimRestartEnabledPtr();
@@ -93,6 +94,10 @@ typename EventStateInfo::Id::basic_type new_cap)
     auto old_z_test_mode_ptr = ZTestModePtr();
     auto old_bin_w_ptr = BinWPtr();
     auto old_bin_h_ptr = BinHPtr();
+    auto old_window_scissor_tlx_ptr = WindowScissorTLXPtr();
+    auto old_window_scissor_tly_ptr = WindowScissorTLYPtr();
+    auto old_window_scissor_brx_ptr = WindowScissorBRXPtr();
+    auto old_window_scissor_bry_ptr = WindowScissorBRYPtr();
     auto old_render_mode_ptr = RenderModePtr();
     auto old_buffers_location_ptr = BuffersLocationPtr();
     auto old_thread_size_ptr = ThreadSizePtr();
@@ -236,6 +241,18 @@ typename EventStateInfo::Id::basic_type new_cap)
     static_assert(std::is_trivially_copyable<uint32_t>::value,
                   "Field type must be trivially copyable");
     memcpy(BinHPtr(), old_bin_h_ptr, kBinHSize * m_size);
+    static_assert(std::is_trivially_copyable<uint16_t>::value,
+                  "Field type must be trivially copyable");
+    memcpy(WindowScissorTLXPtr(), old_window_scissor_tlx_ptr, kWindowScissorTLXSize * m_size);
+    static_assert(std::is_trivially_copyable<uint16_t>::value,
+                  "Field type must be trivially copyable");
+    memcpy(WindowScissorTLYPtr(), old_window_scissor_tly_ptr, kWindowScissorTLYSize * m_size);
+    static_assert(std::is_trivially_copyable<uint16_t>::value,
+                  "Field type must be trivially copyable");
+    memcpy(WindowScissorBRXPtr(), old_window_scissor_brx_ptr, kWindowScissorBRXSize * m_size);
+    static_assert(std::is_trivially_copyable<uint16_t>::value,
+                  "Field type must be trivially copyable");
+    memcpy(WindowScissorBRYPtr(), old_window_scissor_bry_ptr, kWindowScissorBRYSize * m_size);
     static_assert(std::is_trivially_copyable<a6xx_render_mode>::value,
                   "Field type must be trivially copyable");
     memcpy(RenderModePtr(), old_render_mode_ptr, kRenderModeSize * m_size);
@@ -308,6 +325,10 @@ typename EventStateInfo::Id::basic_type new_cap)
     DBG_z_test_mode = ZTestModePtr();
     DBG_bin_w = BinWPtr();
     DBG_bin_h = BinHPtr();
+    DBG_window_scissor_tlx = WindowScissorTLXPtr();
+    DBG_window_scissor_tly = WindowScissorTLYPtr();
+    DBG_window_scissor_brx = WindowScissorBRXPtr();
+    DBG_window_scissor_bry = WindowScissorBRYPtr();
     DBG_render_mode = RenderModePtr();
     DBG_buffers_location = BuffersLocationPtr();
     DBG_thread_size = ThreadSizePtr();
@@ -395,6 +416,10 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     new (ZTestModePtr(Id(m_size))) a6xx_ztest_mode();
     new (BinWPtr(Id(m_size))) uint32_t();
     new (BinHPtr(Id(m_size))) uint32_t();
+    new (WindowScissorTLXPtr(Id(m_size))) uint16_t();
+    new (WindowScissorTLYPtr(Id(m_size))) uint16_t();
+    new (WindowScissorBRXPtr(Id(m_size))) uint16_t();
+    new (WindowScissorBRYPtr(Id(m_size))) uint16_t();
     new (RenderModePtr(Id(m_size))) a6xx_render_mode();
     new (BuffersLocationPtr(Id(m_size))) a6xx_buffers_location();
     new (ThreadSizePtr(Id(m_size))) a6xx_threadsize();
@@ -475,6 +500,10 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetZTestMode(other_obj.ZTestMode(other_id));
     SetBinW(other_obj.BinW(other_id));
     SetBinH(other_obj.BinH(other_id));
+    SetWindowScissorTLX(other_obj.WindowScissorTLX(other_id));
+    SetWindowScissorTLY(other_obj.WindowScissorTLY(other_id));
+    SetWindowScissorBRX(other_obj.WindowScissorBRX(other_id));
+    SetWindowScissorBRY(other_obj.WindowScissorBRY(other_id));
     SetRenderMode(other_obj.RenderMode(other_id));
     SetBuffersLocation(other_obj.BuffersLocation(other_id));
     SetThreadSize(other_obj.ThreadSize(other_id));
@@ -714,6 +743,26 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         auto val = BinH();
         SetBinH(other.BinH());
         other.SetBinH(val);
+    }
+    {
+        auto val = WindowScissorTLX();
+        SetWindowScissorTLX(other.WindowScissorTLX());
+        other.SetWindowScissorTLX(val);
+    }
+    {
+        auto val = WindowScissorTLY();
+        SetWindowScissorTLY(other.WindowScissorTLY());
+        other.SetWindowScissorTLY(val);
+    }
+    {
+        auto val = WindowScissorBRX();
+        SetWindowScissorBRX(other.WindowScissorBRX());
+        other.SetWindowScissorBRX(val);
+    }
+    {
+        auto val = WindowScissorBRY();
+        SetWindowScissorBRY(other.WindowScissorBRY());
+        other.SetWindowScissorBRY(val);
     }
     {
         auto val = RenderMode();

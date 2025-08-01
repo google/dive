@@ -397,5 +397,54 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
 }
 
+// Test submitting the same command buffer twice in one frame results in failure
+// and no update to GPUTime statistics.
+TEST(GPUTimeTest, SubmittingSameCommandBufferTwiceInFrameFailsAndKeepsDefaultStats)
+{
+    GPUTime gpuTime;
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpuTime, kMockTimestampPeriod));
+
+    constexpr size_t            kCmdBufferCount = 2;
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.commandPool = MOCK_COMMAND_POOL;
+    allocInfo.commandBufferCount = kCmdBufferCount;
+    VkCommandBuffer cmd_buffers[kCmdBufferCount] = { MOCK_COMMAND_BUFFER_1, MOCK_COMMAND_BUFFER_2 };
+    ASSERT_TRUE(gpuTime.OnAllocateCommandBuffers(&allocInfo, cmd_buffers).success);
+
+    VkDebugUtilsLabelEXT label = {};
+    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
+    ASSERT_TRUE(gpuTime.OnCmdInsertDebugUtilsLabelEXT(cmd_buffers[1], &label).success);
+
+    VkCommandBuffer cmds[] = { cmd_buffers[0] };
+    VkSubmitInfo    submitInfo = {};
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = cmds;
+
+    ASSERT_TRUE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
+
+    submitInfo.commandBufferCount = 2;
+    submitInfo.pCommandBuffers = cmd_buffers;
+
+    ASSERT_FALSE(
+    gpuTime
+    .OnQueueSubmit(1, &submitInfo, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
+    .success);
+
+    // Since the frame was invalid, the metrics should remain at their default values.
+    auto           stats = gpuTime.GetStats();
+    GPUTime::Stats expected_stats;
+    expected_stats.average = 0.0;
+    expected_stats.median = 0.0;
+    expected_stats.min = std::numeric_limits<double>::max();
+    expected_stats.max = std::numeric_limits<double>::lowest();
+    expected_stats.stddev = 0.0;
+    EXPECT_THAT(stats, StatsEq(expected_stats));
+
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpuTime));
+}
+
 }  // namespace
 }  // namespace Dive

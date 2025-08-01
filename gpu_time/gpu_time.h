@@ -141,6 +141,7 @@ private:
     uint64_t                     m_frame_index = 0;
     uint32_t                     m_timestamp_counter = 0;
     float                        m_timestamp_period = 0.0f;
+    bool                         m_valid_frame = true;
 };
 
 }  // namespace Dive

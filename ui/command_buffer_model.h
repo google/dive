@@ -25,7 +25,7 @@ limitations under the License.
 namespace Dive
 {
 class CommandHierarchy;
-class Topology;
+class SharedNodeTopology;
 };  // namespace Dive
 
 class CommandBufferModel : public QAbstractItemModel
@@ -46,7 +46,7 @@ public:
 
     void Reset();
 
-    void SetTopologyToView(const Dive::Topology *topology_ptr);
+    void SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr);
 
     QVariant      data(const QModelIndex &index, int role) const override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
@@ -86,7 +86,7 @@ private:
     std::vector<uint8_t>     m_node_is_selected_bit_list;
     QModelIndex              m_scroll_to_index;
 
-    const Dive::CommandHierarchy &m_command_hierarchy;
-    const Dive::Topology         *m_topology_ptr = nullptr;
-    bool                          m_show_level_column = true;
+    const Dive::CommandHierarchy   &m_command_hierarchy;
+    const Dive::SharedNodeTopology *m_topology_ptr = nullptr;
+    bool                            m_show_level_column = true;
 };

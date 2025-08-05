@@ -673,6 +673,42 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     // Check the file type to determine what is loaded.
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
 
+    // Check if the file loaded is a .gfxr file.
+    m_gfxr_capture_loaded = (file_extension.compare(".gfxr") == 0);
+
+    if (m_gfxr_capture_loaded)
+    {
+        // Convert the filename to a string to perform a replacement.
+        std::string potential_asset_name(file_name);
+
+        const std::string trim_str = "_trim_trigger";
+        const std::string asset_str = "_asset_file";
+
+        // Find and replace the "trim_trigger" part of the filename.
+        size_t pos = potential_asset_name.find(trim_str);
+        if (pos != std::string::npos)
+        {
+            potential_asset_name.replace(pos, trim_str.length(), asset_str);
+        }
+
+        // Create a path object to the asset file.
+        std::filesystem::path asset_file_path(potential_asset_name);
+        asset_file_path.replace_extension(".gfxa");
+
+        // Check if the required asset file exists.
+        bool asset_file_exists = std::filesystem::exists(asset_file_path);
+
+        if (!asset_file_exists)
+        {
+            HideOverlay();
+            QString title = QString("Unable to open file: %1").arg(file_name);
+            QString description = QString("Required .gfxa file: %1 not found!")
+                                  .arg(QString::fromStdString(asset_file_path.string()));
+            QMessageBox::critical(this, title, description);
+            return false;
+        }
+    }
+
     bool file_loaded = false;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -694,8 +730,6 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
         QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
         return false;
     }
-
-    m_gfxr_capture_loaded = (file_extension.compare(".gfxr") == 0);
 
     // Disconnect the signals for all of the possible tabs.
     DisconnectAllTabs();

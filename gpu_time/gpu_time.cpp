@@ -544,29 +544,24 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submitCou
                              m_cmds[cmd].is_frameboundary };
                 }
 
-                // TODO(wangra): disable this check for now,
-                // it seems that the system is inserting the same empty cmd for left and right eye
-                // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
-                // This does not affect timing, but needs some further investigation.
-
-                //// Check the case where the same primary cmd buffer is reused within a frame
-                //// Most likely due to VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
-                // auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
-                // if (it != m_frame_cmds.end())
-                //{
-                //     m_valid_frame = false;
-                //     std::stringstream ss;
-                //     ss << static_cast<void*>(cmd)
-                //        << " is reused within a frame, gpu timing is not supported for this
-                //        case!";
-                //     return { GPUTime::GpuTimeStatus{ ss.str(), false },
-                //              m_cmds[cmd].is_frameboundary };
-                // }
-
                 if (m_cmds[cmd].is_frameboundary)
                 {
                     is_frame_boundary = true;
                 }
+
+                // Check the case where the same primary cmd buffer is reused within a frame
+                // TODO(wangra):
+                // it seems that the OS is inserting the same empty cmd for left and right eye
+                // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+                // This in theory should trigger a validation error, but not in this case
+                // For now we keep both in the frame cache m_frame_cmds, since it is easier for vk correlation
+                // (but the gput time will be equal to the last cmd that is being submitted)
+                // This does not affect timing since it is empty, but needs some further investigation.
+                /*auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
+                if (it == m_frame_cmds.end())
+                {
+                    m_frame_cmds.push_back(cmd);
+                }*/
                 m_frame_cmds.push_back(cmd);
             }
         }

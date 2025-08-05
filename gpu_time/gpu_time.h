@@ -124,6 +124,7 @@ private:
         {
             is_frameboundary = false;
             usage_one_submit = false;
+            reusable = false;
         }
         const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
 
@@ -131,6 +132,7 @@ private:
         uint32_t      timestamp_offset = kInvalidTimeStampOffset;
         bool          is_frameboundary = false;
         bool          usage_one_submit = false;
+        bool          reusable = false;
     };
 
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);

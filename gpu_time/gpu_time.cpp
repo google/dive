@@ -246,8 +246,8 @@ VkCommandBuffer*                   pCommandBuffers)
             ss << static_cast<void*>(pCommandBuffers[i]) << " has been already added!";
             return GPUTime::GpuTimeStatus{ ss.str(), false };
         }
-        m_cmds.insert(
-        { pCommandBuffers[i], { pAllocateInfo->commandPool, m_timestamp_counter, false } });
+        m_cmds.insert({ pCommandBuffers[i],
+                        { pAllocateInfo->commandPool, m_timestamp_counter, false, false, false } });
         // 1 at vkBeginCommandBuffer and 1 at vkEndCommandBuffer
         m_timestamp_counter += 2;
     }
@@ -311,6 +311,11 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(VkCommandBuffer           c
     if ((flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0)
     {
         m_cmds[commandBuffer].usage_one_submit = true;
+    }
+
+    if ((flags & VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT) != 0)
+    {
+        m_cmds[commandBuffer].reusable = true;
     }
 
     pfnCmdWriteTimestamp(commandBuffer,
@@ -416,10 +421,10 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
 }
 
 GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submitCount,
-                                              const VkSubmitInfo*       pSubmits,
-                                              PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
-                                              PFN_vkResetQueryPool      pfnResetQueryPool,
-                                              PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
+                                             const VkSubmitInfo*       pSubmits,
+                                             PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
+                                             PFN_vkResetQueryPool      pfnResetQueryPool,
+                                             PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
 {
     bool is_frame_boundary = false;
 
@@ -441,18 +446,33 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submitCou
                     return { GPUTime::GpuTimeStatus{ ss.str(), false }, false };
                 }
 
-                // Check the case where the same primary cmd buffer is reused within a frame
-                // Most likely due to VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
-                auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
-                if (it != m_frame_cmds.end())
+                if (m_cmds[cmd].reusable)
                 {
                     m_valid_frame = false;
                     std::stringstream ss;
-                    ss << static_cast<void*>(cmd)
-                       << " is reused within a frame, gpu timing is not supported for this case!";
+                    ss << static_cast<void*>(cmd) << " Reusable cmd is not supported!";
                     return { GPUTime::GpuTimeStatus{ ss.str(), false },
                              m_cmds[cmd].is_frameboundary };
                 }
+
+                // TODO(wangra): disable this check for now,
+                // it seems that the system is inserting the same empty cmd for left and right eye
+                // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT 
+                // This does not affect timing, but needs some further investigation.
+
+                //// Check the case where the same primary cmd buffer is reused within a frame
+                //// Most likely due to VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+                // auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
+                // if (it != m_frame_cmds.end())
+                //{
+                //     m_valid_frame = false;
+                //     std::stringstream ss;
+                //     ss << static_cast<void*>(cmd)
+                //        << " is reused within a frame, gpu timing is not supported for this
+                //        case!";
+                //     return { GPUTime::GpuTimeStatus{ ss.str(), false },
+                //              m_cmds[cmd].is_frameboundary };
+                // }
 
                 if (m_cmds[cmd].is_frameboundary)
                 {

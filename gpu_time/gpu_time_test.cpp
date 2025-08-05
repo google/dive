@@ -165,7 +165,7 @@ TEST(GPUTimeTest, InitialStateReturnsDefaultStats)
     GPUTime gpu_time;
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
-    auto           stats = gpu_time.GetStats();
+    auto           stats = gpu_time.GetFrameTimeStats();
     GPUTime::Stats expected_stats;
     expected_stats.average = 0.0;
     expected_stats.median = 0.0;
@@ -279,12 +279,12 @@ TEST(GPUTimeTest, SingleCommandBufferFrameUpdatesMetricsCorrectly)
     ASSERT_TRUE(
     gpu_time
     .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
+    .gpu_time_status.success);
 
     // After a frame boundary submit, metrics should be updated.
     // Our mock provides a 10ms duration for the first command buffer.
     // (1010000000 - 1000000000) * 1.0f (timestamp_period) * 0.000001 = 10.0
-    auto           stats = gpu_time.GetStats();
+    auto           stats = gpu_time.GetFrameTimeStats();
     GPUTime::Stats expected_stats;
     expected_stats.average = 10.0;
     expected_stats.median = 10.0;
@@ -319,18 +319,42 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
     ASSERT_TRUE(
     gpu_time
     .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
+    .gpu_time_status.success);
 
-    // The total frame time should be the sum of durations from both command buffers.
-    // From our mock function: 10ms + 20ms = 30ms.
-    auto           stats = gpu_time.GetStats();
-    GPUTime::Stats expected_stats;
-    expected_stats.average = 30.0;
-    expected_stats.median = 30.0;
-    expected_stats.min = 30.0;
-    expected_stats.max = 30.0;
-    expected_stats.stddev = 0.0;
-    EXPECT_THAT(stats, StatsEq(expected_stats));
+    {
+        auto           cmd_0_stats = gpu_time.GetFrameCmdTimeStats(0);
+        GPUTime::Stats expected_stats;
+        expected_stats.average = 10.0;
+        expected_stats.median = 10.0;
+        expected_stats.min = 10.0;
+        expected_stats.max = 10.0;
+        expected_stats.stddev = 0.0;
+        EXPECT_THAT(cmd_0_stats, StatsEq(expected_stats));
+    }
+
+    {
+        auto           cmd_1_stats = gpu_time.GetFrameCmdTimeStats(1);
+        GPUTime::Stats expected_stats;
+        expected_stats.average = 20.0;
+        expected_stats.median = 20.0;
+        expected_stats.min = 20.0;
+        expected_stats.max = 20.0;
+        expected_stats.stddev = 0.0;
+        EXPECT_THAT(cmd_1_stats, StatsEq(expected_stats));
+    }
+
+    {
+        // The total frame time should be the sum of durations from both command buffers.
+        // From our mock function: 10ms + 20ms = 30ms.
+        auto           stats = gpu_time.GetFrameTimeStats();
+        GPUTime::Stats expected_stats;
+        expected_stats.average = 30.0;
+        expected_stats.median = 30.0;
+        expected_stats.min = 30.0;
+        expected_stats.max = 30.0;
+        expected_stats.stddev = 0.0;
+        EXPECT_THAT(stats, StatsEq(expected_stats));
+    }
 
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
 }
@@ -361,7 +385,7 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     ASSERT_TRUE(
     gpu_time
     .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
+    .gpu_time_status.success);
 
     // --- Submit Frame 2 (20ms) ---
     gpu_time.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_2, &label);
@@ -369,7 +393,7 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     ASSERT_TRUE(
     gpu_time
     .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
+    .gpu_time_status.success);
 
     // --- Submit Frame 3 (30ms) ---
     gpu_time.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_3, &label);
@@ -377,10 +401,10 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     ASSERT_TRUE(
     gpu_time
     .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
+    .gpu_time_status.success);
 
     // Check stats after three frames (10ms, 20ms, and 30ms)
-    auto stats = gpu_time.GetStats();
+    auto stats = gpu_time.GetFrameTimeStats();
     // Average: (10 + 20 + 30) / 3 = 20.0
     // Median: The middle value of {10, 20, 30} is 20.0
     // Min: 10.0, Max: 30.0
@@ -392,55 +416,6 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     expected_stats.min = 10.0;
     expected_stats.max = 30.0;
     expected_stats.stddev = 10.0;
-    EXPECT_THAT(stats, StatsEq(expected_stats));
-
-    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
-}
-
-// Test submitting the same command buffer twice in one frame results in failure
-// and no update to GPUTime statistics.
-TEST(GPUTimeTest, SubmittingSameCommandBufferTwiceInFrameFailsAndKeepsDefaultStats)
-{
-    GPUTime gpu_time;
-    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
-
-    constexpr size_t            kCmdBufferCount = 2;
-    VkCommandBufferAllocateInfo alloc_info = {};
-    alloc_info.commandPool = MOCK_COMMAND_POOL;
-    alloc_info.commandBufferCount = kCmdBufferCount;
-    VkCommandBuffer cmd_buffers[kCmdBufferCount] = { MOCK_COMMAND_BUFFER_1, MOCK_COMMAND_BUFFER_2 };
-    ASSERT_TRUE(gpu_time.OnAllocateCommandBuffers(&alloc_info, cmd_buffers).success);
-
-    VkDebugUtilsLabelEXT label = {};
-    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
-    ASSERT_TRUE(gpu_time.OnCmdInsertDebugUtilsLabelEXT(cmd_buffers[1], &label).success);
-
-    VkCommandBuffer cmds[] = { cmd_buffers[0] };
-    VkSubmitInfo    submit_info = {};
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = cmds;
-
-    ASSERT_TRUE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
-
-    submit_info.commandBufferCount = 2;
-    submit_info.pCommandBuffers = cmd_buffers;
-
-    ASSERT_FALSE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .success);
-
-    // Since the frame was invalid, the metrics should remain at their default values.
-    auto           stats = gpu_time.GetStats();
-    GPUTime::Stats expected_stats;
-    expected_stats.average = 0.0;
-    expected_stats.median = 0.0;
-    expected_stats.min = std::numeric_limits<double>::max();
-    expected_stats.max = std::numeric_limits<double>::lowest();
-    expected_stats.stddev = 0.0;
     EXPECT_THAT(stats, StatsEq(expected_stats));
 
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));

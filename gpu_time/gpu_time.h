@@ -99,7 +99,8 @@ public:
         double max = std::numeric_limits<double>::lowest();
         double stddev = 0.0;
     };
-    Stats       GetStats() const { return m_metrics.GetStatistics(); }
+    Stats GetFrameTimeStats() const { return m_metrics.GetFrameTimeStats(); }
+    Stats GetFrameCmdTimeStats(size_t index) const { return m_metrics.GetFrameCmdTimeStats(index); }
     std::string GetStatsString() const;
 
 private:
@@ -107,16 +108,20 @@ private:
     {
     public:
         FrameMetrics() = default;
-        void AddFrameTime(double time);
-
-        Stats GetStatistics() const;
+        void   AddFrameData(double frame_time, const std::vector<double> cmd_time_vec);
+        Stats  GetFrameTimeStats() const;
+        Stats  GetFrameCmdTimeStats(size_t index) const;
+        size_t GetFrameCmdCount() const;
 
     private:
-        double CalculateAverage() const;
-        double CalculateMedian() const;
-        double CalculateStdDev(double average) const;
+        Stats  GetStatistics(const std::deque<double>& data) const;
+        double CalculateAverage(const std::deque<double>& data) const;
+        double CalculateMedian(const std::deque<double>& data) const;
+        double CalculateStdDev(const std::deque<double>& data, double average) const;
+        void   Reset();
 
-        std::deque<double> m_frame_data;
+        std::deque<double>              m_frame_time;
+        std::vector<std::deque<double>> m_cmd_time_vec;
     };
 
     class TimeStampSlotAllocator

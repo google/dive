@@ -108,60 +108,77 @@ void GPUTime::TimeStampSlotAllocator::FreeSlots(const std::vector<uint32_t>& slo
     }
 }
 
-void GPUTime::FrameMetrics::AddFrameTime(double time)
+void GPUTime::FrameMetrics::AddFrameData(double frame_time, const std::vector<double> cmd_time_vec)
 {
-    if (m_frame_data.size() == kFrameMetricsLimit)
+    // TODO(wangra): reset when there is a difference in number of cmds per frame
+    // maybe we should expose the Reset and let the app decide when to reset
+    size_t new_frame_cmd_count = cmd_time_vec.size();
+    if (m_cmd_time_vec.size() != new_frame_cmd_count)
     {
-        m_frame_data.pop_front();
+        Reset();
+        m_cmd_time_vec.resize(new_frame_cmd_count);
     }
-    m_frame_data.push_back(time);
+
+    if (m_frame_time.size() == kFrameMetricsLimit)
+    {
+        m_frame_time.pop_front();
+
+        for (auto& t : m_cmd_time_vec)
+        {
+            t.pop_front();
+        }
+    }
+    m_frame_time.push_back(frame_time);
+    for (size_t i = 0; i < new_frame_cmd_count; ++i)
+    {
+        m_cmd_time_vec[i].push_back(cmd_time_vec[i]);
+    }
 }
 
-GPUTime::Stats GPUTime::FrameMetrics::GetStatistics() const
+GPUTime::Stats GPUTime::FrameMetrics::GetStatistics(const std::deque<double>& data) const
 {
     Stats stats;
     stats.min = std::numeric_limits<double>::max();
     stats.max = std::numeric_limits<double>::lowest();
 
-    for (const auto& frame : m_frame_data)
+    for (const auto& d : data)
     {
-        double time = frame;
-        stats.min = std::min(stats.min, time);
-        stats.max = std::max(stats.max, time);
+        stats.min = std::min(stats.min, d);
+        stats.max = std::max(stats.max, d);
     }
 
-    stats.average = CalculateAverage();
-    stats.median = CalculateMedian();
-    stats.stddev = CalculateStdDev(stats.average);
+    stats.average = CalculateAverage(data);
+    stats.median = CalculateMedian(data);
+    stats.stddev = CalculateStdDev(data, stats.average);
 
     return stats;
 }
 
-double GPUTime::FrameMetrics::CalculateAverage() const
+double GPUTime::FrameMetrics::CalculateAverage(const std::deque<double>& data) const
 {
-    if (m_frame_data.empty())
+    if (data.empty())
     {
         return 0.0;
     }
 
     double sum = 0.0;
-    for (const auto& frame : m_frame_data)
+    for (const auto& d : data)
     {
-        sum += frame;
+        sum += d;
     }
-    return sum / m_frame_data.size();
+    return sum / data.size();
 }
 
-double GPUTime::FrameMetrics::CalculateMedian() const
+double GPUTime::FrameMetrics::CalculateMedian(const std::deque<double>& data) const
 {
-    if (m_frame_data.empty())
+    if (data.empty())
     {
         return 0.0;
     }
 
     // Create a mutable copy of the data to sort it,
     // as the original m_frame_data is const in this const member function.
-    std::deque<double> sorted_data = m_frame_data;
+    std::deque<double> sorted_data = data;
     std::sort(sorted_data.begin(), sorted_data.end());
 
     size_t size = sorted_data.size();
@@ -179,32 +196,68 @@ double GPUTime::FrameMetrics::CalculateMedian() const
     }
 }
 
-double GPUTime::FrameMetrics::CalculateStdDev(double average) const
+double GPUTime::FrameMetrics::CalculateStdDev(const std::deque<double>& data, double average) const
 {
-    if (m_frame_data.size() < 2)
+    if (data.size() < 2)
     {
         return 0.0;
     }
     double variance = 0.0;
-    for (const auto& frame : m_frame_data)
+    for (const auto& d : data)
     {
-        double time = frame;
-        variance += (time - average) * (time - average);
+        variance += (d - average) * (d - average);
     }
-    variance /= (m_frame_data.size() - 1);
+    variance /= (data.size() - 1);
     return std::sqrt(variance);
+}
+
+void GPUTime::FrameMetrics::Reset()
+{
+    m_frame_time.clear();
+    m_cmd_time_vec.clear();
+}
+
+GPUTime::Stats GPUTime::FrameMetrics::GetFrameTimeStats() const
+{
+    return GetStatistics(m_frame_time);
+}
+
+GPUTime::Stats GPUTime::FrameMetrics::GetFrameCmdTimeStats(size_t index) const
+{
+    if (index >= m_cmd_time_vec.size())
+    {
+        return GPUTime::Stats();
+    }
+    return GetStatistics(m_cmd_time_vec[index]);
+}
+
+size_t GPUTime::FrameMetrics::GetFrameCmdCount() const
+{
+    return m_cmd_time_vec.size();
 }
 
 std::string GPUTime::GetStatsString() const
 {
-    const Stats&      stats = GetStats();
+    const Stats&      stats = GetFrameTimeStats();
     std::stringstream ss;
-    ss << "FrameMetrics:\n"
-       << std::fixed << std::setprecision(2) << "  Min: " << stats.min << " ms\n"
-       << "  Max: " << stats.max << " ms\n"
-       << "  Mean: " << stats.average << " ms\n"
-       << "  Median: " << stats.median << " ms\n"
-       << "  Std: " << stats.stddev << " ms";
+    ss << "FrameMetrics:\n";
+
+    auto PopulateStatsString = [&](std::stringstream& ss, const Stats& stats) {
+        ss << std::fixed << std::setprecision(2) << "  Min: " << stats.min << " ms\n"
+           << "  Max: " << stats.max << " ms\n"
+           << "  Mean: " << stats.average << " ms\n"
+           << "  Median: " << stats.median << " ms\n"
+           << "  Std: " << stats.stddev << " ms\n";
+    };
+    PopulateStatsString(ss, stats);
+
+    size_t cmd_count = m_metrics.GetFrameCmdCount();
+    for (size_t i = 0; i < cmd_count; ++i)
+    {
+        const Stats& cms_stats = GetFrameCmdTimeStats(i);
+        ss << "Command Buffer " << i << ": \n";
+        PopulateStatsString(ss, cms_stats);
+    }
 
     std::string message = "Frame " + std::to_string(m_frame_index) + " processed successfully.\n" +
                           ss.str();
@@ -393,15 +446,10 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(VkCommandBuffer           c
         m_cmds[commandBuffer].Reset();
     }
 
-    if ((flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0)
-    {
-        m_cmds[commandBuffer].usage_one_submit = true;
-    }
+    m_cmds[commandBuffer].usage_one_submit = ((flags &
+                                               VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);
 
-    if ((flags & VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT) != 0)
-    {
-        m_cmds[commandBuffer].reusable = true;
-    }
+    m_cmds[commandBuffer].reusable = ((flags & VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT) != 0);
 
     pfnCmdWriteTimestamp(commandBuffer,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -467,7 +515,8 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
     // In the future, we could keep command buffer gpu time or render pass gpu time separately
     // but this requires all frames have the same commandbuffers and renderpasses which might
     // not be true for the runtime layer case
-    double frame_time = 0.0;
+    double              frame_time = 0.0;
+    std::vector<double> cmds_time;
 
     for (const auto& cmd : m_frame_cmds)
     {
@@ -497,13 +546,14 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
             uint64_t elapsed_time = timestamps_with_availability[end_timestamp_offset * 2] -
                                     timestamps_with_availability[begin_timestamp_offset * 2];
             double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
+            cmds_time.push_back(elapsed_time_in_ms);
             frame_time += elapsed_time_in_ms;
         }
     }
 
     if (m_valid_frame)
     {
-        m_metrics.AddFrameTime(frame_time);
+        m_metrics.AddFrameData(frame_time, cmds_time);
     }
 
     return GPUTime::GpuTimeStatus();
@@ -554,9 +604,10 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submitCou
                 // it seems that the OS is inserting the same empty cmd for left and right eye
                 // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
                 // This in theory should trigger a validation error, but not in this case
-                // For now we keep both in the frame cache m_frame_cmds, since it is easier for vk correlation
-                // (but the gput time will be equal to the last cmd that is being submitted)
-                // This does not affect timing since it is empty, but needs some further investigation.
+                // For now we keep both in the frame cache m_frame_cmds, since it is easier for vk
+                // correlation (but the gput time will be equal to the last cmd that is being
+                // submitted) This does not affect timing since it is empty, but needs some further
+                // investigation.
                 /*auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
                 if (it == m_frame_cmds.end())
                 {

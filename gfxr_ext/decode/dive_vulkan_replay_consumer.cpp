@@ -289,19 +289,27 @@ format::HandleId                            fence)
     PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
     GetDeviceTable(gpu_time_.GetDevice())->GetQueryPoolResults);
 
-    const VkSubmitInfo*          submit_infos = pSubmits->GetPointer();
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnQueueSubmit(submitCount,
-                                                                  submit_infos,
-                                                                  DeviceWaitIdle,
-                                                                  ResetQueryPool,
-                                                                  GetQueryPoolResults);
-    if (!status.success)
+    const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
+    auto                submit_status = gpu_time_.OnQueueSubmit(submitCount,
+                                                 submit_infos,
+                                                 DeviceWaitIdle,
+                                                 ResetQueryPool,
+                                                 GetQueryPoolResults);
+
+    if (!submit_status.gpu_time_status.success)
     {
-        GFXRECON_LOG_ERROR(status.message.c_str());
+        if (submit_status.contains_frame_boundary)
+        {
+            GFXRECON_LOG_ERROR("Frame Boundary!");
+        }
+        GFXRECON_LOG_ERROR(submit_status.gpu_time_status.message.c_str());
     }
     else
     {
-        GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
+        if (submit_status.contains_frame_boundary)
+        {
+            GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
+        }
     }
 }
 

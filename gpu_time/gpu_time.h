@@ -38,6 +38,12 @@ public:
         bool        success = true;
     };
 
+    struct SubmitStatus
+    {
+        GpuTimeStatus gpu_time_status;
+        bool          contains_frame_boundary = false;
+    };
+
     GPUTime() = default;
     ~GPUTime() = default;
 
@@ -72,11 +78,11 @@ public:
     GpuTimeStatus OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
                                      PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
 
-    GpuTimeStatus OnQueueSubmit(uint32_t                  submitCount,
-                                const VkSubmitInfo*       pSubmits,
-                                PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
-                                PFN_vkResetQueryPool      pfnResetQueryPool,
-                                PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    SubmitStatus OnQueueSubmit(uint32_t                  submitCount,
+                               const VkSubmitInfo*       pSubmits,
+                               PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
+                               PFN_vkResetQueryPool      pfnResetQueryPool,
+                               PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
 
     GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue);
     GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue);

@@ -415,7 +415,7 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
     return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::GpuTimeStatus GPUTime::OnQueueSubmit(uint32_t                  submitCount,
+GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submitCount,
                                               const VkSubmitInfo*       pSubmits,
                                               PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
                                               PFN_vkResetQueryPool      pfnResetQueryPool,
@@ -438,7 +438,7 @@ GPUTime::GpuTimeStatus GPUTime::OnQueueSubmit(uint32_t                  submitCo
                     m_valid_frame = false;
                     std::stringstream ss;
                     ss << static_cast<void*>(cmd) << " is not in the cmd cache!";
-                    return GPUTime::GpuTimeStatus{ ss.str(), false };
+                    return { GPUTime::GpuTimeStatus{ ss.str(), false }, false };
                 }
 
                 // Check the case where the same primary cmd buffer is reused within a frame
@@ -450,7 +450,8 @@ GPUTime::GpuTimeStatus GPUTime::OnQueueSubmit(uint32_t                  submitCo
                     std::stringstream ss;
                     ss << static_cast<void*>(cmd)
                        << " is reused within a frame, gpu timing is not supported for this case!";
-                    return GPUTime::GpuTimeStatus{ ss.str(), false };
+                    return { GPUTime::GpuTimeStatus{ ss.str(), false },
+                             m_cmds[cmd].is_frameboundary };
                 }
 
                 if (m_cmds[cmd].is_frameboundary)
@@ -480,10 +481,10 @@ GPUTime::GpuTimeStatus GPUTime::OnQueueSubmit(uint32_t                  submitCo
         m_valid_frame = true;
         if (!update_status.success)
         {
-            return update_status;
+            return { update_status, true };
         }
     }
-    return GPUTime::GpuTimeStatus();
+    return { GPUTime::GpuTimeStatus(), is_frame_boundary };
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)

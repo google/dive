@@ -23,6 +23,7 @@ limitations under the License.
 #include <deque>
 #include <unordered_map>
 #include <limits>
+#include <atomic>
 
 namespace Dive
 {
@@ -118,6 +119,24 @@ private:
         std::deque<double> m_frame_data;
     };
 
+    class TimeStampSlotAllocator
+    {
+    public:
+        static constexpr uint32_t kSlotsPerBlock = 64;
+        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * 4;
+        static constexpr uint32_t kNumBlocks = kTotalSlots / kSlotsPerBlock;
+        static constexpr uint32_t kInvalidIndex = static_cast<uint32_t>(-1);
+
+        TimeStampSlotAllocator();
+        void     Reset();
+        uint32_t AllocateSlot();
+        void     FreeSlots(const std::vector<uint32_t>& slots);
+
+    private:
+        std::atomic<size_t>   m_masks[kNumBlocks];
+        std::atomic<uint32_t> m_cur = 0;
+    };
+
     struct CommandBufferInfo
     {
         void Reset()
@@ -129,7 +148,8 @@ private:
         const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
 
         VkCommandPool pool = VK_NULL_HANDLE;
-        uint32_t      timestamp_offset = kInvalidTimeStampOffset;
+        uint32_t      begin_timestamp_offset = kInvalidTimeStampOffset;
+        uint32_t      end_timestamp_offset = kInvalidTimeStampOffset;
         bool          is_frameboundary = false;
         bool          usage_one_submit = false;
         bool          reusable = false;
@@ -142,6 +162,7 @@ private:
     std::set<VkQueue>                                      m_queues;
     std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
     std::vector<VkCommandBuffer>                           m_frame_cmds;
+    TimeStampSlotAllocator                                 m_timestamp_allocator;
 
     VkDevice                     m_device = VK_NULL_HANDLE;
     const VkAllocationCallbacks* m_allocator = nullptr;

@@ -72,6 +72,7 @@ wait_for_logcat_line() {
 # Get the main activity from a package, if it exists
 # Usage: find_default_activity PACKAGE
 # Example: ACTIVITY=$(find_default_activity com.google.bigwheels.project_xube_xr.debug) # ACTIVITY should be com.google.bigwheels.MainActivity
+# TODO: If "No activity found", exit status should be > 0
 find_default_activity() {
     adb shell cmd package resolve-activity "$1" | grep "name=" | head -n1 | sed 's/.*name=//'
 }

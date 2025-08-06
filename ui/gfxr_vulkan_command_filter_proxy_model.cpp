@@ -12,8 +12,6 @@
 */
 
 #include "gfxr_vulkan_command_filter_proxy_model.h"
-#include <cstdint>
-#include <string>
 
 GfxrVulkanCommandFilterProxyModel::GfxrVulkanCommandFilterProxyModel(
 QObject                      *parent,

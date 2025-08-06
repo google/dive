@@ -79,6 +79,7 @@ public:
     ~MainWindow();
     bool LoadFile(const char *file_name, bool is_temp_file = false);
     bool LoadDiveFile(const char *file_name);
+    bool LoadAdrenoRdFile(const char *file_name);
     bool LoadGfxrFile(const char *file_name);
     bool InitializePlugins();
 
@@ -121,6 +122,7 @@ private slots:
     void OnTabViewSearchBarVisibilityChange(bool isHidden);
     void OnTabViewChange();
     void ConnectDiveFileTabs();
+    void ConnectAdrenoRdFileTabs();
     void ConnectGfxrFileTabs();
     void ConnectSearchBar();
     void DisconnectSearchBar();

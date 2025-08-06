@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "capture_data.h"
+#include "pm4_capture_data.h"
 
 #include <assert.h>
 #include <string.h>  // memcpy
@@ -840,36 +840,34 @@ const std::map<std::string, uint32_t> &RegisterInfo::GetRegisters() const
 }
 
 // =================================================================================================
-// CaptureData
+// Pm4CaptureData
 // =================================================================================================
-CaptureData::CaptureData() :
+Pm4CaptureData::Pm4CaptureData() :
     m_progress_tracker(NULL)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::CaptureData(ProgressTracker *progress_tracker) :
+Pm4CaptureData::Pm4CaptureData(ProgressTracker *progress_tracker) :
     m_progress_tracker(progress_tracker)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
+// TODO (gcommodore): Separate loading .rd files from loading .dive files so that this function is
+// used purely for loading a .rd file.
+CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const char *file_name)
 {
     std::string file_name_(file_name);
     std::string file_extension = std::filesystem::path(file_name_).extension().generic_string();
 
     if (file_extension.compare(".dive") == 0)
     {
-        return LoadCaptureFile(file_name);
+        return LoadDiveFile(file_name);
     }
     else if (file_extension.compare(".rd") == 0)
     {
         return LoadAdrenoRdFile(file_name);
-    }
-    else if (file_extension.compare(".gfxr") == 0)
-    {
-        return LoadGfxrFile(file_name);
     }
     else
     {
@@ -879,31 +877,7 @@ CaptureData::LoadResult CaptureData::LoadFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-std::ostream &operator<<(std::ostream &os, const CaptureData::LoadResult &r)
-{
-    switch (r)
-    {
-    case CaptureData::LoadResult::kSuccess:
-        os << "Success";
-        break;
-    case CaptureData::LoadResult::kFileIoError:
-        os << "File IO Error";
-        break;
-    case CaptureData::LoadResult::kCorruptData:
-        os << "Corrupt Data";
-        break;
-    case CaptureData::LoadResult::kVersionError:
-        os << "Version Error";
-        break;
-    default:
-        os << "Unknown";
-        break;
-    }
-    return os;
-}
-
-//--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadCaptureFile(const char *file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const char *file_name)
 {
     // Open the file stream
     std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
@@ -913,7 +887,7 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(const char *file_name)
         return LoadResult::kFileIoError;
     }
 
-    auto result = LoadCaptureFile(capture_file);
+    auto result = LoadCaptureFileStream(capture_file);
     if (result != LoadResult::kSuccess)
     {
         std::cerr << "Error reading: " << file_name << " (" << result << ")" << std::endl;
@@ -927,7 +901,7 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const char *file_name)
 {
     FileReader reader(file_name);
     if (reader.Open() != 0)
@@ -949,7 +923,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)
+CaptureData::LoadResult Pm4CaptureData::LoadCaptureFileStream(std::istream &capture_file)
 {
     // Read file header
     FileHeader file_header;
@@ -1009,7 +983,7 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
+CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
 {
     enum rd_sect_type
     {
@@ -1141,150 +1115,73 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult CaptureData::LoadGfxrFile(const char *file_name)
-{
-    if (m_gfxr_capture_block_data != nullptr)
-    {
-        std::cerr << "Error: cannot load another gfxr file with one currently stored: " << file_name
-                  << std::endl;
-        return LoadResult::kFileIoError;
-    }
-
-    m_gfxr_capture_block_data = std::make_shared<gfxrecon::decode::DiveBlockData>();
-
-    gfxrecon::decode::DiveFileProcessor file_processor;
-
-    if (!file_processor.Initialize(file_name))
-    {
-        return LoadResult::kFileIoError;
-    }
-
-    file_processor.SetLoopSingleFrameCount(1);
-    file_processor.SetDiveBlockData(m_gfxr_capture_block_data);
-
-    gfxrecon::decode::VulkanExportDiveConsumer dive_consumer;
-    gfxrecon::decode::VulkanDecoder            decoder;
-    decoder.AddConsumer(&dive_consumer);
-    file_processor.AddDecoder(&decoder);
-
-    DiveAnnotationProcessor dive_annotation_processor;
-    file_processor.SetAnnotationProcessor(&dive_annotation_processor);
-    dive_consumer.Initialize(&dive_annotation_processor);
-
-    if (!file_processor.ProcessAllFrames())
-    {
-        std::cerr << "Error using gfxrecon DiveFileProcessor to load file: " << file_name
-                  << std::endl;
-        std::cerr << file_processor.GetErrorState() << std::endl;
-        return LoadResult::kFileIoError;
-    }
-
-    m_gfxr_submits = dive_annotation_processor.GetSubmits();
-
-    if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
-    {
-        std::cerr << "Error: cannot lock gfxrecon DiveBlockData" << std::endl;
-        return LoadResult::kFileIoError;
-    }
-
-    m_cur_capture_file = file_name;
-
-    return LoadResult::kSuccess;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool CaptureData::WriteModifiedGfxrFile(const char *new_file_name)
-{
-    if (m_cur_capture_file.empty())
-    {
-        std::cerr << "Error: no loaded gfxr file" << std::endl;
-        return false;
-    }
-
-    if (!m_gfxr_capture_block_data->WriteGFXRFile(m_cur_capture_file, new_file_name))
-    {
-        std::cerr << "Error writing modified GFXR file" << std::endl;
-        return false;
-    }
-
-    return true;
-}
-
-//--------------------------------------------------------------------------------------------------
-CaptureDataHeader::CaptureType CaptureData::GetCaptureType() const
+CaptureDataHeader::CaptureType Pm4CaptureData::GetCaptureType() const
 {
     return m_capture_type;
 }
 
 //--------------------------------------------------------------------------------------------------
-const MemoryManager &CaptureData::GetMemoryManager() const
+const MemoryManager &Pm4CaptureData::GetMemoryManager() const
 {
     return m_memory;
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumSubmits() const
+uint32_t Pm4CaptureData::GetNumSubmits() const
 {
     return (uint32_t)m_submits.size();
 }
 
 //--------------------------------------------------------------------------------------------------
-const SubmitInfo &CaptureData::GetSubmitInfo(uint32_t submit_index) const
+const SubmitInfo &Pm4CaptureData::GetSubmitInfo(uint32_t submit_index) const
 {
     return m_submits[submit_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<SubmitInfo> &CaptureData::GetSubmits() const
+const DiveVector<SubmitInfo> &Pm4CaptureData::GetSubmits() const
 {
     return m_submits;
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &
-CaptureData::GetGfxrSubmits() const
-{
-    return m_gfxr_submits;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumPresents() const
+uint32_t Pm4CaptureData::GetNumPresents() const
 {
     return (uint32_t)m_presents.size();
 }
 
 //--------------------------------------------------------------------------------------------------
-const PresentInfo &CaptureData::GetPresentInfo(uint32_t present_index) const
+const PresentInfo &Pm4CaptureData::GetPresentInfo(uint32_t present_index) const
 {
     return m_presents[present_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CaptureData::GetNumRings() const
+uint32_t Pm4CaptureData::GetNumRings() const
 {
     return (uint32_t)m_rings.size();
 }
 
 //--------------------------------------------------------------------------------------------------
-const RingInfo &CaptureData::GetRingInfo(uint32_t ring_index) const
+const RingInfo &Pm4CaptureData::GetRingInfo(uint32_t ring_index) const
 {
     return m_rings[ring_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-const WaveInfo &CaptureData::GetWaveInfo() const
+const WaveInfo &Pm4CaptureData::GetWaveInfo() const
 {
     return m_waves;
 }
 
 //--------------------------------------------------------------------------------------------------
-const RegisterInfo &CaptureData::GetRegisterInfo() const
+const RegisterInfo &Pm4CaptureData::GetRegisterInfo() const
 {
     return m_registers;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header)
+bool Pm4CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header)
 {
     BlockInfo block_info;
     while (capture_file.read((char *)&block_info, sizeof(block_info)))
@@ -1347,7 +1244,7 @@ bool CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHeade
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
 {
     MemoryAllocationsDataHeader memory_allocations_header;
     if (!capture_file.read((char *)&memory_allocations_header, sizeof(memory_allocations_header)))
@@ -1372,7 +1269,7 @@ bool CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadSubmitBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadSubmitBlock(std::istream &capture_file)
 {
     SubmitDataHeader submit_data_header;
     if (!capture_file.read((char *)&submit_data_header, sizeof(submit_data_header)))
@@ -1403,7 +1300,7 @@ bool CaptureData::LoadSubmitBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadMemoryBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadMemoryBlock(std::istream &capture_file)
 {
     MemoryRawDataHeader memory_raw_data_header;
     if (!capture_file.read((char *)&memory_raw_data_header, sizeof(memory_raw_data_header)))
@@ -1427,7 +1324,7 @@ bool CaptureData::LoadMemoryBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadPresentBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadPresentBlock(std::istream &capture_file)
 {
     PresentData present_data;
     if (!capture_file.read((char *)&present_data, sizeof(present_data)))
@@ -1454,7 +1351,7 @@ bool CaptureData::LoadPresentBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadTextBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadTextBlock(std::istream &capture_file)
 {
     TextBlockHeader text_header;
 
@@ -1479,8 +1376,8 @@ bool CaptureData::LoadTextBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadWaveStateBlock(std::istream            &capture_file,
-                                     const CaptureDataHeader &data_header)
+bool Pm4CaptureData::LoadWaveStateBlock(std::istream            &capture_file,
+                                        const CaptureDataHeader &data_header)
 {
     // Only one wave block per capture is expected.
     assert(m_waves.GetWaves().size() == 0);
@@ -1547,7 +1444,7 @@ bool CaptureData::LoadWaveStateBlock(std::istream            &capture_file,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadRegisterBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadRegisterBlock(std::istream &capture_file)
 {
     // Only one wave block per capture is expected.
     assert(m_registers.GetRegisters().size() == 0);
@@ -1576,16 +1473,16 @@ bool CaptureData::LoadRegisterBlock(std::istream &capture_file)
     return true;
 }
 
-bool CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file)
 {
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadGpuAddressAndSize(FileReader &capture_file,
-                                        uint32_t    block_size,
-                                        uint64_t   *gpu_addr,
-                                        uint32_t   *size)
+bool Pm4CaptureData::LoadGpuAddressAndSize(FileReader &capture_file,
+                                           uint32_t    block_size,
+                                           uint64_t   *gpu_addr,
+                                           uint32_t   *size)
 {
     assert(block_size >= 2 * sizeof(uint32_t));
 
@@ -1608,7 +1505,9 @@ bool CaptureData::LoadGpuAddressAndSize(FileReader &capture_file,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_addr, uint32_t size)
+bool Pm4CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file,
+                                           uint64_t    gpu_addr,
+                                           uint32_t    size)
 {
     MemoryData raw_memory;
     raw_memory.m_data_size = size;
@@ -1626,10 +1525,10 @@ bool CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_a
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
-                                           uint32_t    block_size,
-                                           bool        create_new_submit,
-                                           bool        skip_commands)
+bool Pm4CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
+                                              uint32_t    block_size,
+                                              bool        create_new_submit,
+                                              bool        skip_commands)
 {
     uint64_t gpu_addr;
     uint32_t size_in_dwords;
@@ -1662,7 +1561,7 @@ bool CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file,
 }
 
 //--------------------------------------------------------------------------------------------------
-void CaptureData::Finalize(const CaptureDataHeader &data_header)
+void Pm4CaptureData::Finalize(const CaptureDataHeader &data_header)
 {
     // 0.3.2 implemented memory tracking for IBs - ie. no more duplicate capturing
     // Can probably remove this extra check later, since there are very few captures
@@ -1685,7 +1584,7 @@ void CaptureData::Finalize(const CaptureDataHeader &data_header)
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string CaptureData::GetFileFormatVersion() const
+std::string Pm4CaptureData::GetFileFormatVersion() const
 {
     std::stringstream os;
     os << m_data_header.m_major_version << "." << m_data_header.m_minor_version << "."

@@ -22,7 +22,7 @@ print_usage() {
     set +x
     echo "End-to-end capture-replay test for package"
     echo
-    echo "Usage: gfxr_capture_replay_test.sh [-hcdrs] -p PACKAGE"
+    echo "Usage: gfxr_capture_replay_test.sh [-hcdrsz] -p PACKAGE"
     echo
     echo "Required:"
     echo " -p PACKAGE: The app package to test"
@@ -33,6 +33,7 @@ print_usage() {
     echo " -d: Use validation layers during capture"
     echo " -r: Wait for debugger before replay"
     echo " -s: Use validation layers during replay"
+    echo " -z: Package is a system app"
     echo
     echo "Example:"
     echo " gfxr_capture_replay_test.sh -p com.google.bigwheels.project_cube_xr.debug"
@@ -43,7 +44,8 @@ CAPTURE_DEBUG=0
 REPLAY_DEBUG=0
 REPLAY_VALIDATION=0
 CAPTURE_VALIDATION=0
-while getopts cdhp:rs getopts_flag
+SYSTEM_PACKAGE=0
+while getopts cdhp:rsz getopts_flag
 do
     case "${getopts_flag}" in
         c) CAPTURE_DEBUG=1;;
@@ -55,6 +57,7 @@ do
         p) PACKAGE="${OPTARG}";;
         r) REPLAY_DEBUG=1;;
         s) REPLAY_VALIDATION=1;;
+        z) SYSTEM_PACKAGE=1;;
     esac
 done
 
@@ -62,6 +65,11 @@ THIS_DIR=$(dirname "$0")
 . "${THIS_DIR}/test_automation/common.sh"
 
 ACTIVITY="$(find_default_activity "${PACKAGE}")"
+if [ -z "$ACTIVITY" -a ${SYSTEM_PACKAGE} -eq 0 ]
+then
+    echo "No default activity. Is this a system package? Try -z"
+    exit 1
+fi
 
 # Fairly reliable directory on remote device, as long as app has MANAGE_EXTERNAL_STORAGE permissions.
 # /data/local/tmp doesn't work on all devices tested.
@@ -106,6 +114,7 @@ adb shell setprop "${NEW_FRAME_DELIMITER_PROP}" true
 
 # Since root/unroot disconnects the device and disrupts any host monitoring scripts (logcat, scrcpy), minimize the number of times it's called.
 # It's only required to set the old prop. We can check if it's already set to avoid root/unroot.
+# TODO: Remove when NEW_FRAME_DELIMITER_PROP is more widely deployed
 ENABLE_FRAME_DELIMITER="$(adb shell getprop ${OLD_FRAME_DELIMITER_PROP})"
 if [ -z "${ENABLE_FRAME_DELIMITER}" ]
 then
@@ -231,7 +240,14 @@ then
 fi
 
 # Start app, wait for it to start
-adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}"
+if [ ${SYSTEM_PACKAGE} -eq 1 ]
+then
+    adb root
+    adb shell stop
+    adb shell start
+else
+    adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}"
+fi
 
 # Given how long it takes to attach the debugger, etc, it is unlikely that you'll want the script to proceed.
 if [ ${CAPTURE_DEBUG} -eq 1 ]

@@ -53,6 +53,9 @@ void DiveFilterModel::applyNewFilterMode(FilterMode new_mode)
     if (m_filter_mode == new_mode)
         return;
 
+    // Clear the collections of draw call indices
+    pm4_draw_call_indices.clear();
+
     beginResetModel();
     m_filter_mode = new_mode;
     // invalidateFilter() doesn't invalidate all nodes
@@ -66,18 +69,59 @@ void DiveFilterModel::SetMode(FilterMode filter_mode)
     applyNewFilterMode(filter_mode);
 }
 
+void DiveFilterModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index)
+{
+    if (!parent_index.isValid())
+    {
+        gfxr_draw_call_indices.clear();
+    }
+
+    int row_count = sourceModel()->rowCount(parent_index);
+    for (int row = 0; row < row_count; ++row)
+    {
+        QModelIndex index = sourceModel()->index(row, 0, parent_index);
+        if (index.isValid())
+
+        {
+            uint64_t       node_index = (uint64_t)index.internalPointer();
+            Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
+
+            // If a node is a gfxr draw call, add its index to the list.
+            if (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
+            {
+                gfxr_draw_call_indices.push_back(node_index);
+            }
+
+            // Only recurse into children if the current node is gfxr submit node.
+            if (node_type != Dive::NodeType::kSubmitNode)
+            {
+                CollectGfxrDrawCallIndices(index);
+            }
+        }
+    }
+}
+
 bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
+    QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
+    uint64_t    node_index = (uint64_t)index.internalPointer();
+
+    Dive::NodeType current_node_type = m_command_hierarchy.GetNodeType(node_index);
+
+    if (current_node_type == Dive::NodeType::kGfxrVulkanSubmitNode)
+    {
+        return false;
+    }
+
+    if (!index.isValid())
+    {
+        return false;
+    }
+
     if (m_filter_mode == kNone)
     {
         return true;
     }
-
-    QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-    if (!index.isValid())
-        return false;
-
-    uint64_t node_index = (uint64_t)index.internalPointer();
 
     Dive::CommandHierarchy::FilterListType
     filter_list_type = Dive::CommandHierarchy::kFilterListTypeCount;
@@ -102,6 +146,11 @@ bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceP
     if (filter_exclude_indices.find(node_index) != filter_exclude_indices.end())
     {
         return false;
+    }
+
+    if (current_node_type == Dive::NodeType::kDrawDispatchNode)
+    {
+        pm4_draw_call_indices.push_back(node_index);
     }
 
     return true;

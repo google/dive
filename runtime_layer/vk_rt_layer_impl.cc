@@ -387,18 +387,25 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit   pfn,
     PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
     m_device_proc_addr(m_gpu_time.GetDevice(), "vkGetQueryPoolResults"));
 
-    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnQueueSubmit(submitCount,
-                                                                    pSubmits,
-                                                                    DeviceWaitIdle,
-                                                                    ResetQueryPool,
-                                                                    GetQueryPoolResults);
-    if (!status.success)
+    auto submit_status = m_gpu_time.OnQueueSubmit(submitCount,
+                                                  pSubmits,
+                                                  DeviceWaitIdle,
+                                                  ResetQueryPool,
+                                                  GetQueryPoolResults);
+    if (!submit_status.gpu_time_status.success)
     {
-        LOGE("%s", status.message.c_str());
+        if (submit_status.contains_frame_boundary)
+        {
+            LOGE("Frame Boundary!");
+        }
+        LOGE("%s", submit_status.gpu_time_status.message.c_str());
     }
     else
     {
-        LOGI("%s", m_gpu_time.GetStatsString().c_str());
+        if (submit_status.contains_frame_boundary)
+        {
+            LOGI("%s", m_gpu_time.GetStatsString().c_str());
+        }
     }
 
     return result;

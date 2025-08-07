@@ -23,6 +23,7 @@ limitations under the License.
 #include <deque>
 #include <unordered_map>
 #include <limits>
+#include <atomic>
 
 namespace Dive
 {
@@ -36,6 +37,12 @@ public:
     {
         std::string message;
         bool        success = true;
+    };
+
+    struct SubmitStatus
+    {
+        GpuTimeStatus gpu_time_status;
+        bool          contains_frame_boundary = false;
     };
 
     GPUTime() = default;
@@ -72,11 +79,11 @@ public:
     GpuTimeStatus OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
                                      PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
 
-    GpuTimeStatus OnQueueSubmit(uint32_t                  submitCount,
-                                const VkSubmitInfo*       pSubmits,
-                                PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
-                                PFN_vkResetQueryPool      pfnResetQueryPool,
-                                PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    SubmitStatus OnQueueSubmit(uint32_t                  submitCount,
+                               const VkSubmitInfo*       pSubmits,
+                               PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
+                               PFN_vkResetQueryPool      pfnResetQueryPool,
+                               PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
 
     GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue);
     GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue);
@@ -92,7 +99,8 @@ public:
         double max = std::numeric_limits<double>::lowest();
         double stddev = 0.0;
     };
-    Stats       GetStats() const { return m_metrics.GetStatistics(); }
+    Stats GetFrameTimeStats() const { return m_metrics.GetFrameTimeStats(); }
+    Stats GetFrameCmdTimeStats(size_t index) const { return m_metrics.GetFrameCmdTimeStats(index); }
     std::string GetStatsString() const;
 
 private:
@@ -100,16 +108,38 @@ private:
     {
     public:
         FrameMetrics() = default;
-        void AddFrameTime(double time);
-
-        Stats GetStatistics() const;
+        void   AddFrameData(double frame_time, const std::vector<double> cmd_time_vec);
+        Stats  GetFrameTimeStats() const;
+        Stats  GetFrameCmdTimeStats(size_t index) const;
+        size_t GetFrameCmdCount() const;
 
     private:
-        double CalculateAverage() const;
-        double CalculateMedian() const;
-        double CalculateStdDev(double average) const;
+        Stats  GetStatistics(const std::deque<double>& data) const;
+        double CalculateAverage(const std::deque<double>& data) const;
+        double CalculateMedian(const std::deque<double>& data) const;
+        double CalculateStdDev(const std::deque<double>& data, double average) const;
+        void   Reset();
 
-        std::deque<double> m_frame_data;
+        std::deque<double>              m_frame_time;
+        std::vector<std::deque<double>> m_cmd_time_vec;
+    };
+
+    class TimeStampSlotAllocator
+    {
+    public:
+        static constexpr uint32_t kSlotsPerBlock = 64;
+        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * 4;
+        static constexpr uint32_t kNumBlocks = kTotalSlots / kSlotsPerBlock;
+        static constexpr uint32_t kInvalidIndex = static_cast<uint32_t>(-1);
+
+        TimeStampSlotAllocator();
+        void     Reset();
+        uint32_t AllocateSlot();
+        void     FreeSlots(const std::vector<uint32_t>& slots);
+
+    private:
+        std::atomic<size_t>   m_masks[kNumBlocks];
+        std::atomic<uint32_t> m_cur = 0;
     };
 
     struct CommandBufferInfo
@@ -118,13 +148,16 @@ private:
         {
             is_frameboundary = false;
             usage_one_submit = false;
+            reusable = false;
         }
         const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
 
         VkCommandPool pool = VK_NULL_HANDLE;
-        uint32_t      timestamp_offset = kInvalidTimeStampOffset;
+        uint32_t      begin_timestamp_offset = kInvalidTimeStampOffset;
+        uint32_t      end_timestamp_offset = kInvalidTimeStampOffset;
         bool          is_frameboundary = false;
         bool          usage_one_submit = false;
+        bool          reusable = false;
     };
 
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
@@ -134,6 +167,7 @@ private:
     std::set<VkQueue>                                      m_queues;
     std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
     std::vector<VkCommandBuffer>                           m_frame_cmds;
+    TimeStampSlotAllocator                                 m_timestamp_allocator;
 
     VkDevice                     m_device = VK_NULL_HANDLE;
     const VkAllocationCallbacks* m_allocator = nullptr;

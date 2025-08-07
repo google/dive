@@ -147,6 +147,22 @@ public:
                                   VkCommandBuffer                   commandBuffer,
                                   const VkDebugUtilsLabelEXT*       pLabelInfo);
 
+    void CmdBeginRenderPass(PFN_vkCmdBeginRenderPass     pfn,
+                            VkCommandBuffer              commandBuffer,
+                            const VkRenderPassBeginInfo* pRenderPassBegin,
+                            VkSubpassContents            contents);
+
+    void CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuffer commandBuffer);
+
+    void CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2    pfn,
+                             VkCommandBuffer              commandBuffer,
+                             const VkRenderPassBeginInfo* pRenderPassBegin,
+                             const VkSubpassBeginInfo*    pSubpassBeginInfo);
+
+    void CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn,
+                           VkCommandBuffer         commandBuffer,
+                           const VkSubpassEndInfo* pSubpassEndInfo);
+
 private:
     Dive::GPUTime           m_gpu_time;
     PFN_vkGetDeviceProcAddr m_device_proc_addr;

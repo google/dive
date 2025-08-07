@@ -25,9 +25,6 @@ limitations under the License.
 #include <sstream>
 #include <cstring>
 
-static constexpr uint32_t kQueryCount = 256;
-static constexpr uint32_t kFrameMetricsLimit = 1000;
-
 namespace Dive
 {
 
@@ -108,30 +105,46 @@ void GPUTime::TimeStampSlotAllocator::FreeSlots(const std::vector<uint32_t>& slo
     }
 }
 
-void GPUTime::FrameMetrics::AddFrameData(double frame_time, const std::vector<double> cmd_time_vec)
+void GPUTime::FrameMetrics::AddFrameData(double                     frame_time,
+                                         const std::vector<double>& cmd_time_vec,
+                                         const std::vector<double>& renderpass_time_vec,
+                                         const std::vector<size_t>& cmd_renderpass_count_vec)
 {
     // TODO(wangra): reset when there is a difference in number of cmds per frame
     // maybe we should expose the Reset and let the app decide when to reset
     size_t new_frame_cmd_count = cmd_time_vec.size();
-    if (m_cmd_time_vec.size() != new_frame_cmd_count)
+    size_t new_frame_renderpass_count = renderpass_time_vec.size();
+    if ((m_cmd_time_vec.size() != new_frame_cmd_count) ||
+        (m_renderpass_time_vec.size() != new_frame_renderpass_count))
     {
         Reset();
         m_cmd_time_vec.resize(new_frame_cmd_count);
+        m_renderpass_time_vec.resize(new_frame_renderpass_count);
+        m_cmd_renderpass_count_vec = cmd_renderpass_count_vec;
     }
 
-    if (m_frame_time.size() == kFrameMetricsLimit)
+    if (m_frame_time.size() == TimeStampSlotAllocator::kFrameMetricsLimit)
     {
         m_frame_time.pop_front();
 
-        for (auto& t : m_cmd_time_vec)
+        for (auto& c : m_cmd_time_vec)
         {
-            t.pop_front();
+            c.pop_front();
+        }
+
+        for (auto& r : m_renderpass_time_vec)
+        {
+            r.pop_front();
         }
     }
     m_frame_time.push_back(frame_time);
     for (size_t i = 0; i < new_frame_cmd_count; ++i)
     {
         m_cmd_time_vec[i].push_back(cmd_time_vec[i]);
+    }
+    for (size_t i = 0; i < new_frame_renderpass_count; ++i)
+    {
+        m_renderpass_time_vec[i].push_back(renderpass_time_vec[i]);
     }
 }
 
@@ -231,9 +244,32 @@ GPUTime::Stats GPUTime::FrameMetrics::GetFrameCmdTimeStats(size_t index) const
     return GetStatistics(m_cmd_time_vec[index]);
 }
 
+GPUTime::Stats GPUTime::FrameMetrics::GetFrameRenderPassTimeStats(size_t index) const
+{
+    if (index >= m_renderpass_time_vec.size())
+    {
+        return GPUTime::Stats();
+    }
+    return GetStatistics(m_renderpass_time_vec[index]);
+}
+
 size_t GPUTime::FrameMetrics::GetFrameCmdCount() const
 {
     return m_cmd_time_vec.size();
+}
+
+size_t GPUTime::FrameMetrics::GetFrameRenderPassCount() const
+{
+    return m_renderpass_time_vec.size();
+}
+
+size_t GPUTime::FrameMetrics::GetCmdRenderPassCount(size_t index) const
+{
+    if (index >= m_cmd_renderpass_count_vec.size())
+    {
+        return kInvalidRenderPassCount;
+    }
+    return m_cmd_renderpass_count_vec[index];
 }
 
 std::string GPUTime::GetStatsString() const
@@ -242,21 +278,30 @@ std::string GPUTime::GetStatsString() const
     std::stringstream ss;
     ss << "FrameMetrics:\n";
 
-    auto PopulateStatsString = [&](std::stringstream& ss, const Stats& stats) {
-        ss << std::fixed << std::setprecision(2) << "  Min: " << stats.min << " ms\n"
-           << "  Max: " << stats.max << " ms\n"
-           << "  Mean: " << stats.average << " ms\n"
-           << "  Median: " << stats.median << " ms\n"
-           << "  Std: " << stats.stddev << " ms\n";
+    auto PopulateStatsString = [&](std::stringstream& ss, const Stats& stats, int nLevel) {
+        std::string indent(nLevel, '\t');
+        ss << std::fixed << std::setprecision(2) << indent << "  Mean: " << stats.average << " ms\n"
+           << indent << "  Median: " << stats.median << " ms\n";
     };
-    PopulateStatsString(ss, stats);
+    PopulateStatsString(ss, stats, 0);
 
+    size_t renderpass_index = 0;
+    ss << "Command Buffer Metrics:\n";
     size_t cmd_count = m_metrics.GetFrameCmdCount();
     for (size_t i = 0; i < cmd_count; ++i)
     {
-        const Stats& cms_stats = GetFrameCmdTimeStats(i);
-        ss << "Command Buffer " << i << ": \n";
-        PopulateStatsString(ss, cms_stats);
+        const Stats& cmd_stats = GetFrameCmdTimeStats(i);
+        ss << "\tCommandBuffer" << i << ": \n";
+        PopulateStatsString(ss, cmd_stats, 1);
+
+        size_t renderpass_count = GetCmdRenderPassCount(i);
+        for (size_t j = 0; j < renderpass_count; ++j)
+        {
+            const Stats& renderpass_stats = GetFrameRenderPassTimeStats(renderpass_index);
+            ss << "\t\tRenderPass" << renderpass_index << ": \n";
+            PopulateStatsString(ss, renderpass_stats, 2);
+        }
+        renderpass_index += renderpass_count;
     }
 
     std::string message = "Frame " + std::to_string(m_frame_index) + " processed successfully.\n" +
@@ -382,7 +427,7 @@ VkCommandBuffer*                   pCommandBuffers)
 
         m_cmds.insert(
         { pCommandBuffers[i],
-          { pAllocateInfo->commandPool, begin_slot, end_slot, false, false, false } });
+          { {}, pAllocateInfo->commandPool, begin_slot, end_slot, false, false, false } });
     }
     return GPUTime::GpuTimeStatus();
 }
@@ -435,6 +480,9 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(VkCommandBuffer           c
                                                      VkCommandBufferUsageFlags flags,
                                                      PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp)
 {
+    m_timestamp_allocator.FreeSlots(m_cmds[commandBuffer].renderpass_slots);
+    m_cmds[commandBuffer].renderpass_slots.clear();
+
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
         // We do not insert timestamps into secondary command buffers
@@ -509,14 +557,28 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
                                        false };
     }
 
-    // TODO(wangra): Currently we calculating the frame time by accumulating command buffer time
-    // this is NOT correct since the works between command buffers might overlapping with each other
-    // (if there is no sync between them)
-    // In the future, we could keep command buffer gpu time or render pass gpu time separately
-    // but this requires all frames have the same commandbuffers and renderpasses which might
-    // not be true for the runtime layer case
     double              frame_time = 0.0;
     std::vector<double> cmds_time;
+    std::vector<double> renderpasses_time;
+    std::vector<size_t> cmd_renderpass_count_vec;
+
+    const double kInvalidTimeDuration = -1.0f;
+    auto         GetTimeDuration = [&](uint32_t begin_offset,
+                               uint32_t end_offset,
+                               uint64_t timestamps_with_availability[]) -> double {
+        uint64_t availability_end = timestamps_with_availability[end_offset * 2 + 1];
+        uint64_t availability_begin = timestamps_with_availability[begin_offset * 2 + 1];
+        if ((availability_begin == 0) || (availability_end == 0))
+        {
+            return kInvalidTimeDuration;
+        }
+
+        // Calculate the elapsed time in nanoseconds
+        uint64_t elapsed_time = timestamps_with_availability[end_offset * 2] -
+                                timestamps_with_availability[begin_offset * 2];
+        double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
+        return elapsed_time_in_ms;
+    };
 
     for (const auto& cmd : m_frame_cmds)
     {
@@ -527,11 +589,11 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
             const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
             const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
 
-            uint64_t availability_end = timestamps_with_availability[end_timestamp_offset * 2 + 1];
-            uint64_t
-            availability_begin = timestamps_with_availability[begin_timestamp_offset * 2 + 1];
+            double elapsed_time_in_ms = GetTimeDuration(begin_timestamp_offset,
+                                                        end_timestamp_offset,
+                                                        timestamps_with_availability);
 
-            if ((availability_begin == 0) || (availability_end == 0))
+            if (elapsed_time_in_ms == kInvalidTimeDuration)
             {
                 frame_time = 0.0;
                 m_valid_frame = false;
@@ -542,18 +604,40 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
                 return GPUTime::GpuTimeStatus{ ss.str(), false };
             }
 
-            // Calculate the elapsed time in nanoseconds
-            uint64_t elapsed_time = timestamps_with_availability[end_timestamp_offset * 2] -
-                                    timestamps_with_availability[begin_timestamp_offset * 2];
-            double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
             cmds_time.push_back(elapsed_time_in_ms);
             frame_time += elapsed_time_in_ms;
+
+            const size_t renderpass_count = m_cmds[cmd].renderpass_slots.size();
+            cmd_renderpass_count_vec.push_back(renderpass_count / 2);
+            for (size_t r = 0; r < renderpass_count; r = r + 2)
+            {
+                const uint32_t renderpass_begin_timestamp_offset = m_cmds[cmd].renderpass_slots[r];
+                const uint32_t renderpass_end_timestamp_offset = m_cmds[cmd]
+                                                                 .renderpass_slots[r + 1];
+
+                double
+                renderpass_elapsed_time_in_ms = GetTimeDuration(renderpass_begin_timestamp_offset,
+                                                                renderpass_end_timestamp_offset,
+                                                                timestamps_with_availability);
+
+                if (renderpass_elapsed_time_in_ms == kInvalidTimeDuration)
+                {
+                    frame_time = 0.0;
+                    m_valid_frame = false;
+                    std::stringstream ss;
+                    ss << "Query result is not available for renderpass " << r << " in the cmd "
+                       << static_cast<void*>(cmd) << " Begin Offset:" << begin_timestamp_offset
+                       << " End Offset:" << end_timestamp_offset;
+                    return GPUTime::GpuTimeStatus{ ss.str(), false };
+                }
+                renderpasses_time.push_back(renderpass_elapsed_time_in_ms);
+            }
         }
     }
 
     if (m_valid_frame)
     {
-        m_metrics.AddFrameData(frame_time, cmds_time);
+        m_metrics.AddFrameData(frame_time, cmds_time, renderpasses_time, cmd_renderpass_count_vec);
     }
 
     return GPUTime::GpuTimeStatus();
@@ -675,6 +759,42 @@ const VkDebugUtilsLabelEXT* pLabelInfo)
         }
         m_cmds[commandBuffer].is_frameboundary = true;
     }
+    return GPUTime::GpuTimeStatus();
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass(VkCommandBuffer         commandBuffer,
+                                                     PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
+{
+    uint32_t slot = m_timestamp_allocator.AllocateSlot();
+    m_cmds[commandBuffer].renderpass_slots.push_back(slot);
+    pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, slot);
+    return GPUTime::GpuTimeStatus();
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass(VkCommandBuffer         commandBuffer,
+                                                   PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
+{
+    uint32_t slot = m_timestamp_allocator.AllocateSlot();
+    m_cmds[commandBuffer].renderpass_slots.push_back(slot);
+    pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool, slot);
+    return GPUTime::GpuTimeStatus();
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass2(VkCommandBuffer         commandBuffer,
+                                                      PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
+{
+    uint32_t slot = m_timestamp_allocator.AllocateSlot();
+    m_cmds[commandBuffer].renderpass_slots.push_back(slot);
+    pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, slot);
+    return GPUTime::GpuTimeStatus();
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer         commandBuffer,
+                                                    PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
+{
+    uint32_t slot = m_timestamp_allocator.AllocateSlot();
+    m_cmds[commandBuffer].renderpass_slots.push_back(slot);
+    pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool, slot);
     return GPUTime::GpuTimeStatus();
 }
 

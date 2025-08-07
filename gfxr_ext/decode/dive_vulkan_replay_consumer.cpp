@@ -369,5 +369,93 @@ StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo)
     }
 }
 
+void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass(
+const ApiCallInfo&                                   call_info,
+format::HandleId                                     commandBuffer,
+StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+VkSubpassContents                                    contents)
+{
+    VkCommandBuffer in_commandBuffer = MapHandle<
+    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass(in_commandBuffer,
+                                                                         CmdWriteTimestamp);
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
+    VulkanReplayConsumer::Process_vkCmdBeginRenderPass(call_info,
+                                                       commandBuffer,
+                                                       pRenderPassBegin,
+                                                       contents);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass(const ApiCallInfo& call_info,
+                                                          format::HandleId   commandBuffer)
+{
+    VulkanReplayConsumer::Process_vkCmdEndRenderPass(call_info, commandBuffer);
+
+    VkCommandBuffer in_commandBuffer = MapHandle<
+    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass(in_commandBuffer,
+                                                                       CmdWriteTimestamp);
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
+}
+void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass2(
+const ApiCallInfo&                                   call_info,
+format::HandleId                                     commandBuffer,
+StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo)
+{
+    VkCommandBuffer in_commandBuffer = MapHandle<
+    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass2(in_commandBuffer,
+                                                                          CmdWriteTimestamp);
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
+
+    VulkanReplayConsumer::Process_vkCmdBeginRenderPass2(call_info,
+                                                        commandBuffer,
+                                                        pRenderPassBegin,
+                                                        pSubpassBeginInfo);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass2(
+const ApiCallInfo&                              call_info,
+format::HandleId                                commandBuffer,
+StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+{
+    VulkanReplayConsumer::Process_vkCmdEndRenderPass2(call_info, commandBuffer, pSubpassEndInfo);
+
+    VkCommandBuffer in_commandBuffer = MapHandle<
+    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass2(in_commandBuffer,
+                                                                        CmdWriteTimestamp);
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

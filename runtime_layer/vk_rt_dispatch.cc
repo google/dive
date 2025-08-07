@@ -59,6 +59,11 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->DestroyDevice = (PFN_vkDestroyDevice)pa(device, "vkDestroyDevice");
     dt->CmdInsertDebugUtilsLabel = (PFN_vkCmdInsertDebugUtilsLabelEXT)
     pa(device, "vkCmdInsertDebugUtilsLabelEXT");
+
+    dt->CmdBeginRenderPass = (PFN_vkCmdBeginRenderPass)pa(device, "vkCmdBeginRenderPass");
+    dt->CmdEndRenderPass = (PFN_vkCmdEndRenderPass)pa(device, "vkCmdEndRenderPass");
+    dt->CmdBeginRenderPass2 = (PFN_vkCmdBeginRenderPass2)pa(device, "vkCmdBeginRenderPass2");
+    dt->CmdEndRenderPass2 = (PFN_vkCmdEndRenderPass2)pa(device, "vkCmdEndRenderPass2");
 }
 
 }  // namespace DiveLayer

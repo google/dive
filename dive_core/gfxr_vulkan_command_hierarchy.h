@@ -50,6 +50,8 @@ public:
         return m_dive_indices_to_local_indices_map;
     }
 
+    void ClearCreatedDiveIndices() { m_dive_indices_to_local_indices_map.clear(); }
+
 private:
     void     GetArgs(const nlohmann::ordered_json &j,
                      uint64_t                      curr_index,

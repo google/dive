@@ -509,6 +509,51 @@ void DiveInterceptCmdInsertDebugUtilsLabel(VkCommandBuffer             commandBu
     return sDiveRuntimeLayer.CmdInsertDebugUtilsLabel(pfn, commandBuffer, pLabelInfo);
 }
 
+void DiveInterceptCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
+                                     const VkRenderPassBeginInfo *pRenderPassBegin,
+                                     VkSubpassContents            contents)
+{
+    PFN_vkCmdBeginRenderPass pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdBeginRenderPass;
+    sDiveRuntimeLayer.CmdBeginRenderPass(pfn, commandBuffer, pRenderPassBegin, contents);
+}
+
+void DiveInterceptCmdEndRenderPass(VkCommandBuffer commandBuffer)
+{
+    PFN_vkCmdEndRenderPass pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdEndRenderPass;
+    sDiveRuntimeLayer.CmdEndRenderPass(pfn, commandBuffer);
+}
+
+void DiveInterceptCmdBeginRenderPass2(VkCommandBuffer              commandBuffer,
+                                      const VkRenderPassBeginInfo *pRenderPassBegin,
+                                      const VkSubpassBeginInfo    *pSubpassBeginInfo)
+{
+    PFN_vkCmdBeginRenderPass2 pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdBeginRenderPass2;
+    sDiveRuntimeLayer.CmdBeginRenderPass2(pfn, commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
+}
+
+void DiveInterceptCmdEndRenderPass2(VkCommandBuffer         commandBuffer,
+                                    const VkSubpassEndInfo *pSubpassEndInfo)
+{
+    PFN_vkCmdEndRenderPass2 pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdEndRenderPass2;
+    sDiveRuntimeLayer.CmdEndRenderPass2(pfn, commandBuffer, pSubpassEndInfo);
+}
+
 extern "C"
 {
 
@@ -787,6 +832,14 @@ extern "C"
             return (PFN_vkVoidFunction)&DiveInterceptDestroyDevice;
         if (0 == strcmp(func, "vkCmdInsertDebugUtilsLabelEXT"))
             return (PFN_vkVoidFunction)&DiveInterceptCmdInsertDebugUtilsLabel;
+        if (0 == strcmp(func, "vkCmdBeginRenderPass"))
+            return (PFN_vkVoidFunction)&DiveInterceptCmdBeginRenderPass;
+        if (0 == strcmp(func, "vkCmdEndRenderPass"))
+            return (PFN_vkVoidFunction)&DiveInterceptCmdEndRenderPass;
+        if (0 == strcmp(func, "vkCmdBeginRenderPass2"))
+            return (PFN_vkVoidFunction)&DiveInterceptCmdBeginRenderPass2;
+        if (0 == strcmp(func, "vkCmdEndRenderPass2"))
+            return (PFN_vkVoidFunction)&DiveInterceptCmdEndRenderPass2;
         auto layer_data = GetDeviceLayerData(DataKey(dev));
         return layer_data->dispatch_table.pfn_get_device_proc_addr(dev, func);
     }

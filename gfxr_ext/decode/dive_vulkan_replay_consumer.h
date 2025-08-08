@@ -109,6 +109,26 @@ public:
     format::HandleId                                    commandBuffer,
     StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo) override;
 
+    void Process_vkCmdBeginRenderPass(
+    const ApiCallInfo&                                   call_info,
+    format::HandleId                                     commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+    VkSubpassContents                                    contents) override;
+
+    void Process_vkCmdEndRenderPass(const ApiCallInfo& call_info,
+                                    format::HandleId   commandBuffer) override;
+
+    void Process_vkCmdBeginRenderPass2(
+    const ApiCallInfo&                                   call_info,
+    format::HandleId                                     commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+    StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo) override;
+
+    void Process_vkCmdEndRenderPass2(
+    const ApiCallInfo&                              call_info,
+    format::HandleId                                commandBuffer,
+    StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
+
 private:
     Dive::GPUTime gpu_time_;
 };

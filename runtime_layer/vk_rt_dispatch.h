@@ -51,6 +51,10 @@ struct DeviceDispatchTable
     PFN_vkGetDeviceQueue              GetDeviceQueue = nullptr;
     PFN_vkDestroyDevice               DestroyDevice = nullptr;
     PFN_vkCmdInsertDebugUtilsLabelEXT CmdInsertDebugUtilsLabel = nullptr;
+    PFN_vkCmdBeginRenderPass          CmdBeginRenderPass = nullptr;
+    PFN_vkCmdEndRenderPass            CmdEndRenderPass = nullptr;
+    PFN_vkCmdBeginRenderPass2         CmdBeginRenderPass2 = nullptr;
+    PFN_vkCmdEndRenderPass2           CmdEndRenderPass2 = nullptr;
 };
 
 void InitInstanceDispatchTable(VkInstance                instance,

@@ -452,4 +452,80 @@ void DiveRuntimeLayer::CmdInsertDebugUtilsLabel(PFN_vkCmdInsertDebugUtilsLabelEX
     }
 }
 
+void DiveRuntimeLayer::CmdBeginRenderPass(PFN_vkCmdBeginRenderPass     pfn,
+                                          VkCommandBuffer              commandBuffer,
+                                          const VkRenderPassBeginInfo* pRenderPassBegin,
+                                          VkSubpassContents            contents)
+{
+    if (sEnableOpenXRGPUTiming)
+    {
+        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+
+        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass(commandBuffer,
+                                                                              CmdWriteTimestamp);
+        if (!status.success)
+        {
+            LOGE("%s", status.message.c_str());
+        }
+    }
+    pfn(commandBuffer, pRenderPassBegin, contents);
+}
+
+void DiveRuntimeLayer::CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuffer commandBuffer)
+{
+    pfn(commandBuffer);
+    if (sEnableOpenXRGPUTiming)
+    {
+        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+
+        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass(commandBuffer,
+                                                                            CmdWriteTimestamp);
+        if (!status.success)
+        {
+            LOGE("%s", status.message.c_str());
+        }
+    }
+}
+
+void DiveRuntimeLayer::CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2    pfn,
+                                           VkCommandBuffer              commandBuffer,
+                                           const VkRenderPassBeginInfo* pRenderPassBegin,
+                                           const VkSubpassBeginInfo*    pSubpassBeginInfo)
+{
+    if (sEnableOpenXRGPUTiming)
+    {
+        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+
+        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass2(commandBuffer,
+                                                                               CmdWriteTimestamp);
+        if (!status.success)
+        {
+            LOGE("%s", status.message.c_str());
+        }
+    }
+    pfn(commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
+}
+
+void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn,
+                                         VkCommandBuffer         commandBuffer,
+                                         const VkSubpassEndInfo* pSubpassEndInfo)
+{
+    pfn(commandBuffer, pSubpassEndInfo);
+    if (sEnableOpenXRGPUTiming)
+    {
+        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+
+        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass2(commandBuffer,
+                                                                             CmdWriteTimestamp);
+        if (!status.success)
+        {
+            LOGE("%s", status.message.c_str());
+        }
+    }
+}
+
 }  // namespace DiveLayer

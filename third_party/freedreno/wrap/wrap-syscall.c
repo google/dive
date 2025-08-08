@@ -599,10 +599,6 @@ int close(int fd)
 	return orig_close(fd);
 }
 
-// GOOGLE: Need this mutex to make sure only 1 thread can dump bos 
-// This is required since we assume RD_GPUADDR is always followed by RD_BUFFER_CONTENTS
-static pthread_mutex_t bo_lock = PTHREAD_MUTEX_INITIALIZER;
-
 static void dump_bos(int fd)
 {
 	// GOOGLE: Dump BOs only when capturing flag is enabled.

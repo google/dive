@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define __user
 #include "kgsl_drm.h"
@@ -56,7 +57,7 @@ int wrap_printf(const char *format, ...);
 #define USE_PTHREADS
 #endif
 
-// Google Don't call printf to print debug message to console.
+// GOOGLE: Don't call printf to print debug message to console.
 #define printf(...) do { } while(0)
 
 void * __rd_dlsym_helper(const char *name);
@@ -80,13 +81,19 @@ unsigned int wrap_dump_all_bo(void);
 
 void hexdump(const void *data, int size);
 
+// GOOGLE: Need this mutex to make sure only 1 thread can dump bos (dump_bos)
+// This is required since we assume RD_GPUADDR is always followed by RD_BUFFER_CONTENTS
+// Using PTHREAD_RECURSIVE_MUTEX_INITIALIZER since log_gpuaddr can be called in different places
+static pthread_mutex_t bo_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static void log_gpuaddr(int device_fd, uint64_t gpuaddr, uint32_t len)
 {
-	uint32_t sect[3] = {
-			/* upper 32b of gpuaddr added after len for backwards compat */
+    pthread_mutex_lock(&bo_lock);
+    uint32_t sect[3] = {
+        /* upper 32b of gpuaddr added after len for backwards compat */
 			gpuaddr, len, gpuaddr >> 32,
-	};
-	rd_write_section(device_fd, RD_GPUADDR, sect, sizeof(sect));
+    };
+    rd_write_section(device_fd, RD_GPUADDR, sect, sizeof(sect));
+    pthread_mutex_unlock(&bo_lock);
 }
 
 static void log_cmdaddr(int device_fd, uint64_t gpuaddr, uint32_t sizedwords)
@@ -134,7 +141,8 @@ int pthread_mutex_timedlock(pthread_mutex_t *mutex, struct timespec*  ts);
 
 #endif /* USE_PTHREADS */
 #else
-#include <pthread.h>
+// GOOGLE: move this include to the top since it is needed for log_gpuaddr()
+// #include <pthread.h>
 #endif
 
 #endif /* WRAP_H_ */

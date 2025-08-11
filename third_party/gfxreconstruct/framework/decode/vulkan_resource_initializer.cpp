@@ -28,43 +28,12 @@
 #include "graphics/vulkan_util.h"
 #include "util/platform.h"
 
-#include "Vulkan-Utility-Libraries/vk_format_utils.h"
-
 #include <algorithm>
 #include <cassert>
 #include <limits>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
-
-static uint32_t FindBufferOffsetAlignmentForCopyBufferToImage(VkFormat format)
-{
-    uint32_t alignment = 0;
-    if (vkuFormatIsDepthOrStencil(format))
-    {
-        // Spec mandates an alignment of 4 for depth/stencil formats
-        alignment = 4;
-    }
-    else if (vkuFormatIsMultiplane(format))
-    {
-        // According to spec, for multiplanar formats the alignment is determined from the compatible format
-        VkFormat compatible_format = vkuFindMultiplaneCompatibleFormat(format, VK_IMAGE_ASPECT_PLANE_0_BIT);
-        GFXRECON_ASSERT(compatible_format != VK_FORMAT_UNDEFINED);
-        if (compatible_format != VK_FORMAT_UNDEFINED)
-        {
-            const VKU_FORMAT_INFO format_info = vkuGetFormatInfo(compatible_format);
-            alignment                         = format_info.block_size;
-        }
-    }
-    else
-    {
-        // In all othe cases spec mandates an alignment of the format's block size.
-        const VKU_FORMAT_INFO format_info = vkuGetFormatInfo(format);
-        alignment                         = format_info.block_size;
-    }
-
-    return alignment;
-}
 
 VulkanResourceInitializer::VulkanResourceInitializer(const VulkanDeviceInfo*                 device_info,
                                                      VkDeviceSize                            max_copy_size,
@@ -74,9 +43,8 @@ VulkanResourceInitializer::VulkanResourceInitializer(const VulkanDeviceInfo*    
                                                      const graphics::VulkanDeviceTable*      device_table) :
     device_(device_info->handle),
     staging_memory_(VK_NULL_HANDLE), staging_memory_data_(0), staging_buffer_(VK_NULL_HANDLE), staging_buffer_data_(0),
-    staging_buffer_mapped_ptr_(nullptr), staging_buffer_offset_(0), draw_sampler_(VK_NULL_HANDLE),
-    draw_pool_(VK_NULL_HANDLE), draw_set_layout_(VK_NULL_HANDLE), draw_set_(VK_NULL_HANDLE),
-    max_copy_size_(max_copy_size), have_shader_stencil_write_(have_shader_stencil_write),
+    draw_sampler_(VK_NULL_HANDLE), draw_pool_(VK_NULL_HANDLE), draw_set_layout_(VK_NULL_HANDLE),
+    draw_set_(VK_NULL_HANDLE), max_copy_size_(max_copy_size), have_shader_stencil_write_(have_shader_stencil_write),
     resource_allocator_(resource_allocator), device_table_(device_table), device_info_(device_info)
 {
     assert((device_info != nullptr) && (device_info->handle != VK_NULL_HANDLE) &&
@@ -95,12 +63,19 @@ VulkanResourceInitializer::VulkanResourceInitializer(const VulkanDeviceInfo*    
 
 VulkanResourceInitializer::~VulkanResourceInitializer()
 {
-    FlushRemainingResourcesInit();
-    ReleaseStagingBuffer();
-
     for (const auto& entry : command_exec_objects_)
     {
         device_table_->DestroyCommandPool(device_, entry.second.command_pool, nullptr);
+    }
+
+    if (staging_buffer_ != VK_NULL_HANDLE)
+    {
+        resource_allocator_->DestroyBufferDirect(staging_buffer_, nullptr, staging_buffer_data_);
+    }
+
+    if (staging_memory_ != VK_NULL_HANDLE)
+    {
+        resource_allocator_->FreeMemoryDirect(staging_memory_, nullptr, staging_memory_data_);
     }
 
     if (draw_sampler_ != VK_NULL_HANDLE)
@@ -148,49 +123,33 @@ VkResult VulkanResourceInitializer::InitializeBuffer(VkDeviceSize        data_si
     // TODO: handle usage cases without TRANSFER_DST.
     GFXRECON_UNREFERENCED_PARAMETER(usage);
 
-    VkResult result = AcquireStagingBuffer(data_size);
+    VkQueue                               queue               = VK_NULL_HANDLE;
+    VkCommandBuffer                       command_buffer      = VK_NULL_HANDLE;
+    VkDeviceMemory                        staging_memory      = VK_NULL_HANDLE;
+    VkBuffer                              staging_buffer      = VK_NULL_HANDLE;
+    VulkanResourceAllocator::MemoryData   staging_memory_data = 0;
+    VulkanResourceAllocator::ResourceData staging_buffer_data = 0;
+
+    VkResult result = GetCommandExecObjects(queue_family_index, &queue, &command_buffer);
+
     if (result == VK_SUCCESS)
     {
-        // No space left in staging buffer
-        if (staging_buffer_offset_ + data_size > max_copy_size_)
-        {
-            FlushStagingBuffer();
-            result = FlushCommandBuffer(queue_family_index);
-        }
+        result = AcquireInitializedStagingBuffer(
+            data_size, data, &staging_memory, &staging_buffer, &staging_memory_data, &staging_buffer_data);
 
         if (result == VK_SUCCESS)
         {
-            VkCommandBuffer command_buffer = VK_NULL_HANDLE;
-            result                         = BeginCommandBuffer(queue_family_index, &command_buffer);
+            result = BeginCommandBuffer(command_buffer);
+
             if (result == VK_SUCCESS)
             {
-                GFXRECON_ASSERT(staging_buffer_mapped_ptr_ != nullptr);
-                util::platform::MemoryCopy(
-                    staging_buffer_mapped_ptr_ + staging_buffer_offset_, data_size, data, data_size);
+                device_table_->CmdCopyBuffer(command_buffer, staging_buffer, buffer, region_count, regions);
+                device_table_->EndCommandBuffer(command_buffer);
 
-                offsetted_regions_copy_.resize(region_count);
-
-                // srcOffset are initialy calculated to copy from the begining of the staging buffer so they need to
-                // be adjusted to point to the current offset
-
-                // First one should always be zero before the adjustment
-                GFXRECON_ASSERT(regions[0].srcOffset == 0);
-                for (uint32_t i = 0; i < region_count; ++i)
-                {
-                    offsetted_regions_copy_[i] = regions[i];
-                    offsetted_regions_copy_[i].srcOffset += staging_buffer_offset_;
-                }
-
-                if (result == VK_SUCCESS)
-                {
-                    device_table_->CmdCopyBuffer(
-                        command_buffer, staging_buffer_, buffer, region_count, offsetted_regions_copy_.data());
-
-                    // Advance staging buffer offset
-                    GFXRECON_ASSERT(staging_buffer_offset_ + data_size <= max_copy_size_);
-                    staging_buffer_offset_ = staging_buffer_offset_ + data_size;
-                }
+                result = ExecuteCommandBuffer(queue, command_buffer);
             }
+
+            ReleaseStagingBuffer(staging_memory, staging_buffer, staging_memory_data, staging_buffer_data);
         }
     }
 
@@ -213,7 +172,13 @@ VkResult VulkanResourceInitializer::InitializeImage(VkDeviceSize             dat
                                                     uint32_t                 level_count,
                                                     const VkBufferImageCopy* level_copies)
 {
-    VkResult result = AcquireStagingBuffer(data_size);
+    VkDeviceMemory                        staging_memory      = VK_NULL_HANDLE;
+    VkBuffer                              staging_buffer      = VK_NULL_HANDLE;
+    VulkanResourceAllocator::MemoryData   staging_memory_data = 0;
+    VulkanResourceAllocator::ResourceData staging_buffer_data = 0;
+
+    VkResult result = AcquireInitializedStagingBuffer(
+        data_size, data, &staging_memory, &staging_buffer, &staging_memory_data, &staging_buffer_data);
 
     if (result == VK_SUCCESS)
     {
@@ -228,82 +193,24 @@ VkResult VulkanResourceInitializer::InitializeImage(VkDeviceSize             dat
 
         if (!use_transfer && (use_color_write || use_depth_write || use_stencil_write) && (type == VK_IMAGE_TYPE_2D))
         {
-            // PixelShaderImageCopy is not currently batched as it uses temporary objects that are not retained.
-            // Flush any pending commands and reset staging buffer
-            FlushStagingBuffer();
-            result = FlushCommandBuffer(queue_family_index);
-
-            GFXRECON_ASSERT(staging_buffer_mapped_ptr_ != nullptr);
-            util::platform::MemoryCopy(staging_buffer_mapped_ptr_, data_size, data, data_size);
-
-            if (result == VK_SUCCESS)
-            {
-                result = PixelShaderImageCopy(queue_family_index,
-                                              staging_buffer_,
-                                              image,
-                                              type,
-                                              format,
-                                              extent,
-                                              aspect,
-                                              sample_count,
-                                              initial_layout,
-                                              final_layout,
-                                              layer_count,
-                                              level_count,
-                                              level_copies);
-            }
+            result = PixelShaderImageCopy(queue_family_index,
+                                          staging_buffer,
+                                          image,
+                                          type,
+                                          format,
+                                          extent,
+                                          aspect,
+                                          sample_count,
+                                          initial_layout,
+                                          final_layout,
+                                          layer_count,
+                                          level_count,
+                                          level_copies);
         }
         else
         {
-            // Find the proper alignment according to spec
-            if (staging_buffer_offset_ > 0)
-            {
-                // Apply to offset any spec mandated alignment
-                const uint32_t alignment = FindBufferOffsetAlignmentForCopyBufferToImage(format);
-                staging_buffer_offset_   = util::platform::GetAlignedSize(staging_buffer_offset_, alignment);
-
-                // If data does not fit in the remaining portion of the staging buffer flush pending commands and reset
-                // staging buffer offset
-                if (staging_buffer_offset_ + data_size > max_copy_size_)
-                {
-                    FlushStagingBuffer();
-                    result = FlushCommandBuffer(queue_family_index);
-                    if (result != VK_SUCCESS)
-                    {
-                        return result;
-                    }
-                }
-            }
-
-            // Transfer the binary payload to the staging buffer
-            GFXRECON_ASSERT(staging_buffer_mapped_ptr_ != nullptr);
-            util::platform::MemoryCopy(staging_buffer_mapped_ptr_ + staging_buffer_offset_, data_size, data, data_size);
-
-            offsetted_level_copies_.resize(level_count);
-
-            // bufferOffset are initialy calculated to copy from the begining of the staging buffer so they need to
-            // be adjusted to point to the current offset.
-
-            // First one should always be zero before the adjustment
-            GFXRECON_ASSERT(level_count);
-            GFXRECON_ASSERT(level_copies[0].bufferOffset == 0);
-            for (uint32_t i = 0; i < level_count; ++i)
-            {
-                offsetted_level_copies_[i] = level_copies[i];
-                offsetted_level_copies_[i].bufferOffset += staging_buffer_offset_;
-            }
-
-            if (staging_buffer_offset_ == 0)
-            {
-                result = BeginCommandBuffer(queue_family_index);
-                if (result != VK_SUCCESS)
-                {
-                    return result;
-                }
-            }
-
             result = BufferToImageCopy(queue_family_index,
-                                       staging_buffer_,
+                                       staging_buffer,
                                        image,
                                        format,
                                        aspect,
@@ -311,12 +218,10 @@ VkResult VulkanResourceInitializer::InitializeImage(VkDeviceSize             dat
                                        final_layout,
                                        layer_count,
                                        level_count,
-                                       offsetted_level_copies_.data());
-
-            // Advance staging buffer offset
-            GFXRECON_ASSERT(staging_buffer_offset_ + data_size <= max_copy_size_);
-            staging_buffer_offset_ = staging_buffer_offset_ + data_size;
+                                       level_copies);
         }
+
+        ReleaseStagingBuffer(staging_memory, staging_buffer, staging_memory_data, staging_buffer_data);
     }
 
     return result;
@@ -331,55 +236,67 @@ VkResult VulkanResourceInitializer::TransitionImage(uint32_t              queue_
                                                     uint32_t              layer_count,
                                                     uint32_t              level_count)
 {
+    VkQueue         queue          = VK_NULL_HANDLE;
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
-    VkResult        result         = BeginCommandBuffer(queue_family_index, &command_buffer);
+
+    VkResult result = GetCommandExecObjects(queue_family_index, &queue, &command_buffer);
 
     if (result == VK_SUCCESS)
     {
-        VkImageLayout      old_layout        = initial_layout;
-        VkImageAspectFlags transition_aspect = GetImageTransitionAspect(format, aspect, &old_layout);
+        result = BeginCommandBuffer(command_buffer);
 
-        VkImageMemoryBarrier memory_barrier            = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-        memory_barrier.pNext                           = nullptr;
-        memory_barrier.srcAccessMask                   = 0;
-        memory_barrier.dstAccessMask                   = 0;
-        memory_barrier.oldLayout                       = old_layout;
-        memory_barrier.newLayout                       = final_layout;
-        memory_barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        memory_barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        memory_barrier.image                           = image;
-        memory_barrier.subresourceRange.aspectMask     = transition_aspect;
-        memory_barrier.subresourceRange.baseMipLevel   = 0;
-        memory_barrier.subresourceRange.levelCount     = level_count;
-        memory_barrier.subresourceRange.baseArrayLayer = 0;
-        memory_barrier.subresourceRange.layerCount     = layer_count;
+        if (result == VK_SUCCESS)
+        {
+            VkImageLayout      old_layout        = initial_layout;
+            VkImageAspectFlags transition_aspect = GetImageTransitionAspect(format, aspect, &old_layout);
 
-        device_table_->CmdPipelineBarrier(command_buffer,
-                                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                          0,
-                                          0,
-                                          nullptr,
-                                          0,
-                                          nullptr,
-                                          1,
-                                          &memory_barrier);
+            VkImageMemoryBarrier memory_barrier            = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+            memory_barrier.pNext                           = nullptr;
+            memory_barrier.srcAccessMask                   = 0;
+            memory_barrier.dstAccessMask                   = 0;
+            memory_barrier.oldLayout                       = old_layout;
+            memory_barrier.newLayout                       = final_layout;
+            memory_barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+            memory_barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+            memory_barrier.image                           = image;
+            memory_barrier.subresourceRange.aspectMask     = transition_aspect;
+            memory_barrier.subresourceRange.baseMipLevel   = 0;
+            memory_barrier.subresourceRange.levelCount     = level_count;
+            memory_barrier.subresourceRange.baseArrayLayer = 0;
+            memory_barrier.subresourceRange.layerCount     = layer_count;
 
-        result = FlushCommandBuffer(queue_family_index);
+            device_table_->CmdPipelineBarrier(command_buffer,
+                                              VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                              0,
+                                              0,
+                                              nullptr,
+                                              0,
+                                              nullptr,
+                                              1,
+                                              &memory_barrier);
+
+            device_table_->EndCommandBuffer(command_buffer);
+
+            result = ExecuteCommandBuffer(queue, command_buffer);
+        }
     }
 
     return result;
 }
 
-VkResult VulkanResourceInitializer::GetCommandExecObjects(uint32_t queue_family_index, VkCommandBuffer* command_buffer)
+VkResult VulkanResourceInitializer::GetCommandExecObjects(uint32_t         queue_family_index,
+                                                          VkQueue*         queue,
+                                                          VkCommandBuffer* command_buffer)
 {
-    assert(command_buffer != nullptr);
+    assert((queue != nullptr) && (command_buffer != nullptr));
 
     VkResult result = VK_SUCCESS;
     auto     iter   = command_exec_objects_.find(queue_family_index);
 
     if (iter != command_exec_objects_.end())
     {
+        (*queue)          = iter->second.queue;
         (*command_buffer) = iter->second.command_buffer;
     }
     else
@@ -405,9 +322,9 @@ VkResult VulkanResourceInitializer::GetCommandExecObjects(uint32_t queue_family_
 
             if (result == VK_SUCCESS)
             {
-                VkQueue queue = GetDeviceQueue(device_table_, device_info_, queue_family_index, 0);
+                *queue = GetDeviceQueue(device_table_, device_info_, queue_family_index, 0);
                 command_exec_objects_.emplace(queue_family_index,
-                                              CommandExecObjects{ queue, command_pool, *command_buffer, false });
+                                              CommandExecObjects{ *queue, command_pool, *command_buffer });
             }
             else
             {
@@ -993,17 +910,24 @@ void VulkanResourceInitializer::DestroyFramebufferResources(VkImageView view, Vk
     device_table_->DestroyImageView(device_, view, nullptr);
 }
 
-VkResult VulkanResourceInitializer::AcquireStagingBuffer(VkDeviceSize size)
+VkResult VulkanResourceInitializer::AcquireStagingBuffer(VkDeviceMemory*                        memory,
+                                                         VkBuffer*                              buffer,
+                                                         VkDeviceSize                           size,
+                                                         VulkanResourceAllocator::MemoryData*   allocator_memory_data,
+                                                         VulkanResourceAllocator::ResourceData* allocator_buffer_data)
 {
+    assert((memory != nullptr) && (buffer != nullptr) && (size > 0) && (allocator_memory_data != nullptr) &&
+           (allocator_buffer_data != nullptr));
+
     VkResult result = VK_SUCCESS;
 
+    // Create the reusable staging_buffer_ object, with size equal to max_copy_size_, on first acquire, if the requested
+    // size is less than or equal to max_copy_size_.  It the requested size is larger than max_copy_size_, create a
+    // temporary staging buffer that will be destroyed on release.
     if ((staging_buffer_ == VK_NULL_HANDLE) || (size > max_copy_size_))
     {
-        if (staging_buffer_ != VK_NULL_HANDLE)
-        {
-            FlushRemainingResourcesInit();
-            ReleaseStagingBuffer();
-        }
+        VkBuffer                              staging_buffer      = VK_NULL_HANDLE;
+        VulkanResourceAllocator::ResourceData staging_buffer_data = 0;
 
         VkBufferCreateInfo create_info    = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
         create_info.pNext                 = nullptr;
@@ -1014,76 +938,111 @@ VkResult VulkanResourceInitializer::AcquireStagingBuffer(VkDeviceSize size)
         create_info.queueFamilyIndexCount = 0;
         create_info.pQueueFamilyIndices   = nullptr;
 
-        result =
-            resource_allocator_->CreateBufferDirect(&create_info, nullptr, &staging_buffer_, &staging_buffer_data_);
+        result = resource_allocator_->CreateBufferDirect(&create_info, nullptr, &staging_buffer, &staging_buffer_data);
 
         if (result == VK_SUCCESS)
         {
             VkMemoryRequirements memory_requirements;
-            device_table_->GetBufferMemoryRequirements(device_, staging_buffer_, &memory_requirements);
+            device_table_->GetBufferMemoryRequirements(device_, staging_buffer, &memory_requirements);
 
             uint32_t memory_type_index =
                 GetMemoryTypeIndex(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
             assert(memory_type_index != std::numeric_limits<uint32_t>::max());
 
+            // Allocate the memory for the buffer.
+            VkDeviceMemory                      staging_memory      = VK_NULL_HANDLE;
+            VulkanResourceAllocator::MemoryData staging_memory_data = 0;
+
             VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
             alloc_info.pNext                = nullptr;
             alloc_info.allocationSize       = memory_requirements.size;
             alloc_info.memoryTypeIndex      = memory_type_index;
 
-            // Allocate the memory for the buffer.
-            result = resource_allocator_->AllocateMemoryDirect(
-                &alloc_info, nullptr, &staging_memory_, &staging_memory_data_);
+            result =
+                resource_allocator_->AllocateMemoryDirect(&alloc_info, nullptr, &staging_memory, &staging_memory_data);
 
             if (result == VK_SUCCESS)
             {
                 VkMemoryPropertyFlags flags;
                 result = resource_allocator_->BindBufferMemoryDirect(
-                    staging_buffer_, staging_memory_, 0, staging_buffer_data_, staging_memory_data_, &flags);
+                    staging_buffer, staging_memory, 0, staging_buffer_data, staging_memory_data, &flags);
             }
 
             if (result == VK_SUCCESS)
             {
-                max_copy_size_ = size;
+                (*memory)                = staging_memory;
+                (*buffer)                = staging_buffer;
+                (*allocator_memory_data) = staging_memory_data;
+                (*allocator_buffer_data) = staging_buffer_data;
 
-                // Map staging buffer
-                result = resource_allocator_->MapResourceMemoryDirect(
-                    max_copy_size_, 0, reinterpret_cast<void**>(&staging_buffer_mapped_ptr_), staging_buffer_data_);
+                if (size <= max_copy_size_)
+                {
+                    staging_memory_      = staging_memory;
+                    staging_buffer_      = staging_buffer;
+                    staging_memory_data_ = staging_memory_data;
+                    staging_buffer_data_ = staging_buffer_data;
+                }
             }
             else
             {
-                resource_allocator_->DestroyBufferDirect(staging_buffer_, nullptr, staging_buffer_data_);
+                resource_allocator_->DestroyBufferDirect(staging_buffer, nullptr, staging_buffer_data);
 
-                if (staging_memory_ != VK_NULL_HANDLE)
+                if ((*memory) != VK_NULL_HANDLE)
                 {
-                    resource_allocator_->FreeMemoryDirect(staging_memory_, nullptr, staging_memory_data_);
+                    resource_allocator_->FreeMemoryDirect(staging_memory, nullptr, staging_memory_data);
                 }
             }
         }
+    }
+    else
+    {
+        (*memory)                = staging_memory_;
+        (*buffer)                = staging_buffer_;
+        (*allocator_memory_data) = staging_memory_data_;
+        (*allocator_buffer_data) = staging_buffer_data_;
     }
 
     return result;
 }
 
-void VulkanResourceInitializer::ReleaseStagingBuffer()
+VkResult
+VulkanResourceInitializer::AcquireInitializedStagingBuffer(VkDeviceSize                           data_size,
+                                                           const uint8_t*                         data,
+                                                           VkDeviceMemory*                        staging_memory,
+                                                           VkBuffer*                              staging_buffer,
+                                                           VulkanResourceAllocator::MemoryData*   staging_memory_data,
+                                                           VulkanResourceAllocator::ResourceData* staging_buffer_data)
 {
-    if (staging_buffer_mapped_ptr_ != nullptr)
+    VkResult result =
+        AcquireStagingBuffer(staging_memory, staging_buffer, data_size, staging_memory_data, staging_buffer_data);
+
+    if (result == VK_SUCCESS)
     {
-        resource_allocator_->UnmapResourceMemoryDirect(staging_buffer_data_);
-        staging_buffer_mapped_ptr_ = nullptr;
+        assert((staging_memory != nullptr) && (staging_memory_data != nullptr));
+
+        result = LoadData(data_size, data, *staging_buffer_data);
     }
 
-    if (staging_buffer_ != VK_NULL_HANDLE)
-    {
-        resource_allocator_->DestroyBufferDirect(staging_buffer_, nullptr, staging_buffer_data_);
-        staging_buffer_ = VK_NULL_HANDLE;
-    }
+    return result;
+}
 
-    if (staging_memory_ != VK_NULL_HANDLE)
+void VulkanResourceInitializer::ReleaseStagingBuffer(VkDeviceMemory                        memory,
+                                                     VkBuffer                              buffer,
+                                                     VulkanResourceAllocator::MemoryData   staging_memory_data,
+                                                     VulkanResourceAllocator::ResourceData staging_buffer_data)
+{
+    if (buffer != staging_buffer_)
     {
-        resource_allocator_->FreeMemoryDirect(staging_memory_, nullptr, staging_memory_data_);
-        staging_memory_ = VK_NULL_HANDLE;
+        if (buffer != VK_NULL_HANDLE)
+        {
+            resource_allocator_->DestroyBufferDirect(buffer, nullptr, staging_buffer_data);
+        }
+
+        if (memory != VK_NULL_HANDLE)
+        {
+            resource_allocator_->FreeMemoryDirect(memory, nullptr, staging_memory_data);
+        }
     }
 }
 
@@ -1119,37 +1078,14 @@ void VulkanResourceInitializer::UpdateDrawDescriptorSet(VkDescriptorSet set, VkI
     device_table_->UpdateDescriptorSets(device_, 2, write_set, 0, nullptr);
 }
 
-VkResult VulkanResourceInitializer::BeginCommandBuffer(uint32_t queue_family_index, VkCommandBuffer* command_buffer_p)
+VkResult VulkanResourceInitializer::BeginCommandBuffer(VkCommandBuffer command_buffer)
 {
-    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
-    VkResult        result         = GetCommandExecObjects(queue_family_index, &command_buffer);
-    if (result != VK_SUCCESS)
-    {
-        return result;
-    }
+    VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    begin_info.pNext                    = nullptr;
+    begin_info.flags                    = 0;
+    begin_info.pInheritanceInfo         = nullptr;
 
-    if (command_buffer_p != nullptr)
-    {
-        *command_buffer_p = command_buffer;
-    }
-
-    auto iter = command_exec_objects_.find(queue_family_index);
-    GFXRECON_ASSERT(iter != command_exec_objects_.end());
-    if (iter != command_exec_objects_.end() && !iter->second.recording)
-    {
-        VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-        begin_info.pNext                    = nullptr;
-        begin_info.flags                    = 0;
-        begin_info.pInheritanceInfo         = nullptr;
-
-        result = device_table_->BeginCommandBuffer(iter->second.command_buffer, &begin_info);
-        if (result == VK_SUCCESS)
-        {
-            iter->second.recording = true;
-        }
-    }
-
-    return result;
+    return device_table_->BeginCommandBuffer(command_buffer, &begin_info);
 }
 
 VkResult VulkanResourceInitializer::ExecuteCommandBuffer(VkQueue queue, VkCommandBuffer command_buffer)
@@ -1229,14 +1165,17 @@ VkResult VulkanResourceInitializer::BufferToImageCopy(uint32_t                 q
                                                       uint32_t                 level_count,
                                                       const VkBufferImageCopy* level_copies)
 {
+    VkQueue         queue          = VK_NULL_HANDLE;
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
 
-    VkResult result = GetCommandExecObjects(queue_family_index, &command_buffer);
+    VkResult result = GetCommandExecObjects(queue_family_index, &queue, &command_buffer);
 
     if (result == VK_SUCCESS)
     {
         VkImageLayout      old_layout        = initial_layout;
         VkImageAspectFlags transition_aspect = GetImageTransitionAspect(format, aspect, &old_layout);
+
+        result = BeginCommandBuffer(command_buffer);
 
         if (result == VK_SUCCESS)
         {
@@ -1289,6 +1228,10 @@ VkResult VulkanResourceInitializer::BufferToImageCopy(uint32_t                 q
                                                   1,
                                                   &memory_barrier);
             }
+
+            device_table_->EndCommandBuffer(command_buffer);
+
+            result = ExecuteCommandBuffer(queue, command_buffer);
         }
     }
 
@@ -1309,11 +1252,18 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                                                          uint32_t                 level_count,
                                                          const VkBufferImageCopy* level_copies)
 {
-    VkSampler             sampler    = VK_NULL_HANDLE;
-    VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
-    VkDescriptorSet       set        = VK_NULL_HANDLE;
+    VkQueue               queue          = VK_NULL_HANDLE;
+    VkCommandBuffer       command_buffer = VK_NULL_HANDLE;
+    VkSampler             sampler        = VK_NULL_HANDLE;
+    VkDescriptorSetLayout set_layout     = VK_NULL_HANDLE;
+    VkDescriptorSet       set            = VK_NULL_HANDLE;
 
-    VkResult result = GetDrawDescriptorObjects(&sampler, &set_layout, &set);
+    VkResult result = GetCommandExecObjects(queue_family_index, &queue, &command_buffer);
+
+    if (result == VK_SUCCESS)
+    {
+        result = GetDrawDescriptorObjects(&sampler, &set_layout, &set);
+    }
 
     if (result == VK_SUCCESS)
     {
@@ -1361,22 +1311,16 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
 
             if (result == VK_SUCCESS)
             {
-                result = BeginCommandBuffer(queue_family_index);
-                if (result == VK_SUCCESS)
-                {
-                    result = BufferToImageCopy(queue_family_index,
-                                               source,
-                                               staging_image,
-                                               format,
-                                               aspect,
-                                               VK_IMAGE_LAYOUT_UNDEFINED,
-                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                               layer_count,
-                                               level_count,
-                                               level_copies);
-
-                    result = FlushCommandBuffer(queue_family_index);
-                }
+                result = BufferToImageCopy(queue_family_index,
+                                           source,
+                                           staging_image,
+                                           format,
+                                           aspect,
+                                           VK_IMAGE_LAYOUT_UNDEFINED,
+                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                           layer_count,
+                                           level_count,
+                                           level_copies);
 
                 if (result == VK_SUCCESS)
                 {
@@ -1433,8 +1377,7 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
 
                             if (result == VK_SUCCESS)
                             {
-                                VkCommandBuffer command_buffer = VK_NULL_HANDLE;
-                                result = BeginCommandBuffer(queue_family_index, &command_buffer);
+                                result = BeginCommandBuffer(command_buffer);
 
                                 if (result == VK_SUCCESS)
                                 {
@@ -1465,7 +1408,9 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
                                     device_table_->CmdSetScissor(command_buffer, 0, 1, &scissor_rect);
                                     device_table_->CmdDraw(command_buffer, 3, 1, 0, 0);
                                     device_table_->CmdEndRenderPass(command_buffer);
-                                    result = FlushCommandBuffer(queue_family_index);
+                                    device_table_->EndCommandBuffer(command_buffer);
+
+                                    result = ExecuteCommandBuffer(queue, command_buffer);
                                 }
                             }
 
@@ -1488,62 +1433,6 @@ VkResult VulkanResourceInitializer::PixelShaderImageCopy(uint32_t               
     }
 
     return result;
-}
-
-VkResult VulkanResourceInitializer::FlushCommandBuffer(uint32_t queue_family_index)
-{
-    auto iter = command_exec_objects_.find(queue_family_index);
-
-    VkResult result = VK_SUCCESS;
-
-    if (iter != command_exec_objects_.end() && iter->second.recording)
-    {
-        device_table_->EndCommandBuffer(iter->second.command_buffer);
-
-        result = ExecuteCommandBuffer(iter->second.queue, iter->second.command_buffer);
-        if (result == VK_SUCCESS)
-        {
-            iter->second.recording = false;
-        }
-    }
-
-    return result;
-}
-
-VkResult VulkanResourceInitializer::FlushRemainingResourcesInit()
-{
-    FlushStagingBuffer();
-    VkResult result = VK_SUCCESS;
-    for (const auto& exec_object : command_exec_objects_)
-    {
-        if (exec_object.second.recording)
-        {
-            result = FlushCommandBuffer(exec_object.first);
-            if (result != VK_SUCCESS)
-            {
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-void VulkanResourceInitializer::FlushStagingBuffer()
-{
-    GFXRECON_ASSERT(staging_memory_ != VK_NULL_HANDLE || staging_buffer_offset_ == 0);
-
-    if (staging_memory_ != VK_NULL_HANDLE)
-    {
-        VkMappedMemoryRange memory_range;
-        memory_range.sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        memory_range.pNext  = nullptr;
-        memory_range.memory = staging_memory_;
-        memory_range.offset = 0;
-        memory_range.size   = staging_buffer_offset_;
-        resource_allocator_->FlushMappedMemoryRangesDirect(1, &memory_range, &staging_memory_data_);
-
-        staging_buffer_offset_ = 0;
-    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

@@ -401,7 +401,7 @@ bool MemoryManager::RetrieveMemoryData(void    *buffer_ptr,
             const uint8_t *src_data_ptr = &mem_block.m_data_ptr[0];
             memcpy((uint8_t *)buffer_ptr + dst_offset, src_data_ptr + src_offset, size_to_copy);
             amount_copied += size_to_copy;
-#ifndef NDEBUG
+#ifdef _DEBUG
             static int64_t max_buffer_size = 0;
             if (max_buffer_size < mem_block.m_data_size)
             {

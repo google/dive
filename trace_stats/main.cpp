@@ -239,9 +239,34 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     std::set<Viewport>              viewports;
     std::set<WindowScissor>         window_scissors;
 
+    Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
+    uint32_t             num_binning_passes = 0, num_tiling_passes = 0, num_draws_in_pass = 0;
+
     for (size_t i = 0; i < event_count; ++i)
     {
         const Dive::EventInfo &info = meta_data.m_event_info[i];
+        if (info.m_render_mode != cur_type)
+        {
+#ifdef _DEBUG
+            if (cur_type == Dive::RenderModeType::kBinning)
+                ostream << "Binning pass " << num_binning_passes << ": " << num_draws_in_pass
+                        << std::endl;
+            else if (cur_type == Dive::RenderModeType::kTiled)
+                ostream << "Tiling pass " << num_tiling_passes << ": " << num_draws_in_pass
+                        << std::endl;
+#endif
+            if (info.m_render_mode == Dive::RenderModeType::kBinning)
+                num_binning_passes++;
+            else if (info.m_render_mode == Dive::RenderModeType::kTiled)
+                num_tiling_passes++;
+
+            cur_type = info.m_render_mode;
+            num_draws_in_pass = 0;
+        }
+
+        if (info.m_type == Dive::EventInfo::EventType::kDraw)
+            num_draws_in_pass++;
+
         if (info.m_type == Dive::EventInfo::EventType::kDraw)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinning)
@@ -351,8 +376,8 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         ostream << "Viewports:" << std::endl;
         for (const Viewport &viewport : viewports)
         {
-            ostream << "\t" << "x: " << viewport.m_vk_viewport.x << ", ";
-            ostream << "\t" << "y: " << viewport.m_vk_viewport.y << ", ";
+            ostream << "\t" << "x: " << viewport.m_vk_viewport.x << ",   ";
+            ostream << "\t" << "y: " << viewport.m_vk_viewport.y << ",   ";
             ostream << "\t" << "width: " << viewport.m_vk_viewport.width << ", ";
             ostream << "\t" << "height: " << viewport.m_vk_viewport.height << ", ";
             ostream << "\t" << "minDepth: " << viewport.m_vk_viewport.minDepth << ", ";
@@ -362,14 +387,19 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     // Print out all unique window scissors (i.e. tiles)
     {
         ostream << "Window scissors:" << std::endl;
+        ostream << "\tNum binning passes: " << num_binning_passes << std::endl;
+        ostream << "\tNum tiling passes: " << num_tiling_passes << std::endl;
+        uint32_t count = 0;
         for (const WindowScissor &window_scissor : window_scissors)
         {
+            ostream << "\t" << count++;
             ostream << "\t" << "tl_x: " << window_scissor.m_tl_x << ", ";
             ostream << "\t" << "br_x: " << window_scissor.m_br_x << ", ";
             ostream << "\t" << "tl_y: " << window_scissor.m_tl_y << ", ";
             ostream << "\t" << "br_y: " << window_scissor.m_br_y << ", ";
-            ostream << "\t" << "Width: " << window_scissor.m_br_x - window_scissor.m_tl_x << ", ";
-            ostream << "\t" << "Height: " << window_scissor.m_br_y - window_scissor.m_tl_y;
+            ostream << "\t" << "Width: " << window_scissor.m_br_x - window_scissor.m_tl_x + 1
+                    << ", ";
+            ostream << "\t" << "Height: " << window_scissor.m_br_y - window_scissor.m_tl_y + 1;
             ostream << std::endl;
         }
     }

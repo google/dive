@@ -33,13 +33,13 @@ DataCore::DataCore(ProgressTracker *progress_tracker) :
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string& file_name)
+CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string &file_name)
 {
     return m_dive_capture_data.LoadFile(file_name);
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string& file_name)
+CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string &file_name)
 {
 
     m_pm4_capture_data = Pm4CaptureData(m_progress_tracker);  // Clear any previously loaded data
@@ -48,7 +48,7 @@ CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string& file_nam
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const std::string& file_name)
+CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const std::string &file_name)
 {
     m_gfxr_capture_data = GfxrCaptureData();
     return m_gfxr_capture_data.LoadCaptureFile(file_name);

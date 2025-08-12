@@ -37,7 +37,7 @@ public:
     uint64_t GetNumSharedChildren(uint64_t node_index) const;
     uint64_t GetSharedChildNodeIndex(uint64_t node_index, uint64_t child_index) const;
 
-    // Indicate the being & end index of the shared children in the top-level node that belong to
+    // Indicate the begin & end index of the shared children in the top-level node that belong to
     // the given node
     uint64_t GetStartSharedChildNodeIndex(uint64_t node_index) const;
     uint64_t GetEndSharedChildNodeIndex(uint64_t node_index) const;

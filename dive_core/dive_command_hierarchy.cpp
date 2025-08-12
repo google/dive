@@ -58,7 +58,7 @@ bool DiveCommandHierarchyCreator::CreateTrees(DiveCaptureData        &dive_captu
                                               bool                    flatten_chain_nodes,
                                               std::optional<uint64_t> reserve_size)
 {
-    m_pm4_command_hierarchy_creator.CreateTrees(flatten_chain_nodes, reserve_size, false);
+    m_pm4_command_hierarchy_creator.CreateTrees(flatten_chain_nodes, false, reserve_size);
 
     m_gfxr_command_hierarchy_creator.CreateTrees(true);
 
@@ -98,10 +98,10 @@ void DiveCommandHierarchyCreator::CreateTopologies()
     // Convert the m_node_children temporary structure into CommandHierarchy's topologies
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
-        size_t num_pm4_nodes = m_pm4_command_hierarchy_creator.get_node_children(topology, 0)
+        size_t num_pm4_nodes = m_pm4_command_hierarchy_creator.GetNodeChildren(topology, 0)
                                .size();
         size_t total_num_nodes = num_pm4_nodes +
-                                 m_gfxr_command_hierarchy_creator.get_node_children(topology)
+                                 m_gfxr_command_hierarchy_creator.GetNodeChildren(topology)
                                  .size();
 
         SharedNodeTopology &cur_topology = m_command_hierarchy.m_topology[topology];
@@ -115,10 +115,10 @@ void DiveCommandHierarchyCreator::CreateTopologies()
             for (uint64_t node_index = 0; node_index < num_pm4_nodes; ++node_index)
             {
                 total_num_children[topology] += m_pm4_command_hierarchy_creator
-                                                .get_node_children(topology, 0)[node_index]
+                                                .GetNodeChildren(topology, 0)[node_index]
                                                 .size();
                 total_num_shared_children[topology] += m_pm4_command_hierarchy_creator
-                                                       .get_node_children(topology, 1)[node_index]
+                                                       .GetNodeChildren(topology, 1)[node_index]
                                                        .size();
             }
         }
@@ -126,26 +126,26 @@ void DiveCommandHierarchyCreator::CreateTopologies()
         cur_topology.m_shared_children_list.reserve(total_num_shared_children[topology]);
 
         DiveVector<uint64_t> combined_root_children = m_pm4_command_hierarchy_creator
-                                                      .get_node_children(topology, 0)[0];
+                                                      .GetNodeChildren(topology, 0)[0];
 
         for (uint64_t node_index = 1; node_index < num_pm4_nodes; ++node_index)
         {
-            DIVE_ASSERT(m_pm4_command_hierarchy_creator.get_node_children(topology, 0).size() ==
-                        m_pm4_command_hierarchy_creator.get_node_children(topology, 1).size());
+            DIVE_ASSERT(m_pm4_command_hierarchy_creator.GetNodeChildren(topology, 0).size() ==
+                        m_pm4_command_hierarchy_creator.GetNodeChildren(topology, 1).size());
             cur_topology.AddChildren(node_index,
                                      m_pm4_command_hierarchy_creator
-                                     .get_node_children(topology, 0)[node_index]);
+                                     .GetNodeChildren(topology, 0)[node_index]);
             cur_topology.AddSharedChildren(node_index,
                                            m_pm4_command_hierarchy_creator
-                                           .get_node_children(topology, 1)[node_index]);
+                                           .GetNodeChildren(topology, 1)[node_index]);
         }
 
         cur_topology.m_start_shared_child = std::move(
-        m_pm4_command_hierarchy_creator.get_node_start_shared_child(topology));
+        m_pm4_command_hierarchy_creator.GetNodeStartSharedChildren(topology));
         cur_topology.m_end_shared_child = std::move(
-        m_pm4_command_hierarchy_creator.get_node_end_shared_child(topology));
+        m_pm4_command_hierarchy_creator.GetNodeEndSharedChildren(topology));
         cur_topology.m_root_node_index = std::move(
-        m_pm4_command_hierarchy_creator.get_node_root_node_index(topology));
+        m_pm4_command_hierarchy_creator.GetNodeRootNodeIndices(topology));
 
         // Add the gfxr nodes to the topology.
         if (topology == CommandHierarchy::kAllEventTopology)
@@ -157,7 +157,7 @@ void DiveCommandHierarchyCreator::CreateTopologies()
             for (uint64_t node_index = num_pm4_nodes; node_index < total_num_nodes; ++node_index)
             {
                 uint64_t    gfxr_dive_index = gfxr_dive_indices.at(node_index);
-                const auto &children = m_gfxr_command_hierarchy_creator.get_node_children(
+                const auto &children = m_gfxr_command_hierarchy_creator.GetNodeChildren(
                 topology)[gfxr_dive_index];
 
                 DiveVector<uint64_t> filtered_children;

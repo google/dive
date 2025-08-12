@@ -129,7 +129,7 @@ uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string &
         {
             DIVE_ASSERT(m_node_children[i].size() == local_node_index);
             m_node_children[i].resize(local_node_index + 1);
-            m_node_root_node_index[i].resize(local_node_index + 1);
+            m_node_root_node_indices[i].resize(local_node_index + 1);
         }
     }
     else
@@ -139,7 +139,7 @@ uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string &
             DIVE_ASSERT(m_node_children[i].size() == node_index);
             m_node_children[i].resize(m_node_children[i].size() + 1);
 
-            m_node_root_node_index[i].resize(m_node_root_node_index[i].size() + 1);
+            m_node_root_node_indices[i].resize(m_node_root_node_indices[i].size() + 1);
         }
     }
 

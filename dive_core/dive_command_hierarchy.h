@@ -52,15 +52,15 @@ private:
 
     // List of all children for shared nodes.
 
-    // m_shared_children_list contains the node_indexes of all the "shared" children throughout the
+    // m_shared_children_indices contains the node_indexes of all the "shared" children throughout the
     // entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
     // flat, concatenated list of all nodes that are designated as "shared children". These are
     // typically kPacketNodes that can logically appear under multiple different parent nodes or
-    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_list to
+    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_indices to
     // define the range of shared children belonging to a particular node.
-    DiveVector<uint64_t> m_shared_children_list;
+    DiveVector<uint64_t> m_shared_children_indices;
 
-    // This vector points into the m_shared_children_list to define the range of shared children for
+    // This vector points into the m_shared_children_indices to define the range of shared children for
     // a particular node.
     DiveVector<ChildrenInfo> m_node_shared_children;
 

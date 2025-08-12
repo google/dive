@@ -70,7 +70,6 @@ private:
     DiveVector<uint64_t>             m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
     Topology                         m_topology[CommandHierarchy::kTopologyTypeCount];
     bool                             m_used_in_mixed_command_hierarchy = false;
-    uint64_t                         m_local_node_count = 0;
     std::unordered_map<uint64_t, uint64_t> m_dive_indices_to_local_indices_map;
 };
 }  // namespace Dive

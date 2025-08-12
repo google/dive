@@ -24,6 +24,7 @@ limitations under the License.
 #include <limits>
 #include <sstream>
 #include <cstring>
+#include <optional>
 
 namespace Dive
 {
@@ -562,21 +563,26 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
     std::vector<double> renderpasses_time;
     std::vector<size_t> cmd_renderpass_count_vec;
 
-    const double kInvalidTimeDuration = -1.0f;
-    auto         GetTimeDuration = [&](uint32_t begin_offset,
+    auto GetTimeDuration = [&](uint32_t begin_offset,
                                uint32_t end_offset,
-                               uint64_t timestamps_with_availability[]) -> double {
+                               uint64_t timestamps_with_availability[]) -> std::optional<double> {
         uint64_t availability_end = timestamps_with_availability[end_offset * 2 + 1];
         uint64_t availability_begin = timestamps_with_availability[begin_offset * 2 + 1];
+
         if ((availability_begin == 0) || (availability_end == 0))
         {
-            return kInvalidTimeDuration;
+            // Return an empty optional to signal an invalid result
+            return std::nullopt;
         }
 
         // Calculate the elapsed time in nanoseconds
-        uint64_t elapsed_time = timestamps_with_availability[end_offset * 2] -
-                                timestamps_with_availability[begin_offset * 2];
-        double elapsed_time_in_ms = elapsed_time * m_timestamp_period * 0.000001;
+        uint64_t elapsed_timestamp_increments = timestamps_with_availability[end_offset * 2] -
+                                                timestamps_with_availability[begin_offset * 2];
+        // m_timestamp_period is the number of nanoseconds per timestamp increment.
+        const double kNanoToMilli = 1.0 / 1000000.0;
+        double       elapsed_time_in_ms = static_cast<double>(elapsed_timestamp_increments) *
+                                    m_timestamp_period * kNanoToMilli;
+
         return elapsed_time_in_ms;
     };
 
@@ -589,11 +595,11 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
             const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
             const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
 
-            double elapsed_time_in_ms = GetTimeDuration(begin_timestamp_offset,
-                                                        end_timestamp_offset,
-                                                        timestamps_with_availability);
+            auto elapsed_time_in_ms = GetTimeDuration(begin_timestamp_offset,
+                                                      end_timestamp_offset,
+                                                      timestamps_with_availability);
 
-            if (elapsed_time_in_ms == kInvalidTimeDuration)
+            if (!elapsed_time_in_ms)
             {
                 frame_time = 0.0;
                 m_valid_frame = false;
@@ -604,8 +610,8 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
                 return GPUTime::GpuTimeStatus{ ss.str(), false };
             }
 
-            cmds_time.push_back(elapsed_time_in_ms);
-            frame_time += elapsed_time_in_ms;
+            cmds_time.push_back(elapsed_time_in_ms.value());
+            frame_time += elapsed_time_in_ms.value();
 
             const size_t renderpass_count = m_cmds[cmd].renderpass_slots.size();
             cmd_renderpass_count_vec.push_back(renderpass_count / 2);
@@ -615,12 +621,12 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
                 const uint32_t renderpass_end_timestamp_offset = m_cmds[cmd]
                                                                  .renderpass_slots[r + 1];
 
-                double
+                auto
                 renderpass_elapsed_time_in_ms = GetTimeDuration(renderpass_begin_timestamp_offset,
                                                                 renderpass_end_timestamp_offset,
                                                                 timestamps_with_availability);
 
-                if (renderpass_elapsed_time_in_ms == kInvalidTimeDuration)
+                if (!renderpass_elapsed_time_in_ms)
                 {
                     frame_time = 0.0;
                     m_valid_frame = false;
@@ -630,7 +636,7 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn
                        << " End Offset:" << end_timestamp_offset;
                     return GPUTime::GpuTimeStatus{ ss.str(), false };
                 }
-                renderpasses_time.push_back(renderpass_elapsed_time_in_ms);
+                renderpasses_time.push_back(renderpass_elapsed_time_in_ms.value());
             }
         }
     }

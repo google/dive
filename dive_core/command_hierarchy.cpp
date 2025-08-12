@@ -154,8 +154,8 @@ uint64_t SharedNodeTopology::GetSharedChildNodeIndex(uint64_t node_index,
     DIVE_ASSERT(node_index < m_node_shared_children.size());
     DIVE_ASSERT(child_index < m_node_shared_children[node_index].m_num_children);
     uint64_t child_list_index = m_node_shared_children[node_index].m_start_index + child_index;
-    DIVE_ASSERT(child_list_index < m_shared_children_list.size());
-    return m_shared_children_list[child_list_index];
+    DIVE_ASSERT(child_list_index < m_shared_children_indices.size());
+    return m_shared_children_indices[child_list_index];
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -195,10 +195,10 @@ void SharedNodeTopology::AddSharedChildren(uint64_t                    node_inde
     DIVE_ASSERT(m_node_shared_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_shared_children.size() == m_node_child_index.size());
 
-    // Append to m_shared_children_list
-    uint64_t prev_size = m_shared_children_list.size();
-    m_shared_children_list.resize(m_shared_children_list.size() + children.size());
-    std::copy(children.begin(), children.end(), m_shared_children_list.begin() + prev_size);
+    // Append to m_shared_children_indices
+    uint64_t prev_size = m_shared_children_indices.size();
+    m_shared_children_indices.resize(m_shared_children_indices.size() + children.size());
+    std::copy(children.begin(), children.end(), m_shared_children_indices.begin() + prev_size);
 
     // Set "pointer" to children_list
     DIVE_ASSERT(m_node_shared_children[node_index].m_num_children == 0);
@@ -2173,7 +2173,7 @@ void CommandHierarchyCreator::CreateTopologies()
             }
         }
         cur_topology.m_children_list.reserve(total_num_children[topology]);
-        cur_topology.m_shared_children_list.reserve(total_num_shared_children[topology]);
+        cur_topology.m_shared_children_indices.reserve(total_num_shared_children[topology]);
 
         for (uint64_t node_index = 0; node_index < num_nodes; ++node_index)
         {

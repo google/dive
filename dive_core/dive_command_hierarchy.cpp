@@ -123,7 +123,7 @@ void DiveCommandHierarchyCreator::CreateTopologies()
             }
         }
         cur_topology.m_children_list.reserve(total_num_children[topology]);
-        cur_topology.m_shared_children_list.reserve(total_num_shared_children[topology]);
+        cur_topology.m_shared_children_indices.reserve(total_num_shared_children[topology]);
 
         DiveVector<uint64_t> combined_root_children = m_pm4_command_hierarchy_creator
                                                       .GetNodeChildren(topology, 0)[0];

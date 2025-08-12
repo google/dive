@@ -122,25 +122,18 @@ uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string &
 
     if (m_used_in_mixed_command_hierarchy)
     {
-        uint64_t local_node_index = m_local_node_count++;
+        uint64_t local_node_index = m_node_children[CommandHierarchy::kAllEventTopology].size();
         m_dive_indices_to_local_indices_map[node_index] = local_node_index;
-
-        for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; ++i)
-        {
-            DIVE_ASSERT(m_node_children[i].size() == local_node_index);
-            m_node_children[i].resize(local_node_index + 1);
-            m_node_root_node_indices[i].resize(local_node_index + 1);
-        }
+        m_node_children[CommandHierarchy::kAllEventTopology].resize(local_node_index + 1);
+        m_node_root_node_indices[CommandHierarchy::kAllEventTopology].resize(local_node_index + 1);
     }
     else
     {
-        for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; ++i)
-        {
-            DIVE_ASSERT(m_node_children[i].size() == node_index);
-            m_node_children[i].resize(m_node_children[i].size() + 1);
-
-            m_node_root_node_indices[i].resize(m_node_root_node_indices[i].size() + 1);
-        }
+        DIVE_ASSERT(m_node_children[CommandHierarchy::kAllEventTopology].size() == node_index);
+        m_node_children[CommandHierarchy::kAllEventTopology].resize(
+        m_node_children[CommandHierarchy::kAllEventTopology].size() + 1);
+        m_node_root_node_indices[CommandHierarchy::kAllEventTopology].resize(
+        m_node_root_node_indices[CommandHierarchy::kAllEventTopology].size() + 1);
     }
 
     return node_index;

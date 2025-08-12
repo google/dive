@@ -112,16 +112,6 @@ private:
     GfxrVulkanCommandHierarchyCreator &m_gfxr_command_hierarchy_creator;
     CommandHierarchyCreator           &m_pm4_command_hierarchy_creator;
 
-    DiveVector<uint64_t> m_node_start_shared_children[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_end_shared_children[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
-
-    // This is a list of child indices per node, ie. topology info
-    // Once parsing is complete, we will create a topology from this
-    // There are 2 sets of children per node, per topology. The second set of children nodes can
-    // have more than 1 parent each
-    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
-
     bool m_flatten_chain_nodes = false;
 
     uint32_t m_num_events = 0;

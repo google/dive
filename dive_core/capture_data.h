@@ -33,7 +33,7 @@ public:
         kVersionError
     };
     virtual ~CaptureData() = default;
-    virtual LoadResult LoadCaptureFile(const char* file_name) = 0;
+    virtual LoadResult LoadCaptureFile(const std::string& file_name) = 0;
 
 protected:
     std::string m_cur_capture_file;

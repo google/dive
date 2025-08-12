@@ -333,7 +333,7 @@ public:
     Pm4CaptureData(ProgressTracker *progress_tracker);
     virtual ~Pm4CaptureData() = default;
 
-    LoadResult LoadCaptureFile(const char *file_name);
+    LoadResult LoadCaptureFile(const std::string& file_name);
 
     CaptureDataHeader::CaptureType          GetCaptureType() const;
     const MemoryManager                    &GetMemoryManager() const;
@@ -362,8 +362,8 @@ public:
     std::string GetFileFormatVersion() const;
 
 private:
-    LoadResult LoadDiveFile(const char *file_name);
-    LoadResult LoadAdrenoRdFile(const char *file_name);
+    LoadResult LoadDiveFile(const std::string& file_name);
+    LoadResult LoadAdrenoRdFile(const std::string& file_name);
     bool       LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header);
     bool       LoadMemoryAllocBlock(std::istream &capture_file);
     bool       LoadSubmitBlock(std::istream &capture_file);

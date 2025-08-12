@@ -32,7 +32,7 @@ DiveCaptureData::DiveCaptureData() :
 DiveCaptureData::~DiveCaptureData() {}
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DiveCaptureData::LoadFile(const char* file_name)
+CaptureData::LoadResult DiveCaptureData::LoadFile(const std::string& file_name)
 {
     CaptureData::LoadResult result;
 
@@ -45,8 +45,8 @@ CaptureData::LoadResult DiveCaptureData::LoadFile(const char* file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DiveCaptureData::LoadFiles(const char* pm4_file_name,
-                                                   const char* gfxr_file_name)
+CaptureData::LoadResult DiveCaptureData::LoadFiles(const std::string& pm4_file_name,
+                                                   const std::string& gfxr_file_name)
 {
     // Initialize capture data objects
     m_gfxr_capture_data = GfxrCaptureData();

@@ -66,9 +66,9 @@ private:
 
     // For each non-root node, indicate where the shared children start/end are, and
     // what the top level root node is
-    DiveVector<uint64_t> m_start_shared_child;
-    DiveVector<uint64_t> m_end_shared_child;
-    DiveVector<uint64_t> m_root_node_index;
+    DiveVector<uint64_t> m_start_shared_children;
+    DiveVector<uint64_t> m_end_shared_children;
+    DiveVector<uint64_t> m_root_node_indices;
 
     void SetNumNodes(uint64_t num_nodes) override;
     void AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
@@ -112,9 +112,9 @@ private:
     GfxrVulkanCommandHierarchyCreator &m_gfxr_command_hierarchy_creator;
     CommandHierarchyCreator           &m_pm4_command_hierarchy_creator;
 
-    DiveVector<uint64_t> m_node_start_shared_child[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_end_shared_child[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_start_shared_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_end_shared_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
 
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this

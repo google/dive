@@ -40,7 +40,7 @@ public:
     bool ExecuteGfxrSubmit(uint32_t submit_index,
                            const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds);
 
-    const DiveVector<DiveVector<uint64_t>> &get_node_children(uint64_t type) const
+    const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type) const
     {
         return m_node_children[type];
     }
@@ -67,7 +67,7 @@ private:
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t>             m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t>             m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
     Topology                         m_topology[CommandHierarchy::kTopologyTypeCount];
     bool                             m_used_in_mixed_command_hierarchy = false;
     uint64_t                         m_local_node_count = 0;

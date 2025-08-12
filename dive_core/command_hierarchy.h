@@ -433,8 +433,8 @@ public:
                      std::optional<uint64_t> reserve_size);
 
     bool CreateTrees(bool                    flatten_chain_nodes,
-                     std::optional<uint64_t> reserve_size,
-                     bool                    createTopologies);
+                     bool                    createTopologies,
+                    std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
     bool CreateTrees(EngineType             engine_type,
@@ -462,24 +462,24 @@ public:
     virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
     virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
 
-    const DiveVector<DiveVector<uint64_t>> &get_node_children(uint64_t type, size_t sub_index) const
+    const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type, size_t sub_index) const
     {
         return m_node_children[type][sub_index];
     }
 
-    const DiveVector<uint64_t> &get_node_start_shared_child(uint64_t type) const
+    const DiveVector<uint64_t> &GetNodeStartSharedChildren(uint64_t type) const
     {
-        return m_node_start_shared_child[type];
+        return m_node_start_shared_children[type];
     }
 
-    const DiveVector<uint64_t> &get_node_end_shared_child(uint64_t type) const
+    const DiveVector<uint64_t> &GetNodeEndSharedChildren(uint64_t type) const
     {
-        return m_node_end_shared_child[type];
+        return m_node_end_shared_children[type];
     }
 
-    const DiveVector<uint64_t> &get_node_root_node_index(uint64_t type) const
+    const DiveVector<uint64_t> &GetNodeRootNodeIndices(uint64_t type) const
     {
-        return m_node_root_node_index[type];
+        return m_node_root_node_indices[type];
     }
 
 private:
@@ -661,9 +661,9 @@ private:
     bool m_flatten_chain_nodes = false;
 
     // Range of shared children associated with each non-top-level node, per topology
-    DiveVector<uint64_t> m_node_start_shared_child[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_end_shared_child[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_start_shared_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_end_shared_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
 
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this

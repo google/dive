@@ -81,7 +81,7 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
 }
 
 //--------------------------------------------------------------------------------------------------
-bool GfxrCaptureData::WriteModifiedGfxrFile(const char *new_file_name)
+bool GfxrCaptureData::WriteModifiedGfxrFile(const char* new_file_name)
 {
     if (m_cur_capture_file.empty())
     {
@@ -99,7 +99,7 @@ bool GfxrCaptureData::WriteModifiedGfxrFile(const char *new_file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &
+const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>>&
 GfxrCaptureData::GetGfxrSubmits() const
 {
     return m_gfxr_submits;

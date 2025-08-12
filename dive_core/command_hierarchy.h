@@ -160,16 +160,16 @@ private:
 
     // List of all children for shared nodes.
 
-    // m_shared_children_indices contains the node_indexes of all the "shared" children throughout the
-    // entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
+    // m_shared_children_indices contains the node_indexes of all the "shared" children throughout
+    // the entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
     // flat, concatenated list of all nodes that are designated as "shared children". These are
     // typically kPacketNodes that can logically appear under multiple different parent nodes or
-    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_indices to
-    // define the range of shared children belonging to a particular node.
+    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_indices
+    // to define the range of shared children belonging to a particular node.
     DiveVector<uint64_t> m_shared_children_indices;
 
-    // This vector points into the m_shared_children_indices to define the range of shared children for
-    // a particular node.
+    // This vector points into the m_shared_children_indices to define the range of shared children
+    // for a particular node.
     DiveVector<ChildrenInfo> m_node_shared_children;
 
     // For each non-root node, indicate where the shared children start/end are, and
@@ -434,7 +434,7 @@ public:
 
     bool CreateTrees(bool                    flatten_chain_nodes,
                      bool                    createTopologies,
-                    std::optional<uint64_t> reserve_size);
+                     std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
     bool CreateTrees(EngineType             engine_type,

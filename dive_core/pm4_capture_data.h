@@ -333,21 +333,21 @@ public:
     Pm4CaptureData(ProgressTracker *progress_tracker);
     virtual ~Pm4CaptureData() = default;
 
-    LoadResult LoadCaptureFile(const std::string& file_name);
+    LoadResult LoadCaptureFile(const std::string &file_name);
 
-    CaptureDataHeader::CaptureType          GetCaptureType() const;
-    const MemoryManager                    &GetMemoryManager() const;
-    uint32_t                                GetNumSubmits() const;
-    const SubmitInfo                       &GetSubmitInfo(uint32_t submit_index) const;
-    uint32_t                                GetNumPresents() const;
-    const PresentInfo                      &GetPresentInfo(uint32_t present_index) const;
-    uint32_t                                GetNumRings() const;
-    const RingInfo                         &GetRingInfo(uint32_t ring_index) const;
-    const WaveInfo                         &GetWaveInfo() const;
-    const RegisterInfo                     &GetRegisterInfo() const;
-    inline uint32_t                         GetNumText() const { return (uint32_t)m_text.size(); }
-    inline const TextInfo                  &GetText(uint32_t index) const { return m_text[index]; }
-    const DiveVector<SubmitInfo> &GetSubmits() const;
+    CaptureDataHeader::CaptureType GetCaptureType() const;
+    const MemoryManager           &GetMemoryManager() const;
+    uint32_t                       GetNumSubmits() const;
+    const SubmitInfo              &GetSubmitInfo(uint32_t submit_index) const;
+    uint32_t                       GetNumPresents() const;
+    const PresentInfo             &GetPresentInfo(uint32_t present_index) const;
+    uint32_t                       GetNumRings() const;
+    const RingInfo                &GetRingInfo(uint32_t ring_index) const;
+    const WaveInfo                &GetWaveInfo() const;
+    const RegisterInfo            &GetRegisterInfo() const;
+    inline uint32_t                GetNumText() const { return (uint32_t)m_text.size(); }
+    inline const TextInfo         &GetText(uint32_t index) const { return m_text[index]; }
+    const DiveVector<SubmitInfo>  &GetSubmits() const;
 
     Pm4CaptureData &operator=(Pm4CaptureData &&) = default;
 
@@ -358,8 +358,8 @@ public:
     std::string GetFileFormatVersion() const;
 
 private:
-    LoadResult LoadDiveFile(const std::string& file_name);
-    LoadResult LoadAdrenoRdFile(const std::string& file_name);
+    LoadResult LoadDiveFile(const std::string &file_name);
+    LoadResult LoadAdrenoRdFile(const std::string &file_name);
     bool       LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header);
     bool       LoadMemoryAllocBlock(std::istream &capture_file);
     bool       LoadSubmitBlock(std::istream &capture_file);

@@ -18,5 +18,6 @@
         <file>images/dive.ico</file>
         <file>stylesheet.qss</file>
         <file>images/filter.png</file>
+        <file>images/analyze.png</file>
     </qresource>
 </RCC>

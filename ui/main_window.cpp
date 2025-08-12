@@ -46,6 +46,7 @@
 #include "object_names.h"
 #include "settings.h"
 #include "trace_window.h"
+#include "analyze_window.h"
 #ifndef NDEBUG
 #    include "event_timing/event_timing_view.h"
 #endif
@@ -283,6 +284,8 @@ MainWindow::MainWindow()
 
     m_trace_dig = new TraceDialog(this);
 
+    m_analyze_dig = new AnalyzeDialog(this);
+
     // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.
     setCentralWidget(horizontal_splitter);
@@ -366,6 +369,11 @@ MainWindow::MainWindow()
                      SIGNAL(HideOtherSearchBars()),
                      this,
                      SLOT(OnTabViewChange()));
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnNewFileOpened,
+                     this,
+                     &MainWindow::OnOpenFileFromAnalyzeDialog);
 
     CreateActions();
     CreateMenus();
@@ -817,6 +825,17 @@ void MainWindow::OnNormalCapture()
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::OnAnalyzeCapture()
+{
+    if (!m_gfxr_capture_loaded)
+    {
+        OnOpenFile();
+    }
+
+    OnAnalyze(m_gfxr_capture_loaded, m_capture_file.toStdString());
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnCaptureTrigger()
 {
     if (!m_capture_saved && !m_unsaved_capture_path.empty())
@@ -856,6 +875,23 @@ void MainWindow::OnCapture(bool is_capture_delayed, bool is_gfxr_capture)
     m_trace_dig->UseGfxrCapture(is_gfxr_capture);
     m_trace_dig->UpdateDeviceList(true);
     m_trace_dig->exec();
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path)
+{
+    if (!is_gfxr_capture_loaded)
+    {
+        QMessageBox::
+        critical(this,
+                 tr("Analyzation Load Failed"),
+                 tr("Unable to analyze without gfxr capture data loaded. Ensure a capture "
+                    "containing gfxr data is loaded before attempting to analyze."));
+        return;
+    }
+    QString file_path_q_string = QString::fromStdString(file_path);
+    m_analyze_dig->setSelectedCaptureFile(file_path_q_string);
+    m_analyze_dig->exec();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1125,6 +1161,13 @@ void MainWindow::CreateActions()
     m_capture_delay_action->setShortcut(QKeySequence("Ctrl+f5"));
     connect(m_capture_delay_action, &QAction::triggered, this, &MainWindow::OnCaptureTrigger);
 
+    // Analyze action
+    m_analyze_action = new QAction(tr("Analyze Capture"), this);
+    m_analyze_action->setStatusTip(tr("Analyze a Capture"));
+    m_analyze_action->setIcon(QIcon(":/images/analyze.png"));
+    m_analyze_action->setShortcut(QKeySequence("f7"));
+    connect(m_analyze_action, &QAction::triggered, this, &MainWindow::OnAnalyzeCapture);
+
     // Shortcuts action
     m_shortcuts_action = new QAction(tr("&Shortcuts"), this);
     m_shortcuts_action->setStatusTip(tr("Display application keyboard shortcuts"));
@@ -1155,6 +1198,9 @@ void MainWindow::CreateMenus()
     m_capture_menu->addAction(m_pm4_capture_action);
     m_capture_menu->addAction(m_gfxr_capture_action);
 
+    m_analyze_menu = menuBar()->addMenu(tr("&Analyze"));
+    m_analyze_menu->addAction(m_analyze_action);
+
     m_help_menu = menuBar()->addMenu(tr("&Help"));
     m_help_menu->addAction(m_shortcuts_action);
     m_help_menu->addAction(m_about_action);
@@ -1180,6 +1226,15 @@ void MainWindow::CreateToolBars()
     m_capture_button->setIcon(QIcon(":/images/capture.png"));
 
     m_file_tool_bar->addWidget(m_capture_button);
+
+    m_file_tool_bar->addSeparator();
+
+    QToolButton *m_analyze_button = new QToolButton();
+    m_analyze_button->setIcon(QIcon(":/images/analyze.png"));
+    m_analyze_button->setPopupMode(QToolButton::DelayedPopup);
+    connect(m_analyze_button, &QToolButton::clicked, m_analyze_action, &QAction::trigger);
+
+    m_file_tool_bar->addWidget(m_analyze_button);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1587,4 +1642,17 @@ void MainWindow::ConnectGfxrFileTabs()
                      SIGNAL(HideOtherSearchBars()),
                      this,
                      SLOT(OnTabViewChange()));
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
+{
+    const std::string file_path_std_str = file_path.toStdString();
+    const char       *file_path_str = file_path_std_str.c_str();
+    if (!LoadFile(file_path_str))
+    {
+        QMessageBox::critical(this,
+                              QString("Error Opening File"),
+                              (QString("Unable to open file: ") + file_path_str));
+    }
 }

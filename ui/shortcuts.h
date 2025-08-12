@@ -15,7 +15,7 @@
 */
 
 #define SHORTCUT_EVENTS_SEARCH "Ctrl+F"
-#define SHORTCUT_COMMANDS_SEARCH "Ctrl+Shift+F"
+#define SHORTCUT_TAB_VIEW_SEARCH "Ctrl+Shift+F"
 #define SHORTCUT_NEXT_SEARCH_RESULT "Ctrl+Shift+N"
 #define SHORTCUT_PREVIOUS_SEARCH_RESULT "Ctrl+Shift+P"
 #define SHORTCUT_OVERVIEW_TAB "Ctrl+Shift+O"

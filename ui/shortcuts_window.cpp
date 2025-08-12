@@ -42,8 +42,8 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
     os << "Begin an Events Search: ";
     os << SHORTCUT_EVENTS_SEARCH << std::endl;
     os << std::endl;
-    os << "Begin a Commands Search: ";
-    os << SHORTCUT_COMMANDS_SEARCH << std::endl;
+    os << "Begin a Tab View Search: ";
+    os << SHORTCUT_TAB_VIEW_SEARCH << std::endl;
     os << std::endl;
     os << "View the next search result: ";
     os << SHORTCUT_NEXT_SEARCH_RESULT << std::endl;

@@ -589,7 +589,7 @@ void MainWindow::ResetTabWidget()
 // TODO (gcommodore) (b/436646197) : Separate loading .rd files from loading .dive files so that
 // this function is used purely for loading a .dive file or loading a group of files (.gfxr, .rd,
 // and .gfxa).
-bool MainWindow::LoadDiveFile(const char *file_name)
+bool MainWindow::LoadDiveFile(const std::string &file_name)
 {
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
@@ -602,7 +602,9 @@ bool MainWindow::LoadDiveFile(const char *file_name)
             error_msg = QString("File corrupt!");
         else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
             error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
         return false;
     }
 
@@ -626,7 +628,7 @@ bool MainWindow::LoadDiveFile(const char *file_name)
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name));
+                              (QString("Unable to parse file: ") + file_name.c_str()));
         return false;
     }
 
@@ -671,7 +673,7 @@ bool MainWindow::LoadDiveFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadAdrenoRdFile(const char *file_name)
+bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
 {
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
@@ -684,7 +686,9 @@ bool MainWindow::LoadAdrenoRdFile(const char *file_name)
             error_msg = QString("File corrupt!");
         else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
             error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
         return false;
     }
 
@@ -706,7 +710,7 @@ bool MainWindow::LoadAdrenoRdFile(const char *file_name)
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name));
+                              (QString("Unable to parse file: ") + file_name.c_str()));
         return false;
     }
 
@@ -747,7 +751,7 @@ bool MainWindow::LoadAdrenoRdFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadGfxrFile(const char *file_name)
+bool MainWindow::LoadGfxrFile(const std::string &file_name)
 {
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadGfxrCaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
@@ -760,7 +764,9 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
             error_msg = QString("File corrupt!");
         else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
             error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
         return false;
     }
 
@@ -778,7 +784,7 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name));
+                              (QString("Unable to parse file: ") + file_name.c_str()));
         return false;
     }
 
@@ -805,7 +811,7 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
 
 //--------------------------------------------------------------------------------------------------
 // TODO (gcommodore) (b/436646197): Support loading multiple files
-bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
+bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
 {
     // Check the file type to determine what is loaded.
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
@@ -838,7 +844,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
         if (!asset_file_exists)
         {
             HideOverlay();
-            QString title = QString("Unable to open file: %1").arg(file_name);
+            QString title = QString("Unable to open file: %1").arg(file_name.c_str());
             QString description = QString("Required .gfxa file: %1 not found!")
                                   .arg(QString::fromStdString(asset_file_path.string()));
             QMessageBox::critical(this, title, description);
@@ -874,13 +880,15 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     {
         HideOverlay();
         QString error_msg = QString("File type not supported!");
-        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
         return false;
     }
 
     ExpandResizeHierarchyView();
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
-    m_capture_file = QString(file_name);
+    m_capture_file = QString(file_name.c_str());
     QFileInfo file_info(m_capture_file);
     SetCurrentFile(m_capture_file, is_temp_file);
     emit SetSaveAsMenuStatus(true);

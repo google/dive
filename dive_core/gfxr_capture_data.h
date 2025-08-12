@@ -35,7 +35,7 @@ public:
     const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &GetGfxrSubmits() const;
 
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
-    LoadResult LoadCaptureFile(const std::string& file_name) override;
+    LoadResult LoadCaptureFile(const std::string &file_name) override;
 
     // Get the gfxr data
     bool IsDiveBlockDataInitialized() const { return m_gfxr_capture_block_data != nullptr; }

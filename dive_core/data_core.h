@@ -67,9 +67,9 @@ public:
     DataCore(ProgressTracker *progress_tracker);
 
     // Load the capture file
-    CaptureData::LoadResult LoadDiveCaptureData(const std::string& file_name);
-    CaptureData::LoadResult LoadPm4CaptureData(const std::string& file_name);
-    CaptureData::LoadResult LoadGfxrCaptureData(const std::string& file_name);
+    CaptureData::LoadResult LoadDiveCaptureData(const std::string &file_name);
+    CaptureData::LoadResult LoadPm4CaptureData(const std::string &file_name);
+    CaptureData::LoadResult LoadGfxrCaptureData(const std::string &file_name);
 
     // Parse the capture to generate info that describes the capture
     bool ParseDiveCaptureData();

@@ -32,14 +32,14 @@ public:
     virtual ~DiveCaptureData();
     DiveCaptureData &operator=(DiveCaptureData &&) = default;
 
-    CaptureData::LoadResult LoadFile(const char *file_name);
-    CaptureData::LoadResult LoadFiles(const char *pm4_file_name, const char *gfxr_file_name);
+    CaptureData::LoadResult LoadFile(const std::string& file_name);
+    CaptureData::LoadResult LoadFiles(const std::string&pm4_file_name, const std::string& gfxr_file_name);
     const Pm4CaptureData   &getPm4CaptureData() const;
     const GfxrCaptureData  &getGfxrCaptureData() const;
 
 private:
     CaptureData::LoadResult LoadCaptureFileStream(std::istream &capture_file);
-    CaptureData::LoadResult LoadDiveFile(const char *file_name);
+    CaptureData::LoadResult LoadDiveFile(const std::string& file_name);
     ProgressTracker        *m_progress_tracker;
     Pm4CaptureData          m_pm4_capture_data;
     GfxrCaptureData         m_gfxr_capture_data;

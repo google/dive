@@ -856,7 +856,7 @@ Pm4CaptureData::Pm4CaptureData(ProgressTracker *progress_tracker) :
 //--------------------------------------------------------------------------------------------------
 // TODO (gcommodore): Separate loading .rd files from loading .dive files so that this function is
 // used purely for loading a .rd file.
-CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const char *file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const std::string& file_name)
 {
     std::string file_name_(file_name);
     std::string file_extension = std::filesystem::path(file_name_).extension().generic_string();
@@ -877,7 +877,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const char *file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const std::string& file_name)
 {
     // Open the file stream
     std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
@@ -901,10 +901,10 @@ CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const char *file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const std::string& file_name)
 {
-    FileReader reader(file_name);
-    if (reader.Open() != 0)
+    FileReader reader(file_name.data());
+    if (reader.open() != 0)
     {
         std::cerr << "Not able to open: " << file_name << std::endl;
         return LoadResult::kFileIoError;

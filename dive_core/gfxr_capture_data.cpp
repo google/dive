@@ -29,7 +29,7 @@ namespace Dive
 // =================================================================================================
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const char *file_name)
+CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file_name)
 {
     if (m_gfxr_capture_block_data != nullptr)
     {

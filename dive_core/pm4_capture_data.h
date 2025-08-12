@@ -347,10 +347,6 @@ public:
     const RegisterInfo                     &GetRegisterInfo() const;
     inline uint32_t                         GetNumText() const { return (uint32_t)m_text.size(); }
     inline const TextInfo                  &GetText(uint32_t index) const { return m_text[index]; }
-    inline const VulkanMetadataBlockHeader &GetVulkanMetadataVersion() const
-    {
-        return m_vulkan_metadata_header;
-    }
     const DiveVector<SubmitInfo> &GetSubmits() const;
 
     Pm4CaptureData &operator=(Pm4CaptureData &&) = default;

@@ -102,7 +102,7 @@ bool GfxrCaptureData::WriteModifiedGfxrFile(const char *new_file_name)
 const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &
 GfxrCaptureData::GetGfxrSubmits() const
 {
-    return std::move(m_gfxr_submits);
+    return m_gfxr_submits;
 }
 
 }  // namespace Dive

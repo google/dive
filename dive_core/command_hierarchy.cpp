@@ -2067,8 +2067,8 @@ uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
         m_node_start_shared_children[i].resize(m_node_start_shared_children[i].size() + 1);
         m_node_end_shared_children[i].resize(m_node_end_shared_children[i].size() + 1);
         m_node_root_node_indices[i].resize(m_node_root_node_indices[i].size() + 1);
-        DIVE_ASSERT(m_node_start_shared_child[i].size() == m_node_end_shared_child[i].size());
-        DIVE_ASSERT(m_node_start_shared_child[i].size() == m_node_root_node_index[i].size());
+        DIVE_ASSERT(m_node_start_shared_children[i].size() == m_node_end_shared_children[i].size());
+        DIVE_ASSERT(m_node_start_shared_children[i].size() == m_node_root_node_indices[i].size());
     }
 
     return node_index;
@@ -2107,7 +2107,7 @@ void CommandHierarchyCreator::SetStartSharedChildrenNodeIndex(CommandHierarchy::
                                                               uint64_t node_index,
                                                               uint64_t shared_child_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_start_shared_child[type].size());
+    DIVE_ASSERT(node_index < m_node_start_shared_children[type].size());
     m_node_start_shared_children[type][node_index] = shared_child_node_index;
 }
 
@@ -2116,7 +2116,7 @@ void CommandHierarchyCreator::SetEndSharedChildrenNodeIndex(CommandHierarchy::To
                                                             uint64_t node_index,
                                                             uint64_t shared_child_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_end_shared_child[type].size());
+    DIVE_ASSERT(node_index < m_node_end_shared_children[type].size());
     m_node_end_shared_children[type][node_index] = shared_child_node_index;
 }
 
@@ -2125,7 +2125,7 @@ void CommandHierarchyCreator::SetSharedChildRootNodeIndex(CommandHierarchy::Topo
                                                           uint64_t                       node_index,
                                                           uint64_t root_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_root_node_index[type].size());
+    DIVE_ASSERT(node_index < m_node_root_node_indices[type].size());
     m_node_root_node_indices[type][node_index] = root_node_index;
 }
 

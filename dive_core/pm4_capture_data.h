@@ -390,7 +390,6 @@ private:
     DiveVector<TextInfo>           m_text;
     WaveInfo                       m_waves;
     RegisterInfo                   m_registers;
-    VulkanMetadataBlockHeader      m_vulkan_metadata_header;
     MemoryManager                  m_memory;
     ProgressTracker               *m_progress_tracker;
     std::string                    m_cur_capture_file;

@@ -182,7 +182,6 @@ void DiveCommandHierarchyCreator::CreateTopologies()
                 std::string desc = m_command_hierarchy.GetNodeDesc(node_index);
                 if (m_command_hierarchy.GetNodeType(node_index) == NodeType::kGfxrVulkanSubmitNode)
                 {
-                    std::cout << "SUBMIT INDEX: " << node_index << std::endl;
                     gfxr_submit_nodes.push_back(node_index);
                 }
             }

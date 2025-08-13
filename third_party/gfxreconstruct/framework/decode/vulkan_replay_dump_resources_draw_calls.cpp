@@ -2033,13 +2033,41 @@ void DrawCallsDumpingContext::BindDescriptorSets(
                             buf_info.offset += pDynamicOffsets[dynamic_offset_index];
                             ++dynamic_offset_index;
                         }
+                        // GOOGLE: "entries that are not used by a pipeline can have undefined descriptors"
+                        if (bound_descriptor_sets_gr_[set_index][binding_index].buffer_info.empty())
+                        {
+                            GFXRECON_LOG_DEBUG("DrawCallsDumpingContext::BindDescriptorSets: set=%u binding=%u is "
+                                               "undefined. Since \"entries that are not used by a pipeline can have "
+                                               "undefined descriptors\", this might be OK.",
+                                               set_index,
+                                               binding_index);
+                        }
                     }
                 }
             }
         }
     }
 
-    assert((dynamic_offset_index == dynamicOffsetCount && pDynamicOffsets != nullptr) || (!dynamic_offset_index));
+    // GOOGLE: Change assert(dynamic_offset_index == dynamicOffsetCount) into log message. vkAllocateDescriptorSets says
+    // that "entries that are not used by a pipeline can have undefined descriptors".
+    // TODO: Since "dynamicOffsetCount must equal the total number of dynamic descriptors in the sets being bound", we
+    // should still check that.
+    if (pDynamicOffsets != nullptr)
+    {
+        if (dynamic_offset_index != dynamicOffsetCount)
+        {
+            GFXRECON_LOG_DEBUG("DrawCallsDumpingContext::BindDescriptorSets: Did not process all dynamic offsets. "
+                               "dynamicOffsetCount=%u but only found dynamic_offset_index=%u. It's likely that a "
+                               "descriptor for the set is undefined. Since \"entries that are not used by "
+                               "a pipeline can have undefined descriptors\", this might be OK.",
+                               dynamicOffsetCount,
+                               dynamic_offset_index);
+        }
+    }
+    else if (dynamic_offset_index)
+    {
+        assert(!dynamic_offset_index);
+    }
 }
 
 VkResult DrawCallsDumpingContext::CloneRenderPass(const VkRenderPassCreateInfo* original_render_pass_ci)

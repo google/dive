@@ -70,7 +70,7 @@ private:
     void                        PopulateSettings();
     void                        UpdateSelectedSettingsList();
     absl::StatusOr<std::string> GetAssetFile();
-    absl::Status                PushFilesToDevice(Dive::AndroidDevice *device,
+    absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
 
     QLabel      *m_settings_list_label;

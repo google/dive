@@ -358,8 +358,39 @@ void AnalyzeDialog::OnOpenFile()
 
     if (!file_name.isEmpty())
     {
-        QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
-        Settings::Get()->WriteLastFilePath(last_file_path);
+        // Convert the filename to a string to perform a replacement.
+        std::string potential_asset_name(file_name.toStdString());
+
+        const std::string trim_str = "_trim_trigger";
+        const std::string asset_str = "_asset_file";
+
+        // Find and replace the "trim_trigger" part of the filename.
+        size_t pos = potential_asset_name.find(trim_str);
+        if (pos != std::string::npos)
+        {
+            potential_asset_name.replace(pos, trim_str.length(), asset_str);
+        }
+
+        // Create a path object to the asset file.
+        std::filesystem::path asset_file_path(potential_asset_name);
+        asset_file_path.replace_extension(".gfxa");
+
+        // Check if the required asset file exists.
+        bool asset_file_exists = std::filesystem::exists(asset_file_path);
+
+        if (!asset_file_exists)
+        {
+            QString title = QString("Unable to open file: %1").arg(file_name);
+            QString description = QString("Required .gfxa file: %1 not found!")
+                                  .arg(QString::fromStdString(asset_file_path.string()));
+            QMessageBox::critical(this, title, description);
+            return;
+        }
+        else
+        {
+            QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
+            Settings::Get()->WriteLastFilePath(last_file_path);
+        }
     }
 }
 
@@ -382,6 +413,7 @@ absl::StatusOr<std::string> AnalyzeDialog::GetAssetFile()
     std::filesystem::path asset_file_path(potential_asset_name);
     asset_file_path.replace_extension(".gfxa");
 
+    std::cout << "Asset file path: " << asset_file_path << std::endl;
     // Check if the required asset file exists.
     bool asset_file_exists = std::filesystem::exists(asset_file_path);
 
@@ -393,28 +425,30 @@ absl::StatusOr<std::string> AnalyzeDialog::GetAssetFile()
     return asset_file_path.string();
 }
 
-absl::Status AnalyzeDialog::PushFilesToDevice(Dive::AndroidDevice *device,
-                                              const std::string   &local_asset_file_path)
+absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
+Dive::AndroidDevice *device,
+const std::string   &local_asset_file_path)
 {
     const std::string remote_dir = "/sdcard/gfxr_captures_for_replay";
 
-    // 1. Create the remote directory on the device.
+    // Create the remote directory on the device.
     RETURN_IF_ERROR(device->Adb().Run(absl::StrFormat("shell mkdir -p %s", remote_dir)));
 
-    // 2. Push the .gfxr file.
+    // Push the .gfxr file.
     std::string           local_gfxr_path = m_selected_capture_file_string.toStdString();
     std::filesystem::path gfxr_path(local_gfxr_path);
     std::string           gfxr_filename = gfxr_path.filename().string();
-    RETURN_IF_ERROR(device->Adb().Run(
-    absl::StrFormat("push %s %s/%s", local_gfxr_path, remote_dir, gfxr_filename)));
+    std::string           remote_gfxr_path = absl::StrFormat("%s/%s", remote_dir, gfxr_filename);
+    RETURN_IF_ERROR(
+    device->Adb().Run(absl::StrFormat("push %s %s", local_gfxr_path, remote_gfxr_path)));
 
-    // 3. Push the .gfxa file.
+    // Push the .gfxa file.
     std::filesystem::path asset_file_path(local_asset_file_path);
     std::string           asset_file_name = asset_file_path.filename().string();
     RETURN_IF_ERROR(device->Adb().Run(
     absl::StrFormat("push %s %s/%s", local_asset_file_path, remote_dir, asset_file_name)));
 
-    return absl::OkStatus();
+    return remote_gfxr_path;
 }
 
 void AnalyzeDialog::OnReplay()
@@ -442,8 +476,8 @@ void AnalyzeDialog::OnReplay()
         return;
     }
 
-    ret = PushFilesToDevice(device, asset_file.value());
-    if (!ret.ok())
+    absl::StatusOr<std::string> remote_file = PushFilesToDevice(device, asset_file.value());
+    if (!remote_file.ok())
     {
         std::string err_msg = absl::StrCat("Failed to deploy replay apk: ", ret.message());
         qDebug() << err_msg.c_str();
@@ -469,10 +503,7 @@ void AnalyzeDialog::OnReplay()
         replay_args = "--loop-single-frame --loop-single-frame-count " +
                       std::to_string(frame_count);
     }
-    ret = device_manager.RunReplayApk(m_selected_capture_file_string.toStdString(),
-                                      replay_args,
-                                      false,
-                                      "");
+    ret = device_manager.RunReplayApk(remote_file.value(), replay_args, false, "");
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to run replay apk: ", ret.message());

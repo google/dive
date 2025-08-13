@@ -713,6 +713,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
             QString description = QString("Required .gfxa file: %1 not found!")
                                   .arg(QString::fromStdString(asset_file_path.string()));
             QMessageBox::critical(this, title, description);
+            m_gfxr_capture_loaded = false;
             return false;
         }
     }
@@ -831,8 +832,11 @@ void MainWindow::OnAnalyzeCapture()
     {
         OnOpenFile();
     }
-
-    OnAnalyze(m_gfxr_capture_loaded, m_capture_file.toStdString());
+    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog.
+    if (m_gfxr_capture_loaded)
+    {
+        OnAnalyze(m_gfxr_capture_loaded, m_capture_file.toStdString());
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1651,8 +1655,6 @@ void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
     const char       *file_path_str = file_path_std_str.c_str();
     if (!LoadFile(file_path_str))
     {
-        QMessageBox::critical(this,
-                              QString("Error Opening File"),
-                              (QString("Unable to open file: ") + file_path_str));
+        return;
     }
 }

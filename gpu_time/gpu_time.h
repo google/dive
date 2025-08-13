@@ -63,57 +63,57 @@ public:
     void SetEnable(bool enable) { m_enable = enable; }
 
     GpuTimeStatus OnCreateDevice(VkDevice                     device,
-                                 const VkAllocationCallbacks* allocator,
-                                 float                        timestampPeriod,
-                                 PFN_vkCreateQueryPool        pfnCreateQueryPool,
-                                 PFN_vkResetQueryPool         pfnResetQueryPool);
+                                 const VkAllocationCallbacks* allocator_ptr,
+                                 float                        timestamp_period,
+                                 PFN_vkCreateQueryPool        pfn_create_query_pool,
+                                 PFN_vkResetQueryPool         pfn_reset_query_pool);
 
     GpuTimeStatus OnDestroyDevice(VkDevice               device,
-                                  PFN_vkQueueWaitIdle    pfnQueueWaitIdle,
-                                  PFN_vkDestroyQueryPool pfnDestroyQueryPool);
+                                  PFN_vkQueueWaitIdle    pfn_queue_wait_idle,
+                                  PFN_vkDestroyQueryPool pfn_destroy_query_pool);
 
-    GpuTimeStatus OnDestroyCommandPool(VkCommandPool commandPool);
+    GpuTimeStatus OnDestroyCommandPool(VkCommandPool command_pool);
 
-    GpuTimeStatus OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* pAllocateInfo,
-                                           VkCommandBuffer*                   pCommandBuffers);
+    GpuTimeStatus OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* allocate_info_ptr,
+                                           VkCommandBuffer*                   command_buffers_ptr);
 
-    GpuTimeStatus OnFreeCommandBuffers(uint32_t               commandBufferCount,
-                                       const VkCommandBuffer* pCommandBuffers);
+    GpuTimeStatus OnFreeCommandBuffers(uint32_t               command_buffer_count,
+                                       const VkCommandBuffer* command_buffers_ptr);
 
-    GpuTimeStatus OnResetCommandBuffer(VkCommandBuffer commandBuffer);
+    GpuTimeStatus OnResetCommandBuffer(VkCommandBuffer command_buffer);
 
-    GpuTimeStatus OnResetCommandPool(VkCommandPool commandPool);
+    GpuTimeStatus OnResetCommandPool(VkCommandPool command_pool);
 
-    GpuTimeStatus OnBeginCommandBuffer(VkCommandBuffer           commandBuffer,
+    GpuTimeStatus OnBeginCommandBuffer(VkCommandBuffer           command_buffer,
                                        VkCommandBufferUsageFlags flags,
-                                       PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp);
+                                       PFN_vkCmdWriteTimestamp   pfn_cmd_write_timestamp);
 
-    GpuTimeStatus OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
-                                     PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
+    GpuTimeStatus OnEndCommandBuffer(VkCommandBuffer         command_buffer,
+                                     PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
-    SubmitStatus OnQueueSubmit(uint32_t                  submitCount,
-                               const VkSubmitInfo*       pSubmits,
-                               PFN_vkDeviceWaitIdle      pfnDeviceWaitIdle,
-                               PFN_vkResetQueryPool      pfnResetQueryPool,
-                               PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    SubmitStatus OnQueueSubmit(uint32_t                  submit_count,
+                               const VkSubmitInfo*       submits_ptr,
+                               PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
+                               PFN_vkResetQueryPool      pfn_reset_query_pool,
+                               PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
 
     GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue);
     GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue);
 
-    GpuTimeStatus OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             commandBuffer,
-                                                const VkDebugUtilsLabelEXT* pLabelInfo);
+    GpuTimeStatus OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer             command_buffer,
+                                                const VkDebugUtilsLabelEXT* label_info_ptr);
 
-    GpuTimeStatus OnCmdBeginRenderPass(VkCommandBuffer         commandBuffer,
-                                       PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
+    GpuTimeStatus OnCmdBeginRenderPass(VkCommandBuffer         command_buffer,
+                                       PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
-    GpuTimeStatus OnCmdEndRenderPass(VkCommandBuffer         commandBuffer,
-                                     PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
+    GpuTimeStatus OnCmdEndRenderPass(VkCommandBuffer         command_buffer,
+                                     PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
-    GpuTimeStatus OnCmdBeginRenderPass2(VkCommandBuffer         commandBuffer,
-                                        PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
+    GpuTimeStatus OnCmdBeginRenderPass2(VkCommandBuffer         command_buffer,
+                                        PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
-    GpuTimeStatus OnCmdEndRenderPass2(VkCommandBuffer         commandBuffer,
-                                      PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp);
+    GpuTimeStatus OnCmdEndRenderPass2(VkCommandBuffer         command_buffer,
+                                      PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
     struct Stats
     {
@@ -203,7 +203,7 @@ private:
         bool                  reusable = false;
     };
 
-    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfnGetQueryPoolResults);
+    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
 
     FrameMetrics m_metrics;
 

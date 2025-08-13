@@ -36,11 +36,7 @@ namespace DiveLayer
 static bool sEnableDrawcallReport = false;
 static bool sEnableDrawcallLimit = false;
 static bool sEnableDrawcallFilter = false;
-// To use sEnableOpenXRGPUTiming, make sure to
-//     - Disable system gpu preemption
-//     - Insert "vr-marker,frame_end,type,application" as frame boundary
-// Note that the performance will drop due to vkDeviceWaitIdle
-// Setting sEnableOpenXRGPUTiming to false will NOT disable adding/removing cmds to/from m_cmds
+
 static bool sEnableOpenXRGPUTiming = false;
 static bool sRemoveImageFlagFDMOffset = false;
 static bool sRemoveImageFlagSubSampled = false;
@@ -259,36 +255,31 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer        pf
     sDrawcallCounter = 0;
     sTotalIndexCounter = 0;
 
-    if (sEnableOpenXRGPUTiming)
-    {
-        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
 
-        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnBeginCommandBuffer(commandBuffer,
-                                                                              pBeginInfo->flags,
-                                                                              CmdWriteTimestamp);
-        if (!status.success)
-        {
-            LOGE("%s", status.message.c_str());
-        }
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnBeginCommandBuffer(commandBuffer,
+                                                                          pBeginInfo->flags,
+                                                                          CmdWriteTimestamp);
+    if (!status.success)
+    {
+        LOGE("%s", status.message.c_str());
     }
+
     return result;
 }
 
 VkResult DiveRuntimeLayer::EndCommandBuffer(PFN_vkEndCommandBuffer pfn,
                                             VkCommandBuffer        commandBuffer)
 {
-    if (sEnableOpenXRGPUTiming)
-    {
-        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
 
-        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnEndCommandBuffer(commandBuffer,
-                                                                            CmdWriteTimestamp);
-        if (!status.success)
-        {
-            LOGE("%s", status.message.c_str());
-        }
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnEndCommandBuffer(commandBuffer,
+                                                                        CmdWriteTimestamp);
+    if (!status.success)
+    {
+        LOGE("%s", status.message.c_str());
     }
     return pfn(commandBuffer);
 }
@@ -308,6 +299,8 @@ VkResult DiveRuntimeLayer::CreateDevice(PFN_vkGetDeviceProcAddr      pa,
     {
         return result;
     }
+
+    m_gpu_time.SetEnable(sEnableOpenXRGPUTiming);
 
     PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(
     m_device_proc_addr(*pDevice, "vkCreateQueryPool"));
@@ -373,7 +366,7 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit   pfn,
 {
     VkResult result = pfn(queue, submitCount, pSubmits, fence);
 
-    if (!sEnableOpenXRGPUTiming || (result != VK_SUCCESS))
+    if (result != VK_SUCCESS)
     {
         return result;
     }
@@ -457,35 +450,31 @@ void DiveRuntimeLayer::CmdBeginRenderPass(PFN_vkCmdBeginRenderPass     pfn,
                                           const VkRenderPassBeginInfo* pRenderPassBegin,
                                           VkSubpassContents            contents)
 {
-    if (sEnableOpenXRGPUTiming)
-    {
-        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
 
-        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass(commandBuffer,
-                                                                              CmdWriteTimestamp);
-        if (!status.success)
-        {
-            LOGE("%s", status.message.c_str());
-        }
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass(commandBuffer,
+                                                                          CmdWriteTimestamp);
+    if (!status.success)
+    {
+        LOGE("%s", status.message.c_str());
     }
+
     pfn(commandBuffer, pRenderPassBegin, contents);
 }
 
 void DiveRuntimeLayer::CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuffer commandBuffer)
 {
     pfn(commandBuffer);
-    if (sEnableOpenXRGPUTiming)
-    {
-        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
 
-        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass(commandBuffer,
-                                                                            CmdWriteTimestamp);
-        if (!status.success)
-        {
-            LOGE("%s", status.message.c_str());
-        }
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass(commandBuffer,
+                                                                        CmdWriteTimestamp);
+    if (!status.success)
+    {
+        LOGE("%s", status.message.c_str());
     }
 }
 
@@ -494,17 +483,14 @@ void DiveRuntimeLayer::CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2    pfn,
                                            const VkRenderPassBeginInfo* pRenderPassBegin,
                                            const VkSubpassBeginInfo*    pSubpassBeginInfo)
 {
-    if (sEnableOpenXRGPUTiming)
-    {
-        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
 
-        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass2(commandBuffer,
-                                                                               CmdWriteTimestamp);
-        if (!status.success)
-        {
-            LOGE("%s", status.message.c_str());
-        }
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass2(commandBuffer,
+                                                                           CmdWriteTimestamp);
+    if (!status.success)
+    {
+        LOGE("%s", status.message.c_str());
     }
     pfn(commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
 }
@@ -514,17 +500,15 @@ void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn,
                                          const VkSubpassEndInfo* pSubpassEndInfo)
 {
     pfn(commandBuffer, pSubpassEndInfo);
-    if (sEnableOpenXRGPUTiming)
-    {
-        PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-        m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
 
-        Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass2(commandBuffer,
-                                                                             CmdWriteTimestamp);
-        if (!status.success)
-        {
-            LOGE("%s", status.message.c_str());
-        }
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
+
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass2(commandBuffer,
+                                                                         CmdWriteTimestamp);
+    if (!status.success)
+    {
+        LOGE("%s", status.message.c_str());
     }
 }
 

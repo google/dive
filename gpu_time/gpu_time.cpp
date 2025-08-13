@@ -481,6 +481,10 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(VkCommandBuffer           c
                                                      VkCommandBufferUsageFlags flags,
                                                      PFN_vkCmdWriteTimestamp   pfnCmdWriteTimestamp)
 {
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
     m_timestamp_allocator.FreeSlots(m_cmds[commandBuffer].renderpass_slots);
     m_cmds[commandBuffer].renderpass_slots.clear();
 
@@ -510,6 +514,11 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(VkCommandBuffer           c
 GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer         commandBuffer,
                                                    PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
+
     if (m_cmds.find(commandBuffer) == m_cmds.end())
     {
         // We do not insert timestamps into secondary command buffers
@@ -655,6 +664,11 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submitCou
                                              PFN_vkResetQueryPool      pfnResetQueryPool,
                                              PFN_vkGetQueryPoolResults pfnGetQueryPoolResults)
 {
+    if (!m_enable)
+    {
+        return { GPUTime::GpuTimeStatus(), false };
+    }
+
     bool is_frame_boundary = false;
 
     if ((pSubmits != nullptr) && (pSubmits->pCommandBuffers != nullptr))
@@ -771,6 +785,10 @@ const VkDebugUtilsLabelEXT* pLabelInfo)
 GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass(VkCommandBuffer         commandBuffer,
                                                      PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
     uint32_t slot = m_timestamp_allocator.AllocateSlot();
     m_cmds[commandBuffer].renderpass_slots.push_back(slot);
     pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, slot);
@@ -780,6 +798,10 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass(VkCommandBuffer         com
 GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass(VkCommandBuffer         commandBuffer,
                                                    PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
     uint32_t slot = m_timestamp_allocator.AllocateSlot();
     m_cmds[commandBuffer].renderpass_slots.push_back(slot);
     pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool, slot);
@@ -789,6 +811,10 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass(VkCommandBuffer         comma
 GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass2(VkCommandBuffer         commandBuffer,
                                                       PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
     uint32_t slot = m_timestamp_allocator.AllocateSlot();
     m_cmds[commandBuffer].renderpass_slots.push_back(slot);
     pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, slot);
@@ -798,6 +824,10 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass2(VkCommandBuffer         co
 GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer         commandBuffer,
                                                     PFN_vkCmdWriteTimestamp pfnCmdWriteTimestamp)
 {
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
     uint32_t slot = m_timestamp_allocator.AllocateSlot();
     m_cmds[commandBuffer].renderpass_slots.push_back(slot);
     pfnCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool, slot);

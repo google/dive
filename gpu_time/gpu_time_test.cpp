@@ -163,6 +163,7 @@ MATCHER_P(StatsEq, expected, "")
 TEST(GPUTimeTest, InitialStateReturnsDefaultStats)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     auto           stats = gpu_time.GetFrameTimeStats();
@@ -181,6 +182,7 @@ TEST(GPUTimeTest, InitialStateReturnsDefaultStats)
 TEST(GPUTimeTest, AllocateCommandBufferSucceeds)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};
@@ -197,6 +199,7 @@ TEST(GPUTimeTest, AllocateCommandBufferSucceeds)
 TEST(GPUTimeTest, AllocateSameCommandBufferTwiceFails)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};
@@ -216,6 +219,7 @@ TEST(GPUTimeTest, AllocateSameCommandBufferTwiceFails)
 TEST(GPUTimeTest, FreeCommandBufferSucceeds)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};
@@ -234,6 +238,7 @@ TEST(GPUTimeTest, FreeCommandBufferSucceeds)
 TEST(GPUTimeTest, ResetCommandPoolAllowsReinsertingFrameDelimiter)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};
@@ -259,6 +264,7 @@ TEST(GPUTimeTest, ResetCommandPoolAllowsReinsertingFrameDelimiter)
 TEST(GPUTimeTest, SingleCommandBufferFrameUpdatesMetricsCorrectly)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};
@@ -300,6 +306,7 @@ TEST(GPUTimeTest, SingleCommandBufferFrameUpdatesMetricsCorrectly)
 TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};
@@ -363,6 +370,7 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
 TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
 {
     GPUTime gpu_time;
+    gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
     VkCommandBufferAllocateInfo alloc_info = {};

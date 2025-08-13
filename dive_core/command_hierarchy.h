@@ -494,6 +494,14 @@ private:
         uint32_t ordinal2;
     };
 
+    // The type of child nodes.
+    enum ChildrenNodeType
+    {
+        kSingleParentNodeChildren,
+        kSharedNodeChildren,
+        kChildrenNodeTypeCount
+    };
+
     uint64_t AddPacketNode(const IMemoryManager &mem_manager,
                            uint32_t              submit_index,
                            uint64_t              va_addr,
@@ -669,7 +677,8 @@ private:
     // Once parsing is complete, we will create a topology from this
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
-    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
+    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount]
+                                                    [kChildrenNodeTypeCount];
 };
 
 }  // namespace Dive

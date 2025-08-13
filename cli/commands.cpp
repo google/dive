@@ -449,7 +449,7 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
     }
 
     Dive::CommandHierarchy        command_hierarchy;
-    CaptureData                   capture_data;
+    Pm4CaptureData                capture_data;
     Dive::CommandHierarchyCreator cmd_hier_creator(command_hierarchy, capture_data);
     if (!cmd_hier_creator.CreateTrees(engine_type,
                                       queue_type,

@@ -24,6 +24,7 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "android_application.h"
 #include "command_utils.h"
@@ -563,6 +564,67 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
     }
 
     LOGD("RunReplayApk(): completed\n");
+    return absl::OkStatus();
+}
+
+absl::Status DeviceManager::RunProfilingOnReplay(const std::string              &capture_path,
+                                                 const std::vector<std::string> &metrics,
+                                                 const std::string              &download_path)
+{
+    LOGD("RunProfilingOnReplay(): starting\n");
+
+    // Deploy libraries and binaries
+    std::string copy_cmd = absl::StrFormat("push %s %s",
+                                           ResolveAndroidLibPath(kProfilingPluginFolderName, "")
+                                           .generic_string(),
+                                           kTargetPath);
+    RETURN_IF_ERROR(m_device->Adb().Run(copy_cmd));
+
+    // Construct replay arguments for profiling
+    // Start the profiling binary
+    std::string binary_path_on_device = absl::StrCat(kTargetPath,
+                                                     "/",
+                                                     kProfilingPluginFolderName,
+                                                     "/",
+                                                     kProfilingPluginName);
+    // Run replay with profiling arguments
+    std::string metrics_str = absl::StrJoin(metrics, " ");
+    std::string cmd = absl::StrFormat("shell %s %s %s",
+                                      binary_path_on_device,
+                                      capture_path,
+                                      metrics_str);
+    RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+
+    // Get the results file path
+    std::string output_path = capture_path;
+    size_t      dot_pos = output_path.rfind('.');
+    if (dot_pos != std::string::npos)
+    {
+        output_path.replace(dot_pos, std::string::npos, ".csv");
+    }
+    else
+    {
+        output_path += ".csv";
+    }
+    LOGD("Result is at %s \n", output_path.c_str());
+
+    // Get the CSV file.
+    auto status = m_device->RetrieveTrace(output_path, download_path);
+    if (status.ok())
+    {
+        LOGI("Trace file %s downloaded to %s\n", output_path.c_str(), download_path.c_str());
+    }
+    else
+    {
+        LOGI("Failed to download the trace file %s\n", output_path.c_str());
+    }
+
+    // cleanup the library and binary
+    std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s/%s",
+                                            kTargetPath,
+                                            kProfilingPluginFolderName);
+    RETURN_IF_ERROR(m_device->Adb().Run(clean_cmd));
+
     return absl::OkStatus();
 }
 

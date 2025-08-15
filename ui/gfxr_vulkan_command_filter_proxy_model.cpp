@@ -12,8 +12,6 @@
 */
 
 #include "gfxr_vulkan_command_filter_proxy_model.h"
-#include <cstdint>
-#include <string>
 
 GfxrVulkanCommandFilterProxyModel::GfxrVulkanCommandFilterProxyModel(
 QObject                      *parent,
@@ -63,6 +61,12 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
     }
 
     if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kGfxrVulkanCommandArgNode)
+    {
+        return false;
+    }
+
+    // Do not include non-gfxr submits and their descendents.
+    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kSubmitNode)
     {
         return false;
     }

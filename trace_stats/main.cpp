@@ -264,10 +264,17 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             num_draws_in_pass = 0;
         }
 
-        if (info.m_type == Dive::EventInfo::EventType::kDraw)
-            num_draws_in_pass++;
-
-        if (info.m_type == Dive::EventInfo::EventType::kDraw)
+        if (info.m_type == Dive::EventInfo::EventType::kDispatch)
+            stats_list[kDispatches]++;
+        else if (info.m_type == Dive::EventInfo::EventType::kSync)
+            stats_list[kSyncs]++;
+        else if (info.m_type == Dive::EventInfo::EventType::kSysmemToGmemResolve)
+            GATHER_RESOLVES(SysmemToGmem);
+        else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysmemResolve)
+            GATHER_RESOLVES(GmemToSysmem);
+        else if (info.m_type == Dive::EventInfo::EventType::kClearGmem)
+            GATHER_RESOLVES(ClearGmem);
+        else if (info.m_type == Dive::EventInfo::EventType::kDraw)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinning)
                 stats_list[kBinningDraws]++;
@@ -275,68 +282,63 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
                 stats_list[kDirectDraws]++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
                 stats_list[kTiledDraws]++;
-        }
-        else if (info.m_type == Dive::EventInfo::EventType::kDispatch)
-            stats_list[kDispatches]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kSync)
-            stats_list[kSyncs]++;
 
-        const uint32_t event_id = static_cast<uint32_t>(i);
-        auto           event_state_it = event_state.find(static_cast<Dive::EventStateId>(event_id));
-
-        if (info.m_render_mode != Dive::RenderModeType::kBinning)
-        {
-            CHECK_AND_TRACK_STATE(kDepthTestEnabled, DepthTestEnabled);
-            CHECK_AND_TRACK_STATE(kDepthWriteEnabled, DepthTestEnabled, DepthWriteEnabled);
-            if (event_state_it->DepthTestEnabled())
-            {
-                CHECK_AND_TRACK_STATE_EQUAL(kEarlyZ, ZTestMode, A6XX_EARLY_Z);
-                CHECK_AND_TRACK_STATE_EQUAL(kLateZ, ZTestMode, A6XX_LATE_Z);
-                CHECK_AND_TRACK_STATE_EQUAL(kEarlyLRZLateZ, ZTestMode, A6XX_EARLY_LRZ_LATE_Z);
-            }
-        }
-        if ((info.m_render_mode == Dive::RenderModeType::kDirect) ||
-            (info.m_render_mode == Dive::RenderModeType::kBinning))
-        {
-            CHECK_AND_TRACK_STATE(kLrzEnabled, DepthTestEnabled, LRZEnabled);
-            CHECK_AND_TRACK_STATE(kLrzWriteEnabled, DepthTestEnabled, DepthWriteEnabled, LRZWrite);
+            num_draws_in_pass++;
             if (info.m_num_indices != 0)
                 event_num_indices.push_back(info.m_num_indices);
-        }
 
-        CHECK_AND_TRACK_STATE_NOT_EQUAL(kCullModeEnabled, CullMode, VK_CULL_MODE_NONE);
+            const uint32_t event_id = static_cast<uint32_t>(i);
+            auto event_state_it = event_state.find(static_cast<Dive::EventStateId>(event_id));
+
+            if (info.m_render_mode != Dive::RenderModeType::kBinning)
+            {
+                CHECK_AND_TRACK_STATE(kDepthTestEnabled, DepthTestEnabled);
+                CHECK_AND_TRACK_STATE(kDepthWriteEnabled, DepthTestEnabled, DepthWriteEnabled);
+                if (event_state_it->DepthTestEnabled())
+                {
+                    CHECK_AND_TRACK_STATE_EQUAL(kEarlyZ, ZTestMode, A6XX_EARLY_Z);
+                    CHECK_AND_TRACK_STATE_EQUAL(kLateZ, ZTestMode, A6XX_LATE_Z);
+                    CHECK_AND_TRACK_STATE_EQUAL(kEarlyLRZLateZ, ZTestMode, A6XX_EARLY_LRZ_LATE_Z);
+                }
+            }
+            if ((info.m_render_mode == Dive::RenderModeType::kDirect) ||
+                (info.m_render_mode == Dive::RenderModeType::kBinning))
+            {
+                CHECK_AND_TRACK_STATE(kLrzEnabled, DepthTestEnabled, LRZEnabled);
+                CHECK_AND_TRACK_STATE(kLrzWriteEnabled,
+                                      DepthTestEnabled,
+                                      DepthWriteEnabled,
+                                      LRZWrite);
+            }
+
+            CHECK_AND_TRACK_STATE_NOT_EQUAL(kCullModeEnabled, CullMode, VK_CULL_MODE_NONE);
+
+            for (uint32_t v = 0; v < 16; ++v)
+            {
+                if (event_state_it->IsViewportSet(v))
+                {
+                    Viewport viewport;
+                    viewport.m_vk_viewport = event_state_it->Viewport(v);
+                    viewports.insert(viewport);
+                }
+            }
+
+            if (event_state_it->IsWindowScissorTLXSet() &&
+                event_state_it->IsWindowScissorTLYSet() &&
+                event_state_it->IsWindowScissorBRXSet() && event_state_it->IsWindowScissorBRYSet())
+            {
+                WindowScissor window_scissor;
+                window_scissor.m_tl_x = event_state_it->WindowScissorTLX();
+                window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
+                window_scissor.m_br_x = event_state_it->WindowScissorBRX();
+                window_scissor.m_br_y = event_state_it->WindowScissorBRY();
+                window_scissors.insert(window_scissor);
+            }
+        }
 
         for (size_t ref = 0; ref < info.m_shader_references.size(); ++ref)
             if (info.m_shader_references[ref].m_shader_index != UINT32_MAX)
                 shader_ref_set.insert(info.m_shader_references[ref]);
-
-        for (uint32_t v = 0; v < 16; ++v)
-        {
-            if (event_state_it->IsViewportSet(v))
-            {
-                Viewport viewport;
-                viewport.m_vk_viewport = event_state_it->Viewport(v);
-                viewports.insert(viewport);
-            }
-        }
-
-        if (event_state_it->IsWindowScissorTLXSet() && event_state_it->IsWindowScissorTLYSet() &&
-            event_state_it->IsWindowScissorBRXSet() && event_state_it->IsWindowScissorBRYSet())
-        {
-            WindowScissor window_scissor;
-            window_scissor.m_tl_x = event_state_it->WindowScissorTLX();
-            window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
-            window_scissor.m_br_x = event_state_it->WindowScissorBRX();
-            window_scissor.m_br_y = event_state_it->WindowScissorBRY();
-            window_scissors.insert(window_scissor);
-        }
-
-        if (info.m_type == Dive::EventInfo::EventType::kSysmemToGmemResolve)
-            GATHER_RESOLVES(SysmemToGmem);
-        else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysmemResolve)
-            GATHER_RESOLVES(GmemToSysmem);
-        else if (info.m_type == Dive::EventInfo::EventType::kClearGmem)
-            GATHER_RESOLVES(ClearGmem);
     }
 
     GATHER_TOTAL_MIN_MAX_MEDIAN(event_num_indices, Indices);
@@ -446,8 +448,7 @@ int main(int argc, char **argv)
     std::ofstream ofstream;
     if (!output_file_name.empty())
     {
-        std::cout << "Output detailed validation result to \"" << output_file_name << "\""
-                  << std::endl;
+        std::cout << "Output details to \"" << output_file_name << "\"" << std::endl;
         ofstream.open(output_file_name);
         ostream = &ofstream;
     }

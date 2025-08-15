@@ -24,7 +24,7 @@ namespace Dive
 
 absl::Status SendPong(Network::SocketConnection *client_conn);
 
-absl::Status HandShake(Network::HandShakeRequest *request, Network::SocketConnection *client_conn);
+absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn);
 
 absl::Status StartPm4Capture(Network::SocketConnection *client_conn);
 

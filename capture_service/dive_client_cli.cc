@@ -184,12 +184,12 @@ ABSL_FLAG(std::vector<std::string>,
           {},
           "comma-separated list of metrics to profile for profile_replay command.");
 
-void print_usage()
+void PrintUsage()
 {
     std::cout << absl::ProgramUsageMessage() << std::endl;
 }
 
-bool list_device(const Dive::DeviceManager& mgr)
+bool ListDevice(const Dive::DeviceManager& mgr)
 {
     auto list = mgr.ListDevice();
     if (list.empty())
@@ -207,7 +207,7 @@ bool list_device(const Dive::DeviceManager& mgr)
     return true;
 }
 
-bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
+bool ListPackage(Dive::DeviceManager& mgr, const std::string& device_serial)
 {
     auto dev_ret = mgr.SelectDevice(device_serial);
     if (!dev_ret.ok())
@@ -240,20 +240,20 @@ bool list_package(Dive::DeviceManager& mgr, const std::string& device_serial)
     return true;
 }
 
-bool run_package(Dive::DeviceManager& mgr,
-                 const std::string&   serial,
-                 const std::string&   app_type,
-                 const std::string&   package,
-                 const std::string&   command,
-                 const std::string&   command_args,
-                 const std::string&   device_architecture,
-                 const std::string&   gfxr_capture_directory,
-                 bool                 is_gfxr_capture)
+bool RunPackage(Dive::DeviceManager& mgr,
+                const std::string&   serial,
+                const std::string&   app_type,
+                const std::string&   package,
+                const std::string&   command,
+                const std::string&   command_args,
+                const std::string&   device_architecture,
+                const std::string&   gfxr_capture_directory,
+                bool                 is_gfxr_capture)
 {
     if (serial.empty() || (package.empty() && command.empty()))
     {
         std::cout << "Missing required options." << std::endl;
-        print_usage();
+        PrintUsage();
         return false;
     }
     auto dev_ret = mgr.SelectDevice(serial);
@@ -294,7 +294,7 @@ bool run_package(Dive::DeviceManager& mgr,
     }
     else
     {
-        print_usage();
+        PrintUsage();
         return false;
     }
     if (!ret.ok())
@@ -312,7 +312,7 @@ bool run_package(Dive::DeviceManager& mgr,
     return ret.ok();
 }
 
-bool trigger_capture(Dive::DeviceManager& mgr)
+bool TriggerCapture(Dive::DeviceManager& mgr)
 {
     if (mgr.GetDevice() == nullptr)
     {
@@ -356,8 +356,8 @@ bool trigger_capture(Dive::DeviceManager& mgr)
     return true;
 }
 
-absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
-                                       const std::string&   gfxr_capture_directory)
+absl::Status IsCaptureDirectoryBusy(Dive::DeviceManager& mgr,
+                                    const std::string&   gfxr_capture_directory)
 {
     std::string                 on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
                                                            "/",
@@ -382,7 +382,7 @@ absl::Status is_capture_directory_busy(Dive::DeviceManager& mgr,
                              absl::InternalError("Capture file operation in progress.");
 }
 
-bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
+bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
     std::filesystem::path download_dir = absl::GetFlag(FLAGS_download_dir);
 
@@ -426,7 +426,9 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
         local_target_dir_exists = std::filesystem::exists(full_target_download_dir);
     }
 
-    command = absl::StrFormat("pull %s %s", on_device_capture_directory, full_target_download_dir.string());
+    command = absl::StrFormat("pull %s %s",
+                              on_device_capture_directory,
+                              full_target_download_dir.string());
     output = mgr.GetDevice()->Adb().RunAndGetResult(command);
     if (!output.ok())
     {
@@ -438,9 +440,9 @@ bool retrieve_gfxr_capture(Dive::DeviceManager& mgr, const std::string& gfxr_cap
     return true;
 }
 
-void trigger_gfxr_capture(Dive::DeviceManager& mgr,
-                          const std::string&   package,
-                          const std::string&   gfxr_capture_directory)
+void TriggerGfxrCapture(Dive::DeviceManager& mgr,
+                        const std::string&   package,
+                        const std::string&   gfxr_capture_directory)
 {
     std::cout
     << "Press key g+enter to trigger a capture and g+enter to retrieve the capture. Press "
@@ -459,7 +461,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
         {
             if (is_capturing)
             {
-                ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
+                ret = IsCaptureDirectoryBusy(mgr, gfxr_capture_directory);
                 while (!ret.ok())
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -477,7 +479,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                 }
 
                 // Retrieve the capture and asset file at the end of the capture.
-                retrieve_gfxr_capture(mgr, gfxr_capture_directory);
+                RetrieveGfxrCapture(mgr, gfxr_capture_directory);
                 is_capturing = false;
                 std::cout << capture_complete_message << std::endl;
             }
@@ -504,7 +506,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                                               "to complete before stopping the application.";
 
                 std::cout << warning_message << std::endl;
-                ret = is_capture_directory_busy(mgr, gfxr_capture_directory);
+                ret = IsCaptureDirectoryBusy(mgr, gfxr_capture_directory);
                 while (!ret.ok())
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -520,7 +522,7 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
                 }
 
                 // Retrieve the capture and asset file at the end of the capture.
-                retrieve_gfxr_capture(mgr, gfxr_capture_directory);
+                RetrieveGfxrCapture(mgr, gfxr_capture_directory);
                 is_capturing = false;
                 std::cout << capture_complete_message << std::endl;
             }
@@ -540,32 +542,32 @@ void trigger_gfxr_capture(Dive::DeviceManager& mgr,
     absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
 }
 
-bool run_and_capture(Dive::DeviceManager& mgr,
-                     const std::string&   serial,
-                     const std::string&   app_type,
-                     const std::string&   package,
-                     const std::string&   command,
-                     const std::string&   command_args,
-                     const std::string&   device_architecture,
-                     const std::string&   gfxr_capture_directory,
-                     const bool           is_gfxr_capture)
+bool RunAndCapture(Dive::DeviceManager& mgr,
+                   const std::string&   serial,
+                   const std::string&   app_type,
+                   const std::string&   package,
+                   const std::string&   command,
+                   const std::string&   command_args,
+                   const std::string&   device_architecture,
+                   const std::string&   gfxr_capture_directory,
+                   const bool           is_gfxr_capture)
 {
-    if (!run_package(mgr,
-                     serial,
-                     app_type,
-                     package,
-                     command,
-                     command_args,
-                     device_architecture,
-                     gfxr_capture_directory,
-                     is_gfxr_capture))
+    if (!RunPackage(mgr,
+                    serial,
+                    app_type,
+                    package,
+                    command,
+                    command_args,
+                    device_architecture,
+                    gfxr_capture_directory,
+                    is_gfxr_capture))
     {
         return false;
     }
 
     if (is_gfxr_capture)
     {
-        trigger_gfxr_capture(mgr, package, gfxr_capture_directory);
+        TriggerGfxrCapture(mgr, package, gfxr_capture_directory);
     }
     else
     {
@@ -573,7 +575,7 @@ bool run_and_capture(Dive::DeviceManager& mgr,
         std::cout << "wait for " << time_to_wait_in_seconds << " seconds" << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(time_to_wait_in_seconds));
 
-        trigger_capture(mgr);
+        TriggerCapture(mgr);
 
         std::cout << "Press other key+enter to exit" << std::endl;
         std::string input;
@@ -586,15 +588,15 @@ bool run_and_capture(Dive::DeviceManager& mgr,
     return true;
 }
 
-bool clean_up_app_and_device(Dive::DeviceManager& mgr,
-                             const std::string&   serial,
-                             const std::string&   package)
+bool CleanUpAppAndDevice(Dive::DeviceManager& mgr,
+                         const std::string&   serial,
+                         const std::string&   package)
 {
     if (serial.empty())
     {
         std::cout << "Please run with `--device [serial]` and `--package [package]` options."
                   << std::endl;
-        print_usage();
+        PrintUsage();
         return false;
     }
 
@@ -616,7 +618,7 @@ bool clean_up_app_and_device(Dive::DeviceManager& mgr,
     return mgr.Cleanup(serial, package).ok();
 }
 
-bool process_input(Dive::DeviceManager& mgr)
+bool ProcessInput(Dive::DeviceManager& mgr)
 {
     std::cout << "Press key t+enter to trigger a capture. \nPress any other key+enter to exit.";
 
@@ -626,7 +628,7 @@ bool process_input(Dive::DeviceManager& mgr)
         if (input == "t")
         {
             std::cout << "key t pressed " << std::endl;
-            trigger_capture(mgr);
+            TriggerCapture(mgr);
         }
         else
         {
@@ -638,7 +640,7 @@ bool process_input(Dive::DeviceManager& mgr)
     return true;
 }
 
-bool deploy_gfxr_replay(Dive::DeviceManager& mgr, const std::string& device_serial)
+bool DeployGfxrReplay(Dive::DeviceManager& mgr, const std::string& device_serial)
 {
     auto dev_ret = mgr.SelectDevice(device_serial);
 
@@ -665,15 +667,15 @@ bool deploy_gfxr_replay(Dive::DeviceManager& mgr, const std::string& device_seri
     return true;
 }
 
-bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr,
-                                const std::string&   device_serial,
-                                const std::string    gfxr_replay_capture,
-                                const std::string    gfxr_replay_flags)
+bool DeployAndRunGfxrReplay(Dive::DeviceManager& mgr,
+                            const std::string&   device_serial,
+                            const std::string    gfxr_replay_capture,
+                            const std::string    gfxr_replay_flags)
 {
     bool        dump_pm4 = absl::GetFlag(FLAGS_dump_pm4);
     std::string capture_download_dir = absl::GetFlag(FLAGS_download_dir);
 
-    if (!deploy_gfxr_replay(mgr, device_serial))
+    if (!DeployGfxrReplay(mgr, device_serial))
     {
         return false;
     }
@@ -685,13 +687,13 @@ bool deploy_and_run_gfxr_replay(Dive::DeviceManager& mgr,
     return ret.ok();
 }
 
-bool deploy_and_profiling_gfxr_replay(Dive::DeviceManager& mgr,
-                                      const std::string&   device_serial,
-                                      const std::string    gfxr_replay_capture)
+bool DeployAndProfilingGfxrReplay(Dive::DeviceManager& mgr,
+                                  const std::string&   device_serial,
+                                  const std::string    gfxr_replay_capture)
 {
     std::string capture_download_dir = absl::GetFlag(FLAGS_download_dir);
 
-    if (!deploy_gfxr_replay(mgr, device_serial))
+    if (!DeployGfxrReplay(mgr, device_serial))
     {
         return false;
     }
@@ -736,15 +738,15 @@ int main(int argc, char** argv)
     {
     case Command::kGfxrCapture:
     {
-        run_and_capture(mgr,
-                        serial,
-                        app_type,
-                        package,
-                        vulkan_command,
-                        vulkan_command_args,
-                        device_architecture,
-                        gfxr_capture_file_dir,
-                        true);
+        RunAndCapture(mgr,
+                      serial,
+                      app_type,
+                      package,
+                      vulkan_command,
+                      vulkan_command_args,
+                      device_architecture,
+                      gfxr_capture_file_dir,
+                      true);
         break;
     }
     case Command::kGfxrReplay:
@@ -754,7 +756,7 @@ int main(int argc, char** argv)
             std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
             break;
         }
-        res = deploy_and_run_gfxr_replay(mgr, serial, gfxr_replay_file_path, gfxr_replay_flags);
+        res = DeployAndRunGfxrReplay(mgr, serial, gfxr_replay_file_path, gfxr_replay_flags);
         break;
     }
     case Command::kProfileReplay:
@@ -764,33 +766,33 @@ int main(int argc, char** argv)
             std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
             break;
         }
-        res = deploy_and_profiling_gfxr_replay(mgr, serial, gfxr_replay_file_path);
+        res = DeployAndProfilingGfxrReplay(mgr, serial, gfxr_replay_file_path);
         break;
     }
     case Command::kListDevice:
     {
-        res = list_device(mgr);
+        res = ListDevice(mgr);
         break;
     }
     case Command::kListPackage:
     {
-        res = list_package(mgr, serial);
+        res = ListPackage(mgr, serial);
         break;
     }
 
     case Command::kRunPackage:
     {
-        if (run_package(mgr,
-                        serial,
-                        app_type,
-                        package,
-                        vulkan_command,
-                        vulkan_command_args,
-                        "",
-                        "",
-                        false))
+        if (RunPackage(mgr,
+                       serial,
+                       app_type,
+                       package,
+                       vulkan_command,
+                       vulkan_command_args,
+                       "",
+                       "",
+                       false))
         {
-            res = process_input(mgr);
+            res = ProcessInput(mgr);
         }
 
         break;
@@ -798,25 +800,25 @@ int main(int argc, char** argv)
 
     case Command::kRunAndCapture:
     {
-        res = run_and_capture(mgr,
-                              serial,
-                              app_type,
-                              package,
-                              vulkan_command,
-                              vulkan_command_args,
-                              "",
-                              "",
-                              false);
+        res = RunAndCapture(mgr,
+                            serial,
+                            app_type,
+                            package,
+                            vulkan_command,
+                            vulkan_command_args,
+                            "",
+                            "",
+                            false);
         break;
     }
     case Command::kCleanup:
     {
-        res = clean_up_app_and_device(mgr, serial, package);
+        res = CleanUpAppAndDevice(mgr, serial, package);
         break;
     }
     case Command::kNone:
     {
-        print_usage();
+        PrintUsage();
         res = true;
         break;
     }

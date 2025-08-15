@@ -88,6 +88,18 @@
         stats_list[k##type##Resolves]++; \
     } while (0)
 
+#define PRINT_FIELD(name, value, last_item)                                          \
+    {                                                                                \
+        std::ostringstream string_stream;                                            \
+        string_stream << name << " " << std::fixed << std::setprecision(1) << value; \
+        if (!last_item)                                                              \
+        {                                                                            \
+            string_stream << ",";                                                    \
+            ostream << std::setw(17);                                                \
+        }                                                                            \
+        ostream << std::left << string_stream.str();                                 \
+    }
+
 void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &ostream)
 {
     // Number of draw calls in BINNING, DIRECT, and TILED
@@ -378,12 +390,14 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         ostream << "Viewports:" << std::endl;
         for (const Viewport &viewport : viewports)
         {
-            ostream << "\t" << "x: " << viewport.m_vk_viewport.x << ",   ";
-            ostream << "\t" << "y: " << viewport.m_vk_viewport.y << ",   ";
-            ostream << "\t" << "width: " << viewport.m_vk_viewport.width << ", ";
-            ostream << "\t" << "height: " << viewport.m_vk_viewport.height << ", ";
-            ostream << "\t" << "minDepth: " << viewport.m_vk_viewport.minDepth << ", ";
-            ostream << "\t" << "maxDepth: " << viewport.m_vk_viewport.maxDepth << std::endl;
+            ostream << "\t";
+            PRINT_FIELD("x:", viewport.m_vk_viewport.x, false);
+            PRINT_FIELD("y:", viewport.m_vk_viewport.y, false);
+            PRINT_FIELD("width:", viewport.m_vk_viewport.width, false);
+            PRINT_FIELD("height:", viewport.m_vk_viewport.height, false);
+            PRINT_FIELD("minDepth:", viewport.m_vk_viewport.minDepth, false);
+            PRINT_FIELD("maxDepth:", viewport.m_vk_viewport.maxDepth, true);
+            ostream << std::endl;
         }
     }
     // Print out all unique window scissors (i.e. tiles)
@@ -394,14 +408,13 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         uint32_t count = 0;
         for (const WindowScissor &window_scissor : window_scissors)
         {
-            ostream << "\t" << count++;
-            ostream << "\t" << "tl_x: " << window_scissor.m_tl_x << ", ";
-            ostream << "\t" << "br_x: " << window_scissor.m_br_x << ", ";
-            ostream << "\t" << "tl_y: " << window_scissor.m_tl_y << ", ";
-            ostream << "\t" << "br_y: " << window_scissor.m_br_y << ", ";
-            ostream << "\t" << "Width: " << window_scissor.m_br_x - window_scissor.m_tl_x + 1
-                    << ", ";
-            ostream << "\t" << "Height: " << window_scissor.m_br_y - window_scissor.m_tl_y + 1;
+            ostream << "\t" << count++ << "\t";
+            PRINT_FIELD("tl_x:", window_scissor.m_tl_x, false);
+            PRINT_FIELD("br_x:", window_scissor.m_br_x, false);
+            PRINT_FIELD("tl_y:", window_scissor.m_tl_y, false);
+            PRINT_FIELD("br_y:", window_scissor.m_br_y, false);
+            PRINT_FIELD("Width:", window_scissor.m_br_x - window_scissor.m_tl_x + 1, false);
+            PRINT_FIELD("Height:", window_scissor.m_br_y - window_scissor.m_tl_y + 1, true);
             ostream << std::endl;
         }
     }

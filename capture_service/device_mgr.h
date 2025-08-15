@@ -137,6 +137,9 @@ public:
                               const std::string &replay_args,
                               bool               dump_pm4,
                               const std::string &pm4_capture_download_path);
+    absl::Status RunProfilingOnReplay(const std::string              &capture_path,
+                                      const std::vector<std::string> &metrics,
+                                      const std::string              &download_path);
 
 private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };

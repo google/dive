@@ -40,6 +40,8 @@ inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.ca
 inline constexpr char
 kReplayPm4DumpFileNamePropertyName[] = "debug.dive.replay.capture_pm4_file_name";
 inline constexpr char kDefaultCaptureFolderName[] = "gfxr_capture";
+inline constexpr char kProfilingPluginFolderName[] = "dive_profiling_plugin";
+inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

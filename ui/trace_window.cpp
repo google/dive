@@ -364,7 +364,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         return false;
     }
 
-    device->CleanupAPP().IgnoreError();
+    device->CleanupApp().IgnoreError();
     m_run_button->setText("&Starting..");
     m_run_button->setDisabled(true);
 

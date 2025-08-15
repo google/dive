@@ -56,7 +56,7 @@ FileReader::FileReader(const char *file_name) :
 }
 
 //--------------------------------------------------------------------------------------------------
-int FileReader::open()
+int FileReader::Open()
 {
     // Enables auto-detection code and decompression support for gzip
     int ret = archive_read_support_filter_gzip(m_handle.get());
@@ -110,7 +110,7 @@ int FileReader::open()
 }
 
 //--------------------------------------------------------------------------------------------------
-int64_t FileReader::read(char *buf, int64_t nbytes)
+int64_t FileReader::Read(char *buf, int64_t nbytes)
 {
     char   *ptr = buf;
     int64_t ret = 0;
@@ -132,7 +132,7 @@ int64_t FileReader::read(char *buf, int64_t nbytes)
 }
 
 //--------------------------------------------------------------------------------------------------
-int FileReader::close()
+int FileReader::Close()
 {
     m_handle = nullptr;
     return 0;
@@ -930,7 +930,7 @@ CaptureData::LoadResult CaptureData::LoadCaptureFile(const char *file_name)
 CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(const char *file_name)
 {
     FileReader reader(file_name);
-    if (reader.open() != 0)
+    if (reader.Open() != 0)
     {
         std::cerr << "Not able to open: " << file_name << std::endl;
         return LoadResult::kFileIoError;
@@ -1043,12 +1043,12 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
     uint32_t  cur_size = UINT32_MAX;
     bool      is_new_submit = false;
     bool      skip_commands = false;
-    while (capture_file.read((char *)&block_info, sizeof(block_info)) > 0)
+    while (capture_file.Read((char *)&block_info, sizeof(block_info)) > 0)
     {
         // Read and discard any trailing 0xffffffff padding from previous block
         while (block_info.m_block_type == 0xffffffff && block_info.m_data_size == 0xffffffff)
         {
-            if (capture_file.read((char *)&block_info, sizeof(block_info)) <= 0)
+            if (capture_file.Read((char *)&block_info, sizeof(block_info)) <= 0)
                 return LoadResult::kCorruptData;
         }
 
@@ -1082,7 +1082,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             // Skip parsing commands from system processes
             skip_commands = false;
             char *process_name = new char[block_info.m_data_size];
-            if (!capture_file.read((char *)process_name, block_info.m_data_size))
+            if (!capture_file.Read((char *)process_name, block_info.m_data_size))
                 return LoadResult::kFileIoError;
             skip_commands |= (strcmp(process_name, "fdperf") == 0);
             skip_commands |= (strcmp(process_name, "chrome") == 0);
@@ -1102,14 +1102,14 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
         case RD_FRAG_SHADER:
         {
             DiveVector<char> buf(block_info.m_data_size);
-            capture_file.read(buf.data(), block_info.m_data_size);
+            capture_file.Read(buf.data(), block_info.m_data_size);
             break;
         }
         case RD_GPU_ID:
         {
             DIVE_ASSERT(block_info.m_data_size == 4);
             uint32_t gpu_id = 0;
-            capture_file.read(reinterpret_cast<char *>(&gpu_id), block_info.m_data_size);
+            capture_file.Read(reinterpret_cast<char *>(&gpu_id), block_info.m_data_size);
             SetGPUID(gpu_id);
         }
         break;
@@ -1121,7 +1121,7 @@ CaptureData::LoadResult CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
             {
                 DIVE_ASSERT(block_info.m_data_size == 8);
                 fd_dev_id dev_id;
-                capture_file.read(reinterpret_cast<char *>(&dev_id.chip_id),
+                capture_file.Read(reinterpret_cast<char *>(&dev_id.chip_id),
                                   block_info.m_data_size);
                 dev_id.gpu_id = 0;
                 auto info = fd_dev_info(&dev_id);
@@ -1179,7 +1179,7 @@ CaptureData::LoadResult CaptureData::LoadGfxrFile(const char *file_name)
         return LoadResult::kFileIoError;
     }
 
-    m_gfxr_submits = dive_annotation_processor.getSubmits();
+    m_gfxr_submits = dive_annotation_processor.GetSubmits();
 
     if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
     {
@@ -1590,17 +1590,17 @@ bool CaptureData::LoadGpuAddressAndSize(FileReader &capture_file,
     assert(block_size >= 2 * sizeof(uint32_t));
 
     uint32_t dword;
-    if (!capture_file.read((char *)&dword, sizeof(uint32_t)))
+    if (!capture_file.Read((char *)&dword, sizeof(uint32_t)))
         return false;
     *gpu_addr = dword;
-    if (!capture_file.read((char *)&dword, sizeof(uint32_t)))
+    if (!capture_file.Read((char *)&dword, sizeof(uint32_t)))
         return false;
     *size = dword;
 
     // It's possible that only the lower 32-bits are written to the file?
     if (block_size > 2 * sizeof(uint32_t))
     {
-        if (!capture_file.read((char *)&dword, sizeof(uint32_t)))
+        if (!capture_file.Read((char *)&dword, sizeof(uint32_t)))
             return false;
         *gpu_addr |= ((uint64_t)(dword)) << 32;
     }
@@ -1613,7 +1613,7 @@ bool CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_a
     MemoryData raw_memory;
     raw_memory.m_data_size = size;
     raw_memory.m_data_ptr = new uint8_t[raw_memory.m_data_size];
-    if (!capture_file.read((char *)raw_memory.m_data_ptr, size))
+    if (!capture_file.Read((char *)raw_memory.m_data_ptr, size))
     {
         delete[] raw_memory.m_data_ptr;
         return false;

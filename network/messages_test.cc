@@ -71,7 +71,7 @@ TEST(MessagesTest, WriteAndReadString)
 
 TEST(MessagesTest, HandShakeMessage)
 {
-    Network::HandShakeRequest request;
+    Network::HandshakeRequest request;
     request.SetMajorVersion(345612);
     request.SetMinorVersion(567348);
     Network::Buffer buf;
@@ -79,7 +79,7 @@ TEST(MessagesTest, HandShakeMessage)
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(request.GetMessageType(), Network::MessageType::HANDSHAKE_REQUEST);
 
-    Network::HandShakeResponse response;
+    Network::HandshakeResponse response;
     status = response.Deserialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(response.GetMessageType(), Network::MessageType::HANDSHAKE_RESPONSE);

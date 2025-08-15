@@ -30,7 +30,7 @@ limitations under the License.
 namespace Dive
 {
 
-int GetIndention(const std::string &line)
+int GetIndentation(const std::string &line)
 {
     int indention = 0;
     for (int i = 0; i < line.size(); i++)
@@ -72,14 +72,14 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
         if (absl::StrContains(line, "Non-Data Actions"))
         {
             non_data_action_found = true;
-            indention = GetIndention(line);
+            indention = GetIndentation(line);
             continue;
         }
 
         if (!non_data_action_found)
             continue;
 
-        int cur_indention = GetIndention(line);
+        int cur_indention = GetIndentation(line);
         if (cur_indention <= indention)
         {
             non_data_action_found = false;

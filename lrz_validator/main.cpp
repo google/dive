@@ -20,7 +20,7 @@
 #include "dive_core/data_core.h"
 #include "pm4_info.h"
 
-bool ValidataLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
+bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
 {
     size_t                       event_count = meta_data.m_event_info.size();
     const Dive::EventStateInfo  &event_state = meta_data.m_event_state;
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
 
     // LRZ Validation
     const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
-    const bool                   lrz_test_passed = ValidataLRZ(meta_data, output_file_name);
+    const bool                   lrz_test_passed = ValidateLRZ(meta_data, output_file_name);
     if (lrz_test_passed)
     {
         std::cout << "[LRZ Pass] LRZ is correctly set for all drawcalls!\n";

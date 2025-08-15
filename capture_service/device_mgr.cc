@@ -356,7 +356,7 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
     return m_app->Setup();
 }
 
-absl::Status AndroidDevice::CleanupAPP()
+absl::Status AndroidDevice::CleanupApp()
 {
     m_app = nullptr;
     return absl::OkStatus();

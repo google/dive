@@ -47,10 +47,10 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
     {
     case MessageType::HANDSHAKE_REQUEST:
     {
-        auto* request = dynamic_cast<HandShakeRequest*>(message.get());
+        auto* request = dynamic_cast<HandshakeRequest*>(message.get());
         if (request)
         {
-            HandShakeResponse response;
+            HandshakeResponse response;
             response.SetMajorVersion(request->GetMajorVersion());
             response.SetMinorVersion(request->GetMinorVersion());
             auto status = SendMessage(client_conn, response);

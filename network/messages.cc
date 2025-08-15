@@ -61,7 +61,7 @@ absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offs
     return result;
 }
 
-absl::Status HandShakeMessage::Serialize(Buffer& dest) const
+absl::Status HandshakeMessage::Serialize(Buffer& dest) const
 {
     dest.clear();
     WriteUint32ToBuffer(m_major_version, dest);
@@ -69,7 +69,7 @@ absl::Status HandShakeMessage::Serialize(Buffer& dest) const
     return absl::OkStatus();
 }
 
-absl::Status HandShakeMessage::Deserialize(const Buffer& src)
+absl::Status HandshakeMessage::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
     ASSIGN_OR_RETURN(m_major_version, ReadUint32FromBuffer(src, offset));
@@ -234,10 +234,10 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* 
     switch (static_cast<MessageType>(type))
     {
     case MessageType::HANDSHAKE_REQUEST:
-        message = std::make_unique<HandShakeRequest>();
+        message = std::make_unique<HandshakeRequest>();
         break;
     case MessageType::HANDSHAKE_RESPONSE:
-        message = std::make_unique<HandShakeResponse>();
+        message = std::make_unique<HandshakeResponse>();
         break;
     case MessageType::PING_MESSAGE:
         message = std::make_unique<PingMessage>();

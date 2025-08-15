@@ -397,7 +397,7 @@ absl::Status TcpClient::PerformHandshake()
         absl::StrCat("PerformHandshake: Client is not connected."));
     }
 
-    HandShakeRequest hs_request;
+    HandshakeRequest hs_request;
     hs_request.SetMajorVersion(kHandshakeMajorVersion);
     hs_request.SetMinorVersion(kHandshakeMinorVersion);
     std::cout << "Client: Sending Handshake (Client v" << hs_request.GetMajorVersion() << "."
@@ -435,7 +435,7 @@ absl::Status TcpClient::PerformHandshake()
                      ")."));
     }
 
-    auto* hs_response = dynamic_cast<HandShakeResponse*>(response.get());
+    auto* hs_response = dynamic_cast<HandshakeResponse*>(response.get());
     if (!hs_response)
     {
         return absl::InternalError(

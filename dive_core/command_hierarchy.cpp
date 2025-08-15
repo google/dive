@@ -899,13 +899,13 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
         // Create the event node
         {
-            std::string event_string = Util::GetEventString(mem_manager,
+            Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
+            std::string     event_string = Util::GetEventString(mem_manager,
                                                             submit_index,
                                                             va_addr,
-                                                            opcode,
-                                                            header.type7.count,
+                                                            *type7_header,
                                                             m_state_tracker);
-            uint32_t    event_id = m_num_events++;
+            uint32_t        event_id = m_num_events++;
 
             uint64_t node_index;
             SyncType sync_type = Util::GetSyncType(mem_manager,

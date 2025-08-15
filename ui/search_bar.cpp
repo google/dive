@@ -86,7 +86,7 @@ void SearchBar::searchBarFocusOut()
 {
     if (!m_input->hasFocus())
     {
-        if (!m_prev->hasFocus() && !m_next->hasFocus() && !m_tree_view->hasFocus())
+        if (!m_prev->hasFocus() && !m_next->hasFocus() && !m_view->hasFocus())
         {
             this->hide();
             emit hide_search_bar(this->isHidden());
@@ -167,7 +167,7 @@ void SearchBar::cancelSearch()
 }
 
 //--------------------------------------------------------------------------------------------------
-void SearchBar::setTreeView(DiveTreeView* tree_view)
+void SearchBar::setView(QAbstractItemView* view)
 {
-    m_tree_view = tree_view;
+    m_view = view;
 }

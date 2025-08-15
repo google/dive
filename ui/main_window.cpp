@@ -61,6 +61,8 @@
 #include "hover_help_model.h"
 #include "overlay.h"
 #include "overview_tab_view.h"
+#include "perf_counter_tab_view.h"
+#include "perf_counter_model.h"
 #include "plugins/plugin_loader.h"
 #include "property_panel.h"
 #include "search_bar.h"
@@ -189,7 +191,7 @@ MainWindow::MainWindow()
 
         m_command_hierarchy_view = new DiveTreeView(m_data_core->GetCommandHierarchy());
         m_command_hierarchy_view->SetDataCore(m_data_core.get());
-        m_event_search_bar->setTreeView(m_command_hierarchy_view);
+        m_event_search_bar->setView(m_command_hierarchy_view);
 
         m_gfxr_vulkan_commands_filter_proxy_model =
         new GfxrVulkanCommandFilterProxyModel(m_command_hierarchy_view,
@@ -204,6 +206,8 @@ MainWindow::MainWindow()
         // Set the proxy model as the view's model
         m_command_hierarchy_view->setModel(m_filter_model);
         m_filter_model->SetMode(kDefaultFilterMode);
+
+        m_perf_counter_model = new PerfCounterModel(":/resources/result_counters.csv");
 
         QLabel *goto_draw_call_label = new QLabel(tr("Go To:"));
         m_prev_event_button = new QPushButton("Prev Event");
@@ -244,6 +248,9 @@ MainWindow::MainWindow()
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
                                                   *m_event_selection);
         m_event_state_view = new EventStateView(*m_data_core);
+
+        m_perf_counter_tab_view = new PerfCounterTabView(*m_perf_counter_model);
+
         m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
         m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Commands");
@@ -254,8 +261,6 @@ MainWindow::MainWindow()
         new GfxrVulkanCommandArgumentsTabView(m_data_core->GetCommandHierarchy(),
                                               m_gfxr_vulkan_commands_arguments_filter_proxy_model,
                                               m_gfxr_vulkan_command_hierarchy_model);
-        m_gfxr_vulkan_command_arguments_view_tab_index =
-        m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
 #if defined(ENABLE_CAPTURE_BUFFERS)
         m_buffer_view = new BufferView(*m_data_core);
         m_tab_widget->addTab(m_buffer_view, "Buffers");
@@ -663,6 +668,7 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
 
     m_gfxr_vulkan_command_arguments_view_tab_index =
     m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
+    m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
 
     // Ensure the submit topology is displayed.
     m_view_mode_combo_box->currentTextChanged("Submit");
@@ -1098,6 +1104,19 @@ void MainWindow::OnSearchTrigger()
         }
         tab_wiget_search_button->show();
     }
+    else if (current_index == m_perf_counter_view_tab_index)
+    {
+        tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName);
+        tab_wiget_search_button = current_tab->findChild<QPushButton *>(
+        kPerfCounterSearchButtonName);
+
+        if (!tab_wiget_search_bar->isHidden())
+        {
+            tab_wiget_search_bar->clearSearch();
+            tab_wiget_search_bar->hide();
+        }
+        tab_wiget_search_button->show();
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1248,9 +1267,9 @@ void MainWindow::CreateShortcuts()
     m_search_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), this);
     connect(m_search_shortcut, &QShortcut::activated, this, &MainWindow::OnSearchTrigger);
 
-    // Commands Search Shortcut
-    m_search_commands_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_SEARCH), this);
-    connect(m_search_commands_shortcut, &QShortcut::activated, [this]() {
+    // TabView Search Shortcut
+    m_search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), this);
+    connect(m_search_tab_view_shortcut, &QShortcut::activated, [this]() {
         int current_tab_index = m_tab_widget->currentIndex();
         if (current_tab_index == m_command_view_tab_index)
         {
@@ -1259,6 +1278,10 @@ void MainWindow::CreateShortcuts()
         else if (current_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
         {
             m_gfxr_vulkan_command_arguments_tab_view->OnSearchCommandArgs();
+        }
+        else if (current_tab_index == m_perf_counter_view_tab_index)
+        {
+            m_perf_counter_tab_view->OnSearchCounters();
         }
         else
         {
@@ -1448,27 +1471,48 @@ void MainWindow::OnTabViewSearchBarVisibilityChange(bool isHidden)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnTabViewChange()
 {
-    int currentIndex = m_tab_widget->currentIndex();
+    int current_index = m_tab_widget->currentIndex();
 
     // If no current index is selected, return.
-    if (currentIndex == -1)
+    if (current_index == -1)
     {
         return;
     }
 
-    QWidget *currentTab = m_tab_widget->widget(currentIndex);
-    if (currentIndex == m_command_view_tab_index &&
-        !currentTab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
+    // Check if there was a previous tab search that needs to be disabled.
+    if (m_previous_tab_index != -1 && m_previous_tab_index != current_index)
+    {
+        QWidget *previous_tab = m_tab_widget->widget(m_previous_tab_index);
+        if (previous_tab)
+        {
+            if (m_previous_tab_index == m_command_view_tab_index)
+            {
+                m_command_tab_view->OnSearchBarVisibilityChange(true);
+            }
+            else if (m_previous_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+            {
+                m_gfxr_vulkan_command_arguments_tab_view->OnSearchBarVisibilityChange(true);
+            }
+            else if (m_previous_tab_index == m_perf_counter_view_tab_index)
+            {
+                m_perf_counter_tab_view->OnSearchBarVisibilityChange(true);
+            }
+        }
+    }
+
+    QWidget *current_tab = m_tab_widget->widget(current_index);
+    if (current_index == m_command_view_tab_index &&
+        !current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
     {
         m_event_search_bar->clearSearch();
         m_event_search_bar->hide();
         m_search_trigger_button->show();
         DisconnectSearchBar();
     }
-    else if (currentIndex == m_gfxr_vulkan_command_arguments_view_tab_index &&
-             currentTab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName))
+    else if (current_index == m_gfxr_vulkan_command_arguments_view_tab_index &&
+             current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName))
     {
-        if (!currentTab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName)
+        if (!current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName)
              ->isHidden())
         {
             m_event_search_bar->clearSearch();
@@ -1477,10 +1521,23 @@ void MainWindow::OnTabViewChange()
             DisconnectSearchBar();
         }
     }
-    else if (currentIndex != m_command_view_tab_index)
+    else if (current_index == m_perf_counter_view_tab_index &&
+             current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName))
+    {
+        if (!current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName)->isHidden())
+        {
+            m_event_search_bar->clearSearch();
+            m_event_search_bar->hide();
+            m_search_trigger_button->show();
+            DisconnectSearchBar();
+        }
+    }
+    else
     {
         m_command_tab_view->OnSearchBarVisibilityChange(true);
     }
+
+    m_previous_tab_index = current_index;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1578,6 +1635,11 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnTabViewChange()));
 
+    QObject::disconnect(m_perf_counter_tab_view,
+                        SIGNAL(HideOtherSearchBars()),
+                        this,
+                        SLOT(OnTabViewChange()));
+
     // Temporarily set the model to nullptr and clear selection/current index
     // before loading new data. This forces a clean break.
     m_command_hierarchy_view->setModel(nullptr);
@@ -1642,7 +1704,7 @@ void MainWindow::ConnectGfxrFileTabs()
                      this,
                      SLOT(OnTabViewChange()));
 
-    QObject::connect(m_gfxr_vulkan_command_arguments_tab_view,
+    QObject::connect(m_perf_counter_tab_view,
                      SIGNAL(HideOtherSearchBars()),
                      this,
                      SLOT(OnTabViewChange()));

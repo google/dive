@@ -65,7 +65,7 @@ QWidget                                    *parent) :
     main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_command_hierarchy_view);
     setLayout(main_layout);
-    m_search_bar->setTreeView(m_command_hierarchy_view);
+    m_search_bar->setView(m_command_hierarchy_view);
 
     QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchCommandArgs()));
 

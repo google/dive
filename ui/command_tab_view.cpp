@@ -62,7 +62,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_command_buffer_view);
     setLayout(main_layout);
-    m_search_bar->setTreeView(m_command_buffer_view);
+    m_search_bar->setView(m_command_buffer_view);
 
     QObject::connect(m_search_trigger_button,
                      SIGNAL(clicked()),

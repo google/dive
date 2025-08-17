@@ -34,6 +34,8 @@ class EventStateView;
 #ifndef NDEBUG
 class EventTimingView;
 #endif
+class PerfCounterTabView;
+class PerfCounterModel;
 class GfxrVulkanCommandArgumentsTabView;
 class GfxrVulkanCommandArgumentsFilterProxyModel;
 class GfxrVulkanCommandFilterProxyModel;
@@ -190,6 +192,7 @@ private:
     QList<QPushButton *>               m_expand_to_lvl_buttons;
     GfxrVulkanCommandFilterProxyModel *m_gfxr_vulkan_commands_filter_proxy_model;
     GfxrVulkanCommandModel            *m_gfxr_vulkan_command_hierarchy_model;
+    PerfCounterModel                  *m_perf_counter_model;
 
     // Right pane
     QTabWidget                        *m_tab_widget;
@@ -203,6 +206,8 @@ private:
     int                                m_event_state_view_tab_index;
     GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view;
     int                                m_gfxr_vulkan_command_arguments_view_tab_index;
+    PerfCounterTabView                *m_perf_counter_tab_view;
+    int                                m_perf_counter_view_tab_index;
 #if defined(ENABLE_CAPTURE_BUFFERS)
     BufferView *m_buffer_view;
 #endif
@@ -221,7 +226,7 @@ private:
 
     // Shortcuts
     QShortcut *m_search_shortcut = nullptr;
-    QShortcut *m_search_commands_shortcut = nullptr;
+    QShortcut *m_search_tab_view_shortcut = nullptr;
     QShortcut *m_overview_tab_shortcut = nullptr;
     QShortcut *m_command_tab_shortcut = nullptr;
     QShortcut *m_shader_tab_shortcut = nullptr;
@@ -230,6 +235,7 @@ private:
     std::string m_unsaved_capture_path;
     bool        m_capture_saved = false;
     int         m_capture_num = 0;
+    int         m_previous_tab_index = -1;
     bool        m_gfxr_capture_loaded = false;
 
     EventSelection *m_event_selection;

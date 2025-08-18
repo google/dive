@@ -107,8 +107,6 @@ private:
     friend class GfxrVulkanCommandHierarchyCreator;
 
     CommandHierarchy                  &m_command_hierarchy;
-    const Pm4CaptureData              *m_capture_data_ptr = nullptr;
-    const GfxrCaptureData             *m_gfxr_capture_data_ptr = nullptr;
     GfxrVulkanCommandHierarchyCreator &m_gfxr_command_hierarchy_creator;
     CommandHierarchyCreator           &m_pm4_command_hierarchy_creator;
 

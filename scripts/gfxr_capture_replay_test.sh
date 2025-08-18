@@ -166,9 +166,11 @@ fi
 if [ $install_replay_apk -eq 1 ]
 then
     python "${GFXRECON}" install-apk "${GFXR_REPLAY_APK}"
-    # Replay with --dump-resources needs permissions to store generated BMPs
-    adb shell appops set "${REPLAY_PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
 fi
+
+# Replay with --dump-resources needs permissions to store generated BMPs
+# Always do this since this permission resets on reboot or stop/start if not explicitly granted
+adb shell appops set "${REPLAY_PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
 
 # Install the validation layer into the replay app so we can easily find it in both capture and replay
 if [ ${REPLAY_VALIDATION} -eq 1 -o ${CAPTURE_VALIDATION} -eq 1 ]

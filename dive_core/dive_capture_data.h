@@ -35,8 +35,8 @@ public:
     CaptureData::LoadResult LoadFile(const std::string &file_name);
     CaptureData::LoadResult LoadFiles(const std::string &pm4_file_name,
                                       const std::string &gfxr_file_name);
-    const Pm4CaptureData   &getPm4CaptureData() const;
-    const GfxrCaptureData  &getGfxrCaptureData() const;
+    const Pm4CaptureData   &GetPm4CaptureData() const;
+    const GfxrCaptureData  &GetGfxrCaptureData() const;
 
 private:
     CaptureData::LoadResult LoadCaptureFileStream(std::istream &capture_file);

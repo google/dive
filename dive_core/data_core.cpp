@@ -120,8 +120,8 @@ bool DataCore::CreateDiveMetaData()
 {
     CaptureMetadataCreator metadata_creator(m_capture_metadata);
     if (!metadata_creator
-         .ProcessSubmits(m_dive_capture_data.getPm4CaptureData().GetSubmits(),
-                         m_dive_capture_data.getPm4CaptureData().GetMemoryManager()))
+         .ProcessSubmits(m_dive_capture_data.GetPm4CaptureData().GetSubmits(),
+                         m_dive_capture_data.GetPm4CaptureData().GetMemoryManager()))
     {
         return false;
     }

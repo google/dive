@@ -74,13 +74,13 @@ CaptureData::LoadResult DiveCaptureData::LoadFiles(const std::string& pm4_file_n
 }
 
 //--------------------------------------------------------------------------------------------------
-const Pm4CaptureData& DiveCaptureData::getPm4CaptureData() const
+const Pm4CaptureData& DiveCaptureData::GetPm4CaptureData() const
 {
     return m_pm4_capture_data;
 }
 
 //--------------------------------------------------------------------------------------------------
-const GfxrCaptureData& DiveCaptureData::getGfxrCaptureData() const
+const GfxrCaptureData& DiveCaptureData::GetGfxrCaptureData() const
 {
     return m_gfxr_capture_data;
 }

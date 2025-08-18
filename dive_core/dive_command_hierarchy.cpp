@@ -62,9 +62,9 @@ bool DiveCommandHierarchyCreator::CreateTrees(DiveCaptureData        &dive_captu
 
     m_gfxr_command_hierarchy_creator.CreateTrees(true);
 
-    if (!ProcessDiveSubmits(dive_capture_data.getPm4CaptureData().GetSubmits(),
-                            dive_capture_data.getPm4CaptureData().GetMemoryManager(),
-                            dive_capture_data.getGfxrCaptureData().GetGfxrSubmits()))
+    if (!ProcessDiveSubmits(dive_capture_data.GetPm4CaptureData().GetSubmits(),
+                            dive_capture_data.GetPm4CaptureData().GetMemoryManager(),
+                            dive_capture_data.GetGfxrCaptureData().GetGfxrSubmits()))
     {
         return false;
     }

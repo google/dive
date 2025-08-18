@@ -40,13 +40,13 @@ GfxrVulkanCommandArgumentsFilterProxyModel *proxy_model,
 GfxrVulkanCommandModel                     *command_hierarchy_model,
 QWidget                                    *parent) :
     m_vulkan_command_hierarchy(vulkan_command_hierarchy),
-    m_arg_proxy_Model(proxy_model),
+    m_arg_proxy_model(proxy_model),
     m_command_hierarchy_model(command_hierarchy_model)
 {
     m_command_hierarchy_view = new DiveTreeView(m_vulkan_command_hierarchy);
 
-    m_arg_proxy_Model->setSourceModel(m_command_hierarchy_model);
-    m_command_hierarchy_view->setModel(m_arg_proxy_Model);
+    m_arg_proxy_model->setSourceModel(m_command_hierarchy_model);
+    m_command_hierarchy_view->setModel(m_arg_proxy_model);
 
     m_search_trigger_button = new QPushButton;
     m_search_trigger_button->setObjectName(kGfxrVulkanCommandArgumentsSearchButtonName);
@@ -98,7 +98,7 @@ void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &in
 {
     if (!index.isValid())
     {
-        m_arg_proxy_Model->SetTargetParentSourceIndex(QModelIndex());
+        m_arg_proxy_model->SetTargetParentSourceIndex(QModelIndex());
         return;
     }
 
@@ -116,7 +116,7 @@ void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &in
     }
 
     // Always use the source_index, regardless of whether a proxy was involved.
-    m_arg_proxy_Model->SetTargetParentSourceIndex(source_index);
+    m_arg_proxy_model->SetTargetParentSourceIndex(source_index);
 
     uint32_t column_count = (uint32_t)m_command_hierarchy_model->columnCount(QModelIndex());
     for (uint32_t column = 0; column < column_count; ++column)

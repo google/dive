@@ -66,7 +66,6 @@ private:
     SearchBar    *m_search_bar = nullptr;
 
     const Dive::CommandHierarchy               &m_vulkan_command_hierarchy;
-    GfxrVulkanCommandFilterProxyModel          *m_proxy_Model;
-    GfxrVulkanCommandArgumentsFilterProxyModel *m_arg_proxy_Model;
+    GfxrVulkanCommandArgumentsFilterProxyModel *m_arg_proxy_model;
     GfxrVulkanCommandModel                     *m_command_hierarchy_model;
 };

@@ -68,7 +68,7 @@ signals:
 private:
     DiveTreeView *m_command_hierarchy_view;
     QPushButton  *m_search_trigger_button;
-    SearchBar    *m_search_bar = nullptr;
+    SearchBar    *m_search_bar;
 
     const Dive::CommandHierarchy      &m_vulkan_command_hierarchy;
     GfxrVulkanCommandFilterProxyModel &m_proxy_Model;

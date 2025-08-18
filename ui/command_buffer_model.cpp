@@ -255,12 +255,11 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 
     // Ensures that the selected index passed belongs to the filter model currently displayed in the
     // main window.
-    QAbstractItemModel *model = const_cast<QAbstractItemModel *>(index.model());
-    DiveFilterModel    *dive_filter_model = dynamic_cast<DiveFilterModel *>(model);
+    const DiveFilterModel *dive_filter_model = qobject_cast<const DiveFilterModel *>(index.model());
     if (dive_filter_model)
     {
-        QModelIndex new_index = dive_filter_model->mapToSource(index);
-        selected_node_index = (uint64_t)new_index.internalPointer();
+        const QModelIndex &new_index = dive_filter_model->mapToSource(index);
+        selected_node_index = (uint64_t)(new_index.internalPointer());
     }
 
     emit beginResetModel();

@@ -41,6 +41,9 @@ ABSL_FLAG(std::string, input_file_path, "",
 ABSL_FLAG(std::string, output_gfxr_path, "",
           "If specified, a new .gfxr file will be generated from the original file "
           "(--input_file_path) and any specified modifications");
+ABSL_FLAG(std::vector<std::string>, delete_gfxr_blocks, {},
+          "If specified, the blocks with these ids will be omitted from the modified .gfxr file. "
+          "Example: --delete_gfxr_blocks=1,2");
 
 absl::Status ValidateFlags()
 {
@@ -70,6 +73,29 @@ absl::Status ValidateFlags()
                 "if --output_gfxr_path is specified, then --input_file_path must also be specified "
                 "for "
                 "a .gfxr file");
+        }
+    }
+
+    std::vector<std::string> delete_gfxr_block = absl::GetFlag(FLAGS_delete_gfxr_blocks);
+    if (!delete_gfxr_block.empty())
+    {
+        if (input_file_ext != ".gfxr")
+        {
+            return absl::InvalidArgumentError(
+                "if --delete_gfxr_blocks is specified, then "
+                "--input_file_path must also be specified for "
+                "a .gfxr file");
+        }
+        for (auto const& ele : delete_gfxr_block)
+        {
+            int i;
+            if (!absl::SimpleAtoi(ele, &i))
+            {
+                return absl::InvalidArgumentError(
+                    absl::StrFormat("flag --delete_gfxr_blocks accepts comma-separated integers, "
+                                    "invalid input: %s",
+                                    ele));
+            }
         }
     }
 
@@ -105,6 +131,24 @@ int main(int argc, char** argv)
         {
             std::cout << res << std::endl;
             return 1;
+        }
+
+        std::vector<std::string> delete_gfxr_block = absl::GetFlag(FLAGS_delete_gfxr_blocks);
+        if (!delete_gfxr_block.empty())
+        {
+            std::vector<int> delete_block_ids;
+            for (auto const& ele : delete_gfxr_block)
+            {
+                int id;
+                absl::SimpleAtoi(ele, &id);
+                delete_block_ids.push_back(id);
+            }
+            absl::Status res = data_core.RemoveGfxrBlocks(delete_block_ids);
+            if (!res.ok())
+            {
+                std::cout << res << std::endl;
+                return 1;
+            }
         }
 
         std::string output_gfxr_path = absl::GetFlag(FLAGS_output_gfxr_path);

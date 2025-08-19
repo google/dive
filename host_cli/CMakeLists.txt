@@ -92,13 +92,13 @@ function(add_modify_gfxr_test)
     )
 endfunction()
 
-add_modify_gfxr_test(
-    NAME ModifyGfxrSeparateAssetsNoOp
-    INPUT_GFXR
-        ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
-    GOLDEN_FILE
-        ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+add_modify_gfxr_test(NAME ModifyGfxrSeparateAssetsNoOp
+  INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+  GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
 )
 
-list(POP_BACK CMAKE_MESSAGE_INDENT)
-message(CHECK_PASS "done")
+add_modify_gfxr_test(NAME ModifyGfxrSeparateAssetsDeleteBlocks
+  INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+  GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545_delete_blocks_220_223.gfxr
+  ADDITIONAL_ARGUMENTS --delete_gfxr_blocks=220,223
+)

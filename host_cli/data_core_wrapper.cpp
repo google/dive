@@ -18,6 +18,7 @@
 
 #include "dive_core/capture_data.h"
 #include "dive_core/data_core.h"
+#include "gfxr_ext/decode/dive_block_data.h"
 
 namespace Dive::HostCli
 {
@@ -63,6 +64,28 @@ absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::string& new_gfxr_file_
         return absl::InternalError("Could not write GFXR file");
     }
 
+    return absl::OkStatus();
+}
+
+absl::Status DataCoreWrapper::RemoveGfxrBlocks(std::vector<int> block_ids)
+{
+    assert(m_data_core != nullptr);
+    if (!IsGfxrLoaded())
+    {
+        return absl::FailedPreconditionError("Must load original GFXR first");
+    }
+
+    std::shared_ptr<gfxrecon::decode::DiveBlockData>
+    dive_block_data = m_data_core->GetMutableCaptureData().GetMutableGfxrData();
+
+    for (const auto& id : block_ids)
+    {
+        bool res = dive_block_data->AddModification(id, 0, nullptr);
+        if (!res)
+        {
+            return absl::InternalError("Could not delete block id: " + id);
+        }
+    }
     return absl::OkStatus();
 }
 

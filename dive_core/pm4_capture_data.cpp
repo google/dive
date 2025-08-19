@@ -904,7 +904,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const std::string &file_nam
 CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const std::string &file_name)
 {
     FileReader reader(file_name.data());
-    if (reader.open() != 0)
+    if (reader.Open() != 0)
     {
         std::cerr << "Not able to open: " << file_name << std::endl;
         return LoadResult::kFileIoError;

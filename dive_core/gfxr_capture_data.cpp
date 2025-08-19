@@ -67,7 +67,7 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
         return LoadResult::kFileIoError;
     }
 
-    m_gfxr_submits = dive_annotation_processor.getSubmits();
+    m_gfxr_submits = dive_annotation_processor.GetSubmits();
 
     if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
     {

@@ -316,9 +316,9 @@ class FileReader
 {
 public:
     FileReader(const char *file_name);
-    int     open();
-    int64_t read(char *buf, int64_t size);
-    int     close();
+    int     Open();
+    int64_t Read(char *buf, int64_t size);
+    int     Close();
 
 private:
     std::string                                                   m_file_name;

@@ -249,8 +249,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
             event_info.m_num_indices = Util::GetIndexCount(mem_manager,
                                                            submit_index,
                                                            va_addr,
-                                                           type7_header->opcode,
-                                                           header.type7.count);
+                                                           *type7_header);
         }
         else if (IsDispatchEventOpcode(type7_header->opcode))
             event_info.m_type = EventInfo::EventType::kDispatch;
@@ -281,8 +280,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         event_info.m_str = Util::GetEventString(mem_manager,
                                                 submit_index,
                                                 va_addr,
-                                                type7_header->opcode,
-                                                type7_header->count,
+                                                *type7_header,
                                                 m_state_tracker);
 
         m_capture_metadata.m_event_info.push_back(event_info);

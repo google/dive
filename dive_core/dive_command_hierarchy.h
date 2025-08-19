@@ -26,54 +26,6 @@
 namespace Dive
 {
 
-class MixedNodeTopology : public Topology
-{
-public:
-    uint64_t GetNumNodes() const override;
-
-    // Used to get list of shared children for a top level root node
-    // All children of this top level node share this alternate set of children
-    // Each non-top-level node has begin/end indices towards this set of shared children
-    uint64_t GetNumSharedChildren(uint64_t node_index) const;
-    uint64_t GetSharedChildNodeIndex(uint64_t node_index, uint64_t child_index) const;
-
-    // Indicate the begin & end index of the shared children in the top-level node that belong to
-    // the given node
-    uint64_t GetStartSharedChildNodeIndex(uint64_t node_index) const;
-    uint64_t GetEndSharedChildNodeIndex(uint64_t node_index) const;
-
-    // All descendant nodes from the same root node have the same set of shared children
-    // This returns that common root top level node
-    uint64_t GetSharedChildRootNodeIndex(uint64_t node_index) const;
-
-private:
-    friend class CommandHierarchy;
-    friend class CommandHierarchyCreator;
-
-    // List of all children for shared nodes.
-
-    // m_shared_children_indices contains the node_indexes of all the "shared" children throughout
-    // the entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
-    // flat, concatenated list of all nodes that are designated as "shared children". These are
-    // typically kPacketNodes that can logically appear under multiple different parent nodes or
-    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_indices
-    // to define the range of shared children belonging to a particular node.
-    DiveVector<uint64_t> m_shared_children_indices;
-
-    // This vector points into the m_shared_children_indices to define the range of shared children
-    // for a particular node.
-    DiveVector<ChildrenInfo> m_node_shared_children;
-
-    // For each non-root node, indicate where the shared children start/end are, and
-    // what the top level root node is
-    DiveVector<uint64_t> m_start_shared_children;
-    DiveVector<uint64_t> m_end_shared_children;
-    DiveVector<uint64_t> m_root_node_indices;
-
-    void SetNumNodes(uint64_t num_nodes) override;
-    void AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
-};
-
 class DiveCommandHierarchyCreator
 {
 public:

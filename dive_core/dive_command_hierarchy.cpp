@@ -195,6 +195,12 @@ void DiveCommandHierarchyCreator::CreateTopologies()
         }
 
         cur_topology.AddChildren(0, combined_root_children);
+
+        // Ensure the topology is filled. This is necessary while a single vector is used to create
+        // the mixed command hierarchy.
+        cur_topology.m_start_shared_child.resize(total_num_nodes);
+        cur_topology.m_end_shared_child.resize(total_num_nodes);
+        cur_topology.m_root_node_index.resize(total_num_nodes);
     }
 }
 

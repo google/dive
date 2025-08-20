@@ -160,7 +160,7 @@ int main(int argc, char** argv)
                 absl::SimpleAtoi(ele, &id);
                 delete_block_ids.push_back(id);
             }
-            absl::Status res = data_core.RemoveGfxrBlocks(delete_block_ids);
+            res = data_core.RemoveGfxrBlocks(delete_block_ids);
             if (!res.ok())
             {
                 std::cout << res << std::endl;

@@ -35,9 +35,9 @@ absl::Status SendPong(Network::SocketConnection *client_conn)
     return Network::SendMessage(client_conn, response);
 }
 
-absl::Status HandShake(Network::HandShakeRequest *request, Network::SocketConnection *client_conn)
+absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn)
 {
-    Network::HandShakeResponse response;
+    Network::HandshakeResponse response;
     response.SetMajorVersion(request->GetMajorVersion());
     response.SetMinorVersion(request->GetMinorVersion());
     return Network::SendMessage(client_conn, response);
@@ -145,10 +145,10 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
     case Network::MessageType::HANDSHAKE_REQUEST:
     {
         LOGI("Message received: HandShakeRequest");
-        auto *request = dynamic_cast<Network::HandShakeRequest *>(message.get());
+        auto *request = dynamic_cast<Network::HandshakeRequest *>(message.get());
         if (request)
         {
-            auto status = HandShake(request, client_conn);
+            auto status = Handshake(request, client_conn);
             if (!status.ok())
             {
                 LOGI("Handshake failed: %.*s",

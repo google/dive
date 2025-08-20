@@ -48,7 +48,7 @@ enum class MessageType : uint32_t
     FILE_SIZE_RESPONSE = 10
 };
 
-class HandShakeMessage : public ISerializable
+class HandshakeMessage : public ISerializable
 {
 public:
     absl::Status Serialize(Buffer& dest) const override;
@@ -84,13 +84,13 @@ private:
     std::string m_str;
 };
 
-class HandShakeRequest : public HandShakeMessage
+class HandshakeRequest : public HandshakeMessage
 {
 public:
     MessageType GetMessageType() const override { return MessageType::HANDSHAKE_REQUEST; }
 };
 
-class HandShakeResponse : public HandShakeMessage
+class HandshakeResponse : public HandshakeMessage
 {
 public:
     MessageType GetMessageType() const override { return MessageType::HANDSHAKE_RESPONSE; }

@@ -99,7 +99,7 @@ public:
                           const std::string    &args,
                           const ApplicationType type);
 
-    absl::Status      CleanupAPP();
+    absl::Status      CleanupApp();
     absl::Status      StartApp();
     absl::Status      StopApp();
     const AdbSession &Adb() const { return m_adb; }

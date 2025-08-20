@@ -2064,7 +2064,7 @@ void DrawCallsDumpingContext::BindDescriptorSets(
                                dynamic_offset_index);
         }
     }
-    else if (dynamic_offset_index)
+    else
     {
         GFXRECON_ASSERT(!dynamic_offset_index);
     }

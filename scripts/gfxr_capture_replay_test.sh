@@ -94,10 +94,6 @@ VALIDATION_LAYER_LIB=libVkLayer_khronos_validation.so
 REMOTE_TEMP_FILEPATH="/data/local/tmp/${VALIDATION_LAYER_LIB}"
 ARCH=$(adb shell getprop ro.product.cpu.abi)
 LOCAL_VALIDATION_LAYER_FILEPATH="${VALIDATION_LAYER_DIR}/${ARCH}/${VALIDATION_LAYER_LIB}"
-# The old prop requires root access
-OLD_FRAME_DELIMITER_PROP=openxr.enable_frame_delimiter
-# The new prop works with shell user (does not require root access)
-NEW_FRAME_DELIMITER_PROP=debug.openxr.enable_frame_delimiter
 
 #
 # Clear anything previously set (in case the script exited prematurely)
@@ -110,18 +106,7 @@ unset_vulkan_debug_settings
 # Ask OpenXR runtime to emit frame debug marker
 #
 
-adb shell setprop "${NEW_FRAME_DELIMITER_PROP}" true
-
-# Since root/unroot disconnects the device and disrupts any host monitoring scripts (logcat, scrcpy), minimize the number of times it's called.
-# It's only required to set the old prop. We can check if it's already set to avoid root/unroot.
-# TODO: Remove when NEW_FRAME_DELIMITER_PROP is more widely deployed
-ENABLE_FRAME_DELIMITER="$(adb shell getprop ${OLD_FRAME_DELIMITER_PROP})"
-if [ -z "${ENABLE_FRAME_DELIMITER}" ]
-then
-    adb root
-    adb shell setprop ${OLD_FRAME_DELIMITER_PROP} true
-    adb unroot
-fi
+adb shell setprop debug.openxr.enable_frame_delimiter true
 
 #
 # Download validation layers

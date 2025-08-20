@@ -3176,8 +3176,25 @@ VkResult VulkanReplayConsumerBase::PostCreateDeviceUpdateState(VulkanPhysicalDev
     for (uint32_t q = 0; q < create_state.modified_create_info.queueCreateInfoCount; ++q)
     {
         const VkDeviceQueueCreateInfo* queue_create_info = &create_state.modified_create_info.pQueueCreateInfos[q];
-        GFXRECON_ASSERT(device_info->queue_family_creation_flags.find(queue_create_info->queueFamilyIndex) ==
-                        device_info->queue_family_creation_flags.end());
+        // GOOGLE: Given that "two members can share the same queueFamilyIndex if one describes protected-capable
+        // queues and one describes queues that are not protected-capable", an assert is too strict here. Prefer the
+        // queue that is not protected-capable for now.
+        if (const auto queue_family_creation_flags =
+                device_info->queue_family_creation_flags.find(queue_create_info->queueFamilyIndex);
+            queue_family_creation_flags != device_info->queue_family_creation_flags.end())
+        {
+            GFXRECON_LOG_INFO(
+                "pQueueCreateInfos[%u].queueFamilyIndex=%u was already seen! New flags: 0x%x. Old flags: 0x%x",
+                q,
+                queue_create_info->queueFamilyIndex,
+                queue_create_info->flags,
+                *queue_family_creation_flags);
+            if (queue_create_info->flags == VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT)
+            {
+                GFXRECON_LOG_INFO("Ignoring create info for protected queue.");
+                continue;
+            }
+        }
         device_info->queue_family_creation_flags[queue_create_info->queueFamilyIndex] = queue_create_info->flags;
         device_info->queue_family_index_enabled[queue_create_info->queueFamilyIndex]  = true;
     }

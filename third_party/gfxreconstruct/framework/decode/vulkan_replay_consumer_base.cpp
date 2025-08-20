@@ -577,6 +577,22 @@ void VulkanReplayConsumerBase::ProcessFillMemoryCommand(uint64_t       memory_id
                     copy_region.imageSubresource  = { aspect_flags, 0, 0, 1 };
                     copy_region.imageExtent       = { desc.width, desc.height, 1 };
 
+                    // GOOGLE: Provide stride, guessed from width. 16 seems to be a common alignment for captures of
+                    // host, linear image memory on the the device we're targetting.
+                    // TODO: The appropriate bufferRowLength should be stored in the capture as part of
+                    // FillMemoryCommand. Alternatively, the image should be saved without padding.
+                    constexpr auto kBufferAlignment = 16;
+                    if ((desc.width % kBufferAlignment) != 0)
+                    {
+                        copy_region.bufferRowLength = desc.width - (desc.width % kBufferAlignment) + kBufferAlignment;
+                        GFXRECON_LOG_DEBUG("ProcessFillMemoryCommand(memory_id=%lu): AHardwareBuffer width unaligned. "
+                                           "The captured data probably has padding so we need to guess a stride. Given "
+                                           "width=%u, guessed bufferRowLength=%u",
+                                           memory_id,
+                                           desc.width,
+                                           copy_region.bufferRowLength);
+                    }
+
                     initializer->InitializeImage(size,
                                                  data,
                                                  0,

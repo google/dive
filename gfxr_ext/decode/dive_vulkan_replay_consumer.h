@@ -129,6 +129,8 @@ public:
     format::HandleId                                commandBuffer,
     StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
 
+    void ProcessStateEndMarker(uint64_t frame_number) override;
+
 private:
     Dive::GPUTime gpu_time_;
 };

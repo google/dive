@@ -447,6 +447,7 @@ GPUTime::GpuTimeStatus GPUTime::OnFreeCommandBuffers(uint32_t               comm
         }
         m_timestamp_allocator.FreeSlots({ m_cmds[command_buffers_ptr[i]].begin_timestamp_offset,
                                           m_cmds[command_buffers_ptr[i]].end_timestamp_offset });
+        RemoveCmdFromFrameCache(command_buffers_ptr[i]);
         m_cmds.erase(command_buffers_ptr[i]);
     }
     return GPUTime::GpuTimeStatus();
@@ -459,7 +460,7 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandBuffer(VkCommandBuffer command_buf
         // The cache doesn't contain secondary command buffers
         return GPUTime::GpuTimeStatus();
     }
-    m_cmds[command_buffer].Reset();
+    RemoveCmdFromFrameCache(command_buffer);
     return GPUTime::GpuTimeStatus();
 }
 
@@ -469,11 +470,7 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandPool(VkCommandPool command_pool)
     {
         if (cmd.second.pool == command_pool)
         {
-            m_timestamp_allocator.FreeSlots(
-            { cmd.second.begin_timestamp_offset, cmd.second.end_timestamp_offset });
-            cmd.second.begin_timestamp_offset = CommandBufferInfo::kInvalidTimeStampOffset;
-            cmd.second.end_timestamp_offset = CommandBufferInfo::kInvalidTimeStampOffset;
-            cmd.second.Reset();
+            RemoveCmdFromFrameCache(cmd.first);
         }
     }
     return GPUTime::GpuTimeStatus();
@@ -752,6 +749,21 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
     return GPUTime::GpuTimeStatus();
 }
 
+void GPUTime::RemoveCmdFromFrameCache(VkCommandBuffer cmd)
+{
+    // Free any slots that were used for render pass timings within this command buffer
+    m_timestamp_allocator.FreeSlots(m_cmds[cmd].renderpass_slots);
+    m_cmds[cmd].renderpass_slots.clear();
+    m_cmds[cmd].Reset();
+
+    auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
+    if (it != m_frame_cmds.end())
+    {
+        auto& vec = m_frame_cmds;
+        vec.erase(std::remove(vec.begin(), vec.end(), cmd), vec.end());
+    }
+}
+
 GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_count,
                                              const VkSubmitInfo*       submits_ptr,
                                              PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
@@ -798,20 +810,11 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_co
                 }
 
                 // Check the case where the same primary cmd buffer is reused within a frame
-                // TODO(wangra):
-                // it seems that the OS is inserting the same empty cmd for left and right eye
-                // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
-                // This in theory should trigger a validation error, but not in this case
-                // For now we keep both in the frame cache m_frame_cmds, since it is easier for vk
-                // correlation (but the gput time will be equal to the last cmd that is being
-                // submitted) This does not affect timing since it is empty, but needs some further
-                // investigation.
-                /*auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
+                auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
                 if (it == m_frame_cmds.end())
                 {
                     m_frame_cmds.push_back(cmd);
-                }*/
-                m_frame_cmds.push_back(cmd);
+                }
             }
         }
     }
@@ -937,3 +940,8 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer         comm
 }
 
 }  // namespace Dive
+
+void Dive::GPUTime::ClearFrameCache()
+{
+    m_frame_cmds.clear();
+}

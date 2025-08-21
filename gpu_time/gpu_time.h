@@ -169,7 +169,7 @@ private:
     {
     public:
         static constexpr uint32_t kSlotsPerBlock = 64;
-        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * 4;
+        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * 16;
         static constexpr uint32_t kNumBlocks = kTotalSlots / kSlotsPerBlock;
         static constexpr uint32_t kInvalidIndex = static_cast<uint32_t>(-1);
         static constexpr uint32_t kFrameMetricsLimit = 1000;
@@ -205,6 +205,8 @@ private:
 
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
 
+    // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
+    uint64_t     m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];
     FrameMetrics m_metrics;
 
     std::set<VkQueue>                                      m_queues;

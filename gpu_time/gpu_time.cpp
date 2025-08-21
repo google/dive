@@ -25,6 +25,8 @@ limitations under the License.
 #include <sstream>
 #include <cstring>
 #include <optional>
+#include <thread>
+#include <chrono>
 
 namespace Dive
 {
@@ -536,14 +538,6 @@ GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer         comma
 GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
 PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
 {
-    // Get the timestamp results
-    // *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
-    uint64_t timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];
-
-    // VK_QUERY_RESULT_PARTIAL_BIT is used instead of VK_QUERY_RESULT_WAIT_BIT since some of the
-    // timestamps may not be finished. we have some pre-recorded cmds that may not be replayed, but
-    // the counter slot is reserved. VK_QUERY_RESULT_WITH_AVAILABILITY_BIT is used so that we can
-    // check for individual ones to make sure the value is valid
 
     constexpr size_t data_per_query = sizeof(uint64_t);          // For the result itself
     constexpr size_t availability_per_query = sizeof(uint64_t);  // For the availability status
@@ -556,18 +550,115 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
                                                  0,
                                                  TimeStampSlotAllocator::kTotalSlots,
                                                  data_size,
-                                                 timestamps_with_availability,
+                                                 m_timestamps_with_availability,
                                                  stride,
                                                  VK_QUERY_RESULT_64_BIT |
-                                                 VK_QUERY_RESULT_PARTIAL_BIT |
                                                  VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
 
     if (result != VK_SUCCESS)
     {
-        m_valid_frame = false;
-        return GPUTime::GpuTimeStatus{ "vkGetQueryPoolResults failed with VkResult: " +
-                                       std::to_string(static_cast<int>(result)),
-                                       false };
+        if (result == VK_NOT_READY)
+        {
+            // Make sure all timestamps are available
+            // vkDeviceWaitIdle is used to force gpu to finish all tasks
+            // But there is still a delay on the data being transfered from register to mem
+            // Some timestamp might still not be available even after vkDeviceWaitIdle is called
+            // result could also be VK_NOT_READY since we have a ring buffer to keep all timestamps
+            // We allocate slot to all allocated cmd buffers, and it is possible that some cmds
+            // are allocated but never submitted in current frame
+            constexpr uint32_t kMaxQueryCount = 5;
+            uint32_t           query_count = 0;
+            bool               all_timestamp_available = true;
+            do
+            {
+                all_timestamp_available = true;
+                for (const auto& cmd : m_frame_cmds)
+                {
+                    // cmd may not be in the m_cmds when some cmds got deleted before submitting the
+                    // frame boundary cmd
+                    if (m_cmds.find(cmd) != m_cmds.end())
+                    {
+                        const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
+                        const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
+                        uint64_t
+                        availability_end = m_timestamps_with_availability[end_timestamp_offset * 2 +
+                                                                          1];
+                        uint64_t availability_begin = m_timestamps_with_availability
+                        [begin_timestamp_offset * 2 + 1];
+
+                        if ((availability_begin == 0) || (availability_end == 0))
+                        {
+                            all_timestamp_available = false;
+                            // sleep for 1sec and hope the result would be available
+                            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                            result =
+                            pfn_get_query_pool_results(m_device,
+                                                       m_query_pool,
+                                                       0,
+                                                       TimeStampSlotAllocator::kTotalSlots,
+                                                       data_size,
+                                                       m_timestamps_with_availability,
+                                                       stride,
+                                                       VK_QUERY_RESULT_64_BIT |
+                                                       VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+                            ++query_count;
+                            break;
+                        }
+                    }
+                }
+            } while (!all_timestamp_available && query_count < kMaxQueryCount);
+
+            if (!all_timestamp_available && query_count >= kMaxQueryCount)
+            {
+                m_valid_frame = false;
+                // Keep only 4 digits since there seems to be a limit amount of chars we could
+                // output
+                auto ToHexString = [](VkCommandBuffer cmd) -> std::string {
+                    std::stringstream ss;
+                    ss << std::hex << std::setw(4) << std::setfill('0')
+                       << (reinterpret_cast<uintptr_t>(cmd) & 0xFFFF);
+                    return ss.str();
+                };
+
+                std::stringstream ss;
+                ss << std::to_string(m_frame_cmds.size()) << " cmds:" << std::endl;
+                size_t cmd_index = 0;
+                for (const auto& cmd : m_frame_cmds)
+                {
+                    const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
+                    const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
+
+                    uint64_t
+                    availability_end = m_timestamps_with_availability[end_timestamp_offset * 2 + 1];
+                    uint64_t
+                    availability_begin = m_timestamps_with_availability[begin_timestamp_offset * 2 +
+                                                                        1];
+                    ss << std::to_string(cmd_index);
+                    if ((availability_begin == 0) || (availability_end == 0))
+                    {
+                        ss << "_NA: ";
+                    }
+                    else
+                    {
+                        ss << "_A : ";
+                    }
+
+                    ss << "0x" << ToHexString(cmd) << " : S"
+                       << std::to_string(static_cast<uint32_t>(begin_timestamp_offset)) << " : E"
+                       << std::to_string(static_cast<uint32_t>(end_timestamp_offset)) << std::endl;
+                    ++cmd_index;
+                }
+
+                return GPUTime::GpuTimeStatus{ ss.str(), false };
+            }
+        }
+        else
+        {
+            m_valid_frame = false;
+            return GPUTime::GpuTimeStatus{ "vkGetQueryPoolResults failed with VkResult: " +
+                                           std::to_string(static_cast<int>(result)),
+                                           false };
+        }
     }
 
     double              frame_time = 0.0;
@@ -609,7 +700,7 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
 
             auto elapsed_time_in_ms = GetTimeDuration(begin_timestamp_offset,
                                                       end_timestamp_offset,
-                                                      timestamps_with_availability);
+                                                      m_timestamps_with_availability);
 
             if (!elapsed_time_in_ms)
             {
@@ -636,7 +727,7 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
                 auto
                 renderpass_elapsed_time_in_ms = GetTimeDuration(renderpass_begin_timestamp_offset,
                                                                 renderpass_end_timestamp_offset,
-                                                                timestamps_with_availability);
+                                                                m_timestamps_with_availability);
 
                 if (!renderpass_elapsed_time_in_ms)
                 {
@@ -678,10 +769,10 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_co
     {
         for (uint32_t i = 0; i < submit_count; i++)
         {
-            uint32_t num_command_buffers = submits_ptr->commandBufferCount;
+            uint32_t num_command_buffers = submits_ptr[i].commandBufferCount;
             for (uint32_t c = 0; c < num_command_buffers; ++c)
             {
-                const auto& cmd = submits_ptr->pCommandBuffers[c];
+                const auto& cmd = submits_ptr[i].pCommandBuffers[c];
                 if (m_cmds.find(cmd) == m_cmds.end())
                 {
                     // We do not submit secondary command buffer

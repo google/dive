@@ -26,7 +26,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "capture_data.h"
+#include "pm4_capture_data.h"
 #include "capture_event_info.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
@@ -41,7 +41,7 @@ namespace Dive
 {
 
 // Forward declarations
-class CaptureData;
+class Pm4CaptureData;
 class GFRData;
 class MemoryManager;
 class SubmitInfo;
@@ -126,6 +126,7 @@ protected:
 private:
     friend class CommandHierarchy;
     friend class GfxrVulkanCommandHierarchyCreator;
+    friend class DiveCommandHierarchyCreator;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -155,19 +156,20 @@ public:
 private:
     friend class CommandHierarchy;
     friend class CommandHierarchyCreator;
+    friend class DiveCommandHierarchyCreator;
 
     // List of all children for shared nodes.
 
-    // m_shared_children_list contains the node_indexes of all the "shared" children throughout the
-    // entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
+    // m_shared_children_indices contains the node_indexes of all the "shared" children throughout
+    // the entire command hierarchy for a specific TopologyType. Similar to m_children_list, it's a
     // flat, concatenated list of all nodes that are designated as "shared children". These are
     // typically kPacketNodes that can logically appear under multiple different parent nodes or
-    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_list to
-    // define the range of shared children belonging to a particular node.
-    DiveVector<uint64_t> m_shared_children_list;
+    // contexts. The m_node_shared_children vector, similarly points into m_shared_children_indices
+    // to define the range of shared children belonging to a particular node.
+    DiveVector<uint64_t> m_shared_children_indices;
 
-    // This vector points into the m_shared_children_list to define the range of shared children for
-    // a particular node.
+    // This vector points into the m_shared_children_indices to define the range of shared children
+    // for a particular node.
     DiveVector<ChildrenInfo> m_node_shared_children;
 
     // For each non-root node, indicate where the shared children start/end are, and
@@ -310,6 +312,7 @@ public:
 private:
     friend class CommandHierarchyCreator;
     friend class GfxrVulkanCommandHierarchyCreator;
+    friend class DiveCommandHierarchyCreator;
 
     enum TopologyType
     {
@@ -416,13 +419,22 @@ private:
 class CommandHierarchyCreator : public EmulateCallbacksBase
 {
 public:
-    CommandHierarchyCreator(CommandHierarchy &command_hierarchy, const CaptureData &capture_data);
+    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+                            const Pm4CaptureData &capture_data);
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
     // Optional: Passing a reserve_size will allow the creator to pre-reserve the memory needed and
     // potentially speed up the creation
     bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
+
+    bool CreateTrees(const Pm4CaptureData   &capture_data,
+                     bool                    flatten_chain_nodes,
+                     std::optional<uint64_t> reserve_size);
+
+    bool CreateTrees(bool                    flatten_chain_nodes,
+                     bool                    createTopologies,
+                     std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
     bool CreateTrees(EngineType             engine_type,
@@ -445,6 +457,31 @@ public:
                           uint64_t              va_addr,
                           Pm4Header             header) override;
 
+    void CreateTopologies();
+
+    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+
+    const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type, size_t sub_index) const
+    {
+        return m_node_children[type][sub_index];
+    }
+
+    const DiveVector<uint64_t> &GetNodeStartSharedChildren(uint64_t type) const
+    {
+        return m_node_start_shared_children[type];
+    }
+
+    const DiveVector<uint64_t> &GetNodeEndSharedChildren(uint64_t type) const
+    {
+        return m_node_end_shared_children[type];
+    }
+
+    const DiveVector<uint64_t> &GetNodeRootNodeIndices(uint64_t type) const
+    {
+        return m_node_root_node_indices[type];
+    }
+
 private:
     union Type3Ordinal2
     {
@@ -457,14 +494,20 @@ private:
         uint32_t ordinal2;
     };
 
-    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
-    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
-    uint64_t     AddPacketNode(const IMemoryManager &mem_manager,
-                               uint32_t              submit_index,
-                               uint64_t              va_addr,
-                               bool                  is_ce_packet,
-                               Pm4Header             header);
-    uint64_t     AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
+    // The type of child nodes.
+    enum ChildrenNodeType
+    {
+        kSingleParentNodeChildren,
+        kSharedNodeChildren,
+        kChildrenNodeTypeCount
+    };
+
+    uint64_t AddPacketNode(const IMemoryManager &mem_manager,
+                           uint32_t              submit_index,
+                           uint64_t              va_addr,
+                           bool                  is_ce_packet,
+                           Pm4Header             header);
+    uint64_t AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
 
     bool IsBeginDebugMarkerNode(uint64_t node_index);
 
@@ -555,7 +598,6 @@ private:
                                uint64_t                       node_index,
                                uint64_t                       child_index) const;
     uint64_t GetChildCount(CommandHierarchy::TopologyType type, uint64_t node_index) const;
-    void     CreateTopologies();
 
     bool EventNodeHelper(uint64_t node_index, std::function<bool(uint32_t)> callback) const;
 
@@ -573,8 +615,8 @@ private:
         uint64_t m_group_addr;
     };
 
-    CommandHierarchy  &m_command_hierarchy;  // Reference to class being created
-    const CaptureData &m_capture_data;
+    CommandHierarchy     &m_command_hierarchy;  // Reference to class being created
+    const Pm4CaptureData &m_capture_data;
 
     // Parsing State
     DiveVector<uint64_t>
@@ -627,15 +669,16 @@ private:
     bool m_flatten_chain_nodes = false;
 
     // Range of shared children associated with each non-top-level node, per topology
-    DiveVector<uint64_t> m_node_start_shared_child[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_end_shared_child[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t> m_node_root_node_index[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_start_shared_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_end_shared_children[CommandHierarchy::kTopologyTypeCount];
+    DiveVector<uint64_t> m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
 
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
     // There are 2 sets of children per node, per topology. The second set of children nodes can
     // have more than 1 parent each
-    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount][2];
+    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount]
+                                                    [kChildrenNodeTypeCount];
 };
 
 }  // namespace Dive

@@ -441,7 +441,7 @@ int main(int argc, char **argv)
 
     // Load capture
     std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
-    Dive::CaptureData::LoadResult   load_res = data_core->LoadCaptureData(input_file_name);
+    Dive::CaptureData::LoadResult   load_res = data_core->LoadPm4CaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cout << "Loading capture \"" << input_file_name << "\" failed!";
@@ -450,7 +450,7 @@ int main(int argc, char **argv)
     std::cout << "Capture file \"" << input_file_name << "\" is loaded!\n";
 
     // Create meta data
-    if (!data_core->CreateMetaData())
+    if (!data_core->CreatePm4MetaData())
     {
         std::cout << "Failed to create meta data!";
         return 0;

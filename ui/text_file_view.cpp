@@ -76,7 +76,7 @@ static std::string ToHexDump(const char *s, size_t size)
 class TextFileWidgetItem : public QTreeWidgetItem
 {
 public:
-    typedef decltype(std::declval<Dive::CaptureData>().GetNumText()) IndexType;
+    typedef decltype(std::declval<Dive::Pm4CaptureData>().GetNumText()) IndexType;
 
     TextFileWidgetItem(std::string name, IndexType index, QTreeWidget *view) :
         QTreeWidgetItem(view),
@@ -125,7 +125,7 @@ TextFileView::TextFileView(const Dive::DataCore &data_core) :
 void TextFileView::OnFileLoaded()
 {
     Reset();
-    const auto &capture = m_data_core.GetCaptureData();
+    const auto &capture = m_data_core.GetPm4CaptureData();
 
     if (!capture.GetRegisterInfo().GetRegisters().empty())
     {
@@ -177,7 +177,7 @@ void TextFileView::OnFileSelectionChanged()
     const TextFileWidgetItem *item_ptr = static_cast<const TextFileWidgetItem *>(
     m_text_list->currentItem());
 
-    const auto &capture = m_data_core.GetCaptureData();
+    const auto &capture = m_data_core.GetPm4CaptureData();
     std::string text_data;
     if (item_ptr->GetIndex() < capture.GetNumText())
     {

@@ -80,6 +80,7 @@ public:
     absl::Status CleanupPackage(const std::string &package);
     void         EnableGfxr(bool enable_gfxr);
     bool         IsProcessRunning(absl::string_view process_name) const;
+    bool         FileExists(const std::string &file_path);
 
     enum class PackageListOptions
     {

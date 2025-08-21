@@ -67,14 +67,12 @@ bool DataCore::CreateDiveCommandHierarchy()
     uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
     // Command hierarchy tree creation
-    CommandHierarchyCreator           pm4_cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                                 m_pm4_capture_data);
-    GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
-                                                     m_gfxr_capture_data);
-    DiveCommandHierarchyCreator       cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                                 vk_cmd_creator,
-                                                 pm4_cmd_hier_creator);
-    if (!cmd_hier_creator.CreateTrees(m_dive_capture_data, true, reserve_size))
+
+    DiveCommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy);
+    if (!cmd_hier_creator.CreateTrees(m_capture_metadata.m_command_hierarchy,
+                                      m_dive_capture_data,
+                                      true,
+                                      reserve_size))
     {
         return false;
     }

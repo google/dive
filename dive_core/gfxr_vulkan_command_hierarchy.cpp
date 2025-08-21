@@ -21,8 +21,8 @@ namespace Dive
 // GfxrVulkanCommandHierarchyCreator
 // =================================================================================================
 GfxrVulkanCommandHierarchyCreator::GfxrVulkanCommandHierarchyCreator(
-CommandHierarchy &command_hierarchy,
-GfxrCaptureData  &capture_data) :
+CommandHierarchy      &command_hierarchy,
+const GfxrCaptureData &capture_data) :
     m_command_hierarchy(command_hierarchy),
     m_capture_data(capture_data)
 {

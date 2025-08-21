@@ -26,8 +26,8 @@ namespace Dive
 class GfxrVulkanCommandHierarchyCreator
 {
 public:
-    GfxrVulkanCommandHierarchyCreator(CommandHierarchy &command_hierarchy,
-                                      GfxrCaptureData  &capture_data);
+    GfxrVulkanCommandHierarchyCreator(CommandHierarchy      &command_hierarchy,
+                                      const GfxrCaptureData &capture_data);
 
     bool CreateTrees(bool used_in_mixed_command_hierarchy = false);
     bool ProcessGfxrSubmits(
@@ -60,10 +60,10 @@ private:
                       uint64_t                       node_index,
                       uint64_t                       child_node_index);
 
-    uint64_t          m_cur_submit_node_index = 0;
-    uint64_t          m_cur_command_buffer_node_index = 0;
-    CommandHierarchy &m_command_hierarchy;
-    GfxrCaptureData  &m_capture_data;
+    uint64_t               m_cur_submit_node_index = 0;
+    uint64_t               m_cur_command_buffer_node_index = 0;
+    CommandHierarchy      &m_command_hierarchy;
+    const GfxrCaptureData &m_capture_data;
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
     DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount];

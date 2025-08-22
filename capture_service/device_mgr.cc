@@ -79,7 +79,12 @@ absl::Status AndroidDevice::Init()
     {
         m_original_state.m_is_root_shell = (*res == "root");
     }
-
+    res = Adb().RunAndGetResult("shell getprop ro.hardware.vulkan");
+    if (res.ok())
+    {
+        m_dev_info.m_is_adreno_gpu = (*res == "adreno");
+    }
+    LOGD("is_adreno_gpu: %d\n", m_dev_info.m_is_adreno_gpu);
     return absl::OkStatus();
 }
 
@@ -498,6 +503,10 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
     // Enable pm4 capture
     if (dump_pm4)
     {
+        if (!m_device->IsAdrenoGpu())
+        {
+            return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
+        }
         std::string enable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 1",
                                                           kEnableReplayPm4DumpPropertyName);
         m_device->Adb().Run(enable_pm4_dump_cmd).IgnoreError();
@@ -571,6 +580,11 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
                                                  const std::vector<std::string> &metrics,
                                                  const std::string              &download_path)
 {
+    if (!m_device->IsAdrenoGpu())
+    {
+        return absl::UnimplementedError("Dump perf counter is only implemented for Adreno GPU");
+    }
+
     LOGD("RunProfilingOnReplay(): starting\n");
 
     // Deploy libraries and binaries

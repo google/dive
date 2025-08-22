@@ -170,8 +170,8 @@ private:
     {
     public:
         static constexpr uint32_t kSlotsPerBlock = 64;
-        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * 16;
-        static constexpr uint32_t kNumBlocks = kTotalSlots / kSlotsPerBlock;
+        static constexpr uint32_t kNumBlocks = 16;
+        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * kNumBlocks;
         static constexpr uint32_t kInvalidIndex = static_cast<uint32_t>(-1);
         static constexpr uint32_t kFrameMetricsLimit = 1000;
 

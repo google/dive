@@ -563,6 +563,8 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
             // result could also be VK_NOT_READY since we have a ring buffer to keep all timestamps
             // We allocate slot to all allocated cmd buffers, and it is possible that some cmds
             // are allocated but never submitted in current frame
+            // Since we dont know how much the delay is, use kMaxQueryCount to wait for 5 frames to
+            // make sure all results are transfered back to mem
             constexpr uint32_t kMaxQueryCount = 5;
             uint32_t           query_count = 0;
             bool               all_timestamp_available = true;
@@ -586,8 +588,9 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
                         if ((availability_begin == 0) || (availability_end == 0))
                         {
                             all_timestamp_available = false;
-                            // sleep for 1sec and hope the result would be available
-                            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                            // sleep for 14ms (assume 72fps, so ~14ms per frame)
+                            // and hope the result would be available
+                            std::this_thread::sleep_for(std::chrono::milliseconds(14));
                             result =
                             pfn_get_query_pool_results(m_device,
                                                        m_query_pool,
@@ -608,8 +611,8 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
             if (!all_timestamp_available && query_count >= kMaxQueryCount)
             {
                 m_valid_frame = false;
-                // Keep only 4 digits since there seems to be a limit amount of chars we could
-                // output
+                // Keep only the last 4 digits of each handle since there seems to be a limit amount
+                // of chars logcat could output
                 auto ToHexString = [](VkCommandBuffer cmd) -> std::string {
                     std::stringstream ss;
                     ss << std::hex << std::setw(4) << std::setfill('0')
@@ -755,13 +758,8 @@ void GPUTime::RemoveCmdFromFrameCache(VkCommandBuffer cmd)
     m_timestamp_allocator.FreeSlots(m_cmds[cmd].renderpass_slots);
     m_cmds[cmd].renderpass_slots.clear();
     m_cmds[cmd].Reset();
-
-    auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
-    if (it != m_frame_cmds.end())
-    {
-        auto& vec = m_frame_cmds;
-        vec.erase(std::remove(vec.begin(), vec.end(), cmd), vec.end());
-    }
+    auto& vec = m_frame_cmds;
+    vec.erase(std::remove(vec.begin(), vec.end(), cmd), vec.end());
 }
 
 GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_count,
@@ -939,9 +937,9 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer         comm
     return GPUTime::GpuTimeStatus();
 }
 
-}  // namespace Dive
-
 void Dive::GPUTime::ClearFrameCache()
 {
     m_frame_cmds.clear();
 }
+
+}  // namespace Dive

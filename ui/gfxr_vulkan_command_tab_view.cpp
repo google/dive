@@ -18,6 +18,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -28,6 +29,7 @@
 #include "gfxr_vulkan_command_arguments_filter_proxy_model.h"
 #include "search_bar.h"
 #include "shortcuts.h"
+#include "gfxr_vulkan_command_filter.h"
 
 #include "object_names.h"
 
@@ -47,11 +49,18 @@ QWidget                           *parent) :
     m_command_hierarchy_view->setModel(&m_proxy_Model);
     m_command_hierarchy_view->setContextMenuPolicy(Qt::CustomContextMenu);
 
+    QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
+    m_gfxr_vulkan_command_filter = new GfxrVulkanCommandFilter(*m_command_hierarchy_view,
+                                                               m_proxy_Model);
+    m_gfxr_vulkan_command_filter->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
     m_search_trigger_button = new QPushButton;
     m_search_trigger_button->setObjectName(kGfxrVulkanCommandSearchButtonName);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
     QHBoxLayout *options_layout = new QHBoxLayout();
+    options_layout->addWidget(filter_combo_box_label);
+    options_layout->addWidget(m_gfxr_vulkan_command_filter, 1);
     options_layout->addWidget(m_search_trigger_button);
     options_layout->addStretch();
 
@@ -93,6 +102,9 @@ void GfxrVulkanCommandTabView::SetTopologyToView(const Dive::Topology *topology_
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandTabView::ResetModel()
 {
+    // Reset the filter
+    m_gfxr_vulkan_command_filter->Reset();
+
     m_command_hierarchy_model.Reset();
 
     // Reset search results

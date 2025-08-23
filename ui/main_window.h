@@ -62,6 +62,7 @@ class TextFileView;
 class TraceDialog;
 class TreeViewComboBox;
 class AnalyzeDialog;
+class GfxrVulkanCommandFilter;
 
 enum class EventMode;
 
@@ -195,6 +196,7 @@ private:
 
     TreeViewComboBox                  *m_view_mode_combo_box;
     TreeViewComboBox                  *m_filter_mode_combo_box;
+    GfxrVulkanCommandFilter           *m_filter_gfxr_commands_combo_box;
     QPushButton                       *m_prev_event_button;
     QPushButton                       *m_next_event_button;
     QList<QPushButton *>               m_expand_to_lvl_buttons;

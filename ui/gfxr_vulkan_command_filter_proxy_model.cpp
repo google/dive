@@ -21,6 +21,22 @@ const Dive::CommandHierarchy *command_hierarchy) :
 {
 }
 
+void GfxrVulkanCommandFilterProxyModel::ApplyNewFilterMode(FilterMode new_mode)
+{
+    // Check if the mode is actually changing to avoid unnecessary resets
+    if (m_filter_mode == new_mode)
+        return;
+
+    beginResetModel();
+    m_filter_mode = new_mode;
+    endResetModel();
+}
+
+void GfxrVulkanCommandFilterProxyModel::SetFilter(FilterMode filter_mode)
+{
+    ApplyNewFilterMode(filter_mode);
+}
+
 bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sourceRow,
                                                          const QModelIndex &sourceParent) const
 {
@@ -55,20 +71,39 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         return true;
     }
 
-    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kGfxrVulkanCommandNode)
+    if (m_filter_mode == kNone)
     {
-        return true;
-    }
+        if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kGfxrVulkanCommandNode)
+        {
+            return true;
+        }
 
-    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kGfxrVulkanCommandArgNode)
-    {
-        return false;
-    }
+        if (m_command_hierarchy->GetNodeType(node_index) ==
+            Dive::NodeType::kGfxrVulkanCommandArgNode)
+        {
+            return false;
+        }
 
-    // Do not include non-gfxr submits and their descendents.
-    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kSubmitNode)
+        // Do not include non-gfxr submits and their descendents.
+        if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kSubmitNode)
+        {
+            return false;
+        }
+    }
+    else if (m_filter_mode == kDrawDispatchOnly)
     {
-        return false;
+        // Only display Draw/Dispatch and RenderPass commands when filter is enabled.
+        if (m_command_hierarchy->GetNodeType(node_index) !=
+            Dive::NodeType::kGfxrVulkanDrawCommandNode &&
+            m_command_hierarchy->GetNodeType(node_index) !=
+            Dive::NodeType::kGfxrVulkanRenderPassCommandNode)
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
     }
 
     return true;

@@ -13,6 +13,8 @@
 
 #include <QComboBox>
 
+#pragma once
+
 // Forward declarations
 class QTreeView;
 

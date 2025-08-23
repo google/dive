@@ -20,6 +20,7 @@
 
 #pragma once
 // Forward declaration
+class QLabel;
 class QGroupBox;
 class QLineEdit;
 class QPushButton;
@@ -28,6 +29,8 @@ class GfxrVulkanCommandFilterProxyModel;
 class GfxrVulkanCommandArgFilterProxyModel;
 class DiveTreeView;
 class GfxrVulkanCommandModel;
+class GfxrVulkanCommandFilter;
+
 namespace Dive
 {
 class CommandHierarchy;
@@ -66,9 +69,10 @@ signals:
     void SelectCommand(const QModelIndex &);
 
 private:
-    DiveTreeView *m_command_hierarchy_view;
-    QPushButton  *m_search_trigger_button;
-    SearchBar    *m_search_bar;
+    DiveTreeView            *m_command_hierarchy_view;
+    QPushButton             *m_search_trigger_button;
+    SearchBar               *m_search_bar;
+    GfxrVulkanCommandFilter *m_gfxr_vulkan_command_filter;
 
     const Dive::CommandHierarchy      &m_vulkan_command_hierarchy;
     GfxrVulkanCommandFilterProxyModel &m_proxy_Model;

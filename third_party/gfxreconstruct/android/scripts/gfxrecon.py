@@ -157,6 +157,9 @@ def CreateReplayParser():
     parser.add_argument('--loop-single-frame', action='store_true', default=False, help='Enables single frame looping.')
     parser.add_argument('--loop-single-frame-count', metavar='N', help='Only used with --loop-single-frame, specifies how many loops after which replay will terminate.')
 
+    # GOOGLE: [enable-gpu-time] Usage message
+    parser.add_argument('--enable-gpu-time', action='store_true', default=False, help='Enable GPU Time measurement on Replay.')
+    
     return parser
 
 def MakeExtrasString(args):
@@ -366,6 +369,7 @@ def MakeExtrasString(args):
 
     if args.screenshot_ignore_FrameBoundaryANDROID:
         arg_list.append('--screenshot-ignore-FrameBoundaryANDROID')
+
     # GOOGLE: [single-frame-looping] Translating flags for the replay library
     if args.loop_single_frame:
         arg_list.append('--loop-single-frame')
@@ -373,6 +377,10 @@ def MakeExtrasString(args):
     if args.loop_single_frame_count:
         arg_list.append('--loop-single-frame-count')
         arg_list.append('{}'.format(args.loop_single_frame_count))
+
+    # GOOGLE: [enable-gpu-time] Translating flags for the replay library
+    if args.enable_gpu_time:
+        arg_list.append('--enable-gpu-time')
 
     if args.file:
         arg_list.append(args.file)

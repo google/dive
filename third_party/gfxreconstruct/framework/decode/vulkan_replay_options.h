@@ -120,6 +120,9 @@ struct VulkanReplayOptions : public ReplayOptions
     // GOOGLE: [single-frame-looping]
     bool     loop_single_frame;
     uint64_t loop_single_frame_count;
+
+    // GOOGLE: [enable-gpu-time]
+    bool enable_gpu_time;
 };
 
 GFXRECON_END_NAMESPACE(decode)

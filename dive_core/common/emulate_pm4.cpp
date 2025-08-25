@@ -22,7 +22,7 @@
 #include "adreno.h"
 #include "common.h"
 #include "dive_capture_format.h"
-#include "dive_core/capture_data.h"
+#include "dive_core/pm4_capture_data.h"
 #include "dive_core/stl_replacement.h"
 #include "emulate_pm4.h"
 #include "memory_manager_base.h"

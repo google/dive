@@ -126,15 +126,16 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
 
 void DiveFileProcessor::StoreBlockInfo()
 {
-    if (!dive_block_data_)
-    {
-        return;
-    }
-
     if (gfxr_file_name_.empty())
     {
         // Assuming that the first time StoreBlockInfo() is called, the active file is .gfxr file
         gfxr_file_name_ = GetActiveFilename();
+        GFXRECON_LOG_INFO("Storing active filename %s", gfxr_file_name_.c_str());
+    }
+
+    if (!dive_block_data_)
+    {
+        return;
     }
 
     int64_t offset = TellFile(gfxr_file_name_);

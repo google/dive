@@ -121,7 +121,7 @@ public:
 
     bool WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data);
 
-    std::vector<std::unique_ptr<SubmitInfo>> getSubmits() { return std::move(m_submits); }
+    std::vector<std::unique_ptr<SubmitInfo>> GetSubmits() { return std::move(m_submits); }
 
 private:
     std::vector<VulkanCommandInfo>

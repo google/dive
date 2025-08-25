@@ -457,6 +457,7 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
         }
         else
         {
+            m_gfxr_vulkan_command_hierarchy_model->SetTopologyToView(&topology);
             m_command_hierarchy_model->SetTopologyToView(&topology);
             m_command_tab_view->SetTopologyToView(&topology);
         }
@@ -464,8 +465,16 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
     else  // All Vulkan Calls + GPU Events
     {
         const Dive::SharedNodeTopology &topology = command_hierarchy.GetAllEventHierarchyTopology();
-        m_command_hierarchy_model->SetTopologyToView(&topology);
-        m_command_tab_view->SetTopologyToView(&topology);
+        if (m_gfxr_capture_loaded)
+        {
+            m_gfxr_vulkan_command_hierarchy_model->SetTopologyToView(&topology);
+        }
+        else
+        {
+            m_gfxr_vulkan_command_hierarchy_model->SetTopologyToView(&topology);
+            m_command_hierarchy_model->SetTopologyToView(&topology);
+            m_command_tab_view->SetTopologyToView(&topology);
+        }
 
         // Put EventID column to the left of the tree. This forces the expand/collapse icon to be
         // part of the 2nd column (originally 1st)
@@ -577,10 +586,112 @@ void MainWindow::ResetTabWidget()
 }
 
 //--------------------------------------------------------------------------------------------------
-// TODO (gcommodore): Separate loading .rd files from loading .dive files so that this function is
-// used purely for loading a .dive file.
-bool MainWindow::LoadDiveFile(const char *file_name)
+// TODO (gcommodore) (b/436646197) : Separate loading .rd files from loading .dive files so that
+// this function is used purely for loading a .dive file or loading a group of files (.gfxr, .rd,
+// and .gfxa).
+bool MainWindow::LoadDiveFile(const std::string &file_name)
 {
+    Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
+    if (load_res != Dive::CaptureData::LoadResult::kSuccess)
+    {
+        HideOverlay();
+        QString error_msg;
+        if (load_res == Dive::CaptureData::LoadResult::kFileIoError)
+            error_msg = QString("File I/O error!");
+        else if (load_res == Dive::CaptureData::LoadResult::kCorruptData)
+            error_msg = QString("File corrupt!");
+        else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
+            error_msg = QString("Incompatible version!");
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
+        return false;
+    }
+
+    // Reset models and views that display data from the capture
+    m_gfxr_vulkan_command_arguments_tab_view->ResetModel();
+    m_gfxr_vulkan_command_hierarchy_model->Reset();
+    m_command_tab_view->ResetModel();
+    m_command_hierarchy_model->Reset();
+    m_event_selection->Reset();
+    m_shader_view->Reset();
+    m_text_file_view->Reset();
+    m_prev_command_view_mode = QString();
+
+    m_command_hierarchy_model->BeginResetModel();
+
+    // Reset the tab widget.
+    ResetTabWidget();
+
+    if (!m_data_core->ParseDiveCaptureData())
+    {
+        HideOverlay();
+        QMessageBox::critical(this,
+                              QString("Error parsing file"),
+                              (QString("Unable to parse file: ") + file_name.c_str()));
+        return false;
+    }
+
+    // Add the tabs required for an Dive file.
+    m_gfxr_vulkan_command_arguments_view_tab_index =
+    m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
+    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Command Buffers");
+    m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
+    m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
+    m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
+
+#if defined(ENABLE_CAPTURE_BUFFERS)
+    // If m_buffer_view is dynamically created/deleted, handle it here.
+    // If it's a fixed member, ensure it's reset.
+    if (!m_buffer_view)
+    {  // Only create if null, otherwise just reset
+        m_buffer_view = new BufferView(*m_data_core);
+    }
+    else
+    {
+        // m_buffer_view->Reset(); // Assuming it has a reset method
+    }
+    m_tab_widget->addTab(m_buffer_view, "Buffers");
+#endif
+
+    m_filter_model->SetMode(DiveFilterModel::kBinningAndFirstTilePass);
+    m_command_hierarchy_view->setModel(m_filter_model);
+
+    m_filter_mode_combo_box->setEnabled(true);
+    m_view_mode_combo_box->setEnabled(true);
+
+    ConnectDiveFileTabs();
+
+    {
+        OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
+        // TODO (b/185579518): disable the dropdown list for vulkan events.
+    }
+    m_command_hierarchy_model->EndResetModel();
+    m_gfxr_vulkan_command_hierarchy_model->EndResetModel();
+
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
+{
+    Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(file_name);
+    if (load_res != Dive::CaptureData::LoadResult::kSuccess)
+    {
+        HideOverlay();
+        QString error_msg;
+        if (load_res == Dive::CaptureData::LoadResult::kFileIoError)
+            error_msg = QString("File I/O error!");
+        else if (load_res == Dive::CaptureData::LoadResult::kCorruptData)
+            error_msg = QString("File corrupt!");
+        else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
+            error_msg = QString("Incompatible version!");
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
+        return false;
+    }
+
     // Reset models and views that display data from the capture
     m_command_tab_view->ResetModel();
     m_command_hierarchy_model->Reset();
@@ -594,16 +705,16 @@ bool MainWindow::LoadDiveFile(const char *file_name)
     // Reset the tab widget.
     ResetTabWidget();
 
-    if (!m_data_core->ParseCaptureData(m_gfxr_capture_loaded))
+    if (!m_data_core->ParsePm4CaptureData())
     {
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name));
+                              (QString("Unable to parse file: ") + file_name.c_str()));
         return false;
     }
 
-    // Add the tabs required for an Dive/AdrenoRd file.
+    // Add the tabs required for an AdrenoRd file.
     m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
     m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Command Buffers");
     m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
@@ -640,8 +751,25 @@ bool MainWindow::LoadDiveFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadGfxrFile(const char *file_name)
+bool MainWindow::LoadGfxrFile(const std::string &file_name)
 {
+    Dive::CaptureData::LoadResult load_res = m_data_core->LoadGfxrCaptureData(file_name);
+    if (load_res != Dive::CaptureData::LoadResult::kSuccess)
+    {
+        HideOverlay();
+        QString error_msg;
+        if (load_res == Dive::CaptureData::LoadResult::kFileIoError)
+            error_msg = QString("File I/O error!");
+        else if (load_res == Dive::CaptureData::LoadResult::kCorruptData)
+            error_msg = QString("File corrupt!");
+        else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
+            error_msg = QString("Incompatible version!");
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
+        return false;
+    }
+
     // Reset models and views that display data from the capture
     m_gfxr_vulkan_command_hierarchy_model->Reset();
     m_prev_command_view_mode = QString();
@@ -651,12 +779,12 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
     // Reset the tab widget.
     ResetTabWidget();
 
-    if (!m_data_core->ParseCaptureData(m_gfxr_capture_loaded))
+    if (!m_data_core->ParseGfxrCaptureData())
     {
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name));
+                              (QString("Unable to parse file: ") + file_name.c_str()));
         return false;
     }
 
@@ -670,8 +798,8 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
     m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
     m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
 
-    // Ensure the submit topology is displayed.
-    m_view_mode_combo_box->currentTextChanged("Submit");
+    // Ensure the All Event topology is displayed.
+    m_view_mode_combo_box->currentTextChanged(kViewModeStrings[1]);
     // Disable the Mode and Filter combo boxes.
     m_view_mode_combo_box->setEnabled(false);
     m_filter_mode_combo_box->setEnabled(false);
@@ -682,7 +810,8 @@ bool MainWindow::LoadGfxrFile(const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
+// TODO (gcommodore) (b/436646197): Support loading multiple files
+bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
 {
     // Check the file type to determine what is loaded.
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
@@ -715,7 +844,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
         if (!asset_file_exists)
         {
             HideOverlay();
-            QString title = QString("Unable to open file: %1").arg(file_name);
+            QString title = QString("Unable to open file: %1").arg(file_name.c_str());
             QString description = QString("Required .gfxa file: %1 not found!")
                                   .arg(QString::fromStdString(asset_file_path.string()));
             QMessageBox::critical(this, title, description);
@@ -731,21 +860,6 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
 
     m_command_hierarchy_view->setCurrentIndex(QModelIndex());
 
-    Dive::CaptureData::LoadResult load_res = m_data_core->LoadCaptureData(file_name);
-    if (load_res != Dive::CaptureData::LoadResult::kSuccess)
-    {
-        HideOverlay();
-        QString error_msg;
-        if (load_res == Dive::CaptureData::LoadResult::kFileIoError)
-            error_msg = QString("File I/O error!");
-        else if (load_res == Dive::CaptureData::LoadResult::kCorruptData)
-            error_msg = QString("File corrupt!");
-        else if (load_res == Dive::CaptureData::LoadResult::kVersionError)
-            error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
-        return false;
-    }
-
     // Disconnect the signals for all of the possible tabs.
     DisconnectAllTabs();
 
@@ -753,21 +867,28 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
     {
         file_loaded = LoadGfxrFile(file_name);
     }
-    else if (file_extension.compare(".dive") == 0 || file_extension.compare(".rd") == 0)
+    else if (file_extension.compare(".dive") == 0)
     {
-        file_loaded = LoadDiveFile(file_name);
+
+        file_loaded = LoadAdrenoRdFile(file_name);
+    }
+    else if (file_extension.compare(".rd") == 0)
+    {
+        file_loaded = LoadAdrenoRdFile(file_name);
     }
     else
     {
         HideOverlay();
         QString error_msg = QString("File type not supported!");
-        QMessageBox::critical(this, (QString("Unable to open file: ") + file_name), error_msg);
+        QMessageBox::critical(this,
+                              (QString("Unable to open file: ") + file_name.c_str()),
+                              error_msg);
         return false;
     }
 
     ExpandResizeHierarchyView();
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
-    m_capture_file = QString(file_name);
+    m_capture_file = QString(file_name.c_str());
     QFileInfo file_info(m_capture_file);
     SetCurrentFile(m_capture_file, is_temp_file);
     emit SetSaveAsMenuStatus(true);
@@ -794,6 +915,7 @@ bool MainWindow::LoadFile(const char *file_name, bool is_temp_file)
 }
 
 //--------------------------------------------------------------------------------------------------
+// TODO (gcommodore) (b/436646197): Support loading multiple files.
 void MainWindow::OnOpenFile()
 {
     QString supported_files = QStringLiteral(
@@ -1411,7 +1533,7 @@ void MainWindow::UpdateTabAvailability()
 {
     m_overview_tab_view->UpdateTabAvailability();
 
-    bool has_text = m_data_core->GetCaptureData().GetNumText() > 0;
+    bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
     SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, has_text);
 
     SetTabAvailable(m_tab_widget, m_event_state_view_tab_index, true);
@@ -1444,7 +1566,7 @@ void MainWindow::OnFileLoaded()
 {
     UpdateTabAvailability();
 
-    if (m_data_core->GetCaptureData().HasPm4Data())
+    if (m_data_core->GetPm4CaptureData().HasPm4Data())
         m_overview_tab_view->Update(&m_log_record);
 }
 
@@ -1650,9 +1772,45 @@ void MainWindow::DisconnectAllTabs()
 }
 
 //--------------------------------------------------------------------------------------------------
-// TODO (gcommodore): Separate loading .rd files from loading .dive files so that this function is
-// used purely for loading a .dive file.
+// TODO (gcommodore) (b/436646197): Separate loading .rd files from loading .dive files so that this
+// function is used purely for loading a .dive file or loading a group of files (.gfxr, .rd, and
+// .gfxa).
 void MainWindow::ConnectDiveFileTabs()
+{
+    QObject::connect(m_command_hierarchy_view,
+                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
+                     m_command_tab_view,
+                     SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::connect(m_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     this,
+                     SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::connect(m_command_tab_view,
+                     SIGNAL(HideOtherSearchBars()),
+                     this,
+                     SLOT(OnTabViewChange()));
+
+    QObject::connect(this,
+                     SIGNAL(EventSelected(uint64_t)),
+                     m_shader_view,
+                     SLOT(OnEventSelected(uint64_t)));
+
+    QObject::connect(this,
+                     SIGNAL(EventSelected(uint64_t)),
+                     m_event_state_view,
+                     SLOT(OnEventSelected(uint64_t)));
+#if defined(ENABLE_CAPTURE_BUFFERS)
+    QObject::connect(this,
+                     SIGNAL(EventSelected(uint64_t)),
+                     m_buffer_view,
+                     SLOT(OnEventSelected(uint64_t)));
+#endif
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::ConnectAdrenoRdFileTabs()
 {
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),

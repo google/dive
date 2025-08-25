@@ -26,6 +26,7 @@
 #include <string>
 #include "dive_core/common/common.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
+#include "pm4_capture_data.h"
 
 #include "dive_strings.h"
 #include "pm4_info.h"
@@ -153,8 +154,8 @@ uint64_t SharedNodeTopology::GetSharedChildNodeIndex(uint64_t node_index,
     DIVE_ASSERT(node_index < m_node_shared_children.size());
     DIVE_ASSERT(child_index < m_node_shared_children[node_index].m_num_children);
     uint64_t child_list_index = m_node_shared_children[node_index].m_start_index + child_index;
-    DIVE_ASSERT(child_list_index < m_shared_children_list.size());
-    return m_shared_children_list[child_list_index];
+    DIVE_ASSERT(child_list_index < m_shared_children_indices.size());
+    return m_shared_children_indices[child_list_index];
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -194,10 +195,10 @@ void SharedNodeTopology::AddSharedChildren(uint64_t                    node_inde
     DIVE_ASSERT(m_node_shared_children.size() == m_node_parent.size());
     DIVE_ASSERT(m_node_shared_children.size() == m_node_child_index.size());
 
-    // Append to m_shared_children_list
-    uint64_t prev_size = m_shared_children_list.size();
-    m_shared_children_list.resize(m_shared_children_list.size() + children.size());
-    std::copy(children.begin(), children.end(), m_shared_children_list.begin() + prev_size);
+    // Append to m_shared_children_indices
+    uint64_t prev_size = m_shared_children_indices.size();
+    m_shared_children_indices.resize(m_shared_children_indices.size() + children.size());
+    std::copy(children.begin(), children.end(), m_shared_children_indices.begin() + prev_size);
 
     // Set "pointer" to children_list
     DIVE_ASSERT(m_node_shared_children[node_index].m_num_children == 0);
@@ -510,8 +511,8 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, Syn
 // =================================================================================================
 // CommandHierarchyCreator
 // =================================================================================================
-CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy  &command_hierarchy,
-                                                 const CaptureData &capture_data) :
+CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+                                                 const Pm4CaptureData &capture_data) :
     m_command_hierarchy(command_hierarchy),
     m_capture_data(capture_data)
 {
@@ -532,12 +533,12 @@ bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_
     {
         for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
         {
-            m_node_start_shared_child[topology].reserve(*reserve_size);
-            m_node_end_shared_child[topology].reserve(*reserve_size);
-            m_node_root_node_index[topology].reserve(*reserve_size);
+            m_node_start_shared_children[topology].reserve(*reserve_size);
+            m_node_end_shared_children[topology].reserve(*reserve_size);
+            m_node_root_node_indices[topology].reserve(*reserve_size);
 
-            m_node_children[topology][0].reserve(*reserve_size);
-            m_node_children[topology][1].reserve(*reserve_size);
+            m_node_children[topology][kSingleParentNodeChildren].reserve(*reserve_size);
+            m_node_children[topology][kSharedNodeChildren].reserve(*reserve_size);
 
             m_command_hierarchy.m_nodes.m_node_type.reserve(*reserve_size);
             m_command_hierarchy.m_nodes.m_description.reserve(*reserve_size);
@@ -560,6 +561,94 @@ bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_
 
     // Convert the info in m_node_children into CommandHierarchy's topologies
     CreateTopologies();
+
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool CommandHierarchyCreator::CreateTrees(const Pm4CaptureData   &capture_data,
+                                          bool                    flatten_chain_nodes,
+                                          std::optional<uint64_t> reserve_size)
+{
+    // Clear/Reset internal data structures, just in case
+    m_command_hierarchy = CommandHierarchy();
+
+    // Optional: Reserve the internal vectors based on passed-in value. Overguessing means more
+    // memory used during creation, and potentially more memory used while the capture is loaded.
+    // Underguessing means more allocations. For big captures, this is easily in the multi-millions,
+    // so pre-reserving the space is a signficiant performance win
+    if (reserve_size.has_value())
+    {
+        for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
+        {
+            m_node_start_shared_children[topology].reserve(*reserve_size);
+            m_node_end_shared_children[topology].reserve(*reserve_size);
+            m_node_root_node_indices[topology].reserve(*reserve_size);
+
+            m_node_children[topology][kSingleParentNodeChildren].reserve(*reserve_size);
+            m_node_children[topology][kSharedNodeChildren].reserve(*reserve_size);
+
+            m_command_hierarchy.m_nodes.m_node_type.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_description.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_aux_info.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_event_node_indices.reserve(*reserve_size);
+        }
+    }
+
+    // Add a dummy root node for easier management
+    uint64_t root_node_index = AddNode(NodeType::kRootNode, "", 0);
+    DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
+
+    m_num_events = 0;
+    m_flatten_chain_nodes = flatten_chain_nodes;
+
+    if (!ProcessSubmits(capture_data.GetSubmits(), capture_data.GetMemoryManager()))
+    {
+        return false;
+    }
+
+    // Convert the info in m_node_children into CommandHierarchy's topologies
+    CreateTopologies();
+
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_nodes,
+                                          bool                    createTopologies,
+                                          std::optional<uint64_t> reserve_size)
+{
+    // Clear/Reset internal data structures, just in case
+    m_command_hierarchy = CommandHierarchy();
+
+    // Optional: Reserve the internal vectors based on passed-in value. Overguessing means more
+    // memory used during creation, and potentially more memory used while the capture is loaded.
+    // Underguessing means more allocations. For big captures, this is easily in the multi-millions,
+    // so pre-reserving the space is a signficiant performance win
+    if (reserve_size.has_value() && reserve_size > 0)
+    {
+        for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
+        {
+            m_node_start_shared_children[topology].reserve(*reserve_size);
+            m_node_end_shared_children[topology].reserve(*reserve_size);
+            m_node_root_node_indices[topology].reserve(*reserve_size);
+
+            m_node_children[topology][kSingleParentNodeChildren].reserve(*reserve_size);
+            m_node_children[topology][kSharedNodeChildren].reserve(*reserve_size);
+
+            m_command_hierarchy.m_nodes.m_node_type.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_description.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_aux_info.reserve(*reserve_size);
+            m_command_hierarchy.m_nodes.m_event_node_indices.reserve(*reserve_size);
+        }
+    }
+
+    // Add a dummy root node for easier management
+    uint64_t root_node_index = AddNode(NodeType::kRootNode, "", 0);
+    DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
+
+    m_num_events = 0;
+    m_flatten_chain_nodes = flatten_chain_nodes;
 
     return true;
 }
@@ -1165,8 +1254,9 @@ void CommandHierarchyCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInf
 {
     // For the submit topology, the IBs are inserted in emulation order, and are not necessarily in
     // ib-index order. Sort them here so they appear in order of ib-index.
-    DiveVector<uint64_t> &submit_children = m_node_children[CommandHierarchy::kSubmitTopology][0]
-                                                           [m_cur_submit_node_index];
+    DiveVector<uint64_t>
+    &submit_children = m_node_children[CommandHierarchy::kSubmitTopology][kSingleParentNodeChildren]
+                                      [m_cur_submit_node_index];
     std::sort(submit_children.begin(),
               submit_children.end(),
               [&](uint64_t lhs, uint64_t rhs) -> bool {
@@ -1934,7 +2024,8 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
     // Find all the children of the set_draw_state packet, which should contain array indices
     // Using any of the topologies where field nodes are added will work
     uint64_t              index = set_draw_state_node_index;
-    DiveVector<uint64_t> &children = m_node_children[CommandHierarchy::kSubmitTopology][0][index];
+    DiveVector<uint64_t> &children = m_node_children[CommandHierarchy::kSubmitTopology]
+                                                    [kSingleParentNodeChildren][index];
 
     // Obtain the address of each of the children group IBs
     PM4_CP_SET_DRAW_STATE packet;
@@ -1970,16 +2061,18 @@ uint64_t CommandHierarchyCreator::AddNode(NodeType                  type,
     uint64_t node_index = m_command_hierarchy.AddNode(type, std::move(desc), aux_info);
     for (uint32_t i = 0; i < CommandHierarchy::kTopologyTypeCount; ++i)
     {
-        DIVE_ASSERT(m_node_children[i][0].size() == node_index);
-        DIVE_ASSERT(m_node_children[i][1].size() == node_index);
-        m_node_children[i][0].resize(m_node_children[i][0].size() + 1);
-        m_node_children[i][1].resize(m_node_children[i][1].size() + 1);
+        DIVE_ASSERT(m_node_children[i][kSingleParentNodeChildren].size() == node_index);
+        DIVE_ASSERT(m_node_children[i][kSharedNodeChildren].size() == node_index);
+        m_node_children[i][kSingleParentNodeChildren].resize(
+        m_node_children[i][kSingleParentNodeChildren].size() + 1);
+        m_node_children[i][kSharedNodeChildren].resize(
+        m_node_children[i][kSharedNodeChildren].size() + 1);
 
-        m_node_start_shared_child[i].resize(m_node_start_shared_child[i].size() + 1);
-        m_node_end_shared_child[i].resize(m_node_end_shared_child[i].size() + 1);
-        m_node_root_node_index[i].resize(m_node_root_node_index[i].size() + 1);
-        DIVE_ASSERT(m_node_start_shared_child[i].size() == m_node_end_shared_child[i].size());
-        DIVE_ASSERT(m_node_start_shared_child[i].size() == m_node_root_node_index[i].size());
+        m_node_start_shared_children[i].resize(m_node_start_shared_children[i].size() + 1);
+        m_node_end_shared_children[i].resize(m_node_end_shared_children[i].size() + 1);
+        m_node_root_node_indices[i].resize(m_node_root_node_indices[i].size() + 1);
+        DIVE_ASSERT(m_node_start_shared_children[i].size() == m_node_end_shared_children[i].size());
+        DIVE_ASSERT(m_node_start_shared_children[i].size() == m_node_root_node_indices[i].size());
     }
 
     return node_index;
@@ -1998,8 +2091,8 @@ void CommandHierarchyCreator::AddChild(CommandHierarchy::TopologyType type,
 {
     // Store children info into the temporary m_node_children
     // Use this to create the appropriate topology later
-    DIVE_ASSERT(node_index < m_node_children[type][0].size());
-    m_node_children[type][0][node_index].push_back(child_node_index);
+    DIVE_ASSERT(node_index < m_node_children[type][kSingleParentNodeChildren].size());
+    m_node_children[type][kSingleParentNodeChildren][node_index].push_back(child_node_index);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2009,8 +2102,8 @@ void CommandHierarchyCreator::AddSharedChild(CommandHierarchy::TopologyType type
 {
     // Store children info into the temporary m_node_children
     // Use this to create the appropriate topology later
-    DIVE_ASSERT(node_index < m_node_children[type][1].size());
-    m_node_children[type][1][node_index].push_back(child_node_index);
+    DIVE_ASSERT(node_index < m_node_children[type][kSharedNodeChildren].size());
+    m_node_children[type][kSharedNodeChildren][node_index].push_back(child_node_index);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2018,8 +2111,8 @@ void CommandHierarchyCreator::SetStartSharedChildrenNodeIndex(CommandHierarchy::
                                                               uint64_t node_index,
                                                               uint64_t shared_child_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_start_shared_child[type].size());
-    m_node_start_shared_child[type][node_index] = shared_child_node_index;
+    DIVE_ASSERT(node_index < m_node_start_shared_children[type].size());
+    m_node_start_shared_children[type][node_index] = shared_child_node_index;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2027,8 +2120,8 @@ void CommandHierarchyCreator::SetEndSharedChildrenNodeIndex(CommandHierarchy::To
                                                             uint64_t node_index,
                                                             uint64_t shared_child_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_end_shared_child[type].size());
-    m_node_end_shared_child[type][node_index] = shared_child_node_index;
+    DIVE_ASSERT(node_index < m_node_end_shared_children[type].size());
+    m_node_end_shared_children[type][node_index] = shared_child_node_index;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2036,8 +2129,8 @@ void CommandHierarchyCreator::SetSharedChildRootNodeIndex(CommandHierarchy::Topo
                                                           uint64_t                       node_index,
                                                           uint64_t root_node_index)
 {
-    DIVE_ASSERT(node_index < m_node_root_node_index[type].size());
-    m_node_root_node_index[type][node_index] = root_node_index;
+    DIVE_ASSERT(node_index < m_node_root_node_indices[type].size());
+    m_node_root_node_indices[type][node_index] = root_node_index;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2045,17 +2138,17 @@ uint64_t CommandHierarchyCreator::GetChildNodeIndex(CommandHierarchy::TopologyTy
                                                     uint64_t                       node_index,
                                                     uint64_t child_index) const
 {
-    DIVE_ASSERT(node_index < m_node_children[type][0].size());
-    DIVE_ASSERT(child_index < m_node_children[type][0][node_index].size());
-    return m_node_children[type][0][node_index][child_index];
+    DIVE_ASSERT(node_index < m_node_children[type][kSingleParentNodeChildren].size());
+    DIVE_ASSERT(child_index < m_node_children[type][kSingleParentNodeChildren][node_index].size());
+    return m_node_children[type][kSingleParentNodeChildren][node_index][child_index];
 }
 
 //--------------------------------------------------------------------------------------------------
 uint64_t CommandHierarchyCreator::GetChildCount(CommandHierarchy::TopologyType type,
                                                 uint64_t                       node_index) const
 {
-    DIVE_ASSERT(node_index < m_node_children[type][0].size());
-    return m_node_children[type][0][node_index].size();
+    DIVE_ASSERT(node_index < m_node_children[type][kSingleParentNodeChildren].size());
+    return m_node_children[type][kSingleParentNodeChildren][node_index].size();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2067,7 +2160,7 @@ void CommandHierarchyCreator::CreateTopologies()
     // Convert the m_node_children temporary structure into CommandHierarchy's topologies
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
-        size_t              num_nodes = m_node_children[topology][0].size();
+        size_t              num_nodes = m_node_children[topology][kSingleParentNodeChildren].size();
         SharedNodeTopology &cur_topology = m_command_hierarchy.m_topology[topology];
         cur_topology.SetNumNodes(num_nodes);
 
@@ -2079,22 +2172,28 @@ void CommandHierarchyCreator::CreateTopologies()
             for (uint64_t node_index = 0; node_index < num_nodes; ++node_index)
             {
                 auto &node_children = m_node_children[topology];
-                total_num_children[topology] += node_children[0][node_index].size();
+                total_num_children[topology] += node_children[kSingleParentNodeChildren][node_index]
+                                                .size();
                 total_num_shared_children[topology] += node_children[1][node_index].size();
             }
         }
         cur_topology.m_children_list.reserve(total_num_children[topology]);
-        cur_topology.m_shared_children_list.reserve(total_num_shared_children[topology]);
+        cur_topology.m_shared_children_indices.reserve(total_num_shared_children[topology]);
 
         for (uint64_t node_index = 0; node_index < num_nodes; ++node_index)
         {
-            DIVE_ASSERT(m_node_children[topology][0].size() == m_node_children[topology][1].size());
-            cur_topology.AddChildren(node_index, m_node_children[topology][0][node_index]);
-            cur_topology.AddSharedChildren(node_index, m_node_children[topology][1][node_index]);
+            DIVE_ASSERT(m_node_children[topology][kSingleParentNodeChildren].size() ==
+                        m_node_children[topology][kSingleParentNodeChildren].size());
+            cur_topology
+            .AddChildren(node_index,
+                         m_node_children[topology][kSingleParentNodeChildren][node_index]);
+            cur_topology
+            .AddSharedChildren(node_index,
+                               m_node_children[topology][kSharedNodeChildren][node_index]);
         }
-        cur_topology.m_start_shared_child = std::move(m_node_start_shared_child[topology]);
-        cur_topology.m_end_shared_child = std::move(m_node_end_shared_child[topology]);
-        cur_topology.m_root_node_index = std::move(m_node_root_node_index[topology]);
+        cur_topology.m_start_shared_child = std::move(m_node_start_shared_children[topology]);
+        cur_topology.m_end_shared_child = std::move(m_node_end_shared_children[topology]);
+        cur_topology.m_root_node_index = std::move(m_node_root_node_indices[topology]);
     }
 }
 

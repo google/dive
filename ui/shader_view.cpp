@@ -263,7 +263,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
         };
 
         Dive::NodeType node_type = command_hierarchy.GetNodeType(m_node_index);
-        if (node_type == Dive::NodeType::kDrawDispatchBlitNode)
+        if (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
+            node_type == Dive::NodeType::kDrawDispatchNode)
         {
             update_shader_list(m_node_index);
         }
@@ -275,7 +276,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
             {
                 auto           child_node_index = topology.GetChildNodeIndex(m_node_index, i);
                 Dive::NodeType child_node_type = command_hierarchy.GetNodeType(child_node_index);
-                if (child_node_type == Dive::NodeType::kDrawDispatchBlitNode)
+                if (child_node_type == Dive::NodeType::kDrawDispatchBlitNode ||
+                    child_node_type == Dive::NodeType::kDrawDispatchNode)
                 {
                     update_shader_list(child_node_index);
                 }

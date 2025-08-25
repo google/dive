@@ -1013,7 +1013,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             else
             {
                 CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
-                if (event_string.find("Draw") != std::string::npos)
+                if (IsDrawDispatchEventOpcode(opcode))
                 {
                     node_index = AddNode(NodeType::kDrawDispatchNode,
                                          std::move(event_string),

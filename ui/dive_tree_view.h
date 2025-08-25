@@ -54,8 +54,8 @@ public:
     DiveFilterModel(const Dive::CommandHierarchy &command_hierarchy, QObject *parent = nullptr);
     void SetMode(FilterMode filter_mode);
     void CollectGfxrDrawCallIndices(const QModelIndex &parent_index = QModelIndex());
-    std::vector<uint64_t> GetPm4DrawCallIndices() { return pm4_draw_call_indices; }
-    std::vector<uint64_t> GetGfxrDrawCallIndices() { return gfxr_draw_call_indices; }
+    std::vector<uint64_t> GetPm4DrawCallIndices() { return m_pm4_draw_call_indices; }
+    std::vector<uint64_t> GetGfxrDrawCallIndices() { return m_gfxr_draw_call_indices; }
 public slots:
     void applyNewFilterMode(FilterMode new_mode);
 
@@ -65,8 +65,8 @@ protected:
 private:
     const Dive::CommandHierarchy &m_command_hierarchy;
     FilterMode                    m_filter_mode = kNone;
-    mutable std::vector<uint64_t> pm4_draw_call_indices;
-    mutable std::vector<uint64_t> gfxr_draw_call_indices;
+    mutable std::vector<uint64_t> m_pm4_draw_call_indices;
+    mutable std::vector<uint64_t> m_gfxr_draw_call_indices;
 };
 
 //--------------------------------------------------------------------------------------------------

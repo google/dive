@@ -130,7 +130,7 @@ public:
     StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
 
     void ProcessStateEndMarker(uint64_t frame_number) override;
-    
+
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
 
 private:

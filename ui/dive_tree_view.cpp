@@ -54,7 +54,7 @@ void DiveFilterModel::applyNewFilterMode(FilterMode new_mode)
         return;
 
     // Clear the collections of draw call indices
-    pm4_draw_call_indices.clear();
+    m_pm4_draw_call_indices.clear();
 
     beginResetModel();
     m_filter_mode = new_mode;
@@ -73,7 +73,7 @@ void DiveFilterModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index
 {
     if (!parent_index.isValid())
     {
-        gfxr_draw_call_indices.clear();
+        m_gfxr_draw_call_indices.clear();
     }
 
     int row_count = sourceModel()->rowCount(parent_index);
@@ -89,7 +89,7 @@ void DiveFilterModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index
             // If a node is a gfxr draw call, add its index to the list.
             if (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
             {
-                gfxr_draw_call_indices.push_back(node_index);
+                m_gfxr_draw_call_indices.push_back(node_index);
             }
 
             // Only recurse into children if the current node is gfxr submit node.
@@ -150,7 +150,7 @@ bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceP
 
     if (current_node_type == Dive::NodeType::kDrawDispatchNode)
     {
-        pm4_draw_call_indices.push_back(node_index);
+        m_pm4_draw_call_indices.push_back(node_index);
     }
 
     return true;

@@ -530,10 +530,10 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
     if (dump_pm4)
     {
         // Wait application to exit before trying to retrieve the trace file.
-        while (m_device->IsProcessRunning(kGfxrReplayAppName))
+        do
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
+        } while (m_device->IsProcessRunning(kGfxrReplayAppName));
 
         std::string disable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 0",
                                                            kEnableReplayPm4DumpPropertyName);

@@ -511,7 +511,8 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                                           kEnableReplayPm4DumpPropertyName);
         m_device->Adb().Run(enable_pm4_dump_cmd).IgnoreError();
 
-        std::string dump_pm4_file_name = std::filesystem::path(capture_path).filename().string();
+        std::string
+        dump_pm4_file_name = std::filesystem::path(capture_path).filename().stem().string();
         LOGD("Enable pm4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \"%s\"",
                                                                  kReplayPm4DumpFileNamePropertyName,
@@ -548,8 +549,20 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                                            kDeviceCapturePath,
                                                            std::filesystem::path(capture_path)
                                                            .filename()
+                                                           .stem()
                                                            .string()
                                                            .c_str());
+
+        std::string on_device_trace_path_in_progress = absl::StrFormat("%s.inprogress",
+                                                                       on_device_trace_path
+                                                                       .c_str());
+
+        // Wait for trace file to be written to.
+        do
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        } while (m_device->FileExists(on_device_trace_path_in_progress));
+
         auto status = m_device->RetrieveTrace(on_device_trace_path, pm4_capture_download_path);
         if (status.ok())
         {
@@ -677,6 +690,17 @@ bool AndroidDevice::IsProcessRunning(absl::string_view process_name) const
     if (pid.empty())
         return false;
     return true;
+}
+
+bool AndroidDevice::FileExists(const std::string &file_path)
+{
+    // Checks if the file file exists. If the file returns exists, 0 is returned, if not, 1 is
+    // returned.
+    std::string cmd = absl::StrFormat("shell test -e \"%s\"", file_path.c_str());
+
+    absl::StatusOr<std::string> result = Adb().Run(cmd);
+
+    return result.ok();
 }
 
 }  // namespace Dive

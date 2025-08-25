@@ -56,22 +56,33 @@ public:
     AnalyzeDialog(QWidget *parent = 0);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
-    void setSelectedCaptureFile(const QString &filePath);
+    void SetSelectedCaptureFile(const QString &filePath);
 private slots:
     void OnDeviceSelected(const QString &);
     void OnDeviceListRefresh();
     void OnOpenFile();
     void OnReplay();
+    void OnSettingChanged();
 signals:
     void OnNewFileOpened(const QString &file_path);
+    void OnDisplayPerfCounterResults(const QString &file_path);
 
 private:
     void                        ShowErrorMessage(const std::string &message);
+    void                        SetReplayButton(const std::string &message, bool is_enabled);
+    void                        SetReplayDownloadDir();
     void                        PopulateSettings();
     void                        UpdateSelectedSettingsList();
+    void                        UpdatePerfTabView(const std::string remote_file_name);
+    void                        WaitForReplay(Dive::AndroidDevice &device);
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
+    std::string                 GetReplayArgs();
+    absl::Status                Pm4Replay(Dive::DeviceManager &device_manager,
+                                          const std::string   &remote_gfxr_file);
+    absl::Status                PerfCounterReplay(Dive::DeviceManager &device_manager,
+                                                  const std::string   &remote_gfxr_file);
 
     QLabel      *m_settings_list_label;
     QListWidget *m_settings_list;
@@ -93,6 +104,15 @@ private:
     QLineEdit   *m_selected_file_input_box;
     QPushButton *m_open_files_button;
 
+    QHBoxLayout *m_download_directory_layout;
+    QLabel      *m_download_directory_label;
+    QLineEdit   *m_download_directory_input_box;
+
+    QHBoxLayout        *m_dump_pm4_layout;
+    QLabel             *m_dump_pm4_label;
+    QStandardItemModel *m_dump_pm4_model;
+    QComboBox          *m_dump_pm4_box;
+
     QHBoxLayout        *m_gpu_time_layout;
     QLabel             *m_gpu_time_label;
     QStandardItemModel *m_gpu_time_model;
@@ -113,4 +133,12 @@ private:
     std::string                   m_cur_device;
     QString                       m_selected_capture_file_string;
     QVector<CsvItem>             *m_csv_items;
+    std::vector<std::string>     *m_enabled_settings_vector;
+
+    // Used to store a csv item's key in the enabled settings vector.
+    const int         kDataRole = Qt::UserRole + 1;
+    const std::string kDefaultReplayButtonText = "Replay";
+
+    bool m_dump_pm4_enabled;
+    bool m_gpu_time_enabled;
 };

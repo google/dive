@@ -19,7 +19,7 @@ class PerfCounterModel : public QAbstractItemModel
 {
     Q_OBJECT
 public:
-    explicit PerfCounterModel(const QString &filePath, QObject *parent = nullptr);
+    explicit PerfCounterModel(QObject *parent = nullptr);
 
     // QAbstractItemModel interface
     QModelIndex index(int                row,
@@ -40,10 +40,13 @@ public:
     int         GetTotalMatches() const;
     void        ClearSearchResults();
     void        ResetSearchIterator();
-    void        SetIteratorToNearest(const QModelIndex &currentIndex);
+    void        SetIteratorToNearest(const QModelIndex &current_index);
+
+public slots:
+    void OnPerfCounterResultsGenerated(const QString &file_path);
 
 private:
-    void ParseCsv(const QString &filePath);
+    void ParseCsv(const QString &file_path);
 
     QVector<QStringList>               m_csv_data;
     QList<QModelIndex>                 m_search_results;

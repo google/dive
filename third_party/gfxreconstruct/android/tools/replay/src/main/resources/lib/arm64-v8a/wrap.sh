@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# GOOGLE: this script is used for preloading libwrap for PM4 capture
 capture_pm4_enabled=$(getprop debug.dive.replay.capture_pm4)
 
 echo "capture_pm4_enabled is " $capture_pm4_enabled

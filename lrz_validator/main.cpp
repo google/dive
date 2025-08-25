@@ -20,7 +20,7 @@
 #include "dive_core/data_core.h"
 #include "pm4_info.h"
 
-bool ValidataLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
+bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
 {
     size_t                       event_count = meta_data.m_event_info.size();
     const Dive::EventStateInfo  &event_state = meta_data.m_event_state;
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
 
     // Load capture
     std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
-    Dive::CaptureData::LoadResult   load_res = data_core->LoadCaptureData(input_file_name);
+    Dive::CaptureData::LoadResult   load_res = data_core->LoadPm4CaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cout << "Loading capture \"" << input_file_name << "\" failed!";
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
     std::cout << "Capture file \"" << input_file_name << "\" is loaded!\n";
 
     // Create meta data
-    if (!data_core->CreateMetaData())
+    if (!data_core->CreatePm4MetaData())
     {
         std::cout << "Failed to create meta data!";
         return 0;
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
 
     // LRZ Validation
     const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
-    const bool                   lrz_test_passed = ValidataLRZ(meta_data, output_file_name);
+    const bool                   lrz_test_passed = ValidateLRZ(meta_data, output_file_name);
     if (lrz_test_passed)
     {
         std::cout << "[LRZ Pass] LRZ is correctly set for all drawcalls!\n";

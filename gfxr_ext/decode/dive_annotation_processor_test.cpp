@@ -49,7 +49,7 @@ TEST(WriteBlockEndTest, SingleSubmitCreatesOneSubmitWithNoCommands)
                                                              /*block_index=*/1,
                                                              {}));
 
-    auto submits = processor.getSubmits();
+    auto submits = processor.GetSubmits();
     ASSERT_THAT(submits, SizeIs(1));
     EXPECT_THAT(submits[0].get(), SubmitInfoEq("vkQueueSubmit", 0));
     EXPECT_THAT(submits[0]->GetVulkanCommands(), IsEmpty());
@@ -105,7 +105,7 @@ TEST(WriteBlockEndTest, MultipleSubmitsWithCommandsCreatesSubmitsWithCorrectComm
     processor.WriteBlockEnd(cmd_data_7);
     processor.WriteBlockEnd(submit_data_2);
 
-    auto submits = processor.getSubmits();
+    auto submits = processor.GetSubmits();
     ASSERT_THAT(submits, SizeIs(2));
     EXPECT_THAT(submits[0].get(),
                 SubmitInfoEq(submit_data_1.GetFunctionName(), /*expected_command_buffer_count=*/1));

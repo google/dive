@@ -17,7 +17,7 @@
 #include <iostream>
 #include <memory>
 
-#include "dive_core/capture_data.h"
+#include "dive_core/pm4_capture_data.h"
 #include "dive_core/command_hierarchy.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -45,8 +45,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     memstream capture_file(data, size);
 
-    std::unique_ptr<Dive::CaptureData> capture_data_ptr = std::make_unique<Dive::CaptureData>();
-    Dive::CaptureData::LoadResult      result = capture_data_ptr->LoadCaptureFile(capture_file);
+    std::unique_ptr<Dive::Pm4CaptureData>
+                                  capture_data_ptr = std::make_unique<Dive::Pm4CaptureData>();
+    Dive::CaptureData::LoadResult result = capture_data_ptr->LoadCaptureFileStream(capture_file);
 
     if (result != Dive::CaptureData::LoadResult::kSuccess)
     {

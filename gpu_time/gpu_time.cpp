@@ -25,6 +25,8 @@ limitations under the License.
 #include <sstream>
 #include <cstring>
 #include <optional>
+#include <thread>
+#include <chrono>
 
 namespace Dive
 {
@@ -445,6 +447,7 @@ GPUTime::GpuTimeStatus GPUTime::OnFreeCommandBuffers(uint32_t               comm
         }
         m_timestamp_allocator.FreeSlots({ m_cmds[command_buffers_ptr[i]].begin_timestamp_offset,
                                           m_cmds[command_buffers_ptr[i]].end_timestamp_offset });
+        RemoveCmdFromFrameCache(command_buffers_ptr[i]);
         m_cmds.erase(command_buffers_ptr[i]);
     }
     return GPUTime::GpuTimeStatus();
@@ -457,7 +460,7 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandBuffer(VkCommandBuffer command_buf
         // The cache doesn't contain secondary command buffers
         return GPUTime::GpuTimeStatus();
     }
-    m_cmds[command_buffer].Reset();
+    RemoveCmdFromFrameCache(command_buffer);
     return GPUTime::GpuTimeStatus();
 }
 
@@ -467,11 +470,7 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandPool(VkCommandPool command_pool)
     {
         if (cmd.second.pool == command_pool)
         {
-            m_timestamp_allocator.FreeSlots(
-            { cmd.second.begin_timestamp_offset, cmd.second.end_timestamp_offset });
-            cmd.second.begin_timestamp_offset = CommandBufferInfo::kInvalidTimeStampOffset;
-            cmd.second.end_timestamp_offset = CommandBufferInfo::kInvalidTimeStampOffset;
-            cmd.second.Reset();
+            RemoveCmdFromFrameCache(cmd.first);
         }
     }
     return GPUTime::GpuTimeStatus();
@@ -536,14 +535,6 @@ GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer         comma
 GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
 PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
 {
-    // Get the timestamp results
-    // *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
-    uint64_t timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];
-
-    // VK_QUERY_RESULT_PARTIAL_BIT is used instead of VK_QUERY_RESULT_WAIT_BIT since some of the
-    // timestamps may not be finished. we have some pre-recorded cmds that may not be replayed, but
-    // the counter slot is reserved. VK_QUERY_RESULT_WITH_AVAILABILITY_BIT is used so that we can
-    // check for individual ones to make sure the value is valid
 
     constexpr size_t data_per_query = sizeof(uint64_t);          // For the result itself
     constexpr size_t availability_per_query = sizeof(uint64_t);  // For the availability status
@@ -556,18 +547,118 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
                                                  0,
                                                  TimeStampSlotAllocator::kTotalSlots,
                                                  data_size,
-                                                 timestamps_with_availability,
+                                                 m_timestamps_with_availability,
                                                  stride,
                                                  VK_QUERY_RESULT_64_BIT |
-                                                 VK_QUERY_RESULT_PARTIAL_BIT |
                                                  VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
 
     if (result != VK_SUCCESS)
     {
-        m_valid_frame = false;
-        return GPUTime::GpuTimeStatus{ "vkGetQueryPoolResults failed with VkResult: " +
-                                       std::to_string(static_cast<int>(result)),
-                                       false };
+        if (result == VK_NOT_READY)
+        {
+            // Make sure all timestamps are available
+            // vkDeviceWaitIdle is used to force gpu to finish all tasks
+            // But there is still a delay on the data being transfered from register to mem
+            // Some timestamp might still not be available even after vkDeviceWaitIdle is called
+            // result could also be VK_NOT_READY since we have a ring buffer to keep all timestamps
+            // We allocate slot to all allocated cmd buffers, and it is possible that some cmds
+            // are allocated but never submitted in current frame
+            // Since we dont know how much the delay is, use kMaxQueryCount to wait for 5 frames to
+            // make sure all results are transfered back to mem
+            constexpr uint32_t kMaxQueryCount = 5;
+            uint32_t           query_count = 0;
+            bool               all_timestamp_available = true;
+            do
+            {
+                all_timestamp_available = true;
+                for (const auto& cmd : m_frame_cmds)
+                {
+                    // cmd may not be in the m_cmds when some cmds got deleted before submitting the
+                    // frame boundary cmd
+                    if (m_cmds.find(cmd) != m_cmds.end())
+                    {
+                        const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
+                        const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
+                        uint64_t
+                        availability_end = m_timestamps_with_availability[end_timestamp_offset * 2 +
+                                                                          1];
+                        uint64_t availability_begin = m_timestamps_with_availability
+                        [begin_timestamp_offset * 2 + 1];
+
+                        if ((availability_begin == 0) || (availability_end == 0))
+                        {
+                            all_timestamp_available = false;
+                            // sleep for 14ms (assume 72fps, so ~14ms per frame)
+                            // and hope the result would be available
+                            std::this_thread::sleep_for(std::chrono::milliseconds(14));
+                            result =
+                            pfn_get_query_pool_results(m_device,
+                                                       m_query_pool,
+                                                       0,
+                                                       TimeStampSlotAllocator::kTotalSlots,
+                                                       data_size,
+                                                       m_timestamps_with_availability,
+                                                       stride,
+                                                       VK_QUERY_RESULT_64_BIT |
+                                                       VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+                            ++query_count;
+                            break;
+                        }
+                    }
+                }
+            } while (!all_timestamp_available && query_count < kMaxQueryCount);
+
+            if (!all_timestamp_available && query_count >= kMaxQueryCount)
+            {
+                m_valid_frame = false;
+                // Keep only the last 4 digits of each handle since there seems to be a limit amount
+                // of chars logcat could output
+                auto ToHexString = [](VkCommandBuffer cmd) -> std::string {
+                    std::stringstream ss;
+                    ss << std::hex << std::setw(4) << std::setfill('0')
+                       << (reinterpret_cast<uintptr_t>(cmd) & 0xFFFF);
+                    return ss.str();
+                };
+
+                std::stringstream ss;
+                ss << std::to_string(m_frame_cmds.size()) << " cmds:" << std::endl;
+                size_t cmd_index = 0;
+                for (const auto& cmd : m_frame_cmds)
+                {
+                    const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
+                    const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
+
+                    uint64_t
+                    availability_end = m_timestamps_with_availability[end_timestamp_offset * 2 + 1];
+                    uint64_t
+                    availability_begin = m_timestamps_with_availability[begin_timestamp_offset * 2 +
+                                                                        1];
+                    ss << std::to_string(cmd_index);
+                    if ((availability_begin == 0) || (availability_end == 0))
+                    {
+                        ss << "_NA: ";
+                    }
+                    else
+                    {
+                        ss << "_A : ";
+                    }
+
+                    ss << "0x" << ToHexString(cmd) << " : S"
+                       << std::to_string(static_cast<uint32_t>(begin_timestamp_offset)) << " : E"
+                       << std::to_string(static_cast<uint32_t>(end_timestamp_offset)) << std::endl;
+                    ++cmd_index;
+                }
+
+                return GPUTime::GpuTimeStatus{ ss.str(), false };
+            }
+        }
+        else
+        {
+            m_valid_frame = false;
+            return GPUTime::GpuTimeStatus{ "vkGetQueryPoolResults failed with VkResult: " +
+                                           std::to_string(static_cast<int>(result)),
+                                           false };
+        }
     }
 
     double              frame_time = 0.0;
@@ -609,7 +700,7 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
 
             auto elapsed_time_in_ms = GetTimeDuration(begin_timestamp_offset,
                                                       end_timestamp_offset,
-                                                      timestamps_with_availability);
+                                                      m_timestamps_with_availability);
 
             if (!elapsed_time_in_ms)
             {
@@ -636,7 +727,7 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
                 auto
                 renderpass_elapsed_time_in_ms = GetTimeDuration(renderpass_begin_timestamp_offset,
                                                                 renderpass_end_timestamp_offset,
-                                                                timestamps_with_availability);
+                                                                m_timestamps_with_availability);
 
                 if (!renderpass_elapsed_time_in_ms)
                 {
@@ -661,6 +752,16 @@ PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
     return GPUTime::GpuTimeStatus();
 }
 
+void GPUTime::RemoveCmdFromFrameCache(VkCommandBuffer cmd)
+{
+    // Free any slots that were used for render pass timings within this command buffer
+    m_timestamp_allocator.FreeSlots(m_cmds[cmd].renderpass_slots);
+    m_cmds[cmd].renderpass_slots.clear();
+    m_cmds[cmd].Reset();
+    auto& vec = m_frame_cmds;
+    vec.erase(std::remove(vec.begin(), vec.end(), cmd), vec.end());
+}
+
 GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_count,
                                              const VkSubmitInfo*       submits_ptr,
                                              PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
@@ -678,10 +779,10 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_co
     {
         for (uint32_t i = 0; i < submit_count; i++)
         {
-            uint32_t num_command_buffers = submits_ptr->commandBufferCount;
+            uint32_t num_command_buffers = submits_ptr[i].commandBufferCount;
             for (uint32_t c = 0; c < num_command_buffers; ++c)
             {
-                const auto& cmd = submits_ptr->pCommandBuffers[c];
+                const auto& cmd = submits_ptr[i].pCommandBuffers[c];
                 if (m_cmds.find(cmd) == m_cmds.end())
                 {
                     // We do not submit secondary command buffer
@@ -707,20 +808,11 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_co
                 }
 
                 // Check the case where the same primary cmd buffer is reused within a frame
-                // TODO(wangra):
-                // it seems that the OS is inserting the same empty cmd for left and right eye
-                // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
-                // This in theory should trigger a validation error, but not in this case
-                // For now we keep both in the frame cache m_frame_cmds, since it is easier for vk
-                // correlation (but the gput time will be equal to the last cmd that is being
-                // submitted) This does not affect timing since it is empty, but needs some further
-                // investigation.
-                /*auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
+                auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
                 if (it == m_frame_cmds.end())
                 {
                     m_frame_cmds.push_back(cmd);
-                }*/
-                m_frame_cmds.push_back(cmd);
+                }
             }
         }
     }
@@ -843,6 +935,11 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer         comm
                             m_query_pool,
                             slot);
     return GPUTime::GpuTimeStatus();
+}
+
+void Dive::GPUTime::ClearFrameCache()
+{
+    m_frame_cmds.clear();
 }
 
 }  // namespace Dive

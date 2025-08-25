@@ -36,6 +36,7 @@ struct DeviceInfo
     std::string m_serial;
     std::string m_manufacturer;
     std::string m_model;
+    bool        m_is_adreno_gpu = false;
 
     std::string GetDisplayName() const;
 };
@@ -43,7 +44,7 @@ struct DeviceInfo
 inline bool operator==(const DeviceInfo &lhs, const DeviceInfo &rhs)
 {
     return lhs.m_serial == rhs.m_serial && lhs.m_manufacturer == rhs.m_manufacturer &&
-           lhs.m_model == rhs.m_model;
+           lhs.m_model == rhs.m_model && lhs.m_is_adreno_gpu == rhs.m_is_adreno_gpu;
 }
 
 inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs)
@@ -99,12 +100,13 @@ public:
                           const std::string    &args,
                           const ApplicationType type);
 
-    absl::Status      CleanupAPP();
+    absl::Status      CleanupApp();
     absl::Status      StartApp();
     absl::Status      StopApp();
     const AdbSession &Adb() const { return m_adb; }
     AdbSession       &Adb() { return m_adb; }
     int               Port() const { return m_port; }
+    bool              IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
 
     AndroidApplication *GetCurrentApplication() { return m_app.get(); }
     absl::Status RetrieveTrace(const std::string &trace_file_path, const std::string &save_path);

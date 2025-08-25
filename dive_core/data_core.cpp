@@ -33,26 +33,57 @@ DataCore::DataCore(ProgressTracker *progress_tracker) :
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadCaptureData(const char *file_name)
+CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string &file_name)
 {
-    m_capture_data = CaptureData(m_progress_tracker);  // Clear any previously loaded data
-    m_capture_metadata = CaptureMetadata();
-    return m_capture_data.LoadFile(file_name);
+    return m_dive_capture_data.LoadFile(file_name);
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
+CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string &file_name)
 {
-    if (is_gfxr_capture)
+
+    m_pm4_capture_data = Pm4CaptureData(m_progress_tracker);  // Clear any previously loaded data
+    m_capture_metadata = CaptureMetadata();
+    return m_pm4_capture_data.LoadCaptureFile(file_name);
+}
+
+//--------------------------------------------------------------------------------------------------
+CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const std::string &file_name)
+{
+    m_gfxr_capture_data = GfxrCaptureData();
+    return m_gfxr_capture_data.LoadCaptureFile(file_name);
+}
+
+//--------------------------------------------------------------------------------------------------
+bool DataCore::CreateDiveCommandHierarchy()
+{
+    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+
+    // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
+    // This is an educated guess that each PM4 packet results in x number of associated
+    // field/register nodes. Overguessing means more memory used during creation. Underguessing
+    // means more allocations. For big captures, this is easily in the multi-millions, so
+    // pre-reserving the space is a signficiant performance win
+    uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
+
+    // Command hierarchy tree creation
+
+    DiveCommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy);
+    if (!cmd_hier_creator.CreateTrees(m_capture_metadata.m_command_hierarchy,
+                                      m_dive_capture_data,
+                                      true,
+                                      reserve_size))
     {
-        GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
-                                                         m_capture_data);
-        if (!vk_cmd_creator.CreateTrees())
-        {
-            return false;
-        }
-        return true;
+        return false;
     }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool DataCore::CreatePm4CommandHierarchy()
+{
+    std::unique_ptr<EmulateStateTracker> state_tracker(new EmulateStateTracker);
+
     // Optional: Reserve the internal vectors based on the number of pm4 packets in the capture
     // This is an educated guess that each PM4 packet results in x number of associated
     // field/register nodes. Overguessing means more memory used during creation. Underguessing
@@ -62,8 +93,8 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 
     // Command hierarchy tree creation
     CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                             m_capture_data);
-    if (!cmd_hier_creator.CreateTrees(true, std::make_optional(reserve_size)))
+                                             m_pm4_capture_data);
+    if (!cmd_hier_creator.CreateTrees(m_pm4_capture_data, true, reserve_size))
     {
         return false;
     }
@@ -71,11 +102,24 @@ bool DataCore::CreateCommandHierarchy(bool is_gfxr_capture)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::CreateMetaData()
+bool DataCore::CreateGfxrCommandHierarchy()
+{
+    GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
+                                                     m_gfxr_capture_data);
+    if (!vk_cmd_creator.CreateTrees())
+    {
+        return false;
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool DataCore::CreateDiveMetaData()
 {
     CaptureMetadataCreator metadata_creator(m_capture_metadata);
-    if (!metadata_creator.ProcessSubmits(m_capture_data.GetSubmits(),
-                                         m_capture_data.GetMemoryManager()))
+    if (!metadata_creator
+         .ProcessSubmits(m_dive_capture_data.GetPm4CaptureData().GetSubmits(),
+                         m_dive_capture_data.GetPm4CaptureData().GetMemoryManager()))
     {
         return false;
     }
@@ -83,22 +127,31 @@ bool DataCore::CreateMetaData()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DataCore::ParseCaptureData(bool is_gfxr_capture)
+bool DataCore::CreatePm4MetaData()
+{
+    CaptureMetadataCreator metadata_creator(m_capture_metadata);
+    if (!metadata_creator.ProcessSubmits(m_pm4_capture_data.GetSubmits(),
+                                         m_pm4_capture_data.GetMemoryManager()))
+    {
+        return false;
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool DataCore::ParseDiveCaptureData()
 {
     if (m_progress_tracker)
     {
         m_progress_tracker->sendMessage("Processing command buffers...");
     }
 
-    if (!is_gfxr_capture)
+    if (!CreateDiveMetaData())
     {
-        if (!CreateMetaData())
-        {
-            return false;
-        }
+        return false;
     }
 
-    if (!CreateCommandHierarchy(is_gfxr_capture))
+    if (!CreateDiveCommandHierarchy())
     {
         return false;
     }
@@ -107,14 +160,64 @@ bool DataCore::ParseCaptureData(bool is_gfxr_capture)
 }
 
 //--------------------------------------------------------------------------------------------------
-const CaptureData &DataCore::GetCaptureData() const
+bool DataCore::ParsePm4CaptureData()
 {
-    return m_capture_data;
+    if (m_progress_tracker)
+    {
+        m_progress_tracker->sendMessage("Processing command buffers...");
+    }
+
+    if (!CreatePm4MetaData())
+    {
+        return false;
+    }
+
+    if (!CreatePm4CommandHierarchy())
+    {
+        return false;
+    }
+
+    return true;
 }
 
-CaptureData &DataCore::GetMutableCaptureData()
+//--------------------------------------------------------------------------------------------------
+bool DataCore::ParseGfxrCaptureData()
 {
-    return m_capture_data;
+    if (m_progress_tracker)
+    {
+        m_progress_tracker->sendMessage("Processing gfxr commands...");
+    }
+
+    if (!CreateGfxrCommandHierarchy())
+    {
+        return false;
+    }
+
+    return true;
+}
+
+//--------------------------------------------------------------------------------------------------
+const Pm4CaptureData &DataCore::GetPm4CaptureData() const
+{
+    return m_pm4_capture_data;
+}
+
+//--------------------------------------------------------------------------------------------------
+Pm4CaptureData &DataCore::GetMutablePm4CaptureData()
+{
+    return m_pm4_capture_data;
+}
+
+//--------------------------------------------------------------------------------------------------
+const GfxrCaptureData &DataCore::GetGfxrCaptureData() const
+{
+    return m_gfxr_capture_data;
+}
+
+//--------------------------------------------------------------------------------------------------
+GfxrCaptureData &DataCore::GetMutableGfxrCaptureData()
+{
+    return m_gfxr_capture_data;
 }
 
 //--------------------------------------------------------------------------------------------------

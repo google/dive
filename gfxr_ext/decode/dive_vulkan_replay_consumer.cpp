@@ -459,5 +459,10 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
     }
 }
 
+void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
+{
+    gpu_time_.ClearFrameCache();
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

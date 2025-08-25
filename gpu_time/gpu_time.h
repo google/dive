@@ -134,6 +134,7 @@ public:
         return m_metrics.GetCmdRenderPassCount(index);
     }
     std::string GetStatsString() const;
+    void        ClearFrameCache();
 
 private:
     class FrameMetrics
@@ -169,8 +170,8 @@ private:
     {
     public:
         static constexpr uint32_t kSlotsPerBlock = 64;
-        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * 4;
-        static constexpr uint32_t kNumBlocks = kTotalSlots / kSlotsPerBlock;
+        static constexpr uint32_t kNumBlocks = 16;
+        static constexpr uint32_t kTotalSlots = kSlotsPerBlock * kNumBlocks;
         static constexpr uint32_t kInvalidIndex = static_cast<uint32_t>(-1);
         static constexpr uint32_t kFrameMetricsLimit = 1000;
 
@@ -188,6 +189,9 @@ private:
     {
         void Reset()
         {
+            // Do not reset the timestamp offset since it is used for cases like
+            // - usage_one_submit
+            // - OnResetCommandBuffer
             is_frameboundary = false;
             usage_one_submit = false;
             reusable = false;
@@ -204,7 +208,10 @@ private:
     };
 
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
+    void          RemoveCmdFromFrameCache(VkCommandBuffer cmd);
 
+    // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
+    uint64_t     m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];
     FrameMetrics m_metrics;
 
     std::set<VkQueue>                                      m_queues;

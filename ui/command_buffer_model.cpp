@@ -21,6 +21,7 @@
 #include <iostream>
 #include <sstream>
 #include "dive_core/command_hierarchy.h"
+#include "dive_tree_view.h"
 
 static_assert(sizeof(void *) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
@@ -251,6 +252,15 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
     uint64_t selected_node_index = (uint64_t)(index.internalPointer());
     if (m_selected_node_index == selected_node_index)  // Selected same item
         return;
+
+    // Ensures that the selected index passed belongs to the filter model currently displayed in the
+    // main window.
+    const DiveFilterModel *dive_filter_model = qobject_cast<const DiveFilterModel *>(index.model());
+    if (dive_filter_model)
+    {
+        const QModelIndex &new_index = dive_filter_model->mapToSource(index);
+        selected_node_index = (uint64_t)(new_index.internalPointer());
+    }
 
     emit beginResetModel();
     m_selected_node_index = selected_node_index;

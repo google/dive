@@ -27,6 +27,7 @@
 #define GFXRECON_REPLAY_SETTINGS_H
 
 // GOOGLE: [single-frame-looping] Adding flags to usage message
+// GOOGLE: [enable-gpu-time] Adding flags to usage message
 const char kOptions[] =
     "-h|--help,--version,--log-debugview,--no-debug-popup,--paused,--sync,--sfa|--skip-failed-allocations,--opcd|--"
     "omit-pipeline-cache-data,--remove-unsupported,--validate,--debug-device-lost,--create-dummy-allocations,--"
@@ -39,7 +40,7 @@ const char kOptions[] =
     "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
     "separate-alpha,--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,"
     "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--dump-resources-dump-unused-vertex-bindings,--"
-    "deduplicate-device,--log-timestamps,--loop-single-frame";
+    "deduplicate-device,--log-timestamps,--loop-single-frame,--enable-gpu-time";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
@@ -102,6 +103,8 @@ static void PrintUsage(const char* exe_name)
 
     // GOOGLE: [single-frame-looping] Usage message
     GFXRECON_WRITE_CONSOLE("\t\t\t[--loop-single-frame] [--loop-single-frame-count <n>]");
+    // GOOGLE: [enable-gpu-time] Usage message
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--enable-gpu-time]");
 
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--dump-resources-modifiable-state-only]");
@@ -215,6 +218,9 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\t(Only used with --loop-single-frame). Specifies the number of frames");
     GFXRECON_WRITE_CONSOLE("          \t\tto loop, after which replay will be terminated.");
     GFXRECON_WRITE_CONSOLE("          \t\tDefault is 0 (infinite looping).");
+    // GOOGLE: [enable-gpu-time] Usage message details
+    GFXRECON_WRITE_CONSOLE("  --enable-gpu-time");
+    GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, gpu time measurement will be enabled for replay.");
 
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")

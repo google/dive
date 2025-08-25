@@ -55,8 +55,7 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
         return;
     }
 
-    // TODO(wangra): move this to Replay app by getting the setting from Dive UI
-    gpu_time_.SetEnable(false);
+    gpu_time_.SetEnable(enable_gpu_time_);
 
     VkDevice device = MapHandle<VulkanDeviceInfo>(*(pDevice->GetPointer()),
                                                   &CommonObjectInfoTable::GetVkDeviceInfo);

@@ -174,6 +174,12 @@ void android_main(struct android_app* app)
                 gfxrecon::decode::DiveVulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
                 gfxrecon::decode::VulkanDecoder        vulkan_decoder;
 
+                // GOOGLE: Pass replay options to enable/disable gpu time
+                if (arg_parser.IsOptionSet(kEnableGPUTime))
+                {
+                    vulkan_replay_consumer.SetEnableGPUTime(replay_options.enable_gpu_time);
+                }
+
                 ApiReplayOptions  api_replay_options;
                 ApiReplayConsumer api_replay_consumer;
                 api_replay_options.vk_replay_options   = &replay_options;

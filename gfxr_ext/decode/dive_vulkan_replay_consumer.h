@@ -131,8 +131,11 @@ public:
 
     void ProcessStateEndMarker(uint64_t frame_number) override;
 
+    void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
+
 private:
     Dive::GPUTime gpu_time_;
+    bool          enable_gpu_time_ = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)

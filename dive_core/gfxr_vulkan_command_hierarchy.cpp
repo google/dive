@@ -29,14 +29,30 @@ const GfxrCaptureData &capture_data) :
 }
 
 //--------------------------------------------------------------------------------------------------
+void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_index)
+{
+    if (m_cur_begin_debug_utils_node_index_stack.empty())
+    {
+        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                 m_cur_command_buffer_node_index,
+                 node_index);
+    }
+    else
+    {
+        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                 m_cur_begin_debug_utils_node_index_stack.top(),
+                 node_index);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
 uint32_t                                   parent_index,
 DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
 {
     std::ostringstream vk_cmd_string_stream;
     vk_cmd_string_stream << vk_cmd_info.GetVkCmdName();
-    if (vk_cmd_info.GetVkCmdName() == "vkBeginCommandBuffer" ||
-        vk_cmd_info.GetVkCmdName() == "vkEndCommandBuffer")
+    if (vk_cmd_info.GetVkCmdName() == "vkBeginCommandBuffer")
     {
         uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
                                             vk_cmd_string_stream.str());
@@ -46,33 +62,62 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
                  m_cur_submit_node_index,
                  cmd_buffer_index);
     }
+    else if (vk_cmd_info.GetVkCmdName() == "vkEndCommandBuffer")
+    {
+        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
+                                            vk_cmd_string_stream.str());
+
+        GetArgs(vk_cmd_info.GetArgs(), m_cur_command_buffer_node_index, "");
+        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                 m_cur_submit_node_index,
+                 cmd_buffer_index);
+    }
+    else if (vk_cmd_info.GetVkCmdName().find("BeginDebugUtilsLabelEXT") != std::string::npos)
+    {
+        std::string label_name = vk_cmd_info.GetArgs()["pLabelInfo"]["pLabelName"];
+
+        uint64_t
+        begin_debug_utils_label_cmd_index = AddNode(NodeType::kGfxrBeginDebugUtilsLabelCommandNode,
+                                                    label_name.c_str());
+        GetArgs(vk_cmd_info.GetArgs(), begin_debug_utils_label_cmd_index, "");
+        ConditionallyAddChild(begin_debug_utils_label_cmd_index);
+        m_cur_begin_debug_utils_node_index_stack.push(begin_debug_utils_label_cmd_index);
+    }
+    else if (vk_cmd_info.GetVkCmdName().find("EndDebugUtilsLabelEXT") != std::string::npos)
+    {
+        if (!m_cur_begin_debug_utils_node_index_stack.empty())
+        {
+            // Remove the corresponding begin debug utils node from the stack
+            m_cur_begin_debug_utils_node_index_stack.pop();
+        }
+    }
     else if (vk_cmd_info.GetVkCmdName().find("vkCmdDraw") != std::string::npos ||
              vk_cmd_info.GetVkCmdName().find("vkCmdDispatch") != std::string::npos)
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanDrawCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
-                 m_cur_command_buffer_node_index,
-                 vk_cmd_index);
+
+        // Check if the draw call should be a child of a command buffer or debug utils node
+        ConditionallyAddChild(vk_cmd_index);
     }
     else if (vk_cmd_info.GetVkCmdName().find("RenderPass") != std::string::npos)
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
-                 m_cur_command_buffer_node_index,
-                 vk_cmd_index);
+
+        // Check if the render pass call should be a child of a command buffer or debug utils node
+        ConditionallyAddChild(vk_cmd_index);
     }
     else
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
-                 m_cur_command_buffer_node_index,
-                 vk_cmd_index);
+
+        // Check if the vulkan command should be a child of a command buffer or debug utils node
+        ConditionallyAddChild(vk_cmd_index);
     }
 }
 
@@ -86,6 +131,13 @@ const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds)
         DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info = vkCmds[i];
         OnCommand(submit_index, vk_cmd_info);
     }
+
+    // Ensure the begin debug utils node index stack is cleared
+    while (!m_cur_begin_debug_utils_node_index_stack.empty())
+    {
+        m_cur_begin_debug_utils_node_index_stack.pop();
+    }
+
     return true;
 }
 

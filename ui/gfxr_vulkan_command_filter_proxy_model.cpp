@@ -93,11 +93,13 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
     }
     else if (m_filter_mode == kDrawDispatchOnly)
     {
-        // Only display Draw/Dispatch and RenderPass commands when filter is enabled.
+        // Only display Draw/Dispatch, RenderPass, and debug label commands when filter is enabled.
         if (m_command_hierarchy->GetNodeType(node_index) !=
             Dive::NodeType::kGfxrVulkanDrawCommandNode &&
             m_command_hierarchy->GetNodeType(node_index) !=
-            Dive::NodeType::kGfxrVulkanRenderPassCommandNode)
+            Dive::NodeType::kGfxrVulkanRenderPassCommandNode &&
+            m_command_hierarchy->GetNodeType(node_index) !=
+            Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode)
         {
             return false;
         }

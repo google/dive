@@ -22,6 +22,8 @@ limitations under the License.
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
+#if defined(__ANDROID__)
+
 class DivePM4Capture
 {
 public:
@@ -33,8 +35,13 @@ public:
         return instance;
     }
 
-    void MaybeStartCapture();
-    void MaybeStopCapture();
+    bool IsPM4CaptureEnabled() const
+    {
+        return m_is_initialized && m_pm4_start_func != nullptr && m_pm4_stop_func != nullptr;
+    }
+
+    bool TryStartCapture();
+    bool TryStopCapture();
     bool IsCapturing() const { return m_is_capturing; }
 
 private:
@@ -46,6 +53,7 @@ private:
     CaptureFunc m_pm4_stop_func = nullptr;
 };
 
+#endif
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
 

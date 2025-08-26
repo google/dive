@@ -17,16 +17,15 @@ limitations under the License.
 #include "dive_pm4_capture.h"
 
 #include "util/logging.h"
+#if defined(__ANDROID__)
 
-#include <dlfcn.h>
+#    include <dlfcn.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 DivePM4Capture::DivePM4Capture()
 {
-    m_is_initialized = false;
-    m_is_capturing = false;
 
     GFXRECON_LOG_INFO("Initializing PM4 capture");
     void* handle = dlopen(NULL, RTLD_LAZY);
@@ -56,40 +55,44 @@ DivePM4Capture::DivePM4Capture()
     m_is_initialized = true;
 }
 
-void DivePM4Capture::MaybeStartCapture()
+bool DivePM4Capture::TryStartCapture()
 {
     if (!m_is_initialized || m_pm4_start_func == nullptr)
     {
-        return;
+        return false;
     }
     if (m_is_capturing)
     {
         GFXRECON_LOG_INFO("PM4 capture already started");
-        return;
+        return false;
     }
     // Call into libwrap to start capture
     m_pm4_start_func();
     m_is_capturing = true;
     GFXRECON_LOG_INFO("PM4 capture started");
+
+    return true;
 }
 
-void DivePM4Capture::MaybeStopCapture()
+bool DivePM4Capture::TryStopCapture()
 {
     if (!m_is_initialized || m_pm4_stop_func == nullptr)
     {
-        return;
+        return false;
     }
     if (!m_is_capturing)
     {
         GFXRECON_LOG_INFO("PM4 capture not started");
-        return;
+        return false;
     }
 
     // Call into libwrap to stop capture
     m_pm4_stop_func();
     m_is_capturing = false;
     GFXRECON_LOG_INFO("PM4 capture stopped");
+    return true;
 }
 
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)
+#endif

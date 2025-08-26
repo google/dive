@@ -27,11 +27,6 @@ struct DiveWrapLoadStatus
 {
     DiveWrapLoadStatus()
     {
-        if (IsGfrxReplayCapture())
-        {
-            SetCaptureFileNameByProperty();
-            StartCapture();
-        }
         LOGI("Libwrap loaded in pid %d, thread id %ld...", getpid(), pthread_self());
     }
 } load_log;

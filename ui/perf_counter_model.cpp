@@ -17,17 +17,24 @@
 #include <QStringList>
 #include <QDebug>
 
-PerfCounterModel::PerfCounterModel(const QString &filePath, QObject *parent) :
+PerfCounterModel::PerfCounterModel(QObject *parent) :
     QAbstractItemModel(parent)
 {
-    ParseCsv(filePath);
     m_search_iterator = m_search_results.cbegin();
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::ParseCsv(const QString &filePath)
+void PerfCounterModel::OnPerfCounterResultsGenerated(const QString &file_path)
 {
-    QFile file(filePath);
+    emit beginResetModel();
+    ParseCsv(file_path);
+    emit endResetModel();
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterModel::ParseCsv(const QString &file_path)
+{
+    QFile file(file_path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         qDebug() << "Could not open file:" << file.errorString();
@@ -229,15 +236,15 @@ void PerfCounterModel::ResetSearchIterator()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::SetIteratorToNearest(const QModelIndex &currentIndex)
+void PerfCounterModel::SetIteratorToNearest(const QModelIndex &current_index)
 {
-    if (m_search_results.isEmpty() || !currentIndex.isValid())
+    if (m_search_results.isEmpty() || !current_index.isValid())
     {
         m_search_iterator = m_search_results.cbegin();
         return;
     }
 
-    int current_row = currentIndex.row();
+    int current_row = current_index.row();
     int nearest_distance = std::numeric_limits<int>::max();
     int nearest_index_in_list = 0;
 

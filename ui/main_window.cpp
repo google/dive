@@ -207,7 +207,7 @@ MainWindow::MainWindow()
         m_command_hierarchy_view->setModel(m_filter_model);
         m_filter_model->SetMode(kDefaultFilterMode);
 
-        m_perf_counter_model = new PerfCounterModel(":/resources/result_counters.csv");
+        m_perf_counter_model = new PerfCounterModel();
 
         QLabel *goto_draw_call_label = new QLabel(tr("Go To:"));
         m_prev_event_button = new QPushButton("Prev Event");
@@ -379,6 +379,10 @@ MainWindow::MainWindow()
                      &AnalyzeDialog::OnNewFileOpened,
                      this,
                      &MainWindow::OnOpenFileFromAnalyzeDialog);
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     m_perf_counter_model,
+                     &PerfCounterModel::OnPerfCounterResultsGenerated);
 
     CreateActions();
     CreateMenus();
@@ -1022,7 +1026,7 @@ void MainWindow::OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_
         return;
     }
     QString file_path_q_string = QString::fromStdString(file_path);
-    m_analyze_dig->setSelectedCaptureFile(file_path_q_string);
+    m_analyze_dig->SetSelectedCaptureFile(file_path_q_string);
     m_analyze_dig->exec();
 }
 

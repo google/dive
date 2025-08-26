@@ -40,6 +40,7 @@ inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.ca
 inline constexpr char
 kReplayPm4DumpFileNamePropertyName[] = "debug.dive.replay.capture_pm4_file_name";
 inline constexpr char kDefaultCaptureFolderName[] = "gfxr_capture";
+inline constexpr char kDefaultReplayFolderName[] = "gfxr_replay_downloads";
 inline constexpr char kProfilingPluginFolderName[] = "dive_profiling_plugin";
 inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 

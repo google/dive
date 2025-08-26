@@ -107,6 +107,7 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_gpu_time_box->setModel(m_gpu_time_model);
     m_gpu_time_box->setCurrentIndex(1);
     m_gpu_time_layout->addWidget(m_gpu_time_box);
+    m_gpu_time_enabled = m_gpu_time_box->currentIndex() == 0;
 
     // Enable Dump Pm4
     m_dump_pm4_layout = new QHBoxLayout();
@@ -121,6 +122,7 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_dump_pm4_box->setModel(m_dump_pm4_model);
     m_dump_pm4_box->setCurrentIndex(1);
     m_dump_pm4_layout->addWidget(m_dump_pm4_box);
+    m_dump_pm4_enabled = m_dump_pm4_box->currentIndex() == 0;
 
     // Capture Download Directory
     m_download_directory_layout = new QHBoxLayout();
@@ -647,6 +649,7 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
         SetReplayButton("Replaying...", false);
     }
 
+    std::cout << "VALUE: " << m_dump_pm4_enabled << std::endl;
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        m_dump_pm4_enabled,

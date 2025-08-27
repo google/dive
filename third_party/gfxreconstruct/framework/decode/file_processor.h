@@ -266,8 +266,6 @@ class FileProcessor
     };
     std::deque<ActiveFileContext> file_stack_;
 
-    std::string absolute_path_;
-
   private:
     ActiveFileContext& GetCurrentFile()
     {
@@ -288,7 +286,8 @@ class FileProcessor
     virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
     virtual void StoreBlockInfo() {}
 
-    bool run_without_decoders_ = false;
+    bool        run_without_decoders_ = false;
+    std::string absolute_path_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

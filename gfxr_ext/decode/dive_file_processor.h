@@ -36,6 +36,10 @@ public:
 
     void SetDiveBlockData(std::shared_ptr<DiveBlockData> p_block_data);
 
+    // Writes content to a new file that is put in the same dir as the capture file,
+    // overwriting existing file if present
+    bool WriteFile(const std::string& name, const std::string& content);
+
 protected:
     bool ProcessFrameMarker(const format::BlockHeader& block_header,
                             format::MarkerType         marker_type,

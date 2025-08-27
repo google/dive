@@ -496,7 +496,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                          const std::string &replay_args,
                                          bool               dump_pm4,
-                                         const std::string &pm4_capture_download_path)
+                                         const std::string &download_path)
 {
     LOGD("RunReplayApk(): starting\n");
 
@@ -574,16 +574,43 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } while (m_device->FileExists(on_device_trace_path_in_progress));
 
-        auto status = m_device->RetrieveTrace(on_device_trace_path, pm4_capture_download_path);
+        auto status = m_device->RetrieveTrace(on_device_trace_path, download_path);
         if (status.ok())
         {
             LOGI("Trace file %s downloaded to %s\n",
                  on_device_trace_path.c_str(),
-                 pm4_capture_download_path.c_str());
+                 download_path.c_str());
         }
         else
         {
             LOGI("Failed to download the trace file %s\n", on_device_trace_path.c_str());
+        }
+    }
+
+    if (absl::StrContains(replay_args, "--enable-gpu-time"))
+    {
+        // Wait application to exit before trying to retrieve the gpu time file.
+        do
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        } while (m_device->IsProcessRunning(kGfxrReplayAppName));
+
+        std::string on_device_file_path = absl::StrFormat("%s/gpu_time.csv",
+                                                          std::filesystem::path(capture_path)
+                                                          .parent_path()
+                                                          .string()
+                                                          .c_str());
+
+        auto status = m_device->RetrieveTrace(on_device_file_path, download_path);
+        if (status.ok())
+        {
+            LOGI("Gpu time file %s downloaded to %s\n",
+                 on_device_file_path.c_str(),
+                 download_path.c_str());
+        }
+        else
+        {
+            LOGI("Failed to download the trace file %s\n", on_device_file_path.c_str());
         }
     }
 

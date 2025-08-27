@@ -83,6 +83,8 @@ private:
                                           const std::string   &remote_gfxr_file);
     absl::Status                PerfCounterReplay(Dive::DeviceManager &device_manager,
                                                   const std::string   &remote_gfxr_file);
+    absl::Status                GpuTimeReplay(Dive::DeviceManager &device_manager,
+                                              const std::string   &remote_gfxr_file);
 
     QLabel      *m_settings_list_label;
     QListWidget *m_settings_list;

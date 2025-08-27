@@ -515,7 +515,7 @@ void AnalyzeDialog::OnSettingChanged()
     m_dump_pm4_enabled = m_dump_pm4_box->currentIndex() == 0;
     m_gpu_time_enabled = m_gpu_time_box->currentIndex() == 0;
 
-    if (m_enabled_settings_vector->size() > 0 || m_dump_pm4_enabled)
+    if (m_enabled_settings_vector->size() > 0 || m_dump_pm4_enabled || m_gpu_time_enabled)
     {
         m_download_directory_label->show();
         m_download_directory_input_box->show();
@@ -531,34 +531,20 @@ void AnalyzeDialog::OnSettingChanged()
 //--------------------------------------------------------------------------------------------------
 std::string AnalyzeDialog::GetReplayArgs()
 {
-    if (m_dump_pm4_enabled)
+    int         frame_count = m_frame_count_box->value();
+    std::string args = "--loop-single-frame";
+    if (frame_count > 0)
     {
-        if (m_gpu_time_enabled)
-        {
-            return "--enable-gpu-time";
-        }
-        else
-        {
-            return "";
-        }
+
+        args += " --loop-single-frame-count " + std::to_string(frame_count);
     }
-    else
+
+    if (m_gpu_time_enabled)
     {
-        std::string args = "--loop-single-frame";
-        int frame_count = m_frame_count_box->value();
-
-        if (frame_count > 0)
-        {
-            args += " --loop-single-frame-count " + std::to_string(frame_count);
-        }
-
-        if (m_gpu_time_enabled)
-        {
-            args += " --enable-gpu-time";
-        }
-
-        return args;
+        args += " --enable-gpu-time";
     }
+
+    return args;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -642,19 +628,11 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
 {
     std::string replay_args = GetReplayArgs();
-    if (m_dump_pm4_enabled && m_gpu_time_enabled)
+    if (m_dump_pm4_enabled)
     {
-        SetReplayButton("Replaying with dump_pm4 and gpu_time enabled...", false);
-        SetReplayDownloadDir();
-    }
-    else if (m_dump_pm4_enabled && !m_gpu_time_enabled)
-    {
+        // Dump Pm4 does not support the loop-single-frame and loop-single-frame-count arguments
+        replay_args = "";
         SetReplayButton("Replaying with dump_pm4 enabled...", false);
-        SetReplayDownloadDir();
-    }
-    else if (!m_dump_pm4_enabled && m_gpu_time_enabled)
-    {
-        SetReplayButton("Replaying with gpu_time enabled...", false);
     }
     else
     {
@@ -672,11 +650,25 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
                                               const std::string   &remote_gfxr_file)
 {
     SetReplayButton("Replaying with perf counter settings...", false);
-    SetReplayDownloadDir();
+
     return device_manager
     .RunProfilingOnReplay(remote_gfxr_file,
                           *m_enabled_settings_vector,
                           m_download_directory_input_box->text().toStdString());
+}
+
+//--------------------------------------------------------------------------------------------------
+absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
+                                          const std::string   &remote_gfxr_file)
+{
+    std::string replay_args = GetReplayArgs();
+    SetReplayButton("Replaying with gpu_time enabled...", false);
+
+    // Run gpu time replay with dump_pm4 disabled
+    return device_manager.RunReplayApk(remote_gfxr_file,
+                                       replay_args,
+                                       false,
+                                       m_download_directory_input_box->text().toStdString());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -739,8 +731,14 @@ void AnalyzeDialog::OnReplay()
         return;
     }
 
+    // Set the download directory if running replay with dump_pm4, gpu_time, or perf counters
+    if (m_dump_pm4_enabled || !m_enabled_settings_vector->empty() || m_gpu_time_enabled)
+    {
+        SetReplayDownloadDir();
+    }
+
     // Run the pm4 replay
-    if (m_dump_pm4_enabled || m_gpu_time_enabled || m_enabled_settings_vector->empty())
+    if (m_dump_pm4_enabled || (m_enabled_settings_vector->empty() && !m_gpu_time_enabled))
     {
         ret = Pm4Replay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -770,6 +768,22 @@ void AnalyzeDialog::OnReplay()
         }
 
         UpdatePerfTabView(remote_file.value());
+        WaitForReplay(*device);
+    }
+
+    // Run the gpu_time replay
+    if (m_gpu_time_enabled)
+    {
+        ret = GpuTimeReplay(device_manager, remote_file.value());
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to run gpu_time replay: ", ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            SetReplayButton(kDefaultReplayButtonText, true);
+            return;
+        }
+
         WaitForReplay(*device);
     }
 

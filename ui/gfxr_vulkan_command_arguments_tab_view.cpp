@@ -118,7 +118,8 @@ void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &in
     // Always use the source_index, regardless of whether a proxy was involved.
     m_arg_proxy_model->SetTargetParentSourceIndex(source_index);
 
-    uint32_t column_count = (uint32_t)m_command_hierarchy_model->columnCount(QModelIndex());
+    uint32_t column_count = static_cast<uint32_t>(
+    m_command_hierarchy_model->columnCount(QModelIndex()));
     for (uint32_t column = 0; column < column_count; ++column)
         m_command_hierarchy_view->resizeColumnToContents(column);
 

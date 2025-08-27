@@ -539,9 +539,18 @@ std::string AnalyzeDialog::GetReplayArgs()
         args += " --loop-single-frame-count " + std::to_string(frame_count);
     }
 
-    if (m_gpu_time_enabled)
+    if (m_dump_pm4_enabled && m_gpu_time_enabled)
+    {
+        args = "--enable-gpu-time";
+    }
+    else if (!m_dump_pm4_enabled && m_gpu_time_enabled)
     {
         args += " --enable-gpu-time";
+    }
+    else if (m_dump_pm4_enabled)
+    {
+        // Dump Pm4 does not support the loop-single-frame and loop-single-frame-count arguments
+        args = "";
     }
 
     return args;
@@ -632,7 +641,6 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     {
         SetReplayButton("Replaying with dump_pm4 and gpu_time enabled...", false);
         SetReplayDownloadDir();
-        replay_args += " --enable-gpu-time";
     }
     else if (m_dump_pm4_enabled && !m_gpu_time_enabled)
     {
@@ -642,14 +650,12 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     else if (!m_dump_pm4_enabled && m_gpu_time_enabled)
     {
         SetReplayButton("Replaying with gpu_time enabled...", false);
-        SetReplayDownloadDir();
     }
     else
     {
         SetReplayButton("Replaying...", false);
     }
 
-    std::cout << "VALUE: " << m_dump_pm4_enabled << std::endl;
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        m_dump_pm4_enabled,

@@ -531,29 +531,34 @@ void AnalyzeDialog::OnSettingChanged()
 //--------------------------------------------------------------------------------------------------
 std::string AnalyzeDialog::GetReplayArgs()
 {
-    int         frame_count = m_frame_count_box->value();
-    std::string args = "--loop-single-frame";
-    if (frame_count > 0)
+    if (m_dump_pm4_enabled)
     {
+        if (m_gpu_time_enabled)
+        {
+            return "--enable-gpu-time";
+        }
+        else
+        {
+            return "";
+        }
+    }
+    else
+    {
+        std::string args = "--loop-single-frame";
+        int frame_count = m_frame_count_box->value();
 
-        args += " --loop-single-frame-count " + std::to_string(frame_count);
-    }
+        if (frame_count > 0)
+        {
+            args += " --loop-single-frame-count " + std::to_string(frame_count);
+        }
 
-    if (m_dump_pm4_enabled && m_gpu_time_enabled)
-    {
-        args = "--enable-gpu-time";
-    }
-    else if (!m_dump_pm4_enabled && m_gpu_time_enabled)
-    {
-        args += " --enable-gpu-time";
-    }
-    else if (m_dump_pm4_enabled)
-    {
-        // Dump Pm4 does not support the loop-single-frame and loop-single-frame-count arguments
-        args = "";
-    }
+        if (m_gpu_time_enabled)
+        {
+            args += " --enable-gpu-time";
+        }
 
-    return args;
+        return args;
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

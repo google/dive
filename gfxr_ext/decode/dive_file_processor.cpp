@@ -51,7 +51,7 @@ bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& co
     int   result = util::platform::FileOpen(&fd, new_file_path.c_str(), "wb");
     if (result || fd == nullptr)
     {
-        GFXRECON_LOG_ERROR("Failed to open file %s", new_file_path.c_str());
+        GFXRECON_LOG_ERROR("Failed to open file %s, exit code: %d", new_file_path.c_str(), result);
         return false;
     }
 
@@ -63,9 +63,10 @@ bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& co
 
     GFXRECON_LOG_INFO("Wrote file: %s", new_file_path.c_str());
 
-    if (util::platform::FileClose(fd))
+    result = util::platform::FileClose(fd);
+    if (result)
     {
-        GFXRECON_LOG_ERROR("Failed to close file %s", new_file_path.c_str());
+        GFXRECON_LOG_ERROR("Failed to close file %s, exit code: %d", new_file_path.c_str(), result);
         return false;
     }
 

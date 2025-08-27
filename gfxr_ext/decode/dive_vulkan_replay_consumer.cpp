@@ -311,7 +311,7 @@ format::HandleId                            fence)
         if (submit_status.contains_frame_boundary)
         {
             GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
-            gpu_time_stats_csv_str_ += gpu_time_.GetStatsCSVString();
+            gpu_time_stats_csv_str_ = gpu_time_.GetStatsCSVString();
         }
     }
 }

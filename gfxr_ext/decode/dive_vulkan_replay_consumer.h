@@ -133,12 +133,16 @@ public:
 
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
 
-    std::string GetGPUTimeStatsCSVStr() const { return gpu_time_stats_csv_str_; }
+    std::string GetGPUTimeStatsCSVStr() const
+    {
+        return gpu_time_stats_csv_header_str_ + gpu_time_stats_csv_str_;
+    }
 
 private:
     Dive::GPUTime gpu_time_;
     bool          enable_gpu_time_ = false;
-    std::string   gpu_time_stats_csv_str_ = "Type,Id,Mean [ms],Median [ms]\n";
+    std::string   gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
+    std::string   gpu_time_stats_csv_str_ = "";
 };
 
 GFXRECON_END_NAMESPACE(decode)

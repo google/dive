@@ -31,6 +31,7 @@ const GfxrCaptureData &capture_data) :
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_index)
 {
+    // Check if the command node should be a child of a command buffer or debug utils node
     if (m_cur_begin_debug_utils_node_index_stack.empty())
     {
         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
@@ -97,8 +98,6 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanDrawCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-
-        // Check if the draw call should be a child of a command buffer or debug utils node
         ConditionallyAddChild(vk_cmd_index);
     }
     else if (vk_cmd_info.GetVkCmdName().find("RenderPass") != std::string::npos)
@@ -106,8 +105,6 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-
-        // Check if the render pass call should be a child of a command buffer or debug utils node
         ConditionallyAddChild(vk_cmd_index);
     }
     else
@@ -115,8 +112,6 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
-
-        // Check if the vulkan command should be a child of a command buffer or debug utils node
         ConditionallyAddChild(vk_cmd_index);
     }
 }

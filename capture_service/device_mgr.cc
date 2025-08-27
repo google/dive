@@ -501,12 +501,19 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
     LOGD("RunReplayApk(): starting\n");
 
     std::string updated_replay_args = replay_args;
+
     // Enable pm4 capture
     if (dump_pm4)
     {
         if (!m_device->IsAdrenoGpu())
         {
             return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
+        }
+        if (absl::StrContains(replay_args, "--loop-single-frame") ||
+            absl::StrContains(replay_args, "--loop-single-frame-count"))
+        {
+            return absl::InvalidArgumentError("PM4 capture doesn't support replay arguments "
+                                              "--loop-single-frame or --loop-single-frame-count");
         }
         std::string enable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 1",
                                                           kEnableReplayPm4DumpPropertyName);

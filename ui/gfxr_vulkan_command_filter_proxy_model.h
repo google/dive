@@ -47,7 +47,7 @@ private:
     void ApplyNewFilterMode(FilterMode new_mode);
 
     const Dive::CommandHierarchy *m_command_hierarchy;
-    FilterMode                    m_filter_mode = kNone;
+    FilterMode                    m_filter_mode;
 };
 
 #endif  // GFXRVULKANCOMMANDFILTERPROXYMODEL_H

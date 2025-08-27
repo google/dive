@@ -19,6 +19,7 @@ const Dive::CommandHierarchy *command_hierarchy) :
     QSortFilterProxyModel(parent),
     m_command_hierarchy(command_hierarchy)
 {
+    m_filter_mode = kDrawDispatchOnly;
 }
 
 void GfxrVulkanCommandFilterProxyModel::ApplyNewFilterMode(FilterMode new_mode)

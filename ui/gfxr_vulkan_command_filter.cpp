@@ -27,7 +27,7 @@ static constexpr const char
     "Draw/Dispatch"
 };
 static constexpr GfxrVulkanCommandFilterProxyModel::FilterMode
-kDefaultGfxrVulkanCommandFilterMode = GfxrVulkanCommandFilterProxyModel::kNone;
+kDefaultGfxrVulkanCommandFilterMode = GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly;
 // =================================================================================================
 // GfxrVulkanCommandFilter
 // =================================================================================================

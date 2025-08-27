@@ -500,6 +500,8 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
 {
     LOGD("RunReplayApk(): starting\n");
 
+    std::string updated_replay_args = replay_args;
+
     // Enable pm4 capture
     if (dump_pm4)
     {
@@ -507,25 +509,34 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
         {
             return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
         }
+        if (absl::StrContains(replay_args, "--loop-single-frame") ||
+            absl::StrContains(replay_args, "--loop-single-frame-count"))
+        {
+            return absl::InvalidArgumentError("PM4 capture doesn't support replay arguments "
+                                              "--loop-single-frame or --loop-single-frame-count");
+        }
         std::string enable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 1",
                                                           kEnableReplayPm4DumpPropertyName);
         m_device->Adb().Run(enable_pm4_dump_cmd).IgnoreError();
 
         std::string
-        dump_pm4_file_name = std::filesystem::path(capture_path).filename().stem().string();
+        dump_pm4_file_name = std::filesystem::path(capture_path).filename().stem().string() + ".rd";
         LOGD("Enable pm4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \"%s\"",
                                                                  kReplayPm4DumpFileNamePropertyName,
                                                                  dump_pm4_file_name);
 
         m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
+
+        // Loop is needed in the replay to be able to start/stop PM4 capture.
+        updated_replay_args += " --loop-single-frame --loop-single-frame-count 2";
     }
 
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("python %s replay %s %s",
                                       recon_py_path,
                                       capture_path,
-                                      replay_args);
+                                      updated_replay_args);
     absl::StatusOr<std::string> res = RunCommand(cmd);
     // Cleanup PM4 capture
     if (dump_pm4)
@@ -545,7 +556,7 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                                      kReplayPm4DumpFileNamePropertyName);
         m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
 
-        std::string on_device_trace_path = absl::StrFormat("%s/%s-0001.rd",
+        std::string on_device_trace_path = absl::StrFormat("%s/%s.rd",
                                                            kDeviceCapturePath,
                                                            std::filesystem::path(capture_path)
                                                            .filename()

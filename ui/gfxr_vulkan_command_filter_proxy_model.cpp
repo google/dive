@@ -51,6 +51,8 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
     uint64_t                      node_index = (uint64_t)indexInSource.internalPointer();
     const GfxrVulkanCommandModel *sourceMyModel = qobject_cast<const GfxrVulkanCommandModel *>(
     sourceModel());
+    const Dive::NodeType node_type = m_command_hierarchy->GetNodeType(node_index);
+
     if (!sourceMyModel)
     {
         return false;
@@ -61,43 +63,40 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         return false;
     }
 
-    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kGfxrVulkanSubmitNode)
+    if (node_type == Dive::NodeType::kGfxrVulkanSubmitNode)
     {
         return true;
     }
 
-    if (m_command_hierarchy->GetNodeType(node_index) ==
-        Dive::NodeType::kGfxrVulkanCommandBufferNode)
+    if (node_type == Dive::NodeType::kGfxrVulkanCommandBufferNode)
     {
         return true;
     }
 
     if (m_filter_mode == kNone)
     {
-        if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kGfxrVulkanCommandNode)
+        if (node_type == Dive::NodeType::kGfxrVulkanCommandNode)
         {
             return true;
         }
 
-        if (m_command_hierarchy->GetNodeType(node_index) ==
-            Dive::NodeType::kGfxrVulkanCommandArgNode)
+        if (node_type == Dive::NodeType::kGfxrVulkanCommandArgNode)
         {
             return false;
         }
 
         // Do not include non-gfxr submits and their descendents.
-        if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kSubmitNode)
+        if (node_type == Dive::NodeType::kSubmitNode)
         {
             return false;
         }
     }
     else if (m_filter_mode == kDrawDispatchOnly)
     {
-        // Only display Draw/Dispatch and RenderPass commands when filter is enabled.
-        if (m_command_hierarchy->GetNodeType(node_index) !=
-            Dive::NodeType::kGfxrVulkanDrawCommandNode &&
-            m_command_hierarchy->GetNodeType(node_index) !=
-            Dive::NodeType::kGfxrVulkanRenderPassCommandNode)
+        // Only display Draw/Dispatch, RenderPass, and debug label commands when filter is enabled.
+        if ((node_type != Dive::NodeType::kGfxrVulkanDrawCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanRenderPassCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode))
         {
             return false;
         }
@@ -105,12 +104,6 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         {
             return true;
         }
-    }
-
-    // Do not include non-gfxr submits and their descendents.
-    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kSubmitNode)
-    {
-        return false;
     }
 
     return true;

@@ -71,8 +71,8 @@
 #include "shortcuts.h"
 #include "shortcuts_window.h"
 #include "text_file_view.h"
-#include "tree_view_combo_box.h"
 #include "ui/dive_tree_view.h"
+#include "gfxr_vulkan_command_filter.h"
 
 static constexpr int         kViewModeStringCount = 2;
 static constexpr int         kEventViewModeStringCount = 1;
@@ -125,59 +125,59 @@ MainWindow::MainWindow()
         QVBoxLayout *left_vertical_layout = new QVBoxLayout();
 
         QFrame *text_combo_box_frame = new QFrame();
+
+        QHBoxLayout *text_combo_box_layout = new QHBoxLayout();
+
+        QLabel *combo_box_label = new QLabel(tr("Mode:"));
+
+        // Set model for the view mode combo box
+        QStandardItemModel *combo_box_model = new QStandardItemModel();
+        for (int i = 0; i < kViewModeStringCount; i++)
         {
-            QHBoxLayout *text_combo_box_layout = new QHBoxLayout();
-
-            QLabel *combo_box_label = new QLabel(tr("Mode:"));
-
-            // Set model for the combo box
-            QStandardItemModel *combo_box_model = new QStandardItemModel();
-            for (int i = 0; i < kViewModeStringCount; i++)
-            {
-                QStandardItem *item = new QStandardItem(kViewModeStrings[i]);
-                combo_box_model->appendRow(item);
-            }
-
-            QModelIndex    event_item_index = combo_box_model->index(1, 0, QModelIndex());
-            QStandardItem *event_item = combo_box_model->itemFromIndex(event_item_index);
-            event_item->setSelectable(false);
-            for (int i = 0; i < kEventViewModeStringCount; i++)
-            {
-                QStandardItem *item = new QStandardItem(kEventViewModeStrings[i]);
-                event_item->appendRow(item);
-            }
-            m_view_mode_combo_box->setModel(combo_box_model);
-
-            QModelIndex vulkan_event_item_index = combo_box_model->index(0, 0, event_item_index);
-            m_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
-            m_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
-
-            text_combo_box_layout->addWidget(combo_box_label);
-            text_combo_box_layout->addWidget(m_view_mode_combo_box, 1);
-
-            QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
-            m_filter_mode_combo_box = new TreeViewComboBox();
-            m_filter_mode_combo_box->setMinimumWidth(150);
-
-            QStandardItemModel *filter_combo_box_model = new QStandardItemModel();
-            for (uint32_t i = 0; i < DiveFilterModel::kFilterModeCount; i++)
-            {
-                QStandardItem *item = new QStandardItem(kFilterStrings[i]);
-                filter_combo_box_model->appendRow(item);
-            }
-            m_filter_mode_combo_box->setModel(filter_combo_box_model);
-            m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
-
-            text_combo_box_layout->addWidget(filter_combo_box_label);
-            text_combo_box_layout->addWidget(m_filter_mode_combo_box, 1);
-
-            m_search_trigger_button = new QPushButton;
-            m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
-            text_combo_box_layout->addWidget(m_search_trigger_button);
-
-            text_combo_box_layout->addStretch();
-            text_combo_box_frame->setLayout(text_combo_box_layout);
+            QStandardItem *item = new QStandardItem(kViewModeStrings[i]);
+            combo_box_model->appendRow(item);
         }
+
+        QModelIndex    event_item_index = combo_box_model->index(1, 0, QModelIndex());
+        QStandardItem *event_item = combo_box_model->itemFromIndex(event_item_index);
+        event_item->setSelectable(false);
+        for (int i = 0; i < kEventViewModeStringCount; i++)
+        {
+            QStandardItem *item = new QStandardItem(kEventViewModeStrings[i]);
+            event_item->appendRow(item);
+        }
+        m_view_mode_combo_box->setModel(combo_box_model);
+
+        QModelIndex vulkan_event_item_index = combo_box_model->index(0, 0, event_item_index);
+        m_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
+        m_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
+
+        text_combo_box_layout->addWidget(combo_box_label);
+        text_combo_box_layout->addWidget(m_view_mode_combo_box, 1);
+
+        QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
+        m_filter_mode_combo_box = new TreeViewComboBox();
+        m_filter_mode_combo_box->setMinimumWidth(150);
+
+        // Set model for the filter combo box
+        QStandardItemModel *filter_combo_box_model = new QStandardItemModel();
+        for (uint32_t i = 0; i < DiveFilterModel::kFilterModeCount; i++)
+        {
+            QStandardItem *item = new QStandardItem(kFilterStrings[i]);
+            filter_combo_box_model->appendRow(item);
+        }
+        m_filter_mode_combo_box->setModel(filter_combo_box_model);
+        m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
+
+        text_combo_box_layout->addWidget(filter_combo_box_label);
+        text_combo_box_layout->addWidget(m_filter_mode_combo_box, 1);
+
+        m_search_trigger_button = new QPushButton;
+        m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
+        text_combo_box_layout->addWidget(m_search_trigger_button);
+
+        text_combo_box_layout->addStretch();
+        text_combo_box_frame->setLayout(text_combo_box_layout);
 
         m_event_search_bar = new SearchBar(this);
         m_event_search_bar->setObjectName("Event Search Bar");
@@ -207,6 +207,12 @@ MainWindow::MainWindow()
         // Set the proxy model as the view's model
         m_command_hierarchy_view->setModel(m_filter_model);
         m_filter_model->SetMode(kDefaultFilterMode);
+
+        m_filter_gfxr_commands_combo_box =
+        new GfxrVulkanCommandFilter(*m_command_hierarchy_view,
+                                    *m_gfxr_vulkan_commands_filter_proxy_model);
+        text_combo_box_layout->addWidget(m_filter_gfxr_commands_combo_box, 1);
+        m_filter_gfxr_commands_combo_box->hide();
 
         m_perf_counter_model = new PerfCounterModel();
 
@@ -633,6 +639,10 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_shader_view->Reset();
     m_text_file_view->Reset();
     m_prev_command_view_mode = QString();
+    m_filter_gfxr_commands_combo_box->Reset();
+
+    m_gfxr_vulkan_commands_filter_proxy_model->setSourceModel(
+    m_gfxr_vulkan_command_hierarchy_model);
 
     m_gfxr_vulkan_commands_filter_proxy_model->setSourceModel(
     m_gfxr_vulkan_command_hierarchy_model);
@@ -679,6 +689,9 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_command_hierarchy_view->setModel(m_filter_model);
 
     m_filter_mode_combo_box->setEnabled(true);
+    m_filter_mode_combo_box->show();
+    m_filter_gfxr_commands_combo_box->setEnabled(false);
+    m_filter_gfxr_commands_combo_box->hide();
     m_view_mode_combo_box->setEnabled(true);
 
     ConnectDiveFileTabs();
@@ -764,6 +777,10 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     m_command_hierarchy_view->setModel(m_filter_model);
 
     m_filter_mode_combo_box->setEnabled(true);
+    m_filter_mode_combo_box->show();
+    m_filter_gfxr_commands_combo_box->Reset();
+    m_filter_gfxr_commands_combo_box->setEnabled(false);
+    m_filter_gfxr_commands_combo_box->hide();
     m_view_mode_combo_box->setEnabled(true);
 
     ConnectDiveFileTabs();
@@ -803,6 +820,7 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     // Reset models and views that display data from the capture
     m_gfxr_vulkan_command_hierarchy_model->Reset();
     m_prev_command_view_mode = QString();
+    m_filter_gfxr_commands_combo_box->Reset();
 
     m_gfxr_vulkan_command_hierarchy_model->BeginResetModel();
 
@@ -833,6 +851,9 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     // Disable the Mode and Filter combo boxes.
     m_view_mode_combo_box->setEnabled(false);
     m_filter_mode_combo_box->setEnabled(false);
+    m_filter_mode_combo_box->hide();
+    m_filter_gfxr_commands_combo_box->setEnabled(true);
+    m_filter_gfxr_commands_combo_box->show();
 
     m_gfxr_vulkan_command_hierarchy_model->EndResetModel();
 

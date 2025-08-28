@@ -46,9 +46,19 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
                  m_cur_submit_node_index,
                  cmd_buffer_index);
     }
-    else if (vk_cmd_info.GetVkCmdName().find("vkCmdDraw") != std::string::npos)
+    else if (vk_cmd_info.GetVkCmdName().find("vkCmdDraw") != std::string::npos ||
+             vk_cmd_info.GetVkCmdName().find("vkCmdDispatch") != std::string::npos)
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanDrawCommandNode,
+                                        vk_cmd_string_stream.str());
+        GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
+        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                 m_cur_command_buffer_node_index,
+                 vk_cmd_index);
+    }
+    else if (vk_cmd_info.GetVkCmdName().find("RenderPass") != std::string::npos)
+    {
+        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,

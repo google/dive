@@ -29,14 +29,25 @@ class GfxrVulkanCommandFilterProxyModel : public QSortFilterProxyModel
     Q_OBJECT
 
 public:
+    enum FilterMode : uint32_t
+    {
+        kNone,
+        kDrawDispatchOnly,
+        kFilterModeCount
+    };
+
     GfxrVulkanCommandFilterProxyModel(QObject                      *parent = nullptr,
                                       const Dive::CommandHierarchy *command_hierarchy = nullptr);
+    void SetFilter(FilterMode filter_mode);
 
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 
 private:
+    void ApplyNewFilterMode(FilterMode new_mode);
+
     const Dive::CommandHierarchy *m_command_hierarchy;
+    FilterMode                    m_filter_mode;
 };
 
 #endif  // GFXRVULKANCOMMANDFILTERPROXYMODEL_H

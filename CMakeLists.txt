@@ -144,3 +144,10 @@ add_test(NAME TestLoadingUncompressedTrace
          COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0052.rd)
 add_test(NAME TestLoadingCompressedTrace
          COMMAND ${CMAKE_BINARY_DIR}/bin/divecli extract -o . ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd)
+
+if(DIVE_UNIT_TESTS)
+    add_custom_target(run_all_tests
+        COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C ${CMAKE_BUILD_TYPE} --verbose
+        DEPENDS available_metrics_test
+    )
+endif()

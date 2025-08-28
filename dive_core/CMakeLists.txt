@@ -113,6 +113,7 @@ endif()
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
+list(FILTER SRC_FILES EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/tests/.*")
 
 if(DIVE_NO_DISASSEMBLY)
 list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly\\.cpp")
@@ -238,3 +239,8 @@ else()
     $<$<COMPILE_LANGUAGE:C>:-Wno-override-init>
   )
 endif()
+
+if(DIVE_UNIT_TESTS)
+    add_subdirectory(tests)
+endif()
+

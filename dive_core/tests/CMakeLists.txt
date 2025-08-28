@@ -1,0 +1,9 @@
+cmake_minimum_required(VERSION 3.10)
+
+set(CMAKE_CXX_STANDARD 17)
+
+add_executable(available_metrics_test available_metrics_test.cpp)
+target_include_directories(available_metrics_test PRIVATE ${CMAKE_SOURCE_DIR}/third_party/googletest/googletest/include)
+target_link_libraries(available_metrics_test gtest gtest_main dive_core)
+add_test(NAME available_metrics_test COMMAND available_metrics_test)
+

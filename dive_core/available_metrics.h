@@ -17,8 +17,9 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
+#include <filesystem>
 #include <string>
+#include <unordered_map>
 
 namespace Dive
 {
@@ -37,7 +38,6 @@ Available metrics is in the format of
 
 struct MetricInfo
 {
-
     uint32_t    m_metric_id;
     MetricType  m_metric_type;
     std::string m_key;
@@ -49,7 +49,7 @@ class AvailableMetrics
 {
 public:
     // Load available metrics from a CSV file
-    bool LoadFromCsv(const char* file_path);
+    bool LoadFromCsv(const std::filesystem::path& file_path);
 
     // Get the metric info for a given key
     const MetricInfo* GetMetricInfo(const std::string& key) const;
@@ -58,7 +58,7 @@ public:
     MetricType GetMetricType(const std::string& key) const;
 
 private:
-    std::map<std::string, MetricInfo> m_metrics;
+    std::unordered_map<std::string, MetricInfo> m_metrics;
 };
 
 }  // namespace Dive

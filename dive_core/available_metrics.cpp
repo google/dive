@@ -16,6 +16,7 @@
 
 #include "dive_core/available_metrics.h"
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -38,7 +39,7 @@ static void remove_quotes(std::string& str)
     }
 }
 
-bool AvailableMetrics::LoadFromCsv(const char* file_path)
+bool AvailableMetrics::LoadFromCsv(const std::filesystem::path& file_path)
 {
     std::ifstream file(file_path);
     if (!file.is_open())

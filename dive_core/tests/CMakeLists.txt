@@ -7,3 +7,7 @@ target_include_directories(available_metrics_test PRIVATE ${CMAKE_SOURCE_DIR}/th
 target_link_libraries(available_metrics_test gtest gtest_main dive_core)
 add_test(NAME available_metrics_test COMMAND available_metrics_test)
 
+add_executable(perf_counter_data_test perf_counter_data_test.cpp)
+target_include_directories(perf_counter_data_test PRIVATE ${CMAKE_SOURCE_DIR}/third_party/googletest/googletest/include)
+target_link_libraries(perf_counter_data_test gtest gtest_main dive_core)
+add_test(NAME perf_counter_data_test COMMAND perf_counter_data_test)

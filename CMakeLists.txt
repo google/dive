@@ -128,7 +128,7 @@ else()
     endif()
 endif()
 
-option(DIVE_UNIT_TESTS, "Build unit tests for dive")
+option(DIVE_UNIT_TESTS "Build unit tests for dive" ON)
 
 
 option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")
@@ -148,6 +148,6 @@ add_test(NAME TestLoadingCompressedTrace
 if(DIVE_UNIT_TESTS)
     add_custom_target(run_all_tests
         COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C ${CMAKE_BUILD_TYPE} --verbose
-        DEPENDS available_metrics_test
+        DEPENDS available_metrics_test perf_counter_data_test
     )
 endif()

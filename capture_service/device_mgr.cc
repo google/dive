@@ -496,9 +496,11 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                          const std::string &replay_args,
                                          bool               dump_pm4,
-                                         const std::string &pm4_capture_download_path)
+                                         const std::string &download_path)
 {
     LOGD("RunReplayApk(): starting\n");
+
+    std::string updated_replay_args = replay_args;
 
     // Enable pm4 capture
     if (dump_pm4)
@@ -507,24 +509,34 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
         {
             return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
         }
+        if (absl::StrContains(replay_args, "--loop-single-frame") ||
+            absl::StrContains(replay_args, "--loop-single-frame-count"))
+        {
+            return absl::InvalidArgumentError("PM4 capture doesn't support replay arguments "
+                                              "--loop-single-frame or --loop-single-frame-count");
+        }
         std::string enable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 1",
                                                           kEnableReplayPm4DumpPropertyName);
         m_device->Adb().Run(enable_pm4_dump_cmd).IgnoreError();
 
-        std::string dump_pm4_file_name = std::filesystem::path(capture_path).filename().string();
+        std::string
+        dump_pm4_file_name = std::filesystem::path(capture_path).filename().stem().string() + ".rd";
         LOGD("Enable pm4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \"%s\"",
                                                                  kReplayPm4DumpFileNamePropertyName,
                                                                  dump_pm4_file_name);
 
         m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
+
+        // Loop is needed in the replay to be able to start/stop PM4 capture.
+        updated_replay_args += " --loop-single-frame --loop-single-frame-count 2";
     }
 
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("python %s replay %s %s",
                                       recon_py_path,
                                       capture_path,
-                                      replay_args);
+                                      updated_replay_args);
     absl::StatusOr<std::string> res = RunCommand(cmd);
     // Cleanup PM4 capture
     if (dump_pm4)
@@ -544,22 +556,61 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                                      kReplayPm4DumpFileNamePropertyName);
         m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
 
-        std::string on_device_trace_path = absl::StrFormat("%s/%s-0001.rd",
+        std::string on_device_trace_path = absl::StrFormat("%s/%s.rd",
                                                            kDeviceCapturePath,
                                                            std::filesystem::path(capture_path)
                                                            .filename()
+                                                           .stem()
                                                            .string()
                                                            .c_str());
-        auto status = m_device->RetrieveTrace(on_device_trace_path, pm4_capture_download_path);
+
+        std::string on_device_trace_path_in_progress = absl::StrFormat("%s.inprogress",
+                                                                       on_device_trace_path
+                                                                       .c_str());
+
+        // Wait for trace file to be written to.
+        do
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        } while (m_device->FileExists(on_device_trace_path_in_progress));
+
+        auto status = m_device->RetrieveTrace(on_device_trace_path, download_path);
         if (status.ok())
         {
             LOGI("Trace file %s downloaded to %s\n",
                  on_device_trace_path.c_str(),
-                 pm4_capture_download_path.c_str());
+                 download_path.c_str());
         }
         else
         {
             LOGI("Failed to download the trace file %s\n", on_device_trace_path.c_str());
+        }
+    }
+
+    if (absl::StrContains(replay_args, "--enable-gpu-time"))
+    {
+        // Wait application to exit before trying to retrieve the gpu time file.
+        do
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        } while (m_device->IsProcessRunning(kGfxrReplayAppName));
+
+        std::string on_device_file_path = absl::StrFormat("%s/gpu_time.csv",
+                                                          std::filesystem::path(capture_path)
+                                                          .parent_path()
+                                                          .string()
+                                                          .c_str());
+
+        auto status = m_device->RetrieveTrace(on_device_file_path, download_path);
+        if (status.ok())
+        {
+            LOGI("Gpu time file %s downloaded to %s\n",
+                 on_device_file_path.c_str(),
+                 download_path.c_str());
+        }
+        else
+        {
+            LOGI("Failed to download the trace file %s\n", on_device_file_path.c_str());
         }
     }
 
@@ -677,6 +728,17 @@ bool AndroidDevice::IsProcessRunning(absl::string_view process_name) const
     if (pid.empty())
         return false;
     return true;
+}
+
+bool AndroidDevice::FileExists(const std::string &file_path)
+{
+    // Checks if the file file exists. If the file returns exists, 0 is returned, if not, 1 is
+    // returned.
+    std::string cmd = absl::StrFormat("shell test -e \"%s\"", file_path.c_str());
+
+    absl::StatusOr<std::string> result = Adb().Run(cmd);
+
+    return result.ok();
 }
 
 }  // namespace Dive

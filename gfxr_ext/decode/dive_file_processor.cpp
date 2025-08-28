@@ -19,8 +19,10 @@ limitations under the License.
 #include "dive_file_processor.h"
 
 #include "util/logging.h"
+#include "util/platform.h"
 
 #include "dive_block_data.h"
+#include "dive_pm4_capture.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -39,6 +41,36 @@ void DiveFileProcessor::SetDiveBlockData(std::shared_ptr<DiveBlockData> p_block_
 
     // When populating DiveBlockData we want to run through the entire file.
     run_without_decoders_ = true;
+}
+
+bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& content)
+{
+    std::string new_file_path = absolute_path_ + "/" + name;
+
+    FILE* fd;
+    int   result = util::platform::FileOpen(&fd, new_file_path.c_str(), "wb");
+    if (result || fd == nullptr)
+    {
+        GFXRECON_LOG_ERROR("Failed to open file %s, exit code: %d", new_file_path.c_str(), result);
+        return false;
+    }
+
+    bool res = util::platform::FilePuts(content.c_str(), fd);
+    if (!res)
+    {
+        GFXRECON_LOG_ERROR("Could not write file: %s", new_file_path.c_str());
+    }
+
+    GFXRECON_LOG_INFO("Wrote file: %s", new_file_path.c_str());
+
+    result = util::platform::FileClose(fd);
+    if (result)
+    {
+        GFXRECON_LOG_ERROR("Failed to close file %s, exit code: %d", new_file_path.c_str(), result);
+        return false;
+    }
+
+    return true;
 }
 
 bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_header,
@@ -87,7 +119,12 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
             SetUsesFrameMarkers(true);
             current_frame_number_ = kFirstFrame;
         }
-
+#if defined(__ANDROID__)
+        if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
+        {
+            DivePM4Capture::GetInstance().TryStopCapture();
+        }
+#endif
         // Make sure to increment the frame number on the way out.
         ++current_frame_number_;
         ++block_index_;
@@ -119,6 +156,12 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
         state_end_marker_file_offset_ = TellFile(gfxr_file_name_);
         GFXRECON_LOG_INFO("Stored state end marker offset %d", state_end_marker_file_offset_);
         GFXRECON_LOG_INFO("Single frame number %d", GetFirstFrame());
+#if defined(__ANDROID__)
+        if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
+        {
+            DivePM4Capture::GetInstance().TryStartCapture();
+        }
+#endif
     }
 
     return success;

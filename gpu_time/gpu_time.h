@@ -134,6 +134,9 @@ public:
         return m_metrics.GetCmdRenderPassCount(index);
     }
     std::string GetStatsString() const;
+    // Gives a CSV format string representing the GPU timing data for objects in the current frame
+    // Type, id, mean [ms], median [ms]
+    std::string GetStatsCSVString() const;
     void        ClearFrameCache();
 
 private:

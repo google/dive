@@ -303,13 +303,41 @@ std::string GPUTime::GetStatsString() const
             const Stats& renderpass_stats = GetFrameRenderPassTimeStats(renderpass_index);
             ss << "\t\tRenderPass" << renderpass_index << ": \n";
             PopulateStatsString(ss, renderpass_stats, 2);
+            renderpass_index++;
         }
-        renderpass_index += renderpass_count;
     }
 
     std::string message = "Frame " + std::to_string(m_frame_index) + " processed successfully.\n" +
                           ss.str();
     return message;
+}
+
+std::string GPUTime::GetStatsCSVString() const
+{
+    const Stats&      stats = GetFrameTimeStats();
+    std::stringstream ss;
+
+    ss << std::fixed << std::setprecision(3) << "Frame," << std::to_string(m_frame_index) << ","
+       << stats.average << "," << stats.median << "\n";
+
+    size_t rp_index = 0;
+    size_t cmd_count = m_metrics.GetFrameCmdCount();
+    for (size_t cmd_index = 0; cmd_index < cmd_count; ++cmd_index)
+    {
+        const Stats& cmd_stats = GetFrameCmdTimeStats(cmd_index);
+        ss << std::fixed << std::setprecision(3) << "CommandBuffer," << std::to_string(cmd_index)
+           << "," << cmd_stats.average << "," << cmd_stats.median << "\n";
+
+        size_t rp_count = GetCmdRenderPassCount(cmd_index);
+        for (size_t j = 0; j < rp_count; ++j)
+        {
+            const Stats& rp_stats = GetFrameRenderPassTimeStats(rp_index);
+            ss << std::fixed << std::setprecision(3) << "RenderPass," << std::to_string(rp_index)
+               << "," << rp_stats.average << "," << rp_stats.median << "\n";
+            rp_index++;
+        }
+    }
+    return ss.str();
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnCreateDevice(VkDevice                     device,

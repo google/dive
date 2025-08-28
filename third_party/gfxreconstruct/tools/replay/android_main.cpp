@@ -283,6 +283,16 @@ void android_main(struct android_app* app)
                 {
                     GFXRECON_WRITE_CONSOLE("File did not contain any frames");
                 }
+
+                // GOOGLE: Save GPU time stats file
+                if (arg_parser.IsOptionSet(kEnableGPUTime)) {
+                    auto* dive_file_processor = dynamic_cast<gfxrecon::decode::DiveFileProcessor*>(file_processor.get());
+                    GFXRECON_ASSERT(dive_file_processor)
+                    bool res = dive_file_processor->WriteFile("gpu_time.csv", vulkan_replay_consumer.GetGPUTimeStatsCSVStr());
+                    if (!res) {
+                        GFXRECON_WRITE_CONSOLE("Unable to write GPU stats file");
+                    }
+                }
             }
         }
         catch (std::runtime_error& error)

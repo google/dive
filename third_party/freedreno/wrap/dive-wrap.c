@@ -47,12 +47,34 @@ void SetCaptureState(int state)
 
     if (state == 0 && capture_state == 1)
     {
-        const char* num = getenv("TESTNUM");
-        if (!num)
-            num = "0";
-        int  frame_num = atoi(num);
         char path[1024];
-        snprintf(path, 1024, "/sdcard/Download/trace-frame-%04u.rd", frame_num);
+        if (IsGfrxReplayCapture())
+        {
+
+            char prop_str[PROP_VALUE_MAX];
+            int  len = __system_property_get(DIVE_REPLAY_PM4_CAPTURE_FILE_NAME_PROPERTY_NAME,
+                                            prop_str);
+
+            if (len <= 0)
+            {
+                LOGI("Property %s not set.\n", DIVE_REPLAY_PM4_CAPTURE_FILE_NAME_PROPERTY_NAME);
+                return;
+            }
+            LOGD("Property %s is set to %s\n",
+                 DIVE_REPLAY_PM4_CAPTURE_FILE_NAME_PROPERTY_NAME,
+                 prop_str);
+
+            snprintf(path, 1024, "/sdcard/Download/%s", prop_str);
+        }
+        else
+        {
+
+            const char* num = getenv("TESTNUM");
+            if (!num)
+                num = "0";
+            int frame_num = atoi(num);
+            snprintf(path, 1024, "/sdcard/Download/trace-frame-%04u.rd", frame_num);
+        }
         collect_trace_file(path);
     }
 

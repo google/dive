@@ -252,14 +252,17 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     std::set<WindowScissor>         window_scissors;
 
     Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
-    uint32_t             num_binning_passes = 0, num_tiling_passes = 0, num_draws_in_pass = 0;
+    uint32_t             num_binning_passes = 0, num_tiling_passes = 0;
+#ifndef NDEBUG
+    uint32_t num_draws_in_pass = 0;
+#endif
 
     for (size_t i = 0; i < event_count; ++i)
     {
         const Dive::EventInfo &info = meta_data.m_event_info[i];
         if (info.m_render_mode != cur_type)
         {
-#ifdef _DEBUG
+#ifndef NDEBUG
             if (cur_type == Dive::RenderModeType::kBinning)
                 ostream << "Binning pass " << num_binning_passes << ": " << num_draws_in_pass
                         << std::endl;
@@ -273,7 +276,9 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
                 num_tiling_passes++;
 
             cur_type = info.m_render_mode;
+#ifndef NDEBUG
             num_draws_in_pass = 0;
+#endif
         }
 
         if (info.m_type == Dive::EventInfo::EventType::kDispatch)
@@ -295,7 +300,9 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
                 stats_list[kTiledDraws]++;
 
+#ifndef NDEBUG
             num_draws_in_pass++;
+#endif
             if (info.m_num_indices != 0)
                 event_num_indices.push_back(info.m_num_indices);
 

@@ -904,6 +904,9 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
     // Disconnect the signals for all of the possible tabs.
     DisconnectAllTabs();
 
+    // Clear vectors of draw call indices as they are only used for a correlated view.
+    m_filter_model->ClearDrawCallIndices();
+
     if (m_gfxr_capture_loaded)
     {
         file_loaded = LoadGfxrFile(file_name);

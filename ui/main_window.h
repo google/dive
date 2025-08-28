@@ -17,6 +17,7 @@
 #pragma once
 #include <memory>
 #include <QMainWindow>
+#include <qabstractitemmodel.h>
 #include <qshortcut.h>
 #include "dive_core/cross_ref.h"
 #include "progress_tracker_callback.h"
@@ -36,6 +37,7 @@ class EventTimingView;
 #endif
 class PerfCounterTabView;
 class PerfCounterModel;
+class GfxrVulkanCommandTabView;
 class GfxrVulkanCommandArgumentsTabView;
 class GfxrVulkanCommandArgumentsFilterProxyModel;
 class GfxrVulkanCommandFilterProxyModel;
@@ -98,6 +100,7 @@ public slots:
     void OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path);
     void OnOpenFileFromAnalyzeDialog(const QString &file_path);
     void OnSwitchToShaderTab();
+    void OnFilterApplied(const QModelIndex &, int);
 
 private slots:
     void OnCommandViewModeChange(const QString &string);
@@ -129,19 +132,22 @@ private slots:
     void DisconnectAllTabs();
 
 private:
-    void    CreateActions();
-    void    CreateMenus();
-    void    CreateToolBars();
-    void    CreateShortcuts();
-    void    CreateStatusBar();
-    void    ShowTempStatus(const QString &status_message);
-    void    ExpandResizeHierarchyView();
-    void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
-    void    UpdateRecentFileActions(QStringList recent_files);
-    QString StrippedName(const QString &fullFileName);
-    void    HideOverlay();
-    void    UpdateTabAvailability();
-    void    ResetTabWidget();
+    void        CreateActions();
+    void        CreateMenus();
+    void        CreateToolBars();
+    void        CreateShortcuts();
+    void        CreateStatusBar();
+    void        ShowTempStatus(const QString &status_message);
+    void        ExpandResizeHierarchyView();
+    void        SetCurrentFile(const QString &fileName, bool is_temp_file = false);
+    void        UpdateRecentFileActions(QStringList recent_files);
+    QString     StrippedName(const QString &fullFileName);
+    void        HideOverlay();
+    void        UpdateTabAvailability();
+    void        ResetTabWidget();
+    QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model,
+                                        uint64_t            target_node_index,
+                                        const QModelIndex  &parent = QModelIndex());
 
     QMenu         *m_file_menu;
     QMenu         *m_recent_captures_menu;
@@ -206,6 +212,8 @@ private:
     int                                m_shader_view_tab_index;
     EventStateView                    *m_event_state_view;
     int                                m_event_state_view_tab_index;
+    GfxrVulkanCommandTabView          *m_gfxr_vulkan_command_tab_view;
+    int                                m_gfxr_vulkan_command_view_tab_index;
     GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view;
     int                                m_gfxr_vulkan_command_arguments_view_tab_index;
     PerfCounterTabView                *m_perf_counter_tab_view;
@@ -233,12 +241,15 @@ private:
     QShortcut *m_command_tab_shortcut = nullptr;
     QShortcut *m_shader_tab_shortcut = nullptr;
     QShortcut *m_event_state_tab_shortcut = nullptr;
+    QShortcut *m_gfxr_vulkan_command_tab_shortcut = nullptr;
+    QShortcut *m_gfxr_vulkan_command_arguments_tab_shortcut = nullptr;
 
     std::string m_unsaved_capture_path;
     bool        m_capture_saved = false;
     int         m_capture_num = 0;
     int         m_previous_tab_index = -1;
     bool        m_gfxr_capture_loaded = false;
+    bool        m_correlated_capture_loaded = false;
 
     EventSelection *m_event_selection;
 

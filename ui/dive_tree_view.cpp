@@ -55,32 +55,26 @@ void DiveFilterModel::applyNewFilterMode(FilterMode new_mode)
 
     beginResetModel();
     m_filter_mode = new_mode;
+
+    // Only collect the draw call indices if gfxr and pm4 data are present.
+    if (!m_gfxr_draw_call_indices.empty())
+    {
+        // Clear the vector of pm4 draw call indices.
+        m_pm4_draw_call_indices.clear();
+        // Recollect pm4 draw call indices when new filter is applied.
+        CollectPm4DrawCallIndices(QModelIndex());
+    }
     // invalidateFilter() doesn't invalidate all nodes
     // begin/endResetModel() will cause a full re-evaluation and rebuild of the proxy's internal
     // mapping.
     endResetModel();
 }
 
-void DiveFilterModel::SetMode(FilterMode filter_mode)
+bool DiveFilterModel::IncludeIndex(uint64_t node_index) const
 {
-    applyNewFilterMode(filter_mode);
-}
-
-bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
-{
-    if (m_filter_mode == kNone)
-    {
-        return true;
-    }
-
-    QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-    if (!index.isValid())
-        return false;
-
-    uint64_t node_index = (uint64_t)index.internalPointer();
-
     Dive::CommandHierarchy::FilterListType
     filter_list_type = Dive::CommandHierarchy::kFilterListTypeCount;
+
     switch (m_filter_mode)
     {
     case kBinningPassOnly:
@@ -96,15 +90,125 @@ bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceP
         DIVE_ASSERT(false);
         break;
     }
+
     const auto &filter_exclude_indices = m_command_hierarchy.GetFilterExcludeIndices(
     filter_list_type);
-    // If the node index is in the exclude list, we hide the row
+
+    // If the node index is in the exclude list, we exclude the index.
     if (filter_exclude_indices.find(node_index) != filter_exclude_indices.end())
     {
         return false;
     }
 
     return true;
+}
+
+void DiveFilterModel::SetMode(FilterMode filter_mode)
+{
+    applyNewFilterMode(filter_mode);
+}
+
+void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
+{
+    if (!parent_index.isValid())
+    {
+        m_pm4_draw_call_indices.clear();
+    }
+    else
+    {
+        // Check if the current parent node is filtered out.
+        uint64_t parent_node_index = (uint64_t)parent_index.internalPointer();
+
+        if (!IncludeIndex(parent_node_index))
+        {
+            return;
+        }
+    }
+
+    int row_count = sourceModel()->rowCount(parent_index);
+    for (int row = 0; row < row_count; ++row)
+    {
+        QModelIndex index = sourceModel()->index(row, 0, parent_index);
+        if (index.isValid())
+        {
+            uint64_t       node_index = (uint64_t)index.internalPointer();
+            Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
+
+            if (node_type == Dive::NodeType::kDrawDispatchNode)
+            {
+                m_pm4_draw_call_indices.push_back(node_index);
+            }
+
+            // Only recurse into children if the current node is not a Vulkan submit node.
+            if (node_type != Dive::NodeType::kGfxrVulkanSubmitNode)
+            {
+                CollectPm4DrawCallIndices(index);
+            }
+        }
+    }
+}
+
+void DiveFilterModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index)
+{
+    if (!parent_index.isValid())
+    {
+        m_gfxr_draw_call_indices.clear();
+    }
+
+    int row_count = sourceModel()->rowCount(parent_index);
+    for (int row = 0; row < row_count; ++row)
+    {
+        QModelIndex index = sourceModel()->index(row, 0, parent_index);
+        if (index.isValid())
+
+        {
+            uint64_t       node_index = (uint64_t)index.internalPointer();
+            Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
+
+            // If a node is a gfxr draw call, add its index to the list.
+            if (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
+            {
+                m_gfxr_draw_call_indices.push_back(node_index);
+            }
+
+            // Only recurse into children if the current node is gfxr submit node.
+            if (node_type != Dive::NodeType::kSubmitNode)
+            {
+                CollectGfxrDrawCallIndices(index);
+            }
+        }
+    }
+}
+
+void DiveFilterModel::ClearDrawCallIndices()
+{
+    m_pm4_draw_call_indices.clear();
+    m_gfxr_draw_call_indices.clear();
+}
+
+bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+{
+    QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
+    uint64_t    node_index = (uint64_t)index.internalPointer();
+
+    Dive::NodeType current_node_type = m_command_hierarchy.GetNodeType(node_index);
+
+    if (current_node_type == Dive::NodeType::kGfxrVulkanSubmitNode)
+    {
+        return false;
+    }
+
+    if (!index.isValid())
+    {
+        return false;
+    }
+
+    if (m_filter_mode == kNone)
+    {
+        return true;
+    }
+
+    return IncludeIndex(node_index);
 }
 
 // =================================================================================================

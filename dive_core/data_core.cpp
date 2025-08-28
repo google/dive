@@ -35,7 +35,10 @@ DataCore::DataCore(ProgressTracker *progress_tracker) :
 //--------------------------------------------------------------------------------------------------
 CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string &file_name)
 {
-    return m_dive_capture_data.LoadFile(file_name);
+    std::filesystem::path rd_file_path(file_name);
+    rd_file_path.replace_extension(".rd");
+    m_capture_metadata = CaptureMetadata();
+    return m_dive_capture_data.LoadFiles(rd_file_path.string(), file_name);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -106,7 +109,7 @@ bool DataCore::CreateGfxrCommandHierarchy()
 {
     GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
                                                      m_gfxr_capture_data);
-    if (!vk_cmd_creator.CreateTrees())
+    if (!vk_cmd_creator.CreateTrees(false))
     {
         return false;
     }

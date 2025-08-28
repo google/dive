@@ -46,6 +46,15 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
                  m_cur_submit_node_index,
                  cmd_buffer_index);
     }
+    else if (vk_cmd_info.GetVkCmdName().find("vkCmdDraw") != std::string::npos)
+    {
+        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanDrawCommandNode,
+                                        vk_cmd_string_stream.str());
+        GetArgs(vk_cmd_info.GetArgs(), vk_cmd_index, "");
+        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                 m_cur_command_buffer_node_index,
+                 vk_cmd_index);
+    }
     else
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
@@ -93,6 +102,7 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees(bool used_in_mixed_command_h
 {
     m_used_in_mixed_command_hierarchy = used_in_mixed_command_hierarchy;
     // Clear/Reset internal data structures, just in case
+    ClearCreatedDiveIndices();
     if (!m_used_in_mixed_command_hierarchy)
     {
         m_command_hierarchy = CommandHierarchy();
@@ -100,15 +110,13 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees(bool used_in_mixed_command_h
         // Add a dummy root node for easier management
         uint64_t root_node_index = AddNode(NodeType::kRootNode, "");
         DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
-    }
 
-    if (!ProcessGfxrSubmits(m_capture_data.GetGfxrSubmits()))
-    {
-        return false;
-    }
-    // Convert the info in m_gfxr_node_children into GfxrVulkanCommandHierarchy's topologies
-    if (!m_used_in_mixed_command_hierarchy)
-    {
+        if (!ProcessGfxrSubmits(m_capture_data.GetGfxrSubmits()))
+        {
+            return false;
+        }
+
+        // Convert the info in m_gfxr_node_children into GfxrVulkanCommandHierarchy's topologies
         CreateTopologies();
     }
 

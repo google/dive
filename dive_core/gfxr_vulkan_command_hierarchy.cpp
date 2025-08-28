@@ -51,7 +51,7 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
 uint32_t                                   parent_index,
 DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
 {
-    const std::string             vulkan_cmd_name = vk_cmd_info.GetVkCmdName();
+    const std::string            &vulkan_cmd_name = vk_cmd_info.GetVkCmdName();
     const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.GetArgs();
     std::ostringstream            vk_cmd_string_stream;
     vk_cmd_string_stream << vulkan_cmd_name;

@@ -644,6 +644,9 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_gfxr_vulkan_commands_filter_proxy_model->setSourceModel(
     m_gfxr_vulkan_command_hierarchy_model);
 
+    m_gfxr_vulkan_commands_filter_proxy_model->setSourceModel(
+    m_gfxr_vulkan_command_hierarchy_model);
+
     m_command_hierarchy_model->BeginResetModel();
 
     // Reset the tab widget.

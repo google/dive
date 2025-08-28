@@ -107,5 +107,11 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         }
     }
 
+    // Do not include non-gfxr submits and their descendents.
+    if (m_command_hierarchy->GetNodeType(node_index) == Dive::NodeType::kSubmitNode)
+    {
+        return false;
+    }
+
     return true;
 }

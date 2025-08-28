@@ -128,7 +128,7 @@ else()
     endif()
 endif()
 
-option(DIVE_UNIT_TESTS, "Build unit tests for dive")
+option(DIVE_UNIT_TESTS "Build unit tests for dive" ON)
 
 
 option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")

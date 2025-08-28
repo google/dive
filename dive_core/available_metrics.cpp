@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <optional>
 
 namespace Dive
 {
@@ -39,22 +40,22 @@ static void remove_quotes(std::string& str)
     }
 }
 
-bool AvailableMetrics::LoadFromCsv(const std::filesystem::path& file_path)
+std::optional<AvailableMetrics> AvailableMetrics::LoadFromCsv(
+const std::filesystem::path& file_path)
 {
     std::ifstream file(file_path);
     if (!file.is_open())
     {
         std::cerr << "Failed to open file: " << file_path << std::endl;
-        return false;
+        return std::nullopt;
     }
 
-    m_metrics.clear();
-
-    std::string line;
-    // Skip header line
-    if (!std::getline(file, line))
+    AvailableMetrics available_metrics;
+    std::string      line;
+    // Check header line
+    if (!std::getline(file, line) || line.empty() || line.find("MetricID") == std::string::npos)
     {
-        return false;
+        return std::nullopt;
     }
 
     while (std::getline(file, line))
@@ -87,10 +88,10 @@ bool AvailableMetrics::LoadFromCsv(const std::filesystem::path& file_path)
         remove_quotes(info.m_name);
         remove_quotes(info.m_description);
 
-        m_metrics[info.m_key] = info;
+        available_metrics.m_metrics[info.m_key] = info;
     }
 
-    return true;
+    return available_metrics;
 }
 
 const MetricInfo* AvailableMetrics::GetMetricInfo(const std::string& key) const

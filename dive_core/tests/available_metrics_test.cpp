@@ -17,10 +17,17 @@
 #include "dive_core/available_metrics.h"
 #include "gtest/gtest.h"
 
+namespace Dive
+{
+namespace
+{
+
 TEST(AvailableMetrics, LoadFromCsv)
 {
-    Dive::AvailableMetrics metrics;
-    ASSERT_TRUE(metrics.LoadFromCsv("dive_core/tests/mock_available_metrics.csv"));
+    auto metrics_opt = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics.csv");
+    ASSERT_TRUE(metrics_opt.has_value());
+    const auto& metrics = metrics_opt.value();
 
     const Dive::MetricInfo* info_a = metrics.GetMetricInfo("COUNTER_A");
     ASSERT_NE(info_a, nullptr);
@@ -46,8 +53,10 @@ TEST(AvailableMetrics, LoadFromCsv)
 
 TEST(AvailableMetrics, LoadFromCsv_Malformed)
 {
-    Dive::AvailableMetrics metrics;
-    ASSERT_TRUE(metrics.LoadFromCsv("dive_core/tests/mock_available_metrics_malformed.csv"));
+    auto metrics_opt = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics_malformed.csv");
+    ASSERT_TRUE(metrics_opt.has_value());
+    const auto&             metrics = metrics_opt.value();
     const Dive::MetricInfo* info_a = metrics.GetMetricInfo("COUNTER_A");
     ASSERT_NE(info_a, nullptr);
     const Dive::MetricInfo* info_b = metrics.GetMetricInfo("COUNTER_B");
@@ -56,10 +65,9 @@ TEST(AvailableMetrics, LoadFromCsv_Malformed)
 
 TEST(AvailableMetrics, LoadFromCsv_NoHeader)
 {
-    Dive::AvailableMetrics metrics;
-    ASSERT_TRUE(metrics.LoadFromCsv("dive_core/tests/mock_available_metrics_no_header.csv"));
-    const Dive::MetricInfo* info_a = metrics.GetMetricInfo("COUNTER_A");
-    ASSERT_EQ(info_a, nullptr);
-    const Dive::MetricInfo* info_b = metrics.GetMetricInfo("COUNTER_B");
-    ASSERT_NE(info_b, nullptr);
+    auto metrics_opt = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics_no_header.csv");
+    ASSERT_FALSE(metrics_opt.has_value());
 }
+}  // namespace
+}  // namespace Dive

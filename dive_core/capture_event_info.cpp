@@ -70,7 +70,14 @@ SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
                 rb_blit_info.u32All = state_tracker.GetRegValue(rb_blit_info_offset);
                 if (rb_blit_info.bitfields.CLEAR_MASK)
                 {
-                    DIVE_ASSERT(rb_blit_info.bitfields.GMEM);
+                    // TODO(wangra): update mesa code to handle this correctly
+                    // We have encountered the case where rb_blit_info.bitfields.GMEM == 0 but
+                    // rb_blit_info.bitfields.UNK0 == 1 The register 0x88e3 has been updated
+                    // https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/src/freedreno/registers/adreno/a6xx.xml?ref_type=heads#L1712
+                    // The 1st 2 bits are actually TYPE
+                    // If rb_blit_info.bitfields.GMEM bit is set, it means either BLIT_EVENT_CLEAR
+                    // or BLIT_EVENT_LOAD In my case, the value means BLIT_EVENT_STORE_AND_CLEAR
+                    DIVE_ASSERT(rb_blit_info.bitfields.GMEM || rb_blit_info.bitfields.UNK0);
                     type = SyncType::kClearGmem;
                 }
                 else

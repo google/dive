@@ -14,19 +14,23 @@
  limitations under the License.
 */
 
+#include "dive_core/data_core.h"
 #include <QFrame>
 #include <QSortFilterProxyModel>
 
 #pragma once
 // Forward declaration
+class QLabel;
 class QGroupBox;
 class QLineEdit;
 class QPushButton;
 class SearchBar;
 class GfxrVulkanCommandFilterProxyModel;
-class GfxrVulkanCommandArgumentsFilterProxyModel;
+class GfxrVulkanCommandArgFilterProxyModel;
 class DiveTreeView;
 class GfxrVulkanCommandModel;
+class GfxrVulkanCommandFilter;
+
 namespace Dive
 {
 class CommandHierarchy;
@@ -34,15 +38,15 @@ class Topology;
 };  // namespace Dive
 
 //--------------------------------------------------------------------------------------------------
-class GfxrVulkanCommandArgumentsTabView : public QFrame
+class GfxrVulkanCommandTabView : public QFrame
 {
     Q_OBJECT
 
 public:
-    GfxrVulkanCommandArgumentsTabView(const Dive::CommandHierarchy &vulkan_command_hierarchy,
-                                      GfxrVulkanCommandArgumentsFilterProxyModel *proxy_model,
-                                      GfxrVulkanCommandModel *command_hierarchy_model,
-                                      QWidget                *parent = nullptr);
+    GfxrVulkanCommandTabView(const Dive::CommandHierarchy      &vulkan_command_hierarchy,
+                             GfxrVulkanCommandFilterProxyModel &proxy_model,
+                             GfxrVulkanCommandModel            &command_hierarchy_model,
+                             QWidget                           *parent = nullptr);
 
     void SetTopologyToView(const Dive::Topology *topology_ptr);
 
@@ -50,22 +54,27 @@ public:
 
 public slots:
     void OnSelectionChanged(const QModelIndex &index);
-    void OnSearchCommandArgs();
+    void OnSearchCommands();
     void OnSearchBarVisibilityChange(bool isHidden);
     void ConnectSearchBar();
     void DisconnectSearchBar();
+    void ExpandAll();
+    void OnCorrelateCommand(const QPoint &pos);
 
 signals:
     // Update property panel for node information.
     void SendNodeProperty(const QString &);
     void HideOtherSearchBars();
+    void ApplyFilter(const QModelIndex &, int integer_value);
+    void SelectCommand(const QModelIndex &);
 
 private:
-    DiveTreeView *m_command_hierarchy_view;
-    QPushButton  *m_search_trigger_button;
-    SearchBar    *m_search_bar = nullptr;
+    DiveTreeView            *m_command_hierarchy_view;
+    QPushButton             *m_search_trigger_button;
+    SearchBar               *m_search_bar;
+    GfxrVulkanCommandFilter *m_gfxr_vulkan_command_filter;
 
-    const Dive::CommandHierarchy               &m_vulkan_command_hierarchy;
-    GfxrVulkanCommandArgumentsFilterProxyModel *m_arg_proxy_model;
-    GfxrVulkanCommandModel                     *m_command_hierarchy_model;
+    const Dive::CommandHierarchy      &m_vulkan_command_hierarchy;
+    GfxrVulkanCommandFilterProxyModel &m_proxy_Model;
+    GfxrVulkanCommandModel            &m_command_hierarchy_model;
 };

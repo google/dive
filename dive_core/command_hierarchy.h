@@ -55,6 +55,7 @@ enum class NodeType
     kSubmitNode,
     kIbNode,
     kMarkerNode,
+    kDrawDispatchNode,
     kDrawDispatchBlitNode,
     kSyncNode,
     kPostambleStateNode,
@@ -66,7 +67,10 @@ enum class NodeType
     kGfxrVulkanSubmitNode,
     kGfxrVulkanCommandBufferNode,
     kGfxrVulkanCommandNode,
-    kGfxrVulkanCommandArgNode
+    kGfxrVulkanCommandArgNode,
+    kGfxrVulkanDrawCommandNode,
+    kGfxrVulkanRenderPassCommandNode,
+    kGfxrBeginDebugUtilsLabelCommandNode,
 };
 
 //--------------------------------------------------------------------------------------------------

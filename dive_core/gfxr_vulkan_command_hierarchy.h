@@ -20,6 +20,7 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/gfxr_capture_data.h"
+#include <stack>
 
 namespace Dive
 {
@@ -50,6 +51,8 @@ public:
         return m_dive_indices_to_local_indices_map;
     }
 
+    void ClearCreatedDiveIndices() { m_dive_indices_to_local_indices_map.clear(); }
+
 private:
     void     GetArgs(const nlohmann::ordered_json &j,
                      uint64_t                      curr_index,
@@ -59,9 +62,11 @@ private:
     void     AddChild(CommandHierarchy::TopologyType type,
                       uint64_t                       node_index,
                       uint64_t                       child_node_index);
+    void     ConditionallyAddChild(uint64_t node_index);
 
     uint64_t               m_cur_submit_node_index = 0;
     uint64_t               m_cur_command_buffer_node_index = 0;
+    std::stack<uint64_t>   m_cur_begin_debug_utils_node_index_stack;
     CommandHierarchy      &m_command_hierarchy;
     const GfxrCaptureData &m_capture_data;
     // This is a list of child indices per node, ie. topology info

@@ -300,7 +300,7 @@ def GetBitfieldsOrEnumHandleFromBitset(input_type, input_bitfields, input_name, 
 def AppendBitfield(pm4_info_file, enum_index_dict, bitfields, is_64):
     # Iterate through optional bitfields
     for bitfield in bitfields:
-      if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
+      if bitfield.tag != '{http://nouveau.freedesktop.org/}bitfield':
         continue
 
       name = bitfield.attrib['name']
@@ -576,6 +576,7 @@ def outputField(pm4_info_file, field_attributes: FieldAttributes):
 # ---------------------------------------------------------------------------------------
 def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
   dword_count = 0
+  address_end_offset = sys.maxsize
   for element in reg_list:
     is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
     is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
@@ -584,7 +585,10 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
     # Sanity check
     # Note: Allowed to skip an offset (see CP_EVENT_WRITE7)
     if dword_count > offset:
+      # Sometimes a 64-bit "address" is followed by overlapping 2 LO/HI 32-bit ones
+      if offset > address_end_offset:
         raise Exception('Unexpected reverse offset found in packet')
+      continue
 
     dword_count = dword_count + 1
     if is_reg_64:
@@ -597,6 +601,11 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       type = element.attrib['type']
     field_name = element.attrib['name']
     bitfields, enum_handle = GetBitfieldsOrEnumHandleFromBitset(type, input_bitfields, field_name, registers_et_root, enum_index_dict)
+
+    # Possible to have an ADDR register followed by ADDR_LO and ADDR_HI
+    # In that case, the offsets will overlap
+    if type == 'address':
+      address_end_offset = dword_count
 
     # No bitfields, so use the register specification directly
     if len(bitfields) == 0:
@@ -819,7 +828,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       if stripe is not None:
         varset = stripe.attrib['varset']
         if varset != 'chip':
-          enum = domain.find('./{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
+          enum = registers_et_root.find('.//{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
           enum_value = enum.find('./{http://nouveau.freedesktop.org/}value[@name="'+variant[0]+'"]')
           stripe_variant = enum_value.attrib['value']
 

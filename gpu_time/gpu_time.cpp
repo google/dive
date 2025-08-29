@@ -836,11 +836,20 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_co
                 }
 
                 // Check the case where the same primary cmd buffer is reused within a frame
-                auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
+                // TODO(wangra):
+                // it seems that the OS is inserting the same empty cmd for left and right eye
+                // without VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+                // This in theory should trigger a validation error, but not in this case
+                // For now we keep both in the frame cache m_frame_cmds, since it is easier for vk
+                // correlation (but the gput time will be equal to the last cmd that is being
+                // submitted) This does not affect timing since it is empty, but needs some further
+                // investigation.
+                /*auto it = std::find(m_frame_cmds.begin(), m_frame_cmds.end(), cmd);
                 if (it == m_frame_cmds.end())
                 {
                     m_frame_cmds.push_back(cmd);
-                }
+                }*/
+                m_frame_cmds.push_back(cmd);
             }
         }
     }

@@ -30,15 +30,16 @@ namespace Dive
 namespace
 {
 constexpr int kAvailableMetricsFieldCount = 5;
-}
+
 // Helper to remove leading/trailing quotes from a string
-static void remove_quotes(std::string& str)
+void RemoveQuotes(std::string& str)
 {
     if (str.length() >= 2 && str.front() == '"' && str.back() == '"')
     {
         str = str.substr(1, str.length() - 2);
     }
 }
+}  // namespace
 
 std::optional<AvailableMetrics> AvailableMetrics::LoadFromCsv(
 const std::filesystem::path& file_path)
@@ -73,7 +74,7 @@ const std::filesystem::path& file_path)
             continue;  // Skip malformed lines
         }
 
-        MetricInfo info;
+        MetricInfo info{};
         info.m_metric_id = static_cast<uint8_t>(std::stoi(fields[0]));
         info.m_metric_type = static_cast<MetricType>(std::stoul(fields[1]));
         info.m_key = fields[2];
@@ -84,9 +85,9 @@ const std::filesystem::path& file_path)
             info.m_description += ", " + fields[i];
         }
 
-        remove_quotes(info.m_key);
-        remove_quotes(info.m_name);
-        remove_quotes(info.m_description);
+        RemoveQuotes(info.m_key);
+        RemoveQuotes(info.m_name);
+        RemoveQuotes(info.m_description);
 
         available_metrics.m_metrics[info.m_key] = info;
     }

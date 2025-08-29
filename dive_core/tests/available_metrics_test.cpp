@@ -54,7 +54,7 @@ TEST(AvailableMetrics, LoadFromCsv)
     EXPECT_EQ(metrics.GetMetricType("COUNTER_C"), Dive::MetricType::kUnknown);
 }
 
-TEST(AvailableMetrics, LoadFromCsvMalformed)
+TEST(AvailableMetrics, LoadFromCsvIgnoresRowsThatAreMissingColumns)
 {
     auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
                                                      "/mock_available_metrics_malformed.csv");
@@ -64,7 +64,7 @@ TEST(AvailableMetrics, LoadFromCsvMalformed)
     ASSERT_EQ(metrics.GetMetricInfo("COUNTER_B"), nullptr);
 }
 
-TEST(AvailableMetrics, LoadFromCsvNoHeader)
+TEST(AvailableMetrics, LoadFromCsvFailsWhenNoHeader)
 {
     auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
                                                      "/mock_available_metrics_no_header.csv");

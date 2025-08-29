@@ -240,7 +240,5 @@ else()
   )
 endif()
 
-if(DIVE_UNIT_TESTS)
-    add_subdirectory(tests)
-endif()
-
+enable_testing()
+add_subdirectory(tests)

@@ -15,6 +15,7 @@
 */
 
 #include "dive_core/available_metrics.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace Dive
@@ -22,52 +23,53 @@ namespace Dive
 namespace
 {
 
+MATCHER_P(MetricInfoEq, expected, "")
+{
+    EXPECT_EQ(arg->m_metric_id, expected.m_metric_id);
+    EXPECT_EQ(arg->m_metric_type, expected.m_metric_type);
+    EXPECT_EQ(arg->m_key, expected.m_key);
+    EXPECT_EQ(arg->m_name, expected.m_name);
+    EXPECT_EQ(arg->m_description, expected.m_description);
+    return true;
+}
+
 TEST(AvailableMetrics, LoadFromCsv)
 {
-    auto metrics_opt = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                           "/mock_available_metrics.csv");
+    auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR "/mock_available_metrics.csv");
     ASSERT_TRUE(metrics_opt.has_value());
     const auto& metrics = metrics_opt.value();
 
-    const Dive::MetricInfo* info_a = metrics.GetMetricInfo("COUNTER_A");
-    ASSERT_NE(info_a, nullptr);
-    EXPECT_EQ(info_a->m_metric_id, 1);
-    EXPECT_EQ(info_a->m_metric_type, Dive::MetricType::kCount);
-    EXPECT_EQ(info_a->m_name, "Counter A");
-    EXPECT_EQ(info_a->m_description, "Description A");
+    EXPECT_THAT(metrics.GetMetricInfo("COUNTER_A"),
+                AllOf(Not(testing::IsNull()),
+                      MetricInfoEq(MetricInfo{
+                      1, Dive::MetricType::kCount, "COUNTER_A", "Counter A", "Description A" })));
 
-    const Dive::MetricInfo* info_b = metrics.GetMetricInfo("COUNTER_B");
-    ASSERT_NE(info_b, nullptr);
-    EXPECT_EQ(info_b->m_metric_id, 2);
-    EXPECT_EQ(info_b->m_metric_type, Dive::MetricType::kPercent);
-    EXPECT_EQ(info_b->m_name, "Counter B");
-    EXPECT_EQ(info_b->m_description, "Description B");
+    EXPECT_THAT(metrics.GetMetricInfo("COUNTER_B"),
+                AllOf(Not(testing::IsNull()),
+                      MetricInfoEq(MetricInfo{
+                      2, Dive::MetricType::kPercent, "COUNTER_B", "Counter B", "Description B" })));
 
     const Dive::MetricInfo* info_c = metrics.GetMetricInfo("COUNTER_C");
     EXPECT_EQ(info_c, nullptr);
-
-    EXPECT_EQ(metrics.GetMetricType("COUNTER_A"), Dive::MetricType::kCount);
-    EXPECT_EQ(metrics.GetMetricType("COUNTER_B"), Dive::MetricType::kPercent);
     EXPECT_EQ(metrics.GetMetricType("COUNTER_C"), Dive::MetricType::kUnknown);
 }
 
-TEST(AvailableMetrics, LoadFromCsv_Malformed)
+TEST(AvailableMetrics, LoadFromCsvMalformed)
 {
-    auto metrics_opt = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                           "/mock_available_metrics_malformed.csv");
+    auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                     "/mock_available_metrics_malformed.csv");
     ASSERT_TRUE(metrics_opt.has_value());
-    const auto&             metrics = metrics_opt.value();
-    const Dive::MetricInfo* info_a = metrics.GetMetricInfo("COUNTER_A");
-    ASSERT_NE(info_a, nullptr);
-    const Dive::MetricInfo* info_b = metrics.GetMetricInfo("COUNTER_B");
-    ASSERT_EQ(info_b, nullptr);
+    const auto& metrics = metrics_opt.value();
+    ASSERT_NE(metrics.GetMetricInfo("COUNTER_A"), nullptr);
+    ASSERT_EQ(metrics.GetMetricInfo("COUNTER_B"), nullptr);
 }
 
-TEST(AvailableMetrics, LoadFromCsv_NoHeader)
+TEST(AvailableMetrics, LoadFromCsvNoHeader)
 {
-    auto metrics_opt = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                           "/mock_available_metrics_no_header.csv");
+    auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                     "/mock_available_metrics_no_header.csv");
     ASSERT_FALSE(metrics_opt.has_value());
 }
+
 }  // namespace
 }  // namespace Dive

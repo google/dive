@@ -360,7 +360,7 @@ def outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, attr
   is_64_string = '0'
   if attributes.is_64 is True:
     is_64_string = '1'
-  
+
   bitfields, enum_handle = GetBitfieldsOrEnumHandleFromBitset(attributes.type, attributes.bitfields, attributes.name, registers_et_root, enum_index_dict)
 
   variants_bitfield = GetGPUVariantsBitField(attributes.variants)
@@ -833,7 +833,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       if opcode not in packet_type_instances:
         packet_type_instances[opcode] = 1
         if (opcode == 0):
-          pm4_info_file.write('''    
+          pm4_info_file.write('''
     // For descriptors, we purposefully try to include them as "packets" for easier parsing.
     // They are not technically PM4 packets, hence the 0x0.
     // Example: const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);
@@ -860,7 +860,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     if domain is None:
       opcode = int(pm4_type_packet_value.attrib['value'],0)
 
-      # We need the g_sPacketInfoVariant because some PM4s share the same value 
+      # We need the g_sPacketInfoVariant because some PM4s share the same value
       # but with different variants (CP_THREAD_CONTROL (A7XX-) and IN_IB_PREFETCH_END (A2XX) both use 0x17)
       if 'variants' in pm4_type_packet_value.attrib:
         variants = pm4_type_packet_value.attrib['variants']
@@ -874,7 +874,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
               pm4_info_file.write('    g_sPacketInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", 0, UINT8_MAX, {' % (opcode, cur_variant_bitfield, packet_name) + ' } };\n')
       else:
         pm4_info_file.write('    g_sPacketInfo[0x%x] = { "%s", 0, UINT8_MAX, {' % (opcode, packet_name) + ' } };\n')
-      
+
   pm4_info_file.write('\n')
 
   # Append _A?XX to the name if there is any variant

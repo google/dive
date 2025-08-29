@@ -120,6 +120,7 @@ def outputEnums(pm4_packet_file_h, enums):
 # ---------------------------------------------------------------------------------------
 def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
   dword_count = 0
+  address_end_offset = sys.maxsize
   for index, element in enumerate(reg_list):
     is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
     is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
@@ -128,7 +129,10 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
     # Sanity check
     # Note: Allowed to skip an offset (see CP_EVENT_WRITE7)
     if dword_count > offset:
+        # Sometimes a 64-bit "address" is followed by overlapping 2 LO/HI 32-bit ones
+      if offset > address_end_offset:
         raise Exception("Unexpected reverse offset found in packet")
+      continue
 
     dword_count = dword_count + 1
     if is_reg_64:
@@ -143,6 +147,11 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
       type = element.attrib['type']
 
     bitfields = element.findall('{http://nouveau.freedesktop.org/}bitfield')
+
+    # Possible to have an ADDR register followed by ADDR_LO and ADDR_HI
+    # In that case, the offsets will overlap
+    if type == 'address':
+      address_end_offset = dword_count
 
     use_buildin_type = False
     if is_reg_32:
@@ -168,7 +177,7 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
 # ---------------------------------------------------------------------------------------
 def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str, cur_offset):
   for bitfield in bitfields:
-    if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
+    if bitfield.tag != '{http://nouveau.freedesktop.org/}bitfield':
       continue
     bitfield_name = bitfield.attrib['name']
     if bitfield_name[0].isdigit():
@@ -229,16 +238,16 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
       if not isBuiltInType(type):
         enum = registers_et_root.find('./{http://nouveau.freedesktop.org/}enum[@name="'+type+'"]')
 
-        if enum:
+        if enum is not None:
           enum_name = enum.attrib['name']
           pm4_info_file.write(extra_front_tab_str + "\t%s bitfields;\n" % (enum_name))
         else:
           use_bitset_as_type = True
           bitset = a6xx_domain.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
           # Not found in the A6XX domain. Some of the bitsets are defined in the root.
-          if not bitset:
+          if bitset is None:
             bitset = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
-            if not bitset:
+            if bitset is None:
               raise Exception("Not able to find bitset/enum " + type + " for register " + name)
 
           pm4_info_file.write(extra_front_tab_str + "\tstruct\n")
@@ -299,7 +308,7 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
     array = domain.find('./{http://nouveau.freedesktop.org/}array')
     array_size = 1
     pm4_packet = domain
-    if array:
+    if array is not None:
       pm4_packet = array
       array_size = int(array.attrib['length'])
 
@@ -347,7 +356,7 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
       packet_name = domain_name
       if pm4_type_packet is not None: # Add prefix for PM4 packets only
         packet_name = "PM4_" + packet_name
-      if stripe:
+      if stripe is not None:
         reg_variant_dict = {}
 
         for element in variant[1]:
@@ -384,10 +393,10 @@ def outputPackets(pm4_packet_file_h, registers_et_root, domains):
 
       # Determine stripe opcode for this variant/stripe
       stripe_variant = "UINT32_MAX"
-      if stripe:
+      if stripe is not None:
         varset = stripe.attrib['varset']
         if varset != "chip":
-          enum = domain.find('./{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
+          enum = registers_et_root.find('.//{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
           enum_value = enum.find('./{http://nouveau.freedesktop.org/}value[@name="'+variant[0]+'"]')
           stripe_variant = enum_value.attrib['value']
 

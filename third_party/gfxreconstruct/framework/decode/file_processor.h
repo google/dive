@@ -134,6 +134,12 @@ class FileProcessor
         block_index_to_          = block_index_to;
     }
 
+    // GOOGLE: Check if state end marker should be used when parsing based on whether or not the file is being loaded for display in Dive.
+    void LoadForDiveDisplay(bool load_for_dive_display)
+    {
+        load_for_dive_display_ = load_for_dive_display;
+    }
+
   protected:
     bool ContinueDecoding();
 
@@ -288,6 +294,10 @@ class FileProcessor
 
     bool        run_without_decoders_ = false;
     std::string absolute_path_;
+    // GOOGLE: Flag that checks if state end marker has been processed.
+    bool state_end_marker_processed_ = false;
+    // GOOGLE: Flag that checks if file is being processed for display in Dive.
+    bool load_for_dive_display_ = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)

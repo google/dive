@@ -49,6 +49,7 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
 
     file_processor.SetLoopSingleFrameCount(1);
     file_processor.SetDiveBlockData(m_gfxr_capture_block_data);
+    file_processor.LoadForDiveDisplay(true);
 
     gfxrecon::decode::VulkanExportDiveConsumer dive_consumer;
     gfxrecon::decode::VulkanDecoder            decoder;
@@ -77,6 +78,7 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
 
     m_cur_capture_file = file_name;
 
+    file_processor.LoadForDiveDisplay(false);
     return LoadResult::kSuccess;
 }
 

@@ -701,7 +701,10 @@ bool FileProcessor::ProcessFunctionCall(const format::BlockHeader& block_header,
                 {
                     DecodeAllocator::Begin();
                     decoder->SetCurrentApiCallId(call_id);
-                    decoder->DecodeFunctionCall(call_id, call_info, parameter_buffer_.data(), parameter_buffer_size);
+                    if ((state_end_marker_processed_ && load_for_dive_display_) || !load_for_dive_display_)
+                    {
+                        decoder->DecodeFunctionCall(call_id, call_info, parameter_buffer_.data(), parameter_buffer_size);
+                    }
                     DecodeAllocator::End();
                 }
             }
@@ -787,8 +790,11 @@ bool FileProcessor::ProcessMethodCall(const format::BlockHeader& block_header,
                 {
                     DecodeAllocator::Begin();
                     decoder->SetCurrentApiCallId(call_id);
-                    decoder->DecodeMethodCall(
-                        call_id, object_id, call_info, parameter_buffer_.data(), parameter_buffer_size);
+                    if ((state_end_marker_processed_ && load_for_dive_display_) || !load_for_dive_display_)
+                    {
+                        decoder->DecodeMethodCall(
+                            call_id, object_id, call_info, parameter_buffer_.data(), parameter_buffer_size);
+                    }
                     DecodeAllocator::End();
                 }
             }
@@ -2355,6 +2361,7 @@ bool FileProcessor::ProcessStateMarker(const format::BlockHeader& block_header, 
             GFXRECON_LOG_INFO("Finished loading state for captured frame %" PRId64, frame_number);
             first_frame_                   = frame_number;
             loading_trimmed_capture_state_ = false;
+            state_end_marker_processed_ = true;
         }
 
         for (auto decoder : decoders_)

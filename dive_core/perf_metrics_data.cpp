@@ -47,7 +47,7 @@ void trim(std::string& s)
 // Helper functions for safe string to number conversion
 bool safe_stoull(const std::string& s, uint64_t& out)
 {
-    char*       end;
+    char*       end = nullptr;
     const char* start = s.c_str();
     errno = 0;
     unsigned long long val = std::strtoull(start, &end, 10);
@@ -61,7 +61,7 @@ bool safe_stoull(const std::string& s, uint64_t& out)
 
 bool safe_stoul(const std::string& s, uint32_t& out)
 {
-    char*       end;
+    char*       end = nullptr;
     const char* start = s.c_str();
     errno = 0;
     unsigned long val = std::strtoul(start, &end, 10);
@@ -75,7 +75,7 @@ bool safe_stoul(const std::string& s, uint32_t& out)
 
 bool safe_stoll(const std::string& s, int64_t& out)
 {
-    char*       end;
+    char*       end = nullptr;
     const char* start = s.c_str();
     errno = 0;
     long long val = std::strtoll(start, &end, 10);
@@ -89,7 +89,7 @@ bool safe_stoll(const std::string& s, int64_t& out)
 
 bool safe_stof(const std::string& s, float& out)
 {
-    char*       end;
+    char*       end = nullptr;
     const char* start = s.c_str();
     errno = 0;
     float val = std::strtof(start, &end);
@@ -164,8 +164,8 @@ const AvailableMetrics&      available_metrics)
             continue;  // Skip malformed lines
         }
 
-        PerfMetricsRecord record;
-        uint32_t          draw_type, lrz_state;
+        PerfMetricsRecord record{};
+        uint32_t          draw_type = 0, lrz_state = 0;
         if (!safe_stoull(fields[0], record.m_context_id) ||
             !safe_stoull(fields[1], record.m_process_id) ||
             !safe_stoull(fields[2], record.m_frame_id) ||
@@ -190,7 +190,7 @@ const AvailableMetrics&      available_metrics)
                 {
                 case MetricType::kCount:
                 {
-                    int64_t val;
+                    int64_t val = 0;
                     if (safe_stoll(value_str, val))
                     {
                         record.m_metric_values.emplace_back(val);
@@ -203,7 +203,7 @@ const AvailableMetrics&      available_metrics)
                 }
                 case MetricType::kPercent:
                 {
-                    float val;
+                    float val = 0.0f;
                     if (safe_stof(value_str, val))
                     {
                         record.m_metric_values.emplace_back(val);

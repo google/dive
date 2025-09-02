@@ -85,14 +85,12 @@ jobs:
           sudo apt-get install --yes \
             cmake \
             gcc-14 \
-            clang-14 \
             libsystemd-dev \
             libbsd-dev \
             ninja-build \
             python3-mako \
             libxcb-glx0-dev
           which gcc-14
-          which clang-14
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -123,14 +121,12 @@ jobs:
           sudo apt-get update --yes
           sudo apt-get install --yes \
             cmake gcc-14 \
-            clang-14 \
             libsystemd-dev \
             libbsd-dev \
             ninja-build \
             python3-mako \
             libxcb-glx0-dev
           which gcc-14
-          which clang-14
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -160,22 +156,22 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes \
-          cmake clang-14 \
+          cmake clang-19 \
           libsystemd-dev \
           libbsd-dev \
           ninja-build \
           python3-mako \
           libxcb-glx0-dev
-          which clang-14
+          which clang-19
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 \
-            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
             -GNinja \
             -Bbuild .
-      - name: Build Dive host tools with ninja with clang-14
+      - name: Build Dive host tools with ninja with clang-19
         run: |
           ninja -C build
       - name: Run tests
@@ -196,22 +192,22 @@ jobs:
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes \
-          cmake clang-14 \
+          cmake clang-19 \
           libsystemd-dev \
           libbsd-dev \
           ninja-build \
           python3-mako \
           libxcb-glx0-dev
-          which clang-14
+          which clang-19
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-14 \
-            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-14 \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
             -GNinja \
             -Bbuild .
-      - name: Build Dive host tools with ninja with clang-14
+      - name: Build Dive host tools with ninja with clang-19
         run: |
           ninja -C build
       - name: Run tests

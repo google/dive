@@ -251,15 +251,16 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     std::set<Viewport>              viewports;
     std::set<WindowScissor>         window_scissors;
 
-    Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
-    uint32_t             num_binning_passes = 0, num_tiling_passes = 0, num_draws_in_pass = 0;
+    Dive::RenderModeType      cur_type = Dive::RenderModeType::kUnknown;
+    uint32_t                  num_binning_passes = 0, num_tiling_passes = 0;
+    [[maybe_unused]] uint32_t num_draws_in_pass = 0;
 
     for (size_t i = 0; i < event_count; ++i)
     {
         const Dive::EventInfo &info = meta_data.m_event_info[i];
         if (info.m_render_mode != cur_type)
         {
-#ifdef _DEBUG
+#ifndef NDEBUG
             if (cur_type == Dive::RenderModeType::kBinning)
                 ostream << "Binning pass " << num_binning_passes << ": " << num_draws_in_pass
                         << std::endl;

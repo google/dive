@@ -1,0 +1,2 @@
+MetricID,MetricType,Key,Name,Description
+1,3,COUNTER_C,Counter C,"Description C"

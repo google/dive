@@ -33,6 +33,8 @@ public:
     GfxrCaptureData &operator=(GfxrCaptureData &&) = default;
 
     const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &GetGfxrSubmits() const;
+    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo>           &GetGfxrCommandBuffers(
+              uint64_t cmd_handle) const;
 
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
     LoadResult LoadCaptureFile(const std::string &file_name) override;
@@ -54,6 +56,8 @@ private:
 
     // Vector of SubmitInfo objects used to add the GFXR vulkan commands to the UI.
     std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> m_gfxr_submits;
+    std::unordered_map<uint64_t, std::vector<DiveAnnotationProcessor::VulkanCommandInfo>>
+    m_gfxr_command_buffers;
 };
 
 }  // namespace Dive

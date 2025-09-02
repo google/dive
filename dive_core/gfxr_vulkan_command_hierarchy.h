@@ -31,15 +31,13 @@ public:
                                       const GfxrCaptureData &capture_data);
 
     bool CreateTrees(bool used_in_mixed_command_hierarchy = false);
-    bool ProcessGfxrSubmits(
-    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &submits);
+    bool ProcessGfxrSubmits(const GfxrCaptureData &capture_date);
 
     void OnGfxrSubmit(uint32_t                                   submit_index,
                       const DiveAnnotationProcessor::SubmitInfo &submit_info);
-    void OnCommand(uint32_t submit_index, DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info);
+    void OnCommand(DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info);
 
-    bool ExecuteGfxrSubmit(uint32_t submit_index,
-                           const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds);
+    bool ProcessVkCmds(const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds);
 
     const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type) const
     {

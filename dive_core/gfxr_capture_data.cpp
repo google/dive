@@ -67,7 +67,8 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
         return LoadResult::kFileIoError;
     }
 
-    m_gfxr_submits = dive_annotation_processor.GetSubmits();
+    m_gfxr_submits = dive_annotation_processor.TakeSubmits();
+    m_gfxr_command_buffers = dive_annotation_processor.TakeVkCommandsCache();
 
     if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
     {
@@ -103,6 +104,14 @@ const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>>&
 GfxrCaptureData::GetGfxrSubmits() const
 {
     return m_gfxr_submits;
+}
+
+//--------------------------------------------------------------------------------------------------
+const std::vector<DiveAnnotationProcessor::VulkanCommandInfo>&
+GfxrCaptureData::GetGfxrCommandBuffers(uint64_t cmd_handle) const
+{
+    DIVE_ASSERT(m_gfxr_command_buffers.count(cmd_handle) != 0);
+    return m_gfxr_command_buffers.at(cmd_handle);
 }
 
 }  // namespace Dive

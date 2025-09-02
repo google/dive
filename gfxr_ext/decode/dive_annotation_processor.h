@@ -80,36 +80,38 @@ public:
         }
 
         const std::string& GetSubmitText() const { return m_name; }
-        void               SetCommandBufferCount(uint32_t command_buffer_count)
+
+        size_t GetCommandBufferCount() const { return m_vk_command_buffer_handles.size(); }
+        const std::vector<VulkanCommandInfo>& GetNoneCmdVkCommands() const
         {
-            m_command_buffer_count = command_buffer_count;
+            return m_none_cmd_vk_commands;
         }
-        uint32_t GetCommandBufferCount() const { return m_command_buffer_count; }
-        const std::vector<VulkanCommandInfo>& GetVulkanCommands() const
+        void TakeNoneCmdVkCommands(std::vector<VulkanCommandInfo>& commands)
         {
-            return m_vulkan_commands;
+            m_none_cmd_vk_commands = std::move(commands);
         }
-        void SetVulkanCommands(const std::vector<VulkanCommandInfo>& vulkan_commands)
+
+        void TakeVkCommandBufferHandles(std::vector<uint64_t>& handles)
         {
-            m_vulkan_commands = std::move(vulkan_commands);
+            m_vk_command_buffer_handles = std::move(handles);
+        }
+
+        const std::vector<uint64_t>& GetCommandBufferHandles() const
+        {
+            return m_vk_command_buffer_handles;
         }
 
     private:
-        std::vector<VulkanCommandInfo> m_vulkan_commands{};
+        std::vector<VulkanCommandInfo> m_none_cmd_vk_commands{};
+        std::vector<uint64_t>          m_vk_command_buffer_handles{};
         std::string                    m_name{ "" };
-        uint32_t                       m_command_buffer_count{ 0 };
     };
 
     DiveAnnotationProcessor() {}
     ~DiveAnnotationProcessor() {}
 
-    void EndStream();
-    bool IsValid() const;
-
     // Finalize the current block and stream it out.
     void WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data) override;
-
-    void WriteMarker(const char* name, const std::string_view marker_type, uint64_t frame_number);
 
     // @brief Convert annotations, which are simple {type:enum, key:string, value:string} objects.
     virtual void ProcessAnnotation(uint64_t                         block_index,
@@ -119,13 +121,14 @@ public:
     {
     }
 
-    bool WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data);
-
-    std::vector<std::unique_ptr<SubmitInfo>> GetSubmits() { return std::move(m_submits); }
+    std::vector<std::unique_ptr<SubmitInfo>> TakeSubmits() { return std::move(m_submits); }
+    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> TakeVkCommandsCache()
+    {
+        return std::move(m_cmd_vk_commands_cache);
+    }
 
 private:
-    std::vector<VulkanCommandInfo>
-    m_current_submit_commands;  // Buffer for commands before a submit
-    std::vector<std::unique_ptr<SubmitInfo>> m_submits;
-    uint32_t                                 m_current_submit_command_buffer_count = 0;
+    std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache;
+    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache;
+    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits;
 };

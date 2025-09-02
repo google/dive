@@ -49,7 +49,7 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
     if (result != false)
     {
         result = gfxr_command_hierarchy_creator.ProcessGfxrSubmits(
-        dive_capture_data.GetGfxrCaptureData().GetGfxrSubmits());
+        dive_capture_data.GetGfxrCaptureData());
     }
     else
     {

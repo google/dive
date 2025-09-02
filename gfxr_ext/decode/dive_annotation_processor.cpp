@@ -25,26 +25,43 @@
 void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data)
 {
     std::string function_name = function_data.GetFunctionName();
+    const auto& args = function_data.GetArgs();
 
     if (function_name == "vkQueueSubmit" || function_name == "vkQueueSubmit2")
     {
         std::unique_ptr<SubmitInfo> submit_ptr = std::make_unique<SubmitInfo>(function_name);
 
-        submit_ptr->SetVulkanCommands(m_current_submit_commands);
-        m_current_submit_commands.clear();
-        submit_ptr->SetCommandBufferCount(m_current_submit_command_buffer_count);
+        std::vector<uint64_t> vk_command_buffer_handles{};
+        if (args.count("submitCount"))
+        {
+            const auto& submits = args["pSubmits"];
+            for (const auto& submit : submits)
+            {
+                if (submit.count("pCommandBuffers"))
+                {
+                    const auto& command_buffers = submit["pCommandBuffers"];
+                    for (const auto& cmd_buffer : command_buffers)
+                    {
+                        vk_command_buffer_handles.push_back(cmd_buffer);
+                    }
+                }
+            }
+        }
+        submit_ptr->TakeVkCommandBufferHandles(vk_command_buffer_handles);
+        submit_ptr->TakeNoneCmdVkCommands(m_none_cmd_vk_commands_per_submit_cache);
         m_submits.push_back(std::move(submit_ptr));
-        m_current_submit_command_buffer_count = 0;
     }
     else
     {
         VulkanCommandInfo vkCmd(function_data);
-
-        if (function_name.find("vkBeginCommandBuffer") != std::string::npos)
+        if (args.count("commandBuffer") != 0)
         {
-            m_current_submit_command_buffer_count++;
+            uint64_t cmd_handle = args["commandBuffer"];
+            m_cmd_vk_commands_cache[cmd_handle].push_back(vkCmd);
         }
-
-        m_current_submit_commands.push_back(vkCmd);
+        else
+        {
+            m_none_cmd_vk_commands_per_submit_cache.push_back(vkCmd);
+        }
     }
 }

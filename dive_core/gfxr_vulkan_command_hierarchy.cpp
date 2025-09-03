@@ -69,9 +69,9 @@ const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
         uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
                                             vk_cmd_string_stream.str());
 
-        GetArgs(vulkan_cmd_args, m_cur_command_buffer_node_index, "");
+        GetArgs(vulkan_cmd_args, cmd_buffer_index, "");
         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
-                 m_cur_submit_node_index,
+                 m_cur_command_buffer_node_index,
                  cmd_buffer_index);
     }
     else if (vulkan_cmd_name.find("BeginDebugUtilsLabelEXT") != std::string::npos)

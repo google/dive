@@ -45,15 +45,17 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
     bool result = pm4_command_hierarchy_creator
                   .ProcessSubmits(dive_capture_data.GetPm4CaptureData().GetSubmits(),
                                   dive_capture_data.GetPm4CaptureData().GetMemoryManager());
-
-    if (result != false)
+    if (!result)
     {
-        result = gfxr_command_hierarchy_creator.ProcessGfxrSubmits(
-        dive_capture_data.GetGfxrCaptureData().GetGfxrSubmits());
+        return false;
     }
-    else
+
+    result = gfxr_command_hierarchy_creator.ProcessGfxrSubmits(
+    dive_capture_data.GetGfxrCaptureData());
+
+    if (!result)
     {
-        return result;
+        return false;
     }
 
     CreateTopologies(pm4_command_hierarchy_creator, gfxr_command_hierarchy_creator);

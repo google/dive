@@ -32,84 +32,38 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 public:
     struct VulkanCommandInfo
     {
-    public:
-        VulkanCommandInfo(const std::string& name, uint32_t index) :
-            m_args(),
-            m_name(name),
-            m_index(index),
-            m_cmd_count(0)
+        explicit VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data) :
+            args(data.GetArgs()),
+            name(data.GetFunctionName()),
+            index(data.GetCmdBufferIndex())
         {
         }
 
-        VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data) :
-            m_args(data.GetArgs()),
-            m_name(data.GetFunctionName()),
-            m_index(data.GetCmdBufferIndex()),
-            m_cmd_count(0)
-        {
-        }
-
-        VulkanCommandInfo() :
-            m_args({}),
-            m_name(""),
-            m_index(0),
-            m_cmd_count(0)
-        {
-        }
-        const std::string&            GetVkCmdName() const { return m_name; }
-        uint32_t                      GetVkCmdIndex() const { return m_index; }
-        void                          SetCmdCount(uint32_t cmd_count) { m_cmd_count = cmd_count; }
-        uint32_t                      GetCmdCount() const { return m_cmd_count; }
-        const nlohmann::ordered_json& GetArgs() const { return m_args; }
-
-    private:
-        nlohmann::ordered_json m_args;
-        std::string            m_name;
-        uint32_t               m_index;
-        uint32_t               m_cmd_count;  // Only used by vkBeginCommandBuffers
+        nlohmann::ordered_json args = {};
+        std::string            name = "";
+        uint32_t               index = 0;
     };
 
     struct SubmitInfo
     {
-    public:
-        SubmitInfo() = default;
-
-        SubmitInfo(const std::string& name) :
-            m_name(name)
+        explicit SubmitInfo(const std::string& function_name) :
+            name(function_name)
         {
         }
 
-        const std::string& GetSubmitText() const { return m_name; }
-        void               SetCommandBufferCount(uint32_t command_buffer_count)
-        {
-            m_command_buffer_count = command_buffer_count;
-        }
-        uint32_t GetCommandBufferCount() const { return m_command_buffer_count; }
-        const std::vector<VulkanCommandInfo>& GetVulkanCommands() const
-        {
-            return m_vulkan_commands;
-        }
-        void SetVulkanCommands(const std::vector<VulkanCommandInfo>& vulkan_commands)
-        {
-            m_vulkan_commands = std::move(vulkan_commands);
-        }
-
-    private:
-        std::vector<VulkanCommandInfo> m_vulkan_commands{};
-        std::string                    m_name{ "" };
-        uint32_t                       m_command_buffer_count{ 0 };
+        // Keeps all the vk commands that come before this submit and that are not associated with
+        // any command buffer
+        std::vector<VulkanCommandInfo> none_cmd_vk_commands = {};
+        // Keep handles of all command buffers that is submitted by this submission
+        std::vector<uint64_t> vk_command_buffer_handles = {};
+        std::string           name = "";
     };
 
     DiveAnnotationProcessor() {}
     ~DiveAnnotationProcessor() {}
 
-    void EndStream();
-    bool IsValid() const;
-
     // Finalize the current block and stream it out.
     void WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data) override;
-
-    void WriteMarker(const char* name, const std::string_view marker_type, uint64_t frame_number);
 
     // @brief Convert annotations, which are simple {type:enum, key:string, value:string} objects.
     virtual void ProcessAnnotation(uint64_t                         block_index,
@@ -119,13 +73,16 @@ public:
     {
     }
 
-    bool WriteBinaryFile(const std::string& filename, uint64_t data_size, const uint8_t* data);
-
-    std::vector<std::unique_ptr<SubmitInfo>> GetSubmits() { return std::move(m_submits); }
+    std::vector<std::unique_ptr<SubmitInfo>> TakeSubmits() { return std::move(m_submits); }
+    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> TakeVkCommandsCache()
+    {
+        return std::move(m_cmd_vk_commands_cache);
+    }
 
 private:
-    std::vector<VulkanCommandInfo>
-    m_current_submit_commands;  // Buffer for commands before a submit
-    std::vector<std::unique_ptr<SubmitInfo>> m_submits;
-    uint32_t                                 m_current_submit_command_buffer_count = 0;
+    // This is a per submit cache that keeps all vk commands that are not in any command buffer
+    std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
+    // Use command buffer handle as the key to accociate with vk commands
+    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
+    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits = {};
 };

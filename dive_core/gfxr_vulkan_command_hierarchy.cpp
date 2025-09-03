@@ -48,11 +48,10 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
 
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
-uint32_t                                   parent_index,
-DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
+const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
 {
-    const std::string            &vulkan_cmd_name = vk_cmd_info.GetVkCmdName();
-    const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.GetArgs();
+    const std::string            &vulkan_cmd_name = vk_cmd_info.name;
+    const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.args;
     std::ostringstream            vk_cmd_string_stream;
     vk_cmd_string_stream << vulkan_cmd_name;
     if (vulkan_cmd_name == "vkBeginCommandBuffer")
@@ -119,14 +118,13 @@ DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool GfxrVulkanCommandHierarchyCreator::ExecuteGfxrSubmit(
-uint32_t                                                       submit_index,
+bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
 const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds)
 {
     for (uint32_t i = 0; i < vkCmds.size(); ++i)
     {
         DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info = vkCmds[i];
-        OnCommand(submit_index, vk_cmd_info);
+        OnCommand(vk_cmd_info);
     }
 
     // Ensure the begin debug utils node index stack is cleared
@@ -139,18 +137,27 @@ const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(
-const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &submits)
+bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData &capture_data)
 {
+    const auto &submits = capture_data.GetGfxrSubmits();
     for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
     {
         const DiveAnnotationProcessor::SubmitInfo &submit_info = *submits[submit_index];
 
         OnGfxrSubmit(submit_index, submit_info);
 
-        if (!ExecuteGfxrSubmit(submit_index, submit_info.GetVulkanCommands()))
+        if (!ProcessVkCmds(submit_info.none_cmd_vk_commands))
         {
             return false;
+        }
+
+        const auto &cmd_handles = submit_info.vk_command_buffer_handles;
+        for (const auto &handle : cmd_handles)
+        {
+            if (!ProcessVkCmds(capture_data.GetGfxrCommandBuffers(handle)))
+            {
+                return false;
+            }
         }
     }
     return true;
@@ -170,7 +177,7 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees(bool used_in_mixed_command_h
         uint64_t root_node_index = AddNode(NodeType::kRootNode, "");
         DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
 
-        if (!ProcessGfxrSubmits(m_capture_data.GetGfxrSubmits()))
+        if (!ProcessGfxrSubmits(m_capture_data))
         {
             return false;
         }
@@ -338,9 +345,9 @@ uint32_t                                   submit_index,
 const DiveAnnotationProcessor::SubmitInfo &submit_info)
 {
     std::ostringstream submit_string_stream;
-    submit_string_stream << submit_info.GetSubmitText() << ": " << submit_index;
+    submit_string_stream << submit_info.name << ": " << submit_index;
     submit_string_stream << ", Command Buffer Count: "
-                         << std::to_string(submit_info.GetCommandBufferCount());
+                         << std::to_string(submit_info.vk_command_buffer_handles.size());
     // Create submit node
     uint64_t submit_node_index = AddNode(NodeType::kGfxrVulkanSubmitNode,
                                          submit_string_stream.str());

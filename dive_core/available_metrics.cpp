@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include "dive_core/common/string_utils.h"
 #include <optional>
 
 namespace Dive
@@ -30,15 +31,6 @@ namespace Dive
 namespace
 {
 constexpr int kAvailableMetricsFieldCount = 5;
-
-// Helper to remove leading/trailing quotes from a string
-void RemoveQuotes(std::string& str)
-{
-    if (str.length() >= 2 && str.front() == '"' && str.back() == '"')
-    {
-        str = str.substr(1, str.length() - 2);
-    }
-}
 }  // namespace
 
 std::optional<AvailableMetrics> AvailableMetrics::LoadFromCsv(
@@ -53,41 +45,43 @@ const std::filesystem::path& file_path)
 
     AvailableMetrics available_metrics;
     std::string      line;
-    // Check header line
-    if (!std::getline(file, line) || line.empty() || line.find("MetricID") == std::string::npos)
+    // Read and ignore header line
+    if (!StringUtils::GetTrimmedLine(file, line) || line.empty() ||
+        line.find("MetricID") == std::string::npos)
     {
         return std::nullopt;
     }
 
-    while (std::getline(file, line))
+    while (StringUtils::GetTrimmedLine(file, line))
     {
         std::stringstream        ss(line);
         std::string              field;
         std::vector<std::string> fields;
-        while (std::getline(ss, field, ','))
+        while (StringUtils::GetTrimmedField(ss, field, ','))
         {
             fields.push_back(field);
         }
 
         if (fields.size() < kAvailableMetricsFieldCount)
         {
-            continue;  // Skip malformed lines
+            continue;
         }
 
         MetricInfo info{};
-        info.m_metric_id = static_cast<uint8_t>(std::stoi(fields[0]));
-        info.m_metric_type = static_cast<MetricType>(std::stoul(fields[1]));
+        uint32_t   metric_type_val;
+        if (!StringUtils::SafeConvertFromString(fields[0], info.m_metric_id) ||
+            !StringUtils::SafeConvertFromString(fields[1], metric_type_val))
+        {
+            continue;
+        }
+        info.m_metric_type = static_cast<MetricType>(metric_type_val);
         info.m_key = fields[2];
         info.m_name = fields[3];
         info.m_description = fields[4];
         for (size_t i = 5; i < fields.size(); ++i)
         {
-            info.m_description += ", " + fields[i];
+            info.m_description.append(", ").append(fields[i]);
         }
-
-        RemoveQuotes(info.m_key);
-        RemoveQuotes(info.m_name);
-        RemoveQuotes(info.m_description);
 
         available_metrics.m_metrics[info.m_key] = info;
     }

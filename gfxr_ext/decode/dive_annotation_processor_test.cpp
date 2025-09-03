@@ -29,16 +29,16 @@ namespace
 
 MATCHER_P3(VulkanCommandInfoEqual, expected_name, expected_index, expected_args, "")
 {
-    EXPECT_EQ(arg.GetVkCmdName(), expected_name);
-    EXPECT_EQ(arg.GetVkCmdIndex(), expected_index);
-    EXPECT_EQ(arg.GetArgs(), expected_args);
+    EXPECT_EQ(arg.name, expected_name);
+    EXPECT_EQ(arg.index, expected_index);
+    EXPECT_EQ(arg.args, expected_args);
     return true;
 }
 
 MATCHER_P2(SubmitInfoEq, expected_name, expected_command_buffer_count, "")
 {
-    return arg->GetSubmitText() == expected_name &&
-           arg->GetCommandBufferCount() == expected_command_buffer_count;
+    return arg->name == expected_name &&
+           arg->vk_command_buffer_handles.size() == expected_command_buffer_count;
 }
 
 TEST(WriteBlockEndTest, SingleSubmitCreatesOneSubmitWithNoCommands)
@@ -52,7 +52,7 @@ TEST(WriteBlockEndTest, SingleSubmitCreatesOneSubmitWithNoCommands)
     auto submits = processor.TakeSubmits();
     ASSERT_THAT(submits, SizeIs(1));
     EXPECT_THAT(submits[0].get(), SubmitInfoEq("vkQueueSubmit", 0));
-    EXPECT_THAT(submits[0]->GetNoneCmdVkCommands(), IsEmpty());
+    EXPECT_THAT(submits[0]->none_cmd_vk_commands, IsEmpty());
 }
 
 TEST(WriteBlockEndTest, MultipleSubmitsWithCommandsCreatesSubmitsWithCorrectCommands)
@@ -134,14 +134,14 @@ TEST(WriteBlockEndTest, MultipleSubmitsWithCommandsCreatesSubmitsWithCorrectComm
     // Verify Submit 1
     EXPECT_THAT(submits[0].get(),
                 SubmitInfoEq(submit_data_1.GetFunctionName(), /*expected_command_buffer_count=*/1));
-    EXPECT_THAT(submits[0]->GetCommandBufferHandles(), testing::ElementsAre(1001));
-    EXPECT_THAT(submits[0]->GetNoneCmdVkCommands(), IsEmpty());
+    EXPECT_THAT(submits[0]->vk_command_buffer_handles, testing::ElementsAre(1001));
+    EXPECT_THAT(submits[0]->none_cmd_vk_commands, IsEmpty());
 
     // Verify Submit 2
     EXPECT_THAT(submits[1].get(),
                 SubmitInfoEq(submit_data_2.GetFunctionName(), /*expected_command_buffer_count=*/1));
-    EXPECT_THAT(submits[1]->GetCommandBufferHandles(), testing::ElementsAre(1002));
-    EXPECT_THAT(submits[1]->GetNoneCmdVkCommands(), IsEmpty());
+    EXPECT_THAT(submits[1]->vk_command_buffer_handles, testing::ElementsAre(1002));
+    EXPECT_THAT(submits[1]->none_cmd_vk_commands, IsEmpty());
 
     // Verify command cache
     auto vk_commands_cache = processor.TakeVkCommandsCache();

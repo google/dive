@@ -31,7 +31,6 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
     {
         std::unique_ptr<SubmitInfo> submit_ptr = std::make_unique<SubmitInfo>(function_name);
 
-        std::vector<uint64_t> vk_command_buffer_handles{};
         if (args.count("submitCount"))
         {
             const auto& submits = args["pSubmits"];
@@ -42,13 +41,12 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
                     const auto& command_buffers = submit["pCommandBuffers"];
                     for (const auto& cmd_buffer : command_buffers)
                     {
-                        vk_command_buffer_handles.push_back(cmd_buffer);
+                        submit_ptr->vk_command_buffer_handles.push_back(cmd_buffer);
                     }
                 }
             }
         }
-        submit_ptr->TakeVkCommandBufferHandles(vk_command_buffer_handles);
-        submit_ptr->TakeNoneCmdVkCommands(m_none_cmd_vk_commands_per_submit_cache);
+        submit_ptr->none_cmd_vk_commands = std::move(m_none_cmd_vk_commands_per_submit_cache);
         m_submits.push_back(std::move(submit_ptr));
     }
     else

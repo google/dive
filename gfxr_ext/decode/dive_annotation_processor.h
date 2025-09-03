@@ -32,81 +32,31 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 public:
     struct VulkanCommandInfo
     {
-    public:
-        VulkanCommandInfo(const std::string& name, uint32_t index) :
-            m_args(),
-            m_name(name),
-            m_index(index),
-            m_cmd_count(0)
+        explicit VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data) :
+            args(data.GetArgs()),
+            name(data.GetFunctionName()),
+            index(data.GetCmdBufferIndex())
         {
         }
 
-        VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data) :
-            m_args(data.GetArgs()),
-            m_name(data.GetFunctionName()),
-            m_index(data.GetCmdBufferIndex()),
-            m_cmd_count(0)
-        {
-        }
-
-        VulkanCommandInfo() :
-            m_args({}),
-            m_name(""),
-            m_index(0),
-            m_cmd_count(0)
-        {
-        }
-        const std::string&            GetVkCmdName() const { return m_name; }
-        uint32_t                      GetVkCmdIndex() const { return m_index; }
-        void                          SetCmdCount(uint32_t cmd_count) { m_cmd_count = cmd_count; }
-        uint32_t                      GetCmdCount() const { return m_cmd_count; }
-        const nlohmann::ordered_json& GetArgs() const { return m_args; }
-
-    private:
-        nlohmann::ordered_json m_args;
-        std::string            m_name;
-        uint32_t               m_index;
-        uint32_t               m_cmd_count;  // Only used by vkBeginCommandBuffers
+        nlohmann::ordered_json args{};
+        std::string            name{ "" };
+        uint32_t               index = 0;
     };
 
     struct SubmitInfo
     {
-    public:
-        SubmitInfo() = default;
-
-        SubmitInfo(const std::string& name) :
-            m_name(name)
+        explicit SubmitInfo(const std::string& function_name) :
+            name(function_name)
         {
         }
 
-        const std::string& GetSubmitText() const { return m_name; }
-
-        size_t GetCommandBufferCount() const { return m_vk_command_buffer_handles.size(); }
-        const std::vector<VulkanCommandInfo>& GetNoneCmdVkCommands() const
-        {
-            return m_none_cmd_vk_commands;
-        }
-        void TakeNoneCmdVkCommands(std::vector<VulkanCommandInfo>& commands)
-        {
-            m_none_cmd_vk_commands = std::move(commands);
-        }
-
-        void TakeVkCommandBufferHandles(std::vector<uint64_t>& handles)
-        {
-            m_vk_command_buffer_handles = std::move(handles);
-        }
-
-        const std::vector<uint64_t>& GetCommandBufferHandles() const
-        {
-            return m_vk_command_buffer_handles;
-        }
-
-    private:
-        // Keeps all vk commands that are not part of any command buffer
-        std::vector<VulkanCommandInfo> m_none_cmd_vk_commands{};
+        // Keeps all the vk commands that come before this submit and that are not associated with
+        // any command buffer
+        std::vector<VulkanCommandInfo> none_cmd_vk_commands{};
         // Keep handles of all command buffers that is submitted by this submission
-        std::vector<uint64_t> m_vk_command_buffer_handles{};
-        std::string           m_name{ "" };
+        std::vector<uint64_t> vk_command_buffer_handles{};
+        std::string           name{ "" };
     };
 
     DiveAnnotationProcessor() {}

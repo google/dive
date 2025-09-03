@@ -50,8 +50,8 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
 DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
 {
-    const std::string            &vulkan_cmd_name = vk_cmd_info.GetVkCmdName();
-    const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.GetArgs();
+    const std::string            &vulkan_cmd_name = vk_cmd_info.name;
+    const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.args;
     std::ostringstream            vk_cmd_string_stream;
     vk_cmd_string_stream << vulkan_cmd_name;
     if (vulkan_cmd_name == "vkBeginCommandBuffer")
@@ -146,12 +146,12 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
 
         OnGfxrSubmit(submit_index, submit_info);
 
-        if (!ProcessVkCmds(submit_info.GetNoneCmdVkCommands()))
+        if (!ProcessVkCmds(submit_info.none_cmd_vk_commands))
         {
             return false;
         }
 
-        const auto &cmd_handles = submit_info.GetCommandBufferHandles();
+        const auto &cmd_handles = submit_info.vk_command_buffer_handles;
         for (const auto &handle : cmd_handles)
         {
             if (!ProcessVkCmds(capture_data.GetGfxrCommandBuffers(handle)))
@@ -345,9 +345,9 @@ uint32_t                                   submit_index,
 const DiveAnnotationProcessor::SubmitInfo &submit_info)
 {
     std::ostringstream submit_string_stream;
-    submit_string_stream << submit_info.GetSubmitText() << ": " << submit_index;
+    submit_string_stream << submit_info.name << ": " << submit_index;
     submit_string_stream << ", Command Buffer Count: "
-                         << std::to_string(submit_info.GetCommandBufferCount());
+                         << std::to_string(submit_info.vk_command_buffer_handles.size());
     // Create submit node
     uint64_t submit_node_index = AddNode(NodeType::kGfxrVulkanSubmitNode,
                                          submit_string_stream.str());

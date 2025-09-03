@@ -20,3 +20,7 @@ add_executable(available_metrics_test available_metrics_test.cpp)
 target_link_libraries(available_metrics_test gtest gtest_main gmock dive_core)
 target_compile_definitions(available_metrics_test PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 gtest_discover_tests(available_metrics_test)
+
+add_executable(string_utils_test string_utils_test.cpp)
+target_link_libraries(string_utils_test gtest gtest_main gmock dive_core)
+gtest_discover_tests(string_utils_test)

@@ -177,6 +177,12 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees(bool used_in_mixed_command_h
         uint64_t root_node_index = AddNode(NodeType::kRootNode, "");
         DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
 
+        // Add root frame node
+        uint64_t frame_root_node_index = AddNode(NodeType::kGfxrRootFrameNode, "Frame");
+        AddChild(CommandHierarchy::kAllEventTopology,
+                 Topology::kRootNodeIndex,
+                 frame_root_node_index);
+
         if (!ProcessGfxrSubmits(m_capture_data))
         {
             return false;

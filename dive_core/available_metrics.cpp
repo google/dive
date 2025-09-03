@@ -68,7 +68,7 @@ const std::filesystem::path& file_path)
         }
 
         MetricInfo info{};
-        uint32_t   metric_type_val;
+        uint32_t   metric_type_val = 0;
         if (!StringUtils::SafeConvertFromString(fields[0], info.m_metric_id) ||
             !StringUtils::SafeConvertFromString(fields[1], metric_type_val))
         {

@@ -23,7 +23,7 @@ namespace Dive
 namespace StringUtils
 {
 
-TEST(StringUtils, SafeConvertFromString_Int)
+TEST(StringUtils, SafeConvertFromStringInt)
 {
     int val = 0;
     EXPECT_TRUE(SafeConvertFromString("123", val));
@@ -47,13 +47,13 @@ TEST(StringUtils, SafeConvertFromString_Int)
     EXPECT_EQ(val, std::numeric_limits<int>::min());
 
     // Out of range
-    long long too_big = (long long)std::numeric_limits<int>::max() + 1;
+    constexpr long long too_big = static_cast<long long>(std::numeric_limits<int>::max()) + 1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_big), val));
-    long long too_small = (long long)std::numeric_limits<int>::min() - 1;
+    constexpr long long too_small = static_cast<long long>(std::numeric_limits<int>::min()) - 1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_small), val));
 }
 
-TEST(StringUtils, SafeConvertFromString_UnsignedInt)
+TEST(StringUtils, SafeConvertFromStringUnsignedInt)
 {
     unsigned int val = 0;
     EXPECT_TRUE(SafeConvertFromString("123", val));
@@ -75,11 +75,13 @@ TEST(StringUtils, SafeConvertFromString_UnsignedInt)
     EXPECT_EQ(val, std::numeric_limits<unsigned int>::max());
 
     // Out of range
-    unsigned long long too_big = (unsigned long long)std::numeric_limits<unsigned int>::max() + 1;
+    constexpr unsigned long long too_big = static_cast<unsigned long long>(
+                                           std::numeric_limits<unsigned int>::max()) +
+                                           1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_big), val));
 }
 
-TEST(StringUtils, SafeConvertFromString_Float)
+TEST(StringUtils, SafeConvertFromStringFloat)
 {
     float val = 0.0f;
     EXPECT_TRUE(SafeConvertFromString("123.45", val));
@@ -99,7 +101,7 @@ TEST(StringUtils, SafeConvertFromString_Float)
     EXPECT_FALSE(SafeConvertFromString("", val));
 }
 
-TEST(StringUtils, SafeConvertFromString_Double)
+TEST(StringUtils, SafeConvertFromStringDouble)
 {
     double val = 0.0;
     EXPECT_TRUE(SafeConvertFromString("123.45", val));

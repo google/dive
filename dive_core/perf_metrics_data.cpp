@@ -13,19 +13,17 @@
 
 #include "dive_core/perf_metrics_data.h"
 
-#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <filesystem>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <array>
 
 #include "dive_core/available_metrics.h"
+#include "dive_core/common/string_utils.h"
 
 namespace Dive
 {
@@ -35,71 +33,99 @@ constexpr std::array kFixedHeaders = { "ContextID",   "ProcessID", "FrameID",
                                        "CmdBufferID", "DrawID",    "DrawType",
                                        "DrawLabel",   "ProgramID", "LRZState" };
 
-void Trim(std::string& s)
+bool ParseHeaders(const std::string&              line,
+                  const AvailableMetrics&         available_metrics,
+                  std::vector<std::string>&       metric_names,
+                  std::vector<const MetricInfo*>& metric_infos)
 {
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); })
-            .base(),
-            s.end());
-    s.erase(s.begin(),
-            std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+    std::stringstream header_ss(line);
+    std::string       header_field;
+    int               column_index = 0;
+    while (StringUtils::GetTrimmedField(header_ss, header_field, ','))
+    {
+        if (column_index < kFixedHeaders.size())
+        {
+            if (header_field != kFixedHeaders[column_index])
+                return false;
+        }
+        else
+        {
+            metric_names.push_back(header_field);
+            metric_infos.push_back(available_metrics.GetMetricInfo(header_field));
+        }
+        column_index++;
+    }
+
+    return column_index >= kFixedHeaders.size();
 }
 
-// Helper functions for safe string to number conversion
-template<typename T> bool SafeConvertFromString(const std::string& s, T& out)
+std::optional<PerfMetricsRecord> ParseRecordFixedFields(const std::vector<std::string>& fields)
 {
-    if constexpr (std::is_floating_point_v<T>)
+    if (fields.size() < kFixedHeaders.size())
     {
-        char*       end = nullptr;
-        const char* start = s.c_str();
-        errno = 0;
-        T val = std::strtof(start, &end);
-        if (errno == ERANGE || *end != '\0' || start == end)
-        {
-            return false;
-        }
-        out = val;
-        return true;
+        return std::nullopt;
     }
-    else if constexpr (std::is_integral_v<T>)
+
+    PerfMetricsRecord record{};
+    if (!StringUtils::SafeConvertFromString(fields[0], record.m_context_id) ||
+        !StringUtils::SafeConvertFromString(fields[1], record.m_process_id) ||
+        !StringUtils::SafeConvertFromString(fields[2], record.m_frame_id) ||
+        !StringUtils::SafeConvertFromString(fields[3], record.m_cmd_buffer_id) ||
+        !StringUtils::SafeConvertFromString(fields[4], record.m_draw_id) ||
+        !StringUtils::SafeConvertFromString(fields[5], record.m_draw_type) ||
+        !StringUtils::SafeConvertFromString(fields[6], record.m_draw_label) ||
+        !StringUtils::SafeConvertFromString(fields[7], record.m_program_id) ||
+        !StringUtils::SafeConvertFromString(fields[8], record.m_lrz_state))
     {
-        char*       end = nullptr;
-        const char* start = s.c_str();
-        errno = 0;
+        return std::nullopt;  // Parsing failed
+    }
+    return record;
+}
 
-        long long val = 0;
-        if constexpr (std::is_signed_v<T>)
-            val = std::strtoll(start, &end, 10);
-        else
-            val = std::strtoull(start, &end, 10);
-
-        if (errno == ERANGE || *end != '\0' || start == end)
-        {
-            return false;
-        }
-
-        if (val < std::numeric_limits<T>::min() || val > std::numeric_limits<T>::max())
-            return false;
-
-        out = static_cast<T>(val);
+template<typename T>
+bool ParseAndEmplaceMetric(const std::string& s, std::vector<std::variant<int64_t, float>>& values)
+{
+    T val{};
+    if (StringUtils::SafeConvertFromString(s, val))
+    {
+        values.emplace_back(val);
         return true;
     }
     return false;
 }
 
-bool GetTrimmedLine(std::ifstream& file, std::string& line)
+bool ParseMetrics(const std::vector<std::string>&       fields,
+                  const std::vector<const MetricInfo*>& metric_infos,
+                  std::optional<PerfMetricsRecord>&     record_opt)
 {
-    if (!std::getline(file, line))
-        return false;
-    Trim(line);
-    return true;
-}
-
-bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter = ',')
-{
-    if (!std::getline(ss, field, delimiter))
-        return false;
-    Trim(field);
-    return true;
+    bool all_metrics_parsed = true;
+    for (size_t i = 0; i < metric_infos.size(); ++i)
+    {
+        const std::string& value_str = fields[kFixedHeaders.size() + i];
+        const MetricInfo*  info = metric_infos[i];
+        if (info)
+        {
+            switch (info->m_metric_type)
+            {
+            case MetricType::kCount:
+                all_metrics_parsed = ParseAndEmplaceMetric<int64_t>(value_str,
+                                                                    record_opt->m_metric_values);
+                break;
+            case MetricType::kPercent:
+                all_metrics_parsed = ParseAndEmplaceMetric<float>(value_str,
+                                                                  record_opt->m_metric_values);
+                break;
+            default:
+                all_metrics_parsed = false;
+                break;
+            }
+        }
+        if (!all_metrics_parsed)
+        {
+            break;
+        }
+    }
+    return all_metrics_parsed;
 }
 
 }  // namespace
@@ -121,37 +147,23 @@ const AvailableMetrics&      available_metrics)
 
     std::string line;
     // Read header line
-    if (!GetTrimmedLine(file, line) || line.empty())
+    if (!StringUtils::GetTrimmedLine(file, line) || line.empty())
     {
         return nullptr;
     }
 
-    std::stringstream header_ss(line);
-    std::string       header_field;
-    int               column_index = 0;
-    while (GetTrimmedField(header_ss, header_field, ','))
+    if (!ParseHeaders(line, available_metrics, metric_names, metric_infos))
     {
-        if (column_index < kFixedHeaders.size())
-        {
-            if (header_field != kFixedHeaders[column_index])
-                return nullptr;
-        }
-        else
-        {
-            metric_names.push_back(header_field);
-            metric_infos.push_back(available_metrics.GetMetricInfo(header_field));
-        }
-        column_index++;
-    }
-    if (column_index < kFixedHeaders.size())
         return nullptr;
+    }
 
-    while (GetTrimmedLine(file, line))
+    // Read data lines
+    while (StringUtils::GetTrimmedLine(file, line))
     {
         std::stringstream        ss(line);
         std::string              field;
         std::vector<std::string> fields;
-        while (GetTrimmedField(ss, field, ','))
+        while (StringUtils::GetTrimmedField(ss, field, ','))
         {
             fields.push_back(field);
         }
@@ -161,70 +173,15 @@ const AvailableMetrics&      available_metrics)
             continue;  // Skip malformed lines
         }
 
-        PerfMetricsRecord record{};
-        uint32_t          draw_type = 0, lrz_state = 0;
-        if (!SafeConvertFromString(fields[0], record.m_context_id) ||
-            !SafeConvertFromString(fields[1], record.m_process_id) ||
-            !SafeConvertFromString(fields[2], record.m_frame_id) ||
-            !SafeConvertFromString(fields[3], record.m_cmd_buffer_id) ||
-            !SafeConvertFromString(fields[4], record.m_draw_id) ||
-            !SafeConvertFromString(fields[5], draw_type) ||
-            !SafeConvertFromString(fields[6], record.m_draw_label) ||
-            !SafeConvertFromString(fields[7], record.m_program_id) ||
-            !SafeConvertFromString(fields[8], lrz_state))
+        auto record_opt = ParseRecordFixedFields(fields);
+        if (!record_opt.has_value())
         {
-            continue;  // Skip lines with parsing errors
+            continue;  // Skip malformed lines
         }
-        record.m_draw_type = static_cast<uint8_t>(draw_type);
-        record.m_lrz_state = static_cast<uint8_t>(lrz_state);
 
-        bool all_metrics_parsed = true;
-        for (size_t i = 0; i < metric_infos.size(); ++i)
+        if (ParseMetrics(fields, metric_infos, record_opt))
         {
-            const std::string& value_str = fields[kFixedHeaders.size() + i];
-            const MetricInfo*  info = metric_infos[i];
-            if (info)
-            {
-                switch (info->m_metric_type)
-                {
-                case MetricType::kCount:
-                {
-                    int64_t val = 0;
-                    if (SafeConvertFromString(value_str, val))
-                    {
-                        record.m_metric_values.emplace_back(val);
-                    }
-                    else
-                    {
-                        all_metrics_parsed = false;
-                    }
-                    break;
-                }
-                case MetricType::kPercent:
-                {
-                    float val = 0.0f;
-                    if (SafeConvertFromString(value_str, val))
-                    {
-                        record.m_metric_values.emplace_back(val);
-                    }
-                    else
-                    {
-                        all_metrics_parsed = false;
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
-            if (!all_metrics_parsed)
-            {
-                break;
-            }
-        }
-        if (all_metrics_parsed)
-        {
-            records.push_back(record);
+            records.push_back(*record_opt);
         }
     }
 

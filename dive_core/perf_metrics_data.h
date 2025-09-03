@@ -68,6 +68,7 @@ private:
         m_records(std::move(records))
     {
     }
+
     std::vector<std::string>       m_metric_names;
     std::vector<const MetricInfo*> m_metric_infos;
     std::vector<PerfMetricsRecord> m_records;

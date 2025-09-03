@@ -39,8 +39,8 @@ public:
         {
         }
 
-        nlohmann::ordered_json args{};
-        std::string            name{ "" };
+        nlohmann::ordered_json args = {};
+        std::string            name = "";
         uint32_t               index = 0;
     };
 
@@ -53,10 +53,10 @@ public:
 
         // Keeps all the vk commands that come before this submit and that are not associated with
         // any command buffer
-        std::vector<VulkanCommandInfo> none_cmd_vk_commands{};
+        std::vector<VulkanCommandInfo> none_cmd_vk_commands = {};
         // Keep handles of all command buffers that is submitted by this submission
-        std::vector<uint64_t> vk_command_buffer_handles{};
-        std::string           name{ "" };
+        std::vector<uint64_t> vk_command_buffer_handles = {};
+        std::string           name = "";
     };
 
     DiveAnnotationProcessor() {}
@@ -81,8 +81,8 @@ public:
 
 private:
     // This is a per submit cache that keeps all vk commands that are not in any command buffer
-    std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache;
+    std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
     // Use command buffer handle as the key to accociate with vk commands
-    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache;
-    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits;
+    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
+    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits = {};
 };

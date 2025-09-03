@@ -35,7 +35,7 @@ public:
 
     void OnGfxrSubmit(uint32_t                                   submit_index,
                       const DiveAnnotationProcessor::SubmitInfo &submit_info);
-    void OnCommand(DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info);
+    void OnCommand(const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info);
 
     bool ProcessVkCmds(const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds);
 

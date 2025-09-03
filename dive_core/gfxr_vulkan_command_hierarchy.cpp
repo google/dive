@@ -48,7 +48,7 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
 
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
-DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info)
+const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
 {
     const std::string            &vulkan_cmd_name = vk_cmd_info.name;
     const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.args;

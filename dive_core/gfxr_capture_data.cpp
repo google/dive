@@ -68,6 +68,7 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
     }
 
     m_gfxr_submits = dive_annotation_processor.TakeSubmits();
+    DIVE_ASSERT(!m_gfxr_submits.empty());
     m_gfxr_command_buffers = dive_annotation_processor.TakeVkCommandsCache();
 
     if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())

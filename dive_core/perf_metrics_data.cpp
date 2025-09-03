@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <array>
 
 #include "dive_core/available_metrics.h"
 
@@ -30,12 +31,11 @@ namespace Dive
 {
 namespace
 {
-constexpr int     kPerfMetricsFixFieldCount = 9;
-const char* const kFixedHeaders[] = { "ContextID",   "ProcessID", "FrameID",
-                                      "CmdBufferID", "DrawID",    "DrawType",
-                                      "DrawLabel",   "ProgramID", "LRZState" };
+constexpr std::array kFixedHeaders = { "ContextID",   "ProcessID", "FrameID",
+                                       "CmdBufferID", "DrawID",    "DrawType",
+                                       "DrawLabel",   "ProgramID", "LRZState" };
 
-void trim(std::string& s)
+void Trim(std::string& s)
 {
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); })
             .base(),
@@ -45,7 +45,7 @@ void trim(std::string& s)
 }
 
 // Helper functions for safe string to number conversion
-bool safe_stoull(const std::string& s, uint64_t& out)
+bool SafeStoull(const std::string& s, uint64_t& out)
 {
     char*       end = nullptr;
     const char* start = s.c_str();
@@ -59,7 +59,7 @@ bool safe_stoull(const std::string& s, uint64_t& out)
     return true;
 }
 
-bool safe_stoul(const std::string& s, uint32_t& out)
+bool SafeStoul(const std::string& s, uint32_t& out)
 {
     char*       end = nullptr;
     const char* start = s.c_str();
@@ -69,11 +69,11 @@ bool safe_stoul(const std::string& s, uint32_t& out)
     {
         return false;
     }
-    out = val;
+    out = static_cast<uint32_t>(val);
     return true;
 }
 
-bool safe_stoll(const std::string& s, int64_t& out)
+bool SafeStoll(const std::string& s, int64_t& out)
 {
     char*       end = nullptr;
     const char* start = s.c_str();
@@ -87,7 +87,7 @@ bool safe_stoll(const std::string& s, int64_t& out)
     return true;
 }
 
-bool safe_stof(const std::string& s, float& out)
+bool SafeStof(const std::string& s, float& out)
 {
     char*       end = nullptr;
     const char* start = s.c_str();
@@ -98,6 +98,22 @@ bool safe_stof(const std::string& s, float& out)
         return false;
     }
     out = val;
+    return true;
+}
+
+bool GetTrimmedLine(std::ifstream& file, std::string& line)
+{
+    if (!std::getline(file, line))
+        return false;
+    Trim(line);
+    return true;
+}
+
+bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter = ',')
+{
+    if (!std::getline(ss, field, delimiter))
+        return false;
+    Trim(field);
     return true;
 }
 
@@ -120,19 +136,17 @@ const AvailableMetrics&      available_metrics)
 
     std::string line;
     // Read header line
-    if (!std::getline(file, line) || line.empty())
+    if (!GetTrimmedLine(file, line) || line.empty())
     {
         return nullptr;
     }
-    trim(line);
 
     std::stringstream header_ss(line);
     std::string       header_field;
     int               column_index = 0;
-    while (std::getline(header_ss, header_field, ','))
+    while (GetTrimmedField(header_ss, header_field, ','))
     {
-        trim(header_field);
-        if (column_index < kPerfMetricsFixFieldCount)
+        if (column_index < kFixedHeaders.size())
         {
             if (header_field != kFixedHeaders[column_index])
                 return nullptr;
@@ -144,35 +158,33 @@ const AvailableMetrics&      available_metrics)
         }
         column_index++;
     }
-    if (column_index < kPerfMetricsFixFieldCount)
+    if (column_index < kFixedHeaders.size())
         return nullptr;
 
-    while (std::getline(file, line))
+    while (GetTrimmedLine(file, line))
     {
-        trim(line);
         std::stringstream        ss(line);
         std::string              field;
         std::vector<std::string> fields;
-        while (std::getline(ss, field, ','))
+        while (GetTrimmedField(ss, field, ','))
         {
-            trim(field);
             fields.push_back(field);
         }
 
-        if (fields.size() != kPerfMetricsFixFieldCount + metric_names.size())
+        if (fields.size() != kFixedHeaders.size() + metric_names.size())
         {
             continue;  // Skip malformed lines
         }
 
         PerfMetricsRecord record{};
         uint32_t          draw_type = 0, lrz_state = 0;
-        if (!safe_stoull(fields[0], record.m_context_id) ||
-            !safe_stoull(fields[1], record.m_process_id) ||
-            !safe_stoull(fields[2], record.m_frame_id) ||
-            !safe_stoull(fields[3], record.m_cmd_buffer_id) ||
-            !safe_stoul(fields[4], record.m_draw_id) || !safe_stoul(fields[5], draw_type) ||
-            !safe_stoul(fields[6], record.m_draw_label) ||
-            !safe_stoull(fields[7], record.m_program_id) || !safe_stoul(fields[8], lrz_state))
+        if (!SafeStoull(fields[0], record.m_context_id) ||
+            !SafeStoull(fields[1], record.m_process_id) ||
+            !SafeStoull(fields[2], record.m_frame_id) ||
+            !SafeStoull(fields[3], record.m_cmd_buffer_id) ||
+            !SafeStoul(fields[4], record.m_draw_id) || !SafeStoul(fields[5], draw_type) ||
+            !SafeStoul(fields[6], record.m_draw_label) ||
+            !SafeStoull(fields[7], record.m_program_id) || !SafeStoul(fields[8], lrz_state))
         {
             continue;  // Skip lines with parsing errors
         }
@@ -182,7 +194,7 @@ const AvailableMetrics&      available_metrics)
         bool all_metrics_parsed = true;
         for (size_t i = 0; i < metric_infos.size(); ++i)
         {
-            const std::string& value_str = fields[kPerfMetricsFixFieldCount + i];
+            const std::string& value_str = fields[kFixedHeaders.size() + i];
             const MetricInfo*  info = metric_infos[i];
             if (info)
             {
@@ -191,7 +203,7 @@ const AvailableMetrics&      available_metrics)
                 case MetricType::kCount:
                 {
                     int64_t val = 0;
-                    if (safe_stoll(value_str, val))
+                    if (SafeStoll(value_str, val))
                     {
                         record.m_metric_values.emplace_back(val);
                     }
@@ -204,7 +216,7 @@ const AvailableMetrics&      available_metrics)
                 case MetricType::kPercent:
                 {
                     float val = 0.0f;
-                    if (safe_stof(value_str, val))
+                    if (SafeStof(value_str, val))
                     {
                         record.m_metric_values.emplace_back(val);
                     }

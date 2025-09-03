@@ -45,60 +45,45 @@ void Trim(std::string& s)
 }
 
 // Helper functions for safe string to number conversion
-bool SafeStoull(const std::string& s, uint64_t& out)
+template<typename T> bool SafeConvertFromString(const std::string& s, T& out)
 {
-    char*       end = nullptr;
-    const char* start = s.c_str();
-    errno = 0;
-    unsigned long long val = std::strtoull(start, &end, 10);
-    if (errno == ERANGE || *end != '\0' || start == end)
+    if constexpr (std::is_floating_point_v<T>)
     {
-        return false;
+        char*       end = nullptr;
+        const char* start = s.c_str();
+        errno = 0;
+        T val = std::strtof(start, &end);
+        if (errno == ERANGE || *end != '\0' || start == end)
+        {
+            return false;
+        }
+        out = val;
+        return true;
     }
-    out = val;
-    return true;
-}
+    else if constexpr (std::is_integral_v<T>)
+    {
+        char*       end = nullptr;
+        const char* start = s.c_str();
+        errno = 0;
 
-bool SafeStoul(const std::string& s, uint32_t& out)
-{
-    char*       end = nullptr;
-    const char* start = s.c_str();
-    errno = 0;
-    unsigned long val = std::strtoul(start, &end, 10);
-    if (errno == ERANGE || *end != '\0' || start == end)
-    {
-        return false;
-    }
-    out = static_cast<uint32_t>(val);
-    return true;
-}
+        long long val = 0;
+        if constexpr (std::is_signed_v<T>)
+            val = std::strtoll(start, &end, 10);
+        else
+            val = std::strtoull(start, &end, 10);
 
-bool SafeStoll(const std::string& s, int64_t& out)
-{
-    char*       end = nullptr;
-    const char* start = s.c_str();
-    errno = 0;
-    long long val = std::strtoll(start, &end, 10);
-    if (errno == ERANGE || *end != '\0' || start == end)
-    {
-        return false;
-    }
-    out = val;
-    return true;
-}
+        if (errno == ERANGE || *end != '\0' || start == end)
+        {
+            return false;
+        }
 
-bool SafeStof(const std::string& s, float& out)
-{
-    char*       end = nullptr;
-    const char* start = s.c_str();
-    errno = 0;
-    float val = std::strtof(start, &end);
-    if (errno == ERANGE || *end != '\0' || start == end)
-    {
-        return false;
+        if (val < std::numeric_limits<T>::min() || val > std::numeric_limits<T>::max())
+            return false;
+
+        out = static_cast<T>(val);
+        return true;
     }
-    out = val;
-    return true;
+    return false;
 }
 
 bool GetTrimmedLine(std::ifstream& file, std::string& line)
@@ -178,13 +163,15 @@ const AvailableMetrics&      available_metrics)
 
         PerfMetricsRecord record{};
         uint32_t          draw_type = 0, lrz_state = 0;
-        if (!SafeStoull(fields[0], record.m_context_id) ||
-            !SafeStoull(fields[1], record.m_process_id) ||
-            !SafeStoull(fields[2], record.m_frame_id) ||
-            !SafeStoull(fields[3], record.m_cmd_buffer_id) ||
-            !SafeStoul(fields[4], record.m_draw_id) || !SafeStoul(fields[5], draw_type) ||
-            !SafeStoul(fields[6], record.m_draw_label) ||
-            !SafeStoull(fields[7], record.m_program_id) || !SafeStoul(fields[8], lrz_state))
+        if (!SafeConvertFromString(fields[0], record.m_context_id) ||
+            !SafeConvertFromString(fields[1], record.m_process_id) ||
+            !SafeConvertFromString(fields[2], record.m_frame_id) ||
+            !SafeConvertFromString(fields[3], record.m_cmd_buffer_id) ||
+            !SafeConvertFromString(fields[4], record.m_draw_id) ||
+            !SafeConvertFromString(fields[5], draw_type) ||
+            !SafeConvertFromString(fields[6], record.m_draw_label) ||
+            !SafeConvertFromString(fields[7], record.m_program_id) ||
+            !SafeConvertFromString(fields[8], lrz_state))
         {
             continue;  // Skip lines with parsing errors
         }
@@ -203,7 +190,7 @@ const AvailableMetrics&      available_metrics)
                 case MetricType::kCount:
                 {
                     int64_t val = 0;
-                    if (SafeStoll(value_str, val))
+                    if (SafeConvertFromString(value_str, val))
                     {
                         record.m_metric_values.emplace_back(val);
                     }
@@ -216,7 +203,7 @@ const AvailableMetrics&      available_metrics)
                 case MetricType::kPercent:
                 {
                     float val = 0.0f;
-                    if (SafeStof(value_str, val))
+                    if (SafeConvertFromString(value_str, val))
                     {
                         record.m_metric_values.emplace_back(val);
                     }

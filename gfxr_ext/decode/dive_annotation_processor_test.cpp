@@ -169,5 +169,255 @@ TEST(WriteBlockEndTest, MultipleSubmitsWithCommandsCreatesSubmitsWithCorrectComm
     EXPECT_THAT(vk_commands_cache[1002][2],
                 VulkanCommandInfoEqual(cmd_data_7.GetFunctionName(), 0, args_cmd_7));
 }
+
+TEST(WriteBlockEndTest,
+     SingleSubmitWithSingleCommandBufferHasCorrectNumberOfDrawCallsPerCommandBufferRecord)
+{
+    DiveAnnotationProcessor processor;
+
+    // Command Buffer 1 (handle 1001)
+    nlohmann::ordered_json           args_cmd_1 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/6,
+                                                args_cmd_1);
+    nlohmann::ordered_json           args_cmd_2 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdDraw",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/7,
+                                                args_cmd_2);
+    nlohmann::ordered_json           args_cmd_3 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_3("vkCmdDraw",
+                                                /*cmd_buffer_index=*/2,
+                                                /*block_index=*/8,
+                                                args_cmd_3);
+    nlohmann::ordered_json           args_cmd_4 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_4("vkCmdDispatch",
+                                                /*cmd_buffer_index=*/3,
+                                                /*block_index=*/9,
+                                                args_cmd_4);
+    nlohmann::ordered_json           args_cmd_5 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_5("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/10,
+                                                args_cmd_5);
+    nlohmann::ordered_json           args_cmd_6 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_6("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/11,
+                                                args_cmd_6);
+    nlohmann::ordered_json           args_cmd_7 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_7("vkCmdDraw",
+                                                /*cmd_buffer_index=*/4,
+                                                /*block_index=*/12,
+                                                args_cmd_7);
+    nlohmann::ordered_json           args_cmd_8 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_8("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/13,
+                                                args_cmd_8);
+
+    // Submit 1 (submitting command buffer 1001)
+    nlohmann::ordered_json args_submit_1 = {
+        { "submitCount", 1 },
+        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
+    };
+    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit",
+                                                   /*cmd_buffer_index=*/0,
+                                                   /*block_index=*/8,
+                                                   args_submit_1);
+
+    processor.WriteBlockEnd(cmd_data_1);
+    processor.WriteBlockEnd(cmd_data_2);
+    processor.WriteBlockEnd(cmd_data_3);
+    processor.WriteBlockEnd(cmd_data_4);
+    processor.WriteBlockEnd(cmd_data_5);
+    processor.WriteBlockEnd(cmd_data_6);
+    processor.WriteBlockEnd(cmd_data_7);
+    processor.WriteBlockEnd(cmd_data_8);
+    processor.WriteBlockEnd(submit_data_1);
+
+    auto draw_calls_map = processor.TakeCommandBufferDrawCallMap();
+    ASSERT_THAT(draw_calls_map, SizeIs(1));
+    ASSERT_TRUE(draw_calls_map.count(1001));
+
+    EXPECT_THAT(draw_calls_map[1001], testing::ElementsAre(2, 1));
+}
+
+TEST(WriteBlockEndTest, MultipleCommandBuffersHaveCorrectDrawCallCounts)
+{
+    DiveAnnotationProcessor processor;
+
+    // Command Buffer 1 (handle 1001)
+    nlohmann::ordered_json           args_cmd_1 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/1,
+                                                args_cmd_1);
+    nlohmann::ordered_json           args_cmd_2 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdDraw",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/2,
+                                                args_cmd_2);
+    nlohmann::ordered_json           args_cmd_3 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_3("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/3,
+                                                args_cmd_3);
+
+    // Command Buffer 2 (handle 1002)
+    nlohmann::ordered_json           args_cmd_4 = { { "commandBuffer", 1002 } };
+    gfxrecon::util::DiveFunctionData cmd_data_4("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/4,
+                                                args_cmd_4);
+    nlohmann::ordered_json           args_cmd_5 = { { "commandBuffer", 1002 } };
+    gfxrecon::util::DiveFunctionData cmd_data_5("vkCmdDrawIndexed",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/5,
+                                                args_cmd_5);
+    nlohmann::ordered_json           args_cmd_6 = { { "commandBuffer", 1002 } };
+    gfxrecon::util::DiveFunctionData cmd_data_6("vkCmdDraw",
+                                                /*cmd_buffer_index=*/2,
+                                                /*block_index=*/6,
+                                                args_cmd_6);
+    nlohmann::ordered_json           args_cmd_7 = { { "commandBuffer", 1002 } };
+    gfxrecon::util::DiveFunctionData cmd_data_7("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/7,
+                                                args_cmd_7);
+
+    // Single submit of both command buffers
+    nlohmann::ordered_json args_submit_1 = {
+        { "submitCount", 1 },
+        { "pSubmits", { { { "commandBufferCount", 2 }, { "pCommandBuffers", { 1001, 1002 } } } } }
+    };
+    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit",
+                                                   /*cmd_buffer_index=*/0,
+                                                   /*block_index=*/8,
+                                                   args_submit_1);
+
+    processor.WriteBlockEnd(cmd_data_1);
+    processor.WriteBlockEnd(cmd_data_2);
+    processor.WriteBlockEnd(cmd_data_3);
+    processor.WriteBlockEnd(cmd_data_4);
+    processor.WriteBlockEnd(cmd_data_5);
+    processor.WriteBlockEnd(cmd_data_6);
+    processor.WriteBlockEnd(cmd_data_7);
+    processor.WriteBlockEnd(submit_data_1);
+
+    auto draw_calls_map = processor.TakeCommandBufferDrawCallMap();
+    ASSERT_THAT(draw_calls_map, SizeIs(2));
+    ASSERT_TRUE(draw_calls_map.count(1001));
+    ASSERT_TRUE(draw_calls_map.count(1002));
+
+    EXPECT_THAT(draw_calls_map[1001], testing::ElementsAre(1));
+    EXPECT_THAT(draw_calls_map[1002], testing::ElementsAre(2));
+}
+
+TEST(WriteBlockEndTest, CommandBufferWithNoDrawCallsHasZeroCount)
+{
+    DiveAnnotationProcessor processor;
+
+    // Command Buffer 1 (handle 1001) with no draw calls
+    nlohmann::ordered_json           args_cmd_1 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/1,
+                                                args_cmd_1);
+    nlohmann::ordered_json           args_cmd_2 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdCopyBuffer",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/2,
+                                                args_cmd_2);
+    nlohmann::ordered_json           args_cmd_3 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_3("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/3,
+                                                args_cmd_3);
+
+    // Single submit
+    nlohmann::ordered_json args_submit_1 = {
+        { "submitCount", 1 },
+        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
+    };
+    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit",
+                                                   /*cmd_buffer_index=*/0,
+                                                   /*block_index=*/4,
+                                                   args_submit_1);
+
+    processor.WriteBlockEnd(cmd_data_1);
+    processor.WriteBlockEnd(cmd_data_2);
+    processor.WriteBlockEnd(cmd_data_3);
+    processor.WriteBlockEnd(submit_data_1);
+
+    auto draw_calls_map = processor.TakeCommandBufferDrawCallMap();
+    ASSERT_THAT(draw_calls_map, SizeIs(1));
+    ASSERT_TRUE(draw_calls_map.count(1001));
+
+    EXPECT_THAT(draw_calls_map[1001], testing::ElementsAre(0));
+}
+
+TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
+{
+    DiveAnnotationProcessor processor;
+
+    // Command Buffer 1 (handle 1001) with mixed commands
+    nlohmann::ordered_json           args_cmd_1 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/1,
+                                                args_cmd_1);
+    nlohmann::ordered_json           args_cmd_2 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdDraw",
+                                                /*cmd_buffer_index=*/1,
+                                                /*block_index=*/2,
+                                                args_cmd_2);
+    nlohmann::ordered_json           args_cmd_3 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_3("vkCmdDispatch",
+                                                /*cmd_buffer_index=*/2,
+                                                /*block_index=*/3,
+                                                args_cmd_3);
+    nlohmann::ordered_json           args_cmd_4 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_4("vkCmdCopyBuffer",
+                                                /*cmd_buffer_index=*/3,
+                                                /*block_index=*/4,
+                                                args_cmd_4);
+    nlohmann::ordered_json           args_cmd_5 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_5("vkCmdDrawIndirect",
+                                                /*cmd_buffer_index=*/4,
+                                                /*block_index=*/5,
+                                                args_cmd_5);
+    nlohmann::ordered_json           args_cmd_6 = { { "commandBuffer", 1001 } };
+    gfxrecon::util::DiveFunctionData cmd_data_6("vkEndCommandBuffer",
+                                                /*cmd_buffer_index=*/0,
+                                                /*block_index=*/6,
+                                                args_cmd_6);
+
+    // Single submit
+    nlohmann::ordered_json args_submit_1 = {
+        { "submitCount", 1 },
+        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
+    };
+    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit",
+                                                   /*cmd_buffer_index=*/0,
+                                                   /*block_index=*/7,
+                                                   args_submit_1);
+
+    processor.WriteBlockEnd(cmd_data_1);
+    processor.WriteBlockEnd(cmd_data_2);
+    processor.WriteBlockEnd(cmd_data_3);
+    processor.WriteBlockEnd(cmd_data_4);
+    processor.WriteBlockEnd(cmd_data_5);
+    processor.WriteBlockEnd(cmd_data_6);
+    processor.WriteBlockEnd(submit_data_1);
+
+    auto draw_calls_map = processor.TakeCommandBufferDrawCallMap();
+    ASSERT_THAT(draw_calls_map, SizeIs(1));
+    ASSERT_TRUE(draw_calls_map.count(1001));
+
+    EXPECT_THAT(draw_calls_map[1001], testing::ElementsAre(2));
+}
+
 }  // namespace
 }  // namespace gfxrecon::decode

@@ -61,9 +61,18 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
             if (vkCmd.name == "vkBeginCommandBuffer")
             {
                 m_cmd_vk_commands_cache[cmd_handle].clear();
+                m_cmd_buffer_draw_call_counts_map[cmd_handle].push_back(0);
             }
 
             m_cmd_vk_commands_cache[cmd_handle].push_back(vkCmd);
+
+            if (function_name.find("vkCmdDraw") != std::string::npos)
+            {
+                if (!m_cmd_buffer_draw_call_counts_map[cmd_handle].empty())
+                {
+                    m_cmd_buffer_draw_call_counts_map[cmd_handle].back()++;
+                }
+            }
         }
         else
         {

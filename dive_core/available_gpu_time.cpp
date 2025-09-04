@@ -105,7 +105,7 @@ bool AvailableGpuTiming::LoadFromStream(std::istream& stream)
     return true;
 }
 
-bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line, uint32_t expected_columns)
+bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
 {
     std::stringstream        ss(line);
     std::string              field;
@@ -120,12 +120,14 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line, uint32_
         return true;
     }
 
-    if (fields.size() != expected_columns)
+    if (fields.size() != kExpectedColumns)
     {
         std::cerr << "Unexpected number of columns: " << fields.size() << std::endl;
         return false;
     }
 
+    // TODO(b/443122531): Improve integer and float parsing here, this has edge cases that aren't
+    // covered
     uint32_t id;
     Stats    stats;
     try

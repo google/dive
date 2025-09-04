@@ -85,9 +85,7 @@ private:
     bool LoadFromStream(std::istream& stream);
 
     // Load statistics from non-header CSV row
-    bool LoadLine(uint32_t           row,
-                  const std::string& line,
-                  uint32_t           expected_columns = kExpectedColumns);
+    bool LoadLine(uint32_t row, const std::string& line);
 
     // Check m_ordered_entries against info stored in *_stats members
     void Validate();

@@ -55,6 +55,14 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
         if (args.count("commandBuffer") != 0)
         {
             uint64_t cmd_handle = args["commandBuffer"];
+
+            // There could be cases where vkBeginCommandBuffer is called after vkEndCommandBuffer
+            // without having the command buffer submitted
+            if (vkCmd.name == "vkBeginCommandBuffer")
+            {
+                m_cmd_vk_commands_cache[cmd_handle].clear();
+            }
+
             m_cmd_vk_commands_cache[cmd_handle].push_back(vkCmd);
         }
         else

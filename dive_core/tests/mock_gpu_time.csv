@@ -1,0 +1,9 @@
+Type,Id,Mean [ms],Median [ms]
+Frame,10,0.345,0.341
+CommandBuffer,0,0.001,0.002
+CommandBuffer,1,0.003,0.004
+RenderPass,0,0.228,0.229
+CommandBuffer,2,0.005,0.006
+CommandBuffer,3,0.007,0.008
+RenderPass,1,0.109,0.107
+CommandBuffer,4,0.009,0.010

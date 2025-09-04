@@ -231,6 +231,7 @@ void GPUTime::FrameMetrics::Reset()
 {
     m_frame_time.clear();
     m_cmd_time_vec.clear();
+    m_renderpass_time_vec.clear();
 }
 
 GPUTime::Stats GPUTime::FrameMetrics::GetFrameTimeStats() const

@@ -64,7 +64,7 @@ private:
 
     uint64_t               m_cur_submit_node_index = 0;
     uint64_t               m_cur_command_buffer_node_index = 0;
-    std::stack<uint64_t>   m_cur_begin_debug_utils_node_index_stack;
+    std::stack<uint64_t>   m_cur_parent_node_index_stack;
     CommandHierarchy      &m_command_hierarchy;
     const GfxrCaptureData &m_capture_data;
     // This is a list of child indices per node, ie. topology info

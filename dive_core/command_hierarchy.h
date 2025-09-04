@@ -71,6 +71,7 @@ enum class NodeType
     kGfxrVulkanDrawCommandNode,
     kGfxrVulkanRenderPassCommandNode,
     kGfxrBeginDebugUtilsLabelCommandNode,
+    kGfxrRootFrameNode,
 };
 
 //--------------------------------------------------------------------------------------------------

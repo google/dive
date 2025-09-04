@@ -70,17 +70,20 @@ public:
     // For unit testing
     bool LoadFromString(const std::string& full_text);
 
-    // Get the statistic info with the ObjectType and the id (nth object of type ObjectType)
-    // If object_type is kFrame, the object_id value is disregarded
-    std::optional<Stats> GetStats(ObjectType object_type, uint32_t object_id) const;
+    // Get the statistic info with the ObjectType and the object_id (nth object of type ObjectType)
+    // If the object_type is kFrame, the object_id value will be disregarded
+    std::optional<Stats> GetStatsByType(ObjectType object_type, uint32_t object_id) const;
 
-    // Get the statistic info with the id (representing the row in file order, header is row 0)
-    std::optional<Stats> GetStats(uint32_t object_id) const;
+    // Get the statistic info with the row_id (representing the row in file order, header is row 0)
+    std::optional<Stats> GetStatsByRow(uint32_t row_id) const;
 
     // Validate entries to stats counts
     bool IsValid() const { return m_valid; };
 
 private:
+    // Load statistics from stream
+    bool LoadFromStream(std::istream& stream);
+
     // Load statistics from non-header CSV row
     bool LoadLine(uint32_t           row,
                   const std::string& line,

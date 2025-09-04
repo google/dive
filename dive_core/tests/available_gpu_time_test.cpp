@@ -26,7 +26,15 @@ namespace
 {
 std::filesystem::path fp = TEST_DATA_DIR;
 
-TEST(AvailableGpuTiming, LoadFromCsv_Successful)
+struct StatsTestCase
+{
+    AvailableGpuTiming::ObjectType type;
+    uint32_t                       row;
+    float                          mean;
+    float                          median;
+};
+
+TEST(AvailableGpuTiming, LoadFromCsv_Pass)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
@@ -34,7 +42,7 @@ TEST(AvailableGpuTiming, LoadFromCsv_Successful)
     EXPECT_TRUE(g.IsValid());
 }
 
-TEST(AvailableMetrics, LoadFromCsv_MalformedFrameFail)
+TEST(AvailableGpuTiming, LoadFromCsv_MalformedFrameFail)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
@@ -42,7 +50,17 @@ TEST(AvailableMetrics, LoadFromCsv_MalformedFrameFail)
     EXPECT_FALSE(g.IsValid());
 }
 
-TEST(AvailableMetrics, LoadFromString_Successful)
+TEST(AvailableGpuTiming, LoadFromCsv_TwiceFail)
+{
+    AvailableGpuTiming g;
+    EXPECT_FALSE(g.IsValid());
+    EXPECT_TRUE(g.LoadFromCsv(fp / "mock_gpu_time.csv"));
+    EXPECT_TRUE(g.IsValid());
+    EXPECT_FALSE(g.LoadFromCsv(fp / "mock_gpu_time.csv"));
+    EXPECT_TRUE(g.IsValid());
+}
+
+TEST(AvailableGpuTiming, LoadFromString_Pass)
 {
     AvailableGpuTiming g;
     std::string
@@ -52,7 +70,7 @@ TEST(AvailableMetrics, LoadFromString_Successful)
     EXPECT_TRUE(g.IsValid());
 }
 
-TEST(AvailableMetrics, LoadFromString_MalformedHeaderFail)
+TEST(AvailableGpuTiming, LoadFromString_MalformedHeaderFail)
 {
     AvailableGpuTiming g;
     std::string s = "Type,Id,Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,0.001,0.002\n";
@@ -60,7 +78,7 @@ TEST(AvailableMetrics, LoadFromString_MalformedHeaderFail)
     EXPECT_FALSE(g.LoadFromString(s));
 }
 
-TEST(AvailableMetrics, LoadFromString_NoHeaderFail)
+TEST(AvailableGpuTiming, LoadFromString_NoHeaderFail)
 {
     AvailableGpuTiming g;
     std::string        s = "Frame,10,0.345,0.341\nCommandBuffer,0,0.001,0.002\n";
@@ -68,51 +86,82 @@ TEST(AvailableMetrics, LoadFromString_NoHeaderFail)
     EXPECT_FALSE(g.LoadFromString(s));
 }
 
-TEST(AvailableMetrics, GetStats_TwoParam_Successful)
+TEST(AvailableGpuTiming, LoadFromString_StringIdFail)
+{
+    AvailableGpuTiming g;
+    std::string        s = "Type,Id,Mean [ms],Median "
+                           "[ms]\nFrame,10,0.345,0.341\nCommandBuffer,placeholder,0.001,0.002\n";
+    EXPECT_FALSE(g.IsValid());
+    EXPECT_FALSE(g.LoadFromString(s));
+}
+
+TEST(AvailableGpuTiming, LoadFromString_StringMeanFail)
+{
+    AvailableGpuTiming g;
+    std::string
+    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,placeholder,0.002\n";
+    EXPECT_FALSE(g.IsValid());
+    EXPECT_FALSE(g.LoadFromString(s));
+}
+
+TEST(AvailableGpuTiming, LoadFromString_FloatIdFail)
+{
+    AvailableGpuTiming g;
+    std::string
+    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0.5,0.001,0.002\n";
+    EXPECT_FALSE(g.IsValid());
+    EXPECT_FALSE(g.LoadFromString(s));
+    EXPECT_FALSE(g.IsValid());
+}
+
+TEST(AvailableGpuTiming, LoadFromString_IntMeanFail)
+{
+    AvailableGpuTiming g;
+    std::string
+    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,10,0.002\n";
+    EXPECT_FALSE(g.IsValid());
+    EXPECT_FALSE(g.LoadFromString(s));
+    EXPECT_FALSE(g.IsValid());
+}
+
+TEST(AvailableGpuTiming, LoadFromString_IntMedianFail)
+{
+    AvailableGpuTiming g;
+    std::string
+    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,0.001,20\n";
+    EXPECT_FALSE(g.IsValid());
+    EXPECT_FALSE(g.LoadFromString(s));
+    EXPECT_FALSE(g.IsValid());
+}
+
+TEST(AvailableGpuTiming, GetStatsByType_Pass)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
     EXPECT_TRUE(g.LoadFromCsv(fp / "mock_gpu_time.csv"));
     EXPECT_TRUE(g.IsValid());
 
-    std::optional<AvailableGpuTiming::Stats>
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kFrame, 0);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.345f);
-    EXPECT_EQ(ret->median_ms, 0.341f);
+    const std::vector<StatsTestCase> test_cases = {
+        { AvailableGpuTiming::ObjectType::kFrame, 0, 0.345f, 0.341f },
+        { AvailableGpuTiming::ObjectType::kCommandBuffer, 0, 0.001f, 0.002f },
+        { AvailableGpuTiming::ObjectType::kCommandBuffer, 1, 0.003f, 0.004f },
+        { AvailableGpuTiming::ObjectType::kCommandBuffer, 2, 0.005f, 0.006f },
+        { AvailableGpuTiming::ObjectType::kCommandBuffer, 3, 0.007f, 0.008f },
+        { AvailableGpuTiming::ObjectType::kCommandBuffer, 4, 0.009f, 0.010f },
+        { AvailableGpuTiming::ObjectType::kRenderPass, 0, 0.228f, 0.229f },
+        { AvailableGpuTiming::ObjectType::kRenderPass, 1, 0.109f, 0.107f },
+    };
 
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 0);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.001f);
-    EXPECT_EQ(ret->median_ms, 0.002f);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 1);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.003f);
-    EXPECT_EQ(ret->median_ms, 0.004f);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 2);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.005f);
-    EXPECT_EQ(ret->median_ms, 0.006f);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 3);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.007f);
-    EXPECT_EQ(ret->median_ms, 0.008f);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 4);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.009f);
-    EXPECT_EQ(ret->median_ms, 0.010f);
-
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kRenderPass, 0);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.228f);
-    EXPECT_EQ(ret->median_ms, 0.229f);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kRenderPass, 1);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.109f);
-    EXPECT_EQ(ret->median_ms, 0.107f);
+    for (const auto& tc : test_cases)
+    {
+        auto ret = g.GetStatsByType(tc.type, tc.row);
+        ASSERT_NE(ret, std::nullopt);
+        EXPECT_FLOAT_EQ(ret->mean_ms, tc.mean);
+        EXPECT_FLOAT_EQ(ret->median_ms, tc.median);
+    }
 }
 
-TEST(AvailableMetrics, GetStats_TwoParam_InvalidFail)
+TEST(AvailableGpuTiming, GetStatsByType_InvalidFail)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
@@ -120,15 +169,15 @@ TEST(AvailableMetrics, GetStats_TwoParam_InvalidFail)
     EXPECT_FALSE(g.IsValid());
 
     std::optional<AvailableGpuTiming::Stats>
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kFrame, 0);
+    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kFrame, 0);
     EXPECT_EQ(ret, std::nullopt);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 0);
+    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kCommandBuffer, 0);
     EXPECT_EQ(ret, std::nullopt);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kRenderPass, 0);
+    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kRenderPass, 0);
     EXPECT_EQ(ret, std::nullopt);
 }
 
-TEST(AvailableMetrics, GetStats_TwoParam_OOBFail)
+TEST(AvailableGpuTiming, GetStatsByType_OOBFail)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
@@ -136,78 +185,64 @@ TEST(AvailableMetrics, GetStats_TwoParam_OOBFail)
     EXPECT_TRUE(g.IsValid());
 
     std::optional<AvailableGpuTiming::Stats>
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kCommandBuffer, 10);
+    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kCommandBuffer, 10);
     EXPECT_EQ(ret, std::nullopt);
-    ret = g.GetStats(AvailableGpuTiming::ObjectType::kRenderPass, 3);
+    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kRenderPass, 3);
     EXPECT_EQ(ret, std::nullopt);
 }
 
-TEST(AvailableMetrics, GetStats_OneParam_Successful)
+TEST(AvailableGpuTiming, GetStatsByRow_Pass)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
     EXPECT_TRUE(g.LoadFromCsv(fp / "mock_gpu_time.csv"));
     EXPECT_TRUE(g.IsValid());
 
-    std::optional<AvailableGpuTiming::Stats> ret = g.GetStats(1);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.345f);
-    EXPECT_EQ(ret->median_ms, 0.341f);
-    ret = g.GetStats(2);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.001f);
-    EXPECT_EQ(ret->median_ms, 0.002f);
-    ret = g.GetStats(3);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.003f);
-    EXPECT_EQ(ret->median_ms, 0.004f);
-    ret = g.GetStats(4);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.228f);
-    EXPECT_EQ(ret->median_ms, 0.229f);
-    ret = g.GetStats(5);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.005f);
-    EXPECT_EQ(ret->median_ms, 0.006f);
-    ret = g.GetStats(6);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.007f);
-    EXPECT_EQ(ret->median_ms, 0.008f);
-    ret = g.GetStats(7);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.109f);
-    EXPECT_EQ(ret->median_ms, 0.107f);
-    ret = g.GetStats(8);
-    ASSERT_NE(ret, std::nullopt);
-    EXPECT_EQ(ret->mean_ms, 0.009f);
-    EXPECT_EQ(ret->median_ms, 0.010f);
+    const std::vector<StatsTestCase> test_cases = {
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 1, 0.345f, 0.341f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 2, 0.001f, 0.002f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 3, 0.003f, 0.004f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 4, 0.228f, 0.229f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 5, 0.005f, 0.006f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 6, 0.007f, 0.008f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 7, 0.109f, 0.107f },
+        { AvailableGpuTiming::ObjectType::nObjectTypes, 8, 0.009f, 0.010f },
+    };
+
+    for (const auto& tc : test_cases)
+    {
+        auto ret = g.GetStatsByRow(tc.row);
+        ASSERT_NE(ret, std::nullopt);
+        EXPECT_FLOAT_EQ(ret->mean_ms, tc.mean);
+        EXPECT_FLOAT_EQ(ret->median_ms, tc.median);
+    }
 }
 
-TEST(AvailableMetrics, GetStats_OneParam_InvalidFail)
+TEST(AvailableGpuTiming, GetStatsByRow_InvalidFail)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromCsv(fp / "mock_gpu_time_malformed.csv"));
     EXPECT_FALSE(g.IsValid());
 
-    std::optional<AvailableGpuTiming::Stats> ret = g.GetStats(1);
+    std::optional<AvailableGpuTiming::Stats> ret = g.GetStatsByRow(1);
     EXPECT_EQ(ret, std::nullopt);
-    ret = g.GetStats(2);
+    ret = g.GetStatsByRow(2);
     EXPECT_EQ(ret, std::nullopt);
 }
 
-TEST(AvailableMetrics, GetStats_OneParam_OOBFail)
+TEST(AvailableGpuTiming, GetStatsByRow_OOBFail)
 {
     AvailableGpuTiming g;
     EXPECT_FALSE(g.IsValid());
     EXPECT_TRUE(g.LoadFromCsv(fp / "mock_gpu_time.csv"));
     EXPECT_TRUE(g.IsValid());
 
-    std::optional<AvailableGpuTiming::Stats> ret = g.GetStats(0);
+    std::optional<AvailableGpuTiming::Stats> ret = g.GetStatsByRow(0);
     EXPECT_EQ(ret, std::nullopt);
-    ret = g.GetStats(9);
+    ret = g.GetStatsByRow(9);
     EXPECT_EQ(ret, std::nullopt);
-    ret = g.GetStats(13);
+    ret = g.GetStatsByRow(13);
     EXPECT_EQ(ret, std::nullopt);
 }
 

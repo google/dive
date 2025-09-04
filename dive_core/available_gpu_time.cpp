@@ -50,25 +50,9 @@ bool AvailableGpuTiming::LoadFromCsv(const std::filesystem::path& file_path)
         return false;
     }
 
-    std::string line;
-    // Check header line
-    if (!std::getline(file, line) || line.empty() ||
-        line.find(kExpectedHeader) == std::string::npos)
+    if (!LoadFromStream(file))
     {
-        std::cerr << "Unexpected header: " << line << std::endl;
         return false;
-    }
-
-    uint32_t row = 1;
-    while (std::getline(file, line))
-    {
-        bool res = LoadLine(row, line);
-        if (!res)
-        {
-            std::cerr << "Could not parse row (" << row << ") line: " << line << std::endl;
-            return false;
-        }
-        row++;
     }
 
     Validate();
@@ -85,28 +69,40 @@ bool AvailableGpuTiming::LoadFromString(const std::string& full_text)
     m_loaded = true;
 
     std::stringstream ss(full_text);
-    std::string       line;
-    // Check header line
-    if (!std::getline(ss, line) || line.empty() || line.find(kExpectedHeader) == std::string::npos)
+    if (!LoadFromStream(ss))
+    {
+        return false;
+    }
+
+    Validate();
+    return IsValid();
+}
+
+bool AvailableGpuTiming::LoadFromStream(std::istream& stream)
+{
+    std::string line;
+    if (!std::getline(stream, line) || line.empty() ||
+        line.find(kExpectedHeader) == std::string::npos)
     {
         std::cerr << "Unexpected header: " << line << std::endl;
         return false;
     }
 
     uint32_t row = 1;
-    while (std::getline(ss, line))
+    while (std::getline(stream, line))
     {
-        bool res = LoadLine(row, line);
-        if (!res)
+        if (line.empty())
+        {
+            continue;
+        }
+        if (!LoadLine(row, line))
         {
             std::cerr << "Could not parse row (" << row << ") line: " << line << std::endl;
             return false;
         }
         row++;
     }
-
-    Validate();
-    return IsValid();
+    return true;
 }
 
 bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line, uint32_t expected_columns)
@@ -130,11 +126,40 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line, uint32_
         return false;
     }
 
-    uint32_t id = static_cast<uint32_t>(std::stoi(fields[1]));
+    uint32_t id;
+    Stats    stats;
+    try
+    {
+        id = static_cast<uint32_t>(std::stoi(fields[1]));
+        stats.mean_ms = std::stof(fields[2]);
+        stats.median_ms = std::stof(fields[3]);
+    }
+    catch (const std::invalid_argument& e)
+    {
+        std::cerr << "Caught invalid_argument exception: " << e.what() << std::endl;
+        return false;
+    }
+    catch (const std::out_of_range& e)
+    {
+        std::cerr << "Caught out_of_range exception: " << e.what() << std::endl;
+        return false;
+    }
 
-    Stats stats;
-    stats.mean_ms = std::stof(fields[2]);
-    stats.median_ms = std::stof(fields[3]);
+    if (fields[1].find('.') != std::string::npos)
+    {
+        std::cerr << "Expecting an integer id, not float: " << fields[1] << std::endl;
+        return false;
+    }
+    if ((fields[2].find('.') == std::string::npos))
+    {
+        std::cerr << "Expecting a float mean, not integer: " << fields[2] << std::endl;
+        return false;
+    }
+    if ((fields[3].find('.') == std::string::npos))
+    {
+        std::cerr << "Expecting a float median, not integer: " << fields[3] << std::endl;
+        return false;
+    }
 
     Entry entry;
     if (fields[0] == "Frame")
@@ -208,8 +233,9 @@ void AvailableGpuTiming::Validate()
     return;
 }
 
-std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStats(ObjectType object_type,
-                                                                      uint32_t   object_id) const
+std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStatsByType(
+ObjectType object_type,
+uint32_t   object_id) const
 {
     if (!m_valid)
     {
@@ -244,7 +270,7 @@ std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStats(ObjectType
     return std::nullopt;
 }
 
-std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStats(uint32_t object_id) const
+std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStatsByRow(uint32_t row_id) const
 {
     if (!m_valid)
     {
@@ -252,14 +278,14 @@ std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStats(uint32_t o
         return std::nullopt;
     }
 
-    if ((object_id < 1) || object_id > m_ordered_entries.size())
+    if ((row_id < 1) || row_id > m_ordered_entries.size())
     {
-        std::cerr << "Out of bounds (row) object_id: " << object_id << std::endl;
+        std::cerr << "Out of bounds (row) row_id: " << row_id << std::endl;
         return std::nullopt;
     }
 
-    Entry entry = m_ordered_entries[object_id - 1];
-    return AvailableGpuTiming::GetStats(entry.object_type, entry.per_frame_id);
+    Entry entry = m_ordered_entries[row_id - 1];
+    return AvailableGpuTiming::GetStatsByType(entry.object_type, entry.per_frame_id);
 }
 
 }  // namespace Dive

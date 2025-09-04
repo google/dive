@@ -73,6 +73,11 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         return true;
     }
 
+    if (node_type == Dive::NodeType::kGfxrRootFrameNode)
+    {
+        return true;
+    }
+
     if (m_filter_mode == kNone)
     {
         if (node_type == Dive::NodeType::kGfxrVulkanCommandNode)

@@ -16,6 +16,7 @@
 
 enable_testing()
 include(GoogleTest)
+
 add_executable(available_metrics_test available_metrics_test.cpp)
 target_link_libraries(available_metrics_test gtest gtest_main gmock dive_core)
 target_compile_definitions(available_metrics_test PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -30,3 +31,7 @@ target_link_libraries(perf_metrics_data_test gtest gtest_main gmock dive_core)
 target_compile_definitions(perf_metrics_data_test PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 gtest_discover_tests(perf_metrics_data_test)
 
+add_executable(available_gpu_time_test available_gpu_time_test.cpp)
+target_link_libraries(available_gpu_time_test gtest gtest_main dive_core)
+target_compile_definitions(available_gpu_time_test PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+gtest_discover_tests(available_gpu_time_test)

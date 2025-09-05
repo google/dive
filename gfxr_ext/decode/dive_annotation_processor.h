@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <stack>
 #include <string>
 #include "decode/annotation_handler.h"
 #include "util/defines.h"
@@ -78,9 +79,10 @@ public:
     {
         return std::move(m_cmd_vk_commands_cache);
     }
-    std::unordered_map<uint64_t, std::vector<uint64_t>> TakeCommandBufferDrawCallMap()
+    std::unordered_map<uint64_t, std::pair<std::vector<uint64_t>, std::vector<uint64_t>>>
+    TakeDrawCallMap()
     {
-        return std::move(m_cmd_buffer_draw_call_counts_map);
+        return std::move(m_draw_call_counts_map);
     }
 
 private:
@@ -88,6 +90,8 @@ private:
     std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
     // Use command buffer handle as the key to accociate with vk commands
     std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
-    std::unordered_map<uint64_t, std::vector<uint64_t>> m_cmd_buffer_draw_call_counts_map = {};
-    std::vector<std::unique_ptr<SubmitInfo>>            m_submits = {};
+    std::unordered_map<uint64_t, std::pair<std::vector<uint64_t>, std::vector<uint64_t>>>
+                                                       m_draw_call_counts_map = {};
+    std::unordered_map<uint64_t, std::stack<uint64_t>> m_render_pass_draw_call_counts_stack = {};
+    std::vector<std::unique_ptr<SubmitInfo>>           m_submits = {};
 };

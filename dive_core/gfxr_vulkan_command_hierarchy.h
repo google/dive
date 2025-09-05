@@ -36,10 +36,12 @@ public:
     void OnGfxrSubmit(uint32_t                                   submit_index,
                       const DiveAnnotationProcessor::SubmitInfo &submit_info);
     void OnCommand(const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info,
-                   std::vector<uint64_t>                             draw_call_counts);
+                   std::vector<uint64_t>                            &draw_call_counts,
+                   std::vector<uint64_t>                            &render_pass_draw_call_counts);
 
     bool ProcessVkCmds(const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds,
-                       std::vector<uint64_t> draw_call_counts);
+                       const std::vector<uint64_t> &draw_call_counts,
+                       const std::vector<uint64_t> &render_pass_draw_call_counts);
 
     const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type) const
     {

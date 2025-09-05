@@ -56,21 +56,42 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
         {
             uint64_t cmd_handle = args["commandBuffer"];
 
-            // There could be cases where vkBeginCommandBuffer is called after vkEndCommandBuffer
-            // without having the command buffer submitted
-            if (vkCmd.name == "vkBeginCommandBuffer")
+            if (vkCmd.name.find("vkBeginCommandBuffer") != std::string::npos)
             {
                 m_cmd_vk_commands_cache[cmd_handle].clear();
-                m_cmd_buffer_draw_call_counts_map[cmd_handle].push_back(0);
+
+                // Total draw count for this command buffer
+                m_draw_call_counts_map[cmd_handle].first.push_back(0);
+            }
+            else if (vkCmd.name.find("vkCmdBeginRenderPass") != std::string::npos)
+            {
+                m_render_pass_draw_call_counts_stack[cmd_handle].push(0);
+            }
+            else if (vkCmd.name.find("vkCmdEndRenderPass") != std::string::npos)
+            {
+                if (!m_render_pass_draw_call_counts_stack[cmd_handle].empty())
+                {
+                    uint64_t rp_draw_count = m_render_pass_draw_call_counts_stack[cmd_handle].top();
+                    m_draw_call_counts_map[cmd_handle].second.push_back(rp_draw_count);
+                    m_render_pass_draw_call_counts_stack[cmd_handle].pop();
+                }
             }
 
             m_cmd_vk_commands_cache[cmd_handle].push_back(vkCmd);
 
-            if (function_name.find("vkCmdDraw") != std::string::npos)
+            if (vkCmd.name.find("vkCmdDraw") != std::string::npos)
             {
-                if (!m_cmd_buffer_draw_call_counts_map[cmd_handle].empty())
+                if (!m_draw_call_counts_map[cmd_handle].first.empty())
                 {
-                    m_cmd_buffer_draw_call_counts_map[cmd_handle].back()++;
+                    m_draw_call_counts_map[cmd_handle].first.back()++;
+                }
+
+                if (!m_render_pass_draw_call_counts_stack[cmd_handle].empty())
+                {
+                    std::cout << "RP Draw Count: "
+                              << m_render_pass_draw_call_counts_stack[cmd_handle].top()
+                              << std::endl;
+                    m_render_pass_draw_call_counts_stack[cmd_handle].top()++;
                 }
             }
         }

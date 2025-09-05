@@ -35,6 +35,22 @@ namespace Dive
 {
 class CommandHierarchy;
 class Topology;
+
+enum DrawCallContextMenuOption : uint32_t
+{
+    kArguments,
+    kBinningPassOnly,
+    kFirstTilePassOnly,
+    kPerfCounterData,
+    kDrawCallContextMenuOptionCount
+};
+
+static constexpr const char *kDrawCallContextMenuOptionStrings[kDrawCallContextMenuOptionCount] = {
+    "Arguments",
+    "PM4 Events with BinningPassOnly Filter",
+    "PM4 Events with FirstTilePassOnly Filter",
+    "Perf Counter Data"
+};
 };  // namespace Dive
 
 //--------------------------------------------------------------------------------------------------

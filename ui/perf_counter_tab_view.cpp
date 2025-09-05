@@ -53,6 +53,11 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
                      this,
                      SLOT(OnSearchBarVisibilityChange(bool)));
 
+    QObject::connect(parent,
+                     SIGNAL(CorrelateCounter(uint64_t)),
+                     this,
+                     SLOT(OnCorrelateCounter(uint64_t)));
+
     connect(m_perf_counter_view->selectionModel(),
             &QItemSelectionModel::currentChanged,
             this,
@@ -209,4 +214,10 @@ void PerfCounterTabView::DisconnectSearchBar()
                         &PerfCounterTabView::UpdateSearchInfo,
                         m_search_bar,
                         &SearchBar::updateSearchResults);
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::OnCorrelateCounter(uint64_t index)
+{
+    m_perf_counter_view->selectRow(index);
 }

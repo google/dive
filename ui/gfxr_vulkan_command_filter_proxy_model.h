@@ -36,9 +36,11 @@ public:
         kFilterModeCount
     };
 
-    GfxrVulkanCommandFilterProxyModel(QObject                      *parent = nullptr,
-                                      const Dive::CommandHierarchy *command_hierarchy = nullptr);
+    GfxrVulkanCommandFilterProxyModel(const Dive::CommandHierarchy &command_hierarchy,
+                                      QObject                      *parent = nullptr);
     void SetFilter(FilterMode filter_mode);
+    void CollectGfxrDrawCallIndices(const QModelIndex &parent_index = QModelIndex());
+    const std::vector<uint64_t> &GetGfxrDrawCallIndices() { return m_gfxr_draw_call_indices; }
 
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
@@ -46,8 +48,9 @@ protected:
 private:
     void ApplyNewFilterMode(FilterMode new_mode);
 
-    const Dive::CommandHierarchy *m_command_hierarchy;
+    const Dive::CommandHierarchy &m_command_hierarchy;
     FilterMode                    m_filter_mode;
+    std::vector<uint64_t>         m_gfxr_draw_call_indices;
 };
 
 #endif  // GFXRVULKANCOMMANDFILTERPROXYMODEL_H

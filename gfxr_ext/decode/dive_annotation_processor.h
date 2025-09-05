@@ -78,11 +78,16 @@ public:
     {
         return std::move(m_cmd_vk_commands_cache);
     }
+    std::unordered_map<uint64_t, std::vector<uint64_t>> TakeCommandBufferDrawCallMap()
+    {
+        return std::move(m_cmd_buffer_draw_call_counts_map);
+    }
 
 private:
     // This is a per submit cache that keeps all vk commands that are not in any command buffer
     std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
     // Use command buffer handle as the key to accociate with vk commands
     std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
-    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits = {};
+    std::unordered_map<uint64_t, std::vector<uint64_t>> m_cmd_buffer_draw_call_counts_map = {};
+    std::vector<std::unique_ptr<SubmitInfo>>            m_submits = {};
 };

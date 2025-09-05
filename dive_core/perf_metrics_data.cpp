@@ -21,17 +21,21 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "dive_core/available_metrics.h"
 #include "dive_core/common/string_utils.h"
 
 namespace Dive
 {
+
 namespace
 {
 constexpr std::array kFixedHeaders = { "ContextID",   "ProcessID", "FrameID",
                                        "CmdBufferID", "DrawID",    "DrawType",
                                        "DrawLabel",   "ProgramID", "LRZState" };
+const std::string    kEmptyString;
 
 struct ParseHeadersResult
 {
@@ -201,4 +205,162 @@ const AvailableMetrics&      available_metrics)
     new PerfMetricsData(std::move(metric_names), std::move(metric_infos), std::move(records)));
 }
 
+std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::Create(
+std::unique_ptr<PerfMetricsData> data)
+{
+    if (!data)
+        return nullptr;
+
+    return std::unique_ptr<PerfMetricsDataProvider>(new PerfMetricsDataProvider(std::move(data)));
+}
+
+PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data) :
+    m_raw_data(std::move(data))
+{
+    // This map will store intermediate sums and counts for averaging.
+    // Key: {cmd_buffer_id, draw_id}
+    // Value: {vector of metric sums, count of records}
+    std::unordered_map<PerfMetricsKey, std::pair<std::vector<double>, uint32_t>, PerfMetricsKeyHash>
+    sums_and_counts;
+
+    // This map will store the first record for each draw call to preserve non-metric data.
+    // Key: {cmd_buffer_id, draw_id}
+    // Value: const PerfMetricsRecord*
+    std::unordered_map<PerfMetricsKey, const PerfMetricsRecord*, PerfMetricsKeyHash> first_records;
+
+    std::unordered_set<PerfMetricsKey, PerfMetricsKeyHash> seen_draw_calls;
+    std::unordered_set<uint64_t>                           seen_cmd_buffers;
+
+    const size_t num_metrics = m_raw_data->GetMetricNames().size();
+
+    for (const auto& record : m_raw_data->GetRecords())
+    {
+        PerfMetricsKey key = { record.m_cmd_buffer_id, record.m_draw_id };
+        // m_cmd_buffer_list maintains the order of command buffers as they appear in the raw data.
+        if (seen_cmd_buffers.find(record.m_cmd_buffer_id) == seen_cmd_buffers.end())
+        {
+            m_cmd_buffer_list.push_back(record.m_cmd_buffer_id);
+            seen_cmd_buffers.insert(record.m_cmd_buffer_id);
+        }
+
+        if (seen_draw_calls.find(key) == seen_draw_calls.end())
+        {
+            m_cmd_buffer_to_draw_id[record.m_cmd_buffer_id].push_back(record.m_draw_id);
+            first_records[key] = &record;
+            seen_draw_calls.insert(key);
+        }
+
+        auto& draw_call_data = sums_and_counts[key];
+        if (draw_call_data.second == 0)
+        {
+            draw_call_data.first.resize(num_metrics, 0.0);
+        }
+
+        if (record.m_metric_values.size() == num_metrics)
+        {
+            for (size_t i = 0; i < num_metrics; ++i)
+            {
+                std::visit([&](auto&& arg) { draw_call_data.first[i] += static_cast<double>(arg); },
+                           record.m_metric_values[i]);
+            }
+            draw_call_data.second++;
+        }
+    }
+
+    // Now, build the final m_computed_records vector with averaged records in order.
+    for (const auto& cmd_buffer_id : m_cmd_buffer_list)
+    {
+        const auto& draw_ids = m_cmd_buffer_to_draw_id.at(cmd_buffer_id);
+        for (uint32_t draw_id : draw_ids)
+        {
+            PerfMetricsKey key = { cmd_buffer_id, draw_id };
+            const auto&    sums_pair = sums_and_counts.at(key);
+            const auto&    sums = sums_pair.first;
+            const auto     count = sums_pair.second;
+
+            if (count > 0)
+            {
+                PerfMetricsRecord averaged_record = *first_records.at(key);
+                averaged_record.m_metric_values.resize(num_metrics);
+                for (size_t i = 0; i < num_metrics; ++i)
+                {
+                    const auto* metric_info = m_raw_data->GetMetricInfos()[i];
+                    if (metric_info && metric_info->m_metric_type == MetricType::kCount)
+                    {
+                        averaged_record.m_metric_values[i] = static_cast<int64_t>(sums[i] / count);
+                    }
+                    else  // kPercent or others, store as float
+                    {
+                        averaged_record.m_metric_values[i] = static_cast<float>(sums[i] / count);
+                    }
+                }
+                m_metric_key_to_index[key] = m_computed_records.size();
+                m_computed_records.push_back(std::move(averaged_record));
+            }
+        }
+    }
+}
+
+std::optional<std::reference_wrapper<const PerfMetricsRecord>>
+PerfMetricsDataProvider::GetComputedRecord(size_t command_buffer_index,
+                                           size_t draw_call_index) const
+{
+    if (command_buffer_index >= m_cmd_buffer_list.size())
+    {
+        return std::nullopt;
+    }
+
+    const uint64_t command_buffer_id = m_cmd_buffer_list[command_buffer_index];
+    const auto     it_draw_ids = m_cmd_buffer_to_draw_id.find(command_buffer_id);
+    if (it_draw_ids == m_cmd_buffer_to_draw_id.end())
+    {
+        return std::nullopt;
+    }
+
+    const auto& draw_ids = it_draw_ids->second;
+    if (draw_call_index >= draw_ids.size())
+    {
+        return std::nullopt;
+    }
+
+    const uint32_t       draw_call_id = draw_ids[draw_call_index];
+    const PerfMetricsKey metric_key{ command_buffer_id, draw_call_id };
+
+    const auto it_record_index = m_metric_key_to_index.find(metric_key);
+    if (it_record_index == m_metric_key_to_index.end())
+    {
+        return std::nullopt;
+    }
+
+    const size_t record_index = it_record_index->second;
+    if (record_index >= m_computed_records.size())
+    {
+        return std::nullopt;
+    }
+    return std::cref(m_computed_records[record_index]);
+}
+
+const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const
+{
+    return m_raw_data->GetMetricNames();
+}
+
+const std::string& PerfMetricsDataProvider::GetMetricsDescription(size_t metric_index) const
+{
+    if (!m_raw_data)
+    {
+        return kEmptyString;
+    }
+    const auto& metrics_info = m_raw_data->GetMetricInfos();
+    return metrics_info[metric_index]->m_description;
+}
+
+size_t PerfMetricsDataProvider::GetDrawCountForCommandBuffer(size_t command_buffer_index) const
+{
+    if (command_buffer_index >= m_cmd_buffer_list.size())
+        return 0;
+
+    uint64_t cmd_id = m_cmd_buffer_list[command_buffer_index];
+    return m_cmd_buffer_to_draw_id.at(cmd_id).size();
+}
 }  // namespace Dive

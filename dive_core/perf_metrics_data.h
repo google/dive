@@ -18,13 +18,29 @@
 #include <variant>
 #include <vector>
 #include <filesystem>
+#include <unordered_map>
 #include <memory>
+#include <optional>
+#include <functional>
+#include <utility>
 
 namespace Dive
 {
 
 class AvailableMetrics;
 struct MetricInfo;
+
+// A key for performance metrics, combining command buffer ID and draw ID.
+using PerfMetricsKey = std::pair<uint64_t, uint32_t>;
+
+// Hash function for PerfMetricsKey.
+struct PerfMetricsKeyHash
+{
+    std::size_t operator()(const PerfMetricsKey& k) const
+    {
+        return std::hash<uint64_t>()(k.first) ^ (std::hash<uint32_t>()(k.second) << 1);
+    }
+};
 
 // The performance metrics result csv file is in the format of
 // "ContextID,ProcessID,FrameID,CmdBufferID,DrawID,DrawType,DrawLabel,ProgramID,LRZState,COUNTER_A,COUNTER_B,
@@ -45,6 +61,8 @@ struct PerfMetricsRecord
 
 class PerfMetricsData
 {
+    friend class PerfMetricsDataProviderTest;
+
 public:
     // Load performance metrics data from a CSV file
     static std::unique_ptr<PerfMetricsData> LoadFromCsv(const std::filesystem::path& file_path,
@@ -72,6 +90,45 @@ private:
     std::vector<std::string>       m_metric_names;
     std::vector<const MetricInfo*> m_metric_infos;
     std::vector<PerfMetricsRecord> m_records;
+};
+
+class PerfMetricsDataProvider
+{
+public:
+    static std::unique_ptr<PerfMetricsDataProvider> Create(std::unique_ptr<PerfMetricsData> data);
+
+    // Get the total number of unique command buffers of this dataset.
+    size_t GetCommandBufferCount() const { return m_cmd_buffer_list.size(); }
+
+    // Given an index(0 based) of the command buffer array, return the number fo drawcalls in that
+    // command buffer.
+    size_t GetDrawCountForCommandBuffer(size_t command_buffer_index) const;
+
+    // Given the index of the command  buffer and the index of draw call in that command buffer,
+    // returns the |PerfMetricsRecord| for the combination.
+    std::optional<std::reference_wrapper<const PerfMetricsRecord>> GetComputedRecord(
+    size_t command_buffer_index,
+    size_t draw_call_index) const;
+
+    // Get the all of the metrics for a frame. The metrics are computed average of the input
+    // dataset, ordered by command buffer appearance and then draw ID appearance order.
+    const std::vector<PerfMetricsRecord>& GetComputedRecords() const { return m_computed_records; }
+
+    // Get the names of the captured metrics
+    const std::vector<std::string>& GetMetricsNames() const;
+
+    // Given the index of the metric, returns the description for that metric.
+    const std::string& GetMetricsDescription(size_t metric_index) const;
+
+private:
+    PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data);
+
+    std::unique_ptr<PerfMetricsData> m_raw_data;
+    std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
+
+    std::vector<uint64_t>                                          m_cmd_buffer_list;
+    std::unordered_map<uint64_t, std::vector<uint32_t>>            m_cmd_buffer_to_draw_id;
+    std::unordered_map<PerfMetricsKey, size_t, PerfMetricsKeyHash> m_metric_key_to_index;
 };
 
 }  // namespace Dive

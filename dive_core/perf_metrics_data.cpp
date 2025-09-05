@@ -35,7 +35,6 @@ namespace
 constexpr std::array kFixedHeaders = { "ContextID",   "ProcessID", "FrameID",
                                        "CmdBufferID", "DrawID",    "DrawType",
                                        "DrawLabel",   "ProgramID", "LRZState" };
-const std::string    kEmptyString;
 
 struct ParseHeadersResult
 {
@@ -381,13 +380,13 @@ const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const
     return m_raw_data->GetMetricNames();
 }
 
-const std::string& PerfMetricsDataProvider::GetMetricsDescription(size_t metric_index) const
+std::string_view PerfMetricsDataProvider::GetMetricsDescription(size_t metric_index) const
 {
-    if (!m_raw_data)
-    {
-        return kEmptyString;
-    }
     const auto& metrics_info = m_raw_data->GetMetricInfos();
+    if (metric_index >= metrics_info.size() || metrics_info[metric_index] == nullptr)
+    {
+        return {};
+    }
     return metrics_info[metric_index]->m_description;
 }
 

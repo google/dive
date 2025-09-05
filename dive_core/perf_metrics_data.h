@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 #include <string>
 #include <variant>
 #include <vector>
@@ -95,8 +96,6 @@ public:
     [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> Create(
     std::unique_ptr<PerfMetricsData> data);
 
-    PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data);
-
     // Get the total number of unique command buffers of this dataset.
     size_t GetCommandBufferCount() const { return m_cmd_buffer_list.size(); }
 
@@ -114,16 +113,18 @@ public:
     // dataset, ordered by command buffer appearance and then draw ID appearance order.
     const std::vector<PerfMetricsRecord>& GetComputedRecords() const { return m_computed_records; }
 
-    //
+    // Returns the header for the record.
     const std::vector<std::string> GetRecordHeader() const;
 
     // Get the names of the captured metrics
     const std::vector<std::string>& GetMetricsNames() const;
 
     // Given the index of the metric, returns the description for that metric.
-    const std::string& GetMetricsDescription(size_t metric_index) const;
+    std::string_view GetMetricsDescription(size_t metric_index) const;
 
 private:
+    PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data);
+
     std::unique_ptr<PerfMetricsData> m_raw_data;
     std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
 

@@ -229,18 +229,25 @@ void GfxrVulkanCommandTabView::OnCorrelateCommand(const QPoint &pos)
                                        Dive::NodeType::kGfxrVulkanDrawCommandNode)
     {
         QMenu    context_menu;
-        QAction *binning_action = context_menu.addAction("PM4 Events with BinningPassOnly Filter");
-        binning_action->setData(1);
+        QAction *arguments_action = context_menu.addAction(
+        Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
+        arguments_action->setData(Dive::kArguments);
+        QAction *binning_action = context_menu.addAction(
+        Dive::kDrawCallContextMenuOptionStrings[Dive::kBinningPassOnly]);
+        binning_action->setData(Dive::kBinningPassOnly);
         QAction *first_tile_action = context_menu.addAction(
-        "PM4 Events with FirstTilePassOnly Filter");
-        first_tile_action->setData(2);
+        Dive::kDrawCallContextMenuOptionStrings[Dive::kFirstTilePassOnly]);
+        first_tile_action->setData(Dive::kFirstTilePassOnly);
+        QAction *perf_counter_action = context_menu.addAction(
+        Dive::kDrawCallContextMenuOptionStrings[Dive::kPerfCounterData]);
+        perf_counter_action->setData(Dive::kPerfCounterData);
 
-        QAction *selectedAction = context_menu.exec(
+        QAction *selected_action = context_menu.exec(
         m_command_hierarchy_view->viewport()->mapToGlobal(pos));
 
-        if (selectedAction)
+        if (selected_action)
         {
-            emit ApplyFilter(source_model_index, selectedAction->data().toInt());
+            emit ApplyFilter(source_model_index, selected_action->data().toInt());
         }
     }
 }

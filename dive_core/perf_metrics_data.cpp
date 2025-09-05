@@ -33,11 +33,18 @@ constexpr std::array kFixedHeaders = { "ContextID",   "ProcessID", "FrameID",
                                        "CmdBufferID", "DrawID",    "DrawType",
                                        "DrawLabel",   "ProgramID", "LRZState" };
 
-bool ParseHeaders(const std::string&              line,
-                  const AvailableMetrics&         available_metrics,
-                  std::vector<std::string>&       metric_names,
-                  std::vector<const MetricInfo*>& metric_infos)
+struct ParseHeadersResult
 {
+    std::vector<std::string>       metric_names;
+    std::vector<const MetricInfo*> metric_infos;
+};
+
+std::optional<ParseHeadersResult> ParseHeaders(const std::string&      line,
+                                               const AvailableMetrics& available_metrics)
+{
+    std::vector<const MetricInfo*> metric_infos;
+    std::vector<std::string>       metric_names;
+
     std::stringstream header_ss(line);
     std::string       header_field;
     int               column_index = 0;
@@ -46,7 +53,7 @@ bool ParseHeaders(const std::string&              line,
         if (column_index < kFixedHeaders.size())
         {
             if (header_field != kFixedHeaders[column_index])
-                return false;
+                return std::nullopt;  // Fixed header mismatch
         }
         else
         {
@@ -55,8 +62,12 @@ bool ParseHeaders(const std::string&              line,
         }
         column_index++;
     }
+    if (column_index < kFixedHeaders.size())
+    {
+        return std::nullopt;  // Not enough columns
+    }
 
-    return column_index >= kFixedHeaders.size();
+    return ParseHeadersResult{ std::move(metric_names), std::move(metric_infos) };
 }
 
 std::optional<PerfMetricsRecord> ParseRecordFixedFields(const std::vector<std::string>& fields)
@@ -96,7 +107,7 @@ bool ParseAndEmplaceMetric(const std::string& s, std::vector<std::variant<int64_
 
 bool ParseMetrics(const std::vector<std::string>&       fields,
                   const std::vector<const MetricInfo*>& metric_infos,
-                  std::optional<PerfMetricsRecord>&     record_opt)
+                  PerfMetricsRecord&                    record)
 {
     bool all_metrics_parsed = true;
     for (size_t i = 0; i < metric_infos.size(); ++i)
@@ -109,11 +120,11 @@ bool ParseMetrics(const std::vector<std::string>&       fields,
             {
             case MetricType::kCount:
                 all_metrics_parsed = ParseAndEmplaceMetric<int64_t>(value_str,
-                                                                    record_opt->m_metric_values);
+                                                                    record.m_metric_values);
                 break;
             case MetricType::kPercent:
                 all_metrics_parsed = ParseAndEmplaceMetric<float>(value_str,
-                                                                  record_opt->m_metric_values);
+                                                                  record.m_metric_values);
                 break;
             default:
                 all_metrics_parsed = false;
@@ -134,8 +145,6 @@ std::unique_ptr<PerfMetricsData> PerfMetricsData::LoadFromCsv(
 const std::filesystem::path& file_path,
 const AvailableMetrics&      available_metrics)
 {
-    std::vector<std::string>       metric_names;
-    std::vector<const MetricInfo*> metric_infos;
     std::vector<PerfMetricsRecord> records;
 
     std::ifstream file(file_path);
@@ -151,11 +160,14 @@ const AvailableMetrics&      available_metrics)
     {
         return nullptr;
     }
-
-    if (!ParseHeaders(line, available_metrics, metric_names, metric_infos))
+    auto headers_opt = ParseHeaders(line, available_metrics);
+    if (!headers_opt.has_value())
     {
         return nullptr;
     }
+
+    auto& metric_names = headers_opt->metric_names;
+    auto& metric_infos = headers_opt->metric_infos;
 
     // Read data lines
     while (StringUtils::GetTrimmedLine(file, line))
@@ -179,7 +191,7 @@ const AvailableMetrics&      available_metrics)
             continue;  // Skip malformed lines
         }
 
-        if (ParseMetrics(fields, metric_infos, record_opt))
+        if (ParseMetrics(fields, metric_infos, *record_opt))
         {
             records.push_back(*record_opt);
         }

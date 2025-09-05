@@ -113,43 +113,49 @@ bool ParseMetrics(const std::vector<std::string>&       fields,
                   const std::vector<const MetricInfo*>& metric_infos,
                   PerfMetricsRecord&                    record)
 {
-    bool all_metrics_parsed = true;
     for (size_t i = 0; i < metric_infos.size(); ++i)
     {
         const std::string& value_str = fields[kFixedHeaders.size() + i];
         const MetricInfo*  info = metric_infos[i];
-        if (info)
+        if (info == nullptr)
         {
-            switch (info->m_metric_type)
-            {
-            case MetricType::kCount:
-                all_metrics_parsed = ParseAndEmplaceMetric<int64_t>(value_str,
-                                                                    record.m_metric_values);
-                break;
-            case MetricType::kPercent:
-                all_metrics_parsed = ParseAndEmplaceMetric<float>(value_str,
-                                                                  record.m_metric_values);
-                break;
-            default:
-                all_metrics_parsed = false;
-                break;
-            }
+            // Unknown metric, this is an error. The number of metric values
+            // will not match the number of metric names.
+            return false;
         }
-        if (!all_metrics_parsed)
+
+        bool parsed = false;
+        switch (info->m_metric_type)
         {
+        case MetricType::kCount:
+            parsed = ParseAndEmplaceMetric<int64_t>(value_str, record.m_metric_values);
+            break;
+        case MetricType::kPercent:
+            parsed = ParseAndEmplaceMetric<float>(value_str, record.m_metric_values);
+            break;
+        default:
+            // kUnknown or other types are not supported.
             break;
         }
+        if (!parsed)
+        {
+            return false;
+        }
     }
-    return all_metrics_parsed;
+    return true;
 }
 
 }  // namespace
 
 std::unique_ptr<PerfMetricsData> PerfMetricsData::LoadFromCsv(
-const std::filesystem::path& file_path,
-const AvailableMetrics&      available_metrics)
+const std::filesystem::path&      file_path,
+std::unique_ptr<AvailableMetrics> available_metrics)
 {
     std::vector<PerfMetricsRecord> records;
+    if (!available_metrics)
+    {
+        return nullptr;
+    }
 
     std::ifstream file(file_path);
     if (!file.is_open())
@@ -164,7 +170,7 @@ const AvailableMetrics&      available_metrics)
     {
         return nullptr;
     }
-    auto headers_opt = ParseHeaders(line, available_metrics);
+    auto headers_opt = ParseHeaders(line, *available_metrics);
     if (!headers_opt.has_value())
     {
         return nullptr;
@@ -197,12 +203,25 @@ const AvailableMetrics&      available_metrics)
 
         if (ParseMetrics(fields, metric_infos, *record_opt))
         {
-            records.push_back(*record_opt);
+            records.push_back(std::move(*record_opt));
         }
     }
 
-    return std::unique_ptr<PerfMetricsData>(
-    new PerfMetricsData(std::move(metric_names), std::move(metric_infos), std::move(records)));
+    return std::unique_ptr<PerfMetricsData>(new PerfMetricsData(std::move(metric_names),
+                                                                std::move(metric_infos),
+                                                                std::move(records),
+                                                                std::move(available_metrics)));
+}
+
+PerfMetricsData::PerfMetricsData(std::vector<std::string>          metric_names,
+                                 std::vector<const MetricInfo*>    metric_infos,
+                                 std::vector<PerfMetricsRecord>    records,
+                                 std::unique_ptr<AvailableMetrics> available_metrics) :
+    m_metric_names(std::move(metric_names)),
+    m_metric_infos(std::move(metric_infos)),
+    m_records(std::move(records)),
+    m_available_metrics(std::move(available_metrics))
+{
 }
 
 std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::Create(
@@ -281,17 +300,19 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
             if (count > 0)
             {
                 PerfMetricsRecord averaged_record = *first_records.at(key);
-                averaged_record.m_metric_values.resize(num_metrics);
+                averaged_record.m_metric_values.clear();
+                averaged_record.m_metric_values.reserve(num_metrics);
                 for (size_t i = 0; i < num_metrics; ++i)
                 {
-                    const auto* metric_info = m_raw_data->GetMetricInfos()[i];
+                    const auto*  metric_info = m_raw_data->GetMetricInfos()[i];
+                    const double average = sums[i] / count;
                     if (metric_info && metric_info->m_metric_type == MetricType::kCount)
                     {
-                        averaged_record.m_metric_values[i] = static_cast<int64_t>(sums[i] / count);
+                        averaged_record.m_metric_values.emplace_back(static_cast<int64_t>(average));
                     }
                     else  // kPercent or others, store as float
                     {
-                        averaged_record.m_metric_values[i] = static_cast<float>(sums[i] / count);
+                        averaged_record.m_metric_values.emplace_back(static_cast<float>(average));
                     }
                 }
                 m_metric_key_to_index[key] = m_computed_records.size();

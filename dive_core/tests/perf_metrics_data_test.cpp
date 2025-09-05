@@ -76,11 +76,11 @@ TEST(PerfMetricsData, LoadFromCsv)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
                                                            "/mock_available_metrics.csv");
-    ASSERT_NE(available_metrics, std::nullopt);
+    ASSERT_NE(available_metrics, nullptr);
 
     auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
                                                           "/mock_perf_metrics_data.csv",
-                                                          *available_metrics);
+                                                          std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
 
     const auto& records = perf_metrics_data->GetRecords();
@@ -109,25 +109,31 @@ TEST(PerfMetricsData, LoadFromCsv)
 
 TEST(PerfMetricsData, LoadFromCsvMalformedRowSkipped)
 {
-    auto available_metrics = AvailableMetrics::LoadFromCsv(
-    TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_NE(available_metrics, std::nullopt);
+    auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics.csv");
+    ASSERT_NE(available_metrics, nullptr);
 
     auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
                                                           "/mock_perf_metrics_data_malformed.csv",
-                                                          *available_metrics);
+                                                          std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
     ASSERT_THAT(perf_metrics_data->GetRecords(), SizeIs(1));
+    EXPECT_THAT(perf_metrics_data->GetRecords(),
+                ElementsAre(AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 2, 200, 2000, 20000, 2, 2, 2, 2, 2, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(456),
+                                                    VariantWith<float>(FloatEq(4.56f)))))));
 }
 
 TEST(PerfMetricsData, LoadFromCsvFailedWithNoHeader)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(
     TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_NE(available_metrics, std::nullopt);
+    ASSERT_NE(available_metrics, nullptr);
 
     ASSERT_EQ(PerfMetricsData::LoadFromCsv(TEST_DATA_DIR "/mock_perf_metrics_data_no_header.csv",
-                                           *available_metrics),
+                                           std::move(available_metrics)),
               nullptr);
 }
 
@@ -135,12 +141,12 @@ TEST(PerfMetricsData, LoadFromCsvWrongColumnsSkipped)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(
     TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_NE(available_metrics, std::nullopt);
+    ASSERT_NE(available_metrics, nullptr);
 
     auto
     perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
                                                      "/mock_perf_metrics_data_wrong_columns.csv",
-                                                     *available_metrics);
+                                                     std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
     ASSERT_THAT(perf_metrics_data->GetRecords(), IsEmpty());
 }
@@ -149,12 +155,12 @@ TEST(PerfMetricsData, LoadFromCsvUnknownMeticTypeSkipped)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(
     TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_NE(available_metrics, std::nullopt);
+    ASSERT_NE(available_metrics, nullptr);
 
     auto
     perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
                                                      "/mock_perf_metrics_data_unknown_type.csv",
-                                                     *available_metrics);
+                                                     std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
     ASSERT_THAT(perf_metrics_data->GetRecords(), IsEmpty());
 }
@@ -164,20 +170,19 @@ class PerfMetricsDataProviderTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                            "/mock_available_metrics.csv");
-        ASSERT_NE(m_available_metrics, std::nullopt);
+        auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                               "/mock_available_metrics.csv");
+        ASSERT_NE(available_metrics, nullptr);
 
         auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
                                                               "/mock_perf_metrics_data.csv",
-                                                              *m_available_metrics);
+                                                              std::move(available_metrics));
         ASSERT_NE(perf_metrics_data, nullptr);
 
         m_provider = PerfMetricsDataProvider::Create(std::move(perf_metrics_data));
         ASSERT_NE(m_provider, nullptr);
     }
 
-    std::optional<AvailableMetrics>          m_available_metrics;
     std::unique_ptr<PerfMetricsDataProvider> m_provider;
 };
 

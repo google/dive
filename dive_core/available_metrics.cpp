@@ -22,35 +22,52 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <array>
 #include "dive_core/common/string_utils.h"
-#include <optional>
 
 namespace Dive
 {
 
 namespace
 {
-constexpr int kAvailableMetricsFieldCount = 5;
+const std::array kExpectedHeaders = { "MetricID", "MetricType", "Key", "Name", "Description" };
 }  // namespace
 
-std::optional<AvailableMetrics> AvailableMetrics::LoadFromCsv(
+std::unique_ptr<AvailableMetrics> AvailableMetrics::LoadFromCsv(
 const std::filesystem::path& file_path)
 {
     std::ifstream file(file_path);
     if (!file.is_open())
     {
         std::cerr << "Failed to open file: " << file_path << std::endl;
-        return std::nullopt;
+        return nullptr;
     }
 
-    AvailableMetrics available_metrics;
-    std::string      line;
-    // Read and ignore header line
-    if (!StringUtils::GetTrimmedLine(file, line) || line.empty() ||
-        line.find("MetricID") == std::string::npos)
+    auto        available_metrics = std::unique_ptr<AvailableMetrics>(new AvailableMetrics());
+    std::string line;
+    // Read and validate header line
+    if (!StringUtils::GetTrimmedLine(file, line) || line.empty())
     {
-        return std::nullopt;
+        return nullptr;
     }
+
+    std::stringstream header_ss(line);
+    std::string       header_field;
+    size_t            column_index = 0;
+    while (StringUtils::GetTrimmedField(header_ss, header_field, ','))
+    {
+        if (column_index < kExpectedHeaders.size())
+        {
+            if (header_field != kExpectedHeaders[column_index])
+            {
+                std::cerr << "Invalid header in file: " << file_path << std::endl;
+                return nullptr;
+            }
+        }
+        column_index++;
+    }
+    if (column_index < kExpectedHeaders.size())
+        return nullptr;
 
     while (StringUtils::GetTrimmedLine(file, line))
     {
@@ -62,7 +79,7 @@ const std::filesystem::path& file_path)
             fields.push_back(field);
         }
 
-        if (fields.size() < kAvailableMetricsFieldCount)
+        if (fields.size() < kExpectedHeaders.size())
         {
             continue;
         }
@@ -75,15 +92,15 @@ const std::filesystem::path& file_path)
             continue;
         }
         info.m_metric_type = static_cast<MetricType>(metric_type_val);
-        info.m_key = fields[2];
-        info.m_name = fields[3];
-        info.m_description = fields[4];
+        info.m_key = std::move(fields[2]);
+        info.m_name = std::move(fields[3]);
+        info.m_description = std::move(fields[4]);
         for (size_t i = 5; i < fields.size(); ++i)
         {
             info.m_description.append(", ").append(fields[i]);
         }
 
-        available_metrics.m_metrics[info.m_key] = info;
+        available_metrics->m_metrics.emplace(info.m_key, std::move(info));
     }
 
     return available_metrics;

@@ -61,12 +61,11 @@ struct PerfMetricsRecord
 
 class PerfMetricsData
 {
-    friend class PerfMetricsDataProviderTest;
-
 public:
     // Load performance metrics data from a CSV file
-    static std::unique_ptr<PerfMetricsData> LoadFromCsv(const std::filesystem::path& file_path,
-                                                        const AvailableMetrics& available_metrics);
+    [[nodiscard]] static std::unique_ptr<PerfMetricsData> LoadFromCsv(
+    const std::filesystem::path&      file_path,
+    std::unique_ptr<AvailableMetrics> available_metrics);
 
     // Get all performance metrics records
     const std::vector<PerfMetricsRecord>& GetRecords() const { return m_records; }
@@ -77,25 +76,24 @@ public:
     // Get the information of the performance metrics
     const std::vector<const MetricInfo*>& GetMetricInfos() const { return m_metric_infos; }
 
-private:
-    PerfMetricsData(std::vector<std::string>       metric_names,
-                    std::vector<const MetricInfo*> metric_infos,
-                    std::vector<PerfMetricsRecord> records) :
-        m_metric_names(std::move(metric_names)),
-        m_metric_infos(std::move(metric_infos)),
-        m_records(std::move(records))
-    {
-    }
+    PerfMetricsData(std::vector<std::string>          metric_names,
+                    std::vector<const MetricInfo*>    metric_infos,
+                    std::vector<PerfMetricsRecord>    records,
+                    std::unique_ptr<AvailableMetrics> available_metrics);
 
+private:
     std::vector<std::string>       m_metric_names;
     std::vector<const MetricInfo*> m_metric_infos;
     std::vector<PerfMetricsRecord> m_records;
+    // Keep available_metrics alive, since m_metric_infos has raw pointers into it.
+    std::unique_ptr<AvailableMetrics> m_available_metrics;
 };
 
 class PerfMetricsDataProvider
 {
 public:
-    static std::unique_ptr<PerfMetricsDataProvider> Create(std::unique_ptr<PerfMetricsData> data);
+    [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> Create(
+    std::unique_ptr<PerfMetricsData> data);
 
     // Get the total number of unique command buffers of this dataset.
     size_t GetCommandBufferCount() const { return m_cmd_buffer_list.size(); }
@@ -120,9 +118,9 @@ public:
     // Given the index of the metric, returns the description for that metric.
     const std::string& GetMetricsDescription(size_t metric_index) const;
 
-private:
     PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data);
 
+private:
     std::unique_ptr<PerfMetricsData> m_raw_data;
     std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
 

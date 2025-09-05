@@ -322,6 +322,21 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
     }
 }
 
+const std::vector<std::string> PerfMetricsDataProvider::GetRecordHeader() const
+{
+    std::vector<std::string> full_header;
+    full_header.reserve(kFixedHeaders.size() + GetMetricsNames().size());
+    for (const auto& header : kFixedHeaders)
+    {
+        full_header.push_back(header);
+    }
+    for (const auto& metric_name : GetMetricsNames())
+    {
+        full_header.push_back(metric_name);
+    }
+    return full_header;
+}
+
 std::optional<std::reference_wrapper<const PerfMetricsRecord>>
 PerfMetricsDataProvider::GetComputedRecord(size_t command_buffer_index,
                                            size_t draw_call_index) const

@@ -228,6 +228,23 @@ TEST_F(PerfMetricsDataProviderTest, GetComputedRecord)
     EXPECT_FALSE(m_provider->GetComputedRecord(0, 1).has_value());
 }
 
+TEST_F(PerfMetricsDataProviderTest, GetRecordHeader)
+{
+    const auto header = m_provider->GetRecordHeader();
+    ASSERT_THAT(header,
+                ElementsAre("ContextID",
+                            "ProcessID",
+                            "FrameID",
+                            "CmdBufferID",
+                            "DrawID",
+                            "DrawType",
+                            "DrawLabel",
+                            "ProgramID",
+                            "LRZState",
+                            "COUNTER_A",
+                            "COUNTER_B"));
+}
+
 TEST_F(PerfMetricsDataProviderTest, GetMetricsNames)
 {
     const auto& names = m_provider->GetMetricsNames();

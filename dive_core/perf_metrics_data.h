@@ -144,8 +144,13 @@ private:
     std::unique_ptr<PerfMetricsData> m_raw_data;
     std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
 
-    std::vector<uint64_t>                                          m_cmd_buffer_list;
-    std::unordered_map<uint64_t, std::vector<uint32_t>>            m_cmd_buffer_to_draw_id;
+    // The following fields are used to cached the result so that we dont' need to calculate every
+    // time.
+    //  Stores unique command buffer ids with the order of appearance.
+    std::vector<uint64_t> m_cmd_buffer_list;
+    // Keep track draw_ids belongs to a command buffer.
+    std::unordered_map<uint64_t, std::vector<uint32_t>> m_cmd_buffer_to_draw_id;
+    // Keep track of index to m_computed_records given PerfMetricsKey.
     std::unordered_map<PerfMetricsKey, size_t, PerfMetricsKeyHash> m_metric_key_to_index;
 };
 

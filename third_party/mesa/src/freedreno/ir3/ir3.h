@@ -269,9 +269,11 @@ struct ir3_register {
 /*
  * Stupid/simple growable array implementation:
  */
+// GOOGLE: Remove ; from "type *name", since it is causing a build error in MSVC
+// This is because DECLARE_ARRAY(...); causes extra ; to be inserted, which causes compilation error in MSVC
 #define DECLARE_ARRAY(type, name)                                              \
    unsigned name##_count, name##_sz;                                           \
-   type *name;
+   type *name
 
 #define array_insert(ctx, arr, ...)                                            \
    do {                                                                        \
@@ -2775,6 +2777,8 @@ struct ir3_instruction *ir3_split_off_scalar(struct ir3_builder *build,
                                              struct ir3_instruction *src,
                                              unsigned bit_size);
 
+// GOOGLE: The call to ir3_collect causes a build error on MSVC, and this function isn't used by the disassembler
+/*
 static inline struct ir3_instruction *
 ir3_64b(struct ir3_builder *build, struct ir3_instruction *lo,
         struct ir3_instruction *hi)
@@ -2790,6 +2794,7 @@ ir3_64b_immed(struct ir3_builder *build, uint64_t val)
    return ir3_64b(build, create_immed(build, (uint32_t)val),
                   create_immed(build, val >> 32));
 }
+*/
 
 static inline struct ir3_instruction *
 ir3_64b_get_lo(struct ir3_instruction *instr)

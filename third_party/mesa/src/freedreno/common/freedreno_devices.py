@@ -1388,6 +1388,8 @@ static const struct fd_dev_rec fd_dev_recs[] = {
 void
 fd_dev_info_apply_dbg_options(struct fd_dev_info *info)
 {
+    // GOOGLE: Call to strtok_r causes link error on MSVC, so comment out this function
+    /*
     const char *env = debug_get_option("FD_DEV_FEATURES", NULL);
     if (!env || !*env)
         return;
@@ -1426,6 +1428,7 @@ fd_dev_info_apply_dbg_options(struct fd_dev_info *info)
     }
 
     free(features);
+    */
 }
 """
 

@@ -33,7 +33,14 @@ const VulkanReplayOptions&                options) :
 {
 }
 
-DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer() {}
+DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer()
+{
+    // For trimmed captures, all resources that are not released within the frame are released by
+    // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
+    // So it is safe to release all resources from the deferred list here (all parent resources
+    // should be still alive at this point)
+    ReleaseResourcesFromDeferredList();
+}
 
 void DiveVulkanReplayConsumer::Process_vkCreateDevice(
 const ApiCallInfo&                                   call_info,
@@ -460,9 +467,63 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
     }
 }
 
+void DiveVulkanReplayConsumer::Process_vkCreateFence(
+const ApiCallInfo&                                   call_info,
+VkResult                                             returnValue,
+format::HandleId                                     device,
+StructPointerDecoder<Decoded_VkFenceCreateInfo>*     pCreateInfo,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+HandlePointerDecoder<VkFence>*                       pFence)
+{
+    VulkanReplayConsumer::Process_vkCreateFence(call_info,
+                                                returnValue,
+                                                device,
+                                                pCreateInfo,
+                                                pAllocator,
+                                                pFence);
+
+    if (returnValue != VK_SUCCESS)
+    {
+        return;
+    }
+
+    if (!setup_finished_)
+    {
+        deferred_release_fences_[*(pFence->GetPointer())] = { device, pAllocator };
+    }
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyFence(
+const ApiCallInfo&                                   call_info,
+format::HandleId                                     device,
+format::HandleId                                     fence,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    // We only destroy the fence if it is not in the deferred release list
+    if (deferred_release_fences_.find(fence) == deferred_release_fences_.end())
+    {
+        VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
+    }
+}
+
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();
+    setup_finished_ = true;
+}
+
+void DiveVulkanReplayConsumer::ReleaseResourcesFromDeferredList()
+{
+    GFXRECON_LOG_INFO("Release Resources From the DeferredList!");
+    // - We only defer release fences for now, may need to add other resources here
+    for (const auto& f : deferred_release_fences_)
+    {
+        VulkanReplayConsumer::Process_vkDestroyFence(ApiCallInfo{},
+                                                     f.second.device,
+                                                     f.first,
+                                                     f.second.pAllocator);
+    }
+    deferred_release_fences_.clear();
 }
 
 GFXRECON_END_NAMESPACE(decode)

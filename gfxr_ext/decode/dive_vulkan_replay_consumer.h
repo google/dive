@@ -129,6 +129,19 @@ public:
     format::HandleId                                commandBuffer,
     StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
 
+    void Process_vkCreateFence(const ApiCallInfo&                                   call_info,
+                               VkResult                                             returnValue,
+                               format::HandleId                                     device,
+                               StructPointerDecoder<Decoded_VkFenceCreateInfo>*     pCreateInfo,
+                               StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                               HandlePointerDecoder<VkFence>* pFence) override;
+
+    void Process_vkDestroyFence(
+    const ApiCallInfo&                                   call_info,
+    format::HandleId                                     device,
+    format::HandleId                                     fence,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
 
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
@@ -139,10 +152,21 @@ public:
     }
 
 private:
-    Dive::GPUTime gpu_time_;
-    bool          enable_gpu_time_ = false;
-    std::string   gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
-    std::string   gpu_time_stats_csv_str_ = "";
+    // The deferred release list keeps resources that are created in the "setup phase"
+    // Those resources should not be released in the mid of a frame since we may loop frame
+    // We only release those resources once FrameEndMarker is reached or the device is destroyed
+    void ReleaseResourcesFromDeferredList();
+    struct DeferredReleaseFence
+    {
+        format::HandleId                                     device = 0;
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator = nullptr;
+    };
+    std::unordered_map<format::HandleId, DeferredReleaseFence> deferred_release_fences_ = {};
+    Dive::GPUTime                                              gpu_time_ = {};
+    std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
+    std::string gpu_time_stats_csv_str_ = "";
+    bool        enable_gpu_time_ = false;
+    bool        setup_finished_ = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)

@@ -228,19 +228,12 @@ void GfxrVulkanCommandTabView::OnCorrelateCommand(const QPoint &pos)
     if (proxy_model_index.isValid() && m_vulkan_command_hierarchy.GetNodeType(node_index) ==
                                        Dive::NodeType::kGfxrVulkanDrawCommandNode)
     {
-        QMenu    context_menu;
-        QAction *arguments_action = context_menu.addAction(
-        Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
-        arguments_action->setData(Dive::kArguments);
-        QAction *binning_action = context_menu.addAction(
-        Dive::kDrawCallContextMenuOptionStrings[Dive::kBinningPassOnly]);
-        binning_action->setData(Dive::kBinningPassOnly);
-        QAction *first_tile_action = context_menu.addAction(
-        Dive::kDrawCallContextMenuOptionStrings[Dive::kFirstTilePassOnly]);
-        first_tile_action->setData(Dive::kFirstTilePassOnly);
-        QAction *perf_counter_action = context_menu.addAction(
-        Dive::kDrawCallContextMenuOptionStrings[Dive::kPerfCounterData]);
-        perf_counter_action->setData(Dive::kPerfCounterData);
+        QMenu context_menu;
+        for (size_t i = 0; i < std::size(Dive::kDrawCallContextMenuOptionStrings); ++i)
+        {
+            QAction *action = context_menu.addAction(Dive::kDrawCallContextMenuOptionStrings[i]);
+            action->setData(static_cast<int>(i));
+        }
 
         QAction *selected_action = context_menu.exec(
         m_command_hierarchy_view->viewport()->mapToGlobal(pos));

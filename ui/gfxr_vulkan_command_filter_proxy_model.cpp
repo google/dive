@@ -61,7 +61,8 @@ void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelI
                 m_gfxr_draw_call_indices.push_back(node_index);
             }
 
-            // Only recurse into children if the current node is gfxr submit node.
+            // Only recurse into children if the current node is gfxr submit node. Gfxr submit nodes
+            // are of type kGfxrSubmitNode. PM4 submit nodes are of type kSubmitNode.
             if (node_type != Dive::NodeType::kSubmitNode)
             {
                 CollectGfxrDrawCallIndices(index);

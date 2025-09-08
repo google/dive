@@ -14,8 +14,8 @@
 #include "gfxr_vulkan_command_filter_proxy_model.h"
 
 GfxrVulkanCommandFilterProxyModel::GfxrVulkanCommandFilterProxyModel(
-QObject                      *parent,
-const Dive::CommandHierarchy *command_hierarchy) :
+const Dive::CommandHierarchy &command_hierarchy,
+QObject                      *parent) :
     QSortFilterProxyModel(parent),
     m_command_hierarchy(command_hierarchy)
 {
@@ -38,6 +38,39 @@ void GfxrVulkanCommandFilterProxyModel::SetFilter(FilterMode filter_mode)
     ApplyNewFilterMode(filter_mode);
 }
 
+void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index)
+{
+    if (!parent_index.isValid())
+    {
+        m_gfxr_draw_call_indices.clear();
+    }
+
+    int row_count = sourceModel()->rowCount(parent_index);
+    for (int row = 0; row < row_count; ++row)
+    {
+        QModelIndex index = sourceModel()->index(row, 0, parent_index);
+        if (index.isValid())
+
+        {
+            uint64_t       node_index = (uint64_t)index.internalPointer();
+            Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
+
+            // If a node is a gfxr draw call, add its index to the list.
+            if (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
+            {
+                m_gfxr_draw_call_indices.push_back(node_index);
+            }
+
+            // Only recurse into children if the current node is gfxr submit node. Gfxr submit nodes
+            // are of type kGfxrSubmitNode. PM4 submit nodes are of type kSubmitNode.
+            if (node_type != Dive::NodeType::kSubmitNode)
+            {
+                CollectGfxrDrawCallIndices(index);
+            }
+        }
+    }
+}
+
 bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sourceRow,
                                                          const QModelIndex &sourceParent) const
 {
@@ -51,7 +84,7 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
     uint64_t                      node_index = (uint64_t)indexInSource.internalPointer();
     const GfxrVulkanCommandModel *sourceMyModel = qobject_cast<const GfxrVulkanCommandModel *>(
     sourceModel());
-    const Dive::NodeType node_type = m_command_hierarchy->GetNodeType(node_index);
+    const Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
     if (!sourceMyModel)
     {

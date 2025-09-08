@@ -228,19 +228,19 @@ void GfxrVulkanCommandTabView::OnCorrelateCommand(const QPoint &pos)
     if (proxy_model_index.isValid() && m_vulkan_command_hierarchy.GetNodeType(node_index) ==
                                        Dive::NodeType::kGfxrVulkanDrawCommandNode)
     {
-        QMenu    context_menu;
-        QAction *binning_action = context_menu.addAction("PM4 Events with BinningPassOnly Filter");
-        binning_action->setData(1);
-        QAction *first_tile_action = context_menu.addAction(
-        "PM4 Events with FirstTilePassOnly Filter");
-        first_tile_action->setData(2);
+        QMenu context_menu;
+        for (size_t i = 0; i < std::size(Dive::kDrawCallContextMenuOptionStrings); ++i)
+        {
+            QAction *action = context_menu.addAction(Dive::kDrawCallContextMenuOptionStrings[i]);
+            action->setData(static_cast<int>(i));
+        }
 
-        QAction *selectedAction = context_menu.exec(
+        QAction *selected_action = context_menu.exec(
         m_command_hierarchy_view->viewport()->mapToGlobal(pos));
 
-        if (selectedAction)
+        if (selected_action)
         {
-            emit ApplyFilter(source_model_index, selectedAction->data().toInt());
+            emit ApplyFilter(source_model_index, selected_action->data().toInt());
         }
     }
 }

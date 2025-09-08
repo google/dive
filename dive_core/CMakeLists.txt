@@ -125,6 +125,7 @@ file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
 file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
 
 file(GLOB_RECURSE FREEDRENO_SRC_FILES "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common/freedreno_dev_info.c")
+set_source_files_properties(FREEDRENO_SRC_FILES PROPERTIES LANGUAGE CXX)
 
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR} ${DIVE_CORE_GENERATED_FILE_DIR} ${FREEDRENO_ISA_DIRECTORY})
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common)
@@ -132,8 +133,9 @@ include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/)
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/include/)
 include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 
-
-add_definitions(-DHAVE_ENDIAN_H)     # Required for freedreno_dev_info.c
+if(NOT MSVC)
+  add_definitions(-DHAVE_ENDIAN_H)     # Required for freedreno_dev_info.c on Linux
+endif()
 
 add_library(${PROJECT_NAME} STATIC ${HDR_FILES} ${SRC_FILES}
   ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES})
@@ -190,6 +192,7 @@ if(MSVC)
   target_compile_definitions(freedreno_ir3 PRIVATE
       -DHAVE_STRUCT_TIMESPEC
   )
+  set_property(TARGET freedreno_ir3 PROPERTY C_STANDARD 11)
   target_sources(freedreno_ir3 PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c")
   set_target_properties(freedreno_ir3 PROPERTIES FOLDER "freedreno")
 else()

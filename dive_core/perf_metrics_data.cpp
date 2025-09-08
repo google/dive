@@ -194,15 +194,15 @@ std::unique_ptr<AvailableMetrics> available_metrics)
             continue;  // Skip malformed lines
         }
 
-        auto record_opt = ParseRecordFixedFields(fields);
-        if (!record_opt.has_value())
+        auto record = ParseRecordFixedFields(fields);
+        if (!record.has_value())
         {
             continue;  // Skip malformed lines
         }
 
-        if (ParseMetrics(fields, metric_infos, *record_opt))
+        if (ParseMetrics(fields, metric_infos, *record))
         {
-            records.push_back(std::move(*record_opt));
+            records.push_back(*std::move(record));
         }
     }
 

@@ -24,6 +24,7 @@
 #include <optional>
 #include <functional>
 #include <utility>
+#include <tuple>
 
 namespace Dive
 {
@@ -32,14 +33,30 @@ class AvailableMetrics;
 struct MetricInfo;
 
 // A key for performance metrics, combining command buffer ID and draw ID.
-using PerfMetricsKey = std::pair<uint64_t, uint32_t>;
+struct PerfMetricsKey
+{
+    uint64_t m_command_buffer_id;
+    uint32_t m_draw_id;
+
+    bool operator==(const PerfMetricsKey& other) const
+    {
+        return m_command_buffer_id == other.m_command_buffer_id && m_draw_id == other.m_draw_id;
+    }
+    bool operator!=(const PerfMetricsKey& other) const { return !this->operator==(other); }
+    bool operator<(const PerfMetricsKey& other) const
+    {
+        return std::tie(m_command_buffer_id, m_draw_id) <
+               std::tie(other.m_command_buffer_id, other.m_draw_id);
+    }
+};
 
 // Hash function for PerfMetricsKey.
 struct PerfMetricsKeyHash
 {
     std::size_t operator()(const PerfMetricsKey& k) const
     {
-        return std::hash<uint64_t>()(k.first) ^ (std::hash<uint32_t>()(k.second) << 1);
+        return std::hash<uint64_t>()(k.m_command_buffer_id) ^
+               (std::hash<uint32_t>()(k.m_draw_id) << 1);
     }
 };
 

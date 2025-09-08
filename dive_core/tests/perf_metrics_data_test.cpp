@@ -165,42 +165,29 @@ TEST(PerfMetricsData, LoadFromCsvUnknownMeticTypeSkipped)
     ASSERT_THAT(perf_metrics_data->GetRecords(), IsEmpty());
 }
 
-class PerfMetricsDataProviderTest : public ::testing::Test
+std::unique_ptr<PerfMetricsDataProvider> CreateTestMetricProvider()
 {
-protected:
-    void SetUp() override
+    auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics.csv");
+    if (!available_metrics)
     {
-        auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                               "/mock_available_metrics.csv");
-        ASSERT_NE(available_metrics, nullptr);
-
-        auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
-                                                              "/mock_perf_metrics_data.csv",
-                                                              std::move(available_metrics));
-        ASSERT_NE(perf_metrics_data, nullptr);
-
-        m_provider = PerfMetricsDataProvider::Create(std::move(perf_metrics_data));
-        ASSERT_NE(m_provider, nullptr);
+        return nullptr;
     }
-
-    std::unique_ptr<PerfMetricsDataProvider> m_provider;
-};
-
-TEST_F(PerfMetricsDataProviderTest, GetCommandBufferCount)
-{
-    EXPECT_EQ(m_provider->GetCommandBufferCount(), 2);
+    auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
+                                                          "/mock_perf_metrics_data.csv",
+                                                          std::move(available_metrics));
+    if (!perf_metrics_data)
+    {
+        return nullptr;
+    }
+    return PerfMetricsDataProvider::Create(std::move(perf_metrics_data));
 }
 
-TEST_F(PerfMetricsDataProviderTest, GetDrawCountForCommandBuffer)
+TEST(PerfMetricsDataProviderTest, GetComputedRecords)
 {
-    EXPECT_EQ(m_provider->GetDrawCountForCommandBuffer(0), 1);
-    EXPECT_EQ(m_provider->GetDrawCountForCommandBuffer(1), 1);
-    EXPECT_EQ(m_provider->GetDrawCountForCommandBuffer(2), 0);
-}
-
-TEST_F(PerfMetricsDataProviderTest, GetComputedRecords)
-{
-    const auto& computed_records = m_provider->GetComputedRecords();
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    const auto& computed_records = provider->GetComputedRecords();
     ASSERT_THAT(computed_records, SizeIs(2));
 
     PerfMetricsRecord expected_record1{ 1, 100, 1000, 10000, 1, 1, 1, 1, 1 };
@@ -214,9 +201,27 @@ TEST_F(PerfMetricsDataProviderTest, GetComputedRecords)
                 ElementsAre(VariantWith<int64_t>(456), VariantWith<float>(FloatEq(4.56f))));
 }
 
-TEST_F(PerfMetricsDataProviderTest, GetComputedRecord)
+TEST(PerfMetricsDataProviderTest, GetCommandBufferCount)
 {
-    auto record1_opt = m_provider->GetComputedRecord(0, 0);
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_EQ(provider->GetCommandBufferCount(), 2);
+}
+
+TEST(PerfMetricsDataProviderTest, GetDrawCountForCommandBuffer)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(0), 1);
+    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(1), 1);
+    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(2), 0);
+}
+
+TEST(PerfMetricsDataProviderTest, GetComputedRecord)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    auto record1_opt = provider->GetComputedRecord(0, 0);
     ASSERT_TRUE(record1_opt.has_value());
     const auto& record1 = record1_opt->get();
     EXPECT_EQ(record1.m_cmd_buffer_id, 10000);
@@ -224,13 +229,15 @@ TEST_F(PerfMetricsDataProviderTest, GetComputedRecord)
     EXPECT_THAT(record1.m_metric_values,
                 ElementsAre(VariantWith<int64_t>(123), VariantWith<float>(FloatEq(1.23f))));
 
-    EXPECT_FALSE(m_provider->GetComputedRecord(2, 0).has_value());
-    EXPECT_FALSE(m_provider->GetComputedRecord(0, 1).has_value());
+    EXPECT_FALSE(provider->GetComputedRecord(2, 0).has_value());
+    EXPECT_FALSE(provider->GetComputedRecord(0, 1).has_value());
 }
 
-TEST_F(PerfMetricsDataProviderTest, GetRecordHeader)
+TEST(PerfMetricsDataProviderTest, GetRecordHeader)
 {
-    const auto header = m_provider->GetRecordHeader();
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    const auto header = provider->GetRecordHeader();
     ASSERT_THAT(header,
                 ElementsAre("ContextID",
                             "ProcessID",
@@ -245,16 +252,20 @@ TEST_F(PerfMetricsDataProviderTest, GetRecordHeader)
                             "COUNTER_B"));
 }
 
-TEST_F(PerfMetricsDataProviderTest, GetMetricsNames)
+TEST(PerfMetricsDataProviderTest, GetMetricsNames)
 {
-    const auto& names = m_provider->GetMetricsNames();
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    const auto& names = provider->GetMetricsNames();
     ASSERT_THAT(names, ElementsAre("COUNTER_A", "COUNTER_B"));
 }
 
-TEST_F(PerfMetricsDataProviderTest, GetMetricsDescription)
+TEST(PerfMetricsDataProviderTest, GetMetricsDescription)
 {
-    EXPECT_EQ(m_provider->GetMetricsDescription(0), "Description A");
-    EXPECT_EQ(m_provider->GetMetricsDescription(1), "Description B");
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_EQ(provider->GetMetricsDescription(0), "Description A");
+    EXPECT_EQ(provider->GetMetricsDescription(1), "Description B");
 }
 
 TEST(PerfMetricsDataProvider, CreateWithNullData)

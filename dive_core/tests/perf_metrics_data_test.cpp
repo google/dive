@@ -50,7 +50,13 @@ void PrintTo(const PerfMetricsRecord& record, std::ostream* os)
 namespace
 {
 
+using ::testing::AllOf;
+using ::testing::ElementsAre;
+using ::testing::Field;
+using ::testing::FloatEq;
 using ::testing::IsEmpty;
+using ::testing::SizeIs;
+using ::testing::VariantWith;
 
 MATCHER_P(PerfMetricsRecordEq, expected, "has the correct perf metrics record fields")
 {
@@ -68,59 +74,53 @@ MATCHER_P(PerfMetricsRecordEq, expected, "has the correct perf metrics record fi
 
 TEST(PerfMetricsData, LoadFromCsv)
 {
-    auto available_metrics = Dive::AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                                 "/mock_available_metrics.csv");
-    ASSERT_TRUE(available_metrics);
+    auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics.csv");
+    ASSERT_NE(available_metrics, nullptr);
 
-    auto perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
-                                                                "/mock_perf_metrics_data.csv",
-                                                                *available_metrics);
+    auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
+                                                          "/mock_perf_metrics_data.csv",
+                                                          std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
 
     const auto& records = perf_metrics_data->GetRecords();
-    ASSERT_EQ(records.size(), 2);
+    EXPECT_THAT(records,
+                ElementsAre(AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 1, 1, 1, 1, 1, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(123),
+                                                    VariantWith<float>(FloatEq(1.23f))))),
+                            AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 1, 1, 1, 2, 1, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(150),
+                                                    VariantWith<float>(FloatEq(1.5f))))),
+                            AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 2, 1, 1, 1, 1, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(110),
+                                                    VariantWith<float>(FloatEq(1.1f))))),
+                            AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 2, 1, 1, 2, 1, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(120),
+                                                    VariantWith<float>(FloatEq(1.3f))))),
+                            AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 3, 1, 1, 1, 1, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(135),
+                                                    VariantWith<float>(FloatEq(1.35f))))),
+                            AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 3, 1, 1, 2, 1, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(145),
+                                                    VariantWith<float>(FloatEq(1.45f)))))));
 
-    // Check first record
-    Dive::PerfMetricsRecord expected_record1;
-    expected_record1.m_context_id = 1;
-    expected_record1.m_process_id = 100;
-    expected_record1.m_frame_id = 1000;
-    expected_record1.m_cmd_buffer_id = 10000;
-    expected_record1.m_draw_id = 1;
-    expected_record1.m_draw_label = 1;
-    expected_record1.m_program_id = 1;
-    expected_record1.m_draw_type = 1;
-    expected_record1.m_lrz_state = 1;
-    const auto& record1 = records[0];
-    EXPECT_THAT(record1, PerfMetricsRecordEq(expected_record1));
-    ASSERT_EQ(record1.m_metric_values.size(), 2);
-    EXPECT_EQ(std::get<int64_t>(record1.m_metric_values[0]), 123);
-    EXPECT_FLOAT_EQ(std::get<float>(record1.m_metric_values[1]), 1.23f);
-
-    // Check second record
-    Dive::PerfMetricsRecord expected_record2;
-    expected_record2.m_context_id = 2;
-    expected_record2.m_process_id = 200;
-    expected_record2.m_frame_id = 2000;
-    expected_record2.m_cmd_buffer_id = 20000;
-    expected_record2.m_draw_id = 2;
-    expected_record2.m_draw_label = 2;
-    expected_record2.m_program_id = 2;
-    expected_record2.m_draw_type = 2;
-    expected_record2.m_lrz_state = 2;
-    const auto& record2 = records[1];
-    EXPECT_THAT(record2, PerfMetricsRecordEq(expected_record2));
-    ASSERT_EQ(record2.m_metric_values.size(), 2);
-    EXPECT_EQ(std::get<int64_t>(record2.m_metric_values[0]), 456);
-    EXPECT_FLOAT_EQ(std::get<float>(record2.m_metric_values[1]), 4.56f);
-
-    const auto& metric_names = perf_metrics_data->GetMetricNames();
-    ASSERT_EQ(metric_names.size(), 2);
-    EXPECT_EQ(metric_names[0], "COUNTER_A");
-    EXPECT_EQ(metric_names[1], "COUNTER_B");
+    ASSERT_THAT(perf_metrics_data->GetMetricNames(), ElementsAre("COUNTER_A", "COUNTER_B"));
 
     const auto& metric_infos = perf_metrics_data->GetMetricInfos();
-    ASSERT_EQ(metric_infos.size(), 2);
+    ASSERT_THAT(metric_infos, SizeIs(2));
+
     ASSERT_NE(metric_infos[0], nullptr);
     EXPECT_EQ(metric_infos[0]->m_metric_id, 1);
     ASSERT_NE(metric_infos[1], nullptr);
@@ -129,40 +129,44 @@ TEST(PerfMetricsData, LoadFromCsv)
 
 TEST(PerfMetricsData, LoadFromCsvMalformedRowSkipped)
 {
-    auto available_metrics = AvailableMetrics::LoadFromCsv(
-    TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_TRUE(available_metrics);
+    auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics.csv");
+    ASSERT_NE(available_metrics, nullptr);
 
-    auto
-    perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
-                                                           "/mock_perf_metrics_data_malformed.csv",
-                                                           *available_metrics);
-    ASSERT_TRUE(perf_metrics_data);
-    const auto& records = perf_metrics_data->GetRecords();
-    ASSERT_EQ(records.size(), 1);
+    auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
+                                                          "/mock_perf_metrics_data_malformed.csv",
+                                                          std::move(available_metrics));
+    ASSERT_NE(perf_metrics_data, nullptr);
+    ASSERT_THAT(perf_metrics_data->GetRecords(), SizeIs(1));
+    EXPECT_THAT(perf_metrics_data->GetRecords(),
+                ElementsAre(AllOf(PerfMetricsRecordEq(
+                                  PerfMetricsRecord{ 2, 200, 2000, 20000, 2, 2, 2, 2, 2, {} }),
+                                  Field(&PerfMetricsRecord::m_metric_values,
+                                        ElementsAre(VariantWith<int64_t>(456),
+                                                    VariantWith<float>(FloatEq(4.56f)))))));
 }
 
 TEST(PerfMetricsData, LoadFromCsvFailedWithNoHeader)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(
     TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_TRUE(available_metrics);
+    ASSERT_NE(available_metrics, nullptr);
 
-    auto
-    perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
-                                                           "/mock_perf_metrics_data_no_header.csv",
-                                                           *available_metrics);
-    ASSERT_FALSE(perf_metrics_data);
+    ASSERT_EQ(PerfMetricsData::LoadFromCsv(TEST_DATA_DIR "/mock_perf_metrics_data_no_header.csv",
+                                           std::move(available_metrics)),
+              nullptr);
 }
 
 TEST(PerfMetricsData, LoadFromCsvWrongColumnsSkipped)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(
     TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_TRUE(available_metrics);
+    ASSERT_NE(available_metrics, nullptr);
 
-    auto perf_metrics_data = Dive::PerfMetricsData::
-    LoadFromCsv(TEST_DATA_DIR "/mock_perf_metrics_data_wrong_columns.csv", *available_metrics);
+    auto
+    perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
+                                                     "/mock_perf_metrics_data_wrong_columns.csv",
+                                                     std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
     ASSERT_THAT(perf_metrics_data->GetRecords(), IsEmpty());
 }
@@ -171,14 +175,149 @@ TEST(PerfMetricsData, LoadFromCsvUnknownMeticTypeSkipped)
 {
     auto available_metrics = AvailableMetrics::LoadFromCsv(
     TEST_DATA_DIR "/mock_available_metrics_unknown_type.csv");
-    ASSERT_TRUE(available_metrics);
+    ASSERT_NE(available_metrics, nullptr);
 
     auto
     perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
                                                      "/mock_perf_metrics_data_unknown_type.csv",
-                                                     *available_metrics);
+                                                     std::move(available_metrics));
     ASSERT_NE(perf_metrics_data, nullptr);
     ASSERT_THAT(perf_metrics_data->GetRecords(), IsEmpty());
+}
+
+std::unique_ptr<PerfMetricsDataProvider> CreateTestMetricProvider()
+{
+    auto available_metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                           "/mock_available_metrics.csv");
+    if (!available_metrics)
+    {
+        return nullptr;
+    }
+    auto perf_metrics_data = PerfMetricsData::LoadFromCsv(TEST_DATA_DIR
+                                                          "/mock_perf_metrics_data.csv",
+                                                          std::move(available_metrics));
+    if (!perf_metrics_data)
+    {
+        return nullptr;
+    }
+    return PerfMetricsDataProvider::Create(std::move(perf_metrics_data));
+}
+
+TEST(PerfMetricsDataProviderTest, GetComputedRecords)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    const auto& computed_records = provider->GetComputedRecords();
+    ASSERT_THAT(computed_records, SizeIs(3));
+
+    PerfMetricsRecord expected_record1{ 1, 100, 1000, 10000, 1, 1, 1, 1, 1 };
+    EXPECT_THAT(computed_records[0], PerfMetricsRecordEq(expected_record1));
+    EXPECT_THAT(computed_records[0].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(136), VariantWith<float>(FloatEq(1.365f))));
+
+    PerfMetricsRecord expected_record2{ 1, 100, 1000, 10000, 2, 1, 1, 1, 1 };
+    EXPECT_THAT(computed_records[1], PerfMetricsRecordEq(expected_record2));
+    EXPECT_THAT(computed_records[1].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(115), VariantWith<float>(FloatEq(1.2f))));
+
+    PerfMetricsRecord expected_record3{ 1, 100, 1000, 10000, 3, 1, 1, 1, 1 };
+    EXPECT_THAT(computed_records[2], PerfMetricsRecordEq(expected_record3));
+    EXPECT_THAT(computed_records[2].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(140), VariantWith<float>(FloatEq(1.4f))));
+}
+
+TEST(PerfMetricsDataProviderTest, GetCommandBufferCount)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_EQ(provider->GetCommandBufferCount(), 1);
+}
+
+TEST(PerfMetricsDataProviderTest, GetDrawCountForCommandBuffer)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(0), 3);
+    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(1), 0);
+    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(2), 0);
+}
+
+TEST(PerfMetricsDataProviderTest, GetComputedRecord)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+
+    // Check first record
+    auto record1_opt = provider->GetComputedRecord(0, 0);
+    ASSERT_TRUE(record1_opt.has_value());
+    const PerfMetricsRecord* record1 = record1_opt.value();
+    ASSERT_NE(record1, nullptr);
+    EXPECT_EQ(record1->m_cmd_buffer_id, 10000);
+    EXPECT_EQ(record1->m_draw_id, 1);
+    EXPECT_THAT(record1->m_metric_values,
+                ElementsAre(VariantWith<int64_t>(136), VariantWith<float>(FloatEq(1.365f))));
+
+    // Check second record
+    auto record2_opt = provider->GetComputedRecord(0, 1);
+    ASSERT_TRUE(record2_opt.has_value());
+    const PerfMetricsRecord* record2 = record2_opt.value();
+    ASSERT_NE(record2, nullptr);
+    EXPECT_EQ(record2->m_cmd_buffer_id, 10000);
+    EXPECT_EQ(record2->m_draw_id, 2);
+    EXPECT_THAT(record2->m_metric_values,
+                ElementsAre(VariantWith<int64_t>(115), VariantWith<float>(FloatEq(1.2f))));
+
+    // Check third record
+    auto record3_opt = provider->GetComputedRecord(0, 2);
+    ASSERT_TRUE(record3_opt.has_value());
+    const PerfMetricsRecord* record3 = record3_opt.value();
+    ASSERT_NE(record3, nullptr);
+    EXPECT_EQ(record3->m_cmd_buffer_id, 10000);
+    EXPECT_EQ(record3->m_draw_id, 3);
+    EXPECT_THAT(record3->m_metric_values,
+                ElementsAre(VariantWith<int64_t>(140), VariantWith<float>(FloatEq(1.4f))));
+
+    // Check out of bounds
+    EXPECT_FALSE(provider->GetComputedRecord(1, 0).has_value());
+    EXPECT_FALSE(provider->GetComputedRecord(0, 3).has_value());
+}
+
+TEST(PerfMetricsDataProviderTest, GetRecordHeader)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    ASSERT_THAT(provider->GetRecordHeader(),
+                ElementsAre("ContextID",
+                            "ProcessID",
+                            "FrameID",
+                            "CmdBufferID",
+                            "DrawID",
+                            "DrawType",
+                            "DrawLabel",
+                            "ProgramID",
+                            "LRZState",
+                            "COUNTER_A",
+                            "COUNTER_B"));
+}
+
+TEST(PerfMetricsDataProviderTest, GetMetricsNames)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    ASSERT_THAT(provider->GetMetricsNames(), ElementsAre("COUNTER_A", "COUNTER_B"));
+}
+
+TEST(PerfMetricsDataProviderTest, GetMetricsDescription)
+{
+    auto provider = CreateTestMetricProvider();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_EQ(provider->GetMetricsDescription(0), "Description A");
+    EXPECT_EQ(provider->GetMetricsDescription(1), "Description B");
+}
+
+TEST(PerfMetricsDataProvider, CreateWithNullDataReturnsNull)
+{
+    EXPECT_EQ(PerfMetricsDataProvider::Create(nullptr), nullptr);
 }
 }  // namespace
 

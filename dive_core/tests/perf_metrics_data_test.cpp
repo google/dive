@@ -223,10 +223,11 @@ TEST(PerfMetricsDataProviderTest, GetComputedRecord)
     ASSERT_NE(provider, nullptr);
     auto record1_opt = provider->GetComputedRecord(0, 0);
     ASSERT_TRUE(record1_opt.has_value());
-    const auto& record1 = record1_opt->get();
-    EXPECT_EQ(record1.m_cmd_buffer_id, 10000);
-    EXPECT_EQ(record1.m_draw_id, 1);
-    EXPECT_THAT(record1.m_metric_values,
+    const PerfMetricsRecord* record1 = record1_opt.value();
+    ASSERT_NE(record1, nullptr);
+    EXPECT_EQ(record1->m_cmd_buffer_id, 10000);
+    EXPECT_EQ(record1->m_draw_id, 1);
+    EXPECT_THAT(record1->m_metric_values,
                 ElementsAre(VariantWith<int64_t>(123), VariantWith<float>(FloatEq(1.23f))));
 
     EXPECT_FALSE(provider->GetComputedRecord(2, 0).has_value());
@@ -237,8 +238,7 @@ TEST(PerfMetricsDataProviderTest, GetRecordHeader)
 {
     auto provider = CreateTestMetricProvider();
     ASSERT_NE(provider, nullptr);
-    const auto header = provider->GetRecordHeader();
-    ASSERT_THAT(header,
+    ASSERT_THAT(provider->GetRecordHeader(),
                 ElementsAre("ContextID",
                             "ProcessID",
                             "FrameID",
@@ -256,8 +256,7 @@ TEST(PerfMetricsDataProviderTest, GetMetricsNames)
 {
     auto provider = CreateTestMetricProvider();
     ASSERT_NE(provider, nullptr);
-    const auto& names = provider->GetMetricsNames();
-    ASSERT_THAT(names, ElementsAre("COUNTER_A", "COUNTER_B"));
+    ASSERT_THAT(provider->GetMetricsNames(), ElementsAre("COUNTER_A", "COUNTER_B"));
 }
 
 TEST(PerfMetricsDataProviderTest, GetMetricsDescription)
@@ -268,7 +267,7 @@ TEST(PerfMetricsDataProviderTest, GetMetricsDescription)
     EXPECT_EQ(provider->GetMetricsDescription(1), "Description B");
 }
 
-TEST(PerfMetricsDataProvider, CreateWithNullData)
+TEST(PerfMetricsDataProvider, CreateWithNullDataReturnsNull)
 {
     EXPECT_EQ(PerfMetricsDataProvider::Create(nullptr), nullptr);
 }

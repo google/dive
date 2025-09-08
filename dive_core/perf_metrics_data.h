@@ -122,9 +122,8 @@ public:
 
     // Given the index of the command  buffer and the index of draw call in that command buffer,
     // returns the |PerfMetricsRecord| for the combination.
-    std::optional<std::reference_wrapper<const PerfMetricsRecord>> GetComputedRecord(
-    size_t command_buffer_index,
-    size_t draw_call_index) const;
+    std::optional<const PerfMetricsRecord*> GetComputedRecord(size_t command_buffer_index,
+                                                              size_t draw_call_index) const;
 
     // Get the all of the metrics for a frame. The metrics are computed average of the input
     // dataset, ordered by command buffer appearance and then draw ID appearance order.

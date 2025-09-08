@@ -336,9 +336,9 @@ const std::vector<std::string> PerfMetricsDataProvider::GetRecordHeader() const
     return full_header;
 }
 
-std::optional<std::reference_wrapper<const PerfMetricsRecord>>
-PerfMetricsDataProvider::GetComputedRecord(size_t command_buffer_index,
-                                           size_t draw_call_index) const
+std::optional<const PerfMetricsRecord*> PerfMetricsDataProvider::GetComputedRecord(
+size_t command_buffer_index,
+size_t draw_call_index) const
 {
     if (command_buffer_index >= m_cmd_buffer_list.size())
     {
@@ -372,7 +372,7 @@ PerfMetricsDataProvider::GetComputedRecord(size_t command_buffer_index,
     {
         return std::nullopt;
     }
-    return std::cref(m_computed_records[record_index]);
+    return &m_computed_records[record_index];
 }
 
 const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const
@@ -395,7 +395,12 @@ size_t PerfMetricsDataProvider::GetDrawCountForCommandBuffer(size_t command_buff
     if (command_buffer_index >= m_cmd_buffer_list.size())
         return 0;
 
-    uint64_t cmd_id = m_cmd_buffer_list[command_buffer_index];
-    return m_cmd_buffer_to_draw_id.at(cmd_id).size();
+    uint64_t   cmd_id = m_cmd_buffer_list[command_buffer_index];
+    const auto iter = m_cmd_buffer_to_draw_id.find(cmd_id);
+    if (iter == m_cmd_buffer_to_draw_id.end())
+    {
+        return 0;
+    }
+    return iter->second.size();
 }
 }  // namespace Dive

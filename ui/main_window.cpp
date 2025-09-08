@@ -2159,15 +2159,12 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
     m_command_hierarchy_view->indexAt(pos));
     uint64_t node_index = (uint64_t)(source_index.internalPointer());
 
-    if (source_index.isValid() && m_data_core->GetCommandHierarchy().GetNodeType(node_index) ==
-                                  Dive::NodeType::kGfxrVulkanDrawCommandNode)
-    {
-        m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
-    }
-    else
+    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
+                                      Dive::NodeType::kGfxrVulkanDrawCommandNode))
     {
         return;
     }
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
 
     std::vector<uint64_t>
     gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
@@ -2175,37 +2172,40 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
                              ->GetGfxrDrawCallIndices();
     auto it = std::find(gfxr_draw_call_indices.begin(), gfxr_draw_call_indices.end(), node_index);
 
-    if (it != gfxr_draw_call_indices.end())
-    {
-        uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
-
-        QMenu    context_menu;
-        QAction *arguments_action = context_menu.addAction(
-        Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
-        arguments_action->setData(Dive::kArguments);
-        QAction *perf_counter_action = context_menu.addAction(
-        Dive::kDrawCallContextMenuOptionStrings[Dive::kPerfCounterData]);
-        perf_counter_action->setData(Dive::kPerfCounterData);
-
-        QAction *selected_action = context_menu.exec(
-        m_command_hierarchy_view->viewport()->mapToGlobal(pos));
-
-        if (selected_action)
-        {
-            QVariant selected_action_data = selected_action->data();
-            if (selected_action_data == Dive::kPerfCounterData)
-            {
-                m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
-                emit CorrelateCounter(found_gfxr_draw_call_index);
-            }
-            else if (selected_action_data == Dive::kArguments)
-            {
-                m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
-            }
-        }
-    }
-    else
+    if (it == gfxr_draw_call_indices.end())
     {
         QMessageBox::critical(this, "Correlation Failed", "Corresponding perf counter not found.");
+        return;
+    }
+
+    uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
+
+    QMenu    context_menu;
+    QAction *arguments_action = context_menu.addAction(
+    Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
+    arguments_action->setData(Dive::kArguments);
+    QAction *perf_counter_action = context_menu.addAction(
+    Dive::kDrawCallContextMenuOptionStrings[Dive::kPerfCounterData]);
+    perf_counter_action->setData(Dive::kPerfCounterData);
+
+    QAction *selected_action = context_menu.exec(
+    m_command_hierarchy_view->viewport()->mapToGlobal(pos));
+
+    // Ensures that if the user clicks outside of the context menu, a seg fault does not occur since
+    // it is interpreted as a selection.
+    if (selected_action == nullptr)
+    {
+        return;
+    }
+
+    QVariant selected_action_data = selected_action->data();
+    if (selected_action_data == Dive::kPerfCounterData)
+    {
+        m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
+        emit CorrelateCounter(found_gfxr_draw_call_index);
+    }
+    else if (selected_action_data == Dive::kArguments)
+    {
+        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
     }
 }

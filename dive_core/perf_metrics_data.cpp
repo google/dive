@@ -238,7 +238,12 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
     // This map will store intermediate sums and counts for averaging.
     // Key: {cmd_buffer_id, draw_id}
     // Value: {vector of metric sums, count of records}
-    std::unordered_map<PerfMetricsKey, std::pair<std::vector<double>, uint32_t>, PerfMetricsKeyHash>
+    struct MetricSumWithRecordCount
+    {
+        std::vector<double> m_metric_sums{};
+        uint32_t            m_record_count = 0;
+    };
+    std::unordered_map<PerfMetricsKey, MetricSumWithRecordCount, PerfMetricsKeyHash>
     sums_and_counts;
 
     // This map will store the first record for each draw call to preserve non-metric data.
@@ -269,36 +274,53 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
         }
 
         auto& draw_call_data = sums_and_counts[key];
-        if (draw_call_data.second == 0)
+        if (draw_call_data.m_record_count == 0)
         {
-            draw_call_data.first.resize(num_metrics, 0.0);
+            draw_call_data.m_metric_sums.resize(num_metrics, 0.0);
         }
 
         if (record.m_metric_values.size() == num_metrics)
         {
             for (size_t i = 0; i < num_metrics; ++i)
             {
-                std::visit([&](auto&& arg) { draw_call_data.first[i] += static_cast<double>(arg); },
+                std::visit([&](
+                           auto&&
+                           arg) { draw_call_data.m_metric_sums[i] += static_cast<double>(arg); },
                            record.m_metric_values[i]);
             }
-            draw_call_data.second++;
+            draw_call_data.m_record_count++;
         }
     }
 
     // Now, build the final m_computed_records vector with averaged records in order.
     for (const auto& cmd_buffer_id : m_cmd_buffer_list)
     {
-        const auto& draw_ids = m_cmd_buffer_to_draw_id.at(cmd_buffer_id);
+        const auto it_draw_ids = m_cmd_buffer_to_draw_id.find(cmd_buffer_id);
+        if (it_draw_ids == m_cmd_buffer_to_draw_id.end())
+        {
+            continue;
+        }
+        const auto& draw_ids = it_draw_ids->second;
         for (uint32_t draw_id : draw_ids)
         {
             PerfMetricsKey key = { cmd_buffer_id, draw_id };
-            const auto&    sums_pair = sums_and_counts.at(key);
-            const auto&    sums = sums_pair.first;
-            const auto     count = sums_pair.second;
+            const auto     it_sums = sums_and_counts.find(key);
+            if (it_sums == sums_and_counts.end())
+            {
+                continue;
+            }
+            const auto& sums_data = it_sums->second;
+            const auto& sums = sums_data.m_metric_sums;
+            const auto  count = sums_data.m_record_count;
 
             if (count > 0)
             {
-                PerfMetricsRecord averaged_record = *first_records.at(key);
+                const auto it_first_record = first_records.find(key);
+                if (it_first_record == first_records.end())
+                {
+                    continue;
+                }
+                PerfMetricsRecord averaged_record = *it_first_record->second;
                 averaged_record.m_metric_values.clear();
                 averaged_record.m_metric_values.reserve(num_metrics);
                 for (size_t i = 0; i < num_metrics; ++i)

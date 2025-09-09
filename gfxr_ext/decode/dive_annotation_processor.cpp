@@ -88,9 +88,6 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
 
                 if (!m_render_pass_draw_call_counts_stack[cmd_handle].empty())
                 {
-                    std::cout << "RP Draw Count: "
-                              << m_render_pass_draw_call_counts_stack[cmd_handle].top()
-                              << std::endl;
                     m_render_pass_draw_call_counts_stack[cmd_handle].top()++;
                 }
             }

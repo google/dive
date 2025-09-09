@@ -117,7 +117,7 @@ GfxrCaptureData::GetGfxrCommandBuffers(uint64_t cmd_handle) const
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::pair<std::vector<uint64_t>, std::vector<uint64_t>>& GfxrCaptureData::GetDrawCallCounts(
+const DiveAnnotationProcessor::DrawCallCounts& GfxrCaptureData::GetDrawCallCounts(
 uint64_t cmd_handle) const
 {
     return m_gfxr_draw_call_counts.at(cmd_handle);

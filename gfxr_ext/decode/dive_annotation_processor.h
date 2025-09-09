@@ -60,6 +60,12 @@ public:
         std::string           name = "";
     };
 
+    struct DrawCallCounts
+    {
+        std::vector<uint64_t> begin_command_buffer_draw_call_counts = {};
+        std::vector<uint64_t> render_pass_draw_call_counts = {};
+    };
+
     DiveAnnotationProcessor() {}
     ~DiveAnnotationProcessor() {}
 
@@ -79,8 +85,7 @@ public:
     {
         return std::move(m_cmd_vk_commands_cache);
     }
-    std::unordered_map<uint64_t, std::pair<std::vector<uint64_t>, std::vector<uint64_t>>>
-    TakeDrawCallMap()
+    std::unordered_map<uint64_t, DrawCallCounts> TakeDrawCallMap()
     {
         return std::move(m_draw_call_counts_map);
     }
@@ -90,8 +95,7 @@ private:
     std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
     // Use command buffer handle as the key to accociate with vk commands
     std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
-    std::unordered_map<uint64_t, std::pair<std::vector<uint64_t>, std::vector<uint64_t>>>
-                                                       m_draw_call_counts_map = {};
+    std::unordered_map<uint64_t, DrawCallCounts>                 m_draw_call_counts_map = {};
     std::unordered_map<uint64_t, std::stack<uint64_t>> m_render_pass_draw_call_counts_stack = {};
     std::vector<std::unique_ptr<SubmitInfo>>           m_submits = {};
 };

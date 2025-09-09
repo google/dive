@@ -194,8 +194,8 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
         {
             const auto &draw_call_counts = capture_data.GetDrawCallCounts(handle);
             if (!ProcessVkCmds(capture_data.GetGfxrCommandBuffers(handle),
-                               draw_call_counts.first,
-                               draw_call_counts.second))
+                               draw_call_counts.begin_command_buffer_draw_call_counts,
+                               draw_call_counts.render_pass_draw_call_counts))
             {
                 return false;
             }

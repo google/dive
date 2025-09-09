@@ -215,9 +215,11 @@ TEST(WriteBlockEndTest,
     ASSERT_TRUE(draw_counts_map.count(handle));
 
     // Total draw count for command buffer
-    EXPECT_THAT(draw_counts_map.at(handle).first, testing::ElementsAre(3));
+    EXPECT_THAT(draw_counts_map.at(handle).begin_command_buffer_draw_call_counts,
+                testing::ElementsAre(3));
     // Per-render pass draw counts
-    EXPECT_THAT(draw_counts_map.at(handle).second, testing::ElementsAre(2, 1));
+    EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts,
+                testing::ElementsAre(2, 1));
 }
 
 TEST(WriteBlockEndTest, MultipleCommandBuffersHaveCorrectDrawCallCounts)
@@ -254,10 +256,12 @@ TEST(WriteBlockEndTest, MultipleCommandBuffersHaveCorrectDrawCallCounts)
     ASSERT_TRUE(draw_counts_map.count(handle_1));
     ASSERT_TRUE(draw_counts_map.count(handle_2));
 
-    EXPECT_THAT(draw_counts_map.at(handle_1).first, testing::ElementsAre(1));
-    EXPECT_THAT(draw_counts_map.at(handle_1).second, testing::ElementsAre(1));
-    EXPECT_THAT(draw_counts_map.at(handle_2).first, testing::ElementsAre(2));
-    EXPECT_THAT(draw_counts_map.at(handle_2).second, testing::ElementsAre(2));
+    EXPECT_THAT(draw_counts_map.at(handle_1).begin_command_buffer_draw_call_counts,
+                testing::ElementsAre(1));
+    EXPECT_THAT(draw_counts_map.at(handle_1).render_pass_draw_call_counts, testing::ElementsAre(1));
+    EXPECT_THAT(draw_counts_map.at(handle_2).begin_command_buffer_draw_call_counts,
+                testing::ElementsAre(2));
+    EXPECT_THAT(draw_counts_map.at(handle_2).render_pass_draw_call_counts, testing::ElementsAre(2));
 }
 
 TEST(WriteBlockEndTest, CommandBufferWithNoDrawCallsHasZeroCount)
@@ -284,8 +288,9 @@ TEST(WriteBlockEndTest, CommandBufferWithNoDrawCallsHasZeroCount)
     ASSERT_THAT(draw_counts_map, SizeIs(1));
     ASSERT_TRUE(draw_counts_map.count(handle));
 
-    EXPECT_THAT(draw_counts_map.at(handle).first, testing::ElementsAre(0));
-    EXPECT_THAT(draw_counts_map.at(handle).second, testing::ElementsAre(0));
+    EXPECT_THAT(draw_counts_map.at(handle).begin_command_buffer_draw_call_counts,
+                testing::ElementsAre(0));
+    EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts, testing::ElementsAre(0));
 }
 
 TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
@@ -315,8 +320,9 @@ TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
     ASSERT_THAT(draw_counts_map, SizeIs(1));
     ASSERT_TRUE(draw_counts_map.count(handle));
 
-    EXPECT_THAT(draw_counts_map.at(handle).first, testing::ElementsAre(2));
-    EXPECT_THAT(draw_counts_map.at(handle).second, testing::ElementsAre(2));
+    EXPECT_THAT(draw_counts_map.at(handle).begin_command_buffer_draw_call_counts,
+                testing::ElementsAre(2));
+    EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts, testing::ElementsAre(2));
 }
 
 TEST(WriteBlockEndTest, DrawCallsAreCountedBothInsideAndOutsideRenderPass)
@@ -358,10 +364,11 @@ TEST(WriteBlockEndTest, DrawCallsAreCountedBothInsideAndOutsideRenderPass)
     ASSERT_TRUE(draw_counts_map.count(handle));
 
     // The total draw call count for the command buffer should be 4.
-    EXPECT_THAT(draw_counts_map.at(handle).first, testing::ElementsAre(4));
+    EXPECT_THAT(draw_counts_map.at(handle).begin_command_buffer_draw_call_counts,
+                testing::ElementsAre(4));
 
     // The draw call count for the render pass should be 2.
-    EXPECT_THAT(draw_counts_map.at(handle).second, testing::ElementsAre(2));
+    EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts, testing::ElementsAre(2));
 }
 
 }  // namespace

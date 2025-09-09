@@ -321,49 +321,52 @@ TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
     EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts, testing::ElementsAre(2));
 }
 
-TEST(WriteBlockEndTest, DrawCallsAreCountedBothInsideAndOutsideRenderPass)
+TEST(WriteBlockEndTest, DrawCallsAreCorrectlyCountedInMultipleRenderPasses)
 {
     DiveAnnotationProcessor processor;
     uint64_t                handle = 1001;
 
-    // Command Buffer 1 (handle 1001)
+    // Command Buffer (handle 1001)
     processor.WriteBlockEnd(CreateCommandData("vkBeginCommandBuffer", handle, 0, 1));
 
-    // Draw calls outside of a render pass
-    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 1, 2));
+    // Begin Render Pass 1
+    processor.WriteBlockEnd(CreateCommandData("vkCmdBeginRenderPass", handle, 0, 2));
 
-    // Begin render pass
-    processor.WriteBlockEnd(CreateCommandData("vkCmdBeginRenderPass", handle, 0, 3));
-
-    // Draw calls inside the render pass
+    // Draw calls inside Render Pass 1
+    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 1, 3));
     processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 2, 4));
-    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 3, 5));
 
-    // End render pass
-    processor.WriteBlockEnd(CreateCommandData("vkCmdEndRenderPass", handle, 0, 6));
+    // End Render Pass 1
+    processor.WriteBlockEnd(CreateCommandData("vkCmdEndRenderPass", handle, 0, 5));
 
-    // More draw calls outside of a render pass
-    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 4, 7));
+    // Begin Render Pass 2
+    processor.WriteBlockEnd(CreateCommandData("vkCmdBeginRenderPass", handle, 0, 6));
 
-    processor.WriteBlockEnd(CreateCommandData("vkEndCommandBuffer", handle, 0, 8));
+    // Draw calls inside Render Pass 2
+    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 3, 7));
+    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 4, 8));
+    processor.WriteBlockEnd(CreateCommandData("vkCmdDraw", handle, 5, 9));
+
+    // End Render Pass 2
+    processor.WriteBlockEnd(CreateCommandData("vkCmdEndRenderPass", handle, 0, 10));
+
+    processor.WriteBlockEnd(CreateCommandData("vkEndCommandBuffer", handle, 0, 11));
 
     // Single submit
     nlohmann::ordered_json args_submit_1 = {
         { "submitCount", 1 },
         { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
     };
-    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 9, args_submit_1);
+    gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 12, args_submit_1);
     processor.WriteBlockEnd(submit_data_1);
 
     auto draw_counts_map = processor.TakeDrawCallMap();
     ASSERT_THAT(draw_counts_map, SizeIs(1));
     ASSERT_TRUE(draw_counts_map.count(handle));
 
-    // The total draw call count for the command buffer should be 4.
-    EXPECT_THAT(draw_counts_map.at(handle).begin_command_buffer_draw_call_count, 4);
-
-    // The draw call count for the render pass should be 2.
-    EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts, testing::ElementsAre(2));
+    EXPECT_THAT(draw_counts_map.at(handle).begin_command_buffer_draw_call_count, 5);
+    EXPECT_THAT(draw_counts_map.at(handle).render_pass_draw_call_counts,
+                testing::ElementsAre(2, 3));
 }
 
 }  // namespace

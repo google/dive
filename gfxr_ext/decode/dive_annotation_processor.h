@@ -15,7 +15,6 @@
 
 #include <cstdint>
 #include <optional>
-#include <stack>
 #include <string>
 #include "decode/annotation_handler.h"
 #include "util/defines.h"
@@ -62,7 +61,9 @@ public:
 
     struct DrawCallCounts
     {
-        uint64_t              begin_command_buffer_draw_call_count = 0;
+        // Total draw count for a single command buffer
+        uint64_t begin_command_buffer_draw_call_count = 0;
+        // Total draw counts for renderpasses in a single command buffer
         std::vector<uint64_t> render_pass_draw_call_counts = {};
     };
 
@@ -96,6 +97,5 @@ private:
     // Use command buffer handle as the key to accociate with vk commands
     std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
     std::unordered_map<uint64_t, DrawCallCounts>                 m_draw_call_counts_map = {};
-    std::unordered_map<uint64_t, std::stack<uint64_t>> m_render_pass_draw_call_counts_stack = {};
-    std::vector<std::unique_ptr<SubmitInfo>>           m_submits = {};
+    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits = {};
 };

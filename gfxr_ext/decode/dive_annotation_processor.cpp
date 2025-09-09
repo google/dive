@@ -16,7 +16,6 @@
 
 #include "dive_annotation_processor.h"
 #include <cstdint>
-#include <iostream>
 #include <ostream>
 #include "decode/api_decoder.h"
 #include "util/logging.h"
@@ -59,23 +58,11 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
             if (vkCmd.name.find("vkBeginCommandBuffer") != std::string::npos)
             {
                 m_cmd_vk_commands_cache[cmd_handle].clear();
-
-                // Total draw count for this command buffer
                 m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_count = 0;
             }
             else if (vkCmd.name.find("vkCmdBeginRenderPass") != std::string::npos)
             {
-                m_render_pass_draw_call_counts_stack[cmd_handle].push(0);
-            }
-            else if (vkCmd.name.find("vkCmdEndRenderPass") != std::string::npos)
-            {
-                if (!m_render_pass_draw_call_counts_stack[cmd_handle].empty())
-                {
-                    uint64_t rp_draw_count = m_render_pass_draw_call_counts_stack[cmd_handle].top();
-                    m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.push_back(
-                    rp_draw_count);
-                    m_render_pass_draw_call_counts_stack[cmd_handle].pop();
-                }
+                m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.push_back(0);
             }
 
             m_cmd_vk_commands_cache[cmd_handle].push_back(vkCmd);
@@ -83,9 +70,9 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
             if (vkCmd.name.find("vkCmdDraw") != std::string::npos)
             {
                 m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_count++;
-                if (!m_render_pass_draw_call_counts_stack[cmd_handle].empty())
+                if (!m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.empty())
                 {
-                    m_render_pass_draw_call_counts_stack[cmd_handle].top()++;
+                    m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.back()++;
                 }
             }
         }

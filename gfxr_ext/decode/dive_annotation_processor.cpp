@@ -61,8 +61,7 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
                 m_cmd_vk_commands_cache[cmd_handle].clear();
 
                 // Total draw count for this command buffer
-                m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_counts.push_back(
-                0);
+                m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_count = 0;
             }
             else if (vkCmd.name.find("vkCmdBeginRenderPass") != std::string::npos)
             {
@@ -83,13 +82,7 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
 
             if (vkCmd.name.find("vkCmdDraw") != std::string::npos)
             {
-                if (!m_draw_call_counts_map[cmd_handle]
-                     .begin_command_buffer_draw_call_counts.empty())
-                {
-                    m_draw_call_counts_map[cmd_handle]
-                    .begin_command_buffer_draw_call_counts.back()++;
-                }
-
+                m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_count++;
                 if (!m_render_pass_draw_call_counts_stack[cmd_handle].empty())
                 {
                     m_render_pass_draw_call_counts_stack[cmd_handle].top()++;

@@ -62,7 +62,7 @@ public:
 
     struct DrawCallCounts
     {
-        std::vector<uint64_t> begin_command_buffer_draw_call_counts = {};
+        uint64_t              begin_command_buffer_draw_call_count = 0;
         std::vector<uint64_t> render_pass_draw_call_counts = {};
     };
 

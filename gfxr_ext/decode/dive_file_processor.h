@@ -53,7 +53,7 @@ protected:
 private:
     // Application will terminate after the single frame has been looped loop_single_frame_count_
     // times. If 0, application will loop infinitely.
-    uint64_t loop_single_frame_count_{ 0 };
+    uint64_t loop_single_frame_count_{ 1 };
 
     // Capture file offset of the marker that indicates the end of resources setup.
     int64_t state_end_marker_file_offset_{ 0 };

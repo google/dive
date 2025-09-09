@@ -136,6 +136,8 @@ void android_main(struct android_app* app)
             // GOOGLE: Initialize DiveFileProcessor instead of FileProcessor
             if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
             {
+                GFXRECON_ASSERT((!arg_parser.IsOptionSet(kLoopSingleFrame)) &&
+                                (!arg_parser.IsOptionSet(kEnableGPUTime)));
                 file_processor = std::make_unique<gfxrecon::decode::PreloadFileProcessor>();
             }
             else

@@ -516,12 +516,12 @@ void DiveVulkanReplayConsumer::ReleaseResourcesFromDeferredList()
 {
     GFXRECON_LOG_INFO("Release Resources From the DeferredList!");
     // - We only defer release fences for now, may need to add other resources here
-    for (const auto& f : deferred_release_fences_)
+    for (const auto& [fence_handle, fence_release_info] : deferred_release_fences_)
     {
         VulkanReplayConsumer::Process_vkDestroyFence(ApiCallInfo{},
-                                                     f.second.device,
-                                                     f.first,
-                                                     f.second.pAllocator);
+                                                     fence_release_info.device,
+                                                     fence_handle,
+                                                     fence_release_info.pAllocator);
     }
     deferred_release_fences_.clear();
 }

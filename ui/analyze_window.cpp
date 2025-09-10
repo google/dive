@@ -273,6 +273,11 @@ void AnalyzeDialog::PopulateSettings()
         csv_item->setCheckState(Qt::Unchecked);
         m_settings_list->addItem(csv_item);
     }
+
+    // Add spacer so that all settings are visible at the end of the list.
+    QListWidgetItem *spacer = new QListWidgetItem();
+    spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
+    m_settings_list->addItem(spacer);
 }
 
 //--------------------------------------------------------------------------------------------------

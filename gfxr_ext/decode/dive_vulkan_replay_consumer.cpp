@@ -460,9 +460,50 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
     }
 }
 
+void DiveVulkanReplayConsumer::Process_vkCreateFence(
+const ApiCallInfo&                                   call_info,
+VkResult                                             returnValue,
+format::HandleId                                     device,
+StructPointerDecoder<Decoded_VkFenceCreateInfo>*     pCreateInfo,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+HandlePointerDecoder<VkFence>*                       pFence)
+{
+    VulkanReplayConsumer::Process_vkCreateFence(call_info,
+                                                returnValue,
+                                                device,
+                                                pCreateInfo,
+                                                pAllocator,
+                                                pFence);
+
+    if (returnValue != VK_SUCCESS)
+    {
+        return;
+    }
+
+    if (!setup_finished_)
+    {
+        deferred_release_list_.push_back(*(pFence->GetPointer()));
+    }
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyFence(
+const ApiCallInfo&                                   call_info,
+format::HandleId                                     device,
+format::HandleId                                     fence,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    // We only destroy the fence if it is not in the deferred release list
+    auto it = std::find(deferred_release_list_.begin(), deferred_release_list_.end(), fence);
+    if (it == deferred_release_list_.end())
+    {
+        VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
+    }
+}
+
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();
+    setup_finished_ = true;
 }
 
 GFXRECON_END_NAMESPACE(decode)

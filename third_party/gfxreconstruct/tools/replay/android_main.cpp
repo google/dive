@@ -71,8 +71,8 @@ const char kLayerProperty[]      = "debug.vulkan.layers";
 
 const int32_t kSwipeDistance = 200;
 
-void    ProcessAppCmd(struct android_app* app, int32_t cmd);
-int32_t ProcessInputEvent(struct android_app* app, AInputEvent* event);
+void        ProcessAppCmd(struct android_app* app, int32_t cmd);
+int32_t     ProcessInputEvent(struct android_app* app, AInputEvent* event);
 
 static std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
 
@@ -134,16 +134,15 @@ void android_main(struct android_app* app)
         try
         {
             // GOOGLE: Initialize DiveFileProcessor instead of FileProcessor
-            if (arg_parser.IsOptionSet(kPreloadMeasurementRangeOption))
-            {
-                GFXRECON_ASSERT((!arg_parser.IsOptionSet(kLoopSingleFrame)) &&
-                                (!arg_parser.IsOptionSet(kEnableGPUTime)));
-                file_processor = std::make_unique<gfxrecon::decode::PreloadFileProcessor>();
-            }
-            else
-            {
-                file_processor = std::make_unique<gfxrecon::decode::DiveFileProcessor>();
-            }
+            // TODO(wangra): remove kLoopSingleFrame: b/444224938
+            const bool need_preload_processor = arg_parser.IsOptionSet(kPreloadMeasurementRangeOption);
+            const bool need_dive_processor =
+                arg_parser.IsOptionSet(kLoopSingleFrame) || arg_parser.IsOptionSet(kEnableGPUTime);
+            GFXRECON_ASSERT(!(need_preload_processor && need_dive_processor));
+            file_processor =
+                arg_parser.IsOptionSet(kPreloadMeasurementRangeOption)
+                    ? std::unique_ptr<gfxrecon::decode::FileProcessor>(new gfxrecon::decode::PreloadFileProcessor)
+                    : std::make_unique<gfxrecon::decode::DiveFileProcessor>();
 
             if (!file_processor->Initialize(filename))
             {
@@ -162,6 +161,8 @@ void android_main(struct android_app* app)
                 // GOOGLE: Pass replay options to DiveFileProcessor
                 if (arg_parser.IsOptionSet(kLoopSingleFrame) && arg_parser.IsArgumentSet(kLoopSingleFrameCount))
                 {
+                    const bool need_preload_processor = arg_parser.IsOptionSet(kPreloadMeasurementRangeOption);
+                    GFXRECON_ASSERT(!need_preload_processor)
                     auto* dive_file_processor =
                         dynamic_cast<gfxrecon::decode::DiveFileProcessor*>(file_processor.get());
                     GFXRECON_ASSERT(dive_file_processor)
@@ -174,7 +175,7 @@ void android_main(struct android_app* app)
 
                 // GOOGLE: replace VulkanReplayConsumer with dive specific DiveVulkanReplayConsumer
                 gfxrecon::decode::DiveVulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
-                gfxrecon::decode::VulkanDecoder            vulkan_decoder;
+                gfxrecon::decode::VulkanDecoder        vulkan_decoder;
 
                 // GOOGLE: Pass replay options to enable/disable gpu time
                 if (arg_parser.IsOptionSet(kEnableGPUTime))
@@ -289,6 +290,8 @@ void android_main(struct android_app* app)
                 // GOOGLE: Save GPU time stats file
                 if (arg_parser.IsOptionSet(kEnableGPUTime))
                 {
+                    const bool need_preload_processor = arg_parser.IsOptionSet(kPreloadMeasurementRangeOption);
+                    GFXRECON_ASSERT(!need_preload_processor)
                     auto* dive_file_processor =
                         dynamic_cast<gfxrecon::decode::DiveFileProcessor*>(file_processor.get());
                     GFXRECON_ASSERT(dive_file_processor)

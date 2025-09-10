@@ -162,7 +162,9 @@ private:
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";
     bool        enable_gpu_time_ = false;
-    bool        setup_finished_ = false;
+    // This is a flag that indicates if the Setup Phase is finised or not for gfx Replay
+    // The Setup Phase is done when StateEndMarker is triggered
+    bool setup_finished_ = false;
 };
 
 GFXRECON_END_NAMESPACE(decode)

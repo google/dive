@@ -33,10 +33,7 @@ const VulkanReplayOptions&                options) :
 {
 }
 
-DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer()
-{
-    deferred_release_list_.clear();
-}
+DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer() {}
 
 void DiveVulkanReplayConsumer::Process_vkCreateDevice(
 const ApiCallInfo&                                   call_info,

@@ -394,6 +394,10 @@ MainWindow::MainWindow()
                      this,
                      &MainWindow::OnOpenFileFromAnalyzeDialog);
     QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::ReloadCapture,
+                     this,
+                     &MainWindow::OnOpenFileFromAnalyzeDialog);
+    QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayPerfCounterResults,
                      m_perf_counter_model,
                      &PerfCounterModel::OnPerfCounterResultsGenerated);
@@ -624,9 +628,6 @@ void MainWindow::ResetTabWidget()
 // and .gfxa).
 bool MainWindow::LoadDiveFile(const std::string &file_name)
 {
-    // Reset the correlated capture variable
-    m_correlated_capture_loaded = false;
-
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
@@ -884,6 +885,9 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
     // Check if the file loaded is a .gfxr file.
     m_gfxr_capture_loaded = (file_extension.compare(".gfxr") == 0);
 
+    // Reset the correlated capture variable
+    m_correlated_capture_loaded = false;
+
     if (m_gfxr_capture_loaded)
     {
         // Convert the filename to a string to perform a replacement.
@@ -925,6 +929,17 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
             m_gfxr_capture_loaded = false;
             m_correlated_capture_loaded = true;
         }
+
+        // Check if there is existing perf counter data
+        std::filesystem::path perf_counter_file_path(file_name);
+        perf_counter_file_path.replace_extension(".csv");
+        if (std::filesystem::exists(perf_counter_file_path))
+        {
+            m_perf_counter_model->OnPerfCounterResultsGenerated(
+            QString::fromStdWString(perf_counter_file_path.wstring()));
+        }
+
+        // TODO(b/444228847) Check if there is existing gpu time data
     }
 
     bool file_loaded = false;
@@ -996,7 +1011,6 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-// TODO (gcommodore) (b/436646197): Support loading multiple files.
 void MainWindow::OnOpenFile()
 {
     QString supported_files = QStringLiteral(
@@ -1037,14 +1051,16 @@ void MainWindow::OnNormalCapture()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
 {
-    if (!m_gfxr_capture_loaded)
+    if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
     {
         OnOpenFile();
     }
-    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog.
-    if (m_gfxr_capture_loaded)
+    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A .gfxr
+    // file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
+    bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
+    if (gfxr_capture_loaded)
     {
-        OnAnalyze(m_gfxr_capture_loaded, m_capture_file.toStdString());
+        OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
     }
 }
 

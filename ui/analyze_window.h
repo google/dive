@@ -62,19 +62,19 @@ private slots:
     void OnDeviceListRefresh();
     void OnOpenFile();
     void OnReplay();
-    void OnSettingChanged();
 signals:
     void OnNewFileOpened(const QString &file_path);
     void OnDisplayPerfCounterResults(const QString &file_path);
+    void ReloadCapture(const QString &file_path);
 
 private:
     void                        ShowErrorMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
-    void                        SetReplayDownloadDir();
     void                        PopulateSettings();
     void                        UpdateSelectedSettingsList();
     void                        UpdatePerfTabView(const std::string remote_file_name);
     void                        WaitForReplay(Dive::AndroidDevice &device);
+    absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
@@ -106,10 +106,6 @@ private:
     QLineEdit   *m_selected_file_input_box;
     QPushButton *m_open_files_button;
 
-    QHBoxLayout *m_download_directory_layout;
-    QLabel      *m_download_directory_label;
-    QLineEdit   *m_download_directory_input_box;
-
     QHBoxLayout        *m_dump_pm4_layout;
     QLabel             *m_dump_pm4_label;
     QStandardItemModel *m_dump_pm4_model;
@@ -138,8 +134,9 @@ private:
     std::vector<std::string>     *m_enabled_settings_vector;
 
     // Used to store a csv item's key in the enabled settings vector.
-    const int         kDataRole = Qt::UserRole + 1;
-    const std::string kDefaultReplayButtonText = "Replay";
+    const int                   kDataRole = Qt::UserRole + 1;
+    const std::string           kDefaultReplayButtonText = "Replay";
+    absl::StatusOr<std::string> m_capture_file_directory = "";
 
     bool m_dump_pm4_enabled;
     bool m_gpu_time_enabled;

@@ -21,6 +21,7 @@
 #include <string>
 #include <unordered_map>
 #include <optional>
+#include <memory>
 
 namespace Dive
 {
@@ -50,7 +51,7 @@ class AvailableMetrics
 {
 public:
     // Load available metrics from a CSV file
-    static std::optional<AvailableMetrics> LoadFromCsv(const std::filesystem::path& file_path);
+    static std::unique_ptr<AvailableMetrics> LoadFromCsv(const std::filesystem::path& file_path);
 
     // Get the metric info for a given key
     const MetricInfo* GetMetricInfo(const std::string& key) const;

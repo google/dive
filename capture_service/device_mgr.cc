@@ -595,6 +595,7 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } while (m_device->IsProcessRunning(kGfxrReplayAppName));
 
+        // TODO(b/444228664) Prevent gpt time file overwriting for different captures
         std::string on_device_file_path = absl::StrFormat("%s/gpu_time.csv",
                                                           std::filesystem::path(capture_path)
                                                           .parent_path()

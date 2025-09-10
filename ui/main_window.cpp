@@ -35,6 +35,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <qvariant.h>
 
 #include "about_window.h"
 #include "buffer_view.h"
@@ -195,8 +196,8 @@ MainWindow::MainWindow()
         m_event_search_bar->setView(m_command_hierarchy_view);
 
         m_gfxr_vulkan_commands_filter_proxy_model =
-        new GfxrVulkanCommandFilterProxyModel(m_command_hierarchy_view,
-                                              &m_data_core->GetCommandHierarchy());
+        new GfxrVulkanCommandFilterProxyModel(m_data_core->GetCommandHierarchy(),
+                                              m_command_hierarchy_view);
 
         m_gfxr_vulkan_commands_arguments_filter_proxy_model =
         new GfxrVulkanCommandArgumentsFilterProxyModel(m_command_hierarchy_view,
@@ -206,6 +207,7 @@ MainWindow::MainWindow()
         m_filter_model->setSourceModel(m_command_hierarchy_model);
         // Set the proxy model as the view's model
         m_command_hierarchy_view->setModel(m_filter_model);
+        m_command_hierarchy_view->setContextMenuPolicy(Qt::CustomContextMenu);
         m_filter_model->SetMode(kDefaultFilterMode);
 
         m_filter_gfxr_commands_combo_box =
@@ -256,7 +258,7 @@ MainWindow::MainWindow()
                                                   *m_event_selection);
         m_event_state_view = new EventStateView(*m_data_core);
 
-        m_perf_counter_tab_view = new PerfCounterTabView(*m_perf_counter_model);
+        m_perf_counter_tab_view = new PerfCounterTabView(*m_perf_counter_model, this);
         m_gfxr_vulkan_command_tab_view =
         new GfxrVulkanCommandTabView(m_data_core->GetCommandHierarchy(),
                                      *m_gfxr_vulkan_commands_filter_proxy_model,
@@ -392,9 +394,17 @@ MainWindow::MainWindow()
                      this,
                      &MainWindow::OnOpenFileFromAnalyzeDialog);
     QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::ReloadCapture,
+                     this,
+                     &MainWindow::OnOpenFileFromAnalyzeDialog);
+    QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayPerfCounterResults,
                      m_perf_counter_model,
                      &PerfCounterModel::OnPerfCounterResultsGenerated);
+    QObject::connect(m_command_hierarchy_view,
+                     &QTreeView::customContextMenuRequested,
+                     this,
+                     &MainWindow::OnCorrelateVulkanDrawCall);
 
     CreateActions();
     CreateMenus();
@@ -587,6 +597,12 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::ResetTabWidget()
 {
+    // Disconnect OnTabViewChange so that it is not triggered during the reset of the tab widget.
+    QObject::disconnect(m_tab_widget,
+                        &QTabWidget::currentChanged,
+                        this,
+                        &MainWindow::OnTabViewChange);
+
     // Remove all the tabs.
     while (m_tab_widget->count() > 0)
     {
@@ -601,6 +617,9 @@ void MainWindow::ResetTabWidget()
     m_shader_view_tab_index = -1;
     m_event_state_view_tab_index = -1;
     m_perf_counter_view_tab_index = -1;
+
+    // Reconnect OnTabViewChange.
+    QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -609,9 +628,6 @@ void MainWindow::ResetTabWidget()
 // and .gfxa).
 bool MainWindow::LoadDiveFile(const std::string &file_name)
 {
-    // Reset the correlated capture variable
-    m_correlated_capture_loaded = false;
-
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
@@ -869,6 +885,9 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
     // Check if the file loaded is a .gfxr file.
     m_gfxr_capture_loaded = (file_extension.compare(".gfxr") == 0);
 
+    // Reset the correlated capture variable
+    m_correlated_capture_loaded = false;
+
     if (m_gfxr_capture_loaded)
     {
         // Convert the filename to a string to perform a replacement.
@@ -910,6 +929,17 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
             m_gfxr_capture_loaded = false;
             m_correlated_capture_loaded = true;
         }
+
+        // Check if there is existing perf counter data
+        std::filesystem::path perf_counter_file_path(file_name);
+        perf_counter_file_path.replace_extension(".csv");
+        if (std::filesystem::exists(perf_counter_file_path))
+        {
+            m_perf_counter_model->OnPerfCounterResultsGenerated(
+            QString::fromStdWString(perf_counter_file_path.wstring()));
+        }
+
+        // TODO(b/444228847) Check if there is existing gpu time data
     }
 
     bool file_loaded = false;
@@ -981,7 +1011,6 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-// TODO (gcommodore) (b/436646197): Support loading multiple files.
 void MainWindow::OnOpenFile()
 {
     QString supported_files = QStringLiteral(
@@ -1022,14 +1051,16 @@ void MainWindow::OnNormalCapture()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
 {
-    if (!m_gfxr_capture_loaded)
+    if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
     {
         OnOpenFile();
     }
-    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog.
-    if (m_gfxr_capture_loaded)
+    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A .gfxr
+    // file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
+    bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
+    if (gfxr_capture_loaded)
     {
-        OnAnalyze(m_gfxr_capture_loaded, m_capture_file.toStdString());
+        OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
     }
 }
 
@@ -2071,6 +2102,13 @@ QModelIndex MainWindow::FindSourceIndexFromNode(QAbstractItemModel *model,
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnFilterApplied(const QModelIndex &gfxr_index, int filter_index)
 {
+    // If the filter index is for arguments, change tab to the arguments tab.
+    if (filter_index == Dive::kArguments)
+    {
+        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+        return;
+    }
+
     m_filter_mode_combo_box->setCurrentIndex(filter_index);
     m_filter_model->CollectGfxrDrawCallIndices();
 
@@ -2089,6 +2127,14 @@ void MainWindow::OnFilterApplied(const QModelIndex &gfxr_index, int filter_index
     if (it != gfxr_draw_call_indices.end())
     {
         long found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
+
+        // If the filter index is for perf counter data, change tab and correlate the index.
+        if (filter_index == Dive::kPerfCounterData)
+        {
+            m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
+            emit CorrelateCounter(found_gfxr_draw_call_index);
+            return;
+        }
 
         uint64_t corresponding_pm4_draw_call_index = pm4_draw_call_indices.at(
         found_gfxr_draw_call_index);
@@ -2119,5 +2165,63 @@ void MainWindow::OnFilterApplied(const QModelIndex &gfxr_index, int filter_index
     else
     {
         QMessageBox::critical(this, "Correlation Failed", "Corresponding PM4 draw call not found.");
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
+{
+    QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(
+    m_command_hierarchy_view->indexAt(pos));
+    uint64_t node_index = (uint64_t)(source_index.internalPointer());
+
+    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
+                                      Dive::NodeType::kGfxrVulkanDrawCommandNode))
+    {
+        return;
+    }
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+
+    std::vector<uint64_t>
+    gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
+                             m_command_hierarchy_view->model())
+                             ->GetGfxrDrawCallIndices();
+    auto it = std::find(gfxr_draw_call_indices.begin(), gfxr_draw_call_indices.end(), node_index);
+
+    if (it == gfxr_draw_call_indices.end())
+    {
+        QMessageBox::critical(this, "Correlation Failed", "Corresponding perf counter not found.");
+        return;
+    }
+
+    uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
+
+    QMenu    context_menu;
+    QAction *arguments_action = context_menu.addAction(
+    Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
+    arguments_action->setData(Dive::kArguments);
+    QAction *perf_counter_action = context_menu.addAction(
+    Dive::kDrawCallContextMenuOptionStrings[Dive::kPerfCounterData]);
+    perf_counter_action->setData(Dive::kPerfCounterData);
+
+    QAction *selected_action = context_menu.exec(
+    m_command_hierarchy_view->viewport()->mapToGlobal(pos));
+
+    // Ensures that if the user clicks outside of the context menu, a seg fault does not occur since
+    // it is interpreted as a selection.
+    if (selected_action == nullptr)
+    {
+        return;
+    }
+
+    QVariant selected_action_data = selected_action->data();
+    if (selected_action_data == Dive::kPerfCounterData)
+    {
+        m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
+        emit CorrelateCounter(found_gfxr_draw_call_index);
+    }
+    else if (selected_action_data == Dive::kArguments)
+    {
+        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
     }
 }

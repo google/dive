@@ -35,40 +35,38 @@ MATCHER_P(MetricInfoEq, expected, "")
 
 TEST(AvailableMetrics, LoadFromCsv)
 {
-    auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR "/mock_available_metrics.csv");
-    ASSERT_TRUE(metrics_opt.has_value());
-    const auto& metrics = metrics_opt.value();
+    auto metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR "/mock_available_metrics.csv");
+    ASSERT_NE(metrics, nullptr);
 
-    EXPECT_THAT(metrics.GetMetricInfo("COUNTER_A"),
+    EXPECT_THAT(metrics->GetMetricInfo("COUNTER_A"),
                 AllOf(Not(testing::IsNull()),
                       MetricInfoEq(MetricInfo{
                       1, Dive::MetricType::kCount, "COUNTER_A", "Counter A", "Description A" })));
 
-    EXPECT_THAT(metrics.GetMetricInfo("COUNTER_B"),
+    EXPECT_THAT(metrics->GetMetricInfo("COUNTER_B"),
                 AllOf(Not(testing::IsNull()),
                       MetricInfoEq(MetricInfo{
                       2, Dive::MetricType::kPercent, "COUNTER_B", "Counter B", "Description B" })));
 
-    const Dive::MetricInfo* info_c = metrics.GetMetricInfo("COUNTER_C");
+    const Dive::MetricInfo* info_c = metrics->GetMetricInfo("COUNTER_C");
     EXPECT_EQ(info_c, nullptr);
-    EXPECT_EQ(metrics.GetMetricType("COUNTER_C"), Dive::MetricType::kUnknown);
+    EXPECT_EQ(metrics->GetMetricType("COUNTER_C"), Dive::MetricType::kUnknown);
 }
 
 TEST(AvailableMetrics, LoadFromCsvIgnoresRowsThatAreMissingColumns)
 {
-    auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                     "/mock_available_metrics_malformed.csv");
-    ASSERT_TRUE(metrics_opt.has_value());
-    const auto& metrics = metrics_opt.value();
-    ASSERT_NE(metrics.GetMetricInfo("COUNTER_A"), nullptr);
-    ASSERT_EQ(metrics.GetMetricInfo("COUNTER_B"), nullptr);
+    auto metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                 "/mock_available_metrics_malformed.csv");
+    ASSERT_NE(metrics, nullptr);
+    ASSERT_NE(metrics->GetMetricInfo("COUNTER_A"), nullptr);
+    ASSERT_EQ(metrics->GetMetricInfo("COUNTER_B"), nullptr);
 }
 
 TEST(AvailableMetrics, LoadFromCsvFailsWhenNoHeader)
 {
-    auto metrics_opt = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                     "/mock_available_metrics_no_header.csv");
-    ASSERT_FALSE(metrics_opt.has_value());
+    auto metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
+                                                 "/mock_available_metrics_no_header.csv");
+    ASSERT_EQ(metrics, nullptr);
 }
 
 }  // namespace

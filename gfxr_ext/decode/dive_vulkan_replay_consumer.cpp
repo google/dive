@@ -35,11 +35,7 @@ const VulkanReplayOptions&                options) :
 
 DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer()
 {
-    // For trimmed captures, all resources that are not released within the frame are released by
-    // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
-    // So it is safe to release all resources from the deferred list here (all parent resources
-    // should be still alive at this point)
-    ReleaseResourcesFromDeferredList();
+    deferred_release_list_.clear();
 }
 
 void DiveVulkanReplayConsumer::Process_vkCreateDevice(
@@ -489,7 +485,7 @@ HandlePointerDecoder<VkFence>*                       pFence)
 
     if (!setup_finished_)
     {
-        deferred_release_fences_[*(pFence->GetPointer())] = { device, pAllocator };
+        deferred_release_list_.push_back(*(pFence->GetPointer()));
     }
 }
 
@@ -500,7 +496,8 @@ format::HandleId                                     fence,
 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
     // We only destroy the fence if it is not in the deferred release list
-    if (deferred_release_fences_.find(fence) == deferred_release_fences_.end())
+    auto it = std::find(deferred_release_list_.begin(), deferred_release_list_.end(), fence);
+    if (it == deferred_release_list_.end())
     {
         VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
     }
@@ -510,20 +507,6 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();
     setup_finished_ = true;
-}
-
-void DiveVulkanReplayConsumer::ReleaseResourcesFromDeferredList()
-{
-    GFXRECON_LOG_INFO("Release Resources From the DeferredList!");
-    // - We only defer release fences for now, may need to add other resources here
-    for (const auto& [fence_handle, fence_release_info] : deferred_release_fences_)
-    {
-        VulkanReplayConsumer::Process_vkDestroyFence(ApiCallInfo{},
-                                                     fence_release_info.device,
-                                                     fence_handle,
-                                                     fence_release_info.pAllocator);
-    }
-    deferred_release_fences_.clear();
 }
 
 GFXRECON_END_NAMESPACE(decode)

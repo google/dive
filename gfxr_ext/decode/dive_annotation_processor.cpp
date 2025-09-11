@@ -16,7 +16,6 @@
 
 #include "dive_annotation_processor.h"
 #include <cstdint>
-#include <iostream>
 #include <ostream>
 #include "decode/api_decoder.h"
 #include "util/logging.h"
@@ -56,14 +55,26 @@ void DiveAnnotationProcessor::WriteBlockEnd(const gfxrecon::util::DiveFunctionDa
         {
             uint64_t cmd_handle = args["commandBuffer"];
 
-            // There could be cases where vkBeginCommandBuffer is called after vkEndCommandBuffer
-            // without having the command buffer submitted
-            if (vkCmd.name == "vkBeginCommandBuffer")
+            if (vkCmd.name.find("vkBeginCommandBuffer") != std::string::npos)
             {
                 m_cmd_vk_commands_cache[cmd_handle].clear();
+                m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_count = 0;
+            }
+            else if (vkCmd.name.find("vkCmdBeginRenderPass") != std::string::npos)
+            {
+                m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.push_back(0);
             }
 
             m_cmd_vk_commands_cache[cmd_handle].push_back(vkCmd);
+
+            if (vkCmd.name.find("vkCmdDraw") != std::string::npos)
+            {
+                m_draw_call_counts_map[cmd_handle].begin_command_buffer_draw_call_count++;
+                if (!m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.empty())
+                {
+                    m_draw_call_counts_map[cmd_handle].render_pass_draw_call_counts.back()++;
+                }
+            }
         }
         else
         {

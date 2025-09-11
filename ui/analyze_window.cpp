@@ -33,6 +33,7 @@
 #include <QVBoxLayout>
 #include <filesystem>
 #include <qapplication.h>
+#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
@@ -45,10 +46,11 @@
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
-AnalyzeDialog::AnalyzeDialog(QWidget *parent)
+AnalyzeDialog::AnalyzeDialog(QWidget *parent, const Dive::AvailableMetrics *available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
 
+    m_available_metrics = available_metrics;
     // Settings List
     m_settings_list_label = new QLabel(tr("Available Settings:"));
     m_settings_list = new QListWidget();
@@ -226,53 +228,35 @@ void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::PopulateSettings()
 {
-    QFile file(":/resources/available_settings.csv");
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if (m_available_metrics)
     {
-        std::cout << "Could not open file:" << file.errorString().toStdString() << std::endl;
-        qDebug() << "Could not open file:" << file.errorString();
-        return;
-    }
+        // Get the list of all available metrics
+        std::vector<std::string> all_keys = m_available_metrics->GetAllMetricKeys();
 
-    QTextStream in(&file);
-
-    // Read and discard the first line (headers)
-    if (!in.atEnd())
-    {
-        in.readLine();
-    }
-
-    while (!in.atEnd())
-    {
-        QString     line = in.readLine();
-        QStringList fields = line.split(',');
-
-        if (fields.size() == 5)
+        for (const auto &key : all_keys)
         {
-            CsvItem item;
-            item.id = fields[0].replace('"', "");
-            ;
-            item.type = fields[1].replace('"', "");
-            ;
-            item.key = fields[2].replace('"', "");
-            ;
-            item.name = fields[3].replace('"', "");
-            ;
-            item.description = fields[4].replace('"', "");
-            ;
-            m_csv_items->append(item);
+            const Dive::MetricInfo *info = m_available_metrics->GetMetricInfo(key);
+            if (info)
+            {
+                CsvItem item;
+                item.id = info->m_metric_id;
+                item.type = info->m_metric_type;
+                item.key = QString::fromStdString(key);
+                item.name = QString::fromStdString(info->m_name);
+                item.description = QString::fromStdString(info->m_description);
+                m_csv_items->append(item);
+            }
         }
-    }
-    file.close();
 
-    // Populate the settings list
-    for (const auto &item : *m_csv_items)
-    {
-        QListWidgetItem *csv_item = new QListWidgetItem(item.name);
-        csv_item->setData(kDataRole, item.key);
-        csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
-        csv_item->setCheckState(Qt::Unchecked);
-        m_settings_list->addItem(csv_item);
+        // Populate the settings list
+        for (const auto &item : *m_csv_items)
+        {
+            QListWidgetItem *csv_item = new QListWidgetItem(item.name);
+            csv_item->setData(kDataRole, item.key);
+            csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
+            csv_item->setCheckState(Qt::Unchecked);
+            m_settings_list->addItem(csv_item);
+        }
     }
 
     // Add spacer so that all settings are visible at the end of the list.
@@ -552,17 +536,16 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
 
 void AnalyzeDialog::UpdatePerfTabView(const std::string remote_file_name)
 {
-    QString directory = m_capture_file_directory.value().c_str();
+    QString directory_path = m_capture_file_directory.value().c_str();
 
-    // Get the original filename from the remote path
     QFileInfo original_file_info(QString::fromStdString(remote_file_name));
-    QString   file_name = original_file_info.completeBaseName() + Dive::kProfilingMetricsCsvSuffix;
+    QString   file_name_with_suffix = original_file_info.completeBaseName() +
+                                    Dive::kProfilingMetricsCsvSuffix;
 
-    // Construct the new full path.
-    QString     full_path = QDir(directory).filePath(file_name);
-    std::string output_path = full_path.toStdString();
+    std::filesystem::path full_path(
+    QDir(directory_path).filePath(file_name_with_suffix).toStdString());
 
-    emit OnDisplayPerfCounterResults(output_path.c_str());
+    emit OnDisplayPerfCounterResults(full_path, m_available_metrics);
 }
 
 void AnalyzeDialog::UpdateGpuTimingTabView(const std::string remote_file_name)

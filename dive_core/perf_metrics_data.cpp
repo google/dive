@@ -32,9 +32,6 @@ namespace Dive
 
 namespace
 {
-constexpr std::array kFixedHeaders = { "ContextID",   "ProcessID", "FrameID",
-                                       "CmdBufferID", "DrawID",    "DrawType",
-                                       "DrawLabel",   "ProgramID", "LRZState" };
 
 struct ParseHeadersResult
 {
@@ -53,7 +50,7 @@ std::optional<ParseHeadersResult> ParseHeaders(const std::string&      line,
     int               column_index = 0;
     while (StringUtils::GetTrimmedField(header_ss, header_field, ','))
     {
-        if (column_index < kFixedHeaders.size())
+        if (column_index < kFixedPerfMetricsDataHeaderCount)
         {
             if (header_field != kFixedHeaders[column_index])
                 return std::nullopt;  // Fixed header mismatch
@@ -65,7 +62,7 @@ std::optional<ParseHeadersResult> ParseHeaders(const std::string&      line,
         }
         column_index++;
     }
-    if (column_index < kFixedHeaders.size())
+    if (column_index < kFixedPerfMetricsDataHeaderCount)
     {
         return std::nullopt;  // Not enough columns
     }
@@ -75,7 +72,7 @@ std::optional<ParseHeadersResult> ParseHeaders(const std::string&      line,
 
 std::optional<PerfMetricsRecord> ParseRecordFixedFields(const std::vector<std::string>& fields)
 {
-    if (fields.size() < kFixedHeaders.size())
+    if (fields.size() < kFixedPerfMetricsDataHeaderCount)
     {
         return std::nullopt;
     }
@@ -114,7 +111,7 @@ bool ParseMetrics(const std::vector<std::string>&       fields,
 {
     for (size_t i = 0; i < metric_infos.size(); ++i)
     {
-        const std::string& value_str = fields[kFixedHeaders.size() + i];
+        const std::string& value_str = fields[kFixedPerfMetricsDataHeaderCount + i];
         const MetricInfo*  info = metric_infos[i];
         if (info == nullptr)
         {
@@ -147,8 +144,8 @@ bool ParseMetrics(const std::vector<std::string>&       fields,
 }  // namespace
 
 std::unique_ptr<PerfMetricsData> PerfMetricsData::LoadFromCsv(
-const std::filesystem::path&      file_path,
-std::unique_ptr<AvailableMetrics> available_metrics)
+const std::filesystem::path&  file_path,
+const Dive::AvailableMetrics* available_metrics)
 {
     std::vector<PerfMetricsRecord> records;
     if (!available_metrics)
@@ -189,7 +186,7 @@ std::unique_ptr<AvailableMetrics> available_metrics)
             fields.push_back(field);
         }
 
-        if (fields.size() != kFixedHeaders.size() + metric_names.size())
+        if (fields.size() != kFixedPerfMetricsDataHeaderCount + metric_names.size())
         {
             continue;  // Skip malformed lines
         }
@@ -206,20 +203,18 @@ std::unique_ptr<AvailableMetrics> available_metrics)
         }
     }
 
-    return std::unique_ptr<PerfMetricsData>(new PerfMetricsData(std::move(metric_names),
-                                                                std::move(metric_infos),
-                                                                std::move(records),
-                                                                std::move(available_metrics)));
+    return std::unique_ptr<PerfMetricsData>(
+    new PerfMetricsData(metric_names, metric_infos, records, available_metrics));
 }
 
-PerfMetricsData::PerfMetricsData(std::vector<std::string>          metric_names,
-                                 std::vector<const MetricInfo*>    metric_infos,
-                                 std::vector<PerfMetricsRecord>    records,
-                                 std::unique_ptr<AvailableMetrics> available_metrics) :
+PerfMetricsData::PerfMetricsData(std::vector<std::string>       metric_names,
+                                 std::vector<const MetricInfo*> metric_infos,
+                                 std::vector<PerfMetricsRecord> records,
+                                 const Dive::AvailableMetrics*  available_metrics) :
     m_metric_names(std::move(metric_names)),
     m_metric_infos(std::move(metric_infos)),
     m_records(std::move(records)),
-    m_available_metrics(std::move(available_metrics))
+    m_available_metrics(available_metrics)
 {
 }
 
@@ -346,7 +341,7 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
 const std::vector<std::string> PerfMetricsDataProvider::GetRecordHeader() const
 {
     std::vector<std::string> full_header;
-    full_header.reserve(kFixedHeaders.size() + GetMetricsNames().size());
+    full_header.reserve(kFixedPerfMetricsDataHeaderCount + GetMetricsNames().size());
     for (const auto& header : kFixedHeaders)
     {
         full_header.push_back(header);

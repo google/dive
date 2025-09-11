@@ -342,7 +342,7 @@ void DiveTreeView::setCurrentNode(uint64_t node_index)
         source_node_model_idx = gfxr_vulkan_command_model->findNode(node_index);
     }
 
-    QModelIndex proxy_model_idx = GetNodeSourceModelIndex(source_node_model_idx);
+    QModelIndex proxy_model_idx = GetProxyModelIndexFromSource(source_node_model_idx);
 
     proxy_model_idx = model()->index(proxy_model_idx.row(), 1, proxy_model_idx.parent());
 
@@ -438,6 +438,35 @@ QModelIndex DiveTreeView::GetNodeSourceModelIndex(const QModelIndex &proxy_model
     else
     {
         return proxy_model_index;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+QModelIndex DiveTreeView::GetProxyModelIndexFromSource(const QModelIndex &source_model_index) const
+{
+    const DiveFilterModel *filter_model = qobject_cast<const DiveFilterModel *>(model());
+
+    const GfxrVulkanCommandFilterProxyModel
+    *vulkan_command_proxy_model = qobject_cast<const GfxrVulkanCommandFilterProxyModel *>(model());
+
+    const GfxrVulkanCommandArgumentsFilterProxyModel *vulkan_command_arg_proxy_model = qobject_cast<
+    const GfxrVulkanCommandArgumentsFilterProxyModel *>(model());
+
+    if (filter_model)
+    {
+        return filter_model->mapFromSource(source_model_index);
+    }
+    else if (vulkan_command_proxy_model)
+    {
+        return vulkan_command_proxy_model->mapFromSource(source_model_index);
+    }
+    else if (vulkan_command_arg_proxy_model)
+    {
+        return vulkan_command_arg_proxy_model->mapFromSource(source_model_index);
+    }
+    else
+    {
+        return source_model_index;
     }
 }
 
@@ -624,7 +653,7 @@ void DiveTreeView::RetainCurrentNode()
         source_node_model_idx = gfxr_vulkan_command_model->findNode(source_node_idx);
     }
 
-    QModelIndex proxy_model_idx = GetNodeSourceModelIndex(source_node_model_idx);
+    QModelIndex proxy_model_idx = GetProxyModelIndexFromSource(source_node_model_idx);
     proxy_model_idx = model()->index(proxy_model_idx.row(), 1, proxy_model_idx.parent());
 
     if (isExpanded(proxy_model_idx.parent()))
@@ -644,7 +673,7 @@ void DiveTreeView::RetainCurrentNode()
         QModelIndex proxy_parent_model_idx;
         while (index.isValid())
         {
-            proxy_parent_model_idx = GetNodeSourceModelIndex(index);
+            proxy_parent_model_idx = GetProxyModelIndexFromSource(index);
             if (isExpanded(proxy_parent_model_idx))
                 break;
             index = command_model ? command_model->parent(index) :

@@ -220,7 +220,8 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     // Command creation.
     StandardCreateWrite<vulkan_wrappers::CommandPoolWrapper>(state_table);
-    WriteCommandBufferState(state_table);
+    // GOOGLE: Partially recorded buffer are now returned from WriteCommandBufferState so that they could be played after StateEndMarker
+    auto partially_recorded_primary_cmds = WriteCommandBufferState(state_table);
     StandardCreateWrite<vulkan_wrappers::IndirectCommandsLayoutNVWrapper>(state_table);  // TODO: If we intend to support this, we need to reserve command space after creation.
     WriteTrimCommandPool(state_table);
 
@@ -231,6 +232,13 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
 
     marker.marker_type = format::kEndMarker;
     output_stream_->Write(&marker, sizeof(marker));
+
+    // GOOGLE: Move partially recorded command buffer after StateEndMarker 
+    // so that both vkBeginCommandBuffer and vkEndCommandBuffer of the same cmd are after StateEndMarker
+    for (auto cmd_wrapper : partially_recorded_primary_cmds)
+    {
+        WriteCommandBufferCommands(cmd_wrapper, state_table);
+    }
 
     if (asset_file_stream_)
     {
@@ -310,10 +318,14 @@ void VulkanStateWriter::WriteDeviceState(const VulkanStateTable& state_table)
     });
 }
 
-void VulkanStateWriter::WriteCommandBufferState(const VulkanStateTable& state_table)
+// GOOGLE: Partially recorded buffer are now returned from WriteCommandBufferState
+std::vector<vulkan_wrappers::CommandBufferWrapper*>
+VulkanStateWriter::WriteCommandBufferState(const VulkanStateTable& state_table)
 {
     std::set<util::MemoryOutputStream*>                 processed;
     std::vector<vulkan_wrappers::CommandBufferWrapper*> primary;
+    // GOOGLE: Temp vector to keep partially recorded primary cmd
+    std::vector<vulkan_wrappers::CommandBufferWrapper*> partially_recorded_primary_cmds;
 
     // Because secondaries can reference other secondaries we need to do a first pass over all alive command buffers
     // to detect all invalid secondaries.
@@ -353,8 +365,18 @@ void VulkanStateWriter::WriteCommandBufferState(const VulkanStateTable& state_ta
     // Initialize the primary command buffers now that secondary command buffer have been initialized.
     for (auto wrapper : primary)
     {
+        // GOOGLE: If the cmd is still in kRecording state, we consider it as a partially recorded primary cmd
+        if (wrapper->state == vulkan_wrappers::CommandBufferWrapper::kRecording)
+        {
+            partially_recorded_primary_cmds.push_back(wrapper);
+            continue;
+        }
         WriteCommandBufferCommands(wrapper, state_table);
     }
+
+    // GOOGLE: Returns the primary command buffers that are partially recorded from previous frame (no
+    // vkEndCommandBuffer called in previous frame)
+    return partially_recorded_primary_cmds;
 }
 
 void VulkanStateWriter::WriteTrimCommandPool(const VulkanStateTable& state_table)

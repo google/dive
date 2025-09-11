@@ -696,6 +696,7 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
     m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
     m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
+    m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
 #if defined(ENABLE_CAPTURE_BUFFERS)
     // If m_buffer_view is dynamically created/deleted, handle it here.
     // If it's a fixed member, ensure it's reset.
@@ -730,6 +731,11 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
 
     // Collect the gfxr draw call indices
     m_filter_model->CollectGfxrDrawCallIndices();
+
+    // Iterate m_gfxr_vulkan_command_hierarchy_model to collect the indices of the vulkan events
+    // where gpu timing data will be collected
+    m_gpu_timing_tab_view->CollectIndicesFromModel(*m_gfxr_vulkan_command_hierarchy_model,
+                                                   QModelIndex());
 
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;

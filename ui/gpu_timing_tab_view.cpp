@@ -101,6 +101,8 @@ void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
         uint64_t index_address = (uint64_t)model_index.internalPointer();
         m_timed_event_indices.push_back(index_address);
     }
+    default:
+        return;
     }
 }
 

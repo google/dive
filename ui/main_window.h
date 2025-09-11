@@ -25,7 +25,6 @@
 
 // Forward declarations
 class BufferView;
-class CaptureSettingView;  // TODO: remove if unnecessary
 class CommandModel;
 class CommandTabView;
 class DiveFilterModel;
@@ -48,13 +47,10 @@ class HoverHelp;
 class Overlay;
 class OverlayWidget;
 class OverviewTabView;
-class PerfCounterView;  // TODO: remove if unnecessary
 class PropertyPanel;
 class QCheckBox;
 class QComboBox;
-class QItemSelection;  // TODO: remove if unnecessary
 class QLabel;
-class QProgressBar;  // TODO: remove if unnecessary
 class QPushButton;
 class QTabWidget;
 class SearchBar;

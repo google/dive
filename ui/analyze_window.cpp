@@ -561,6 +561,8 @@ void AnalyzeDialog::UpdateGpuTimingTabView(const std::string remote_file_name)
 {
     QString directory = m_capture_file_directory.value().c_str();
 
+    // TODO(b/444228664): Avoid hardcoded file name and make it a suffix instead to associate it
+    // with the gfxr file
     QString file_name = "gpu_time.csv";
 
     // Construct the new full path.

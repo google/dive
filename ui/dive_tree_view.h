@@ -145,6 +145,7 @@ private:
 
     QAbstractItemModel *GetCommandModel();
     QModelIndex         GetNodeSourceModelIndex(const QModelIndex &proxy_model_index) const;
+    QModelIndex         GetProxyModelIndexFromSource(const QModelIndex &source_model_index) const;
 
     QModelIndex                  m_curr_node_selected;
     QList<QModelIndex>           m_search_indexes;

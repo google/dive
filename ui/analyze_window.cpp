@@ -33,6 +33,7 @@
 #include <QVBoxLayout>
 #include <filesystem>
 #include <qapplication.h>
+#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
@@ -58,10 +59,11 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
-AnalyzeDialog::AnalyzeDialog(QWidget *parent)
+AnalyzeDialog::AnalyzeDialog(QWidget *parent, const Dive::AvailableMetrics *available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
 
+    m_available_metrics = available_metrics;
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
     m_metrics_list = new QListWidget();
@@ -249,59 +251,41 @@ void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::PopulateMetrics()
 {
-    QFile file(":/resources/available_metrics.csv");
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if (m_available_metrics)
     {
-        std::cout << "Could not open file:" << file.errorString().toStdString() << std::endl;
-        qDebug() << "Could not open file:" << file.errorString();
-        return;
-    }
+        // Get the list of all available metrics
+        std::vector<std::string> all_keys = m_available_metrics->GetAllMetricKeys();
 
-    QTextStream in(&file);
-
-    // Read and discard the first line (headers)
-    if (!in.atEnd())
-    {
-        in.readLine();
-    }
-
-    while (!in.atEnd())
-    {
-        QString     line = in.readLine();
-        QStringList fields = line.split(',');
-
-        if (fields.size() == 5)
+        for (const auto &key : all_keys)
         {
-            CsvItem item;
-            item.id = fields[0].replace('"', "");
-            ;
-            item.type = fields[1].replace('"', "");
-            ;
-            item.key = fields[2].replace('"', "");
-            ;
-            item.name = fields[3].replace('"', "");
-            ;
-            item.description = fields[4].replace('"', "");
-            ;
-            m_csv_items->append(item);
+            const Dive::MetricInfo *info = m_available_metrics->GetMetricInfo(key);
+            if (info)
+            {
+                CsvItem item;
+                item.id = info->m_metric_id;
+                item.type = info->m_metric_type;
+                item.key = QString::fromStdString(key);
+                item.name = QString::fromStdString(info->m_name);
+                item.description = QString::fromStdString(info->m_description);
+                m_csv_items->append(item);
+            }
         }
-    }
-    file.close();
 
-    // Populate the metrics list
-    for (const auto &item : *m_csv_items)
-    {
-        QListWidgetItem *csv_item = new QListWidgetItem(item.name);
-        csv_item->setData(kDataRole, item.key);
-        csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
-        csv_item->setCheckState(Qt::Unchecked);
-        m_metrics_list->addItem(csv_item);
-    }
+        // Populate the metrics list
+        for (const auto &item : *m_csv_items)
+        {
+            QListWidgetItem *csv_item = new QListWidgetItem(item.name);
+            csv_item->setData(kDataRole, item.key);
+            csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
+            csv_item->setCheckState(Qt::Unchecked);
+            m_metrics_list->addItem(csv_item);
+        }
 
-    // Add spacer so that all metrics are visible at the end of the list.
-    QListWidgetItem *spacer = new QListWidgetItem();
-    spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
-    m_metrics_list->addItem(spacer);
+        // Add spacer so that all metrics are visible at the end of the list.
+        QListWidgetItem *spacer = new QListWidgetItem();
+        spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
+        m_metrics_list->addItem(spacer);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -757,12 +741,13 @@ void AnalyzeDialog::OnReplay()
         }
         WaitForReplay(*device);
         qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
-        emit OnDisplayPerfCounterResults(QString::fromStdString(perf_counter_csv.string()));
+        
+        emit OnDisplayPerfCounterResults(perf_counter_csv.string(), m_available_metrics);
     }
     else
     {
         qDebug() << "Cleared perf counter data";
-        emit OnDisplayPerfCounterResults("");
+        emit OnDisplayPerfCounterResults("", nullptr);
     }
 
     // Run the gpu_time replay

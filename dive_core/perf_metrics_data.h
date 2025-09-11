@@ -28,6 +28,24 @@
 
 namespace Dive
 {
+enum FixedPerfMetricsDataHeaders : uint32_t
+{
+    kContextID,
+    kProcessID,
+    kFrameID,
+    kCmdBufferID,
+    kDrawID,
+    kDrawType,
+    kDrawLabel,
+    kProgramID,
+    kLRZState,
+    kFixedPerfMetricsDataHeaderCount,
+};
+
+inline constexpr const char* kFixedHeaders[kFixedPerfMetricsDataHeaderCount] = {
+    "ContextID", "ProcessID", "FrameID",   "CmdBufferID", "DrawID",
+    "DrawType",  "DrawLabel", "ProgramID", "LRZState"
+};
 
 class CommandHierarchy;
 class AvailableMetrics;

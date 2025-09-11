@@ -65,6 +65,16 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
 }
 
 //--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::ClearSelection()
+{
+    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    if (selection_model)
+    {
+        selection_model->clear();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
 {
     if (!index.isValid())
@@ -78,6 +88,9 @@ void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
     {
         m_perf_counter_view->resizeColumnToContents(column);
     }
+    int selected_row = index.row();
+
+    emit CounterSelected(selected_row);
 }
 
 //--------------------------------------------------------------------------------------------------

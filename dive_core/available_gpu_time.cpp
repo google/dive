@@ -334,7 +334,7 @@ uint32_t   object_id) const
     }
 
     uint8_t index = static_cast<uint8_t>(object_type);
-    if ((index < 0) || (index >= m_stats.size()))
+    if (index >= m_stats.size())
     {
         std::cerr << "m_stats does not contain stats for object_type: " << index << std::endl;
         return std::nullopt;

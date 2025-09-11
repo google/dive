@@ -26,6 +26,35 @@
 
 namespace Dive
 {
+std::string AvailableGpuTiming::GetGpuTimingObjectTypeString(ObjectType object_type) const
+{
+    std::stringstream ss;
+    switch (object_type)
+    {
+    case ObjectType::kFrame:
+    {
+        ss << "Frame";
+        break;
+    }
+    case ObjectType::kCommandBuffer:
+    {
+        ss << "CommandBuffer";
+        break;
+    }
+    case ObjectType::kRenderPass:
+    {
+        ss << "RenderPass";
+        break;
+    }
+    default:
+    {
+        std::cerr << "GetGpuTimingObjectTypeString() failed, object_type OOB: "
+                  << static_cast<int>(object_type) << std::endl;
+        return "";
+    }
+    }
+    return ss.str();
+}
 
 bool AvailableGpuTiming::LoadFromCsv(const std::filesystem::path& file_path)
 {
@@ -268,7 +297,8 @@ uint32_t   object_id) const
         return m_render_pass_stats[object_id];
     }
 
-    std::cerr << "Unexpected ObjectType: " << static_cast<int>(object_type) << std::endl;
+    std::cerr << "Unexpected ObjectType: " << GetGpuTimingObjectTypeString(object_type)
+              << std::endl;
     return std::nullopt;
 }
 
@@ -288,6 +318,111 @@ std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStatsByRow(uint3
 
     Entry entry = m_ordered_entries[row_id - 1];
     return AvailableGpuTiming::GetStatsByType(entry.object_type, entry.per_frame_id);
+}
+
+std::string AvailableGpuTiming::GetColumnHeader(int col) const
+{
+    if (col >= kExpectedColumns)
+    {
+        std::cerr << "GetColumnHeader() OOB, col: " << col << std::endl;
+        return "";
+    }
+
+    std::stringstream        ss(kExpectedHeader);
+    std::string              field;
+    std::vector<std::string> fields;
+    while (std::getline(ss, field, ','))
+    {
+        fields.push_back(field);
+    }
+
+    if (fields.size() != kExpectedColumns)
+    {
+        std::cerr << "kExpectedHeader columns: " << fields.size()
+                  << " kExpectedColumns: " << kExpectedColumns << std::endl;
+        return "";
+    }
+
+    return fields[col];
+}
+
+std::string AvailableGpuTiming::GetCell(int row, int col) const
+{
+    if (!m_valid)
+    {
+        std::cerr << "Invalid AvailableGpuTiming object" << std::endl;
+        return "";
+    }
+
+    if ((row < 0) || (row >= GetRows()))
+    {
+        std::cerr << "GetCell() OOB error, row: " << row << " expecting: [0-" << (GetRows() - 1)
+                  << "]" << std::endl;
+        return "";
+    }
+
+    if ((col < 0) || (col >= GetColumns()))
+    {
+        std::cerr << "GetCell() OOB error, col: " << col << " expecting: [0-" << (GetColumns() - 1)
+                  << "]" << std::endl;
+        return "";
+    }
+
+    std::stringstream ss;
+
+    if (col < 2)
+    {
+        // First two columns are type and id
+        const Entry& entry = m_ordered_entries[row];
+
+        if (col == 0)
+        {
+            ss << GetGpuTimingObjectTypeString(entry.object_type);
+            return ss.str();
+        }
+
+        ss << entry.per_frame_id;
+        return ss.str();
+    }
+
+    // Offset because QTableView first row (frame info) is index 0
+    auto ret = GetStatsByRow(row + 1);
+    if (!ret.has_value())
+    {
+        std::cerr << "GetStatsByRow() failed, row: " << row << std::endl;
+        return "";
+    }
+    Stats& stats = *ret;
+
+    switch (col)
+    {
+    case 2:
+    {
+        ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.mean_ms;
+        return ss.str();
+    }
+    case 3:
+    {
+        ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.median_ms;
+        return ss.str();
+    }
+    default:
+    {
+        std::cerr << "GetCell() OOB error, col: " << col << " expected: [2-" << (GetColumns() - 1)
+                  << "]" << std::endl;
+        return "";
+    }
+    }
+}
+
+int AvailableGpuTiming::GetRows() const
+{
+    if (!m_valid)
+    {
+        std::cerr << "Invalid AvailableGpuTiming object" << std::endl;
+        return -1;
+    }
+    return static_cast<int>(m_ordered_entries.size());
 }
 
 }  // namespace Dive

@@ -60,6 +60,8 @@
 #include "gfxr_vulkan_command_arguments_filter_proxy_model.h"
 #include "gfxr_vulkan_command_arguments_tab_view.h"
 #include "gfxr_vulkan_command_tab_view.h"
+#include "gpu_timing_model.h"
+#include "gpu_timing_tab_view.h"
 #include "hover_help_model.h"
 #include "overlay.h"
 #include "overview_tab_view.h"
@@ -218,6 +220,8 @@ MainWindow::MainWindow()
 
         m_perf_counter_model = new PerfCounterModel();
 
+        m_gpu_timing_model = new GpuTimingModel(this);
+
         QLabel *goto_draw_call_label = new QLabel(tr("Go To:"));
         m_prev_event_button = new QPushButton("Prev Event");
         m_next_event_button = new QPushButton("Next Event");
@@ -268,6 +272,9 @@ MainWindow::MainWindow()
         new GfxrVulkanCommandArgumentsTabView(m_data_core->GetCommandHierarchy(),
                                               m_gfxr_vulkan_commands_arguments_filter_proxy_model,
                                               m_gfxr_vulkan_command_hierarchy_model);
+        m_gpu_timing_tab_view = new GpuTimingTabView(*m_gpu_timing_model,
+                                                     m_data_core->GetCommandHierarchy(),
+                                                     this);
 
         m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
@@ -405,6 +412,10 @@ MainWindow::MainWindow()
                      &QTreeView::customContextMenuRequested,
                      this,
                      &MainWindow::OnCorrelateVulkanDrawCall);
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     m_gpu_timing_model,
+                     &GpuTimingModel::OnGpuTimingResultsGenerated);
 
     CreateActions();
     CreateMenus();
@@ -617,6 +628,7 @@ void MainWindow::ResetTabWidget()
     m_shader_view_tab_index = -1;
     m_event_state_view_tab_index = -1;
     m_perf_counter_view_tab_index = -1;
+    m_gpu_timing_view_tab_index = -1;
 
     // Reconnect OnTabViewChange.
     QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
@@ -858,6 +870,7 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     m_gfxr_vulkan_command_arguments_view_tab_index =
     m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
     m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
+    m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
 
     // Ensure the All Event topology is displayed.
     m_view_mode_combo_box->currentTextChanged(kViewModeStrings[1]);
@@ -869,6 +882,11 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     m_filter_gfxr_commands_combo_box->show();
 
     m_gfxr_vulkan_command_hierarchy_model->EndResetModel();
+
+    // Iterate m_gfxr_vulkan_command_hierarchy_model to collect the indices of the vulkan events
+    // where gpu timing data will be collected
+    m_gpu_timing_tab_view->CollectIndicesFromModel(*m_gfxr_vulkan_command_hierarchy_model,
+                                                   QModelIndex());
 
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
@@ -1930,6 +1948,11 @@ void MainWindow::DisconnectAllTabs()
                         m_gfxr_vulkan_command_arguments_tab_view,
                         SLOT(OnSelectionChanged(const QModelIndex &)));
 
+    QObject::disconnect(m_command_hierarchy_view,
+                        SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
+                        m_gpu_timing_tab_view,
+                        SLOT(OnEventSelectionChanged(const QModelIndex &)));
+
     // Temporarily set the model to nullptr and clear selection/current index
     // before loading new data. This forces a clean break.
     m_command_hierarchy_view->setModel(nullptr);
@@ -2059,6 +2082,11 @@ void MainWindow::ConnectGfxrFileTabs()
                      SIGNAL(HideOtherSearchBars()),
                      this,
                      SLOT(OnTabViewChange()));
+
+    QObject::connect(m_command_hierarchy_view,
+                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
+                     m_gpu_timing_tab_view,
+                     SLOT(OnEventSelectionChanged(const QModelIndex &)));
 }
 
 //--------------------------------------------------------------------------------------------------

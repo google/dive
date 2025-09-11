@@ -35,11 +35,14 @@ namespace
 {
 constexpr char kExpectedHeader[] = "Type,Id,Mean [ms],Median [ms]";
 constexpr int  kExpectedColumns = 4;
+constexpr int  kDisplayFloatPrecision = 3;
 }  // namespace
 
 class AvailableGpuTiming
 {
 public:
+    // TODO: Consider moving this to gpu_time/ where the statistics are produced and refactoring so
+    // that it is no longer hard-coding the Vulkan object names
     enum class ObjectType : uint8_t
     {
         kFrame = 0,
@@ -70,15 +73,35 @@ public:
     // For unit testing
     bool LoadFromString(const std::string& full_text);
 
-    // Get the statistic info with the ObjectType and the object_id (nth object of type ObjectType)
-    // If the object_type is kFrame, the object_id value will be disregarded
-    std::optional<Stats> GetStatsByType(ObjectType object_type, uint32_t object_id) const;
+    // Get the statistic info with the ObjectType and the object_id (nth object
+    // of type ObjectType) If the object_type is kFrame, the object_id value
+    // will be disregarded
+    std::optional<Stats> GetStatsByType(AvailableGpuTiming::ObjectType object_type,
+                                        uint32_t                       object_id) const;
 
     // Get the statistic info with the row_id (representing the row in file order, header is row 0)
     std::optional<Stats> GetStatsByRow(uint32_t row_id) const;
 
     // Validate entries to stats counts
-    bool IsValid() const { return m_valid; };
+    bool IsValid() const { return m_valid; }
+
+    // Convert ObjectType to string for logging
+    std::string GetGpuTimingObjectTypeString(AvailableGpuTiming::ObjectType object_type) const;
+
+    // -------------------------------------------------------------
+    // The following are called by the UI to populate GpuTimingModel
+
+    // Get the header for a specific column
+    std::string GetColumnHeader(int col) const;
+
+    // Get the statistic info for a specific cell
+    std::string GetCell(int row, int col) const;
+
+    // Get the number of non-header rows in the CSV file
+    int GetRows() const;
+
+    // Get the number of columns expected for the table
+    int GetColumns() const { return kExpectedColumns; }
 
 private:
     // Load statistics from stream

@@ -91,7 +91,9 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     }
     else if (vulkan_cmd_name.find("EndDebugUtilsLabelEXT") != std::string::npos)
     {
-        if (!m_cur_parent_node_index_stack.empty())
+        if (!m_cur_parent_node_index_stack.empty() &&
+            m_command_hierarchy.GetNodeType(m_cur_parent_node_index_stack.top()) ==
+            NodeType::kGfxrBeginDebugUtilsLabelCommandNode)
         {
             // Remove the corresponding begin debug utils node from the stack
             m_cur_parent_node_index_stack.pop();

@@ -76,6 +76,7 @@ public slots:
     void DisconnectSearchBar();
     void ExpandAll();
     void OnCorrelateCommand(const QPoint &pos);
+    void OnCorrelateDrawCall(uint64_t);
 
 signals:
     // Update property panel for node information.
@@ -85,6 +86,8 @@ signals:
     void SelectCommand(const QModelIndex &);
 
 private:
+    QModelIndex FindSourceIndexFromNode(uint64_t target_node_index, const QModelIndex &parent);
+
     DiveTreeView            *m_command_hierarchy_view;
     QPushButton             *m_search_trigger_button;
     SearchBar               *m_search_bar;

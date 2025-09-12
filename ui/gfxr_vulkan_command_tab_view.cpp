@@ -20,6 +20,7 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <iostream>
@@ -91,6 +92,11 @@ QWidget                           *parent) :
             &QItemSelectionModel::currentChanged,
             this,
             &GfxrVulkanCommandTabView::OnSelectionChanged);
+
+    QObject::connect(parent,
+                     SIGNAL(CorrelateDrawCall(uint64_t)),
+                     this,
+                     SLOT(OnCorrelateDrawCall(uint64_t)));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -243,4 +249,57 @@ void GfxrVulkanCommandTabView::OnCorrelateCommand(const QPoint &pos)
             emit ApplyFilter(source_model_index, selected_action->data().toInt());
         }
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+QModelIndex GfxrVulkanCommandTabView::FindSourceIndexFromNode(uint64_t           target_node_index,
+                                                              const QModelIndex &parent)
+{
+    for (int r = 0; r < m_proxy_Model.rowCount(parent); ++r)
+    {
+        QModelIndex proxy_index = m_proxy_Model.index(r, 0, parent);
+
+        QModelIndex source_index = m_proxy_Model.mapToSource(proxy_index);
+
+        if (source_index.isValid())
+        {
+            if ((uint64_t)source_index.internalPointer() == target_node_index)
+            {
+                return proxy_index;
+            }
+        }
+
+        if (m_proxy_Model.hasChildren(proxy_index))
+        {
+            QModelIndex source_index_from_node = FindSourceIndexFromNode(target_node_index,
+                                                                         proxy_index);
+            if (source_index_from_node.isValid())
+            {
+                return source_index_from_node;
+            }
+        }
+    }
+    return QModelIndex();
+}
+
+//--------------------------------------------------------------------------------------------------
+void GfxrVulkanCommandTabView::OnCorrelateDrawCall(uint64_t index)
+{
+    m_proxy_Model.CollectGfxrDrawCallIndices();
+    const std::vector<uint64_t> collected_gfxr_indices = m_proxy_Model.GetGfxrDrawCallIndices();
+
+    if (index > collected_gfxr_indices.size())
+    {
+        QMessageBox::critical(this,
+                              "Correlation Failed",
+                              "Invalid index for corresponding vulkan draw call.");
+        return;
+    }
+
+    uint64_t    corresponding_index = m_proxy_Model.GetGfxrDrawCallIndices().at(index);
+    QModelIndex corresponding_model_index = FindSourceIndexFromNode(corresponding_index,
+                                                                    QModelIndex());
+    QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
+                                                QItemSelectionModel::Rows;
+    m_command_hierarchy_view->selectionModel()->setCurrentIndex(corresponding_model_index, flags);
 }

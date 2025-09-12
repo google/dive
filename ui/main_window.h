@@ -94,6 +94,7 @@ signals:
     void SetSaveAsMenuStatus(bool);
     void FileLoaded();
     void CorrelateCounter(uint64_t);
+    void CorrelateDrawCall(uint64_t);
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
@@ -102,6 +103,7 @@ public slots:
     void OnSwitchToShaderTab();
     void OnFilterApplied(const QModelIndex &, int);
     void OnCorrelateVulkanDrawCall(const QPoint &pos);
+    void OnCorrelatePm4DrawCall(const QPoint &pos);
 
 private slots:
     void OnCommandViewModeChange(const QString &string);

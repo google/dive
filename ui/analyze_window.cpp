@@ -65,6 +65,12 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_enabled_settings_list_label = new QLabel(tr("Enabled Settings:"));
     m_enabled_settings_list = new QListWidget();
 
+    // Replay Button
+    m_button_layout = new QHBoxLayout();
+    m_replay_button = new QPushButton("&Replay", this);
+    m_replay_button->setEnabled(false);
+    m_button_layout->addWidget(m_replay_button);
+
     // Device Selector
     m_device_layout = new QHBoxLayout();
     m_device_label = new QLabel(tr("Devices:"));
@@ -134,12 +140,6 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_frame_count_box->setValue(-1);
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
-
-    // Replay Button
-    m_button_layout = new QHBoxLayout();
-    m_replay_button = new QPushButton("&Replay", this);
-    m_replay_button->setEnabled(true);
-    m_button_layout->addWidget(m_replay_button);
 
     // Left Panel Layout
     m_left_panel_layout = new QVBoxLayout();
@@ -314,6 +314,8 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 
     m_devices = cur_list;
     m_device_model->clear();
+    // Replay button should only be enabled when a device is selected.
+    m_replay_button->setEnabled(false);
 
     if (m_devices.empty())
     {
@@ -360,6 +362,8 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
              << ", m_devices[device_index].m_serial " << m_devices[device_index].m_serial.c_str();
     if (m_cur_device == m_devices[device_index].m_serial)
     {
+        // Enable the replay button as soon as a device is selected.
+        m_replay_button->setEnabled(true);
         return;
     }
 
@@ -373,8 +377,11 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
                                            dev_ret.status().message());
         qDebug() << err_msg.c_str();
         ShowErrorMessage(err_msg);
+        OnDeviceListRefresh();
         return;
     }
+
+    m_replay_button->setEnabled(true);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -643,7 +650,8 @@ void AnalyzeDialog::OnReplay()
         std::string err_msg = absl::StrCat("Fail to setup device: ", ret.message());
         qDebug() << err_msg.c_str();
         ShowErrorMessage(err_msg);
-        SetReplayButton(kDefaultReplayButtonText, true);
+        SetReplayButton(kDefaultReplayButtonText, false);
+        OnDeviceListRefresh();
         return;
     }
 

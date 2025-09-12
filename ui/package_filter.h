@@ -47,5 +47,4 @@ private:
     QRadioButton     *m_debuggable_filter = nullptr;
     QPushButton      *m_apply = nullptr;
     QString           m_active_filter_text = "";
-    bool              m_applied;
 };

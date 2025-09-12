@@ -230,7 +230,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
     QObject::connect(m_args_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputArgs);
     QObject::connect(m_pkg_filter,
-                     &PackageFilter::filtersApplied,
+                     &PackageFilter::FiltersApplied,
                      this,
                      &TraceDialog::OnPackageListFilterApplied);
 }

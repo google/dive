@@ -30,16 +30,15 @@ public:
     PackageFilter(QWidget *parent = nullptr);
 
 public slots:
-    void selectAllEventsFilter(int state);
-    void selectFilter(int state);
-    void applyFilters();
-    void onReject();
+    void SelectAllEventsFilter(int state);
+    void SelectFilter(int state);
+    void ApplyFilters();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
 
 signals:
-    void filtersApplied(QSet<QString> filters);
+    void FiltersApplied(QSet<QString> filters);
 
 private:
     const std::size_t kTotalFilterCount = 3;

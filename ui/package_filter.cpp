@@ -36,11 +36,10 @@ PackageFilter::PackageFilter(QWidget* parent) :
     m_debuggable_filter->setCheckState(Qt::Checked);
     m_active_filters.insert(m_debuggable_filter);
 
-    connect(this, SIGNAL(rejected()), this, SLOT(onReject()));
-    connect(m_all_filter, SIGNAL(stateChanged(int)), this, SLOT(selectAllEventsFilter(int)));
-    connect(m_debuggable_filter, SIGNAL(stateChanged(int)), this, SLOT(selectFilter(int)));
-    connect(m_non_debuggable_filter, SIGNAL(stateChanged(int)), this, SLOT(selectFilter(int)));
-    connect(m_apply, SIGNAL(clicked()), this, SLOT(applyFilters()));
+    connect(m_all_filter, SIGNAL(stateChanged(int)), this, SLOT(SelectAllEventsFilter(int)));
+    connect(m_debuggable_filter, SIGNAL(stateChanged(int)), this, SLOT(SelectFilter(int)));
+    connect(m_non_debuggable_filter, SIGNAL(stateChanged(int)), this, SLOT(SelectFilter(int)));
+    connect(m_apply, SIGNAL(clicked()), this, SLOT(ApplyFilters()));
 
     QHBoxLayout* filter_options_layout = new QHBoxLayout;
     filter_options_layout->addWidget(m_all_filter);
@@ -52,54 +51,89 @@ PackageFilter::PackageFilter(QWidget* parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::selectAllEventsFilter(int state)
+void PackageFilter::SelectAllEventsFilter(int state)
 {
     if (state == Qt::Checked)
     {
-        m_non_debuggable_filter->setCheckState(Qt::Unchecked);
+        // Block signals so this function does not trigger SelectFilter through the setCheckState
+        // calls.
+        m_debuggable_filter->blockSignals(true);
+        m_non_debuggable_filter->blockSignals(true);
+
         m_debuggable_filter->setCheckState(Qt::Unchecked);
+        m_non_debuggable_filter->setCheckState(Qt::Unchecked);
+
         m_filters.clear();
+        m_filters.insert(m_all_filter);
+
+        // Unblock signals so SelectFilter is triggered through the setCheckState calls.
+        m_debuggable_filter->blockSignals(false);
+        m_non_debuggable_filter->blockSignals(false);
+    }
+    else
+    {
+        m_filters.erase(m_all_filter);
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::selectFilter(int state)
+void PackageFilter::SelectFilter(int state)
 {
+    QCheckBox* current_sender = qobject_cast<QCheckBox*>(sender());
+
+    // Block signals so this function is not recursively triggered by setCheckState calls.
+    m_all_filter->blockSignals(true);
+    m_debuggable_filter->blockSignals(true);
+    m_non_debuggable_filter->blockSignals(true);
+
     if (state == Qt::Checked)
     {
-        m_all_filter->setCheckState(Qt::Unchecked);
-        auto iterator = std::find_if(m_filters.begin(),
-                                     m_filters.end(),
-                                     [](const QCheckBox* checkBox) {
-                                         return checkBox->text() == "All";
-                                     });
-        if (iterator != m_filters.end())
+        if (m_all_filter->isChecked())
         {
-            m_filters.erase(iterator);
+            m_all_filter->setCheckState(Qt::Unchecked);
+            m_filters.erase(m_all_filter);
         }
-        m_filters.insert(qobject_cast<QCheckBox*>(sender()));
 
-        if (m_filters.size() == (kTotalFilterCount - 1))
+        m_filters.insert(current_sender);
+
+        if (m_debuggable_filter->isChecked() && m_non_debuggable_filter->isChecked())
         {
             m_all_filter->setCheckState(Qt::Checked);
+
+            m_debuggable_filter->setCheckState(Qt::Unchecked);
+            m_non_debuggable_filter->setCheckState(Qt::Unchecked);
+
+            m_filters.clear();
+            m_filters.insert(m_all_filter);
         }
     }
     else
     {
-        m_filters.erase(qobject_cast<QCheckBox*>(sender()));
+        if (m_all_filter->isChecked())
+        {
+            m_all_filter->setCheckState(Qt::Unchecked);
+            m_filters.erase(m_all_filter);
+        }
+
+        m_filters.erase(current_sender);
     }
+
+    // Unblock signals so this function is triggered by setCheckState calls.
+    m_all_filter->blockSignals(false);
+    m_debuggable_filter->blockSignals(false);
+    m_non_debuggable_filter->blockSignals(false);
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::applyFilters()
+void PackageFilter::ApplyFilters()
 {
     m_active_filters.clear();
 
     if (m_filters.empty())
     {
-        m_debuggable_filter->setCheckState(Qt::Checked);
-        m_active_filters.insert(m_debuggable_filter);
-        emit filtersApplied({ m_debuggable_filter->text() });
+        m_all_filter->setCheckState(Qt::Checked);
+        m_active_filters.insert(m_all_filter);
+        emit FiltersApplied({ m_all_filter->text() });
     }
     else
     {
@@ -112,21 +146,15 @@ void PackageFilter::applyFilters()
                 applied_filter_texts.clear();
                 m_active_filters.insert(selectedCheckBox);
                 applied_filter_texts.insert(selectedCheckBox->text());
-                emit filtersApplied(applied_filter_texts);
+                emit FiltersApplied(applied_filter_texts);
                 break;
             }
             m_active_filters.insert(selectedCheckBox);
             applied_filter_texts.insert(selectedCheckBox->text());
         }
-        emit filtersApplied(applied_filter_texts);
+        emit FiltersApplied(applied_filter_texts);
         m_filters.clear();
     }
-}
-
-//--------------------------------------------------------------------------------------------------
-void PackageFilter::onReject()
-{
-    close();
 }
 
 //--------------------------------------------------------------------------------------------------

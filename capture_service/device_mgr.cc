@@ -146,7 +146,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 
         packages_to_check = all_packages;
 
-        // Asynchronously get the package information for each package
         for (const auto &pkg : packages_to_check)
         {
             futures.push_back(std::async(std::launch::async, [this, pkg]() {
@@ -154,7 +153,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
             }));
         }
 
-        // Iterate through the futures containing the package info an filter
         for (size_t i = 0; i < futures.size(); ++i)
         {
             absl::StatusOr<std::string> dumpsys_result = futures[i].get();
@@ -182,7 +180,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         }
     }
 
-    // Sort the packages so they are in alphabetical order
     std::sort(package_list.begin(), package_list.end());
     return package_list;
 }

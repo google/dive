@@ -283,6 +283,7 @@ absl::Status AndroidDevice::CleanupDevice()
     .Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kVkGfxrLayerLibName))
     .IgnoreError();
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kManifestFilePath)).IgnoreError();
+    Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
     if (output.ok())
     {

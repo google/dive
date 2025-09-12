@@ -18,6 +18,8 @@ limitations under the License.
 
 #include "dive_file_processor.h"
 
+#include <fstream>
+
 #include "util/logging.h"
 #include "util/platform.h"
 

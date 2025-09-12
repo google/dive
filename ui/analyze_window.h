@@ -65,6 +65,7 @@ private slots:
 signals:
     void OnNewFileOpened(const QString &file_path);
     void OnDisplayPerfCounterResults(const QString &file_path);
+    void OnDisplayGpuTimingResults(const QString &file_path);
     void ReloadCapture(const QString &file_path);
 
 private:
@@ -73,6 +74,7 @@ private:
     void                        PopulateSettings();
     void                        UpdateSelectedSettingsList();
     void                        UpdatePerfTabView(const std::string remote_file_name);
+    void                        UpdateGpuTimingTabView(const std::string remote_file_name);
     void                        WaitForReplay(Dive::AndroidDevice &device);
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();

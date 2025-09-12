@@ -557,6 +557,21 @@ void AnalyzeDialog::UpdatePerfTabView(const std::string remote_file_name)
     emit OnDisplayPerfCounterResults(output_path.c_str());
 }
 
+void AnalyzeDialog::UpdateGpuTimingTabView(const std::string remote_file_name)
+{
+    QString directory = m_capture_file_directory.value().c_str();
+
+    // TODO(b/444228664): Avoid hardcoded file name and make it a suffix instead to associate it
+    // with the gfxr file
+    QString file_name = "gpu_time.csv";
+
+    // Construct the new full path.
+    QString     full_path = QDir(directory).filePath(file_name);
+    std::string output_path = full_path.toStdString();
+
+    emit OnDisplayGpuTimingResults(output_path.c_str());
+}
+
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
@@ -733,7 +748,7 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-
+        UpdateGpuTimingTabView(remote_file.value());
         WaitForReplay(*device);
     }
 

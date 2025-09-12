@@ -165,8 +165,7 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
         {
             DivePM4Capture::GetInstance().TryStartCapture();
         }
-        // Tell other processes that replay has finished trim state loading. Use /sdcard/Download/
-        // as the base path since GFXR can reliably write there.
+        // Tell other processes that replay has finished trim state loading.
         // TODO: b/444647876 - Implementation that doesn't use global state (filesystem)
         if (!std::ofstream(Dive::kReplayStateLoadedSignalFile))
         {

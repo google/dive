@@ -43,7 +43,8 @@ inline constexpr char kDefaultCaptureFolderName[] = "gfxr_capture";
 inline constexpr char kDefaultReplayFolderName[] = "gfxr_replay_downloads";
 inline constexpr char kProfilingPluginFolderName[] = "dive_profiling_plugin";
 inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
-// This file will be created by replay when it has completed trim state loading.
+// This file will be created by replay when it has completed trim state loading. /sdcard/Download/
+// is the base path since GFXR can reliably write there.
 inline constexpr char kReplayStateLoadedSignalFile[] = "/sdcard/Download/replay_state_loaded";
 
 inline constexpr int

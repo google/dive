@@ -141,11 +141,8 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     else
     {
         std::vector<std::future<absl::StatusOr<std::string>>> futures;
-        std::vector<std::string>                              packages_to_check;
 
-        packages_to_check = all_packages;
-
-        for (const auto &pkg : packages_to_check)
+        for (const auto &pkg : all_packages)
         {
             futures.push_back(std::async(std::launch::async, [this, pkg]() {
                 return Adb().RunAndGetResult("shell dumpsys package " + pkg);
@@ -159,7 +156,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
             {
                 return dumpsys_output.status();
             }
-            const std::string &current_package = packages_to_check[i];
+            const std::string &current_package = all_packages[i];
 
             if (option == PackageListOptions::kDebuggableOnly)
             {

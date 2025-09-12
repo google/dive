@@ -26,6 +26,8 @@ limitations under the License.
 #include "dive_block_data.h"
 #include "dive_pm4_capture.h"
 
+#include "capture_service/constants.h"
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -166,7 +168,7 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
         // Tell other processes that replay has finished trim state loading. Use /sdcard/Download/
         // as the base path since GFXR can reliably write there.
         // TODO: b/444647876 - Implementation that doesn't use global state (filesystem)
-        if (!std::ofstream("/sdcard/Download/replay_state_loaded"))
+        if (!std::ofstream(Dive::kReplayStateLoadedSignalFile))
         {
             GFXRECON_LOG_INFO("Failed to create a file signaling that trim state loading is "
                               "complete. This will impact our ability to gather metrics.");

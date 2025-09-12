@@ -43,6 +43,8 @@ inline constexpr char kDefaultCaptureFolderName[] = "gfxr_capture";
 inline constexpr char kDefaultReplayFolderName[] = "gfxr_replay_downloads";
 inline constexpr char kProfilingPluginFolderName[] = "dive_profiling_plugin";
 inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
+// This file will be created by replay when it has completed trim state loading.
+inline constexpr char kReplayStateLoadedSignalFile[] = "/sdcard/Download/replay_state_loaded";
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

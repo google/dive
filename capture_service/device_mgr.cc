@@ -122,7 +122,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     {
         return list_packages_output.status();
     }
-    std::vector<std::string> lines = absl::StrSplit(list_packages_output->data(), '\n');
+    std::vector<std::string> lines = absl::StrSplit(*list_packages_output, '\n');
 
     std::vector<std::string> all_packages;
     for (const auto &line : lines)
@@ -160,14 +160,14 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 
             if (option == PackageListOptions::kDebuggableOnly)
             {
-                if (absl::StrContains(dumpsys_output->data(), "DEBUGGABLE"))
+                if (absl::StrContains(*dumpsys_output, "DEBUGGABLE"))
                 {
                     package_list.push_back(current_package);
                 }
             }
             else if (option == PackageListOptions::kNonDebuggableOnly)
             {
-                if (!absl::StrContains(dumpsys_output->data(), "DEBUGGABLE"))
+                if (!absl::StrContains(*dumpsys_output, "DEBUGGABLE"))
                 {
                     package_list.push_back(current_package);
                 }

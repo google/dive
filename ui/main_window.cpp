@@ -87,6 +87,8 @@ static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] =
     "FirstTilePassOnly",
     "BinningAndFirstTilePass"
 };
+constexpr DiveFilterModel::FilterMode
+kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
 
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {
@@ -122,8 +124,7 @@ MainWindow::MainWindow()
     QFrame *left_frame = new QFrame();
     m_view_mode_combo_box = new TreeViewComboBox();
     m_view_mode_combo_box->setMinimumWidth(150);
-    constexpr DiveFilterModel::FilterMode
-    kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
+
     {
         QVBoxLayout *left_vertical_layout = new QVBoxLayout();
 
@@ -699,11 +700,12 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_tab_widget->addTab(m_buffer_view, "Buffers");
 #endif
 
-    m_filter_model->SetMode(DiveFilterModel::kBinningAndFirstTilePass);
+    m_filter_model->SetMode(kDefaultFilterMode);
     m_command_hierarchy_view->setModel(m_filter_model);
 
     m_filter_mode_combo_box->setEnabled(true);
     m_filter_mode_combo_box->show();
+    m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
     m_filter_gfxr_commands_combo_box->setEnabled(false);
     m_filter_gfxr_commands_combo_box->hide();
     m_view_mode_combo_box->setEnabled(true);
@@ -792,11 +794,12 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     m_tab_widget->addTab(m_buffer_view, "Buffers");
 #endif
 
-    m_filter_model->SetMode(DiveFilterModel::kBinningAndFirstTilePass);
+    m_filter_model->SetMode(kDefaultFilterMode);
     m_command_hierarchy_view->setModel(m_filter_model);
 
     m_filter_mode_combo_box->setEnabled(true);
     m_filter_mode_combo_box->show();
+    m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
     m_filter_gfxr_commands_combo_box->Reset();
     m_filter_gfxr_commands_combo_box->setEnabled(false);
     m_filter_gfxr_commands_combo_box->hide();

@@ -49,7 +49,9 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
 
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
-const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
+const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info,
+uint64_t                                          draw_call_count,
+std::vector<uint64_t>                            &render_pass_draw_call_counts)
 {
     const std::string            &vulkan_cmd_name = vk_cmd_info.name;
     const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.args;
@@ -57,6 +59,7 @@ const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
     vk_cmd_string_stream << vulkan_cmd_name;
     if (vulkan_cmd_name == "vkBeginCommandBuffer")
     {
+        vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
         uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
                                             vk_cmd_string_stream.str());
         m_cur_command_buffer_node_index = cmd_buffer_index;
@@ -104,6 +107,12 @@ const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
     }
     else if (vulkan_cmd_name.find("vkCmdBeginRenderPass") != std::string::npos)
     {
+        if (!render_pass_draw_call_counts.empty())
+        {
+            draw_call_count = render_pass_draw_call_counts.front();
+            render_pass_draw_call_counts.erase(render_pass_draw_call_counts.begin());
+        }
+        vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index, "");
@@ -133,12 +142,16 @@ const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info)
 
 //--------------------------------------------------------------------------------------------------
 bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
-const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds)
+const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds,
+uint64_t                                                       draw_call_count,
+const std::vector<uint64_t>                                   &render_pass_draw_call_counts)
 {
+    std::vector<uint64_t> mutable_render_pass_draw_call_counts = render_pass_draw_call_counts;
+
     for (uint32_t i = 0; i < vkCmds.size(); ++i)
     {
         DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info = vkCmds[i];
-        OnCommand(vk_cmd_info);
+        OnCommand(vk_cmd_info, draw_call_count, mutable_render_pass_draw_call_counts);
     }
 
     // Ensure the parent node index stack is cleared
@@ -160,7 +173,8 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
 
         OnGfxrSubmit(submit_index, submit_info);
 
-        if (!ProcessVkCmds(submit_info.none_cmd_vk_commands))
+        std::vector<uint64_t> empty_render_pass_counts;
+        if (!ProcessVkCmds(submit_info.none_cmd_vk_commands, 0, empty_render_pass_counts))
         {
             return false;
         }
@@ -168,7 +182,10 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
         const auto &cmd_handles = submit_info.vk_command_buffer_handles;
         for (const auto &handle : cmd_handles)
         {
-            if (!ProcessVkCmds(capture_data.GetGfxrCommandBuffers(handle)))
+            const auto &draw_call_counts = capture_data.GetDrawCallCounts(handle);
+            if (!ProcessVkCmds(capture_data.GetGfxrCommandBuffers(handle),
+                               draw_call_counts.begin_command_buffer_draw_call_count,
+                               draw_call_counts.render_pass_draw_call_counts))
             {
                 return false;
             }

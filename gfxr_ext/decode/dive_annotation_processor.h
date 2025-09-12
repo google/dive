@@ -59,6 +59,14 @@ public:
         std::string           name = "";
     };
 
+    struct DrawCallCounts
+    {
+        // Total draw count for a single command buffer
+        uint64_t begin_command_buffer_draw_call_count = 0;
+        // Total draw counts for renderpasses in a single command buffer
+        std::vector<uint64_t> render_pass_draw_call_counts = {};
+    };
+
     DiveAnnotationProcessor() {}
     ~DiveAnnotationProcessor() {}
 
@@ -78,11 +86,16 @@ public:
     {
         return std::move(m_cmd_vk_commands_cache);
     }
+    std::unordered_map<uint64_t, DrawCallCounts> TakeDrawCallMap()
+    {
+        return std::move(m_draw_call_counts_map);
+    }
 
 private:
     // This is a per submit cache that keeps all vk commands that are not in any command buffer
     std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
     // Use command buffer handle as the key to accociate with vk commands
     std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
+    std::unordered_map<uint64_t, DrawCallCounts>                 m_draw_call_counts_map = {};
     std::vector<std::unique_ptr<SubmitInfo>>                     m_submits = {};
 };

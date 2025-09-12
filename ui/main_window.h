@@ -25,7 +25,6 @@
 
 // Forward declarations
 class BufferView;
-class CaptureSettingView;
 class CommandModel;
 class CommandTabView;
 class DiveFilterModel;
@@ -42,17 +41,16 @@ class GfxrVulkanCommandArgumentsTabView;
 class GfxrVulkanCommandArgumentsFilterProxyModel;
 class GfxrVulkanCommandFilterProxyModel;
 class GfxrVulkanCommandModel;
+class GpuTimingModel;
+class GpuTimingTabView;
 class HoverHelp;
 class Overlay;
 class OverlayWidget;
 class OverviewTabView;
-class PerfCounterView;
 class PropertyPanel;
 class QCheckBox;
 class QComboBox;
-class QItemSelection;
 class QLabel;
-class QProgressBar;
 class QPushButton;
 class QTabWidget;
 class SearchBar;
@@ -205,6 +203,7 @@ private:
     GfxrVulkanCommandFilterProxyModel *m_gfxr_vulkan_commands_filter_proxy_model;
     GfxrVulkanCommandModel            *m_gfxr_vulkan_command_hierarchy_model;
     PerfCounterModel                  *m_perf_counter_model;
+    GpuTimingModel                    *m_gpu_timing_model;
 
     // Right pane
     QTabWidget                        *m_tab_widget;
@@ -222,6 +221,8 @@ private:
     int                                m_gfxr_vulkan_command_arguments_view_tab_index;
     PerfCounterTabView                *m_perf_counter_tab_view;
     int                                m_perf_counter_view_tab_index;
+    GpuTimingTabView                  *m_gpu_timing_tab_view;
+    int                                m_gpu_timing_view_tab_index;
 #if defined(ENABLE_CAPTURE_BUFFERS)
     BufferView *m_buffer_view;
 #endif

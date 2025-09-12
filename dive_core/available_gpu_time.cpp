@@ -27,6 +27,96 @@
 namespace Dive
 {
 
+AvailableGpuTiming::AvailableGpuTiming()
+{
+    m_stats.resize(static_cast<uint8_t>(ObjectType::nObjectTypes));
+}
+
+std::string AvailableGpuTiming::GetObjectTypeString(ObjectType object_type) const
+{
+    std::stringstream ss;
+    switch (object_type)
+    {
+    case ObjectType::kFrame:
+    {
+        ss << "Frame";
+        break;
+    }
+    case ObjectType::kCommandBuffer:
+    {
+        ss << "CommandBuffer";
+        break;
+    }
+    case ObjectType::kRenderPass:
+    {
+        ss << "RenderPass";
+        break;
+    }
+    default:
+    {
+        std::cerr << "GetObjectTypeString() failed, object_type OOB: "
+                  << static_cast<int>(object_type) << std::endl;
+        return "";
+    }
+    }
+    return ss.str();
+}
+
+AvailableGpuTiming::ObjectType AvailableGpuTiming::GetObjectType(
+const std::string& object_type_str) const
+{
+    if (object_type_str == "Frame")
+    {
+        return ObjectType::kFrame;
+    }
+    else if (object_type_str == "CommandBuffer")
+    {
+        return ObjectType::kCommandBuffer;
+    }
+    else if (object_type_str == "RenderPass")
+    {
+        return ObjectType::kRenderPass;
+    }
+
+    // Unrecognized object_type_str
+    return ObjectType::nObjectTypes;
+}
+
+std::string AvailableGpuTiming::GetColumnTypeString(ColumnType column_type) const
+{
+    std::stringstream ss;
+    switch (column_type)
+    {
+    case ColumnType::kObjectType:
+    {
+        ss << "Type";
+        break;
+    }
+    case ColumnType::kId:
+    {
+        ss << "Id";
+        break;
+    }
+    case ColumnType::kMeanMs:
+    {
+        ss << "Mean [ms]";
+        break;
+    }
+    case ColumnType::kMedianMs:
+    {
+        ss << "Median [ms]";
+        break;
+    }
+    default:
+    {
+        std::cerr << "GetColumnTypeString() failed, object_type OOB: "
+                  << static_cast<int>(column_type) << std::endl;
+        return "";
+    }
+    }
+    return ss.str();
+}
+
 bool AvailableGpuTiming::LoadFromCsv(const std::filesystem::path& file_path)
 {
     std::cout << "Loading GPU timing statistics from file..." << std::endl;
@@ -81,14 +171,7 @@ bool AvailableGpuTiming::LoadFromString(const std::string& full_text)
 bool AvailableGpuTiming::LoadFromStream(std::istream& stream)
 {
     std::string line;
-    if (!std::getline(stream, line) || line.empty() ||
-        line.find(kExpectedHeader) == std::string::npos)
-    {
-        std::cerr << "Unexpected header: " << line << std::endl;
-        return false;
-    }
-
-    uint32_t row = 1;
+    uint32_t    row = 0;
     while (std::getline(stream, line))
     {
         if (line.empty())
@@ -120,10 +203,24 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
         return true;
     }
 
-    if (fields.size() != kExpectedColumns)
+    if (fields.size() != GetColumns())
     {
         std::cerr << "Unexpected number of columns: " << fields.size() << std::endl;
         return false;
+    }
+
+    // Check header without loading
+    if (row == 0)
+    {
+        for (uint8_t i = 0; i < fields.size(); i++)
+        {
+            if (fields[i] != GetColumnTypeString(static_cast<ColumnType>(i)))
+            {
+                std::cerr << "Unexpected header element: " << fields[i] << std::endl;
+                return false;
+            }
+        }
+        return true;
     }
 
     // TODO(b/443122531): Improve integer and float parsing here, this has edge cases that aren't
@@ -163,51 +260,34 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
         return false;
     }
 
-    Entry entry;
-    if (fields[0] == "Frame")
+    Entry      entry;
+    ObjectType object_type = GetObjectType(fields[0]);
+    if (object_type == ObjectType::nObjectTypes)
     {
-        if (row != 1)
-        {
-            std::cerr << "Unexpected Frame stats on row: " << row << std::endl;
-            return false;
-        }
-
-        entry.object_type = ObjectType::kFrame;
-        entry.per_frame_id = 0;
-        m_frame_stats = stats;
-        m_total_frames = id;
-    }
-    else if (fields[0] == "CommandBuffer")
-    {
-        entry.object_type = ObjectType::kCommandBuffer;
-        if (m_command_buffer_stats.size() != id)
-        {
-            std::cerr << "Unexpected CommandBuffer id: " << id << std::endl;
-            std::cerr << "Current m_command_buffer_stats.size(): " << m_command_buffer_stats.size()
-                      << std::endl;
-            return false;
-        }
-        entry.per_frame_id = id;
-        m_command_buffer_stats.push_back(stats);
-    }
-    else if (fields[0] == "RenderPass")
-    {
-        entry.object_type = ObjectType::kRenderPass;
-        if (m_render_pass_stats.size() != id)
-        {
-            std::cerr << "Unexpected RenderPass id: " << id << std::endl;
-            std::cerr << "Current m_render_pass_stats.size(): " << m_render_pass_stats.size()
-                      << std::endl;
-            return false;
-        }
-        entry.per_frame_id = id;
-        m_render_pass_stats.push_back(stats);
-    }
-    else
-    {
-        std::cerr << "Unrecognizable field: " << fields[0] << std::endl;
+        std::cerr << "Expecting a float median, not integer: " << fields[3] << std::endl;
         return false;
     }
+
+    entry.object_type = object_type;
+    entry.per_frame_id = id;
+    if (object_type == ObjectType::kFrame)
+    {
+        // Within the CSV file there is only one row for Frame, and this row's id field is used to
+        // store the total number of frames used to calculate the statistics
+        m_total_frames = id;
+        entry.per_frame_id = 0;
+    }
+
+    uint8_t index = static_cast<uint8_t>(object_type);
+
+    if (m_stats[index].size() != entry.per_frame_id)
+    {
+        std::cerr << "Unexpected id (" << id << ") on row (" << row
+                  << ") for object_type: " << GetObjectTypeString(object_type) << std::endl;
+        return false;
+    }
+
+    m_stats[index].push_back(stats);
     m_ordered_entries.push_back(entry);
 
     if (row != m_ordered_entries.size())
@@ -222,13 +302,21 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
 
 void AvailableGpuTiming::Validate()
 {
-    if ((m_render_pass_stats.size() + m_command_buffer_stats.size() + 1) !=
-        m_ordered_entries.size())
+    size_t total_stats = 0;
+    for (size_t i = 0; i < m_stats.size(); i++)
+    {
+        total_stats += m_stats[i].size();
+    }
+
+    if (total_stats != m_ordered_entries.size())
     {
         std::cerr << "Inconsistent number of entries: " << m_ordered_entries.size() << std::endl;
-        std::cerr << "Frame row: 1" << std::endl;
-        std::cerr << "CommandBuffer rows: " << m_command_buffer_stats.size() << std::endl;
-        std::cerr << "RenderPass rows: " << m_render_pass_stats.size() << std::endl;
+
+        for (size_t i = 0; i < m_stats.size(); i++)
+        {
+            std::cerr << GetObjectTypeString(static_cast<ObjectType>(i))
+                      << " number of rows: " << m_stats[i].size() << std::endl;
+        }
         return;
     }
     m_valid = true;
@@ -245,31 +333,21 @@ uint32_t   object_id) const
         return std::nullopt;
     }
 
-    if (object_type == ObjectType::kFrame)
+    uint8_t index = static_cast<uint8_t>(object_type);
+    if (index >= m_stats.size())
     {
-        return m_frame_stats;
-    }
-    else if (object_type == ObjectType::kCommandBuffer)
-    {
-        if (object_id >= m_command_buffer_stats.size())
-        {
-            std::cerr << "Out of bounds (CommandBuffer) object_id: " << object_id << std::endl;
-            return std::nullopt;
-        }
-        return m_command_buffer_stats[object_id];
-    }
-    else if (object_type == ObjectType::kRenderPass)
-    {
-        if (object_id >= m_render_pass_stats.size())
-        {
-            std::cerr << "Out of bounds (RenderPass) object_id: " << object_id << std::endl;
-            return std::nullopt;
-        }
-        return m_render_pass_stats[object_id];
+        std::cerr << "m_stats does not contain stats for object_type: " << index << std::endl;
+        return std::nullopt;
     }
 
-    std::cerr << "Unexpected ObjectType: " << static_cast<int>(object_type) << std::endl;
-    return std::nullopt;
+    if (object_id >= m_stats[index].size())
+    {
+        std::cerr << "m_stats does not contain stats for object_type(" << index << ") object_id ("
+                  << object_id << ")" << std::endl;
+        return std::nullopt;
+    }
+
+    return m_stats[index][object_id];
 }
 
 std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStatsByRow(uint32_t row_id) const
@@ -288,6 +366,95 @@ std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStatsByRow(uint3
 
     Entry entry = m_ordered_entries[row_id - 1];
     return AvailableGpuTiming::GetStatsByType(entry.object_type, entry.per_frame_id);
+}
+
+std::string AvailableGpuTiming::GetColumnHeader(int col) const
+{
+    if ((col < 0) || (col >= static_cast<int>(ColumnType::nColumnTypes)))
+    {
+        std::cerr << "Invalid col for GetColumnHeader: " << col << std::endl;
+        return "";
+    }
+    return GetColumnTypeString(static_cast<ColumnType>(col));
+}
+
+std::string AvailableGpuTiming::GetCell(int row, int col) const
+{
+    if (!m_valid)
+    {
+        std::cerr << "Invalid AvailableGpuTiming object" << std::endl;
+        return "";
+    }
+
+    if ((row < 0) || (row >= GetRows()))
+    {
+        std::cerr << "GetCell() OOB error, row: " << row << " expecting: [0-" << (GetRows() - 1)
+                  << "]" << std::endl;
+        return "";
+    }
+
+    if ((col < 0) || (col >= GetColumns()))
+    {
+        std::cerr << "GetCell() OOB error, col: " << col << " expecting: [0-" << (GetColumns() - 1)
+                  << "]" << std::endl;
+        return "";
+    }
+
+    std::stringstream ss;
+
+    if (col < 2)
+    {
+        // First two columns are type and id
+        const Entry& entry = m_ordered_entries[row];
+
+        if (col == 0)
+        {
+            ss << GetObjectTypeString(entry.object_type);
+            return ss.str();
+        }
+
+        ss << entry.per_frame_id;
+        return ss.str();
+    }
+
+    // Offset because QTableView first row (frame info) is index 0
+    auto ret = GetStatsByRow(row + 1);
+    if (!ret.has_value())
+    {
+        std::cerr << "GetStatsByRow() failed, row: " << row << std::endl;
+        return "";
+    }
+    Stats& stats = *ret;
+
+    switch (col)
+    {
+    case 2:
+    {
+        ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.mean_ms;
+        return ss.str();
+    }
+    case 3:
+    {
+        ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.median_ms;
+        return ss.str();
+    }
+    default:
+    {
+        std::cerr << "GetCell() OOB error, col: " << col << " expected: [2-" << (GetColumns() - 1)
+                  << "]" << std::endl;
+        return "";
+    }
+    }
+}
+
+int AvailableGpuTiming::GetRows() const
+{
+    if (!m_valid)
+    {
+        std::cerr << "Invalid AvailableGpuTiming object" << std::endl;
+        return -1;
+    }
+    return static_cast<int>(m_ordered_entries.size());
 }
 
 }  // namespace Dive

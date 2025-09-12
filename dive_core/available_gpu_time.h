@@ -33,34 +33,50 @@ TODO: Retrieve GPU timing info from device to host through network/ rather than 
 
 namespace
 {
-constexpr char kExpectedHeader[] = "Type,Id,Mean [ms],Median [ms]";
-constexpr int  kExpectedColumns = 4;
+constexpr int kDisplayFloatPrecision = 3;
 }  // namespace
 
 class AvailableGpuTiming
 {
 public:
+    // TODO(b/444500681): Consider moving enums (ObjectType, ColumnType) and kDisplayFloatPrecision
+    // to gpu_time/ where the statistics are produced and refactoring so that it is no longer
+    // hard-coded
     enum class ObjectType : uint8_t
     {
         kFrame = 0,
         kCommandBuffer = 1,
         kRenderPass = 2,
-        nObjectTypes = 3,
+        nObjectTypes = 3,  // Also used for invalid ObjectTypes
     };
 
+    // Columns expected in the .csv file
+    enum class ColumnType : uint8_t
+    {
+        kObjectType = 0,
+        kId = 1,
+        kMeanMs = 2,
+        kMedianMs = 3,
+        nColumnTypes = 4,
+    };
+
+    // For preserving an ordered record of the rows in the .csv file, useful in correlation of
+    // Vulkan events to timing info
     struct Entry
     {
         ObjectType object_type;
         uint32_t   per_frame_id;
     };
 
+    // Corresponds to information received designated by ColumnType, except that the first two
+    // non-statistic columns are omitted
     struct Stats
     {
-        float mean_ms;
-        float median_ms;
+        float mean_ms;    // ColumnType::kMeanMs
+        float median_ms;  // ColumnType::kMedianMs
     };
 
-    AvailableGpuTiming() = default;
+    AvailableGpuTiming();
     ~AvailableGpuTiming() = default;
 
     // Load statistics from a CSV file and flag as loaded afterwards
@@ -70,15 +86,38 @@ public:
     // For unit testing
     bool LoadFromString(const std::string& full_text);
 
-    // Get the statistic info with the ObjectType and the object_id (nth object of type ObjectType)
-    // If the object_type is kFrame, the object_id value will be disregarded
+    // Get the statistic info with the ObjectType and the object_id (nth object
+    // of type ObjectType) If the object_type is kFrame, the object_id value
+    // will be disregarded
     std::optional<Stats> GetStatsByType(ObjectType object_type, uint32_t object_id) const;
 
     // Get the statistic info with the row_id (representing the row in file order, header is row 0)
     std::optional<Stats> GetStatsByRow(uint32_t row_id) const;
 
     // Validate entries to stats counts
-    bool IsValid() const { return m_valid; };
+    bool IsValid() const { return m_valid; }
+
+    // -------------------------------------------------------------
+    // Methods for converting between enums and strings
+
+    std::string GetObjectTypeString(ObjectType object_type) const;
+    ObjectType  GetObjectType(const std::string& object_type_str) const;
+    std::string GetColumnTypeString(ColumnType column_type) const;
+
+    // -------------------------------------------------------------
+    // Methods called by the UI to populate GpuTimingModel
+
+    // Get the header for a specific column
+    std::string GetColumnHeader(int col) const;
+
+    // Get the statistic info for a specific cell
+    std::string GetCell(int row, int col) const;
+
+    // Get the number of non-header rows in the CSV file
+    int GetRows() const;
+
+    // Get the number of columns expected for the table
+    int GetColumns() const { return static_cast<int>(ColumnType::nColumnTypes); }
 
 private:
     // Load statistics from stream
@@ -90,10 +129,12 @@ private:
     // Check m_ordered_entries against info stored in *_stats members
     void Validate();
 
-    std::vector<Entry> m_ordered_entries = {};  // Preserved row order from file
-    Stats              m_frame_stats = {};
-    std::vector<Stats> m_command_buffer_stats = {};
-    std::vector<Stats> m_render_pass_stats = {};
+    // Preserved row order from file
+    std::vector<Entry> m_ordered_entries = {};
+
+    // Statistics from file, indexed by ObjectType
+    std::vector<std::vector<Stats>> m_stats = {};
+
     uint32_t m_total_frames = 0;  // The number of frames the statistics were collected from
     bool     m_loaded = false;    // If true, prevent further loading
     bool     m_valid = false;     // Validated at loading time

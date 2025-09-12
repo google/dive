@@ -404,18 +404,6 @@ MainWindow::MainWindow()
                      &AnalyzeDialog::ReloadCapture,
                      this,
                      &MainWindow::OnOpenFileFromAnalyzeDialog);
-    QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayPerfCounterResults,
-                     m_perf_counter_model,
-                     &PerfCounterModel::OnPerfCounterResultsGenerated);
-    QObject::connect(m_command_hierarchy_view,
-                     &QTreeView::customContextMenuRequested,
-                     this,
-                     &MainWindow::OnCorrelateVulkanDrawCall);
-    QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayGpuTimingResults,
-                     m_gpu_timing_model,
-                     &GpuTimingModel::OnGpuTimingResultsGenerated);
 
     CreateActions();
     CreateMenus();
@@ -1899,6 +1887,26 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnSelectionChanged(const QModelIndex &)));
 
+    QObject::disconnect(m_command_hierarchy_view,
+                        &QTreeView::customContextMenuRequested,
+                        this,
+                        &MainWindow::OnCorrelateVulkanDrawCall);
+
+    QObject::disconnect(m_analyze_dig,
+                        &AnalyzeDialog::OnDisplayPerfCounterResults,
+                        m_perf_counter_model,
+                        &PerfCounterModel::OnPerfCounterResultsGenerated);
+
+    QObject::disconnect(m_analyze_dig,
+                        &AnalyzeDialog::OnDisplayGpuTimingResults,
+                        m_gpu_timing_model,
+                        &GpuTimingModel::OnGpuTimingResultsGenerated);
+
+    QObject::disconnect(m_command_hierarchy_view,
+                        &QTreeView::customContextMenuRequested,
+                        this,
+                        &MainWindow::OnCorrelatePm4DrawCall);
+
     QObject::disconnect(m_command_tab_view,
                         SIGNAL(HideOtherSearchBars()),
                         this,
@@ -1989,6 +1997,21 @@ void MainWindow::ConnectDiveFileTabs()
                      this,
                      SLOT(OnSelectionChanged(const QModelIndex &)));
 
+    QObject::connect(m_command_hierarchy_view,
+                     &QTreeView::customContextMenuRequested,
+                     this,
+                     &MainWindow::OnCorrelatePm4DrawCall);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     m_perf_counter_model,
+                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     m_gpu_timing_model,
+                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+
     QObject::connect(m_command_tab_view,
                      SIGNAL(HideOtherSearchBars()),
                      this,
@@ -2069,6 +2092,21 @@ void MainWindow::ConnectAdrenoRdFileTabs()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::ConnectGfxrFileTabs()
 {
+    QObject::connect(m_command_hierarchy_view,
+                     &QTreeView::customContextMenuRequested,
+                     this,
+                     &MainWindow::OnCorrelateVulkanDrawCall);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     m_perf_counter_model,
+                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     m_gpu_timing_model,
+                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_gfxr_vulkan_command_arguments_tab_view,
@@ -2258,4 +2296,61 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
     {
         m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCorrelatePm4DrawCall(const QPoint &pos)
+{
+    if (m_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
+        m_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
+    {
+        QMessageBox::
+        information(this,
+                    "Correlation Disabled",
+                    "Ensure either the Binning Pass Only or First Tile Pass Only filter is enabled "
+                    "before attempting to correlate the draw calls.");
+        return;
+    }
+
+    QModelIndex source_index = m_filter_model->mapToSource(m_command_hierarchy_view->indexAt(pos));
+    uint64_t    node_index = (uint64_t)(source_index.internalPointer());
+
+    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
+                                      Dive::NodeType::kDrawDispatchNode))
+    {
+        return;
+    }
+
+    std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
+                                                  m_command_hierarchy_view->model())
+                                                  ->GetPm4DrawCallIndices();
+
+    auto it = std::find(pm4_draw_call_indices.begin(), pm4_draw_call_indices.end(), node_index);
+
+    if (it == pm4_draw_call_indices.end())
+    {
+        QMessageBox::critical(this,
+                              "Correlation Failed",
+                              "Corresponding vulkan draw call not found.");
+        return;
+    }
+
+    uint64_t found_pm4_draw_call_index = std::distance(pm4_draw_call_indices.begin(), it);
+
+    QMenu    context_menu;
+    QAction *draw_call_correlation_action = context_menu.addAction("Vulkan Draw Call");
+    draw_call_correlation_action->setData(0);
+
+    QAction *selected_action = context_menu.exec(
+    m_command_hierarchy_view->viewport()->mapToGlobal(pos));
+
+    // Ensures that if the user clicks outside of the context menu, a seg fault does not occur since
+    // it is interpreted as a selection.
+    if (selected_action == nullptr)
+    {
+        return;
+    }
+
+    m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_view_tab_index);
+    emit CorrelateDrawCall(found_pm4_draw_call_index);
 }

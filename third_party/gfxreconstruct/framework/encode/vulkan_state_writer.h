@@ -120,7 +120,9 @@ class VulkanStateWriter
 
     void WriteDeviceState(const VulkanStateTable& state_table);
 
-    void WriteCommandBufferState(const VulkanStateTable& state_table);
+    // GOOGLE: Returns the primary command buffers that are partially recorded from previous frame (no
+    // vkEndCommandBuffer called in previous frame)
+    std::vector<vulkan_wrappers::CommandBufferWrapper*> WriteCommandBufferState(const VulkanStateTable& state_table);
 
     void WriteTrimCommandPool(const VulkanStateTable& state_table);
 

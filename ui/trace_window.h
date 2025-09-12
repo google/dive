@@ -142,7 +142,7 @@ private slots:
     void OnInputCommand(const QString &);
     void OnInputArgs(const QString &);
     void OnPackageListFilter();
-    void OnPackageListFilterApplied(QSet<QString> filters);
+    void OnPackageListFilterApplied(const QString &filter);
     void OnGfxrCaptureClicked();
 
 signals:

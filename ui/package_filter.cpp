@@ -17,7 +17,8 @@
 #include <QLabel>
 #include <iostream>
 #include <string>
-#include "QCheckBox"
+#include "QButtonGroup"
+#include "QRadioButton"
 #include "QHBoxLayout"
 #include "QPushButton"
 #include "QVBoxLayout"
@@ -27,124 +28,64 @@ PackageFilter::PackageFilter(QWidget* parent) :
     QWidget(parent)
 
 {
-    m_all_filter = new QCheckBox("All", this);
-    m_debuggable_filter = new QCheckBox("Debuggable", this);
-    m_non_debuggable_filter = new QCheckBox("Non-Debuggable", this);
+    m_filter_button_group = new QButtonGroup(this);
+    m_all_filter = new QRadioButton("All", this);
+    m_debuggable_filter = new QRadioButton("Debuggable", this);
+    m_non_debuggable_filter = new QRadioButton("Non-Debuggable", this);
     m_apply = new QPushButton("Apply Filters", this);
     m_apply->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
-    m_debuggable_filter->setCheckState(Qt::Checked);
-    m_active_filters.insert(m_debuggable_filter);
+    m_filter_button_group->addButton(m_all_filter, 0);
+    m_filter_button_group->addButton(m_debuggable_filter, 1);
+    m_filter_button_group->addButton(m_non_debuggable_filter, 2);
 
-    connect(this, SIGNAL(rejected()), this, SLOT(onReject()));
-    connect(m_all_filter, SIGNAL(stateChanged(int)), this, SLOT(selectAllEventsFilter(int)));
-    connect(m_debuggable_filter, SIGNAL(stateChanged(int)), this, SLOT(selectFilter(int)));
-    connect(m_non_debuggable_filter, SIGNAL(stateChanged(int)), this, SLOT(selectFilter(int)));
-    connect(m_apply, SIGNAL(clicked()), this, SLOT(applyFilters()));
+    m_debuggable_filter->setChecked(true);
+    m_active_filter_text = m_debuggable_filter->text();
+
+    connect(m_apply, &QPushButton::clicked, this, &PackageFilter::ApplyFilters);
 
     QHBoxLayout* filter_options_layout = new QHBoxLayout;
     filter_options_layout->addWidget(m_all_filter);
     filter_options_layout->addWidget(m_debuggable_filter);
     filter_options_layout->addWidget(m_non_debuggable_filter);
+    filter_options_layout->addStretch();
     filter_options_layout->addWidget(m_apply);
 
     setLayout(filter_options_layout);
 }
 
 //--------------------------------------------------------------------------------------------------
-void PackageFilter::selectAllEventsFilter(int state)
+void PackageFilter::ApplyFilters()
 {
-    if (state == Qt::Checked)
+    QRadioButton* checked_button = qobject_cast<QRadioButton*>(
+    m_filter_button_group->checkedButton());
+    if (checked_button)
     {
-        m_non_debuggable_filter->setCheckState(Qt::Unchecked);
-        m_debuggable_filter->setCheckState(Qt::Unchecked);
-        m_filters.clear();
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void PackageFilter::selectFilter(int state)
-{
-    if (state == Qt::Checked)
-    {
-        m_all_filter->setCheckState(Qt::Unchecked);
-        auto iterator = std::find_if(m_filters.begin(),
-                                     m_filters.end(),
-                                     [](const QCheckBox* checkBox) {
-                                         return checkBox->text() == "All";
-                                     });
-        if (iterator != m_filters.end())
-        {
-            m_filters.erase(iterator);
-        }
-        m_filters.insert(qobject_cast<QCheckBox*>(sender()));
-
-        if (m_filters.size() == (kTotalFilterCount - 1))
-        {
-            m_all_filter->setCheckState(Qt::Checked);
-        }
+        m_active_filter_text = checked_button->text();
     }
     else
     {
-        m_filters.erase(qobject_cast<QCheckBox*>(sender()));
+        m_active_filter_text = "All";
+        m_all_filter->setChecked(true);
     }
-}
 
-//--------------------------------------------------------------------------------------------------
-void PackageFilter::applyFilters()
-{
-    m_active_filters.clear();
-
-    if (m_filters.empty())
-    {
-        m_debuggable_filter->setCheckState(Qt::Checked);
-        m_active_filters.insert(m_debuggable_filter);
-        emit filtersApplied({ m_debuggable_filter->text() });
-    }
-    else
-    {
-        QSet<QString> applied_filter_texts;
-        for (QCheckBox* selectedCheckBox : m_filters)
-        {
-            if (selectedCheckBox->text() == "All")
-            {
-                m_active_filters.clear();
-                applied_filter_texts.clear();
-                m_active_filters.insert(selectedCheckBox);
-                applied_filter_texts.insert(selectedCheckBox->text());
-                emit filtersApplied(applied_filter_texts);
-                break;
-            }
-            m_active_filters.insert(selectedCheckBox);
-            applied_filter_texts.insert(selectedCheckBox->text());
-        }
-        emit filtersApplied(applied_filter_texts);
-        m_filters.clear();
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void PackageFilter::onReject()
-{
-    close();
+    emit FiltersApplied(m_active_filter_text);
 }
 
 //--------------------------------------------------------------------------------------------------
 void PackageFilter::closeEvent(QCloseEvent* event)
 {
-    // Iterate over the copy of filters
-    auto unappliedFilters = m_filters;
-    for (QCheckBox* checkBox : unappliedFilters)
+    QList<QAbstractButton*> buttons = m_filter_button_group->buttons();
+    for (QAbstractButton* button : buttons)
     {
-        checkBox->setCheckState(m_active_filters.count(checkBox) ? Qt::Checked : Qt::Unchecked);
-    }
-
-    // Ensure all checkboxes in m_active_filters are checked
-    for (QCheckBox* checkBox : m_active_filters)
-    {
-        if (!checkBox->isChecked())
+        if (button->text() == m_active_filter_text)
         {
-            checkBox->setCheckState(Qt::Checked);
+            if (!button->isChecked())
+            {
+                button->setChecked(true);
+            }
+            break;
         }
     }
+    QWidget::closeEvent(event);
 }

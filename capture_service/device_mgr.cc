@@ -17,6 +17,7 @@ limitations under the License.
 #include "device_mgr.h"
 
 #include <filesystem>
+#include <future>
 #include <memory>
 
 #include "../dive_core/common/common.h"
@@ -110,60 +111,70 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 {
     std::vector<std::string> package_list;
     std::string              cmd = "shell pm list packages";
+
     if (option != PackageListOptions::kAll && option != PackageListOptions::kNonDebuggableOnly)
     {
         cmd += " -3";
     }
-    std::string                 output;
-    absl::StatusOr<std::string> result = Adb().RunAndGetResult(cmd);
-    if (!result.ok())
+
+    absl::StatusOr<std::string> list_packages_output = Adb().RunAndGetResult(cmd);
+    if (!list_packages_output.ok())
     {
-        return result.status();
+        return list_packages_output.status();
     }
-    output = *result;
-    std::vector<std::string> lines = absl::StrSplit(output, '\n');
+    std::vector<std::string> lines = absl::StrSplit(*list_packages_output, '\n');
+
+    std::vector<std::string> all_packages;
     for (const auto &line : lines)
     {
         std::vector<std::string> fields = absl::StrSplit(line, ':');
         if (fields.size() == 2 && fields[0] == "package")
         {
-            std::string package(absl::StripAsciiWhitespace(fields[1]));
-            switch (option)
+            all_packages.push_back(std::string(absl::StripAsciiWhitespace(fields[1])));
+        }
+    }
+
+    if (option == PackageListOptions::kAll)
+    {
+        package_list = all_packages;
+    }
+    else
+    {
+        std::vector<std::future<absl::StatusOr<std::string>>> futures;
+
+        for (const auto &pkg : all_packages)
+        {
+            futures.push_back(std::async(std::launch::async, [this, pkg]() {
+                return Adb().RunAndGetResult("shell dumpsys package " + pkg);
+            }));
+        }
+
+        for (size_t i = 0; i < futures.size(); ++i)
+        {
+            absl::StatusOr<std::string> dumpsys_output = futures[i].get();
+            if (!dumpsys_output.ok())
             {
-            case PackageListOptions::kAll:
-                package_list.push_back(package);
-                break;
-            case PackageListOptions::kDebuggableOnly:
-                result = Adb().RunAndGetResult("shell dumpsys package " + package);
-                if (!result.ok())
+                return dumpsys_output.status();
+            }
+            const std::string &current_package = all_packages[i];
+
+            if (option == PackageListOptions::kDebuggableOnly)
+            {
+                if (absl::StrContains(*dumpsys_output, "DEBUGGABLE"))
                 {
-                    return result.status();
+                    package_list.push_back(current_package);
                 }
-                output = *result;
-                // TODO: find out more reliable way to find if app is debuggable.
-                if (absl::StrContains(output, "DEBUGGABLE"))
+            }
+            else if (option == PackageListOptions::kNonDebuggableOnly)
+            {
+                if (!absl::StrContains(*dumpsys_output, "DEBUGGABLE"))
                 {
-                    package_list.push_back(package);
+                    package_list.push_back(current_package);
                 }
-                break;
-            case PackageListOptions::kNonDebuggableOnly:
-                result = Adb().RunAndGetResult("shell dumpsys package " + package);
-                if (!result.ok())
-                {
-                    return result.status();
-                }
-                output = *result;
-                if (!absl::StrContains(output, "DEBUGGABLE"))
-                {
-                    package_list.push_back(package);
-                }
-                break;
-            default:
-                DIVE_ASSERT(false);
-                break;  // Unknown Package List Option.
             }
         }
     }
+
     std::sort(package_list.begin(), package_list.end());
     return package_list;
 }

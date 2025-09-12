@@ -230,7 +230,7 @@ TraceDialog::TraceDialog(QWidget *parent)
     QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
     QObject::connect(m_args_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputArgs);
     QObject::connect(m_pkg_filter,
-                     &PackageFilter::filtersApplied,
+                     &PackageFilter::FiltersApplied,
                      this,
                      &TraceDialog::OnPackageListFilterApplied);
 }
@@ -992,17 +992,17 @@ void TraceDialog::OnPackageListFilter()
     }
 }
 
-void TraceDialog::OnPackageListFilterApplied(QSet<QString> filters)
+void TraceDialog::OnPackageListFilterApplied(const QString &filter)
 {
-    if (filters.contains("All"))
+    if (filter == "All")
     {
         m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kAll;
     }
-    else if (filters.contains("Debuggable"))
+    else if (filter == "Debuggable")
     {
         m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
     }
-    else if (filters.contains("Non-Debuggable"))
+    else if (filter == "Non-Debuggable")
     {
         m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kNonDebuggableOnly;
     }

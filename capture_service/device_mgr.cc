@@ -117,13 +117,12 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         cmd += " -3";
     }
 
-    absl::StatusOr<std::string> result = Adb().RunAndGetResult(cmd);
-    if (!result.ok())
+    absl::StatusOr<std::string> list_packages_output = Adb().RunAndGetResult(cmd);
+    if (!list_packages_output.ok())
     {
-        return result.status();
+        return list_packages_output.status();
     }
-    std::string              output = *result;
-    std::vector<std::string> lines = absl::StrSplit(output, '\n');
+    std::vector<std::string> lines = absl::StrSplit(list_packages_output->data(), '\n');
 
     std::vector<std::string> all_packages;
     for (const auto &line : lines)
@@ -155,24 +154,23 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 
         for (size_t i = 0; i < futures.size(); ++i)
         {
-            absl::StatusOr<std::string> dumpsys_result = futures[i].get();
-            if (!dumpsys_result.ok())
+            absl::StatusOr<std::string> dumpsys_output = futures[i].get();
+            if (!dumpsys_output.ok())
             {
-                return dumpsys_result.status();
+                return dumpsys_output.status();
             }
-            output = *dumpsys_result;
             const std::string &current_package = packages_to_check[i];
 
             if (option == PackageListOptions::kDebuggableOnly)
             {
-                if (absl::StrContains(output, "DEBUGGABLE"))
+                if (absl::StrContains(dumpsys_output->data(), "DEBUGGABLE"))
                 {
                     package_list.push_back(current_package);
                 }
             }
             else if (option == PackageListOptions::kNonDebuggableOnly)
             {
-                if (!absl::StrContains(output, "DEBUGGABLE"))
+                if (!absl::StrContains(dumpsys_output->data(), "DEBUGGABLE"))
                 {
                     package_list.push_back(current_package);
                 }

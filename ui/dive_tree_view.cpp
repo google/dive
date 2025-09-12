@@ -87,8 +87,7 @@ bool DiveFilterModel::IncludeIndex(uint64_t node_index) const
         filter_list_type = Dive::CommandHierarchy::kBinningAndFirstTilePass;
         break;
     default:
-        DIVE_ASSERT(false);
-        break;
+        return true;
     }
 
     const auto &filter_exclude_indices = m_command_hierarchy.GetFilterExcludeIndices(

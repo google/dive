@@ -18,11 +18,15 @@ limitations under the License.
 
 #include "dive_file_processor.h"
 
+#include <fstream>
+
 #include "util/logging.h"
 #include "util/platform.h"
 
 #include "dive_block_data.h"
 #include "dive_pm4_capture.h"
+
+#include "capture_service/constants.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -160,6 +164,13 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
         if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
         {
             DivePM4Capture::GetInstance().TryStartCapture();
+        }
+        // Tell other processes that replay has finished trim state loading.
+        // TODO: b/444647876 - Implementation that doesn't use global state (filesystem)
+        if (!std::ofstream(Dive::kReplayStateLoadedSignalFile))
+        {
+            GFXRECON_LOG_INFO("Failed to create a file signaling that trim state loading is "
+                              "complete. This will impact our ability to gather metrics.");
         }
 #endif
     }

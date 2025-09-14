@@ -70,6 +70,14 @@ public:
                                       format::HandleId          commandBuffer,
                                       VkCommandBufferResetFlags flags) override;
 
+    void Process_vkCreateCommandPool(
+    const ApiCallInfo&                                     call_info,
+    VkResult                                               returnValue,
+    format::HandleId                                       device,
+    StructPointerDecoder<Decoded_VkCommandPoolCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
+    HandlePointerDecoder<VkCommandPool>*                   pCommandPool) override;
+
     void Process_vkResetCommandPool(const ApiCallInfo&      call_info,
                                     VkResult                returnValue,
                                     format::HandleId        device,

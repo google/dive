@@ -137,6 +137,17 @@ public:
     format::HandleId                                commandBuffer,
     StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
 
+    void Process_vkCmdBeginRenderPass2KHR(
+    const ApiCallInfo&                                   call_info,
+    format::HandleId                                     commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+    StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo) override;
+
+    void Process_vkCmdEndRenderPass2KHR(
+    const ApiCallInfo&                              call_info,
+    format::HandleId                                commandBuffer,
+    StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
+
     void Process_vkCreateFence(const ApiCallInfo&                                   call_info,
                                VkResult                                             returnValue,
                                format::HandleId                                     device,

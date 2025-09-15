@@ -439,6 +439,7 @@ void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass(const ApiCallInfo& cal
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
 }
+
 void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass2(
 const ApiCallInfo&                                   call_info,
 format::HandleId                                     commandBuffer,
@@ -483,6 +484,23 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
+}
+
+void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass2KHR(
+const ApiCallInfo&                                   call_info,
+format::HandleId                                     commandBuffer,
+StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo)
+{
+    Process_vkCmdBeginRenderPass2(call_info, commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass2KHR(
+const ApiCallInfo&                              call_info,
+format::HandleId                                commandBuffer,
+StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+{
+    Process_vkCmdEndRenderPass2(call_info, commandBuffer, pSubpassEndInfo);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCreateFence(

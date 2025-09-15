@@ -42,6 +42,7 @@
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "command_model.h"
+#include "dive_core/command_hierarchy.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
 #include "object_names.h"
@@ -544,8 +545,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     }
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(selected_item_node_index);
-    if (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
-        node_type == Dive::NodeType::kMarkerNode)
+    if (Dive::IsDrawDispatchBlitNode(node_type) || node_type == Dive::NodeType::kMarkerNode)
     {
         emit EventSelected(selected_item_node_index);
     }
@@ -2318,8 +2318,8 @@ void MainWindow::OnCorrelatePm4DrawCall(const QPoint &pos)
     QModelIndex source_index = m_filter_model->mapToSource(m_command_hierarchy_view->indexAt(pos));
     uint64_t    node_index = (uint64_t)(source_index.internalPointer());
 
-    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
-                                      Dive::NodeType::kDrawDispatchNode))
+    if ((!source_index.isValid()) ||
+        !Dive::IsDrawDispatchNode(m_data_core->GetCommandHierarchy().GetNodeType(node_index)))
     {
         return;
     }

@@ -65,8 +65,11 @@ public:
         m_progress_bar(pd)
     {
     }
-    void                    SetGfxrCapturePath(const std::string &capture_path);
-    void                    SetGfxrTargetCapturePath(const std::string &target_capture_path);
+    void SetGfxrSourceCaptureDir(const std::string &source_capture_dir);
+
+    // Appends/increments the numerical suffix "_#" to target_capture_path for a fresh directory, if
+    // the directory already exists
+    void                    SetGfxrTargetCaptureDir(const std::string &target_capture_dir);
     bool                    areTimestampsCurrent(Dive::AndroidDevice     *device,
                                                  std::vector<std::string> previous_timestamps);
     absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
@@ -75,9 +78,10 @@ signals:
     void GfxrCaptureAvailable(const QString &);
 
 private:
-    QProgressDialog         *m_progress_bar;
-    std::filesystem::path    m_capture_path;
-    std::filesystem::path    m_target_capture_path;
+    QProgressDialog *m_progress_bar;
+    std::string      m_source_capture_dir;  // On Android, better to keep as std::string since the
+                                            // host platform delimiter may be inconsistent
+    std::filesystem::path    m_target_capture_dir;
     std::vector<std::string> m_file_list;
 };
 

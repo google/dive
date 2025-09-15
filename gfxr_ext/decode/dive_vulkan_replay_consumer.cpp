@@ -196,6 +196,31 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandBuffer(const ApiCallInfo&  
                                                        flags);
 }
 
+void DiveVulkanReplayConsumer::Process_vkCreateCommandPool(
+const ApiCallInfo&                                     call_info,
+VkResult                                               returnValue,
+format::HandleId                                       device,
+StructPointerDecoder<Decoded_VkCommandPoolCreateInfo>* pCreateInfo,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
+HandlePointerDecoder<VkCommandPool>*                   pCommandPool)
+{
+    // Forcing all pools to use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.
+    // This is needed because without this flag, vkBeginCommandBuffer will NOT perform an implicit
+    // reset if the command buffer is not in the Initial state. Some of the command buffers are not
+    // created with this flag, but for the case of looping frames, calling vkBeginCommandBuffer
+    // again on those cmds, and submitting those cmds would cause VK_ERROR_INITIALIZATION_FAILED.
+    // Note that there might be performance impact on this which needs more investigation
+    // (b/444976541)
+    VkCommandPoolCreateInfo* create_info = pCreateInfo->GetPointer();
+    create_info->flags |= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    VulkanReplayConsumer::Process_vkCreateCommandPool(call_info,
+                                                      returnValue,
+                                                      device,
+                                                      pCreateInfo,
+                                                      pAllocator,
+                                                      pCommandPool);
+}
+
 void DiveVulkanReplayConsumer::Process_vkResetCommandPool(const ApiCallInfo&      call_info,
                                                           VkResult                returnValue,
                                                           format::HandleId        device,

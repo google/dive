@@ -61,6 +61,7 @@ public:
     // But the gpu time needs to be disabled/enabled before recording any command buffer
     // (be careful that some cmd buffers might be pre-recorded, only once)
     void SetEnable(bool enable) { m_enable = enable; }
+    bool IsEnabled() const { return m_enable; }
 
     GpuTimeStatus OnCreateDevice(VkDevice                     device,
                                  const VkAllocationCallbacks* allocator_ptr,

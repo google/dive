@@ -180,6 +180,7 @@ private:
     Dive::GPUTime                 gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";
+    VkDevice    device_ = VK_NULL_HANDLE;
     bool        enable_gpu_time_ = false;
     // This is a flag that indicates if the Setup Phase is finised or not for gfx Replay
     // The Setup Phase is done when StateEndMarker is triggered

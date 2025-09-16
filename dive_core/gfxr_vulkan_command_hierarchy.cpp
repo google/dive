@@ -168,6 +168,10 @@ const std::vector<uint64_t>                                   &render_pass_draw_
 //--------------------------------------------------------------------------------------------------
 bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData &capture_data)
 {
+    // Add frame node
+    uint64_t frame_root_node_index = AddNode(NodeType::kGfxrRootFrameNode, "Frame");
+    AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, frame_root_node_index);
+
     const auto &submits = capture_data.GetGfxrSubmits();
     for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
     {
@@ -209,12 +213,6 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees(bool used_in_mixed_command_h
         // Add a dummy root node for easier management
         uint64_t root_node_index = AddNode(NodeType::kRootNode, "");
         DIVE_VERIFY(root_node_index == Topology::kRootNodeIndex);
-
-        // Add root frame node
-        uint64_t frame_root_node_index = AddNode(NodeType::kGfxrRootFrameNode, "Frame");
-        AddChild(CommandHierarchy::kAllEventTopology,
-                 Topology::kRootNodeIndex,
-                 frame_root_node_index);
 
         if (!ProcessGfxrSubmits(m_capture_data))
         {

@@ -148,12 +148,14 @@ GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator)
                 cur_topology.AddChildren(node_index, filtered_children);
             }
 
-            // Identify ALL GFXR submit nodes.
+            // Identify ALL GFXR submit and frame nodes.
             DiveVector<uint64_t> gfxr_submit_nodes;
             for (uint64_t node_index = num_pm4_nodes; node_index < total_num_nodes; ++node_index)
             {
                 std::string desc = m_command_hierarchy.GetNodeDesc(node_index);
-                if (m_command_hierarchy.GetNodeType(node_index) == NodeType::kGfxrVulkanSubmitNode)
+                if (m_command_hierarchy.GetNodeType(node_index) ==
+                    NodeType::kGfxrVulkanSubmitNode ||
+                    m_command_hierarchy.GetNodeType(node_index) == NodeType::kGfxrRootFrameNode)
                 {
                     gfxr_submit_nodes.push_back(node_index);
                 }

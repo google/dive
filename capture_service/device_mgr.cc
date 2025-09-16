@@ -642,7 +642,8 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
 
 absl::Status DeviceManager::RunProfilingOnReplay(const std::string              &capture_path,
                                                  const std::vector<std::string> &metrics,
-                                                 const std::string              &download_path)
+                                                 const std::string              &download_path,
+                                                 const std::string              &gfxr_replay_flags)
 {
     if (!m_device->IsAdrenoGpu())
     {
@@ -667,9 +668,13 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
                                                      kProfilingPluginName);
     // Run replay with profiling arguments
     std::string metrics_str = absl::StrJoin(metrics, " ");
-    std::string cmd = absl::StrFormat("shell %s %s %s",
+    std::string gfxr_replay_flag = gfxr_replay_flags.empty() ?
+                                   "" :
+                                   absl::StrFormat("--gfxr_replay_flags \"%s\"", gfxr_replay_flags);
+    std::string cmd = absl::StrFormat("shell %s %s %s %s",
                                       binary_path_on_device,
                                       capture_path,
+                                      gfxr_replay_flag,
                                       metrics_str);
     RETURN_IF_ERROR(m_device->Adb().Run(cmd));
 

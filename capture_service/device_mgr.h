@@ -142,7 +142,8 @@ public:
                               const std::string &pm4_capture_download_path);
     absl::Status RunProfilingOnReplay(const std::string              &capture_path,
                                       const std::vector<std::string> &metrics,
-                                      const std::string              &download_path);
+                                      const std::string              &download_path,
+                                      const std::string              &gfxr_replay_flags = "");
 
 private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };

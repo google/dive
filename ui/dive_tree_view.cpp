@@ -132,8 +132,7 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
         {
             uint64_t       node_index = (uint64_t)index.internalPointer();
             Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
-
-            if (node_type == Dive::NodeType::kDrawDispatchNode)
+            if (Dive::IsDrawDispatchNode(node_type))
             {
                 m_pm4_draw_call_indices.push_back(node_index);
             }
@@ -573,7 +572,7 @@ void DiveTreeView::GotoEvent(bool is_above)
                         command_model->data(event_id_idx, Qt::DisplayRole) :
                         gfxr_vulkan_command_model->data(event_id_idx, Qt::DisplayRole);
 
-        if (event_id != QVariant() && (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
+        if (event_id != QVariant() && (Dive::IsDrawDispatchBlitNode(node_type) ||
                                        (node_type == Dive::NodeType::kMarkerNode &&
                                         m_command_hierarchy.GetMarkerNodeType(node_idx) !=
                                         Dive::CommandHierarchy::MarkerType::kBeginEnd)))

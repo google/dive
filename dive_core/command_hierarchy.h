@@ -56,7 +56,7 @@ enum class NodeType
     kIbNode,
     kMarkerNode,
     kDrawDispatchNode,
-    kDrawDispatchBlitNode,
+    kBlitNode,
     kSyncNode,
     kPostambleStateNode,
     kPacketNode,
@@ -73,6 +73,16 @@ enum class NodeType
     kGfxrBeginDebugUtilsLabelCommandNode,
     kGfxrRootFrameNode,
 };
+
+constexpr bool IsDrawDispatchNode(NodeType node_type)
+{
+    return node_type == NodeType::kDrawDispatchNode;
+}
+
+constexpr bool IsDrawDispatchBlitNode(NodeType node_type)
+{
+    return node_type == NodeType::kDrawDispatchNode || node_type == NodeType::kBlitNode;
+}
 
 //--------------------------------------------------------------------------------------------------
 // This is per-node graph topology info.

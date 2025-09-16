@@ -74,7 +74,9 @@ int u_thread_create(thrd_t *thrd, int (*routine)(void *), void *param)
 
 void u_thread_setname( const char *name )
 {
-#if defined(HAVE_PTHREAD)
+// GOOGLE: Fix build error
+//#if defined(HAVE_PTHREAD)
+#if defined(HAVE_PTHREAD_NP)
 #if DETECT_OS_LINUX || DETECT_OS_CYGWIN || DETECT_OS_SOLARIS || defined(__GLIBC__) || DETECT_OS_MANAGARM || DETECT_OS_FUCHSIA
    int ret = pthread_setname_np(pthread_self(), name);
    if (ret == ERANGE) {

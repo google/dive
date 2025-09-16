@@ -137,7 +137,7 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_frame_count_box->setRange(0, std::numeric_limits<int>::max());
     m_frame_count_box->setSpecialValueText("Infinite");
     m_frame_count_box->setMinimum(-1);
-    m_frame_count_box->setValue(-1);
+    m_frame_count_box->setValue(kDefaultFrameCount);
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
 

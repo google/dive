@@ -142,6 +142,7 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
             return success;
         }
         GFXRECON_ASSERT(!gfxr_file_name_.empty());
+        block_index_ = state_end_marker_block_index_;
         SeekActiveFile(gfxr_file_name_, state_end_marker_file_offset_, util::platform::FileSeekSet);
         should_break = false;
     }
@@ -158,6 +159,7 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
         // Store state end marker offset
         GFXRECON_ASSERT(!gfxr_file_name_.empty());
         state_end_marker_file_offset_ = TellFile(gfxr_file_name_);
+        state_end_marker_block_index_ = block_index_;
         GFXRECON_LOG_INFO("Stored state end marker offset %d", state_end_marker_file_offset_);
         GFXRECON_LOG_INFO("Single frame number %d", GetFirstFrame());
 #if defined(__ANDROID__)

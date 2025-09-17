@@ -508,7 +508,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
                                          const std::string &replay_args,
                                          bool               dump_pm4,
-                                         const std::string &download_path)
+                                         const std::string &local_download_dir)
 {
     LOGD("RunReplayApk(): starting\n");
 
@@ -586,12 +586,12 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } while (m_device->FileExists(on_device_trace_path_in_progress));
 
-        auto status = m_device->RetrieveTrace(on_device_trace_path, download_path);
+        auto status = m_device->RetrieveFile(on_device_trace_path, local_download_dir);
         if (status.ok())
         {
             LOGI("Trace file %s downloaded to %s\n",
                  on_device_trace_path.c_str(),
-                 download_path.c_str());
+                 local_download_dir.c_str());
         }
         else
         {
@@ -607,24 +607,31 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } while (m_device->IsProcessRunning(kGfxrReplayAppName));
 
-        // TODO(b/444228664) Prevent gpt time file overwriting for different captures
-        std::string on_device_file_path = absl::StrFormat("%s/gpu_time.csv",
-                                                          std::filesystem::path(capture_path)
-                                                          .parent_path()
-                                                          .string()
-                                                          .c_str());
+        std::filesystem::path remote_gfxr_path = capture_path;
+        std::string
+        on_device_file_path = absl::StrFormat("%s/%s",
+                                              remote_gfxr_path.parent_path().string().c_str(),
+                                              kGpuTimingFile);
 
-        auto status = m_device->RetrieveTrace(on_device_file_path, download_path);
-        if (status.ok())
+        // Get the local name for the file
+        std::string csv_local_name = absl::StrFormat("%s%s",
+                                                     remote_gfxr_path.stem(),
+                                                     kGpuTimingCsvSuffix);
+
+        // Get the profiling CSV file.
+        auto ret = m_device->RetrieveFile(on_device_file_path,
+                                          local_download_dir,
+                                          true,
+                                          csv_local_name);
+
+        if (!ret.ok())
         {
-            LOGI("Gpu time file %s downloaded to %s\n",
-                 on_device_file_path.c_str(),
-                 download_path.c_str());
+            LOGE("Failed to download the trace file %s\n", on_device_file_path.c_str());
+            return ret;
         }
-        else
-        {
-            LOGI("Failed to download the trace file %s\n", on_device_file_path.c_str());
-        }
+        LOGI("Gpu time file %s downloaded to %s\n",
+             on_device_file_path.c_str(),
+             local_download_dir.c_str());
     }
 
     if (!res.ok())
@@ -642,7 +649,7 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
 
 absl::Status DeviceManager::RunProfilingOnReplay(const std::string              &capture_path,
                                                  const std::vector<std::string> &metrics,
-                                                 const std::string              &download_path)
+                                                 const std::string              &local_download_dir)
 {
     if (!m_device->IsAdrenoGpu())
     {
@@ -686,16 +693,19 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
     }
     LOGD("Result is at %s \n", output_path.c_str());
 
-    // Get the CSV file.
-    auto status = m_device->RetrieveTrace(output_path, download_path);
-    if (status.ok())
+    // Get the local name for the file
+    std::filesystem::path parse_remote_path = capture_path;
+    std::string           csv_local_name = absl::StrFormat("%s%s",
+                                                 parse_remote_path.stem(),
+                                                 kProfilingMetricsCsvSuffix);
+
+    // Get the profiling CSV file.
+    auto status = m_device->RetrieveFile(output_path, local_download_dir, true, csv_local_name);
+    if (!status.ok())
     {
-        LOGI("Trace file %s downloaded to %s\n", output_path.c_str(), download_path.c_str());
+        return absl::NotFoundError("Failed to download the trace file: " + output_path);
     }
-    else
-    {
-        LOGI("Failed to download the trace file %s\n", output_path.c_str());
-    }
+    LOGI("Trace file %s downloaded to %s\n", output_path.c_str(), local_download_dir.c_str());
 
     // cleanup the library and binary
     std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s/%s",
@@ -720,11 +730,42 @@ absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::RetrieveTrace(const std::string &trace_path,
-                                          const std::string &save_path)
+absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
+                                         const std::string &local_save_dir,
+                                         bool               delete_after_retrieve,
+                                         const std::string &new_file_name)
 {
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", trace_path, save_path)));
-    return Adb().Run(absl::StrFormat("shell rm -rf %s", trace_path));
+    if (!std::filesystem::is_directory(local_save_dir))
+    {
+        return absl::FailedPreconditionError("Invalid local_save_dir: " + local_save_dir);
+    }
+
+    std::filesystem::path local_save_path = local_save_dir;
+
+    if (new_file_name.size() > 0)
+    {
+        auto original_ext = std::filesystem::path(remote_file_path).extension();
+        auto new_ext = std::filesystem::path(new_file_name).extension();
+        if (original_ext.string() != new_ext.string())
+        {
+            std::string error_msg = absl::StrFormat("Invalid new_file_name extension (%s), needs "
+                                                    "to be consistent with original extension (%s)",
+                                                    remote_file_path,
+                                                    new_file_name);
+            return absl::FailedPreconditionError(error_msg);
+        }
+        local_save_path /= new_file_name;
+    }
+
+    // "adb pull" can handle a destination directory or file path
+    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", remote_file_path, local_save_path)));
+
+    if (!delete_after_retrieve)
+    {
+        return absl::OkStatus();
+    }
+
+    return Adb().Run(absl::StrFormat("shell rm -rf %s", remote_file_path));
 }
 
 void AndroidDevice::EnableGfxr(bool enable_gfxr)

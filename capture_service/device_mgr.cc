@@ -673,6 +673,7 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
                                                      kProfilingPluginFolderName,
                                                      "/",
                                                      kProfilingPluginName);
+    RETURN_IF_ERROR(m_device->Adb().Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
     // Run replay with profiling arguments
     std::string metrics_str = absl::StrJoin(metrics, " ");
     std::string gfxr_replay_flag = gfxr_replay_flags.empty() ?

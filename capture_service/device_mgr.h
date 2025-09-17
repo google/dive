@@ -110,7 +110,14 @@ public:
     bool              IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
 
     AndroidApplication *GetCurrentApplication() { return m_app.get(); }
-    absl::Status RetrieveTrace(const std::string &trace_file_path, const std::string &save_path);
+
+    // Fetches file at remote_file_path to local_save_dir and deletes the remote file after
+    // If new_file_name specified, local file is renamed
+    // If delete_after_retrieve is false, remote file is not deleted
+    absl::Status RetrieveFile(const std::string &remote_file_path,
+                              const std::string &local_save_dir,
+                              bool               delete_after_retrieve = true,
+                              const std::string &new_file_name = "");
 
 private:
     const std::string                   m_serial;
@@ -139,10 +146,10 @@ public:
     absl::Status RunReplayApk(const std::string &capture_path,
                               const std::string &replay_args,
                               bool               dump_pm4,
-                              const std::string &pm4_capture_download_path);
+                              const std::string &local_download_dir);
     absl::Status RunProfilingOnReplay(const std::string              &capture_path,
                                       const std::vector<std::string> &metrics,
-                                      const std::string              &download_path,
+                                      const std::string              &local_download_dir,
                                       const std::string              &gfxr_replay_flags = "");
 
 private:

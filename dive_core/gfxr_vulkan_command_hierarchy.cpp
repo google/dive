@@ -60,7 +60,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     if (vulkan_cmd_name == "vkBeginCommandBuffer")
     {
         vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
-        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
+        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanBeginCommandBufferNode,
                                             vk_cmd_string_stream.str());
         m_cur_command_buffer_node_index = cmd_buffer_index;
         GetArgs(vulkan_cmd_args, m_cur_command_buffer_node_index, "");
@@ -70,7 +70,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     }
     else if (vulkan_cmd_name == "vkEndCommandBuffer")
     {
-        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanCommandBufferNode,
+        uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanEndCommandBufferNode,
                                             vk_cmd_string_stream.str());
 
         GetArgs(vulkan_cmd_args, cmd_buffer_index, "");
@@ -115,7 +115,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
             render_pass_draw_call_counts.erase(render_pass_draw_call_counts.begin());
         }
         vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
-        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanRenderPassCommandNode,
+        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanBeginRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index, "");
         ConditionallyAddChild(vk_cmd_index);
@@ -123,7 +123,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     }
     else if (vulkan_cmd_name.find("vkCmdEndRenderPass") != std::string::npos)
     {
-        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanRenderPassCommandNode,
+        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanEndRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index, "");
         ConditionallyAddChild(vk_cmd_index);

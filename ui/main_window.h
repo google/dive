@@ -18,6 +18,7 @@
 #include <memory>
 #include <QMainWindow>
 #include <qabstractitemmodel.h>
+#include <qframe.h>
 #include <qshortcut.h>
 #include "dive_core/cross_ref.h"
 #include "progress_tracker_callback.h"
@@ -36,7 +37,6 @@ class EventTimingView;
 #endif
 class PerfCounterTabView;
 class PerfCounterModel;
-class GfxrVulkanCommandTabView;
 class GfxrVulkanCommandArgumentsTabView;
 class GfxrVulkanCommandArgumentsFilterProxyModel;
 class GfxrVulkanCommandFilterProxyModel;
@@ -61,6 +61,8 @@ class TraceDialog;
 class TreeViewComboBox;
 class AnalyzeDialog;
 class GfxrVulkanCommandFilter;
+class QFrame;
+class QSortFilterProxyModel;
 
 enum class EventMode;
 
@@ -68,6 +70,25 @@ namespace Dive
 {
 class DataCore;
 class PluginLoader;
+
+enum DrawCallContextMenuOption : uint32_t
+{
+    kArguments,
+    kBinningPassOnly,
+    kFirstTilePassOnly,
+    kPerfCounterData,
+    kGpuTimeData,
+    kDrawCallContextMenuOptionCount
+};
+
+inline static constexpr const char
+*kDrawCallContextMenuOptionStrings[kDrawCallContextMenuOptionCount] = {
+    "Arguments",
+    "PM4 Events with BinningPassOnly Filter",
+    "PM4 Events with FirstTilePassOnly Filter",
+    "Perf Counter Data",
+    "Gpu Time Data"
+};
 }  // namespace Dive
 
 #define MESSAGE_TIMEOUT 2500
@@ -94,16 +115,16 @@ signals:
     void SetSaveAsMenuStatus(bool);
     void FileLoaded();
     void CorrelateCounter(uint64_t);
-    void CorrelateDrawCall(uint64_t);
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
     void OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path);
     void OnOpenFileFromAnalyzeDialog(const QString &file_path);
     void OnSwitchToShaderTab();
-    void OnFilterApplied(const QModelIndex &, int);
-    void OnCorrelateVulkanDrawCall(const QPoint &pos);
-    void OnCorrelatePm4DrawCall(const QPoint &pos);
+    void OnOpenVulkanDrawCallMenu(const QPoint &pos);
+    void OnOpenVulkanCallMenu(const QPoint &pos);
+    void OnCorrelateVulkanDrawCall(const QModelIndex &);
+    void OnCorrelatePm4DrawCall(const QModelIndex &);
 
 private slots:
     void OnCommandViewModeChange(const QString &string);
@@ -132,25 +153,30 @@ private slots:
     void ConnectGfxrFileTabs();
     void ConnectSearchBar();
     void DisconnectSearchBar();
+    void ConnectPm4SearchBar();
+    void DisconnectPm4SearchBar();
     void DisconnectAllTabs();
 
 private:
-    void        CreateActions();
-    void        CreateMenus();
-    void        CreateToolBars();
-    void        CreateShortcuts();
-    void        CreateStatusBar();
-    void        ShowTempStatus(const QString &status_message);
-    void        ExpandResizeHierarchyView();
-    void        SetCurrentFile(const QString &fileName, bool is_temp_file = false);
-    void        UpdateRecentFileActions(QStringList recent_files);
-    QString     StrippedName(const QString &fullFileName);
-    void        HideOverlay();
-    void        UpdateTabAvailability();
-    void        ResetTabWidget();
+    void    CreateActions();
+    void    CreateMenus();
+    void    CreateToolBars();
+    void    CreateShortcuts();
+    void    CreateStatusBar();
+    void    ShowTempStatus(const QString &status_message);
+    void    ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
+    void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
+    void    UpdateRecentFileActions(QStringList recent_files);
+    QString StrippedName(const QString &fullFileName);
+    void    HideOverlay();
+    void    UpdateTabAvailability();
+    void    ResetTabWidget();
     QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model,
                                         uint64_t            target_node_index,
                                         const QModelIndex  &parent = QModelIndex());
+    void        ResetEventSearchBar();
+    void        ResetPm4EventSearchBar();
+    void        ResetHorizontalScroll(const DiveTreeView &tree_view);
 
     QMenu         *m_file_menu;
     QMenu         *m_recent_captures_menu;
@@ -190,6 +216,7 @@ private:
     QStatusBar *m_status_bar;
 
     // Left pane
+    QFrame       *m_left_frame;
     QString       m_prev_command_view_mode;
     DiveTreeView *m_command_hierarchy_view;
     CommandModel *m_command_hierarchy_model;
@@ -207,6 +234,18 @@ private:
     PerfCounterModel                  *m_perf_counter_model;
     GpuTimingModel                    *m_gpu_timing_model;
 
+    // Middle pane
+    QFrame              *m_middle_frame;
+    DiveTreeView        *m_pm4_command_hierarchy_view;
+    QPushButton         *m_pm4_search_trigger_button;
+    SearchBar           *m_pm4_event_search_bar = nullptr;
+    QPushButton         *m_pm4_prev_event_button;
+    QPushButton         *m_pm4_next_event_button;
+    QList<QPushButton *> m_pm4_expand_to_lvl_buttons;
+
+    TreeViewComboBox *m_pm4_view_mode_combo_box;
+    TreeViewComboBox *m_pm4_filter_mode_combo_box;
+
     // Right pane
     QTabWidget                        *m_tab_widget;
     CommandTabView                    *m_command_tab_view;
@@ -217,8 +256,6 @@ private:
     int                                m_shader_view_tab_index;
     EventStateView                    *m_event_state_view;
     int                                m_event_state_view_tab_index;
-    GfxrVulkanCommandTabView          *m_gfxr_vulkan_command_tab_view;
-    int                                m_gfxr_vulkan_command_view_tab_index;
     GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view;
     int                                m_gfxr_vulkan_command_arguments_view_tab_index;
     PerfCounterTabView                *m_perf_counter_tab_view;
@@ -248,7 +285,6 @@ private:
     QShortcut *m_command_tab_shortcut = nullptr;
     QShortcut *m_shader_tab_shortcut = nullptr;
     QShortcut *m_event_state_tab_shortcut = nullptr;
-    QShortcut *m_gfxr_vulkan_command_tab_shortcut = nullptr;
     QShortcut *m_gfxr_vulkan_command_arguments_tab_shortcut = nullptr;
 
     std::string m_unsaved_capture_path;

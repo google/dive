@@ -60,7 +60,6 @@
 #include "gfxr_vulkan_command_filter_proxy_model.h"
 #include "gfxr_vulkan_command_arguments_filter_proxy_model.h"
 #include "gfxr_vulkan_command_arguments_tab_view.h"
-#include "gfxr_vulkan_command_tab_view.h"
 #include "gpu_timing_model.h"
 #include "gpu_timing_tab_view.h"
 #include "hover_help_model.h"
@@ -122,7 +121,7 @@ MainWindow::MainWindow()
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
     // Left side panel
-    QFrame *left_frame = new QFrame();
+    m_left_frame = new QFrame();
     m_view_mode_combo_box = new TreeViewComboBox();
     m_view_mode_combo_box->setMinimumWidth(150);
 
@@ -177,13 +176,6 @@ MainWindow::MainWindow()
         text_combo_box_layout->addWidget(filter_combo_box_label);
         text_combo_box_layout->addWidget(m_filter_mode_combo_box, 1);
 
-        m_search_trigger_button = new QPushButton;
-        m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
-        text_combo_box_layout->addWidget(m_search_trigger_button);
-
-        text_combo_box_layout->addStretch();
-        text_combo_box_frame->setLayout(text_combo_box_layout);
-
         m_event_search_bar = new SearchBar(this);
         m_event_search_bar->setObjectName("Event Search Bar");
 
@@ -220,6 +212,13 @@ MainWindow::MainWindow()
         text_combo_box_layout->addWidget(m_filter_gfxr_commands_combo_box, 1);
         m_filter_gfxr_commands_combo_box->hide();
 
+        m_search_trigger_button = new QPushButton;
+        m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
+        text_combo_box_layout->addWidget(m_search_trigger_button);
+
+        text_combo_box_layout->addStretch();
+        text_combo_box_frame->setLayout(text_combo_box_layout);
+
         m_perf_counter_model = new PerfCounterModel();
 
         m_gpu_timing_model = new GpuTimingModel(this);
@@ -252,10 +251,119 @@ MainWindow::MainWindow()
         left_vertical_layout->addWidget(m_command_hierarchy_view);
         left_vertical_layout->addLayout(goto_draw_call_layout);
         left_vertical_layout->addLayout(expand_to_lvl_layout);
-        left_frame->setLayout(left_vertical_layout);
+        m_left_frame->setLayout(left_vertical_layout);
     }
 
-    // Right side tab
+    // Middle panel
+    m_middle_frame = new QFrame();
+    m_pm4_view_mode_combo_box = new TreeViewComboBox();
+    m_pm4_view_mode_combo_box->setMinimumWidth(150);
+    {
+        QVBoxLayout *middle_vertical_layout = new QVBoxLayout();
+
+        QFrame *text_combo_box_frame = new QFrame();
+
+        QHBoxLayout *text_combo_box_layout = new QHBoxLayout();
+
+        QLabel *combo_box_label = new QLabel(tr("Mode:"));
+
+        // Set model for the view mode combo box
+        QStandardItemModel *combo_box_model = new QStandardItemModel();
+        for (int i = 0; i < kViewModeStringCount; i++)
+        {
+            QStandardItem *item = new QStandardItem(kViewModeStrings[i]);
+            combo_box_model->appendRow(item);
+        }
+
+        QModelIndex    event_item_index = combo_box_model->index(1, 0, QModelIndex());
+        QStandardItem *event_item = combo_box_model->itemFromIndex(event_item_index);
+        event_item->setSelectable(false);
+        for (int i = 0; i < kEventViewModeStringCount; i++)
+        {
+            QStandardItem *item = new QStandardItem(kEventViewModeStrings[i]);
+            event_item->appendRow(item);
+        }
+        m_pm4_view_mode_combo_box->setModel(combo_box_model);
+
+        QModelIndex vulkan_event_item_index = combo_box_model->index(0, 0, event_item_index);
+        m_pm4_view_mode_combo_box->setRootModelIndex(vulkan_event_item_index.parent());
+        m_pm4_view_mode_combo_box->setCurrentIndex(vulkan_event_item_index.row());
+
+        text_combo_box_layout->addWidget(combo_box_label);
+        text_combo_box_layout->addWidget(m_pm4_view_mode_combo_box, 1);
+
+        QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
+        m_pm4_filter_mode_combo_box = new TreeViewComboBox();
+        m_pm4_filter_mode_combo_box->setMinimumWidth(150);
+
+        // Set model for the filter combo box
+        QStandardItemModel *filter_combo_box_model = new QStandardItemModel();
+        for (uint32_t i = 0; i < DiveFilterModel::kFilterModeCount; i++)
+        {
+            QStandardItem *item = new QStandardItem(kFilterStrings[i]);
+            filter_combo_box_model->appendRow(item);
+        }
+        m_pm4_filter_mode_combo_box->setModel(filter_combo_box_model);
+        m_pm4_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
+
+        text_combo_box_layout->addWidget(filter_combo_box_label);
+        text_combo_box_layout->addWidget(m_pm4_filter_mode_combo_box, 1);
+
+        m_pm4_search_trigger_button = new QPushButton;
+        m_pm4_search_trigger_button->setIcon(QIcon(":/images/search.png"));
+        text_combo_box_layout->addWidget(m_pm4_search_trigger_button);
+
+        text_combo_box_layout->addStretch();
+        text_combo_box_frame->setLayout(text_combo_box_layout);
+
+        m_pm4_event_search_bar = new SearchBar(this);
+        m_pm4_event_search_bar->setObjectName("Event Search Bar");
+        m_pm4_event_search_bar->setView(m_pm4_command_hierarchy_view);
+
+        QHBoxLayout *search_layout = new QHBoxLayout;
+        search_layout->addWidget(m_pm4_event_search_bar);
+        m_pm4_event_search_bar->hide();
+
+        m_pm4_command_hierarchy_view = new DiveTreeView(m_data_core->GetCommandHierarchy());
+        m_pm4_command_hierarchy_view->SetDataCore(m_data_core.get());
+        m_pm4_event_search_bar->setView(m_pm4_command_hierarchy_view);
+
+        // Set the proxy model as the view's model
+        m_pm4_command_hierarchy_view->setModel(m_filter_model);
+        m_pm4_command_hierarchy_view->setContextMenuPolicy(Qt::CustomContextMenu);
+        m_filter_model->SetMode(kDefaultFilterMode);
+        //
+        QLabel *pm4_goto_draw_call_label = new QLabel(tr("Go To:"));
+        m_pm4_prev_event_button = new QPushButton("Prev Event");
+        m_pm4_next_event_button = new QPushButton("Next Event");
+        QHBoxLayout *pm4_goto_draw_call_layout = new QHBoxLayout();
+        pm4_goto_draw_call_layout->addWidget(pm4_goto_draw_call_label);
+        pm4_goto_draw_call_layout->addWidget(m_pm4_prev_event_button);
+        pm4_goto_draw_call_layout->addWidget(m_pm4_next_event_button);
+        pm4_goto_draw_call_layout->addStretch();
+
+        QLabel *expand_to_lvl_label = new QLabel(tr("Expand to level:"));
+        for (int i = 1; i <= 3; i++)
+        {
+            auto button = new QPushButton{ QString::number(i) };
+            m_pm4_expand_to_lvl_buttons << button;
+        }
+
+        QHBoxLayout *pm4_expand_to_lvl_layout = new QHBoxLayout();
+        pm4_expand_to_lvl_layout->addWidget(expand_to_lvl_label);
+        foreach (auto expand_to_lvl_button, m_pm4_expand_to_lvl_buttons)
+            pm4_expand_to_lvl_layout->addWidget(expand_to_lvl_button);
+        pm4_expand_to_lvl_layout->addStretch();
+
+        middle_vertical_layout->addWidget(m_pm4_event_search_bar);
+        middle_vertical_layout->addWidget(text_combo_box_frame);
+        middle_vertical_layout->addWidget(m_pm4_command_hierarchy_view);
+        middle_vertical_layout->addLayout(pm4_goto_draw_call_layout);
+        middle_vertical_layout->addLayout(pm4_expand_to_lvl_layout);
+        m_middle_frame->setLayout(middle_vertical_layout);
+    }
+
+    // Tabbed View
     m_tab_widget = new QTabWidget();
     {
         m_command_tab_view = new CommandTabView(m_data_core->GetCommandHierarchy());
@@ -265,11 +373,6 @@ MainWindow::MainWindow()
         m_event_state_view = new EventStateView(*m_data_core);
 
         m_perf_counter_tab_view = new PerfCounterTabView(*m_perf_counter_model, this);
-        m_gfxr_vulkan_command_tab_view =
-        new GfxrVulkanCommandTabView(m_data_core->GetCommandHierarchy(),
-                                     *m_gfxr_vulkan_commands_filter_proxy_model,
-                                     *m_gfxr_vulkan_command_hierarchy_model,
-                                     this);
         m_gfxr_vulkan_command_arguments_tab_view =
         new GfxrVulkanCommandArgumentsTabView(m_data_core->GetCommandHierarchy(),
                                               m_gfxr_vulkan_commands_arguments_filter_proxy_model,
@@ -280,7 +383,7 @@ MainWindow::MainWindow()
 
         m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
-        m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Command Buffers");
+        m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
         m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
         m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
 
@@ -296,94 +399,55 @@ MainWindow::MainWindow()
         SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, false);
     }
     // Side panel
+    // TODO (b/445754645) Remove the PropertyPanel and replace with a tooltip or overlay.
     m_property_panel = new PropertyPanel();
     m_property_panel->setMinimumWidth(350);
     m_hover_help = HoverHelp::Get();
     m_shader_view->SetupHoverHelp(*m_hover_help);
 
-    // The main horizontal splitter (Left<->Right panels, with a 1:2 size ratio)
+    m_left_frame->setMinimumSize(QSize(50, 0));
+    m_middle_frame->setMinimumSize(QSize(50, 0));
+    m_tab_widget->setMinimumSize(QSize(50, 0));
+
+    // The main horizontal splitter (Left, Middle, and Right panels, with a 1:1:1 size ratio)
     QSplitter *horizontal_splitter = new QSplitter(Qt::Horizontal);
-    horizontal_splitter->addWidget(left_frame);
+    horizontal_splitter->addWidget(m_left_frame);
+    horizontal_splitter->addWidget(m_middle_frame);
     horizontal_splitter->addWidget(m_tab_widget);
-    horizontal_splitter->addWidget(m_property_panel);
     horizontal_splitter->setStretchFactor(0, 1);
-    horizontal_splitter->setStretchFactor(1, 2);
+    horizontal_splitter->setStretchFactor(1, 1);
     horizontal_splitter->setStretchFactor(2, 1);
 
-    m_trace_dig = new TraceDialog(this);
+    QList<int> equal_sizes;
+    equal_sizes << 1 << 1 << 1;
+    horizontal_splitter->setSizes(equal_sizes);
 
+    m_trace_dig = new TraceDialog(this);
     m_analyze_dig = new AnalyzeDialog(this);
 
     // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.
     setCentralWidget(horizontal_splitter);
 
+    m_middle_frame->hide();
+
     // Connections
-    QObject::connect(m_view_mode_combo_box,
-                     SIGNAL(currentTextChanged(const QString &)),
-                     this,
-                     SLOT(OnCommandViewModeChange(const QString &)));
-    QObject::connect(m_view_mode_combo_box,
-                     SIGNAL(textHighlighted(const QString &)),
-                     this,
-                     SLOT(OnCommandViewModeComboBoxHover(const QString &)));
     QObject::connect(m_hover_help,
                      SIGNAL(CurrStringChanged(const QString &)),
                      m_property_panel,
                      SLOT(OnHoverStringChange(const QString &)));
-    QObject::connect(m_command_tab_view,
-                     SIGNAL(SendNodeProperty(const QString &)),
-                     m_property_panel,
-                     SLOT(OnSelectionInfoChange(const QString &)));
     // Event selection connections
     QObject::connect(m_event_selection,
                      &EventSelection::vulkanParams,
                      m_property_panel,
                      &PropertyPanel::OnVulkanParams);
-    QObject::connect(m_command_hierarchy_view,
-                     &DiveTreeView::expanded,
-                     m_command_hierarchy_view,
-                     &DiveTreeView::expandNode);
-    QObject::connect(m_command_hierarchy_view,
-                     &DiveTreeView::collapsed,
-                     m_command_hierarchy_view,
-                     &DiveTreeView::collapseNode);
-    QObject::connect(m_event_selection,
-                     &EventSelection::currentNodeChanged,
-                     m_command_hierarchy_view,
-                     &DiveTreeView::setCurrentNode);
-    QObject::connect(m_prev_event_button,
-                     &QPushButton::clicked,
-                     m_command_hierarchy_view,
-                     &DiveTreeView::gotoPrevEvent);
-    QObject::connect(m_next_event_button,
-                     &QPushButton::clicked,
-                     m_command_hierarchy_view,
-                     &DiveTreeView::gotoNextEvent);
-    QObject::connect(m_property_panel,
-                     &PropertyPanel::crossReference,
-                     this,
-                     &MainWindow::OnCrossReference);
-    QObject::connect(m_event_selection,
-                     &EventSelection::crossReference,
-                     this,
-                     &MainWindow::OnCrossReference);
     QObject::connect(m_trace_dig,
                      &TraceDialog::TraceAvailable,
                      this,
                      &MainWindow::OnTraceAvailable);
 
-    QObject::connect(m_filter_mode_combo_box,
-                     SIGNAL(currentTextChanged(const QString &)),
-                     this,
-                     SLOT(OnFilterModeChange(const QString &)));
-
     QObject::connect(this, &MainWindow::FileLoaded, m_text_file_view, &TextFileView::OnFileLoaded);
     QObject::connect(this, &MainWindow::FileLoaded, this, &MainWindow::OnFileLoaded);
-    foreach (auto expand_to_lvl_button, m_expand_to_lvl_buttons)
-    {
-        QObject::connect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
-    }
     QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchTrigger()));
 
     QObject::connect(m_event_search_bar,
@@ -392,11 +456,6 @@ MainWindow::MainWindow()
                      SLOT(OnTabViewSearchBarVisibilityChange(bool)));
 
     QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
-
-    QObject::connect(m_command_tab_view,
-                     SIGNAL(HideOtherSearchBars()),
-                     this,
-                     SLOT(OnTabViewChange()));
 
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnNewFileOpened,
@@ -473,21 +532,22 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCommandViewModeChange(const QString &view_mode)
 {
-    m_command_hierarchy_view->header()->reset();
+    QObject *sender_object = sender();
+    if (sender_object == m_pm4_view_mode_combo_box)
+    {
+        m_pm4_command_hierarchy_view->header()->reset();
+    }
+    else
+    {
+        m_command_hierarchy_view->header()->reset();
+    }
+
     const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
     if (view_mode == tr(kViewModeStrings[0]))  // Submit
     {
         const Dive::SharedNodeTopology &topology = command_hierarchy.GetSubmitHierarchyTopology();
-        if (m_gfxr_capture_loaded)
-        {
-            m_gfxr_vulkan_command_hierarchy_model->SetTopologyToView(&topology);
-        }
-        else
-        {
-            m_gfxr_vulkan_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_hierarchy_model->SetTopologyToView(&topology);
-            m_command_tab_view->SetTopologyToView(&topology);
-        }
+        m_command_hierarchy_model->SetTopologyToView(&topology);
+        m_command_tab_view->SetTopologyToView(&topology);
     }
     else  // All Vulkan Calls + GPU Events
     {
@@ -508,11 +568,32 @@ void MainWindow::OnCommandViewModeChange(const QString &view_mode)
         if (m_prev_command_view_mode.isEmpty() ||
             m_prev_command_view_mode == tr(kViewModeStrings[0]) ||
             m_prev_command_view_mode == tr(kViewModeStrings[1]))
-            m_command_hierarchy_view->header()->moveSection(1, 0);
+        {
+            if (sender_object == m_pm4_view_mode_combo_box)
+            {
+                m_pm4_command_hierarchy_view->header()->moveSection(1, 0);
+            }
+            else
+            {
+                m_command_hierarchy_view->header()->moveSection(1, 0);
+            }
+        }
     }
 
     m_prev_command_view_mode = view_mode;
-    ExpandResizeHierarchyView();
+    if (sender_object == m_pm4_view_mode_combo_box)
+    {
+        ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
+    }
+    else if (m_gfxr_capture_loaded)
+    {
+        ExpandResizeHierarchyView(*m_command_hierarchy_view,
+                                  *m_gfxr_vulkan_commands_filter_proxy_model);
+    }
+    else
+    {
+        ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -591,7 +672,14 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
         m_command_hierarchy_view->scrollToTop();
     }
 
-    ExpandResizeHierarchyView();
+    if (m_correlated_capture_loaded)
+    {
+        ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
+    }
+    else
+    {
+        ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -610,7 +698,6 @@ void MainWindow::ResetTabWidget()
     }
 
     // Reset all of the tab indices.
-    m_gfxr_vulkan_command_view_tab_index = -1;
     m_gfxr_vulkan_command_arguments_view_tab_index = -1;
     m_overview_view_tab_index = -1;
     m_command_view_tab_index = -1;
@@ -624,9 +711,6 @@ void MainWindow::ResetTabWidget()
 }
 
 //--------------------------------------------------------------------------------------------------
-// TODO (gcommodore) (b/436646197) : Separate loading .rd files from loading .dive files so that
-// this function is used purely for loading a .dive file or loading a group of files (.gfxr, .rd,
-// and .gfxa).
 bool MainWindow::LoadDiveFile(const std::string &file_name)
 {
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
@@ -647,7 +731,7 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     }
 
     // Reset models and views that display data from the capture
-    m_gfxr_vulkan_command_tab_view->ResetModel();
+    m_middle_frame->show();
     m_gfxr_vulkan_command_arguments_tab_view->ResetModel();
     m_gfxr_vulkan_command_hierarchy_model->Reset();
     m_command_tab_view->ResetModel();
@@ -676,11 +760,9 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     }
 
     // Add the tabs required for an Dive file or .rd and .gfxr file.
-    m_gfxr_vulkan_command_view_tab_index = m_tab_widget->addTab(m_gfxr_vulkan_command_tab_view,
-                                                                "Commands");
     m_gfxr_vulkan_command_arguments_view_tab_index =
     m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
-    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Command Buffers");
+    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
     m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
     m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
     m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
@@ -700,15 +782,23 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_tab_widget->addTab(m_buffer_view, "Buffers");
 #endif
 
+    // Left Panel contains gfxr display
+    m_command_hierarchy_view->setModel(m_gfxr_vulkan_commands_filter_proxy_model);
+    // Reset and enable the gfxr command filter
+    m_filter_gfxr_commands_combo_box->Reset();
+    m_filter_gfxr_commands_combo_box->setEnabled(true);
+    m_filter_gfxr_commands_combo_box->show();
+    // Disable the view mode combo box and filter
     m_filter_model->SetMode(kDefaultFilterMode);
-    m_command_hierarchy_view->setModel(m_filter_model);
-
-    m_filter_mode_combo_box->setEnabled(true);
-    m_filter_mode_combo_box->show();
     m_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
-    m_filter_gfxr_commands_combo_box->setEnabled(false);
-    m_filter_gfxr_commands_combo_box->hide();
-    m_view_mode_combo_box->setEnabled(true);
+    m_view_mode_combo_box->setEnabled(false);
+    m_filter_mode_combo_box->hide();
+
+    // Middle Panel contains pm4 display
+    m_pm4_command_hierarchy_view->setModel(m_filter_model);
+    m_pm4_filter_mode_combo_box->setEnabled(true);
+    m_pm4_filter_mode_combo_box->show();
+    m_pm4_filter_mode_combo_box->setCurrentIndex(kDefaultFilterMode);
 
     ConnectDiveFileTabs();
 
@@ -720,7 +810,7 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     m_gfxr_vulkan_command_hierarchy_model->EndResetModel();
 
     // Collect the gfxr draw call indices
-    m_filter_model->CollectGfxrDrawCallIndices();
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
 
     // Iterate m_gfxr_vulkan_command_hierarchy_model to collect the indices of the vulkan events
     // where gpu timing data will be collected
@@ -754,6 +844,7 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     }
 
     // Reset models and views that display data from the capture
+    m_middle_frame->hide();
     m_command_tab_view->ResetModel();
     m_command_hierarchy_model->Reset();
     m_event_selection->Reset();
@@ -777,7 +868,7 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
 
     // Add the tabs required for an AdrenoRd file.
     m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "Command Buffers");
+    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
     m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
     m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
 #if defined(ENABLE_CAPTURE_BUFFERS)
@@ -805,7 +896,7 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     m_filter_gfxr_commands_combo_box->hide();
     m_view_mode_combo_box->setEnabled(true);
 
-    ConnectDiveFileTabs();
+    ConnectAdrenoRdFileTabs();
 
     {
         OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
@@ -840,6 +931,7 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     }
 
     // Reset models and views that display data from the capture
+    m_middle_frame->hide();
     m_gfxr_vulkan_command_hierarchy_model->Reset();
     m_prev_command_view_mode = QString();
     m_filter_gfxr_commands_combo_box->Reset();
@@ -870,7 +962,7 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
 
     // Ensure the All Event topology is displayed.
-    m_view_mode_combo_box->currentTextChanged(kViewModeStrings[1]);
+    OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
     // Disable the Mode and Filter combo boxes.
     m_view_mode_combo_box->setEnabled(false);
     m_filter_mode_combo_box->setEnabled(false);
@@ -990,19 +1082,25 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
     if (m_gfxr_capture_loaded)
     {
         file_loaded = LoadGfxrFile(file_name);
+        ExpandResizeHierarchyView(*m_command_hierarchy_view,
+                                  *m_gfxr_vulkan_commands_filter_proxy_model);
     }
     else if (m_correlated_capture_loaded)
     {
         file_loaded = LoadDiveFile(file_name);
+        ExpandResizeHierarchyView(*m_command_hierarchy_view,
+                                  *m_gfxr_vulkan_commands_filter_proxy_model);
+        ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
     }
     else if (file_extension.compare(".dive") == 0)
     {
-
         file_loaded = LoadAdrenoRdFile(file_name);
+        ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
     }
     else if (file_extension.compare(".rd") == 0)
     {
         file_loaded = LoadAdrenoRdFile(file_name);
+        ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
     }
     else
     {
@@ -1014,7 +1112,6 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
         return false;
     }
 
-    ExpandResizeHierarchyView();
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
     m_capture_file = QString(file_name.c_str());
     QFileInfo file_info(m_capture_file);
@@ -1164,9 +1261,23 @@ void MainWindow::OnExpandToLevel()
         QPushButton *button = qobject_cast<QPushButton *>(sender_obj);
         if (button)
         {
-            int level = button->text().toInt();
-            m_command_hierarchy_view->ExpandToLevel(level);
-            m_command_hierarchy_view->RetainCurrentNode();
+            int           level = button->text().toInt();
+            DiveTreeView *target_view = nullptr;
+
+            if (m_expand_to_lvl_buttons.contains(button))
+            {
+                target_view = m_command_hierarchy_view;
+            }
+            else
+            {
+                target_view = m_pm4_command_hierarchy_view;
+            }
+
+            if (target_view)
+            {
+                target_view->ExpandToLevel(level);
+                target_view->RetainCurrentNode();
+            }
         }
     }
 }
@@ -1307,21 +1418,76 @@ void MainWindow::OnSaveCapture()
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::ResetEventSearchBar()
+{
+    m_event_search_bar->clearSearch();
+    m_event_search_bar->hide();
+    m_search_trigger_button->show();
+    DisconnectSearchBar();
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::ResetPm4EventSearchBar()
+{
+    m_pm4_event_search_bar->clearSearch();
+    m_pm4_event_search_bar->hide();
+    m_pm4_search_trigger_button->show();
+    DisconnectPm4SearchBar();
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::ResetHorizontalScroll(const DiveTreeView &tree_view)
+{
+    QScrollBar *h_scroll_bar = tree_view.horizontalScrollBar();
+    if (h_scroll_bar)
+    {
+        h_scroll_bar->triggerAction(QAbstractSlider::SliderToMinimum);
+        QApplication::processEvents();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnSearchTrigger()
 {
-    if (m_event_search_bar->isVisible())
+    QObject *sender_object = sender();
+
+    if (sender_object == m_search_trigger_button)
     {
-        m_event_search_bar->clearSearch();
-        m_event_search_bar->hide();
-        m_search_trigger_button->show();
-        DisconnectSearchBar();
+        if (m_event_search_bar->isVisible())
+        {
+            ResetEventSearchBar();
+        }
+        else
+        {
+            ConnectSearchBar();
+            m_search_trigger_button->hide();
+            m_event_search_bar->positionCurser();
+            m_event_search_bar->show();
+
+            if (m_pm4_event_search_bar->isVisible())
+            {
+                ResetPm4EventSearchBar();
+            }
+        }
     }
-    else
+    else if (sender_object == m_pm4_search_trigger_button)
     {
-        ConnectSearchBar();
-        m_search_trigger_button->hide();
-        m_event_search_bar->positionCurser();
-        m_event_search_bar->show();
+        if (m_pm4_event_search_bar->isVisible())
+        {
+            ResetPm4EventSearchBar();
+        }
+        else
+        {
+            ConnectPm4SearchBar();
+            m_pm4_search_trigger_button->hide();
+            m_pm4_event_search_bar->positionCurser();
+            m_pm4_event_search_bar->show();
+
+            if (m_event_search_bar->isVisible())
+            {
+                ResetEventSearchBar();
+            }
+        }
     }
 
     int          current_index = m_tab_widget->currentIndex();
@@ -1334,19 +1500,6 @@ void MainWindow::OnSearchTrigger()
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName);
         tab_wiget_search_button = current_tab->findChild<QPushButton *>(
         kCommandBufferSearchButtonName);
-        if (!tab_wiget_search_bar->isHidden())
-        {
-            tab_wiget_search_bar->clearSearch();
-            tab_wiget_search_bar->hide();
-        }
-        tab_wiget_search_button->show();
-    }
-    else if (current_index == m_gfxr_vulkan_command_view_tab_index)
-    {
-        tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kGfxrVulkanCommandSearchBarName);
-        tab_wiget_search_button = current_tab->findChild<QPushButton *>(
-        kGfxrVulkanCommandSearchButtonName);
-
         if (!tab_wiget_search_bar->isHidden())
         {
             tab_wiget_search_bar->clearSearch();
@@ -1539,10 +1692,6 @@ void MainWindow::CreateShortcuts()
         {
             m_command_tab_view->OnSearchCommandBuffer();
         }
-        else if (current_tab_index == m_gfxr_vulkan_command_view_tab_index)
-        {
-            m_gfxr_vulkan_command_tab_view->OnSearchCommands();
-        }
         else if (current_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
         {
             m_gfxr_vulkan_command_arguments_tab_view->OnSearchCommandArgs();
@@ -1556,11 +1705,11 @@ void MainWindow::CreateShortcuts()
             m_tab_widget->setCurrentIndex(m_command_view_tab_index);
             m_command_tab_view->OnSearchCommandBuffer();
         }
-        m_event_search_bar->clearSearch();
-        m_event_search_bar->hide();
-        m_search_trigger_button->show();
-
-        DisconnectSearchBar();
+        ResetEventSearchBar();
+        if (m_correlated_capture_loaded)
+        {
+            ResetPm4EventSearchBar();
+        }
     });
 
     // Overview Shortcut
@@ -1582,16 +1731,6 @@ void MainWindow::CreateShortcuts()
     m_event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
     connect(m_event_state_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
-    });
-    // Gfxr Vulkan Command Shortcut
-    m_gfxr_vulkan_command_tab_shortcut = new QShortcut(QKeySequence(
-                                                       SHORTCUT_GFXR_VULKAN_COMMAND_TAB),
-                                                       this);
-    connect(m_gfxr_vulkan_command_tab_shortcut, &QShortcut::activated, [this]() {
-        if (m_gfxr_vulkan_command_view_tab_index != -1)
-        {
-            m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_view_tab_index);
-        }
     });
     // Gfxr Vulkan Command Arguments Shortcut
     m_gfxr_vulkan_command_arguments_tab_shortcut =
@@ -1637,18 +1776,17 @@ void MainWindow::ShowTempStatus(const QString &status_message)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::ExpandResizeHierarchyView()
+void MainWindow::ExpandResizeHierarchyView(DiveTreeView                &tree_view,
+                                           const QSortFilterProxyModel &model)
 {
-    m_command_hierarchy_view->expandAll();
-    m_gfxr_vulkan_command_tab_view->ExpandAll();
-
+    tree_view.expandAll();
     // Set to -1 so that resizeColumnToContents() will consider *all* rows to determine amount
     // to resize. This can potentially be slow!
     // Then resize each column. This will also auto-adjust horizontal scroll bar size.
-    m_command_hierarchy_view->header()->setResizeContentsPrecision(-1);
-    uint32_t column_count = (uint32_t)m_command_hierarchy_model->columnCount(QModelIndex());
+    tree_view.header()->setResizeContentsPrecision(-1);
+    uint32_t column_count = (uint32_t)model.columnCount(QModelIndex());
     for (uint32_t column = 0; column < column_count; ++column)
-        m_command_hierarchy_view->resizeColumnToContents(column);
+        tree_view.resizeColumnToContents(column);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1748,11 +1886,11 @@ void MainWindow::OnTabViewSearchBarVisibilityChange(bool isHidden)
 {
     if (isHidden)
     {
-        m_event_search_bar->clearSearch();
-        m_event_search_bar->hide();
-        m_search_trigger_button->show();
-
-        DisconnectSearchBar();
+        ResetEventSearchBar();
+        if (m_correlated_capture_loaded)
+        {
+            ResetPm4EventSearchBar();
+        }
     }
 }
 
@@ -1777,10 +1915,6 @@ void MainWindow::OnTabViewChange()
             {
                 m_command_tab_view->OnSearchBarVisibilityChange(true);
             }
-            else if (m_previous_tab_index == m_gfxr_vulkan_command_view_tab_index)
-            {
-                m_gfxr_vulkan_command_tab_view->OnSearchBarVisibilityChange(true);
-            }
             else if (m_previous_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
             {
                 m_gfxr_vulkan_command_arguments_tab_view->OnSearchBarVisibilityChange(true);
@@ -1796,20 +1930,10 @@ void MainWindow::OnTabViewChange()
     if (current_index == m_command_view_tab_index &&
         !current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
     {
-        m_event_search_bar->clearSearch();
-        m_event_search_bar->hide();
-        m_search_trigger_button->show();
-        DisconnectSearchBar();
-    }
-    else if (current_index == m_gfxr_vulkan_command_view_tab_index &&
-             current_tab->findChild<SearchBar *>(kGfxrVulkanCommandSearchBarName))
-    {
-        if (!current_tab->findChild<SearchBar *>(kGfxrVulkanCommandSearchBarName)->isHidden())
+        ResetEventSearchBar();
+        if (m_correlated_capture_loaded)
         {
-            m_event_search_bar->clearSearch();
-            m_event_search_bar->hide();
-            m_search_trigger_button->show();
-            DisconnectSearchBar();
+            ResetPm4EventSearchBar();
         }
     }
     else if (current_index == m_gfxr_vulkan_command_arguments_view_tab_index &&
@@ -1818,10 +1942,11 @@ void MainWindow::OnTabViewChange()
         if (!current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName)
              ->isHidden())
         {
-            m_event_search_bar->clearSearch();
-            m_event_search_bar->hide();
-            m_search_trigger_button->show();
-            DisconnectSearchBar();
+            ResetEventSearchBar();
+            if (m_correlated_capture_loaded)
+            {
+                ResetPm4EventSearchBar();
+            }
         }
     }
     else if (current_index == m_perf_counter_view_tab_index &&
@@ -1829,10 +1954,11 @@ void MainWindow::OnTabViewChange()
     {
         if (!current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName)->isHidden())
         {
-            m_event_search_bar->clearSearch();
-            m_event_search_bar->hide();
-            m_search_trigger_button->show();
-            DisconnectSearchBar();
+            ResetEventSearchBar();
+            if (m_correlated_capture_loaded)
+            {
+                ResetPm4EventSearchBar();
+            }
         }
     }
     else
@@ -1886,16 +2012,109 @@ void MainWindow::DisconnectSearchBar()
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::ConnectPm4SearchBar()
+{
+    QObject::connect(m_pm4_event_search_bar,
+                     SIGNAL(new_search(const QString &)),
+                     m_pm4_command_hierarchy_view,
+                     SLOT(searchNodeByText(const QString &)));
+    QObject::connect(m_pm4_event_search_bar,
+                     &SearchBar::next_search,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::nextNodeInSearch);
+    QObject::connect(m_pm4_event_search_bar,
+                     &SearchBar::prev_search,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::prevNodeInSearch);
+    QObject::connect(m_pm4_command_hierarchy_view,
+                     &DiveTreeView::updateSearch,
+                     m_pm4_event_search_bar,
+                     &SearchBar::updateSearchResults);
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::DisconnectPm4SearchBar()
+{
+    QObject::disconnect(m_pm4_event_search_bar,
+                        SIGNAL(new_search(const QString &)),
+                        m_pm4_command_hierarchy_view,
+                        SLOT(searchNodeByText(const QString &)));
+    QObject::disconnect(m_pm4_event_search_bar,
+                        &SearchBar::next_search,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::nextNodeInSearch);
+    QObject::disconnect(m_pm4_event_search_bar,
+                        &SearchBar::prev_search,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::prevNodeInSearch);
+    QObject::disconnect(m_pm4_command_hierarchy_view,
+                        &DiveTreeView::updateSearch,
+                        m_pm4_event_search_bar,
+                        &SearchBar::updateSearchResults);
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::DisconnectAllTabs()
 {
-    // Get the current selection model before it potentially changes.
-    QItemSelectionModel *currentSelectionModel = m_command_hierarchy_view->selectionModel();
+    // Get the current selection models before they potentially change.
+    QItemSelectionModel *current_selection_model = m_command_hierarchy_view->selectionModel();
+    QItemSelectionModel *current_pm4_selection_model = m_pm4_command_hierarchy_view
+                                                       ->selectionModel();
 
-    // Disconnect ALL signals from the selection model to ALL slots.
-    if (currentSelectionModel)
+    // Disconnect ALL signals from the selection models to all slots.
+    if (current_selection_model)
     {
-        QObject::disconnect(currentSelectionModel, nullptr, nullptr, nullptr);
+        QObject::disconnect(current_selection_model, nullptr, nullptr, nullptr);
     }
+
+    if (current_pm4_selection_model)
+    {
+        QObject::disconnect(current_pm4_selection_model, nullptr, nullptr, nullptr);
+    }
+
+    foreach (auto expand_to_lvl_button, m_expand_to_lvl_buttons)
+    {
+        QObject::disconnect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
+    }
+
+    QObject::disconnect(m_view_mode_combo_box,
+                        SIGNAL(currentTextChanged(const QString &)),
+                        this,
+                        SLOT(OnCommandViewModeChange(const QString &)));
+    QObject::disconnect(m_view_mode_combo_box,
+                        SIGNAL(textHighlighted(const QString &)),
+                        this,
+                        SLOT(OnCommandViewModeComboBoxHover(const QString &)));
+
+    QObject::disconnect(m_command_hierarchy_view,
+                        &DiveTreeView::expanded,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::expandNode);
+    QObject::disconnect(m_command_hierarchy_view,
+                        &DiveTreeView::collapsed,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::collapseNode);
+    QObject::disconnect(m_prev_event_button,
+                        &QPushButton::clicked,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::gotoPrevEvent);
+    QObject::disconnect(m_next_event_button,
+                        &QPushButton::clicked,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::gotoNextEvent);
+
+    QObject::disconnect(m_property_panel,
+                        &PropertyPanel::crossReference,
+                        this,
+                        &MainWindow::OnCrossReference);
+    QObject::disconnect(m_event_selection,
+                        &EventSelection::crossReference,
+                        this,
+                        &MainWindow::OnCrossReference);
+    QObject::disconnect(m_event_selection,
+                        &EventSelection::currentNodeChanged,
+                        m_command_hierarchy_view,
+                        &DiveTreeView::setCurrentNode);
 
     QObject::disconnect(m_command_hierarchy_view,
                         SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
@@ -1910,27 +2129,77 @@ void MainWindow::DisconnectAllTabs()
     QObject::disconnect(m_command_hierarchy_view,
                         &QTreeView::customContextMenuRequested,
                         this,
-                        &MainWindow::OnCorrelateVulkanDrawCall);
+                        &MainWindow::OnOpenVulkanDrawCallMenu);
 
-    QObject::disconnect(m_analyze_dig,
-                        &AnalyzeDialog::OnDisplayPerfCounterResults,
-                        m_perf_counter_model,
-                        &PerfCounterModel::OnPerfCounterResultsGenerated);
+    foreach (auto expand_to_lvl_button, m_pm4_expand_to_lvl_buttons)
+    {
+        QObject::disconnect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
+    }
 
-    QObject::disconnect(m_analyze_dig,
-                        &AnalyzeDialog::OnDisplayGpuTimingResults,
-                        m_gpu_timing_model,
-                        &GpuTimingModel::OnGpuTimingResultsGenerated);
-
-    QObject::disconnect(m_command_hierarchy_view,
-                        &QTreeView::customContextMenuRequested,
+    QObject::disconnect(m_pm4_view_mode_combo_box,
+                        SIGNAL(currentTextChanged(const QString &)),
                         this,
-                        &MainWindow::OnCorrelatePm4DrawCall);
+                        SLOT(OnCommandViewModeChange(const QString &)));
+    QObject::disconnect(m_pm4_view_mode_combo_box,
+                        SIGNAL(textHighlighted(const QString &)),
+                        this,
+                        SLOT(OnCommandViewModeComboBoxHover(const QString &)));
+
+    QObject::disconnect(m_pm4_search_trigger_button,
+                        SIGNAL(clicked()),
+                        this,
+                        SLOT(OnSearchTrigger()));
+
+    QObject::disconnect(m_pm4_command_hierarchy_view,
+                        &DiveTreeView::expanded,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::expandNode);
+    QObject::disconnect(m_pm4_command_hierarchy_view,
+                        &DiveTreeView::collapsed,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::collapseNode);
+    QObject::disconnect(m_event_selection,
+                        &EventSelection::currentNodeChanged,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::setCurrentNode);
+    QObject::disconnect(m_pm4_prev_event_button,
+                        &QPushButton::clicked,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::gotoPrevEvent);
+    QObject::disconnect(m_pm4_next_event_button,
+                        &QPushButton::clicked,
+                        m_pm4_command_hierarchy_view,
+                        &DiveTreeView::gotoNextEvent);
+
+    QObject::disconnect(m_pm4_command_hierarchy_view,
+                        SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
+                        m_command_tab_view,
+                        SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::disconnect(m_pm4_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                        m_command_tab_view,
+                        SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::disconnect(m_pm4_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                        this,
+                        SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::disconnect(m_pm4_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                        this,
+                        SLOT(OnCorrelatePm4DrawCall(const QModelIndex &)));
 
     QObject::disconnect(m_command_tab_view,
                         SIGNAL(HideOtherSearchBars()),
                         this,
                         SLOT(OnTabViewChange()));
+
+    QObject::disconnect(m_command_tab_view,
+                        SIGNAL(SendNodeProperty(const QString &)),
+                        m_property_panel,
+                        SLOT(OnSelectionInfoChange(const QString &)));
 
     QObject::disconnect(this,
                         SIGNAL(EventSelected(uint64_t)),
@@ -1962,80 +2231,181 @@ void MainWindow::DisconnectAllTabs()
                         SIGNAL(HideOtherSearchBars()),
                         this,
                         SLOT(OnTabViewChange()));
-    QObject::disconnect(m_command_hierarchy_view->selectionModel(),
-                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
-                        m_gfxr_vulkan_command_tab_view,
-                        SLOT(OnSelectionChanged(const QModelIndex &)));
-
-    QObject::disconnect(m_gfxr_vulkan_command_tab_view,
-                        SIGNAL(HideOtherSearchBars()),
-                        this,
-                        SLOT(OnTabViewChange()));
-
-    QObject::disconnect(m_gfxr_vulkan_command_tab_view,
-                        SIGNAL(ApplyFilter(const QModelIndex &, int)),
-                        this,
-                        SLOT(OnFilterApplied(const QModelIndex &, int)));
-
-    QObject::disconnect(m_gfxr_vulkan_command_tab_view,
-                        SIGNAL(SelectCommand(const QModelIndex &)),
-                        m_gfxr_vulkan_command_arguments_tab_view,
-                        SLOT(OnSelectionChanged(const QModelIndex &)));
 
     QObject::disconnect(m_command_hierarchy_view,
                         SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                         m_gpu_timing_tab_view,
                         SLOT(OnEventSelectionChanged(const QModelIndex &)));
 
+    QObject::disconnect(m_filter_mode_combo_box,
+                        SIGNAL(currentTextChanged(const QString &)),
+                        this,
+                        SLOT(OnFilterModeChange(const QString &)));
+
+    QObject::disconnect(m_analyze_dig,
+                        &AnalyzeDialog::OnDisplayPerfCounterResults,
+                        m_perf_counter_model,
+                        &PerfCounterModel::OnPerfCounterResultsGenerated);
+
+    QObject::disconnect(m_analyze_dig,
+                        &AnalyzeDialog::OnDisplayGpuTimingResults,
+                        m_gpu_timing_model,
+                        &GpuTimingModel::OnGpuTimingResultsGenerated);
+
     // Temporarily set the model to nullptr and clear selection/current index
     // before loading new data. This forces a clean break.
     m_command_hierarchy_view->setModel(nullptr);
-    if (currentSelectionModel)
+    m_pm4_command_hierarchy_view->setModel(nullptr);
+
+    if (current_selection_model)
     {
-        currentSelectionModel->clearSelection();
+        current_selection_model->clearSelection();
+    }
+
+    if (current_pm4_selection_model)
+    {
+        current_pm4_selection_model->clearSelection();
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-// TODO (gcommodore) (b/436646197): Separate loading .rd files from loading .dive files so that this
-// function is used purely for loading a .dive file or loading a group of files (.gfxr, .rd, and
-// .gfxa).
 void MainWindow::ConnectDiveFileTabs()
 {
+    // Left Panel
+    foreach (auto expand_to_lvl_button, m_expand_to_lvl_buttons)
+    {
+        QObject::connect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
+    }
+
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::expanded,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::expandNode);
+
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::collapsed,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::collapseNode);
+
+    QObject::connect(m_event_selection,
+                     &EventSelection::currentNodeChanged,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::setCurrentNode);
+
+    // Buttons
+    QObject::connect(m_prev_event_button,
+                     &QPushButton::clicked,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::gotoPrevEvent);
+    QObject::connect(m_next_event_button,
+                     &QPushButton::clicked,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::gotoNextEvent);
+
+    // Tabs
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
-                     m_command_tab_view,
+                     m_gfxr_vulkan_command_arguments_tab_view,
                      SLOT(OnSelectionChanged(const QModelIndex &)));
 
     QObject::connect(m_command_hierarchy_view->selectionModel(),
                      SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
-                     m_command_tab_view,
+                     m_gfxr_vulkan_command_arguments_tab_view,
                      SLOT(OnSelectionChanged(const QModelIndex &)));
 
+    // Correlate between two calls
     QObject::connect(m_command_hierarchy_view->selectionModel(),
                      SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                      this,
-                     SLOT(OnSelectionChanged(const QModelIndex &)));
+                     SLOT(OnCorrelateVulkanDrawCall(const QModelIndex &)));
 
     QObject::connect(m_command_hierarchy_view,
                      &QTreeView::customContextMenuRequested,
                      this,
-                     &MainWindow::OnCorrelatePm4DrawCall);
+                     &MainWindow::OnOpenVulkanDrawCallMenu);
 
-    QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayPerfCounterResults,
-                     m_perf_counter_model,
-                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+    QObject::connect(m_property_panel,
+                     &PropertyPanel::crossReference,
+                     this,
+                     &MainWindow::OnCrossReference);
+    QObject::connect(m_event_selection,
+                     &EventSelection::crossReference,
+                     this,
+                     &MainWindow::OnCrossReference);
 
-    QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayGpuTimingResults,
-                     m_gpu_timing_model,
-                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+    // Middle Panel
+    foreach (auto expand_to_lvl_button, m_pm4_expand_to_lvl_buttons)
+    {
+        QObject::connect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
+    }
+
+    QObject::connect(m_pm4_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     this,
+                     SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::connect(m_pm4_command_hierarchy_view,
+                     &DiveTreeView::expanded,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::expandNode);
+    QObject::connect(m_pm4_command_hierarchy_view,
+                     &DiveTreeView::collapsed,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::collapseNode);
+    QObject::connect(m_event_selection,
+                     &EventSelection::currentNodeChanged,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::setCurrentNode);
+
+    // Combo Boxes
+    QObject::connect(m_pm4_view_mode_combo_box,
+                     SIGNAL(currentTextChanged(const QString &)),
+                     this,
+                     SLOT(OnCommandViewModeChange(const QString &)));
+
+    QObject::connect(m_pm4_view_mode_combo_box,
+                     SIGNAL(textHighlighted(const QString &)),
+                     this,
+                     SLOT(OnCommandViewModeComboBoxHover(const QString &)));
+
+    QObject::connect(m_pm4_filter_mode_combo_box,
+                     SIGNAL(currentTextChanged(const QString &)),
+                     this,
+                     SLOT(OnFilterModeChange(const QString &)));
+
+    // Buttons
+    QObject::connect(m_pm4_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchTrigger()));
+
+    QObject::connect(m_pm4_prev_event_button,
+                     &QPushButton::clicked,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::gotoPrevEvent);
+
+    QObject::connect(m_pm4_next_event_button,
+                     &QPushButton::clicked,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::gotoNextEvent);
+
+    // Tabs
+    QObject::connect(m_pm4_command_hierarchy_view,
+                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
+                     m_command_tab_view,
+                     SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    QObject::connect(m_pm4_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     m_command_tab_view,
+                     SLOT(OnSelectionChanged(const QModelIndex &)));
 
     QObject::connect(m_command_tab_view,
                      SIGNAL(HideOtherSearchBars()),
                      this,
                      SLOT(OnTabViewChange()));
+
+    QObject::connect(m_command_tab_view,
+                     SIGNAL(SendNodeProperty(const QString &)),
+                     m_property_panel,
+                     SLOT(OnSelectionInfoChange(const QString &)));
 
     QObject::connect(this,
                      SIGNAL(EventSelected(uint64_t)),
@@ -2046,6 +2416,7 @@ void MainWindow::ConnectDiveFileTabs()
                      SIGNAL(EventSelected(uint64_t)),
                      m_event_state_view,
                      SLOT(OnEventSelected(uint64_t)));
+
 #if defined(ENABLE_CAPTURE_BUFFERS)
     QObject::connect(this,
                      SIGNAL(EventSelected(uint64_t)),
@@ -2058,25 +2429,65 @@ void MainWindow::ConnectDiveFileTabs()
                      this,
                      SLOT(OnTabViewChange()));
 
-    QObject::connect(m_gfxr_vulkan_command_tab_view,
-                     SIGNAL(HideOtherSearchBars()),
-                     this,
-                     SLOT(OnTabViewChange()));
+    QObject::connect(m_command_hierarchy_view,
+                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
+                     m_gpu_timing_tab_view,
+                     SLOT(OnEventSelectionChanged(const QModelIndex &)));
 
-    QObject::connect(m_gfxr_vulkan_command_tab_view,
-                     SIGNAL(ApplyFilter(const QModelIndex &, int)),
+    // Correlate between two calls
+    QObject::connect(m_pm4_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                      this,
-                     SLOT(OnFilterApplied(const QModelIndex &, int)));
+                     SLOT(OnCorrelatePm4DrawCall(const QModelIndex &)));
 
-    QObject::connect(m_gfxr_vulkan_command_tab_view,
-                     SIGNAL(SelectCommand(const QModelIndex &)),
-                     m_gfxr_vulkan_command_arguments_tab_view,
-                     SLOT(OnSelectionChanged(const QModelIndex &)));
+    // Dialogs
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     m_perf_counter_model,
+                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     m_gpu_timing_model,
+                     &GpuTimingModel::OnGpuTimingResultsGenerated);
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::ConnectAdrenoRdFileTabs()
 {
+    foreach (auto expand_to_lvl_button, m_expand_to_lvl_buttons)
+    {
+        QObject::connect(expand_to_lvl_button, SIGNAL(clicked()), this, SLOT(OnExpandToLevel()));
+    }
+
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::expanded,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::expandNode);
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::collapsed,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::collapseNode);
+    QObject::connect(m_event_selection,
+                     &EventSelection::currentNodeChanged,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::setCurrentNode);
+
+    // Combo Boxes
+    QObject::connect(m_view_mode_combo_box,
+                     SIGNAL(currentTextChanged(const QString &)),
+                     this,
+                     SLOT(OnCommandViewModeChange(const QString &)));
+    QObject::connect(m_view_mode_combo_box,
+                     SIGNAL(textHighlighted(const QString &)),
+                     this,
+                     SLOT(OnCommandViewModeComboBoxHover(const QString &)));
+    QObject::connect(m_filter_mode_combo_box,
+                     SIGNAL(currentTextChanged(const QString &)),
+                     this,
+                     SLOT(OnFilterModeChange(const QString &)));
+
+    // Tabs
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_command_tab_view,
@@ -2092,6 +2503,11 @@ void MainWindow::ConnectAdrenoRdFileTabs()
                      this,
                      SLOT(OnTabViewChange()));
 
+    QObject::connect(m_command_tab_view,
+                     SIGNAL(SendNodeProperty(const QString &)),
+                     m_property_panel,
+                     SLOT(OnSelectionInfoChange(const QString &)));
+
     QObject::connect(this,
                      SIGNAL(EventSelected(uint64_t)),
                      m_shader_view,
@@ -2101,22 +2517,34 @@ void MainWindow::ConnectAdrenoRdFileTabs()
                      SIGNAL(EventSelected(uint64_t)),
                      m_event_state_view,
                      SLOT(OnEventSelected(uint64_t)));
+
+    // Buttons
+    QObject::connect(m_prev_event_button,
+                     &QPushButton::clicked,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::gotoPrevEvent);
+    QObject::connect(m_next_event_button,
+                     &QPushButton::clicked,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::gotoNextEvent);
+
+    QObject::connect(m_property_panel,
+                     &PropertyPanel::crossReference,
+                     this,
+                     &MainWindow::OnCrossReference);
+    QObject::connect(m_event_selection,
+                     &EventSelection::crossReference,
+                     this,
+                     &MainWindow::OnCrossReference);
+
 #if defined(ENABLE_CAPTURE_BUFFERS)
     QObject::connect(this,
                      SIGNAL(EventSelected(uint64_t)),
                      m_buffer_view,
                      SLOT(OnEventSelected(uint64_t)));
 #endif
-}
 
-//--------------------------------------------------------------------------------------------------
-void MainWindow::ConnectGfxrFileTabs()
-{
-    QObject::connect(m_command_hierarchy_view,
-                     &QTreeView::customContextMenuRequested,
-                     this,
-                     &MainWindow::OnCorrelateVulkanDrawCall);
-
+    // Dialogs
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayPerfCounterResults,
                      m_perf_counter_model,
@@ -2126,7 +2554,11 @@ void MainWindow::ConnectGfxrFileTabs()
                      &AnalyzeDialog::OnDisplayGpuTimingResults,
                      m_gpu_timing_model,
                      &GpuTimingModel::OnGpuTimingResultsGenerated);
+}
 
+//--------------------------------------------------------------------------------------------------
+void MainWindow::ConnectGfxrFileTabs()
+{
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_gfxr_vulkan_command_arguments_tab_view,
@@ -2137,6 +2569,12 @@ void MainWindow::ConnectGfxrFileTabs()
                      m_gfxr_vulkan_command_arguments_tab_view,
                      SLOT(OnSelectionChanged(const QModelIndex &)));
 
+    QObject::connect(m_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     this,
+                     SLOT(OnSelectionChanged(const QModelIndex &)));
+
+    // Tabs
     QObject::connect(m_gfxr_vulkan_command_arguments_tab_view,
                      SIGNAL(HideOtherSearchBars()),
                      this,
@@ -2151,6 +2589,49 @@ void MainWindow::ConnectGfxrFileTabs()
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_gpu_timing_tab_view,
                      SLOT(OnEventSelectionChanged(const QModelIndex &)));
+
+    // Buttons
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::expanded,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::expandNode);
+
+    QObject::connect(m_command_hierarchy_view,
+                     &DiveTreeView::collapsed,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::collapseNode);
+
+    QObject::connect(m_event_selection,
+                     &EventSelection::currentNodeChanged,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::setCurrentNode);
+
+    QObject::connect(m_prev_event_button,
+                     &QPushButton::clicked,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::gotoPrevEvent);
+
+    QObject::connect(m_next_event_button,
+                     &QPushButton::clicked,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::gotoNextEvent);
+
+    // Dialogs
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     m_perf_counter_model,
+                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     m_gpu_timing_model,
+                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+
+    // Menus
+    QObject::connect(m_command_hierarchy_view,
+                     &QTreeView::customContextMenuRequested,
+                     this,
+                     &MainWindow::OnOpenVulkanDrawCallMenu);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2192,76 +2673,7 @@ QModelIndex MainWindow::FindSourceIndexFromNode(QAbstractItemModel *model,
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnFilterApplied(const QModelIndex &gfxr_index, int filter_index)
-{
-    // If the filter index is for arguments, change tab to the arguments tab.
-    if (filter_index == Dive::kArguments)
-    {
-        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
-        return;
-    }
-
-    m_filter_mode_combo_box->setCurrentIndex(filter_index);
-    m_filter_model->CollectGfxrDrawCallIndices();
-
-    uint64_t              gfxr_draw_call_index = (uint64_t)gfxr_index.internalPointer();
-    std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
-                                                  m_command_hierarchy_view->model())
-                                                  ->GetPm4DrawCallIndices();
-    std::vector<uint64_t> gfxr_draw_call_indices = qobject_cast<DiveFilterModel *>(
-                                                   m_command_hierarchy_view->model())
-                                                   ->GetGfxrDrawCallIndices();
-
-    auto it = std::find(gfxr_draw_call_indices.begin(),
-                        gfxr_draw_call_indices.end(),
-                        gfxr_draw_call_index);
-
-    if (it != gfxr_draw_call_indices.end())
-    {
-        long found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
-
-        // If the filter index is for perf counter data, change tab and correlate the index.
-        if (filter_index == Dive::kPerfCounterData)
-        {
-            m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
-            emit CorrelateCounter(found_gfxr_draw_call_index);
-            return;
-        }
-
-        uint64_t corresponding_pm4_draw_call_index = pm4_draw_call_indices.at(
-        found_gfxr_draw_call_index);
-
-        QAbstractItemModel *source_model = m_filter_model->sourceModel();
-
-        QModelIndex source_index = FindSourceIndexFromNode(source_model,
-                                                           corresponding_pm4_draw_call_index);
-
-        if (source_index.isValid())
-        {
-            QModelIndex proxy_index = m_filter_model->mapFromSource(source_index);
-            if (proxy_index.isValid())
-            {
-                QItemSelectionModel *selection_model = m_command_hierarchy_view->selectionModel();
-
-                QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
-                                                            QItemSelectionModel::Rows;
-
-                selection_model->setCurrentIndex(proxy_index, flags);
-
-                m_command_hierarchy_view->scrollTo(proxy_index,
-                                                   QAbstractItemView::PositionAtCenter);
-                m_command_hierarchy_view->expand(proxy_index);
-            }
-        }
-    }
-    else
-    {
-        QMessageBox::critical(this, "Correlation Failed", "Corresponding PM4 draw call not found.");
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
+void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
 {
     QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(
     m_command_hierarchy_view->indexAt(pos));
@@ -2270,6 +2682,8 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
     if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
                                       Dive::NodeType::kGfxrVulkanDrawCommandNode))
     {
+        // Check if requesting a menu for a BeginCommandBuffer or BeginRenderPass node.
+        OnOpenVulkanCallMenu(pos);
         return;
     }
     m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
@@ -2288,13 +2702,19 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
 
     uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
 
-    QMenu    context_menu;
-    QAction *arguments_action = context_menu.addAction(
-    Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
-    arguments_action->setData(Dive::kArguments);
-    QAction *perf_counter_action = context_menu.addAction(
-    Dive::kDrawCallContextMenuOptionStrings[Dive::kPerfCounterData]);
-    perf_counter_action->setData(Dive::kPerfCounterData);
+    QMenu context_menu;
+    for (size_t i = 0; i < std::size(Dive::kDrawCallContextMenuOptionStrings) - 1; ++i)
+    {
+        if (!m_correlated_capture_loaded &&
+            (i == Dive::DrawCallContextMenuOption::kBinningPassOnly ||
+             i == Dive::DrawCallContextMenuOption::kFirstTilePassOnly))
+        {
+            continue;
+        }
+
+        QAction *action = context_menu.addAction(Dive::kDrawCallContextMenuOptionStrings[i]);
+        action->setData(static_cast<int>(i));
+    }
 
     QAction *selected_action = context_menu.exec(
     m_command_hierarchy_view->viewport()->mapToGlobal(pos));
@@ -2316,50 +2736,39 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QPoint &pos)
     {
         m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
     }
+    else
+    {
+        m_pm4_filter_mode_combo_box->setCurrentIndex(selected_action->data().toInt());
+        OnCorrelateVulkanDrawCall(m_command_hierarchy_view->selectionModel()->currentIndex());
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnCorrelatePm4DrawCall(const QPoint &pos)
+void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
 {
-    if (m_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
-        m_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
-    {
-        QMessageBox::
-        information(this,
-                    "Correlation Disabled",
-                    "Ensure either the Binning Pass Only or First Tile Pass Only filter is enabled "
-                    "before attempting to correlate the draw calls.");
-        return;
-    }
+    QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(
+    m_command_hierarchy_view->indexAt(pos));
+    uint64_t node_index = (uint64_t)(source_index.internalPointer());
 
-    QModelIndex source_index = m_filter_model->mapToSource(m_command_hierarchy_view->indexAt(pos));
-    uint64_t    node_index = (uint64_t)(source_index.internalPointer());
+    std::string    node_desc = m_data_core->GetCommandHierarchy().GetNodeDesc(node_index);
+    Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(node_index);
 
+    // Only the BeginCommandBuffer and BeginRenderPass calls are used for correlation
     if ((!source_index.isValid()) ||
-        !Dive::IsDrawDispatchNode(m_data_core->GetCommandHierarchy().GetNodeType(node_index)))
+        ((node_type != Dive::NodeType::kGfxrVulkanBeginCommandBufferNode) &&
+         (node_type != Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) &&
+         (node_type != Dive::NodeType::kGfxrRootFrameNode)))
     {
         return;
     }
-
-    std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
-                                                  m_command_hierarchy_view->model())
-                                                  ->GetPm4DrawCallIndices();
-
-    auto it = std::find(pm4_draw_call_indices.begin(), pm4_draw_call_indices.end(), node_index);
-
-    if (it == pm4_draw_call_indices.end())
-    {
-        QMessageBox::critical(this,
-                              "Correlation Failed",
-                              "Corresponding vulkan draw call not found.");
-        return;
-    }
-
-    uint64_t found_pm4_draw_call_index = std::distance(pm4_draw_call_indices.begin(), it);
 
     QMenu    context_menu;
-    QAction *draw_call_correlation_action = context_menu.addAction("Vulkan Draw Call");
-    draw_call_correlation_action->setData(0);
+    QAction *arguments_action = context_menu.addAction(
+    Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
+    arguments_action->setData(Dive::kArguments);
+    QAction *gpu_time_action = context_menu.addAction(
+    Dive::kDrawCallContextMenuOptionStrings[Dive::kGpuTimeData]);
+    gpu_time_action->setData(Dive::kGpuTimeData);
 
     QAction *selected_action = context_menu.exec(
     m_command_hierarchy_view->viewport()->mapToGlobal(pos));
@@ -2371,6 +2780,158 @@ void MainWindow::OnCorrelatePm4DrawCall(const QPoint &pos)
         return;
     }
 
-    m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_view_tab_index);
-    emit CorrelateDrawCall(found_pm4_draw_call_index);
+    QVariant selected_action_data = selected_action->data();
+    if (selected_action_data == Dive::kGpuTimeData)
+    {
+        m_tab_widget->setCurrentIndex(m_gpu_timing_view_tab_index);
+    }
+    else if (selected_action_data == Dive::kArguments)
+    {
+        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
+{
+    if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
+        m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
+    {
+        return;
+    }
+
+    QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(index);
+    uint64_t    node_index = (uint64_t)(source_index.internalPointer());
+
+    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
+                                      Dive::NodeType::kGfxrVulkanDrawCommandNode))
+    {
+        QItemSelectionModel *selection_model = m_pm4_command_hierarchy_view->selectionModel();
+        if (selection_model)
+        {
+            selection_model->clear();
+            m_command_tab_view->ResetModel();
+        }
+        return;
+    }
+
+    std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
+                                                  m_pm4_command_hierarchy_view->model())
+                                                  ->GetPm4DrawCallIndices();
+
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+
+    std::vector<uint64_t>
+    gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
+                             m_command_hierarchy_view->model())
+                             ->GetGfxrDrawCallIndices();
+
+    auto it = std::find(gfxr_draw_call_indices.begin(), gfxr_draw_call_indices.end(), node_index);
+
+    if (it == gfxr_draw_call_indices.end())
+    {
+        return;
+    }
+
+    uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
+    uint64_t corresponding_pm4_draw_call_index = pm4_draw_call_indices.at(
+    found_gfxr_draw_call_index);
+
+    QAbstractItemModel *source_model = m_filter_model->sourceModel();
+    QModelIndex
+    pm4_draw_call_index_from_source = FindSourceIndexFromNode(source_model,
+                                                              corresponding_pm4_draw_call_index);
+
+    if (pm4_draw_call_index_from_source.isValid())
+    {
+        QModelIndex proxy_index = m_filter_model->mapFromSource(pm4_draw_call_index_from_source);
+        if (proxy_index.isValid())
+        {
+            QItemSelectionModel *selection_model = m_pm4_command_hierarchy_view->selectionModel();
+
+            QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
+                                                        QItemSelectionModel::Rows;
+
+            selection_model->setCurrentIndex(proxy_index, flags);
+
+            m_pm4_command_hierarchy_view->scrollTo(proxy_index,
+                                                   QAbstractItemView::PositionAtCenter);
+            m_pm4_command_hierarchy_view->expand(proxy_index);
+        }
+    }
+
+    ResetHorizontalScroll(*m_pm4_command_hierarchy_view);
+    m_command_tab_view->ResetHorizontalScroll();
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
+{
+    if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
+        m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
+    {
+        return;
+    }
+
+    QModelIndex source_index = m_filter_model->mapToSource(index);
+    uint64_t    node_index = (uint64_t)(source_index.internalPointer());
+
+    if ((!source_index.isValid()) ||
+        !Dive::IsDrawDispatchNode(m_data_core->GetCommandHierarchy().GetNodeType(node_index)))
+    {
+        QItemSelectionModel *selection_model = m_command_hierarchy_view->selectionModel();
+        if (selection_model)
+        {
+            selection_model->clear();
+        }
+        return;
+    }
+
+    std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
+                                                  m_pm4_command_hierarchy_view->model())
+                                                  ->GetPm4DrawCallIndices();
+
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+
+    std::vector<uint64_t>
+    gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
+                             m_command_hierarchy_view->model())
+                             ->GetGfxrDrawCallIndices();
+
+    auto it = std::find(pm4_draw_call_indices.begin(), pm4_draw_call_indices.end(), node_index);
+
+    if (it == pm4_draw_call_indices.end())
+    {
+        return;
+    }
+
+    uint64_t found_pm4_draw_call_index = std::distance(pm4_draw_call_indices.begin(), it);
+    uint64_t corresponding_gfxr_draw_call_index = gfxr_draw_call_indices.at(
+    found_pm4_draw_call_index);
+
+    QAbstractItemModel *source_model = m_gfxr_vulkan_commands_filter_proxy_model->sourceModel();
+    QModelIndex
+    gfxr_draw_call_index_from_source = FindSourceIndexFromNode(source_model,
+                                                               corresponding_gfxr_draw_call_index);
+
+    if (gfxr_draw_call_index_from_source.isValid())
+    {
+        QModelIndex proxy_index = m_gfxr_vulkan_commands_filter_proxy_model->mapFromSource(
+        gfxr_draw_call_index_from_source);
+        if (proxy_index.isValid())
+        {
+            QItemSelectionModel *selection_model = m_command_hierarchy_view->selectionModel();
+
+            QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
+                                                        QItemSelectionModel::Rows;
+
+            selection_model->setCurrentIndex(proxy_index, flags);
+
+            m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
+            m_command_hierarchy_view->expand(proxy_index);
+        }
+    }
+
+    ResetHorizontalScroll(*m_pm4_command_hierarchy_view);
+    m_command_tab_view->ResetHorizontalScroll();
 }

@@ -88,9 +88,9 @@ void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
     {
     case Dive::NodeType::kGfxrRootFrameNode:  // AvailableGpuTiming::ObjectType::kFrame
     case Dive::NodeType::
-    kGfxrVulkanCommandBufferNode:  // AvailableGpuTiming::ObjectType::kCommandBuffer
+    kGfxrVulkanBeginCommandBufferNode:  // AvailableGpuTiming::ObjectType::kCommandBuffer
     case Dive::NodeType::
-    kGfxrVulkanRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
+    kGfxrVulkanBeginRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
     {
         if (node_desc.find("End") != std::string::npos)
         {

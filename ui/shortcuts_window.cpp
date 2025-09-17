@@ -63,9 +63,6 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
     os << "View the Event State tab: ";
     os << SHORTCUT_EVENT_STATE_TAB << std::endl;
     os << std::endl;
-    os << "View the Gfxr Vulkan Command tab: ";
-    os << SHORTCUT_GFXR_VULKAN_COMMAND_TAB << std::endl;
-    os << std::endl;
     os << "View the Gfxr Vulkan Command Arguments tab: ";
     os << SHORTCUT_GFXR_VULKAN_COMMAND_ARGUMENTS_TAB << std::endl;
     os << std::endl;

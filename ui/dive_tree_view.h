@@ -55,10 +55,8 @@ public:
     bool IncludeIndex(uint64_t node_index) const;
     void SetMode(FilterMode filter_mode);
     void CollectPm4DrawCallIndices(const QModelIndex &parent_index = QModelIndex());
-    void CollectGfxrDrawCallIndices(const QModelIndex &parent_index = QModelIndex());
     void ClearDrawCallIndices();
     const std::vector<uint64_t> &GetPm4DrawCallIndices() { return m_pm4_draw_call_indices; }
-    const std::vector<uint64_t> &GetGfxrDrawCallIndices() { return m_gfxr_draw_call_indices; }
 public slots:
     void applyNewFilterMode(FilterMode new_mode);
 
@@ -69,7 +67,6 @@ private:
     const Dive::CommandHierarchy &m_command_hierarchy;
     FilterMode                    m_filter_mode = kNone;
     std::vector<uint64_t>         m_pm4_draw_call_indices;
-    std::vector<uint64_t>         m_gfxr_draw_call_indices;
 };
 
 //--------------------------------------------------------------------------------------------------

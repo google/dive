@@ -21,6 +21,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <qapplication.h>
+#include <qscrollbar.h>
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "search_bar.h"
@@ -132,6 +134,8 @@ void CommandTabView::OnSelectionChanged(const QModelIndex &index)
     {
         clearSearchBar();
     }
+
+    ResetHorizontalScroll();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -205,4 +209,11 @@ void CommandTabView::DisconnectSearchBar()
                         &CommandBufferView::updateSearch,
                         m_search_bar,
                         &SearchBar::updateSearchResults);
+}
+
+//--------------------------------------------------------------------------------------------------
+void CommandTabView::ResetHorizontalScroll()
+{
+    m_command_buffer_view->horizontalScrollBar()->triggerAction(QAbstractSlider::SliderToMinimum);
+    QApplication::processEvents();
 }

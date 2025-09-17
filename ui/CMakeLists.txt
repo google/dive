@@ -54,7 +54,7 @@ include_directories(${LibArchive_INCLUDE_DIRS})
 # Tell CMake to create the Dive executable
 add_executable(${PROJECT_NAME} ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} resources.qrc)
 if (DIVE_UI_WIN32)
-  set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE) # WIN32_EXECUTABLE
+  set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
 # Use the Widgets module from Qt 5

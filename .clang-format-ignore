@@ -1,7 +1,6 @@
 # ignore third_party submodule code from clang-format checks
 ./third_party/OpenXR-SDK/*
 ./third_party/Vulkan-Headers/*
-./third_party/catch2/*
 ./third_party/libarchive/*
 ./third_party/pybind11/*
 

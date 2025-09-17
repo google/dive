@@ -18,6 +18,8 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive)
 
+option(DIVE_UI_WIN32 "(Windows-only) Build Dive UI as WIN32 GUI application instead of a console application" ON)
+
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 

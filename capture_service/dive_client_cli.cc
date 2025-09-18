@@ -689,7 +689,8 @@ bool DeployAndRunGfxrReplay(Dive::DeviceManager& mgr,
 
 bool DeployAndProfilingGfxrReplay(Dive::DeviceManager& mgr,
                                   const std::string&   device_serial,
-                                  const std::string    gfxr_replay_capture)
+                                  const std::string    gfxr_replay_capture,
+                                  const std::string&   gfxr_replay_flags)
 {
     std::string capture_download_dir = absl::GetFlag(FLAGS_download_dir);
 
@@ -699,7 +700,10 @@ bool DeployAndProfilingGfxrReplay(Dive::DeviceManager& mgr,
     }
     std::vector<std::string> metrics = absl::GetFlag(FLAGS_metrics);
 
-    auto ret = mgr.RunProfilingOnReplay(gfxr_replay_capture, metrics, capture_download_dir);
+    auto ret = mgr.RunProfilingOnReplay(gfxr_replay_capture,
+                                        metrics,
+                                        capture_download_dir,
+                                        gfxr_replay_flags);
     return ret.ok();
 }
 
@@ -766,7 +770,7 @@ int main(int argc, char** argv)
             std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
             break;
         }
-        res = DeployAndProfilingGfxrReplay(mgr, serial, gfxr_replay_file_path);
+        res = DeployAndProfilingGfxrReplay(mgr, serial, gfxr_replay_file_path, gfxr_replay_flags);
         break;
     }
     case Command::kListDevice:

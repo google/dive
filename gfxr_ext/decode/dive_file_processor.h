@@ -51,6 +51,8 @@ protected:
     void StoreBlockInfo() override;
 
 private:
+    // The block index of the state end marker
+    uint64_t state_end_marker_block_index_{ 0 };
     // Application will terminate after the single frame has been looped loop_single_frame_count_
     // times. If 0, application will loop infinitely.
     uint64_t loop_single_frame_count_{ 1 };

@@ -108,9 +108,10 @@ if(NOT ANDROID)
     add_subdirectory(plugins)
 else()
     if(NOT CMAKE_HOST_WIN32)
+        set(DIVE_GFXR_GRADLE_CONSOLE "verbose" CACHE LIST "Value of --console to use when building GFXR with Gradle")
         message(CHECK_START "Build gfxr for android")
         execute_process(
-            COMMAND ./gradlew replay:assemble${CMAKE_BUILD_TYPE} --console=verbose -P${ANDROID_ABI}
+            COMMAND ./gradlew replay:assemble${CMAKE_BUILD_TYPE} --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
             COMMAND_ERROR_IS_FATAL ANY
         )

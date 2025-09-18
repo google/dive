@@ -93,7 +93,6 @@ endif()
 
 # Collect 3rd party licenses
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
-file(COPY ${CMAKE_SOURCE_DIR}/third_party/catch2/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/catch2/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
 
 # Generate license NOTICE file

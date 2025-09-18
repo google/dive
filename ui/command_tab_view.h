@@ -41,6 +41,8 @@ public:
 
     void ResetModel();
 
+    void ResetHorizontalScroll();
+
 public slots:
     void OnSelectionChanged(const QModelIndex &index);
     void OnSearchCommandBuffer();

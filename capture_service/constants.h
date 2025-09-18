@@ -46,6 +46,9 @@ inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 // This file will be created by replay when it has completed trim state loading. /sdcard/Download/
 // is the base path since GFXR can reliably write there.
 inline constexpr char kReplayStateLoadedSignalFile[] = "/sdcard/Download/replay_state_loaded";
+inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR replay
+inline constexpr char kProfilingMetricsCsvSuffix[] = "_profiling_metrics.csv";
+inline constexpr char kGpuTimingCsvSuffix[] = "_gpu_time.csv";
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

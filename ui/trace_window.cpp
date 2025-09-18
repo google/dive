@@ -699,18 +699,18 @@ void TraceWorker::run()
     emit    TraceAvailable(capture_saved_path);
 }
 
-void GfxrCaptureWorker::SetGfxrCapturePath(const std::string &capture_path)
+void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string &source_capture_dir)
 {
-    m_capture_path = capture_path;
+    m_source_capture_dir = source_capture_dir;
 }
 
-void GfxrCaptureWorker::SetGfxrTargetCapturePath(const std::string &target_capture_path)
+void GfxrCaptureWorker::SetGfxrTargetCaptureDir(const std::string &target_capture_dir)
 {
-    if (!std::filesystem::exists(target_capture_path))
+    if (!std::filesystem::exists(target_capture_dir))
     {
 
         std::error_code ec;
-        if (!std::filesystem::create_directories(target_capture_path, ec))
+        if (!std::filesystem::create_directories(target_capture_dir, ec))
         {
             std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
             qDebug() << err_msg.c_str();
@@ -718,7 +718,7 @@ void GfxrCaptureWorker::SetGfxrTargetCapturePath(const std::string &target_captu
             return;
         }
 
-        m_target_capture_path = target_capture_path;
+        m_target_capture_dir = target_capture_dir;
     }
     else
     {
@@ -728,7 +728,7 @@ void GfxrCaptureWorker::SetGfxrTargetCapturePath(const std::string &target_captu
         std::filesystem::path newDirPath;
         while (true)
         {
-            newDirPath = std::filesystem::path(target_capture_path + "_" + std::to_string(counter));
+            newDirPath = std::filesystem::path(target_capture_dir + "_" + std::to_string(counter));
             if (!std::filesystem::exists(newDirPath))
             {
                 std::error_code ec;
@@ -740,7 +740,7 @@ void GfxrCaptureWorker::SetGfxrTargetCapturePath(const std::string &target_captu
                     ShowErrorMessage(err_msg);
                     return;
                 }
-                m_target_capture_path = newDirPath;
+                m_target_capture_dir = newDirPath;
                 break;
             }
             counter++;
@@ -753,11 +753,11 @@ bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
 {
     std::vector<std::string> current_time_stamps;
     std::string              get_first_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                   m_capture_path.string(),
+                                                                   m_source_capture_dir,
                                                                    "/",
                                                                    m_file_list[0].data());
     std::string get_second_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                    m_capture_path.string(),
+                                                                    m_source_capture_dir,
                                                                     "/",
                                                                     m_file_list[1].data());
     absl::StatusOr<std::string> first_current_timestamp = device->Adb().RunAndGetResult(
@@ -774,8 +774,7 @@ bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
 {
     // Retrieve the names of the files in the capture directory on the device.
-    std::string                 path = m_capture_path.string();
-    std::string                 ls_command = "shell ls " + path;
+    std::string                 ls_command = "shell ls " + m_source_capture_dir;
     absl::StatusOr<std::string> ls_output = device->Adb().RunAndGetResult(ls_command);
 
     if (!ls_output.ok())
@@ -805,7 +804,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
     {
         for (std::string file : m_file_list)
         {
-            path = absl::StrCat(m_capture_path.string(), "/", file.data());
+            std::string path = absl::StrCat(m_source_capture_dir, "/", file.data());
 
             // Get the size of the file.
             std::string get_file_size_command = "shell stat -c %s " + path;
@@ -875,7 +874,7 @@ void GfxrCaptureWorker::run()
     int64_t capture_directory_size = *ret;
 
     ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
-                                                                   m_target_capture_path
+                                                                   m_target_capture_dir
                                                                    .generic_string(),
                                                                    capture_directory_size,
                                                                    true);
@@ -893,7 +892,7 @@ void GfxrCaptureWorker::run()
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the trace file to "
-             << m_target_capture_path.generic_string().c_str();
+             << m_target_capture_dir.generic_string().c_str();
 
     int64_t size = 0;
 
@@ -901,10 +900,14 @@ void GfxrCaptureWorker::run()
     // Retrieve each file in the capture directory (capture file and asset file).
     for (std::string file : m_file_list)
     {
-        std::string target_file = absl::StrCat(m_target_capture_path.string(), "/", file.data());
-        std::string source_file = absl::StrCat(m_capture_path.string(), "/", file.data());
+        std::filesystem::path filename = file.data();
+        std::filesystem::path target_path = m_target_capture_dir;
+        target_path /= filename;
 
-        auto retrieve_file = device->RetrieveTrace(source_file, target_file);
+        // Source path is intended for Android, cannot use std::filesystem here
+        std::string source_file = absl::StrCat(m_source_capture_dir, "/", filename.string());
+
+        auto retrieve_file = device->RetrieveFile(source_file, m_target_capture_dir.string());
 
         if (!retrieve_file.ok())
         {
@@ -914,12 +917,12 @@ void GfxrCaptureWorker::run()
             return;
         }
 
-        if (target_file.find(".gfxr") != std::string::npos)
+        if (filename.extension() == ".gfxr")
         {
-            gfxr_capture_file = target_file;
+            gfxr_capture_file = target_path.string();
         }
 
-        size += static_cast<int64_t>(std::filesystem::file_size(target_file));
+        size += static_cast<int64_t>(std::filesystem::file_size(target_path.string()));
         emit DownloadedSize(size);
     }
 
@@ -1121,9 +1124,9 @@ void TraceDialog::RetrieveGfxrCapture()
     progress_bar->setAutoClose(true);
 
     GfxrCaptureWorker *workerThread = new GfxrCaptureWorker(progress_bar);
-    workerThread->SetGfxrCapturePath(on_device_capture_file_directory);
+    workerThread->SetGfxrSourceCaptureDir(on_device_capture_file_directory);
 
-    workerThread->SetGfxrTargetCapturePath(
+    workerThread->SetGfxrTargetCaptureDir(
     m_gfxr_capture_file_local_directory_input_box->text().toStdString());
 
     connect(workerThread,

@@ -37,6 +37,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
 #include "settings.h"
 #include "common/macros.h"
@@ -137,7 +138,7 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_frame_count_box->setRange(0, std::numeric_limits<int>::max());
     m_frame_count_box->setSpecialValueText("Infinite");
     m_frame_count_box->setMinimum(-1);
-    m_frame_count_box->setValue(-1);
+    m_frame_count_box->setValue(kDefaultFrameCount);
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
 
@@ -555,7 +556,7 @@ void AnalyzeDialog::UpdatePerfTabView(const std::string remote_file_name)
 
     // Get the original filename from the remote path
     QFileInfo original_file_info(QString::fromStdString(remote_file_name));
-    QString   file_name = original_file_info.completeBaseName() + ".csv";
+    QString   file_name = original_file_info.completeBaseName() + Dive::kProfilingMetricsCsvSuffix;
 
     // Construct the new full path.
     QString     full_path = QDir(directory).filePath(file_name);
@@ -568,9 +569,9 @@ void AnalyzeDialog::UpdateGpuTimingTabView(const std::string remote_file_name)
 {
     QString directory = m_capture_file_directory.value().c_str();
 
-    // TODO(b/444228664): Avoid hardcoded file name and make it a suffix instead to associate it
-    // with the gfxr file
-    QString file_name = "gpu_time.csv";
+    // Get the original filename from the original remote path
+    QFileInfo original_file_info(QString::fromStdString(remote_file_name));
+    QString   file_name = original_file_info.completeBaseName() + Dive::kGpuTimingCsvSuffix;
 
     // Construct the new full path.
     QString     full_path = QDir(directory).filePath(file_name);

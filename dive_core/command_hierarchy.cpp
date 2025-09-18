@@ -316,8 +316,7 @@ uint32_t CommandHierarchy::GetMarkerNodeId(uint64_t node_index) const
 uint32_t CommandHierarchy::GetEventNodeId(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
-    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kDrawDispatchBlitNode ||
-                m_nodes.m_node_type[node_index] == Dive::NodeType::kDrawDispatchNode);
+    DIVE_ASSERT(IsDrawDispatchBlitNode(m_nodes.m_node_type[node_index]));
     const AuxInfo &info = m_nodes.m_aux_info[node_index];
     return info.event_node.m_event_id;
 }
@@ -1021,9 +1020,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                 }
                 else
                 {
-                    node_index = AddNode(NodeType::kDrawDispatchBlitNode,
-                                         std::move(event_string),
-                                         aux_info);
+                    node_index = AddNode(NodeType::kBlitNode, std::move(event_string), aux_info);
                 }
             }
             AppendEventNodeIndex(node_index);

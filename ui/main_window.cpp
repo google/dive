@@ -42,6 +42,7 @@
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "command_model.h"
+#include "dive_core/command_hierarchy.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
 #include "object_names.h"
@@ -544,8 +545,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     }
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(selected_item_node_index);
-    if (node_type == Dive::NodeType::kDrawDispatchBlitNode ||
-        node_type == Dive::NodeType::kMarkerNode)
+    if (Dive::IsDrawDispatchBlitNode(node_type) || node_type == Dive::NodeType::kMarkerNode)
     {
         emit EventSelected(selected_item_node_index);
     }
@@ -936,9 +936,17 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
             return false;
         }
 
+        // Paths of associated files produced by Dive's GFXR replay
+        std::filesystem::path capture_file_path = file_name;
+        std::filesystem::path rd_file_path = capture_file_path.replace_extension(".rd");
+        std::filesystem::path perf_counter_file_path = capture_file_path.parent_path() /
+                                                       (capture_file_path.stem().string() +
+                                                        Dive::kProfilingMetricsCsvSuffix);
+        std::filesystem::path gpu_time_file_path = capture_file_path.parent_path() /
+                                                   (capture_file_path.stem().string() +
+                                                    Dive::kGpuTimingCsvSuffix);
+
         // Check if there is a corresponding .rd file
-        std::filesystem::path rd_file_path(file_name);
-        rd_file_path.replace_extension(".rd");
         if (std::filesystem::exists(rd_file_path))
         {
             m_gfxr_capture_loaded = false;
@@ -946,15 +954,24 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
         }
 
         // Check if there is existing perf counter data
-        std::filesystem::path perf_counter_file_path(file_name);
-        perf_counter_file_path.replace_extension(".csv");
+        qDebug() << "Attempting to load perf counter data from: "
+                 << perf_counter_file_path.string().c_str();
         if (std::filesystem::exists(perf_counter_file_path))
         {
             m_perf_counter_model->OnPerfCounterResultsGenerated(
             QString::fromStdWString(perf_counter_file_path.wstring()));
+            qDebug() << "Loaded: " << perf_counter_file_path.string().c_str();
         }
 
-        // TODO(b/444228847) Check if there is existing gpu time data
+        // Check if there is existing gpu timing data
+        qDebug() << "Attempting to load gpu timing data from: "
+                 << gpu_time_file_path.string().c_str();
+        if (std::filesystem::exists(gpu_time_file_path))
+        {
+            m_gpu_timing_model->OnGpuTimingResultsGenerated(
+            QString::fromStdWString(gpu_time_file_path.wstring()));
+            qDebug() << "Loaded: " << gpu_time_file_path.string().c_str();
+        }
     }
 
     bool file_loaded = false;
@@ -2318,8 +2335,8 @@ void MainWindow::OnCorrelatePm4DrawCall(const QPoint &pos)
     QModelIndex source_index = m_filter_model->mapToSource(m_command_hierarchy_view->indexAt(pos));
     uint64_t    node_index = (uint64_t)(source_index.internalPointer());
 
-    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
-                                      Dive::NodeType::kDrawDispatchNode))
+    if ((!source_index.isValid()) ||
+        !Dive::IsDrawDispatchNode(m_data_core->GetCommandHierarchy().GetNodeType(node_index)))
     {
         return;
     }

@@ -142,6 +142,16 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
 {
+    // Verify that the number of rows in the model is consistent with the rows of
+    // m_timed_event_indices
+    if (m_model.rowCount() != static_cast<int>(m_timed_event_indices.size()))
+    {
+        qDebug()
+        << "GpuTimingTabView::OnEventSelectionChanged() ERROR: inconsistent model row count ("
+        << m_model.rowCount() << ") and count of collected indices of timed Vulkan events: "
+        << m_timed_event_indices.size();
+    }
+
     int row = EventIndexToRow(model_index);
     if (row < 0)
     {

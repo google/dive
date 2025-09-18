@@ -142,6 +142,15 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
 
+    // Replay Warning
+    m_replay_warning_layout = new QHBoxLayout();
+    m_replay_warning_label = new QLabel(tr("WARNING: Initiating replay will clear any temporary "
+                                           "artifacts produced by previous replays. Please save "
+                                           "them manually in a different folder before proceeding, "
+                                           "if those artifacts are desired."));
+    m_replay_warning_label->setWordWrap(true);
+    m_replay_warning_layout->addWidget(m_replay_warning_label);
+
     // Left Panel Layout
     m_left_panel_layout = new QVBoxLayout();
     m_left_panel_layout->addWidget(m_settings_list_label);
@@ -158,6 +167,7 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_right_panel_layout->addLayout(m_dump_pm4_layout);
     m_right_panel_layout->addLayout(m_gpu_time_layout);
     m_right_panel_layout->addLayout(m_frame_count_layout);
+    m_right_panel_layout->addLayout(m_replay_warning_layout);
     m_right_panel_layout->addLayout(m_button_layout);
 
     // Main Layout
@@ -550,34 +560,17 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
     QApplication::processEvents();
 }
 
-void AnalyzeDialog::UpdatePerfTabView(const std::string remote_file_name)
+std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_stem,
+                                                      const std::string &suffix) const
 {
-    QString directory = m_capture_file_directory.value().c_str();
+    if (!m_local_capture_file_directory.ok())
+    {
+        return "";
+    }
 
-    // Get the original filename from the remote path
-    QFileInfo original_file_info(QString::fromStdString(remote_file_name));
-    QString   file_name = original_file_info.completeBaseName() + Dive::kProfilingMetricsCsvSuffix;
-
-    // Construct the new full path.
-    QString     full_path = QDir(directory).filePath(file_name);
-    std::string output_path = full_path.toStdString();
-
-    emit OnDisplayPerfCounterResults(output_path.c_str());
-}
-
-void AnalyzeDialog::UpdateGpuTimingTabView(const std::string remote_file_name)
-{
-    QString directory = m_capture_file_directory.value().c_str();
-
-    // Get the original filename from the original remote path
-    QFileInfo original_file_info(QString::fromStdString(remote_file_name));
-    QString   file_name = original_file_info.completeBaseName() + Dive::kGpuTimingCsvSuffix;
-
-    // Construct the new full path.
-    QString     full_path = QDir(directory).filePath(file_name);
-    std::string output_path = full_path.toStdString();
-
-    emit OnDisplayGpuTimingResults(output_path.c_str());
+    std::filesystem::path full_path = m_local_capture_file_directory.value();
+    full_path /= (gfxr_stem + suffix);
+    return full_path;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -599,7 +592,7 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        m_dump_pm4_enabled,
-                                       m_capture_file_directory.value());
+                                       m_local_capture_file_directory.value());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -610,7 +603,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
 
     return device_manager.RunProfilingOnReplay(remote_gfxr_file,
                                                *m_enabled_settings_vector,
-                                               m_capture_file_directory.value());
+                                               m_local_capture_file_directory.value());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -624,7 +617,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        false,
-                                       m_capture_file_directory.value());
+                                       m_local_capture_file_directory.value());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -690,15 +683,39 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Set the download directory to the directory of the current capture file
-    m_capture_file_directory = GetCaptureFileDirectory();
-    if (!m_capture_file_directory.ok())
+    m_local_capture_file_directory = GetCaptureFileDirectory();
+    if (!m_local_capture_file_directory.ok())
     {
         std::string err_msg = absl::StrCat("Failed to set download directory: ",
-                                           m_capture_file_directory.status().message());
+                                           m_local_capture_file_directory.status().message());
         qDebug() << err_msg.c_str();
         ShowErrorMessage(err_msg);
         SetReplayButton(kDefaultReplayButtonText, true);
         return;
+    }
+
+    // Delete any temporary artifacts from previous runs
+    std::filesystem::path gfxr_filename_stem = std::filesystem::path(remote_file.value()).stem();
+    std::filesystem::path perf_counter_csv = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                              Dive::kProfilingMetricsCsvSuffix);
+    std::filesystem::path gpu_timing_csv = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                            Dive::kGpuTimingCsvSuffix);
+    qDebug() << "Attempting to delete temporary artifacts from previous runs...";
+    if (std::filesystem::remove(perf_counter_csv))
+    {
+        qDebug() << "Successfully deleted: " << perf_counter_csv.string().c_str();
+    }
+    else
+    {
+        qDebug() << "Was not present: " << perf_counter_csv.string().c_str();
+    }
+    if (std::filesystem::remove(gpu_timing_csv))
+    {
+        qDebug() << "Successfully deleted: " << gpu_timing_csv.string().c_str();
+    }
+    else
+    {
+        qDebug() << "Was not present: " << gpu_timing_csv.string().c_str();
     }
 
     // Get the enabled settings
@@ -740,12 +757,18 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-
-        UpdatePerfTabView(remote_file.value());
         WaitForReplay(*device);
+        qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
+        emit OnDisplayPerfCounterResults(QString::fromStdString(perf_counter_csv.string()));
+    }
+    else
+    {
+        qDebug() << "Cleared perf counter data";
+        emit OnDisplayPerfCounterResults("");
     }
 
     // Run the gpu_time replay
+    std::string gpu_time_csv_stem = "";
     if (m_gpu_time_enabled)
     {
         ret = GpuTimeReplay(device_manager, remote_file.value());
@@ -757,8 +780,14 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-        UpdateGpuTimingTabView(remote_file.value());
         WaitForReplay(*device);
+        qDebug() << "Loading gpu timing data: " << perf_counter_csv.string().c_str();
+        emit OnDisplayGpuTimingResults(QString::fromStdString(gpu_timing_csv.string()));
+    }
+    else
+    {
+        qDebug() << "Cleared gpu timing data";
+        emit OnDisplayGpuTimingResults("");
     }
 
     SetReplayButton(kDefaultReplayButtonText, true);

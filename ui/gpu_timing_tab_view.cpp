@@ -92,12 +92,6 @@ void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
     case Dive::NodeType::
     kGfxrVulkanBeginRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
     {
-        if (node_desc.find("End") != std::string::npos)
-        {
-            // For paired types (e.g. Command Buffers and RenderPasses), only the *Begin* calls are
-            // used for correlation, *End* is rejected
-            return;
-        }
         uint64_t index_address = (uint64_t)model_index.internalPointer();
         m_timed_event_indices.push_back(index_address);
     }

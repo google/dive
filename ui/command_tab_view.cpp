@@ -21,8 +21,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
-#include <qapplication.h>
-#include <qscrollbar.h>
+#include <QApplication>
+#include <QScrollBar>
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "search_bar.h"

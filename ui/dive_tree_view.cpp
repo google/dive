@@ -56,14 +56,11 @@ void DiveFilterModel::applyNewFilterMode(FilterMode new_mode)
     beginResetModel();
     m_filter_mode = new_mode;
 
-    // Only collect the draw call indices if gfxr and pm4 data are present.
-    if (!m_gfxr_draw_call_indices.empty())
-    {
-        // Clear the vector of pm4 draw call indices.
-        m_pm4_draw_call_indices.clear();
-        // Recollect pm4 draw call indices when new filter is applied.
-        CollectPm4DrawCallIndices(QModelIndex());
-    }
+    // Clear the vector of pm4 draw call indices.
+    m_pm4_draw_call_indices.clear();
+    // Recollect pm4 draw call indices when new filter is applied.
+    CollectPm4DrawCallIndices(QModelIndex());
+
     // invalidateFilter() doesn't invalidate all nodes
     // begin/endResetModel() will cause a full re-evaluation and rebuild of the proxy's internal
     // mapping.
@@ -146,42 +143,9 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
     }
 }
 
-void DiveFilterModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index)
-{
-    if (!parent_index.isValid())
-    {
-        m_gfxr_draw_call_indices.clear();
-    }
-
-    int row_count = sourceModel()->rowCount(parent_index);
-    for (int row = 0; row < row_count; ++row)
-    {
-        QModelIndex index = sourceModel()->index(row, 0, parent_index);
-        if (index.isValid())
-
-        {
-            uint64_t       node_index = (uint64_t)index.internalPointer();
-            Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
-
-            // If a node is a gfxr draw call, add its index to the list.
-            if (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
-            {
-                m_gfxr_draw_call_indices.push_back(node_index);
-            }
-
-            // Only recurse into children if the current node is gfxr submit node.
-            if (node_type != Dive::NodeType::kSubmitNode)
-            {
-                CollectGfxrDrawCallIndices(index);
-            }
-        }
-    }
-}
-
 void DiveFilterModel::ClearDrawCallIndices()
 {
     m_pm4_draw_call_indices.clear();
-    m_gfxr_draw_call_indices.clear();
 }
 
 bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const

@@ -101,7 +101,12 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         return true;
     }
 
-    if (node_type == Dive::NodeType::kGfxrVulkanCommandBufferNode)
+    if (node_type == Dive::NodeType::kGfxrVulkanBeginCommandBufferNode)
+    {
+        return true;
+    }
+
+    if (node_type == Dive::NodeType::kGfxrVulkanEndCommandBufferNode)
     {
         return true;
     }
@@ -133,7 +138,8 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
     {
         // Only display Draw/Dispatch, RenderPass, and debug label commands when filter is enabled.
         if ((node_type != Dive::NodeType::kGfxrVulkanDrawCommandNode) &&
-            (node_type != Dive::NodeType::kGfxrVulkanRenderPassCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanEndRenderPassCommandNode) &&
             (node_type != Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode))
         {
             return false;

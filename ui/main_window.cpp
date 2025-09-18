@@ -126,6 +126,7 @@ MainWindow::MainWindow()
 
     // Left side panel
     m_left_group_box = new QGroupBox(kFrameTitleStrings[0]);
+    m_left_group_box->setAlignment(Qt::AlignHCenter);
     m_view_mode_combo_box = new TreeViewComboBox();
     m_view_mode_combo_box->setMinimumWidth(150);
 
@@ -260,6 +261,7 @@ MainWindow::MainWindow()
 
     // Middle panel
     m_middle_group_box = new QGroupBox(kFrameTitleStrings[0]);
+    m_middle_group_box->setAlignment(Qt::AlignHCenter);
     m_pm4_view_mode_combo_box = new TreeViewComboBox();
     m_pm4_view_mode_combo_box->setMinimumWidth(150);
     {

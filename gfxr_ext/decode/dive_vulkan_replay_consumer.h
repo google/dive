@@ -21,6 +21,7 @@ limitations under the License.
 #include "gpu_time/gpu_time.h"
 #include <set>
 #include <vector>
+#include <unordered_map>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -162,6 +163,7 @@ public:
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
     void ProcessStateEndMarker(uint64_t frame_number) override;
+    void ProcessFrameEndMarker(uint64_t frame_number) override;
 
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
 
@@ -171,6 +173,10 @@ public:
     }
 
 private:
+    // Keeps the fences status after setup phase
+    std::unordered_map<VkFence, VkResult> fence_initial_status_ = {};
+    // This queue is only used for signaling the fences, could be any queue
+    VkQueue fence_signal_queue_ = VK_NULL_HANDLE;
     // The deferred release list keeps resources that are created in the "setup phase"
     // Those resources should not be released in the mid of a frame since we may loop frame.
     // For trimmed captures, all resources that are not released within the frame are released by

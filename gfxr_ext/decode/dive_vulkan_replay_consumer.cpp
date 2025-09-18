@@ -100,6 +100,7 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyDevice(in_device,
                                                                     QueueWaitIdle,
                                                                     DestroyQueryPool);
+    fence_signal_queue_ = VK_NULL_HANDLE;
     device_ = VK_NULL_HANDLE;
     if (!status.success)
     {
@@ -391,7 +392,8 @@ StructPointerDecoder<Decoded_VkDeviceQueueInfo2>* pQueueInfo,
 HandlePointerDecoder<VkQueue>*                    pQueue)
 {
     VulkanReplayConsumer::Process_vkGetDeviceQueue2(call_info, device, pQueueInfo, pQueue);
-    VkQueue*                     queue = pQueue->GetHandlePointer();
+    VkQueue* queue = pQueue->GetHandlePointer();
+    fence_signal_queue_ = *queue;
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnGetDeviceQueue2(queue);
     if (!status.success)
     {
@@ -410,7 +412,8 @@ void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue(const ApiCallInfo& call_
                                                    queueFamilyIndex,
                                                    queueIndex,
                                                    pQueue);
-    VkQueue*                     queue = pQueue->GetHandlePointer();
+    VkQueue* queue = pQueue->GetHandlePointer();
+    fence_signal_queue_ = *queue;
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnGetDeviceQueue(queue);
     if (!status.success)
     {
@@ -569,6 +572,7 @@ HandlePointerDecoder<VkFence>*                       pFence)
     if (!setup_finished_)
     {
         deferred_release_list_.push_back(*(pFence->GetPointer()));
+        fence_initial_status_[*(pFence->GetHandlePointer())] = VK_SUCCESS;
     }
 }
 
@@ -590,6 +594,59 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();
     setup_finished_ = true;
+
+    PFN_vkGetFenceStatus GetFenceStatus = reinterpret_cast<PFN_vkGetFenceStatus>(
+    GetDeviceTable(device_)->GetFenceStatus);
+
+    // We keep the inital status of all fences that are created in the setup phase before the 1st
+    // frame starts. ProcessStateEndMarker is called only once when the setup phase is finished
+    for (auto& [fence, initial_status] : fence_initial_status_)
+    {
+        const VkResult status = GetFenceStatus(device_, fence);
+        initial_status = status;
+    }
+}
+
+void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
+{
+    PFN_vkGetFenceStatus GetFenceStatus = reinterpret_cast<PFN_vkGetFenceStatus>(
+    GetDeviceTable(device_)->GetFenceStatus);
+
+    PFN_vkQueueSubmit QueueSubmit = reinterpret_cast<PFN_vkQueueSubmit>(
+    GetDeviceTable(device_)->QueueSubmit);
+
+    std::vector<VkFence> reset_fence_list = {};
+
+    // We try to bring back the initial status for all fences at the end of each loop
+    for (const auto& [fence, initial_status] : fence_initial_status_)
+    {
+        const VkResult current_status = GetFenceStatus(device_, fence);
+
+        if (current_status != initial_status)
+        {
+            if (initial_status == VK_SUCCESS)
+            {
+                // vkQueueSubmit here is only for signaling the fence
+                // There will be some CPU overhead, but GPU cost is negaligable
+                // It doesn't matter which type of queue it is if we submit 0 cmd
+                VkQueue queue = fence_signal_queue_;
+                QueueSubmit(queue, 0, nullptr, fence);
+            }
+            else
+            {
+                reset_fence_list.push_back(fence);
+            }
+        }
+    }
+
+    if (!reset_fence_list.empty())
+    {
+        PFN_vkResetFences ResetFences = reinterpret_cast<PFN_vkResetFences>(
+        GetDeviceTable(device_)->ResetFences);
+        ResetFences(device_,
+                    static_cast<uint32_t>(reset_fence_list.size()),
+                    reset_fence_list.data());
+    }
 }
 
 GFXRECON_END_NAMESPACE(decode)

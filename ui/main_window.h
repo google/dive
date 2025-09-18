@@ -18,7 +18,6 @@
 #include <memory>
 #include <QMainWindow>
 #include <qabstractitemmodel.h>
-#include <qframe.h>
 #include <qshortcut.h>
 #include "dive_core/cross_ref.h"
 #include "progress_tracker_callback.h"
@@ -61,7 +60,7 @@ class TraceDialog;
 class TreeViewComboBox;
 class AnalyzeDialog;
 class GfxrVulkanCommandFilter;
-class QFrame;
+class QGroupBox;
 class QSortFilterProxyModel;
 
 enum class EventMode;
@@ -216,7 +215,7 @@ private:
     QStatusBar *m_status_bar;
 
     // Left pane
-    QFrame       *m_left_frame;
+    QGroupBox    *m_left_group_box;
     QString       m_prev_command_view_mode;
     DiveTreeView *m_command_hierarchy_view;
     CommandModel *m_command_hierarchy_model;
@@ -235,7 +234,7 @@ private:
     GpuTimingModel                    *m_gpu_timing_model;
 
     // Middle pane
-    QFrame              *m_middle_frame;
+    QGroupBox           *m_middle_group_box;
     DiveTreeView        *m_pm4_command_hierarchy_view;
     QPushButton         *m_pm4_search_trigger_button;
     SearchBar           *m_pm4_event_search_bar = nullptr;

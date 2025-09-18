@@ -79,8 +79,12 @@
 
 static constexpr int         kViewModeStringCount = 2;
 static constexpr int         kEventViewModeStringCount = 1;
+static constexpr int         kFrameTitleStringCount = 3;
 static constexpr const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
 static constexpr const char *kEventViewModeStrings[kEventViewModeStringCount] = { "GPU Events" };
+static constexpr const char *kFrameTitleStrings[kFrameTitleStringCount] = { "No File Loaded",
+                                                                            "Gfxr Capture",
+                                                                            "Adreno Rd Capture" };
 static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] = {
     "None",
     "BinningPassOnly",
@@ -121,7 +125,7 @@ MainWindow::MainWindow()
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
     // Left side panel
-    m_left_frame = new QFrame();
+    m_left_group_box = new QGroupBox(kFrameTitleStrings[0]);
     m_view_mode_combo_box = new TreeViewComboBox();
     m_view_mode_combo_box->setMinimumWidth(150);
 
@@ -251,11 +255,11 @@ MainWindow::MainWindow()
         left_vertical_layout->addWidget(m_command_hierarchy_view);
         left_vertical_layout->addLayout(goto_draw_call_layout);
         left_vertical_layout->addLayout(expand_to_lvl_layout);
-        m_left_frame->setLayout(left_vertical_layout);
+        m_left_group_box->setLayout(left_vertical_layout);
     }
 
     // Middle panel
-    m_middle_frame = new QFrame();
+    m_middle_group_box = new QGroupBox(kFrameTitleStrings[0]);
     m_pm4_view_mode_combo_box = new TreeViewComboBox();
     m_pm4_view_mode_combo_box->setMinimumWidth(150);
     {
@@ -360,7 +364,7 @@ MainWindow::MainWindow()
         middle_vertical_layout->addWidget(m_pm4_command_hierarchy_view);
         middle_vertical_layout->addLayout(pm4_goto_draw_call_layout);
         middle_vertical_layout->addLayout(pm4_expand_to_lvl_layout);
-        m_middle_frame->setLayout(middle_vertical_layout);
+        m_middle_group_box->setLayout(middle_vertical_layout);
     }
 
     // Tabbed View
@@ -405,14 +409,14 @@ MainWindow::MainWindow()
     m_hover_help = HoverHelp::Get();
     m_shader_view->SetupHoverHelp(*m_hover_help);
 
-    m_left_frame->setMinimumSize(QSize(50, 0));
-    m_middle_frame->setMinimumSize(QSize(50, 0));
+    m_left_group_box->setMinimumSize(QSize(50, 0));
+    m_middle_group_box->setMinimumSize(QSize(50, 0));
     m_tab_widget->setMinimumSize(QSize(50, 0));
 
     // The main horizontal splitter (Left, Middle, and Right panels, with a 1:1:1 size ratio)
     QSplitter *horizontal_splitter = new QSplitter(Qt::Horizontal);
-    horizontal_splitter->addWidget(m_left_frame);
-    horizontal_splitter->addWidget(m_middle_frame);
+    horizontal_splitter->addWidget(m_left_group_box);
+    horizontal_splitter->addWidget(m_middle_group_box);
     horizontal_splitter->addWidget(m_tab_widget);
     horizontal_splitter->setStretchFactor(0, 1);
     horizontal_splitter->setStretchFactor(1, 1);
@@ -429,7 +433,7 @@ MainWindow::MainWindow()
     // Make the horizontal splitter that central widget so it takes up the whole area.
     setCentralWidget(horizontal_splitter);
 
-    m_middle_frame->hide();
+    m_middle_group_box->hide();
 
     // Connections
     QObject::connect(m_hover_help,
@@ -731,7 +735,9 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     }
 
     // Reset models and views that display data from the capture
-    m_middle_frame->show();
+    m_left_group_box->setTitle(kFrameTitleStrings[1]);
+    m_middle_group_box->show();
+    m_middle_group_box->setTitle(kFrameTitleStrings[2]);
     m_gfxr_vulkan_command_arguments_tab_view->ResetModel();
     m_gfxr_vulkan_command_hierarchy_model->Reset();
     m_command_tab_view->ResetModel();
@@ -844,7 +850,9 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     }
 
     // Reset models and views that display data from the capture
-    m_middle_frame->hide();
+    m_left_group_box->setTitle(kFrameTitleStrings[2]);
+    m_middle_group_box->setTitle(kFrameTitleStrings[0]);
+    m_middle_group_box->hide();
     m_command_tab_view->ResetModel();
     m_command_hierarchy_model->Reset();
     m_event_selection->Reset();
@@ -931,7 +939,9 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     }
 
     // Reset models and views that display data from the capture
-    m_middle_frame->hide();
+    m_left_group_box->setTitle(kFrameTitleStrings[1]);
+    m_middle_group_box->setTitle(kFrameTitleStrings[0]);
+    m_middle_group_box->hide();
     m_gfxr_vulkan_command_hierarchy_model->Reset();
     m_prev_command_view_mode = QString();
     m_filter_gfxr_commands_combo_box->Reset();

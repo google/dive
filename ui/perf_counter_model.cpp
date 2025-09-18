@@ -27,6 +27,19 @@ PerfCounterModel::PerfCounterModel(QObject *parent) :
 void PerfCounterModel::OnPerfCounterResultsGenerated(const QString &file_path)
 {
     emit beginResetModel();
+
+    m_csv_data.clear();
+    m_search_results.clear();
+    m_search_iterator = nullptr;
+    m_headers.clear();
+    m_column_count = 0;
+
+    if (file_path.length() == 0)
+    {
+        emit endResetModel();
+        return;
+    }
+
     ParseCsv(file_path);
     emit endResetModel();
 }

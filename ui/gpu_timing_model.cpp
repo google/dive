@@ -29,6 +29,13 @@ void GpuTimingModel::OnGpuTimingResultsGenerated(const QString &file_path)
     emit beginResetModel();
     m_available_gpu_timing_data = {};  // Need to create a new AvailableGpuTiming object because it
                                        // can only be loaded once
+
+    if (file_path.size() == 0)
+    {
+        emit endResetModel();
+        return;
+    }
+
     ParseCsv(file_path);
     emit endResetModel();
 }

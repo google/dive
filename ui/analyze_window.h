@@ -73,8 +73,8 @@ private:
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateSettings();
     void                        UpdateSelectedSettingsList();
-    void                        UpdatePerfTabView(const std::string remote_file_name);
-    void                        UpdateGpuTimingTabView(const std::string remote_file_name);
+    std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
+                                                 const std::string &suffix) const;
     void                        WaitForReplay(Dive::AndroidDevice &device);
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
@@ -122,6 +122,9 @@ private:
     QLabel      *m_frame_count_label;
     QSpinBox    *m_frame_count_box;
 
+    QHBoxLayout *m_replay_warning_layout;
+    QLabel      *m_replay_warning_label;
+
     QHBoxLayout *m_button_layout;
     QPushButton *m_load_settings_button;
     QPushButton *m_replay_button;
@@ -139,7 +142,7 @@ private:
     const int                   kDataRole = Qt::UserRole + 1;
     const int                   kDefaultFrameCount = 3;
     const std::string           kDefaultReplayButtonText = "Replay";
-    absl::StatusOr<std::string> m_capture_file_directory = "";
+    absl::StatusOr<std::string> m_local_capture_file_directory = "";
 
     bool m_dump_pm4_enabled;
     bool m_gpu_time_enabled;

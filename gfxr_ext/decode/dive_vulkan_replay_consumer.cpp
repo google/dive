@@ -59,6 +59,7 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
 
     VkDevice device = MapHandle<VulkanDeviceInfo>(*(pDevice->GetPointer()),
                                                   &CommonObjectInfoTable::GetVkDeviceInfo);
+    device_ = device;
 
     PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(
     GetDeviceTable(device)->CreateQueryPool);
@@ -92,13 +93,14 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
     VkDevice            in_device = MapHandle<VulkanDeviceInfo>(device,
                                                      &CommonObjectInfoTable::GetVkDeviceInfo);
     PFN_vkQueueWaitIdle QueueWaitIdle = reinterpret_cast<PFN_vkQueueWaitIdle>(
-    GetDeviceTable(gpu_time_.GetDevice())->QueueWaitIdle);
+    GetDeviceTable(device_)->QueueWaitIdle);
     PFN_vkDestroyQueryPool DestroyQueryPool = reinterpret_cast<PFN_vkDestroyQueryPool>(
-    GetDeviceTable(gpu_time_.GetDevice())->DestroyQueryPool);
+    GetDeviceTable(device_)->DestroyQueryPool);
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyDevice(in_device,
                                                                     QueueWaitIdle,
                                                                     DestroyQueryPool);
+    device_ = VK_NULL_HANDLE;
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -308,13 +310,13 @@ format::HandleId                            fence)
                                                 fence);
 
     PFN_vkDeviceWaitIdle DeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
-    GetDeviceTable(gpu_time_.GetDevice())->DeviceWaitIdle);
+    GetDeviceTable(device_)->DeviceWaitIdle);
 
     PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
-    GetDeviceTable(gpu_time_.GetDevice())->ResetQueryPool);
+    GetDeviceTable(device_)->ResetQueryPool);
 
     PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
-    GetDeviceTable(gpu_time_.GetDevice())->GetQueryPoolResults);
+    GetDeviceTable(device_)->GetQueryPoolResults);
 
     const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
     auto                submit_status = gpu_time_.OnQueueSubmit(submitCount,
@@ -322,6 +324,47 @@ format::HandleId                            fence)
                                                  DeviceWaitIdle,
                                                  ResetQueryPool,
                                                  GetQueryPoolResults);
+
+    auto IsFrameBoundary = [](Decoded_VkSubmitInfo*  submit_info_data,
+                              uint32_t               submit_count,
+                              CommonObjectInfoTable& object_info_table) -> bool {
+        if (submit_info_data == nullptr)
+        {
+            return false;
+        }
+
+        for (uint32_t i = 0; i < submit_count; ++i)
+        {
+            size_t     command_buffer_count = submit_info_data[i].pCommandBuffers.GetLength();
+            const auto command_buffer_ids = submit_info_data[i].pCommandBuffers.GetPointer();
+
+            for (uint32_t j = 0; j < command_buffer_count; ++j)
+            {
+                auto command_buffer_info = object_info_table.GetVkCommandBufferInfo(
+                command_buffer_ids[j]);
+
+                if (command_buffer_info->is_frame_boundary)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
+    bool is_frame_boundary = IsFrameBoundary(pSubmits->GetMetaStructPointer(),
+                                             submitCount,
+                                             GetObjectInfoTable());
+
+    // vkDeviceWaitIdle is needed since when we loop the frame, we do not double/triple buffer cmds.
+    // If the CPU is too fast, it might start to write to cmd while GPU is using it which would
+    // cause random crashes. (No need to add device wait idle when gpu time is enabled since it is
+    // called in GPUTime::OnQueueSubmit)
+    if (!gpu_time_.IsEnabled() && is_frame_boundary)
+    {
+        DeviceWaitIdle(device_);
+    }
 
     if (!submit_status.gpu_time_status.success)
     {

@@ -572,7 +572,7 @@ HandlePointerDecoder<VkFence>*                       pFence)
     if (!setup_finished_)
     {
         deferred_release_list_.push_back(*(pFence->GetPointer()));
-        fence_initial_status_[*(pFence->GetHandlePointer())] = VK_SUCCESS;
+        fence_initial_status_[*(pFence->GetHandlePointer())] = FenceStatus::kUnsignaled;
     }
 }
 
@@ -595,57 +595,59 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
     gpu_time_.ClearFrameCache();
     setup_finished_ = true;
 
-    PFN_vkGetFenceStatus GetFenceStatus = reinterpret_cast<PFN_vkGetFenceStatus>(
-    GetDeviceTable(device_)->GetFenceStatus);
+    PFN_vkGetFenceStatus GetFenceStatus = GetDeviceTable(device_)->GetFenceStatus;
 
     // We keep the inital status of all fences that are created in the setup phase before the 1st
     // frame starts. ProcessStateEndMarker is called only once when the setup phase is finished
     for (auto& [fence, initial_status] : fence_initial_status_)
     {
         const VkResult status = GetFenceStatus(device_, fence);
-        initial_status = status;
+        GFXRECON_ASSERT((status == VK_NOT_READY) || (status == VK_SUCCESS));
+        initial_status = (status == VK_SUCCESS) ? FenceStatus::kSignaled : FenceStatus::kUnsignaled;
     }
 }
 
 void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 {
-    PFN_vkGetFenceStatus GetFenceStatus = reinterpret_cast<PFN_vkGetFenceStatus>(
-    GetDeviceTable(device_)->GetFenceStatus);
+    PFN_vkGetFenceStatus GetFenceStatus = GetDeviceTable(device_)->GetFenceStatus;
 
-    PFN_vkQueueSubmit QueueSubmit = reinterpret_cast<PFN_vkQueueSubmit>(
-    GetDeviceTable(device_)->QueueSubmit);
+    PFN_vkQueueSubmit QueueSubmit = GetDeviceTable(device_)->QueueSubmit;
 
     std::vector<VkFence> reset_fence_list = {};
 
     // We try to bring back the initial status for all fences at the end of each loop
     for (const auto& [fence, initial_status] : fence_initial_status_)
     {
-        const VkResult current_status = GetFenceStatus(device_, fence);
-
-        if (current_status != initial_status)
+        const VkResult status = GetFenceStatus(device_, fence);
+        GFXRECON_ASSERT((status == VK_NOT_READY) || (status == VK_SUCCESS));
+        const FenceStatus current_status = (status == VK_SUCCESS) ? FenceStatus::kSignaled :
+                                                                    FenceStatus::kUnsignaled;
+        if (current_status == initial_status)
         {
-            if (initial_status == VK_SUCCESS)
-            {
-                // vkQueueSubmit here is only for signaling the fence
-                // There will be some CPU overhead, but GPU cost is negaligable
-                // It doesn't matter which type of queue it is if we submit 0 cmd
-                VkQueue queue = fence_signal_queue_;
-                QueueSubmit(queue, 0, nullptr, fence);
-            }
-            else
-            {
-                reset_fence_list.push_back(fence);
-            }
+            continue;
+        }
+
+        switch (initial_status)
+        {
+        case FenceStatus::kSignaled:
+            // vkQueueSubmit here is only for signaling the fence.
+            // There will be some CPU overhead, but GPU cost is negligible. It doesn't matter which
+            // type of queue it is if we submit 0 cmd
+            QueueSubmit(fence_signal_queue_, 0, nullptr, fence);
+            break;
+        case FenceStatus::kUnsignaled:
+            reset_fence_list.push_back(fence);
+            break;
         }
     }
 
     if (!reset_fence_list.empty())
     {
-        PFN_vkResetFences ResetFences = reinterpret_cast<PFN_vkResetFences>(
-        GetDeviceTable(device_)->ResetFences);
-        ResetFences(device_,
-                    static_cast<uint32_t>(reset_fence_list.size()),
-                    reset_fence_list.data());
+        PFN_vkResetFences ResetFences = GetDeviceTable(device_)->ResetFences;
+        VkResult          result = ResetFences(device_,
+                                      static_cast<uint32_t>(reset_fence_list.size()),
+                                      reset_fence_list.data());
+        GFXRECON_ASSERT(result == VK_SUCCESS);
     }
 }
 

@@ -174,7 +174,12 @@ public:
 
 private:
     // Keeps the fences status after setup phase
-    std::unordered_map<VkFence, VkResult> fence_initial_status_ = {};
+    enum class FenceStatus
+    {
+        kUnsignaled,
+        kSignaled
+    };
+    std::unordered_map<VkFence, FenceStatus> fence_initial_status_ = {};
     // This queue is only used for signaling the fences, could be any queue
     VkQueue fence_signal_queue_ = VK_NULL_HANDLE;
     // The deferred release list keeps resources that are created in the "setup phase"

@@ -242,6 +242,7 @@ jobs:
 
       - name: Gemerate build files with cmake
         run: |
+          # DIVE_GFXR_GRADLE_CONSOLE=plain produces more readable output in CI
           cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
           -G "Ninja" \
           -DCMAKE_MAKE_PROGRAM="ninja" \
@@ -252,6 +253,7 @@ jobs:
           -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
           -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
           -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          -DDIVE_GFXR_GRADLE_CONSOLE=plain \
           -Bbuild .
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}

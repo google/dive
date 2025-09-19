@@ -65,6 +65,12 @@ public:
     virtual void OnNewFrame() override;
     virtual void WaitForTraceDone() override;
 
+    TraceState GetState() ABSL_LOCKS_EXCLUDED(m_state_lock)
+    {
+        absl::MutexLock lock(&m_state_lock);
+        return m_state;
+    }
+
 private:
     void               TraceByFrame();
     void               TraceByDuration();

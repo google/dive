@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "absl/strings/str_cat.h"
 #include "trace_mgr.h"
 
 #include <string>

@@ -42,6 +42,19 @@
 #include "settings.h"
 #include "common/macros.h"
 
+//--------------------------------------------------------------------------------------------------
+void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
+{
+    if (std::filesystem::remove(file_path))
+    {
+        qDebug() << "Successfully deleted: " << file_path.string().c_str();
+    }
+    else
+    {
+        qDebug() << "Was not present: " << file_path.string().c_str();
+    }
+}
+
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
@@ -144,7 +157,7 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
 
     // Replay Warning
     m_replay_warning_layout = new QHBoxLayout();
-    m_replay_warning_label = new QLabel(tr("WARNING: Initiating replay will clear any temporary "
+    m_replay_warning_label = new QLabel(tr("⚠ Initiating replay will clear any temporary "
                                            "artifacts produced by previous replays. Please save "
                                            "them manually in a different folder before proceeding, "
                                            "if those artifacts are desired."));
@@ -560,6 +573,7 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
     QApplication::processEvents();
 }
 
+//--------------------------------------------------------------------------------------------------
 std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_stem,
                                                       const std::string &suffix) const
 {
@@ -700,23 +714,12 @@ void AnalyzeDialog::OnReplay()
                                                               Dive::kProfilingMetricsCsvSuffix);
     std::filesystem::path gpu_timing_csv = GetFullLocalPath(gfxr_filename_stem.string(),
                                                             Dive::kGpuTimingCsvSuffix);
+    std::filesystem::path pm4_rd = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                    Dive::kPm4RdSuffix);
     qDebug() << "Attempting to delete temporary artifacts from previous runs...";
-    if (std::filesystem::remove(perf_counter_csv))
-    {
-        qDebug() << "Successfully deleted: " << perf_counter_csv.string().c_str();
-    }
-    else
-    {
-        qDebug() << "Was not present: " << perf_counter_csv.string().c_str();
-    }
-    if (std::filesystem::remove(gpu_timing_csv))
-    {
-        qDebug() << "Successfully deleted: " << gpu_timing_csv.string().c_str();
-    }
-    else
-    {
-        qDebug() << "Was not present: " << gpu_timing_csv.string().c_str();
-    }
+    AttemptDeletingTemporaryLocalFile(perf_counter_csv);
+    AttemptDeletingTemporaryLocalFile(gpu_timing_csv);
+    AttemptDeletingTemporaryLocalFile(pm4_rd);
 
     // Get the enabled settings
     m_dump_pm4_enabled = m_dump_pm4_box->currentIndex() == 0;
@@ -734,15 +737,10 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-
-        // If dump pm4 is enabled, reload the capture so the combined view is displayed
-        if (m_dump_pm4_enabled)
-        {
-            emit ReloadCapture(m_selected_capture_file_string);
-        }
-
-        WaitForReplay(*device);
     }
+    // Reload the capture so the correct PM4 data (or absence thereof) is displayed
+    emit ReloadCapture(m_selected_capture_file_string);
+    WaitForReplay(*device);
 
     // Run the perf counter replay
     if (!m_enabled_settings_vector->empty())

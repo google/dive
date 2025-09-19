@@ -1066,6 +1066,11 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
             QString::fromStdWString(perf_counter_file_path.wstring()));
             qDebug() << "Loaded: " << perf_counter_file_path.string().c_str();
         }
+        else
+        {
+            m_perf_counter_model->OnPerfCounterResultsGenerated("");
+            qDebug() << "Failed to find perf counter data";
+        }
 
         // Check if there is existing gpu timing data
         qDebug() << "Attempting to load gpu timing data from: "
@@ -1075,6 +1080,11 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
             m_gpu_timing_model->OnGpuTimingResultsGenerated(
             QString::fromStdWString(gpu_time_file_path.wstring()));
             qDebug() << "Loaded: " << gpu_time_file_path.string().c_str();
+        }
+        else
+        {
+            m_gpu_timing_model->OnGpuTimingResultsGenerated("");
+            qDebug() << "Failed to find gpu timing data";
         }
     }
 

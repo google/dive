@@ -28,6 +28,24 @@
 
 namespace Dive
 {
+enum FixedPerfMetricsDataHeaders : uint32_t
+{
+    kContextID,
+    kProcessID,
+    kFrameID,
+    kCmdBufferID,
+    kDrawID,
+    kDrawType,
+    kDrawLabel,
+    kProgramID,
+    kLRZState,
+    kFixedPerfMetricsDataHeaderCount,
+};
+
+inline constexpr const char* kFixedHeaders[kFixedPerfMetricsDataHeaderCount] = {
+    "ContextID", "ProcessID", "FrameID",   "CmdBufferID", "DrawID",
+    "DrawType",  "DrawLabel", "ProgramID", "LRZState"
+};
 
 class AvailableMetrics;
 struct MetricInfo;
@@ -82,8 +100,8 @@ class PerfMetricsData
 public:
     // Load performance metrics data from a CSV file
     [[nodiscard]] static std::unique_ptr<PerfMetricsData> LoadFromCsv(
-    const std::filesystem::path&      file_path,
-    std::unique_ptr<AvailableMetrics> available_metrics);
+    const std::filesystem::path& file_path,
+    const AvailableMetrics*      available_metrics);
 
     // Get all performance metrics records
     const std::vector<PerfMetricsRecord>& GetRecords() const { return m_records; }
@@ -94,17 +112,20 @@ public:
     // Get the information of the performance metrics
     const std::vector<const MetricInfo*>& GetMetricInfos() const { return m_metric_infos; }
 
-    PerfMetricsData(std::vector<std::string>          metric_names,
-                    std::vector<const MetricInfo*>    metric_infos,
-                    std::vector<PerfMetricsRecord>    records,
-                    std::unique_ptr<AvailableMetrics> available_metrics);
+    // Get the available metrics
+    const AvailableMetrics& GetAvailableMetrics() const { return *m_available_metrics; }
+
+    PerfMetricsData(std::vector<std::string>       metric_names,
+                    std::vector<const MetricInfo*> metric_infos,
+                    std::vector<PerfMetricsRecord> records,
+                    const Dive::AvailableMetrics*  available_metrics);
 
 private:
     std::vector<std::string>       m_metric_names;
     std::vector<const MetricInfo*> m_metric_infos;
     std::vector<PerfMetricsRecord> m_records;
     // Keep available_metrics alive, since m_metric_infos has raw pointers into it.
-    std::unique_ptr<AvailableMetrics> m_available_metrics;
+    const AvailableMetrics* m_available_metrics;
 };
 
 class PerfMetricsDataProvider

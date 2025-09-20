@@ -35,6 +35,7 @@ public slots:
     void OnNextMatch();
     void OnPrevMatch();
     void OnCorrelateCounter(uint64_t);
+    void OnEventSelected(uint64_t node_index);
 
 signals:
     void UpdateSearchInfo(uint64_t curr_item_pos, uint64_t total_search_results);

@@ -220,7 +220,7 @@ MainWindow::MainWindow()
         text_combo_box_layout->addWidget(m_filter_gfxr_commands_combo_box, 1);
         m_filter_gfxr_commands_combo_box->hide();
 
-        m_perf_counter_model = new PerfCounterModel();
+        m_perf_counter_model = new PerfCounterModel(m_data_core->GetCommandHierarchy());
 
         m_gpu_timing_model = new GpuTimingModel(this);
 
@@ -995,6 +995,15 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
                               (QString("Unable to open file: ") + file_name.c_str()),
                               error_msg);
         return false;
+    }
+
+    // Check if there is existing perf counter data
+    std::filesystem::path perf_counter_file_path(file_name);
+    perf_counter_file_path.replace_extension(".csv");
+    if (std::filesystem::exists(perf_counter_file_path))
+    {
+        m_perf_counter_model->OnPerfCounterResultsGenerated(
+        QString::fromStdWString(perf_counter_file_path.wstring()));
     }
 
     ExpandResizeHierarchyView();
@@ -2035,6 +2044,11 @@ void MainWindow::ConnectDiveFileTabs()
                      m_buffer_view,
                      SLOT(OnEventSelected(uint64_t)));
 #endif
+
+    QObject::connect(this,
+                     SIGNAL(EventSelected(uint64_t)),
+                     m_perf_counter_tab_view,
+                     SLOT(OnEventSelected(uint64_t)));
 
     QObject::connect(m_gfxr_vulkan_command_arguments_tab_view,
                      SIGNAL(HideOtherSearchBars()),

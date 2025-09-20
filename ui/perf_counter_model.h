@@ -15,12 +15,26 @@
 #include <QVector>
 #include <QStringList>
 
+#include <optional>
+
+namespace Dive
+{
+class CommandHierarchy;
+class PerfMetricsDataProvider;
+}  // namespace Dive
+
 class PerfCounterModel : public QAbstractItemModel
 {
     Q_OBJECT
 public:
-    explicit PerfCounterModel(QObject *parent = nullptr);
+    explicit PerfCounterModel(const Dive::CommandHierarchy &command_hierarchy,
+                              QObject                      *parent = nullptr);
+    ~PerfCounterModel();
 
+    PerfCounterModel(const PerfCounterModel &) = delete;
+    PerfCounterModel(PerfCounterModel &&) = delete;
+    PerfCounterModel &operator=(const PerfCounterModel &) = delete;
+    PerfCounterModel &operator=(PerfCounterModel &&) = delete;
     // QAbstractItemModel interface
     QModelIndex index(int                row,
                       int                column,
@@ -42,15 +56,21 @@ public:
     void        ResetSearchIterator();
     void        SetIteratorToNearest(const QModelIndex &current_index);
 
+    std::optional<int> GetRowForNode(uint64_t node_index);
+
 public slots:
     void OnPerfCounterResultsGenerated(const QString &file_path);
 
 private:
     void ParseCsv(const QString &file_path);
 
-    QVector<QStringList>               m_csv_data;
+    const Dive::CommandHierarchy &m_command_hierarchy;
+
+    std::unique_ptr<Dive::PerfMetricsDataProvider> m_perf_metrics_data_provider;
+
     QList<QModelIndex>                 m_search_results;
     QList<QModelIndex>::const_iterator m_search_iterator;
     QStringList                        m_headers;
+    int                                m_row_count = 0;
     int                                m_column_count = 0;
 };

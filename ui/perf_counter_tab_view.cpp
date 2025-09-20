@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
+#include <qabstractitemmodel.h>
 #include "object_names.h"
 
 PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWidget *parent) :
@@ -178,6 +179,17 @@ void PerfCounterTabView::OnPrevMatch()
 
     emit UpdateSearchInfo(m_perf_counter_model.GetCurrentMatchIndex(),
                           m_perf_counter_model.GetTotalMatches());
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::OnEventSelected(uint64_t node_index)
+{
+    auto row = m_perf_counter_model.GetRowForNode(node_index);
+    if (!row)
+    {
+        return;
+    }
+    m_perf_counter_view->selectRow(*row);
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -68,6 +68,7 @@ namespace Dive
 {
 class DataCore;
 class PluginLoader;
+class PerfMetricsDataProvider;
 }  // namespace Dive
 
 #define MESSAGE_TIMEOUT 2500

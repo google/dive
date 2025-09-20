@@ -608,7 +608,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     SetReplayButton("Replaying with perf counter settings...", false);
 
     return device_manager.RunProfilingOnReplay(remote_gfxr_file,
-                                               *m_enabled_settings_vector,
+                                               {"PERCENT_SHADERS_BUSY"},
                                                m_capture_file_directory.value());
 }
 
@@ -727,7 +727,7 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Run the perf counter replay
-    if (!m_enabled_settings_vector->empty())
+    if (!m_enabled_settings_vector->empty() || true)
     {
         ret = PerfCounterReplay(device_manager, remote_file.value());
         if (!ret.ok())

@@ -25,6 +25,7 @@
 #include <functional>
 #include <utility>
 #include <tuple>
+#include <array>
 
 namespace Dive
 {

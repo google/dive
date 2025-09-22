@@ -35,6 +35,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <qabstractitemmodel.h>
 #include <qvariant.h>
 
@@ -1091,13 +1092,13 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
             if (std::filesystem::exists(perf_counter_file_path) && m_available_metrics)
             {
                 m_perf_counter_model->OnPerfCounterResultsGenerated(perf_counter_file_path,
-                                                                    m_available_metrics.get());
+                                                                    *m_available_metrics);
                 qDebug() << "Loaded: " << perf_counter_file_path.string().c_str();
             }
         }
         else
         {
-            m_perf_counter_model->OnPerfCounterResultsGenerated("", nullptr);
+            m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
             qDebug() << "Failed to find perf counter data";
         }
 

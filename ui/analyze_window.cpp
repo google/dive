@@ -32,6 +32,7 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 #include <filesystem>
+#include <optional>
 #include <qapplication.h>
 #include <qtemporarydir.h>
 #include <string>
@@ -63,7 +64,7 @@ AnalyzeDialog::AnalyzeDialog(
 std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
 QWidget                                                            *parent) :
     QDialog(parent),
-    m_available_metrics(available_metrics.has_value() ? &(available_metrics->get()) : nullptr)
+    m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
 
@@ -254,14 +255,14 @@ void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::PopulateMetrics()
 {
-    if (m_available_metrics)
+    if (m_available_metrics.has_value())
     {
         // Get the list of all available metrics
-        std::vector<std::string> all_keys = m_available_metrics->GetAllMetricKeys();
+        std::vector<std::string> all_keys = m_available_metrics->get().GetAllMetricKeys();
 
         for (const auto &key : all_keys)
         {
-            const Dive::MetricInfo *info = m_available_metrics->GetMetricInfo(key);
+            const Dive::MetricInfo *info = m_available_metrics->get().GetMetricInfo(key);
             if (info)
             {
                 CsvItem item;
@@ -750,7 +751,7 @@ void AnalyzeDialog::OnReplay()
     else
     {
         qDebug() << "Cleared perf counter data";
-        emit OnDisplayPerfCounterResults("", nullptr);
+        emit OnDisplayPerfCounterResults("", std::nullopt);
     }
 
     // Run the gpu_time replay

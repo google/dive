@@ -27,8 +27,8 @@ PerfCounterModel::PerfCounterModel(QObject *parent) :
 
 //--------------------------------------------------------------------------------------------------
 void PerfCounterModel::OnPerfCounterResultsGenerated(
-const std::filesystem::path  &file_path,
-const Dive::AvailableMetrics *available_metrics)
+const std::filesystem::path                                        &file_path,
+std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics)
 {
     emit beginResetModel();
 
@@ -37,7 +37,7 @@ const Dive::AvailableMetrics *available_metrics)
     m_headers.clear();
     m_column_count = 0;
 
-    if (file_path.empty())
+    if (file_path.empty() || !available_metrics.has_value())
     {
         emit endResetModel();
         return;
@@ -46,7 +46,7 @@ const Dive::AvailableMetrics *available_metrics)
     auto
     perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path,
                                                            std::make_unique<Dive::AvailableMetrics>(
-                                                           *available_metrics));
+                                                           available_metrics->get()));
     m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(
     std::move(perf_metrics_data));
     LoadData();

@@ -67,8 +67,9 @@ private slots:
     void OnReplay();
 signals:
     void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(const std::filesystem::path  &file_path,
-                                     const Dive::AvailableMetrics *available_metrics);
+    void OnDisplayPerfCounterResults(
+    const std::filesystem::path                                        &file_path,
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
     void OnDisplayGpuTimingResults(const QString &file_path);
     void ReloadCapture(const QString &file_path);
 
@@ -140,7 +141,7 @@ private:
     QString                       m_selected_capture_file_string;
     QVector<CsvItem>             *m_csv_items;
     std::vector<std::string>     *m_enabled_metrics_vector;
-    const Dive::AvailableMetrics *m_available_metrics;
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> m_available_metrics;
     // Used to store a csv item's key in the enabled metrics vector.
     const int             kDataRole = Qt::UserRole + 1;
     const int             kDefaultFrameCount = 3;

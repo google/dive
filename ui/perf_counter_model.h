@@ -44,8 +44,9 @@ public:
     void        SetIteratorToNearest(const QModelIndex &current_index);
 
 public slots:
-    void OnPerfCounterResultsGenerated(const std::filesystem::path  &file_path,
-                                       const Dive::AvailableMetrics *available_metrics);
+    void OnPerfCounterResultsGenerated(
+    const std::filesystem::path                                        &file_path,
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
 
 private:
     void ParseCsv(const QString &file_path);

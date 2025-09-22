@@ -577,13 +577,12 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
 std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_stem,
                                                       const std::string &suffix) const
 {
-    if (!m_local_capture_file_directory.ok())
+    if (m_local_capture_file_directory.empty())
     {
         return "";
     }
 
-    std::filesystem::path full_path = m_local_capture_file_directory.value();
-    full_path /= (gfxr_stem + suffix);
+    std::filesystem::path full_path = m_local_capture_file_directory / (gfxr_stem + suffix);
     return full_path;
 }
 
@@ -606,7 +605,7 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        m_dump_pm4_enabled,
-                                       m_local_capture_file_directory.value());
+                                       m_local_capture_file_directory.string());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -617,7 +616,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
 
     return device_manager.RunProfilingOnReplay(remote_gfxr_file,
                                                *m_enabled_settings_vector,
-                                               m_local_capture_file_directory.value());
+                                               m_local_capture_file_directory.string());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -631,7 +630,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        false,
-                                       m_local_capture_file_directory.value());
+                                       m_local_capture_file_directory.string());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -697,16 +696,17 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Set the download directory to the directory of the current capture file
-    m_local_capture_file_directory = GetCaptureFileDirectory();
-    if (!m_local_capture_file_directory.ok())
+    auto ret2 = GetCaptureFileDirectory();
+    if (!ret2.ok())
     {
         std::string err_msg = absl::StrCat("Failed to set download directory: ",
-                                           m_local_capture_file_directory.status().message());
+                                           ret2.status().message());
         qDebug() << err_msg.c_str();
         ShowErrorMessage(err_msg);
         SetReplayButton(kDefaultReplayButtonText, true);
         return;
     }
+    m_local_capture_file_directory = ret2.value();
 
     // Delete any temporary artifacts from previous runs
     std::filesystem::path gfxr_filename_stem = std::filesystem::path(remote_file.value()).stem();
@@ -766,7 +766,6 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Run the gpu_time replay
-    std::string gpu_time_csv_stem = "";
     if (m_gpu_time_enabled)
     {
         ret = GpuTimeReplay(device_manager, remote_file.value());
@@ -779,7 +778,7 @@ void AnalyzeDialog::OnReplay()
             return;
         }
         WaitForReplay(*device);
-        qDebug() << "Loading gpu timing data: " << perf_counter_csv.string().c_str();
+        qDebug() << "Loading gpu timing data: " << gpu_timing_csv.string().c_str();
         emit OnDisplayGpuTimingResults(QString::fromStdString(gpu_timing_csv.string()));
     }
     else

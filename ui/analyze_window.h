@@ -139,10 +139,10 @@ private:
     std::vector<std::string>     *m_enabled_settings_vector;
 
     // Used to store a csv item's key in the enabled settings vector.
-    const int                   kDataRole = Qt::UserRole + 1;
-    const int                   kDefaultFrameCount = 3;
-    const std::string           kDefaultReplayButtonText = "Replay";
-    absl::StatusOr<std::string> m_local_capture_file_directory = "";
+    const int             kDataRole = Qt::UserRole + 1;
+    const int             kDefaultFrameCount = 3;
+    const std::string     kDefaultReplayButtonText = "Replay";
+    std::filesystem::path m_local_capture_file_directory = "";
 
     bool m_dump_pm4_enabled;
     bool m_gpu_time_enabled;

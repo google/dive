@@ -85,36 +85,96 @@ TEST(PerfMetricsData, LoadFromCsv)
 
     const auto& records = perf_metrics_data->GetRecords();
     EXPECT_THAT(records,
-                ElementsAre(AllOf(PerfMetricsRecordEq(
-                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 1, 1, 1, 1, 1, {} }),
-                                  Field(&PerfMetricsRecord::m_metric_values,
-                                        ElementsAre(VariantWith<int64_t>(123),
-                                                    VariantWith<float>(FloatEq(1.23f))))),
-                            AllOf(PerfMetricsRecordEq(
-                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 1, 1, 1, 2, 1, {} }),
-                                  Field(&PerfMetricsRecord::m_metric_values,
-                                        ElementsAre(VariantWith<int64_t>(150),
-                                                    VariantWith<float>(FloatEq(1.5f))))),
-                            AllOf(PerfMetricsRecordEq(
-                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 2, 1, 1, 1, 1, {} }),
-                                  Field(&PerfMetricsRecord::m_metric_values,
-                                        ElementsAre(VariantWith<int64_t>(110),
-                                                    VariantWith<float>(FloatEq(1.1f))))),
-                            AllOf(PerfMetricsRecordEq(
-                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 2, 1, 1, 2, 1, {} }),
-                                  Field(&PerfMetricsRecord::m_metric_values,
-                                        ElementsAre(VariantWith<int64_t>(120),
-                                                    VariantWith<float>(FloatEq(1.3f))))),
-                            AllOf(PerfMetricsRecordEq(
-                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 3, 1, 1, 1, 1, {} }),
-                                  Field(&PerfMetricsRecord::m_metric_values,
-                                        ElementsAre(VariantWith<int64_t>(135),
-                                                    VariantWith<float>(FloatEq(1.35f))))),
-                            AllOf(PerfMetricsRecordEq(
-                                  PerfMetricsRecord{ 1, 100, 1000, 10000, 3, 1, 1, 2, 1, {} }),
-                                  Field(&PerfMetricsRecord::m_metric_values,
-                                        ElementsAre(VariantWith<int64_t>(145),
-                                                    VariantWith<float>(FloatEq(1.45f)))))));
+                ElementsAre(
+                // First incomplete frame
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 999, 10001, 1, 1, 1, 7, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(2109),
+                                        VariantWith<float>(FloatEq(2.109f))))),
+                // First complete frame:
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10000, 1, 1, 1, 4, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1230),
+                                        VariantWith<float>(FloatEq(1.230f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10000, 2, 1, 1, 5, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1100),
+                                        VariantWith<float>(FloatEq(1.100f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10000, 3, 1, 1, 6, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1350),
+                                        VariantWith<float>(FloatEq(1.350f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10000, 1, 1, 1, 4, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1500),
+                                        VariantWith<float>(FloatEq(1.500f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10000, 2, 1, 1, 5, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1200),
+                                        VariantWith<float>(FloatEq(1.300f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10000, 3, 1, 1, 6, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1450),
+                                        VariantWith<float>(FloatEq(1.450f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1000, 10001, 1, 1, 1, 7, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(2100),
+                                        VariantWith<float>(FloatEq(2.100f))))),
+                // Second complete frame:
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10000, 1, 1, 1, 4, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1232),
+                                        VariantWith<float>(FloatEq(1.232f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10000, 2, 1, 1, 5, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1102),
+                                        VariantWith<float>(FloatEq(1.102f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10000, 3, 1, 1, 6, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1352),
+                                        VariantWith<float>(FloatEq(1.352f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10000, 1, 1, 1, 4, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1502),
+                                        VariantWith<float>(FloatEq(1.502f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10000, 2, 1, 1, 5, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1202),
+                                        VariantWith<float>(FloatEq(1.302f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10000, 3, 1, 1, 6, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1452),
+                                        VariantWith<float>(FloatEq(1.452f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1001, 10001, 1, 1, 1, 7, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(2102),
+                                        VariantWith<float>(FloatEq(2.102f))))),
+                // Incomplete frame at the end:
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1002, 10000, 1, 1, 1, 4, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1234),
+                                        VariantWith<float>(FloatEq(1.234f))))),
+                AllOf(PerfMetricsRecordEq(
+                      PerfMetricsRecord{ 1, 100, 1002, 10000, 2, 1, 1, 5, 1, {} }),
+                      Field(&PerfMetricsRecord::m_metric_values,
+                            ElementsAre(VariantWith<int64_t>(1104),
+                                        VariantWith<float>(FloatEq(1.104f)))))));
 
     ASSERT_THAT(perf_metrics_data->GetMetricNames(), ElementsAre("COUNTER_A", "COUNTER_B"));
 
@@ -207,79 +267,44 @@ TEST(PerfMetricsDataProviderTest, GetComputedRecords)
 {
     auto provider = CreateTestMetricProvider();
     ASSERT_NE(provider, nullptr);
+    provider->Analyze(nullptr);
     const auto& computed_records = provider->GetComputedRecords();
-    ASSERT_THAT(computed_records, SizeIs(3));
+    ASSERT_THAT(computed_records, SizeIs(7));
 
-    PerfMetricsRecord expected_record1{ 1, 100, 1000, 10000, 1, 1, 1, 1, 1 };
+    PerfMetricsRecord expected_record1{ 1, 100, 0, 10000, 1, 1, 1, 4, 1 };
     EXPECT_THAT(computed_records[0], PerfMetricsRecordEq(expected_record1));
     EXPECT_THAT(computed_records[0].m_metric_values,
-                ElementsAre(VariantWith<int64_t>(136), VariantWith<float>(FloatEq(1.365f))));
+                ElementsAre(VariantWith<int64_t>(1231), VariantWith<float>(FloatEq(1.231f))));
 
-    PerfMetricsRecord expected_record2{ 1, 100, 1000, 10000, 2, 1, 1, 1, 1 };
+    PerfMetricsRecord expected_record2{ 1, 100, 0, 10000, 2, 1, 1, 5, 1 };
     EXPECT_THAT(computed_records[1], PerfMetricsRecordEq(expected_record2));
     EXPECT_THAT(computed_records[1].m_metric_values,
-                ElementsAre(VariantWith<int64_t>(115), VariantWith<float>(FloatEq(1.2f))));
+                ElementsAre(VariantWith<int64_t>(1101), VariantWith<float>(FloatEq(1.101f))));
 
-    PerfMetricsRecord expected_record3{ 1, 100, 1000, 10000, 3, 1, 1, 1, 1 };
+    PerfMetricsRecord expected_record3{ 1, 100, 0, 10000, 3, 1, 1, 6, 1 };
     EXPECT_THAT(computed_records[2], PerfMetricsRecordEq(expected_record3));
     EXPECT_THAT(computed_records[2].m_metric_values,
-                ElementsAre(VariantWith<int64_t>(140), VariantWith<float>(FloatEq(1.4f))));
-}
+                ElementsAre(VariantWith<int64_t>(1351), VariantWith<float>(FloatEq(1.351f))));
 
-TEST(PerfMetricsDataProviderTest, GetCommandBufferCount)
-{
-    auto provider = CreateTestMetricProvider();
-    ASSERT_NE(provider, nullptr);
-    EXPECT_EQ(provider->GetCommandBufferCount(), 1);
-}
+    PerfMetricsRecord expected_record4{ 1, 100, 0, 10000, 1, 1, 1, 4, 1 };
+    EXPECT_THAT(computed_records[3], PerfMetricsRecordEq(expected_record4));
+    EXPECT_THAT(computed_records[3].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(1501), VariantWith<float>(FloatEq(1.501f))));
 
-TEST(PerfMetricsDataProviderTest, GetDrawCountForCommandBuffer)
-{
-    auto provider = CreateTestMetricProvider();
-    ASSERT_NE(provider, nullptr);
-    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(0), 3);
-    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(1), 0);
-    EXPECT_EQ(provider->GetDrawCountForCommandBuffer(2), 0);
-}
+    PerfMetricsRecord expected_record5{ 1, 100, 0, 10000, 2, 1, 1, 5, 1 };
+    EXPECT_THAT(computed_records[4], PerfMetricsRecordEq(expected_record5));
+    EXPECT_THAT(computed_records[4].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(1201), VariantWith<float>(FloatEq(1.301f))));
 
-TEST(PerfMetricsDataProviderTest, GetComputedRecord)
-{
-    auto provider = CreateTestMetricProvider();
-    ASSERT_NE(provider, nullptr);
+    PerfMetricsRecord expected_record6{ 1, 100, 0, 10000, 3, 1, 1, 6, 1 };
+    EXPECT_THAT(computed_records[5], PerfMetricsRecordEq(expected_record6));
+    EXPECT_THAT(computed_records[5].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(1451), VariantWith<float>(FloatEq(1.451f))));
 
-    // Check first record
-    auto record1_opt = provider->GetComputedRecord(0, 0);
-    ASSERT_TRUE(record1_opt.has_value());
-    const PerfMetricsRecord* record1 = record1_opt.value();
-    ASSERT_NE(record1, nullptr);
-    EXPECT_EQ(record1->m_cmd_buffer_id, 10000);
-    EXPECT_EQ(record1->m_draw_id, 1);
-    EXPECT_THAT(record1->m_metric_values,
-                ElementsAre(VariantWith<int64_t>(136), VariantWith<float>(FloatEq(1.365f))));
-
-    // Check second record
-    auto record2_opt = provider->GetComputedRecord(0, 1);
-    ASSERT_TRUE(record2_opt.has_value());
-    const PerfMetricsRecord* record2 = record2_opt.value();
-    ASSERT_NE(record2, nullptr);
-    EXPECT_EQ(record2->m_cmd_buffer_id, 10000);
-    EXPECT_EQ(record2->m_draw_id, 2);
-    EXPECT_THAT(record2->m_metric_values,
-                ElementsAre(VariantWith<int64_t>(115), VariantWith<float>(FloatEq(1.2f))));
-
-    // Check third record
-    auto record3_opt = provider->GetComputedRecord(0, 2);
-    ASSERT_TRUE(record3_opt.has_value());
-    const PerfMetricsRecord* record3 = record3_opt.value();
-    ASSERT_NE(record3, nullptr);
-    EXPECT_EQ(record3->m_cmd_buffer_id, 10000);
-    EXPECT_EQ(record3->m_draw_id, 3);
-    EXPECT_THAT(record3->m_metric_values,
-                ElementsAre(VariantWith<int64_t>(140), VariantWith<float>(FloatEq(1.4f))));
-
-    // Check out of bounds
-    EXPECT_FALSE(provider->GetComputedRecord(1, 0).has_value());
-    EXPECT_FALSE(provider->GetComputedRecord(0, 3).has_value());
+    PerfMetricsRecord expected_record7{ 1, 100, 0, 10001, 1, 1, 1, 7, 1 };
+    EXPECT_THAT(computed_records[6], PerfMetricsRecordEq(expected_record7));
+    EXPECT_THAT(computed_records[6].m_metric_values,
+                ElementsAre(VariantWith<int64_t>(2101), VariantWith<float>(FloatEq(2.101f))));
 }
 
 TEST(PerfMetricsDataProviderTest, GetRecordHeader)
@@ -315,10 +340,6 @@ TEST(PerfMetricsDataProviderTest, GetMetricsDescription)
     EXPECT_EQ(provider->GetMetricsDescription(1), "Description B");
 }
 
-TEST(PerfMetricsDataProvider, CreateWithNullDataReturnsNull)
-{
-    EXPECT_EQ(PerfMetricsDataProvider::Create(nullptr), nullptr);
-}
 }  // namespace
 
 }  // namespace Dive

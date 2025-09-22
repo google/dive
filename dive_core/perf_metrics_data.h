@@ -28,24 +28,38 @@
 
 namespace Dive
 {
-enum FixedPerfMetricsDataHeaders : uint32_t
-{
-    kContextID,
-    kProcessID,
-    kFrameID,
-    kCmdBufferID,
-    kDrawID,
-    kDrawType,
-    kDrawLabel,
-    kProgramID,
-    kLRZState,
-    kFixedPerfMetricsDataHeaderCount,
+
+enum FixedPerfMetricsDataHeaders : uint32_t {
+  kContextID,
+  kProcessID,
+  kFrameID,
+  kCmdBufferID,
+  kDrawID,
+  kDrawType,
+  kDrawLabel,
+  kProgramID,
+  kLRZState,
+  kFixedPerfMetricsDataHeaderCount
 };
 
-inline constexpr const char* kFixedHeaders[kFixedPerfMetricsDataHeaderCount] = {
-    "ContextID", "ProcessID", "FrameID",   "CmdBufferID", "DrawID",
-    "DrawType",  "DrawLabel", "ProgramID", "LRZState"
-};
+constexpr std::array kHeaderMap = {
+    std::pair(kContextID, "ContextID"), std::pair(kProcessID, "ProcessID"),
+    std::pair(kFrameID, "FrameID"),     std::pair(kCmdBufferID, "CmdBufferID"),
+    std::pair(kDrawID, "DrawID"),       std::pair(kDrawType, "DrawType"),
+    std::pair(kDrawLabel, "DrawLabel"), std::pair(kProgramID, "ProgramID"),
+    std::pair(kLRZState, "LRZState")};
+
+static_assert(kHeaderMap.size() == kFixedPerfMetricsDataHeaderCount,
+              "ERROR: FixedPerfMetricsDataHeaders and kHeaderMap are out of sync!");
+
+inline constexpr std::array<const char*, kFixedPerfMetricsDataHeaderCount>
+    kFixedHeaders = [] {
+      std::array<const char*, kFixedPerfMetricsDataHeaderCount> arr{};
+      for (const auto& pair : kHeaderMap) {
+        arr[pair.first] = pair.second;
+      }
+      return arr;
+    }();
 
 class CommandHierarchy;
 class AvailableMetrics;

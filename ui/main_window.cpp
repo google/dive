@@ -3300,7 +3300,7 @@ void MainWindow::OnCorrelateCounter(const QModelIndex &index)
                                  ->GetGfxrDrawCallIndices();
 
         // Use helper for GFXR sender
-        std::optional<uint64_t> found_draw_call_index =
+        found_draw_call_index =
         GetDrawCallIndexFromProxyIndex(index,
                                        *m_gfxr_vulkan_commands_filter_proxy_model,
                                        gfxr_draw_call_indices,

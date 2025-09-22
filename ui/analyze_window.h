@@ -54,8 +54,9 @@ class AnalyzeDialog : public QDialog
     Q_OBJECT
 
 public:
-    AnalyzeDialog(QWidget                      *parent = nullptr,
-                  const Dive::AvailableMetrics *available_metrics = nullptr);
+    AnalyzeDialog(
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
+    QWidget                                                            *parent = nullptr);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
     void SetSelectedCaptureFile(const QString &filePath);

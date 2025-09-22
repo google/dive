@@ -32,7 +32,6 @@ const Dive::AvailableMetrics *available_metrics)
 {
     emit beginResetModel();
 
-    m_csv_data.clear();
     m_search_results.clear();
     m_search_iterator = nullptr;
     m_headers.clear();
@@ -44,7 +43,8 @@ const Dive::AvailableMetrics *available_metrics)
         return;
     }
 
-    auto perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path,
+    auto
+    perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path,
                                                            std::make_unique<Dive::AvailableMetrics>(
                                                            *available_metrics));
     m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(

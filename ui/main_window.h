@@ -176,7 +176,7 @@ private:
     void    CreateToolBars();
     void    CreateShortcuts();
     void    CreateStatusBar();
-    void    GetAvailableMetrics();
+    void    LoadAvailableMetrics();
     void    ShowTempStatus(const QString &status_message);
     void    ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
@@ -322,7 +322,4 @@ private:
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
-
-    const std::string kMetricsFilePath = ":/resources/available_settings.csv";
-    const std::string kMetricsFileName = "available_settings.csv";
 };

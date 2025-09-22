@@ -95,6 +95,9 @@ static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] =
 constexpr DiveFilterModel::FilterMode
 kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
 
+static constexpr const char *kMetricsFilePath = ":/resources/available_settings.csv";
+static constexpr const char *kMetricsFileName = "available_settings.csv";
+
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {
     if (index < 0)
@@ -430,10 +433,15 @@ MainWindow::MainWindow()
     horizontal_splitter->setSizes(equal_sizes);
 
     // Retrieve the available metrics
-    GetAvailableMetrics();
+    LoadAvailableMetrics();
 
     m_trace_dig = new TraceDialog(this);
-    m_analyze_dig = new AnalyzeDialog(this, m_available_metrics.get());
+    m_analyze_dig = new AnalyzeDialog(m_available_metrics.get() ?
+                                      std::optional<
+                                      std::reference_wrapper<const Dive::AvailableMetrics>>(
+                                      std::ref(*m_available_metrics.get())) :
+                                      std::nullopt,
+                                      this);
 
     // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.
@@ -1580,7 +1588,7 @@ void MainWindow::OnSearchTrigger()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::GetAvailableMetrics()
+void MainWindow::LoadAvailableMetrics()
 {
     QFile inputFile(QString::fromStdString(kMetricsFilePath));
     if (!inputFile.open(QIODevice::ReadOnly))
@@ -1600,7 +1608,7 @@ void MainWindow::GetAvailableMetrics()
     }
 
     // Get the temporary file path as a QString
-    QString tempFilePath = QDir(tempDir.path()).filePath(kMetricsFileName.c_str());
+    QString tempFilePath = QDir(tempDir.path()).filePath(kMetricsFileName);
 
     QFile tempFile(tempFilePath);
     if (!tempFile.open(QIODevice::WriteOnly))

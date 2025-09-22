@@ -59,11 +59,14 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
-AnalyzeDialog::AnalyzeDialog(QWidget *parent, const Dive::AvailableMetrics *available_metrics)
+AnalyzeDialog::AnalyzeDialog(
+std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
+QWidget                                                            *parent) :
+    QDialog(parent),
+    m_available_metrics(available_metrics.has_value() ? &(available_metrics->get()) : nullptr)
 {
     qDebug() << "AnalyzeDialog created.";
 
-    m_available_metrics = available_metrics;
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
     m_metrics_list = new QListWidget();
@@ -741,7 +744,7 @@ void AnalyzeDialog::OnReplay()
         }
         WaitForReplay(*device);
         qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
-        
+
         emit OnDisplayPerfCounterResults(perf_counter_csv.string(), m_available_metrics);
     }
     else

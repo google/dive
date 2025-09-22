@@ -51,7 +51,6 @@ private:
     void ParseCsv(const QString &file_path);
     void LoadData();
 
-    QVector<QStringList>                           m_csv_data;
     QList<QModelIndex>                             m_search_results;
     QList<QModelIndex>::const_iterator             m_search_iterator;
     QStringList                                    m_headers;

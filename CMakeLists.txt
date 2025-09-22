@@ -70,9 +70,13 @@ if(GIT_FOUND)
     execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE REPO_SHA1)
-    string(STRIP "${REPO_SHA1}" REPO_SHA1)
-    add_definitions( -DREPO_SHA1="${REPO_SHA1}" )
+    string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
 endif()
+
+# Adds all the configure time information into dive_cmake_generated.h.in
+configure_file("${CMAKE_SOURCE_DIR}/common/dive_cmake_generated.h.in" "${CMAKE_BINARY_DIR}/generated_include/common/dive_cmake_generated.h")
+
+include_directories("${CMAKE_BINARY_DIR}/generated_include")
 
 option(DIVE_NO_DISASSEMBLY, "Include builtin shader disassembly.")
 if(DIVE_NO_DISASSEMBLY)
@@ -124,7 +128,7 @@ else()
             DESTINATION "${CMAKE_INSTALL_PREFIX}/gfxr_layer"
         )
         install(
-            FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME} 
+            FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
             DESTINATION ${CMAKE_INSTALL_PREFIX}
             RENAME "gfxr-replay.apk")
         message(CHECK_PASS "successful")

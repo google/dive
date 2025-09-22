@@ -27,9 +27,14 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_cat.h"
 
+#include "common/dive_version.h"
 #include "data_core_wrapper.h"
 
+namespace
+{
+constexpr const char kDiveVersionSHA1String[] = DIVE_VERSION_SHA1;
 constexpr std::array kAllowedInputFileExtensions = { ".gfxr" };
+}  // namespace
 
 ABSL_FLAG(bool, version_info, false, "Shows the version of Dive host tools and quits");
 ABSL_FLAG(std::string,
@@ -78,11 +83,14 @@ absl::Status ValidateFlags()
 
 std::string GetDiveRepositoryVersion()
 {
-    std::string version_string = "(unknown version)";
-#ifdef REPO_SHA1
-    version_string = REPO_SHA1;
-#endif
-    return version_string;
+    if constexpr (std::size(kDiveVersionSHA1String) > 0 && kDiveVersionSHA1String[0] != 0)
+    {
+        return kDiveVersionSHA1String;
+    }
+    else
+    {
+        return "(unknown version)";
+    }
 }
 
 int main(int argc, char **argv)

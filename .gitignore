@@ -18,6 +18,7 @@ driver/xgl/builds
 third_party/freedreno/libs/
 third_party/freedreno/obj
 build_android/
+.gradle/
 # Amdvlk auto-generated files
 *.pyc
 g_*.h

@@ -3207,6 +3207,9 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
 
     if (row_index >= gfxr_draw_call_indices.size())
     {
+        QMessageBox::critical(this,
+                              "Correlation Failed",
+                              "Selected row does not correlate with current loaded capture.");
         ClearViewModelSelection(*m_command_hierarchy_view, false);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
         return;

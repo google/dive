@@ -49,6 +49,7 @@ std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_me
                                                            available_metrics->get()));
     m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(
     std::move(perf_metrics_data));
+    m_perf_metrics_data_provider->Analyze();
     LoadData();
     emit endResetModel();
 }

@@ -130,6 +130,7 @@ public slots:
     void OnCorrelatePm4DrawCall(const QModelIndex &);
     void OnCorrelateCounter(const QModelIndex &);
     void OnCounterSelected(uint64_t);
+    void OnGpuTimingDataSelected(uint64_t);
     void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
 
 private slots:

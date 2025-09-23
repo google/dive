@@ -50,6 +50,7 @@ public:
 signals:
     void TraceAvailable(const QString &);
     void DownloadedSize(uint64_t size);
+    void ErrorMessage(const QString &err_msg);
 
 private:
     QProgressDialog *m_progress_bar;
@@ -76,6 +77,7 @@ public:
 signals:
     void DownloadedSize(uint64_t size);
     void GfxrCaptureAvailable(const QString &);
+    void ErrorMessage(const QString &err_msg);
 
 private:
     QProgressDialog *m_progress_bar;
@@ -134,6 +136,9 @@ public:
     void UseGfxrCapture(bool enable);
     void RetrieveGfxrCapture();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
     void OnDeviceSelected(const QString &);
     void OnPackageSelected(const QString &);
@@ -148,6 +153,8 @@ private slots:
     void OnPackageListFilter();
     void OnPackageListFilterApplied(const QString &filter);
     void OnGfxrCaptureClicked();
+    void ShowErrorMessage(const QString &err_msg);
+    bool StopPackage();
 
 signals:
     void TraceAvailable(const QString &);

@@ -131,7 +131,7 @@ bool AndroidTraceManager::ShouldStopTrace() const
     m_state_lock.AssertHeld();
 #endif
     return (m_state == TraceState::Tracing &&
-            m_frame_num - m_trace_start_frame > GetNumFrameToTrace());
+            m_frame_num - m_trace_start_frame >= GetNumFrameToTrace());
 }
 
 void AndroidTraceManager::OnTraceStart()

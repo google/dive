@@ -15,15 +15,21 @@
 
 #include <cctype>
 #include <cerrno>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <filesystem>
+#include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 #include <array>
 #include <unordered_map>
 #include <unordered_set>
 
+#include "dive_core/command_hierarchy.h"
 #include "dive_core/available_metrics.h"
 #include "dive_core/common/string_utils.h"
 
@@ -153,6 +159,14 @@ std::unique_ptr<AvailableMetrics> available_metrics)
     std::vector<PerfMetricsRecord> records;
     if (!available_metrics)
     {
+        auto available_metrics_path = file_path.parent_path().append("available_settings.csv");
+        if (std::filesystem::exists(available_metrics_path))
+        {
+            available_metrics = AvailableMetrics::LoadFromCsv(available_metrics_path);
+        }
+    }
+    if (!available_metrics)
+    {
         return nullptr;
     }
 
@@ -223,18 +237,295 @@ PerfMetricsData::PerfMetricsData(std::vector<std::string>          metric_names,
 {
 }
 
+class PerfMetricsDataProvider::Correlator
+{
+public:
+    using DrawRef = uint64_t;
+    using PatternIndex = size_t;
+    static constexpr PatternIndex kInvalidPatternIndex = std::numeric_limits<PatternIndex>::max();
+
+    void Reset()
+    {
+        m_draws.clear();
+        m_draw_to_index.clear();
+
+        m_pattern_size = 0;
+        m_record_to_index.clear();
+    }
+
+    void AnalyzeCommands(const CommandHierarchy&);
+
+    void AnalyzeRecords(const std::vector<PerfMetricsRecord>&);
+
+    std::optional<PatternIndex> MatchOf(size_t index) const
+    {
+
+        if (index >= m_record_to_index.size())
+        {
+            return std::nullopt;
+        }
+        PatternIndex pattern_index = m_record_to_index[index];
+        if (pattern_index >= m_pattern_size)
+        {
+            return std::nullopt;
+        }
+        return pattern_index;
+    }
+
+    size_t GetPatternSize() const { return m_pattern_size; }
+
+    std::optional<DrawRef> GetDrawRef(PatternIndex offset) const
+    {
+        if (offset >= m_draws.size())
+        {
+            return std::nullopt;
+        }
+        return m_draws[offset];
+    }
+
+    std::optional<PatternIndex> GetPatternIndex(DrawRef ref) const
+    {
+        auto iter = m_draw_to_index.find(ref);
+        if (iter == m_draw_to_index.end())
+        {
+            return std::nullopt;
+        }
+        return iter->second;
+    }
+
+private:
+    static void ExtractDraws(const CommandHierarchy&                 command_hierarchy,
+                             std::vector<uint64_t>&                  out_draws,
+                             std::unordered_map<uint64_t, uint64_t>& out_mapping);
+
+    struct DrawSignatures
+    {
+        const PerfMetricsRecord* m_begin;
+        const PerfMetricsRecord* m_end;
+    };
+    static bool MatchDrawSignatures(const DrawSignatures&,
+                                    const PerfMetricsRecord* begin,
+                                    const PerfMetricsRecord* end);
+
+    std::vector<DrawRef>                      m_draws;
+    std::unordered_map<DrawRef, PatternIndex> m_draw_to_index;
+
+    size_t                    m_pattern_size;
+    std::vector<PatternIndex> m_record_to_index;
+};
+
+void PerfMetricsDataProvider::Correlator::ExtractDraws(
+const CommandHierarchy&                 command_hierarchy,
+std::vector<uint64_t>&                  out_draws,
+std::unordered_map<uint64_t, uint64_t>& out_mapping)
+{
+    // TODO: extract the command buffer pattern.
+
+    std::unordered_map<uint64_t, uint64_t> draw_to_index;
+
+    // First instance of the draw call in the command stream (from binning pass).
+    std::vector<uint64_t> actual_draws;
+    // Draw call that already being accounted for (tile pass).
+    std::vector<uint64_t> alias_draws;
+
+    std::vector<uint64_t>* draws = &actual_draws;
+
+    auto dedupe = [&]() {
+        // We encountered either submit or render marker, unless it's
+        // tile pass, we will be getting first instace of the draw call.
+        draws = &actual_draws;
+
+        if (alias_draws.size() <= actual_draws.size())
+        {
+            // Tile pass should corresponding to the last binning draws.
+            size_t base = actual_draws.size() - alias_draws.size();
+            for (size_t i = 0; i < alias_draws.size(); ++i)
+            {
+                draw_to_index[alias_draws[i]] = base + i;
+            }
+        }
+        alias_draws.clear();
+    };
+
+    auto& alias_marker = command_hierarchy.GetFilterExcludeIndices(
+    Dive::CommandHierarchy::kBinningPassOnly);
+
+    for (size_t i = 0; i < command_hierarchy.size(); ++i)
+    {
+        auto node_type = command_hierarchy.GetNodeType(i);
+        if (node_type == Dive::NodeType::kSubmitNode)
+        {
+            dedupe();
+        }
+        if (node_type == Dive::NodeType::kRenderMarkerNode)
+        {
+            dedupe();
+            if (alias_marker.find(i) != alias_marker.end())
+            {
+                draws = &alias_draws;
+            }
+        }
+        if (!Dive::IsDrawDispatchNode(node_type))
+        {
+            continue;
+        }
+        draws->push_back(i);
+    }
+    dedupe();
+    for (size_t i = 0; i < actual_draws.size(); ++i)
+    {
+        draw_to_index[actual_draws[i]] = i;
+    }
+    out_draws = std::move(actual_draws);
+    out_mapping = std::move(draw_to_index);
+}
+
+void PerfMetricsDataProvider::Correlator::AnalyzeCommands(const CommandHierarchy& command_hierarchy)
+{
+    ExtractDraws(command_hierarchy, m_draws, m_draw_to_index);
+}
+
+bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatures&    signatures,
+                                                              const PerfMetricsRecord* begin,
+                                                              const PerfMetricsRecord* end)
+{
+    const ptrdiff_t size = (signatures.m_end - signatures.m_begin);
+    if (size != end - begin)
+    {
+        return false;
+    }
+    const PerfMetricsRecord* at = begin;
+    const PerfMetricsRecord* signatures_at = signatures.m_begin;
+    for (; at != end; ++at, ++signatures_at)
+    {
+
+        if (at->m_cmd_buffer_id != signatures_at->m_cmd_buffer_id)
+        {
+            return false;
+        }
+        if (at->m_draw_id != signatures_at->m_draw_id)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void PerfMetricsDataProvider::Correlator::AnalyzeRecords(
+const std::vector<PerfMetricsRecord>& records)
+{
+    m_pattern_size = 0;
+    m_record_to_index.clear();
+
+    if (records.empty())
+    {
+        return;
+    }
+    size_t template_frame_start = 0;
+    size_t template_frame_size = 0;
+
+    // Find the frame with the max number of draw calls, and use that as template.
+    {
+        size_t frame_start = 0;
+        auto   emit_frame = [&](size_t start, size_t end) {
+            if (end - start > template_frame_size)
+            {
+                template_frame_start = start;
+                template_frame_size = end - start;
+            }
+        };
+        for (size_t i = 0; i < records.size(); ++i)
+        {
+            if (records[frame_start].m_frame_id != records[i].m_frame_id)
+            {
+                emit_frame(frame_start, i);
+                frame_start = i;
+            }
+        }
+        emit_frame(frame_start, records.size());
+    }
+
+    if (!m_draws.empty() && m_draws.size() != template_frame_size)
+    {
+        // Draw pattern is different between capture file and metric file.
+        return;
+    }
+
+    const DrawSignatures signature = {
+        records.data() + template_frame_start,
+        records.data() + template_frame_start + template_frame_size,
+    };
+
+    std::vector<PatternIndex> record_to_index(records.size(), kInvalidPatternIndex);
+    {
+        size_t frame_start = 0;
+        auto   emit_frame = [&](size_t start, size_t end) {
+            if (!MatchDrawSignatures(signature, records.data() + start, records.data() + end))
+            {
+                // Bad data?
+                return;
+            }
+            const size_t frame_size = end - start;
+            for (int i = 0; i < frame_size; ++i)
+            {
+                record_to_index[start + i] = i;
+            }
+        };
+        for (size_t i = 0; i < records.size(); ++i)
+        {
+            if (records[frame_start].m_frame_id != records[i].m_frame_id)
+            {
+                emit_frame(frame_start, i);
+                frame_start = i;
+            }
+        }
+        emit_frame(frame_start, records.size());
+    }
+
+    m_pattern_size = template_frame_size;
+    m_record_to_index = std::move(record_to_index);
+}
+
 std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::Create(
 std::unique_ptr<PerfMetricsData> data)
 {
-    if (!data)
-        return nullptr;
-
-    return std::unique_ptr<PerfMetricsDataProvider>(new PerfMetricsDataProvider(std::move(data)));
+    auto result = std::unique_ptr<PerfMetricsDataProvider>(new PerfMetricsDataProvider);
+    result->Update(std::move(data));
+    return result;
+}
+PerfMetricsDataProvider::~PerfMetricsDataProvider() = default;
+PerfMetricsDataProvider::PerfMetricsDataProvider() :
+    m_correlator(new Correlator)
+{
 }
 
-PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data) :
-    m_raw_data(std::move(data))
+void PerfMetricsDataProvider::Update(std::unique_ptr<PerfMetricsData> data)
 {
+    if (!data)
+    {
+        return;
+    }
+
+    m_raw_data = std::move(data);
+    m_computed_records.clear();
+    m_correlator->Reset();
+}
+
+void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
+{
+
+    const size_t num_metrics = m_raw_data->GetMetricNames().size();
+    const auto&  records = m_raw_data->GetRecords();
+    m_correlator->Reset();
+    if (command_hierarchy)
+    {
+        m_correlator->AnalyzeCommands(*command_hierarchy);
+    }
+    m_correlator->AnalyzeRecords(records);
+
+    const size_t pattern_size = m_correlator->GetPatternSize();
+    m_computed_records.resize(pattern_size);
+
     // This map will store intermediate sums and counts for averaging.
     // Key: {cmd_buffer_id, draw_id}
     // Value: {vector of metric sums, count of records}
@@ -243,40 +534,26 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
         std::vector<double> m_metric_sums{};
         uint32_t            m_record_count = 0;
     };
-    std::unordered_map<PerfMetricsKey, MetricSumWithRecordCount, PerfMetricsKeyHash>
-    sums_and_counts;
 
-    // This map will store the first record for each draw call to preserve non-metric data.
-    // Key: {cmd_buffer_id, draw_id}
-    // Value: const PerfMetricsRecord*
-    std::unordered_map<PerfMetricsKey, const PerfMetricsRecord*, PerfMetricsKeyHash> first_records;
+    std::vector<MetricSumWithRecordCount> sums_and_counts;
+    sums_and_counts.resize(pattern_size);
 
-    std::unordered_set<PerfMetricsKey, PerfMetricsKeyHash> seen_draw_calls;
-    std::unordered_set<uint64_t>                           seen_cmd_buffers;
-
-    const size_t num_metrics = m_raw_data->GetMetricNames().size();
-
-    for (const auto& record : m_raw_data->GetRecords())
+    size_t skipped = 0;
+    for (size_t record_index = 0; record_index < records.size(); ++record_index)
     {
-        PerfMetricsKey key = { record.m_cmd_buffer_id, record.m_draw_id };
-        // m_cmd_buffer_list maintains the order of command buffers as they appear in the raw data.
-        if (seen_cmd_buffers.find(record.m_cmd_buffer_id) == seen_cmd_buffers.end())
+        auto pattern_index = m_correlator->MatchOf(record_index);
+        if (!pattern_index)
         {
-            m_cmd_buffer_list.push_back(record.m_cmd_buffer_id);
-            seen_cmd_buffers.insert(record.m_cmd_buffer_id);
+            ++skipped;
+            continue;
         }
-
-        if (seen_draw_calls.find(key) == seen_draw_calls.end())
-        {
-            m_cmd_buffer_to_draw_id[record.m_cmd_buffer_id].push_back(record.m_draw_id);
-            first_records[key] = &record;
-            seen_draw_calls.insert(key);
-        }
-
-        auto& draw_call_data = sums_and_counts[key];
+        auto& record = records[record_index];
+        auto& draw_call_data = sums_and_counts[*pattern_index];
         if (draw_call_data.m_record_count == 0)
         {
-            draw_call_data.m_metric_sums.resize(num_metrics, 0.0);
+            draw_call_data.m_metric_sums.resize(num_metrics);
+
+            m_computed_records[*pattern_index] = record;
         }
 
         if (record.m_metric_values.size() == num_metrics)
@@ -291,53 +568,39 @@ PerfMetricsDataProvider::PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData
             draw_call_data.m_record_count++;
         }
     }
+    if (skipped)
+    {
+        std::cerr << "Skipping " << skipped << " metrics." << std::endl;
+    }
 
     // Now, build the final m_computed_records vector with averaged records in order.
-    for (const auto& cmd_buffer_id : m_cmd_buffer_list)
+    for (size_t draw_index = 0; draw_index < pattern_size; ++draw_index)
     {
-        const auto it_draw_ids = m_cmd_buffer_to_draw_id.find(cmd_buffer_id);
-        if (it_draw_ids == m_cmd_buffer_to_draw_id.end())
+        PerfMetricsRecord& averaged_record = m_computed_records[draw_index];
+        averaged_record.m_metric_values.clear();
+        // frame_id for aggregated data is meaningless.
+        averaged_record.m_frame_id = 0;
+
+        const auto count = sums_and_counts[draw_index].m_record_count;
+        auto&      sums = sums_and_counts[draw_index].m_metric_sums;
+        if (count == 0 || sums.empty())
         {
             continue;
         }
-        const auto& draw_ids = it_draw_ids->second;
-        for (uint32_t draw_id : draw_ids)
-        {
-            PerfMetricsKey key = { cmd_buffer_id, draw_id };
-            const auto     it_sums = sums_and_counts.find(key);
-            if (it_sums == sums_and_counts.end())
-            {
-                continue;
-            }
-            const auto& sums_data = it_sums->second;
-            const auto& sums = sums_data.m_metric_sums;
-            const auto  count = sums_data.m_record_count;
 
-            if (count > 0)
+        averaged_record.m_metric_values.reserve(num_metrics);
+        for (size_t i = 0; i < num_metrics; ++i)
+        {
+            const auto* metric_info = m_raw_data->GetMetricInfos()[i];
+            if (metric_info && metric_info->m_metric_type == MetricType::kCount)
             {
-                const auto it_first_record = first_records.find(key);
-                if (it_first_record == first_records.end())
-                {
-                    continue;
-                }
-                PerfMetricsRecord averaged_record = *it_first_record->second;
-                averaged_record.m_metric_values.clear();
-                averaged_record.m_metric_values.reserve(num_metrics);
-                for (size_t i = 0; i < num_metrics; ++i)
-                {
-                    const auto*  metric_info = m_raw_data->GetMetricInfos()[i];
-                    const double average = sums[i] / count;
-                    if (metric_info && metric_info->m_metric_type == MetricType::kCount)
-                    {
-                        averaged_record.m_metric_values.emplace_back(static_cast<int64_t>(average));
-                    }
-                    else  // kPercent or others, store as float
-                    {
-                        averaged_record.m_metric_values.emplace_back(static_cast<float>(average));
-                    }
-                }
-                m_metric_key_to_index[key] = m_computed_records.size();
-                m_computed_records.push_back(std::move(averaged_record));
+                const int64_t average = std::llround(sums[i] / count);
+                averaged_record.m_metric_values.emplace_back(average);
+            }
+            else  // kPercent or others, store as float
+            {
+                const float average = static_cast<float>(sums[i] / count);
+                averaged_record.m_metric_values.emplace_back(average);
             }
         }
     }
@@ -358,43 +621,10 @@ const std::vector<std::string> PerfMetricsDataProvider::GetRecordHeader() const
     return full_header;
 }
 
-std::optional<const PerfMetricsRecord*> PerfMetricsDataProvider::GetComputedRecord(
-size_t command_buffer_index,
-size_t draw_call_index) const
+std::optional<uint64_t> PerfMetricsDataProvider::GetCorrelatedComputedRecordIndex(
+uint64_t draw_ref) const
 {
-    if (command_buffer_index >= m_cmd_buffer_list.size())
-    {
-        return std::nullopt;
-    }
-
-    const uint64_t command_buffer_id = m_cmd_buffer_list[command_buffer_index];
-    const auto     it_draw_ids = m_cmd_buffer_to_draw_id.find(command_buffer_id);
-    if (it_draw_ids == m_cmd_buffer_to_draw_id.end())
-    {
-        return std::nullopt;
-    }
-
-    const auto& draw_ids = it_draw_ids->second;
-    if (draw_call_index >= draw_ids.size())
-    {
-        return std::nullopt;
-    }
-
-    const uint32_t       draw_call_id = draw_ids[draw_call_index];
-    const PerfMetricsKey metric_key{ command_buffer_id, draw_call_id };
-
-    const auto it_record_index = m_metric_key_to_index.find(metric_key);
-    if (it_record_index == m_metric_key_to_index.end())
-    {
-        return std::nullopt;
-    }
-
-    const size_t record_index = it_record_index->second;
-    if (record_index >= m_computed_records.size())
-    {
-        return std::nullopt;
-    }
-    return &m_computed_records[record_index];
+    return m_correlator->GetPatternIndex(draw_ref);
 }
 
 const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const
@@ -412,17 +642,4 @@ std::string_view PerfMetricsDataProvider::GetMetricsDescription(size_t metric_in
     return metrics_info[metric_index]->m_description;
 }
 
-size_t PerfMetricsDataProvider::GetDrawCountForCommandBuffer(size_t command_buffer_index) const
-{
-    if (command_buffer_index >= m_cmd_buffer_list.size())
-        return 0;
-
-    uint64_t   cmd_id = m_cmd_buffer_list[command_buffer_index];
-    const auto iter = m_cmd_buffer_to_draw_id.find(cmd_id);
-    if (iter == m_cmd_buffer_to_draw_id.end())
-    {
-        return 0;
-    }
-    return iter->second.size();
-}
 }  // namespace Dive

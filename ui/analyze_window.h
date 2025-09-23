@@ -72,7 +72,7 @@ private:
     void                        ShowErrorMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateMetrics();
-    void                        UpdateSelectedSettingsList();
+    void                        UpdateSelectedMetricsList();
     std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
                                                  const std::string &suffix) const;
     void                        WaitForReplay(Dive::AndroidDevice &device);

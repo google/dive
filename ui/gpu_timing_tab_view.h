@@ -40,6 +40,11 @@ public:
 public slots:
     void OnModelReset();
     void OnEventSelectionChanged(const QModelIndex &model_index);
+    void OnSelectionChanged(const QModelIndex &index);
+    void ClearSelection();
+
+signals:
+    void GpuTimingDataSelected(uint64_t);
 
 private:
     void ResizeColumns();
@@ -64,4 +69,6 @@ private:
     //
     // The Qt index of all events for which there is GPU timing data
     std::vector<uint64_t> m_timed_event_indices = {};
+
+    bool m_ignore_selection_changes = false;
 };

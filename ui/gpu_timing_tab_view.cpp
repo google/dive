@@ -37,6 +37,11 @@ GpuTimingTabView::GpuTimingTabView(GpuTimingModel               &gpu_timing_mode
                      &QAbstractItemModel::modelReset,
                      this,
                      &GpuTimingTabView::OnModelReset);
+
+    QObject::connect(m_table_view->selectionModel(),
+                     &QItemSelectionModel::currentChanged,
+                     this,
+                     &GpuTimingTabView::OnSelectionChanged);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -153,4 +158,35 @@ void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
         return;
     }
     m_table_view->selectRow(row);
+}
+
+//--------------------------------------------------------------------------------------------------
+void GpuTimingTabView::OnSelectionChanged(const QModelIndex &index)
+{
+    // Resize columns to fit the content
+    uint32_t column_count = (uint32_t)m_model.columnCount(QModelIndex());
+    for (uint32_t column = 0; column < column_count; ++column)
+    {
+        m_table_view->resizeColumnToContents(column);
+    }
+    int selected_row = index.row();
+    if (static_cast<size_t>(selected_row) < m_timed_event_indices.size())
+    {
+        emit GpuTimingDataSelected(m_timed_event_indices.at(selected_row));
+        m_ignore_selection_changes = true;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void GpuTimingTabView::ClearSelection()
+{
+    if (!m_ignore_selection_changes)
+    {
+        QItemSelectionModel *selection_model = m_table_view->selectionModel();
+        if (selection_model)
+        {
+            selection_model->clear();
+        }
+    }
+    m_ignore_selection_changes = false;
 }

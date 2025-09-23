@@ -695,6 +695,7 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
     {
         ClearViewModelSelection(*m_command_hierarchy_view, true);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+        m_perf_counter_tab_view->ClearSelection();
         ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
     }
     else
@@ -712,6 +713,7 @@ void MainWindow::OnGfxrFilterModeChange()
     if (m_correlated_capture_loaded)
     {
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+        m_perf_counter_tab_view->ClearSelection();
     }
 }
 
@@ -1591,38 +1593,39 @@ void MainWindow::OnSearchTrigger()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::LoadAvailableMetrics()
 {
-    QFile inputFile(QString::fromStdString(kMetricsFilePath));
-    if (!inputFile.open(QIODevice::ReadOnly))
+    QFile input_file(QString::fromStdString(kMetricsFilePath));
+    if (!input_file.open(QIODevice::ReadOnly))
     {
         std::cerr << "Failed to open resource file: " << kMetricsFilePath << std::endl;
         return;
     }
 
-    QByteArray file_contents = inputFile.readAll();
-    inputFile.close();
+    QByteArray file_contents = input_file.readAll();
+    input_file.close();
 
-    QTemporaryDir tempDir;
-    if (!tempDir.isValid())
+    QTemporaryDir temp_dir;
+    if (!temp_dir.isValid())
     {
         std::cerr << "Failed to create temporary directory." << std::endl;
         return;
     }
 
     // Get the temporary file path as a QString
-    QString tempFilePath = QDir(tempDir.path()).filePath(kMetricsFileName);
+    QString temp_file_path = QDir(temp_dir.path()).filePath(kMetricsFileName);
 
-    QFile tempFile(tempFilePath);
-    if (!tempFile.open(QIODevice::WriteOnly))
+    QFile temp_file(temp_file_path);
+    if (!temp_file.open(QIODevice::WriteOnly))
     {
-        std::cerr << "Failed to create temporary file: " << tempFilePath.toStdString() << std::endl;
+        std::cerr << "Failed to create temporary file: " << temp_file_path.toStdString()
+                  << std::endl;
         return;
     }
 
-    tempFile.write(file_contents);
-    tempFile.close();
+    temp_file.write(file_contents);
+    temp_file.close();
 
     m_available_metrics = Dive::AvailableMetrics::LoadFromCsv(
-    std::filesystem::path(tempFilePath.toStdString()));
+    std::filesystem::path(temp_file_path.toStdString()));
 }
 
 //--------------------------------------------------------------------------------------------------

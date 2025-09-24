@@ -50,6 +50,7 @@ public:
 signals:
     void TraceAvailable(const QString &);
     void DownloadedSize(uint64_t size);
+    void ErrorMessage(const QString &err_msg);
 
 private:
     QProgressDialog *m_progress_bar;
@@ -76,6 +77,7 @@ public:
 signals:
     void DownloadedSize(uint64_t size);
     void GfxrCaptureAvailable(const QString &);
+    void ErrorMessage(const QString &err_msg);
 
 private:
     QProgressDialog *m_progress_bar;
@@ -134,20 +136,25 @@ public:
     void UseGfxrCapture(bool enable);
     void RetrieveGfxrCapture();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
-    void OnDeviceSelected(const QString &);
-    void OnPackageSelected(const QString &);
-    void OnStartClicked();
-    void OnTraceClicked();
-    void OnTraceAvailable(const QString &);
-    void OnGFXRCaptureAvailable(const QString &);
-    void OnDevListRefresh();
-    void OnAppListRefresh();
-    void OnInputCommand(const QString &);
-    void OnInputArgs(const QString &);
-    void OnPackageListFilter();
-    void OnPackageListFilterApplied(const QString &filter);
-    void OnGfxrCaptureClicked();
+    void         OnDeviceSelected(const QString &);
+    void         OnPackageSelected(const QString &);
+    void         OnStartClicked();
+    void         OnTraceClicked();
+    void         OnTraceAvailable(const QString &);
+    void         OnGFXRCaptureAvailable(const QString &);
+    void         OnDevListRefresh();
+    void         OnAppListRefresh();
+    void         OnInputCommand(const QString &);
+    void         OnInputArgs(const QString &);
+    void         OnPackageListFilter();
+    void         OnPackageListFilterApplied(const QString &filter);
+    void         OnGfxrCaptureClicked();
+    void         ShowErrorMessage(const QString &err_msg);
+    absl::Status StopPackageAndCleanup();
 
 signals:
     void TraceAvailable(const QString &);

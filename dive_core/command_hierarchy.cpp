@@ -1905,7 +1905,8 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         ext_src_addr |= ((uint64_t)packet.u32All2) << 32;
         break;
     case SS6_UBO:
-        DIVE_ASSERT(false);  // Not used. Not sure what it's for
+        // Not sure what this is used for, and even cffdump just sets ext_src_addr=0 in this case
+        break;
     }
 
     auto AppendSharps = [&](const char *sharp_struct_name, uint32_t sharp_struct_size) {
@@ -1945,14 +1946,17 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         // Constant data
         else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
         {
-            // NUM_UNIT is in unit of float4s
-            // Add 4 dwords per line
-            AddConstantsToPacketNode<float>(mem_manager,
-                                            ext_src_addr,
-                                            packet_node_index,
-                                            packet.bitfields0.NUM_UNIT * 4,
-                                            submit_index,
-                                            4);
+            if (ext_src_addr != 0)
+            {
+                // NUM_UNIT is in unit of float4s
+                // Add 4 dwords per line
+                AddConstantsToPacketNode<float>(mem_manager,
+                                                ext_src_addr,
+                                                packet_node_index,
+                                                packet.bitfields0.NUM_UNIT * 4,
+                                                submit_index,
+                                                4);
+            }
         }
         else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
             AppendSharps("A6XX_UBO", bindless ? 16 : sizeof(A6XX_UBO));

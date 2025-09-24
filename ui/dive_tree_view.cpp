@@ -486,19 +486,14 @@ void DiveTreeView::GotoEvent(bool is_above)
     const GfxrVulkanCommandFilterProxyModel
     *vulkan_command_proxy_model = qobject_cast<const GfxrVulkanCommandFilterProxyModel *>(model());
 
-    const GfxrVulkanCommandArgumentsFilterProxyModel *vulkan_command_arg_proxy_model = qobject_cast<
-    const GfxrVulkanCommandArgumentsFilterProxyModel *>(model());
-
-    if (!filter_model || !vulkan_command_proxy_model || !vulkan_command_arg_proxy_model)
+    if (!filter_model && !vulkan_command_proxy_model)
         return;
 
-    // This gets the source model
-    QAbstractItemModel     *model_ptr = GetCommandModel();
-    CommandModel           *command_model = qobject_cast<CommandModel *>(model_ptr);
-    GfxrVulkanCommandModel *gfxr_vulkan_command_model = qobject_cast<GfxrVulkanCommandModel *>(
-    model_ptr);
-
     QModelIndex next_proxy_idx = current_proxy_idx;
+    if (is_above)
+        next_proxy_idx = indexAbove(current_proxy_idx);
+    else
+        next_proxy_idx = indexBelow(current_proxy_idx);
 
     while (next_proxy_idx.isValid())
     {
@@ -507,13 +502,9 @@ void DiveTreeView::GotoEvent(bool is_above)
         {
             source_node_idx = filter_model->mapToSource(next_proxy_idx);
         }
-        else if (vulkan_command_proxy_model)
-        {
-            source_node_idx = vulkan_command_proxy_model->mapToSource(next_proxy_idx);
-        }
         else
         {
-            source_node_idx = vulkan_command_arg_proxy_model->mapToSource(next_proxy_idx);
+            source_node_idx = vulkan_command_proxy_model->mapToSource(next_proxy_idx);
         }
 
         if (!source_node_idx.isValid())
@@ -524,47 +515,32 @@ void DiveTreeView::GotoEvent(bool is_above)
         uint64_t node_idx = (uint64_t)(source_node_idx.internalPointer());
         auto     node_type = m_command_hierarchy.GetNodeType(node_idx);
 
-        auto event_id_idx = command_model ?
-                            command_model->index(source_node_idx.row(),
-                                                 1,
-                                                 source_node_idx.parent()) :
-                            gfxr_vulkan_command_model->index(source_node_idx.row(),
-                                                             1,
-                                                             source_node_idx.parent());
-
-        auto event_id = command_model ?
-                        command_model->data(event_id_idx, Qt::DisplayRole) :
-                        gfxr_vulkan_command_model->data(event_id_idx, Qt::DisplayRole);
-
-        if (event_id != QVariant() && (Dive::IsDrawDispatchBlitNode(node_type) ||
-                                       (node_type == Dive::NodeType::kMarkerNode &&
-                                        m_command_hierarchy.GetMarkerNodeType(node_idx) !=
-                                        Dive::CommandHierarchy::MarkerType::kBeginEnd)))
+        // Check for Draw/Dispatch/Blit or relevant Marker
+        if (Dive::IsDrawDispatchBlitNode(node_type) ||
+            (node_type == Dive::NodeType::kMarkerNode &&
+             m_command_hierarchy.GetMarkerNodeType(node_idx) !=
+             Dive::CommandHierarchy::MarkerType::kBeginEnd) ||
+            node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
         {
+            QModelIndex final_proxy_idx;
+
             if (filter_model)
             {
-                next_proxy_idx = filter_model->mapFromSource(source_node_idx);
-                next_proxy_idx = filter_model->index(next_proxy_idx.row(),
-                                                     1,
-                                                     next_proxy_idx.parent());
-            }
-            else if (vulkan_command_proxy_model)
-            {
-                next_proxy_idx = vulkan_command_proxy_model->mapFromSource(source_node_idx);
-                next_proxy_idx = vulkan_command_proxy_model->index(next_proxy_idx.row(),
-                                                                   1,
-                                                                   next_proxy_idx.parent());
+                final_proxy_idx = filter_model->mapFromSource(source_node_idx);
+                final_proxy_idx = filter_model->index(final_proxy_idx.row(),
+                                                      1,
+                                                      final_proxy_idx.parent());
             }
             else
             {
-                next_proxy_idx = vulkan_command_arg_proxy_model->mapFromSource(source_node_idx);
-                next_proxy_idx = vulkan_command_arg_proxy_model->index(next_proxy_idx.row(),
-                                                                       1,
-                                                                       next_proxy_idx.parent());
+                final_proxy_idx = vulkan_command_proxy_model->mapFromSource(source_node_idx);
+                final_proxy_idx = vulkan_command_proxy_model->index(final_proxy_idx.row(),
+                                                                    0,
+                                                                    final_proxy_idx.parent());
             }
 
             scrollTo(next_proxy_idx);
-            setCurrentIndex(next_proxy_idx);
+            setCurrentIndex(final_proxy_idx);
             return;
         }
 

@@ -29,6 +29,7 @@
 namespace Dive
 {
 
+class CommandHierarchy;
 class AvailableMetrics;
 struct MetricInfo;
 
@@ -111,19 +112,22 @@ class PerfMetricsDataProvider
 {
 public:
     [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> Create(
-    std::unique_ptr<PerfMetricsData> data);
+    std::unique_ptr<PerfMetricsData> = nullptr);
 
-    // Get the total number of unique command buffers of this dataset.
-    size_t GetCommandBufferCount() const { return m_cmd_buffer_list.size(); }
+    ~PerfMetricsDataProvider();
+    PerfMetricsDataProvider(const PerfMetricsDataProvider&) = delete;
+    PerfMetricsDataProvider(PerfMetricsDataProvider&&) = delete;
+    PerfMetricsDataProvider& operator=(const PerfMetricsDataProvider&) = delete;
+    PerfMetricsDataProvider& operator=(PerfMetricsDataProvider&&) = delete;
 
-    // Given an index(0 based) of the command buffer array, return the number fo drawcalls in that
-    // command buffer.
-    size_t GetDrawCountForCommandBuffer(size_t command_buffer_index) const;
+    // Update perf metrics data.
+    void Update(std::unique_ptr<PerfMetricsData>);
 
-    // Given the index of the command  buffer and the index of draw call in that command buffer,
-    // returns the |PerfMetricsRecord| for the combination.
-    std::optional<const PerfMetricsRecord*> GetComputedRecord(size_t command_buffer_index,
-                                                              size_t draw_call_index) const;
+    // Process aggregated statistics
+    void Analyze(const CommandHierarchy* = nullptr);
+
+    // Return a row that is corrisponding to the node_index.
+    std::optional<uint64_t> GetCorrelatedComputedRecordIndex(uint64_t node_index) const;
 
     // Get the all of the metrics for a frame. The metrics are computed average of the input
     // dataset, ordered by command buffer appearance and then draw ID appearance order.
@@ -139,19 +143,14 @@ public:
     std::string_view GetMetricsDescription(size_t metric_index) const;
 
 private:
-    PerfMetricsDataProvider(std::unique_ptr<PerfMetricsData> data);
+    class Correlator;
+
+    PerfMetricsDataProvider();
+
+    std::unique_ptr<Correlator> m_correlator;
 
     std::unique_ptr<PerfMetricsData> m_raw_data;
     std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
-
-    // The following fields are used to cached the result so that we dont' need to calculate every
-    // time.
-    //  Stores unique command buffer ids with the order of appearance.
-    std::vector<uint64_t> m_cmd_buffer_list;
-    // Keep track draw_ids belongs to a command buffer.
-    std::unordered_map<uint64_t, std::vector<uint32_t>> m_cmd_buffer_to_draw_id;
-    // Keep track of index to m_computed_records given PerfMetricsKey.
-    std::unordered_map<PerfMetricsKey, size_t, PerfMetricsKeyHash> m_metric_key_to_index;
 };
 
 }  // namespace Dive

@@ -654,7 +654,7 @@ void TraceWorker::run()
                                                                    *file_size,
                                                                    false);
     connect(progress_bar_worker,
-            &TraceWorker::finished,
+            &ProgressBarWorker::finished,
             progress_bar_worker,
             &QObject::deleteLater);
     connect(this,
@@ -879,7 +879,7 @@ void GfxrCaptureWorker::run()
                                                                    capture_directory_size,
                                                                    true);
     connect(progress_bar_worker,
-            &GfxrCaptureWorker::finished,
+            &ProgressBarWorker::finished,
             progress_bar_worker,
             &QObject::deleteLater);
 
@@ -1133,7 +1133,7 @@ void TraceDialog::RetrieveGfxrCapture()
             &GfxrCaptureWorker::GfxrCaptureAvailable,
             this,
             &TraceDialog::OnGFXRCaptureAvailable);
-    connect(workerThread, &TraceWorker::finished, workerThread, &QObject::deleteLater);
+    connect(workerThread, &GfxrCaptureWorker::finished, workerThread, &QObject::deleteLater);
     workerThread->start();
 
     m_gfxr_capture_button->setEnabled(false);
@@ -1145,6 +1145,7 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
     if (progress_bar)
     {
         progress_bar->close();
+        progress_bar->deleteLater();
     }
     std::string success_msg = "Capture successfully saved at " + capture_path.toStdString();
     qDebug() << success_msg.c_str();

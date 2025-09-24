@@ -2329,8 +2329,8 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnCorrelateCounter(const QModelIndex &)));
 
-    QObject::disconnect(m_command_hierarchy_view,
-                        SIGNAL(clicked(const QModelIndex &)),
+    QObject::disconnect(m_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                         this,
                         SLOT(OnCorrelateVulkanDrawCall(const QModelIndex &)));
 
@@ -2436,8 +2436,8 @@ void MainWindow::ConnectDiveFileTabs()
                      SLOT(OnSelectionChanged(const QModelIndex &)));
 
     // Correlate between two calls
-    QObject::connect(m_command_hierarchy_view,
-                     SIGNAL(clicked(const QModelIndex &)),
+    QObject::connect(m_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                      this,
                      SLOT(OnCorrelateVulkanDrawCall(const QModelIndex &)));
 
@@ -3074,9 +3074,12 @@ CorrelationTarget            target)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 {
+    m_perf_counter_tab_view->ClearSelection();
+
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
+        OnCorrelateCounter(index);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
         return;
     }
@@ -3095,7 +3098,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 
     if (!found_gfxr_draw_call_index.has_value())
     {
-        ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, true);
         m_command_tab_view->ResetModel();
         return;
     }
@@ -3128,6 +3131,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
             m_pm4_command_hierarchy_view->scrollTo(proxy_index,
                                                    QAbstractItemView::PositionAtCenter);
             m_pm4_command_hierarchy_view->expand(proxy_index);
+            emit CorrelateCounter(found_gfxr_draw_call_index.value());
         }
     }
 
@@ -3138,6 +3142,8 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 {
+    m_perf_counter_tab_view->ClearSelection();
+
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
@@ -3191,7 +3197,7 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 
             m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
             m_command_hierarchy_view->expand(proxy_index);
-            emit CorrelateCounter(corresponding_gfxr_draw_call_index);
+            emit CorrelateCounter(found_pm4_draw_call_index.value());
         }
     }
 
@@ -3275,6 +3281,8 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
     {
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
     }
+
+    ResetHorizontalScroll(*m_pm4_command_hierarchy_view);
 }
 
 //--------------------------------------------------------------------------------------------------

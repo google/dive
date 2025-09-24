@@ -96,8 +96,8 @@ static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] =
 constexpr DiveFilterModel::FilterMode
 kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
 
-static constexpr const char *kMetricsFilePath = ":/resources/available_settings.csv";
-static constexpr const char *kMetricsFileName = "available_settings.csv";
+static constexpr const char *kMetricsFilePath = ":/resources/available_metrics.csv";
+static constexpr const char *kMetricsFileName = "available_metrics.csv";
 
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {

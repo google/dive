@@ -241,12 +241,91 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
-void ShowErrorMessage(const std::string &err_msg)
+void TraceDialog::ShowErrorMessage(const QString &err_msg)
 {
     QMessageBox msgBox;
-    msgBox.setText(err_msg.c_str());
+    msgBox.setText(err_msg);
     msgBox.exec();
     return;
+}
+
+absl::Status TraceDialog::StopPackageAndCleanup()
+{
+    auto device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        return absl::OkStatus();
+    }
+    auto cur_app = device->GetCurrentApplication();
+    if (cur_app == nullptr || !cur_app->IsRunning())
+    {
+        return absl::OkStatus();
+    }
+
+    if (m_gfxr_capture)
+    {
+        if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture &&
+            m_gfxr_capture_button->isEnabled())
+        {
+            return absl::FailedPreconditionError("GFXR capture is in process. Please retrieve the "
+                                                 "capture before stopping the application.");
+        }
+        // Only delete the on device capture directory when the application is closed.
+        std::string
+             on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
+                                                   "/",
+                                                   m_gfxr_capture_file_directory_input_box->text()
+                                                   .toStdString());
+        auto ret = device->Adb().Run(
+        absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
+        m_gfxr_capture_button->setEnabled(false);
+        m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
+    }
+    else
+    {
+        m_capture_button->setEnabled(false);
+    }
+
+    device->StopApp().IgnoreError();
+    absl::Status cleanup_status = cur_app->Cleanup();
+    if (!cleanup_status.ok())
+    {
+        return absl::Status(cleanup_status.code(),
+                            absl::StrCat("Failed to cleanup application: ",
+                                         cleanup_status.message()));
+    }
+    return absl::OkStatus();
+}
+
+void TraceDialog::closeEvent(QCloseEvent *event)
+{
+    absl::Status status = StopPackageAndCleanup();
+
+    // The operation was successful, close normally.
+    if (status.ok())
+    {
+        m_run_button->setEnabled(true);
+        m_run_button->setText(kStart_Application);
+        event->accept();
+        return;
+    }
+
+    // A specific error occurred that should prevent closing the window.
+    if (status.code() == absl::StatusCode::kFailedPrecondition)
+    {
+        qDebug() << "Preventing window close: " << status.ToString().c_str();
+        ShowErrorMessage(QString::fromUtf8(status.message().data(), (int)status.message().size()));
+        event->ignore();
+    }
+    else
+    {
+        // For any other error, we still allow the window to close to avoid trapping the user.
+        qDebug() << "Closing window despite non-critical error: " << status.ToString().c_str();
+        ShowErrorMessage(QString::fromUtf8(status.message().data(), (int)status.message().size()));
+        m_run_button->setEnabled(true);
+        m_run_button->setText(kStart_Application);
+        event->accept();
+    }
 }
 
 void TraceDialog::UpdateDeviceList(bool isInitialized)
@@ -318,7 +397,7 @@ void TraceDialog::OnDeviceSelected(const QString &s)
                                            ", error: ",
                                            dev_ret.status().message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -411,7 +490,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         {
             std::string err_msg = "Please input a valid command to execute";
             qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
+            ShowErrorMessage(QString::fromStdString(err_msg));
             return false;
         }
         qDebug() << "exe: " << m_executable.c_str() << " args: " << m_command_args.c_str();
@@ -424,7 +503,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                            " error: ",
                                            ret.message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return false;
     }
     ret = device->StartApp();
@@ -435,7 +514,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                            " error: ",
                                            ret.message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return false;
     }
     auto cur_app = device->GetCurrentApplication();
@@ -446,7 +525,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                            m_cur_pkg,
                                            " not found, possibly crashed.");
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return false;
     }
 
@@ -476,7 +555,7 @@ void TraceDialog::OnStartClicked()
         std::string
         err_msg = "No device/application selected. Please select a device and application and "
                   "then try again.";
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return;
     }
     device->EnableGfxr(m_gfxr_capture);
@@ -485,13 +564,13 @@ void TraceDialog::OnStartClicked()
     {
         std::string err_msg = absl::StrCat("Fail to setup device: ", ret.message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return;
     }
     int ty = m_app_type_box->currentIndex();
     if (ty == -1)
     {
-        ShowErrorMessage("Please select application type");
+        ShowErrorMessage(QString("Please select application type"));
         return;
     }
     std::string ty_str = kAppTypes[ty];
@@ -506,46 +585,23 @@ void TraceDialog::OnStartClicked()
     }
     else
     {
-        qDebug() << "Stop package " << m_cur_pkg.c_str();
-
-        if (m_gfxr_capture)
+        qDebug() << "Stop package and cleanup: " << m_cur_pkg.c_str();
+        absl::Status status = StopPackageAndCleanup();
+        if (!status.ok())
         {
-            if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture &&
-                m_gfxr_capture_button->isEnabled())
+            qDebug() << "Failed to stop package or cleanup: " << status.ToString().c_str();
+            ShowErrorMessage(
+            QString::fromUtf8(status.message().data(), (int)status.message().size()));
+
+            // Only exit without resetting the button if the error is a precondition
+            // failure (GFXR capture in progress). For other cleanup errors, we still
+            // want to reset the UI to a "startable" state.
+            if (status.code() == absl::StatusCode::kFailedPrecondition)
             {
-                std::string err_msg = "Failed to stop application. Gfxr capture in process. Please "
-                                      "retrieve the capture before stopping the application.";
-                qDebug() << err_msg.c_str();
-                ShowErrorMessage(err_msg);
                 return;
             }
-
-            // Only delete the on device capture directory when the application is closed.
-            std::string
-            on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                       "/",
-                                                       m_gfxr_capture_file_directory_input_box
-                                                       ->text()
-                                                       .toStdString());
-            ret = device->Adb().Run(
-            absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
-
-            m_gfxr_capture_button->setEnabled(false);
         }
-        else
-        {
-            m_capture_button->setEnabled(false);
-        }
-
-        device->StopApp().IgnoreError();
-
-        ret = device->GetCurrentApplication()->Cleanup();
-        if (!ret.ok())
-        {
-            std::string err_msg = absl::StrCat("Failed to cleanup application: ", ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-        }
+        m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
     }
 }
@@ -561,6 +617,7 @@ void TraceDialog::OnTraceClicked()
     TraceWorker *workerThread = new TraceWorker(progress_bar);
     connect(workerThread, &TraceWorker::TraceAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &TraceWorker::finished, workerThread, &QObject::deleteLater);
+    connect(workerThread, &TraceWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
     workerThread->start();
     std::cout << "OnTraceClicked done " << std::endl;
 }
@@ -599,7 +656,7 @@ void TraceWorker::run()
     {
         std::string err_msg = "Application is not running, possibly crashed.";
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -624,7 +681,7 @@ void TraceWorker::run()
         std::string err_msg = absl::StrCat("Trigger capture failed: ",
                                            capture_file_path.status().message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
     std::string           download_path = ".";
@@ -644,7 +701,7 @@ void TraceWorker::run()
         std::string err_msg = absl::StrCat("Failed to retrieve capture file size, error: ",
                                            file_size.status().message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -686,7 +743,7 @@ void TraceWorker::run()
         std::string err_msg = absl::StrCat("Failed to download capture file, error: ",
                                            status.message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -714,7 +771,7 @@ void GfxrCaptureWorker::SetGfxrTargetCaptureDir(const std::string &target_captur
         {
             std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
             qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
+            emit ErrorMessage(QString::fromStdString(err_msg));
             return;
         }
 
@@ -737,7 +794,7 @@ void GfxrCaptureWorker::SetGfxrTargetCaptureDir(const std::string &target_captur
                 {
                     std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
                     qDebug() << err_msg.c_str();
-                    ShowErrorMessage(err_msg);
+                    emit ErrorMessage(QString::fromStdString(err_msg));
                     return;
                 }
                 m_target_capture_dir = newDirPath;
@@ -867,7 +924,7 @@ void GfxrCaptureWorker::run()
                                            " error: ",
                                            ret.status().message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -913,7 +970,7 @@ void GfxrCaptureWorker::run()
         {
             std::cout << "Failed to retrieve gfxr capture: " << ret.status().message() << std::endl;
             qDebug() << retrieve_file.message().data();
-            ShowErrorMessage(retrieve_file.message().data());
+            emit ErrorMessage(QString::fromStdString(retrieve_file.message().data()));
             return;
         }
 
@@ -963,7 +1020,7 @@ void TraceDialog::UpdatePackageList()
                                            " error: ",
                                            ret.status().message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowErrorMessage(QString::fromStdString(err_msg));
         return;
     }
     m_pkg_list = *ret;
@@ -1062,7 +1119,7 @@ void TraceDialog::OnGfxrCaptureClicked()
                                                " error: ",
                                                ret.message());
             qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
+            ShowErrorMessage(QString::fromStdString(err_msg));
             return;
         }
 
@@ -1082,7 +1139,7 @@ void TraceDialog::OnGfxrCaptureClicked()
                                                " error: ",
                                                ret.message());
             qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
+            ShowErrorMessage(QString::fromStdString(err_msg));
             return;
         }
         m_gfxr_capture_button->setText(kRetrieve_Gfxr_Runtime_Capture);
@@ -1134,6 +1191,7 @@ void TraceDialog::RetrieveGfxrCapture()
             this,
             &TraceDialog::OnGFXRCaptureAvailable);
     connect(workerThread, &GfxrCaptureWorker::finished, workerThread, &QObject::deleteLater);
+    connect(workerThread, &GfxrCaptureWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
     workerThread->start();
 
     m_gfxr_capture_button->setEnabled(false);
@@ -1149,6 +1207,6 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
     }
     std::string success_msg = "Capture successfully saved at " + capture_path.toStdString();
     qDebug() << success_msg.c_str();
-    ShowErrorMessage(success_msg);
+    ShowErrorMessage(QString::fromStdString(success_msg));
     emit TraceAvailable(capture_path);
 }

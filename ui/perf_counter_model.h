@@ -11,6 +11,7 @@
  limitations under the License.
 */
 
+#include "dive_core/perf_metrics_data.h"
 #include <QAbstractItemModel>
 #include <QVector>
 #include <QStringList>
@@ -43,14 +44,18 @@ public:
     void        SetIteratorToNearest(const QModelIndex &current_index);
 
 public slots:
-    void OnPerfCounterResultsGenerated(const QString &file_path);
+    void OnPerfCounterResultsGenerated(
+    const std::filesystem::path                                        &file_path,
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
 
 private:
     void ParseCsv(const QString &file_path);
+    void LoadData();
 
-    QVector<QStringList>               m_csv_data;
-    QList<QModelIndex>                 m_search_results;
-    QList<QModelIndex>::const_iterator m_search_iterator;
-    QStringList                        m_headers;
-    int                                m_column_count = 0;
+    QList<QModelIndex>                             m_search_results;
+    QList<QModelIndex>::const_iterator             m_search_iterator;
+    QStringList                                    m_headers;
+    int                                            m_column_count = 0;
+    std::unique_ptr<Dive::PerfMetricsDataProvider> m_perf_metrics_data_provider;
+    std::vector<Dive::PerfMetricsRecord>           m_perf_metrics_record;
 };

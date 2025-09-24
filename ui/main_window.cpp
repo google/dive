@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
+#include <qabstractitemmodel.h>
 #include <qvariant.h>
 
 #include "about_window.h"
@@ -93,6 +95,9 @@ static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] =
 };
 constexpr DiveFilterModel::FilterMode
 kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
+
+static constexpr const char *kMetricsFilePath = ":/resources/available_settings.csv";
+static constexpr const char *kMetricsFileName = "available_settings.csv";
 
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {
@@ -428,8 +433,16 @@ MainWindow::MainWindow()
     equal_sizes << 1 << 1 << 1;
     horizontal_splitter->setSizes(equal_sizes);
 
+    // Retrieve the available metrics
+    LoadAvailableMetrics();
+
     m_trace_dig = new TraceDialog(this);
-    m_analyze_dig = new AnalyzeDialog(this);
+    m_analyze_dig = new AnalyzeDialog(m_available_metrics.get() ?
+                                      std::optional<
+                                      std::reference_wrapper<const Dive::AvailableMetrics>>(
+                                      std::ref(*m_available_metrics.get())) :
+                                      std::nullopt,
+                                      this);
 
     // Main Window requires a central widget.
     // Make the horizontal splitter that central widget so it takes up the whole area.
@@ -680,11 +693,27 @@ void MainWindow::OnFilterModeChange(const QString &filter_mode)
 
     if (m_correlated_capture_loaded)
     {
+        ClearViewModelSelection(*m_command_hierarchy_view, true);
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+        m_perf_counter_tab_view->ClearSelection();
         ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
     }
     else
     {
+        ClearViewModelSelection(*m_command_hierarchy_view, true);
         ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnGfxrFilterModeChange()
+{
+    ClearViewModelSelection(*m_command_hierarchy_view, true);
+
+    if (m_correlated_capture_loaded)
+    {
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+        m_perf_counter_tab_view->ClearSelection();
     }
 }
 
@@ -1062,13 +1091,16 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
                  << perf_counter_file_path.string().c_str();
         if (std::filesystem::exists(perf_counter_file_path))
         {
-            m_perf_counter_model->OnPerfCounterResultsGenerated(
-            QString::fromStdWString(perf_counter_file_path.wstring()));
-            qDebug() << "Loaded: " << perf_counter_file_path.string().c_str();
+            if (std::filesystem::exists(perf_counter_file_path) && m_available_metrics)
+            {
+                m_perf_counter_model->OnPerfCounterResultsGenerated(perf_counter_file_path,
+                                                                    *m_available_metrics);
+                qDebug() << "Loaded: " << perf_counter_file_path.string().c_str();
+            }
         }
         else
         {
-            m_perf_counter_model->OnPerfCounterResultsGenerated("");
+            m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
             qDebug() << "Failed to find perf counter data";
         }
 
@@ -1556,6 +1588,44 @@ void MainWindow::OnSearchTrigger()
         }
         tab_wiget_search_button->show();
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::LoadAvailableMetrics()
+{
+    QFile input_file(QString::fromStdString(kMetricsFilePath));
+    if (!input_file.open(QIODevice::ReadOnly))
+    {
+        std::cerr << "Failed to open resource file: " << kMetricsFilePath << std::endl;
+        return;
+    }
+
+    QByteArray file_contents = input_file.readAll();
+    input_file.close();
+
+    QTemporaryDir temp_dir;
+    if (!temp_dir.isValid())
+    {
+        std::cerr << "Failed to create temporary directory." << std::endl;
+        return;
+    }
+
+    // Get the temporary file path as a QString
+    QString temp_file_path = QDir(temp_dir.path()).filePath(kMetricsFileName);
+
+    QFile temp_file(temp_file_path);
+    if (!temp_file.open(QIODevice::WriteOnly))
+    {
+        std::cerr << "Failed to create temporary file: " << temp_file_path.toStdString()
+                  << std::endl;
+        return;
+    }
+
+    temp_file.write(file_contents);
+    temp_file.close();
+
+    m_available_metrics = Dive::AvailableMetrics::LoadFromCsv(
+    std::filesystem::path(temp_file_path.toStdString()));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2167,6 +2237,11 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnCommandViewModeComboBoxHover(const QString &)));
 
+    QObject::disconnect(m_pm4_filter_mode_combo_box,
+                        SIGNAL(currentTextChanged(const QString &)),
+                        this,
+                        SLOT(OnFilterModeChange(const QString &)));
+
     QObject::disconnect(m_pm4_search_trigger_button,
                         SIGNAL(clicked()),
                         this,
@@ -2211,6 +2286,11 @@ void MainWindow::DisconnectAllTabs()
     QObject::disconnect(m_pm4_command_hierarchy_view->selectionModel(),
                         SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                         this,
+                        SLOT(OnCorrelateCounter(const QModelIndex &)));
+
+    QObject::disconnect(m_pm4_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                        this,
                         SLOT(OnCorrelatePm4DrawCall(const QModelIndex &)));
 
     QObject::disconnect(m_command_tab_view,
@@ -2244,6 +2324,16 @@ void MainWindow::DisconnectAllTabs()
                         m_gfxr_vulkan_command_arguments_tab_view,
                         SLOT(OnSelectionChanged(const QModelIndex &)));
 
+    QObject::disconnect(m_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                        this,
+                        SLOT(OnCorrelateCounter(const QModelIndex &)));
+
+    QObject::disconnect(m_command_hierarchy_view->selectionModel(),
+                        SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                        this,
+                        SLOT(OnCorrelateVulkanDrawCall(const QModelIndex &)));
+
     QObject::disconnect(m_gfxr_vulkan_command_arguments_tab_view,
                         SIGNAL(HideOtherSearchBars()),
                         this,
@@ -2254,6 +2344,11 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnTabViewChange()));
 
+    QObject::disconnect(m_perf_counter_tab_view,
+                        &PerfCounterTabView::CounterSelected,
+                        this,
+                        &MainWindow::OnCounterSelected);
+
     QObject::disconnect(m_command_hierarchy_view,
                         SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                         m_gpu_timing_tab_view,
@@ -2263,6 +2358,11 @@ void MainWindow::DisconnectAllTabs()
                         SIGNAL(currentTextChanged(const QString &)),
                         this,
                         SLOT(OnFilterModeChange(const QString &)));
+
+    QObject::disconnect(m_filter_gfxr_commands_combo_box,
+                        SIGNAL(FilterChanged()),
+                        this,
+                        SLOT(OnGfxrFilterModeChange()));
 
     QObject::disconnect(m_analyze_dig,
                         &AnalyzeDialog::OnDisplayPerfCounterResults,
@@ -2395,6 +2495,11 @@ void MainWindow::ConnectDiveFileTabs()
                      this,
                      SLOT(OnFilterModeChange(const QString &)));
 
+    QObject::connect(m_filter_gfxr_commands_combo_box,
+                     SIGNAL(FilterChanged()),
+                     this,
+                     SLOT(OnGfxrFilterModeChange()));
+
     // Buttons
     QObject::connect(m_pm4_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchTrigger()));
 
@@ -2420,6 +2525,11 @@ void MainWindow::ConnectDiveFileTabs()
                      SLOT(OnSelectionChanged(const QModelIndex &)));
 
     QObject::connect(m_command_tab_view,
+                     SIGNAL(HideOtherSearchBars()),
+                     this,
+                     SLOT(OnTabViewChange()));
+
+    QObject::connect(m_perf_counter_tab_view,
                      SIGNAL(HideOtherSearchBars()),
                      this,
                      SLOT(OnTabViewChange()));
@@ -2451,16 +2561,32 @@ void MainWindow::ConnectDiveFileTabs()
                      this,
                      SLOT(OnTabViewChange()));
 
+    QObject::connect(m_perf_counter_tab_view,
+                     &PerfCounterTabView::CounterSelected,
+                     this,
+                     &MainWindow::OnCounterSelected);
+
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_gpu_timing_tab_view,
                      SLOT(OnEventSelectionChanged(const QModelIndex &)));
 
     // Correlate between two calls
+    QObject::connect(m_pm4_command_hierarchy_view,
+                     SIGNAL(clicked(const QModelIndex &)),
+                     this,
+                     SLOT(OnCorrelatePm4DrawCall(const QModelIndex &)));
+
+    // Correlate counter
+    QObject::connect(m_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     this,
+                     SLOT(OnCorrelateCounter(const QModelIndex &)));
+
     QObject::connect(m_pm4_command_hierarchy_view->selectionModel(),
                      SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                      this,
-                     SLOT(OnCorrelatePm4DrawCall(const QModelIndex &)));
+                     SLOT(OnCorrelateCounter(const QModelIndex &)));
 
     // Dialogs
     QObject::connect(m_analyze_dig,
@@ -2607,11 +2733,21 @@ void MainWindow::ConnectGfxrFileTabs()
                      this,
                      SLOT(OnTabViewChange()));
 
+    QObject::connect(m_perf_counter_tab_view,
+                     &PerfCounterTabView::CounterSelected,
+                     this,
+                     &MainWindow::OnCounterSelected);
+
     QObject::connect(m_command_hierarchy_view,
                      SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
                      m_gpu_timing_tab_view,
                      SLOT(OnEventSelectionChanged(const QModelIndex &)));
 
+    // Combo Boxes
+    QObject::connect(m_filter_gfxr_commands_combo_box,
+                     SIGNAL(FilterChanged()),
+                     this,
+                     SLOT(OnGfxrFilterModeChange()));
     // Buttons
     QObject::connect(m_command_hierarchy_view,
                      &DiveTreeView::expanded,
@@ -2648,6 +2784,12 @@ void MainWindow::ConnectGfxrFileTabs()
                      &AnalyzeDialog::OnDisplayGpuTimingResults,
                      m_gpu_timing_model,
                      &GpuTimingModel::OnGpuTimingResultsGenerated);
+
+    // Correlate counter
+    QObject::connect(m_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     this,
+                     SLOT(OnCorrelateCounter(const QModelIndex &)));
 
     // Menus
     QObject::connect(m_command_hierarchy_view,
@@ -2697,8 +2839,10 @@ QModelIndex MainWindow::FindSourceIndexFromNode(QAbstractItemModel *model,
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
 {
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+    QModelIndex vulkan_draw_call_index = m_command_hierarchy_view->indexAt(pos);
     QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(
-    m_command_hierarchy_view->indexAt(pos));
+    vulkan_draw_call_index);
     uint64_t node_index = (uint64_t)(source_index.internalPointer());
 
     if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
@@ -2708,7 +2852,6 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
         OnOpenVulkanCallMenu(pos);
         return;
     }
-    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
 
     std::vector<uint64_t>
     gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
@@ -2761,8 +2904,60 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     else
     {
         m_pm4_filter_mode_combo_box->setCurrentIndex(selected_action->data().toInt());
-        OnCorrelateVulkanDrawCall(m_command_hierarchy_view->selectionModel()->currentIndex());
+
+        OnCorrelationFilterApplied(found_gfxr_draw_call_index,
+                                   selected_action->data().toInt(),
+                                   vulkan_draw_call_index);
     }
+}
+
+void MainWindow::OnCorrelationFilterApplied(uint64_t           gfxr_draw_call_index,
+                                            int                filter_index,
+                                            const QModelIndex &vulkan_draw_call_model_index)
+{
+    std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
+                                                  m_pm4_command_hierarchy_view->model())
+                                                  ->GetPm4DrawCallIndices();
+
+    uint64_t corresponding_pm4_draw_call_index = pm4_draw_call_indices.at(gfxr_draw_call_index);
+
+    QAbstractItemModel *source_model = m_filter_model->sourceModel();
+
+    QModelIndex source_index = FindSourceIndexFromNode(source_model,
+                                                       corresponding_pm4_draw_call_index);
+
+    if (source_index.isValid())
+    {
+        QModelIndex proxy_index = m_filter_model->mapFromSource(source_index);
+
+        if (proxy_index.isValid())
+        {
+            QItemSelectionModel *selection_model = m_pm4_command_hierarchy_view->selectionModel();
+            bool                 old_state = selection_model->blockSignals(true);
+
+            QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
+                                                        QItemSelectionModel::Rows;
+
+            selection_model->setCurrentIndex(proxy_index, flags);
+
+            m_pm4_command_hierarchy_view->scrollTo(proxy_index,
+                                                   QAbstractItemView::PositionAtCenter);
+            m_pm4_command_hierarchy_view->expand(proxy_index);
+
+            selection_model->blockSignals(old_state);
+        }
+    }
+
+    QItemSelectionModel *gfxr_selection_model = m_command_hierarchy_view->selectionModel();
+    bool                 gfxr_old_state = gfxr_selection_model->blockSignals(true);
+
+    QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
+                                                QItemSelectionModel::Rows;
+
+    gfxr_selection_model->setCurrentIndex(vulkan_draw_call_model_index, flags);
+    gfxr_selection_model->blockSignals(gfxr_old_state);
+
+    OnCorrelateCounter(vulkan_draw_call_model_index);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2814,26 +3009,97 @@ void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::ClearViewModelSelection(DiveTreeView &tree_view, bool should_clear_tab)
+{
+    QItemSelectionModel *selection_model = tree_view.selectionModel();
+    if (selection_model)
+    {
+        bool old_state = selection_model->blockSignals(true);
+        selection_model->clear();
+        QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect |
+                                                    QItemSelectionModel::Rows;
+        selection_model->setCurrentIndex(QModelIndex(), flags);
+        selection_model->blockSignals(old_state);
+    }
+
+    if (should_clear_tab && (m_correlated_capture_loaded || m_gfxr_capture_loaded))
+    {
+        m_perf_counter_tab_view->ClearSelection();
+    }
+
+    tree_view.viewport()->update();
+}
+
+//--------------------------------------------------------------------------------------------------
+std::optional<uint64_t> MainWindow::GetDrawCallIndexFromProxyIndex(
+const QModelIndex           &proxy_index,
+const QAbstractProxyModel   &proxy_model,
+const std::vector<uint64_t> &draw_call_indices,
+CorrelationTarget            target)
+{
+    QModelIndex source_index = proxy_model.mapToSource(proxy_index);
+    if (!source_index.isValid())
+    {
+        return std::nullopt;
+    }
+
+    uint64_t       node_index = (uint64_t)(source_index.internalPointer());
+    Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(node_index);
+    bool           type_is_valid = false;
+
+    if (target == CorrelationTarget::kGfxrDrawCall)
+    {
+        type_is_valid = (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode);
+    }
+    else if (target == CorrelationTarget::kPm4DrawCall)
+    {
+        type_is_valid = Dive::IsDrawDispatchNode(node_type);
+    }
+
+    if (!type_is_valid)
+    {
+        return std::nullopt;
+    }
+
+    auto it = std::find(draw_call_indices.begin(), draw_call_indices.end(), node_index);
+
+    if (it == draw_call_indices.end())
+    {
+        return std::nullopt;
+    }
+
+    return std::distance(draw_call_indices.begin(), it);
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 {
+    m_perf_counter_tab_view->ClearSelection();
+
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
+        OnCorrelateCounter(index);
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
         return;
     }
 
-    QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(index);
-    uint64_t    node_index = (uint64_t)(source_index.internalPointer());
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+    std::vector<uint64_t>
+    gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
+                             m_command_hierarchy_view->model())
+                             ->GetGfxrDrawCallIndices();
 
-    if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
-                                      Dive::NodeType::kGfxrVulkanDrawCommandNode))
+    std::optional<uint64_t> found_gfxr_draw_call_index =
+    GetDrawCallIndexFromProxyIndex(index,
+                                   *m_gfxr_vulkan_commands_filter_proxy_model,
+                                   gfxr_draw_call_indices,
+                                   CorrelationTarget::kGfxrDrawCall);
+
+    if (!found_gfxr_draw_call_index.has_value())
     {
-        QItemSelectionModel *selection_model = m_pm4_command_hierarchy_view->selectionModel();
-        if (selection_model)
-        {
-            selection_model->clear();
-            m_command_tab_view->ResetModel();
-        }
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, true);
+        m_command_tab_view->ResetModel();
         return;
     }
 
@@ -2841,23 +3107,8 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
                                                   m_pm4_command_hierarchy_view->model())
                                                   ->GetPm4DrawCallIndices();
 
-    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
-
-    std::vector<uint64_t>
-    gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
-                             m_command_hierarchy_view->model())
-                             ->GetGfxrDrawCallIndices();
-
-    auto it = std::find(gfxr_draw_call_indices.begin(), gfxr_draw_call_indices.end(), node_index);
-
-    if (it == gfxr_draw_call_indices.end())
-    {
-        return;
-    }
-
-    uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
     uint64_t corresponding_pm4_draw_call_index = pm4_draw_call_indices.at(
-    found_gfxr_draw_call_index);
+    found_gfxr_draw_call_index.value());
 
     QAbstractItemModel *source_model = m_filter_model->sourceModel();
     QModelIndex
@@ -2867,6 +3118,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
     if (pm4_draw_call_index_from_source.isValid())
     {
         QModelIndex proxy_index = m_filter_model->mapFromSource(pm4_draw_call_index_from_source);
+
         if (proxy_index.isValid())
         {
             QItemSelectionModel *selection_model = m_pm4_command_hierarchy_view->selectionModel();
@@ -2879,6 +3131,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
             m_pm4_command_hierarchy_view->scrollTo(proxy_index,
                                                    QAbstractItemView::PositionAtCenter);
             m_pm4_command_hierarchy_view->expand(proxy_index);
+            emit CorrelateCounter(found_gfxr_draw_call_index.value());
         }
     }
 
@@ -2889,47 +3142,40 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 {
+    m_perf_counter_tab_view->ClearSelection();
+
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
+        ClearViewModelSelection(*m_command_hierarchy_view, false);
         return;
     }
 
-    QModelIndex source_index = m_filter_model->mapToSource(index);
-    uint64_t    node_index = (uint64_t)(source_index.internalPointer());
-
-    if ((!source_index.isValid()) ||
-        !Dive::IsDrawDispatchNode(m_data_core->GetCommandHierarchy().GetNodeType(node_index)))
-    {
-        QItemSelectionModel *selection_model = m_command_hierarchy_view->selectionModel();
-        if (selection_model)
-        {
-            selection_model->clear();
-        }
-        return;
-    }
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
 
     std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
                                                   m_pm4_command_hierarchy_view->model())
                                                   ->GetPm4DrawCallIndices();
 
-    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+    std::optional<uint64_t>
+    found_pm4_draw_call_index = GetDrawCallIndexFromProxyIndex(index,
+                                                               *m_filter_model,
+                                                               pm4_draw_call_indices,
+                                                               CorrelationTarget::kPm4DrawCall);
+
+    if (!found_pm4_draw_call_index.has_value())
+    {
+        ClearViewModelSelection(*m_command_hierarchy_view, false);
+        return;
+    }
 
     std::vector<uint64_t>
     gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
                              m_command_hierarchy_view->model())
                              ->GetGfxrDrawCallIndices();
 
-    auto it = std::find(pm4_draw_call_indices.begin(), pm4_draw_call_indices.end(), node_index);
-
-    if (it == pm4_draw_call_indices.end())
-    {
-        return;
-    }
-
-    uint64_t found_pm4_draw_call_index = std::distance(pm4_draw_call_indices.begin(), it);
     uint64_t corresponding_gfxr_draw_call_index = gfxr_draw_call_indices.at(
-    found_pm4_draw_call_index);
+    found_pm4_draw_call_index.value());
 
     QAbstractItemModel *source_model = m_gfxr_vulkan_commands_filter_proxy_model->sourceModel();
     QModelIndex
@@ -2951,9 +3197,146 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 
             m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
             m_command_hierarchy_view->expand(proxy_index);
+            emit CorrelateCounter(found_pm4_draw_call_index.value());
         }
     }
 
     ResetHorizontalScroll(*m_pm4_command_hierarchy_view);
     m_command_tab_view->ResetHorizontalScroll();
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCounterSelected(uint64_t row_index)
+{
+    m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+    std::vector<uint64_t>
+    gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
+                             m_command_hierarchy_view->model())
+                             ->GetGfxrDrawCallIndices();
+
+    if (row_index >= gfxr_draw_call_indices.size())
+    {
+        QMessageBox::critical(this,
+                              "Correlation Failed",
+                              "Selected row does not correlate with current loaded capture.");
+        ClearViewModelSelection(*m_command_hierarchy_view, false);
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+        return;
+    }
+
+    QAbstractItemModel *gfxr_source_model = m_gfxr_vulkan_commands_filter_proxy_model
+                                            ->sourceModel();
+    QModelIndex gfxr_draw_call_index_from_source = FindSourceIndexFromNode(gfxr_source_model,
+                                                                           gfxr_draw_call_indices
+                                                                           .at(row_index));
+    QModelIndex proxy_index;
+    QItemSelectionModel                *selection_model;
+    QItemSelectionModel::SelectionFlags flags;
+    if (gfxr_draw_call_index_from_source.isValid())
+    {
+        proxy_index = m_gfxr_vulkan_commands_filter_proxy_model->mapFromSource(
+        gfxr_draw_call_index_from_source);
+        if (proxy_index.isValid())
+        {
+            selection_model = m_command_hierarchy_view->selectionModel();
+
+            flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
+
+            selection_model->setCurrentIndex(proxy_index, flags);
+
+            m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
+            m_command_hierarchy_view->expand(proxy_index);
+        }
+    }
+
+    if (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
+        m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly)
+    {
+        std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
+                                                      m_pm4_command_hierarchy_view->model())
+                                                      ->GetPm4DrawCallIndices();
+        QAbstractItemModel *pm4_source_model = m_filter_model->sourceModel();
+        QModelIndex pm4_draw_call_index_from_source = FindSourceIndexFromNode(pm4_source_model,
+                                                                              pm4_draw_call_indices
+                                                                              .at(row_index));
+
+        if (pm4_draw_call_index_from_source.isValid())
+        {
+            proxy_index = m_filter_model->mapFromSource(pm4_draw_call_index_from_source);
+            if (proxy_index.isValid())
+            {
+                selection_model = m_pm4_command_hierarchy_view->selectionModel();
+
+                flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
+
+                selection_model->setCurrentIndex(proxy_index, flags);
+
+                m_pm4_command_hierarchy_view->scrollTo(proxy_index,
+                                                       QAbstractItemView::PositionAtCenter);
+                m_pm4_command_hierarchy_view->expand(proxy_index);
+            }
+        }
+    }
+    else
+    {
+        ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
+    }
+
+    ResetHorizontalScroll(*m_pm4_command_hierarchy_view);
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnCorrelateCounter(const QModelIndex &index)
+{
+    m_perf_counter_tab_view->ClearSelection();
+
+    QObject                *sender_object = sender();
+    std::optional<uint64_t> found_draw_call_index = 0;
+    bool                    found = false;
+
+    if (sender_object == m_pm4_command_hierarchy_view->selectionModel())
+    {
+        if (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
+            m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly)
+        {
+            std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
+                                                          m_pm4_command_hierarchy_view->model())
+                                                          ->GetPm4DrawCallIndices();
+
+            found_draw_call_index = GetDrawCallIndexFromProxyIndex(index,
+                                                                   *m_filter_model,
+                                                                   pm4_draw_call_indices,
+                                                                   CorrelationTarget::kPm4DrawCall);
+
+            if (found_draw_call_index.has_value())
+            {
+                found = true;
+            }
+        }
+    }
+    else
+    {
+        m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
+        std::vector<uint64_t>
+        gfxr_draw_call_indices = qobject_cast<GfxrVulkanCommandFilterProxyModel *>(
+                                 m_command_hierarchy_view->model())
+                                 ->GetGfxrDrawCallIndices();
+
+        // Use helper for GFXR sender
+        found_draw_call_index =
+        GetDrawCallIndexFromProxyIndex(index,
+                                       *m_gfxr_vulkan_commands_filter_proxy_model,
+                                       gfxr_draw_call_indices,
+                                       CorrelationTarget::kGfxrDrawCall);
+
+        if (found_draw_call_index.has_value())
+        {
+            found = true;
+        }
+    }
+
+    if (found)
+    {
+        m_perf_counter_tab_view->OnCorrelateCounter(found_draw_call_index.value());
+    }
 }

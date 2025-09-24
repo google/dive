@@ -1,5 +1,5 @@
 /*
- Copyright 2019 Google LLC
+ Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@
 #pragma once
 #include <memory>
 #include <QMainWindow>
+#include <optional>
 #include <qabstractitemmodel.h>
 #include <qshortcut.h>
 #include "dive_core/cross_ref.h"
+#include "dive_core/command_hierarchy.h"
 #include "progress_tracker_callback.h"
 #include "dive_core/log.h"
 
@@ -62,6 +64,7 @@ class AnalyzeDialog;
 class GfxrVulkanCommandFilter;
 class QGroupBox;
 class QSortFilterProxyModel;
+class QAbstractProxyModel;
 
 enum class EventMode;
 
@@ -69,6 +72,7 @@ namespace Dive
 {
 class DataCore;
 class PluginLoader;
+class AvailableMetrics;
 
 enum DrawCallContextMenuOption : uint32_t
 {
@@ -124,12 +128,16 @@ public slots:
     void OnOpenVulkanCallMenu(const QPoint &pos);
     void OnCorrelateVulkanDrawCall(const QModelIndex &);
     void OnCorrelatePm4DrawCall(const QModelIndex &);
+    void OnCorrelateCounter(const QModelIndex &);
+    void OnCounterSelected(uint64_t);
+    void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
 
 private slots:
     void OnCommandViewModeChange(const QString &string);
     void OnCommandViewModeComboBoxHover(const QString &);
     void OnSelectionChanged(const QModelIndex &index);
     void OnFilterModeChange(const QString &string);
+    void OnGfxrFilterModeChange();
     void OnOpenFile();
     void OnGFXRCapture();
     void OnNormalCapture();
@@ -157,11 +165,18 @@ private slots:
     void DisconnectAllTabs();
 
 private:
+    enum class CorrelationTarget
+    {
+        kGfxrDrawCall,
+        kPm4DrawCall
+    };
+
     void    CreateActions();
     void    CreateMenus();
     void    CreateToolBars();
     void    CreateShortcuts();
     void    CreateStatusBar();
+    void    LoadAvailableMetrics();
     void    ShowTempStatus(const QString &status_message);
     void    ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
@@ -170,12 +185,18 @@ private:
     void    HideOverlay();
     void    UpdateTabAvailability();
     void    ResetTabWidget();
-    QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model,
-                                        uint64_t            target_node_index,
-                                        const QModelIndex  &parent = QModelIndex());
-    void        ResetEventSearchBar();
-    void        ResetPm4EventSearchBar();
-    void        ResetHorizontalScroll(const DiveTreeView &tree_view);
+    QModelIndex             FindSourceIndexFromNode(QAbstractItemModel *model,
+                                                    uint64_t            target_node_index,
+                                                    const QModelIndex  &parent = QModelIndex());
+    void                    ResetEventSearchBar();
+    void                    ResetPm4EventSearchBar();
+    void                    ResetHorizontalScroll(const DiveTreeView &tree_view);
+    void                    ClearViewModelSelection(DiveTreeView &tree_view, bool should_clear_tab);
+    std::optional<uint64_t> GetDrawCallIndexFromProxyIndex(
+    const QModelIndex           &proxy_index,
+    const QAbstractProxyModel   &proxy_model,
+    const std::vector<uint64_t> &draw_call_indices,
+    CorrelationTarget            target);
 
     QMenu         *m_file_menu;
     QMenu         *m_recent_captures_menu;
@@ -300,4 +321,5 @@ private:
 
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
+    std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
 };

@@ -34,7 +34,7 @@ public slots:
     void OnFilterGfxrVulkanCommandChange(const QString &filter_mode);
 
 signals:
-    void FilterTextChanged(const QString &text);
+    void FilterChanged();
 
 private:
     DiveTreeView                      &m_command_hierarchy_view;

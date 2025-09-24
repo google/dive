@@ -505,15 +505,8 @@ void * __rd_dlsym_helper(const char *name)
 }
 
 // GOOGLE: append src file to the end of the target file.
-int append_file(const char *target, const char *src)
+int append_file(int fd_target, const char *src)
 {
-	// If target does not exist, just rename instead of copy.
-	if(access(target, F_OK) != 0)
-	{
-		rename(src, target);
-		return 0;
-	}
-    int fd_target = open(target, O_CREAT | O_APPEND | O_WRONLY);
     if (fd_target < 0)
         return -1;
 
@@ -528,11 +521,12 @@ int append_file(const char *target, const char *src)
     }
 	LOGI("append file done\n");
     close(fd_src);
-    close(fd_target);
     return 0;
 }
 
 // GOOGLE: Close all opened trace fd
+// Concatenate all open log files to `capture_file_path`. Replace `capture_file_path` if it already exists.
+// In the process, all log files are closed and all inprogress files are deleted.
 void collect_trace_file(const char* capture_file_path)
 {
 	char full_path[PATH_MAX];
@@ -542,6 +536,14 @@ void collect_trace_file(const char* capture_file_path)
 	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
 #endif
 	LOGD("full_path is %s", full_path);
+
+	// Could remove(full_path). However, that is susceptible to TOCTOU problems.
+	// Prefer to open the target file once and keep it open for the duration of collection.
+	int concatenated_log_fd = open(full_path, O_CREAT | O_TRUNC | O_WRONLY);
+	if (concatenated_log_fd < 0) {
+		LOGI("Failed to open `%s` to collect traces. Can't collect traces. Error: %s", full_path, strerror(concatenated_log_fd));
+		return;
+	}
 
 	for (int i = 0; i < MAX_DEVICE_FILES; i++)
 	{
@@ -558,13 +560,18 @@ void collect_trace_file(const char* capture_file_path)
 			LOG_CLOSE_FILE(df->log_fd);
 			df->log_fd = LOG_NULL_FILE;
 			pthread_mutex_unlock(&write_lock);
-			if(-1 == append_file(full_path, df->file_name))
+			if(-1 == append_file(concatenated_log_fd, df->file_name))
 			{
 				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);
 			}
 			// delete the file that has been concatenated. 
 			remove(df->file_name);
         }
+	}
+
+	int close_result = close(concatenated_log_fd);
+	if (close_result < 0) {
+		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", full_path, strerror(close_result));
 	}
 }
 void hexdump(const void *data, int size)

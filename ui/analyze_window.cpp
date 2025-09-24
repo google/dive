@@ -62,22 +62,22 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
 {
     qDebug() << "AnalyzeDialog created.";
 
-    // Settings List
-    m_settings_list_label = new QLabel(tr("Available Settings:"));
-    m_settings_list = new QListWidget();
+    // Metrics List
+    m_metrics_list_label = new QLabel(tr("Available Metrics:"));
+    m_metrics_list = new QListWidget();
     m_csv_items = new QVector<CsvItem>();
-    m_enabled_settings_vector = new std::vector<std::string>();
-    PopulateSettings();
+    m_enabled_metrics_vector = new std::vector<std::string>();
+    PopulateMetrics();
 
-    // Settings Description
-    selected_setting_description_label = new QLabel(tr("Description:"));
-    selected_setting_description = new QTextEdit();
-    selected_setting_description->setReadOnly(true);
-    selected_setting_description->setPlaceholderText("Select a setting to see its description...");
+    // Metrics Description
+    m_selected_metrics_description_label = new QLabel(tr("Description:"));
+    m_selected_metrics_description = new QTextEdit();
+    m_selected_metrics_description->setReadOnly(true);
+    m_selected_metrics_description->setPlaceholderText("Select a metric to see its description...");
 
-    // Enabled Settings
-    m_enabled_settings_list_label = new QLabel(tr("Enabled Settings:"));
-    m_enabled_settings_list = new QListWidget();
+    // Enabled Metrics
+    m_enabled_metrics_list_label = new QLabel(tr("Enabled Metrics:"));
+    m_enabled_metrics_list = new QListWidget();
 
     // Replay Button
     m_button_layout = new QHBoxLayout();
@@ -166,15 +166,15 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
 
     // Left Panel Layout
     m_left_panel_layout = new QVBoxLayout();
-    m_left_panel_layout->addWidget(m_settings_list_label);
-    m_left_panel_layout->addWidget(m_settings_list);
+    m_left_panel_layout->addWidget(m_metrics_list_label);
+    m_left_panel_layout->addWidget(m_metrics_list);
 
     // Right Panel Layout
     m_right_panel_layout = new QVBoxLayout();
-    m_right_panel_layout->addWidget(selected_setting_description_label);
-    m_right_panel_layout->addWidget(selected_setting_description);
-    m_right_panel_layout->addWidget(m_enabled_settings_list_label);
-    m_right_panel_layout->addWidget(m_enabled_settings_list);
+    m_right_panel_layout->addWidget(m_selected_metrics_description_label);
+    m_right_panel_layout->addWidget(m_selected_metrics_description);
+    m_right_panel_layout->addWidget(m_enabled_metrics_list_label);
+    m_right_panel_layout->addWidget(m_enabled_metrics_list);
     m_right_panel_layout->addLayout(m_device_layout);
     m_right_panel_layout->addLayout(m_selected_file_layout);
     m_right_panel_layout->addLayout(m_dump_pm4_layout);
@@ -191,24 +191,24 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     setLayout(m_main_layout);
 
     // Connect the name list's selection change to a lambda
-    QObject::connect(m_settings_list,
+    QObject::connect(m_metrics_list,
                      &QListWidget::currentItemChanged,
                      [&](QListWidgetItem *current, QListWidgetItem *previous) {
                          if (current)
                          {
-                             int index = m_settings_list->row(current);
+                             int index = m_metrics_list->row(current);
                              if (index >= 0 && index < m_csv_items->size())
                              {
-                                 selected_setting_description->setText(
+                                 m_selected_metrics_description->setText(
                                  m_csv_items->at(index).description);
                              }
                          }
                      });
 
-    QObject::connect(m_settings_list, &QListWidget::itemChanged, [&](QListWidgetItem *item) {
+    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem *item) {
         // This code will execute whenever an item's state changes
         // It will refresh the second list of selected items
-        UpdateSelectedSettingsList();
+        UpdateSelectedMetricsList();
     });
 
     QObject::connect(m_device_box,
@@ -247,9 +247,9 @@ void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::PopulateSettings()
+void AnalyzeDialog::PopulateMetrics()
 {
-    QFile file(":/resources/available_settings.csv");
+    QFile file(":/resources/available_metrics.csv");
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         std::cout << "Could not open file:" << file.errorString().toStdString() << std::endl;
@@ -288,39 +288,39 @@ void AnalyzeDialog::PopulateSettings()
     }
     file.close();
 
-    // Populate the settings list
+    // Populate the metrics list
     for (const auto &item : *m_csv_items)
     {
         QListWidgetItem *csv_item = new QListWidgetItem(item.name);
         csv_item->setData(kDataRole, item.key);
         csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
         csv_item->setCheckState(Qt::Unchecked);
-        m_settings_list->addItem(csv_item);
+        m_metrics_list->addItem(csv_item);
     }
 
-    // Add spacer so that all settings are visible at the end of the list.
+    // Add spacer so that all metrics are visible at the end of the list.
     QListWidgetItem *spacer = new QListWidgetItem();
     spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
-    m_settings_list->addItem(spacer);
+    m_metrics_list->addItem(spacer);
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdateSelectedSettingsList()
+void AnalyzeDialog::UpdateSelectedMetricsList()
 {
     // Clear the existing items in the target list
-    m_enabled_settings_list->clear();
-    m_enabled_settings_vector->clear();
+    m_enabled_metrics_list->clear();
+    m_enabled_metrics_vector->clear();
 
     // Iterate through the source list to find checked items
-    for (int i = 0; i < m_settings_list->count(); ++i)
+    for (int i = 0; i < m_metrics_list->count(); ++i)
     {
-        QListWidgetItem *item = m_settings_list->item(i);
+        QListWidgetItem *item = m_metrics_list->item(i);
 
         // If the item is checked, add it to the target list
         if (item->checkState() == Qt::Checked)
         {
-            m_enabled_settings_list->addItem(item->text());
-            m_enabled_settings_vector->push_back(item->data(kDataRole).toString().toStdString());
+            m_enabled_metrics_list->addItem(item->text());
+            m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
         }
     }
 }
@@ -615,7 +615,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     SetReplayButton("Replaying with perf counter settings...", false);
 
     return device_manager.RunProfilingOnReplay(remote_gfxr_file,
-                                               *m_enabled_settings_vector,
+                                               *m_enabled_metrics_vector,
                                                m_local_capture_file_directory.string());
 }
 
@@ -726,7 +726,7 @@ void AnalyzeDialog::OnReplay()
     m_gpu_time_enabled = m_gpu_time_box->currentIndex() == 0;
 
     // Run the pm4 replay
-    if (m_dump_pm4_enabled || (m_enabled_settings_vector->empty() && !m_gpu_time_enabled))
+    if (m_dump_pm4_enabled || (m_enabled_metrics_vector->empty() && !m_gpu_time_enabled))
     {
         ret = Pm4Replay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -743,7 +743,7 @@ void AnalyzeDialog::OnReplay()
     WaitForReplay(*device);
 
     // Run the perf counter replay
-    if (!m_enabled_settings_vector->empty())
+    if (!m_enabled_metrics_vector->empty())
     {
         ret = PerfCounterReplay(device_manager, remote_file.value());
         if (!ret.ok())

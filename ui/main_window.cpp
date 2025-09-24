@@ -2401,11 +2401,6 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         &MainWindow::OnGpuTimingDataSelected);
 
-    QObject::disconnect(m_command_hierarchy_view,
-                        SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
-                        m_gpu_timing_tab_view,
-                        SLOT(OnEventSelectionChanged(const QModelIndex &)));
-
     QObject::disconnect(m_filter_mode_combo_box,
                         SIGNAL(currentTextChanged(const QString &)),
                         this,
@@ -2623,11 +2618,6 @@ void MainWindow::ConnectDiveFileTabs()
                      this,
                      &MainWindow::OnGpuTimingDataSelected);
 
-    QObject::connect(m_command_hierarchy_view,
-                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
-                     m_gpu_timing_tab_view,
-                     SLOT(OnEventSelectionChanged(const QModelIndex &)));
-
     // Correlate between two calls
     QObject::connect(m_pm4_command_hierarchy_view,
                      SIGNAL(clicked(const QModelIndex &)),
@@ -2799,11 +2789,6 @@ void MainWindow::ConnectGfxrFileTabs()
                      &GpuTimingTabView::GpuTimingDataSelected,
                      this,
                      &MainWindow::OnGpuTimingDataSelected);
-
-    QObject::connect(m_command_hierarchy_view,
-                     SIGNAL(sourceCurrentChanged(const QModelIndex &, const QModelIndex &)),
-                     m_gpu_timing_tab_view,
-                     SLOT(OnEventSelectionChanged(const QModelIndex &)));
 
     // Combo Boxes
     QObject::connect(m_filter_gfxr_commands_combo_box,
@@ -3136,16 +3121,32 @@ CorrelationTarget            target)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 {
+    m_gpu_timing_tab_view->ClearSelection();
+    QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(index);
+
+    // Check if the selected node is a GPU timing node. If so, do not correlate with the PM4 view
+    // and performance counters. Only correlate with GPU timing view.
+    uint64_t       source_node_index = (uint64_t)source_index.internalPointer();
+    Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(source_node_index);
+    bool           is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
+                              (node_type ==
+                               Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) ||
+                              (node_type == Dive::NodeType::kGfxrVulkanBeginCommandBufferNode);
+
+    if (is_gpu_timing_node)
+    {
+        m_gpu_time_correlation_from_command_hierarchy = true;
+        m_gpu_timing_tab_view->OnEventSelectionChanged(source_index);
+        m_gpu_time_correlation_from_command_hierarchy = false;
+        return;
+    }
+
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
         OnCorrelateCounter(index);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
         return;
-    }
-    else
-    {
-        m_gpu_timing_tab_view->ClearSelection();
     }
 
     m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
@@ -3417,10 +3418,8 @@ void MainWindow::OnCorrelateCounter(const QModelIndex &index)
             {
                 return;
             }
-            else
-            {
-                m_gpu_timing_tab_view->ClearSelection();
-            }
+
+            m_gpu_timing_tab_view->ClearSelection();
         }
     }
 
@@ -3447,11 +3446,26 @@ void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
     {
         QItemSelectionModel *selection_model = m_command_hierarchy_view->selectionModel();
 
+        // Only block signals if
+        // the selection was initiated by the user clicking a node in the command hierarchy,
+        // triggering correlation. This prevents the selection of the node here from trigger
+        // correlation again.
+        bool old_state = false;
+        if (m_gpu_time_correlation_from_command_hierarchy)
+        {
+            old_state = selection_model->blockSignals(true);
+        }
+
         flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
 
         selection_model->setCurrentIndex(proxy_index, flags);
 
         m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
         m_command_hierarchy_view->expand(proxy_index);
+
+        if (m_gpu_time_correlation_from_command_hierarchy)
+        {
+            selection_model->blockSignals(old_state);
+        }
     }
 }

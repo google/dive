@@ -314,6 +314,7 @@ private:
     int         m_previous_tab_index = -1;
     bool        m_gfxr_capture_loaded = false;
     bool        m_correlated_capture_loaded = false;
+    bool        m_gpu_time_correlation_from_command_hierarchy = true;
 
     EventSelection *m_event_selection;
 

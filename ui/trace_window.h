@@ -140,21 +140,21 @@ protected:
     void closeEvent(QCloseEvent *event) override;
 
 private slots:
-    void OnDeviceSelected(const QString &);
-    void OnPackageSelected(const QString &);
-    void OnStartClicked();
-    void OnTraceClicked();
-    void OnTraceAvailable(const QString &);
-    void OnGFXRCaptureAvailable(const QString &);
-    void OnDevListRefresh();
-    void OnAppListRefresh();
-    void OnInputCommand(const QString &);
-    void OnInputArgs(const QString &);
-    void OnPackageListFilter();
-    void OnPackageListFilterApplied(const QString &filter);
-    void OnGfxrCaptureClicked();
-    void ShowErrorMessage(const QString &err_msg);
-    bool StopPackage();
+    void         OnDeviceSelected(const QString &);
+    void         OnPackageSelected(const QString &);
+    void         OnStartClicked();
+    void         OnTraceClicked();
+    void         OnTraceAvailable(const QString &);
+    void         OnGFXRCaptureAvailable(const QString &);
+    void         OnDevListRefresh();
+    void         OnAppListRefresh();
+    void         OnInputCommand(const QString &);
+    void         OnInputArgs(const QString &);
+    void         OnPackageListFilter();
+    void         OnPackageListFilterApplied(const QString &filter);
+    void         OnGfxrCaptureClicked();
+    void         ShowErrorMessage(const QString &err_msg);
+    absl::Status StopPackageAndCleanup();
 
 signals:
     void TraceAvailable(const QString &);

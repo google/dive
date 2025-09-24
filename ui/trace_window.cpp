@@ -249,17 +249,17 @@ void TraceDialog::ShowErrorMessage(const QString &err_msg)
     return;
 }
 
-bool TraceDialog::StopPackage()
+absl::Status TraceDialog::StopPackageAndCleanup()
 {
     auto device = Dive::GetDeviceManager().GetDevice();
     if (device == nullptr)
     {
-        return true;
+        return absl::OkStatus();
     }
     auto cur_app = device->GetCurrentApplication();
     if (cur_app == nullptr || !cur_app->IsRunning())
     {
-        return true;
+        return absl::OkStatus();
     }
 
     if (m_gfxr_capture)
@@ -267,11 +267,8 @@ bool TraceDialog::StopPackage()
         if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture &&
             m_gfxr_capture_button->isEnabled())
         {
-            std::string err_msg = "Failed to stop application. Gfxr capture in process. Please "
-                                  "retrieve the capture before stopping the application.";
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(QString::fromStdString(err_msg));
-            return false;
+            return absl::FailedPreconditionError("GFXR capture is in process. Please retrieve the "
+                                                 "capture before stopping the application.");
         }
         // Only delete the on device capture directory when the application is closed.
         std::string
@@ -282,6 +279,7 @@ bool TraceDialog::StopPackage()
         auto ret = device->Adb().Run(
         absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
         m_gfxr_capture_button->setEnabled(false);
+        m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
     }
     else
     {
@@ -289,27 +287,44 @@ bool TraceDialog::StopPackage()
     }
 
     device->StopApp().IgnoreError();
-    auto ret = cur_app->Cleanup();
-    if (!ret.ok())
+    absl::Status cleanup_status = cur_app->Cleanup();
+    if (!cleanup_status.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to cleanup application: ", ret.message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(QString::fromStdString(err_msg));
+        return absl::Status(cleanup_status.code(),
+                            absl::StrCat("Failed to cleanup application: ",
+                                         cleanup_status.message()));
     }
-    return true;
+    return absl::OkStatus();
 }
 
 void TraceDialog::closeEvent(QCloseEvent *event)
 {
-    if (StopPackage())
+    absl::Status status = StopPackageAndCleanup();
+
+    // The operation was successful, close normally.
+    if (status.ok())
     {
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
         event->accept();
+        return;
+    }
+
+    // A specific error occurred that should prevent closing the window.
+    if (status.code() == absl::StatusCode::kFailedPrecondition)
+    {
+        qDebug() << "Preventing window close: " << status.ToString().c_str();
+        ShowErrorMessage(QString::fromUtf8(status.message().data(), (int)status.message().size()));
+        event->ignore();
     }
     else
     {
-        event->ignore();
+        // For any other error, we still allow the window to close to avoid trapping the user.
+        qDebug() << "Closing window despite non-critical error: " << status.ToString().c_str();
+        ShowErrorMessage(QString::fromUtf8(status.message().data(), (int)status.message().size()));
+        m_run_button->setEnabled(true);
+        m_run_button->setText(kStart_Application);
+        event->accept();
     }
 }
 
@@ -570,11 +585,21 @@ void TraceDialog::OnStartClicked()
     }
     else
     {
-        qDebug() << "Stop package " << m_cur_pkg.c_str();
-        if (!StopPackage())
+        qDebug() << "Stop package and cleanup: " << m_cur_pkg.c_str();
+        absl::Status status = StopPackageAndCleanup();
+        if (!status.ok())
         {
-            qDebug() << "Failed to stop Package!";
-            return;
+            qDebug() << "Failed to stop package or cleanup: " << status.ToString().c_str();
+            ShowErrorMessage(
+            QString::fromUtf8(status.message().data(), (int)status.message().size()));
+
+            // Only exit without resetting the button if the error is a precondition
+            // failure (GFXR capture in progress). For other cleanup errors, we still
+            // want to reset the UI to a "startable" state.
+            if (status.code() == absl::StatusCode::kFailedPrecondition)
+            {
+                return;
+            }
         }
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);

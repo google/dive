@@ -2832,11 +2832,16 @@ void MainWindow::ConnectGfxrFileTabs()
                      m_gpu_timing_model,
                      &GpuTimingModel::OnGpuTimingResultsGenerated);
 
-    // Correlate counter
+    // Correlate calls
     QObject::connect(m_command_hierarchy_view->selectionModel(),
                      SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
                      this,
                      SLOT(OnCorrelateCounter(const QModelIndex &)));
+
+    QObject::connect(m_command_hierarchy_view->selectionModel(),
+                     SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
+                     this,
+                     SLOT(OnCorrelateVulkanDrawCall(const QModelIndex &)));           
 
     // Menus
     QObject::connect(m_command_hierarchy_view,

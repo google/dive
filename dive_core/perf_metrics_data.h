@@ -101,16 +101,16 @@ struct PerfMetricsKeyHash
 // ... "
 struct PerfMetricsRecord
 {
-    uint64_t                                  m_context_id;
-    uint64_t                                  m_process_id;
-    uint64_t                                  m_frame_id;
-    uint64_t                                  m_cmd_buffer_id;
-    uint32_t                                  m_draw_id;
-    uint32_t                                  m_draw_label;
-    uint64_t                                  m_program_id;
-    uint8_t                                   m_draw_type;
-    uint8_t                                   m_lrz_state;
-    std::vector<std::variant<int64_t, float>> m_metric_values;
+    uint64_t            m_context_id;
+    uint64_t            m_process_id;
+    uint64_t            m_frame_id;
+    uint64_t            m_cmd_buffer_id;
+    uint32_t            m_draw_id;
+    uint32_t            m_draw_label;
+    uint64_t            m_program_id;
+    uint8_t             m_draw_type;
+    uint8_t             m_lrz_state;
+    std::vector<double> m_metric_values;
 };
 
 class PerfMetricsData

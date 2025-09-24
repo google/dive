@@ -160,8 +160,7 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
     {
         const auto &metric_value = record.m_metric_values.at(metric_col_index);
 
-        return std::visit([](const auto &value) { return QVariant::fromValue(value); },
-                          metric_value);
+        return QString::number(metric_value, 'f', 1);
     }
 
     return QVariant();

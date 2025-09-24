@@ -150,22 +150,10 @@ bool ParseMetrics(const std::vector<std::string>&       fields,
 }  // namespace
 
 std::unique_ptr<PerfMetricsData> PerfMetricsData::LoadFromCsv(
-const std::filesystem::path&      file_path,
-std::unique_ptr<AvailableMetrics> available_metrics)
+const std::filesystem::path& file_path,
+const AvailableMetrics&      available_metrics)
 {
     std::vector<PerfMetricsRecord> records;
-    if (!available_metrics)
-    {
-        auto available_metrics_path = file_path.parent_path().append("available_metrics.csv");
-        if (std::filesystem::exists(available_metrics_path))
-        {
-            available_metrics = AvailableMetrics::LoadFromCsv(available_metrics_path);
-        }
-    }
-    if (!available_metrics)
-    {
-        return nullptr;
-    }
 
     std::ifstream file(file_path);
     if (!file.is_open())
@@ -180,7 +168,7 @@ std::unique_ptr<AvailableMetrics> available_metrics)
     {
         return nullptr;
     }
-    auto headers_opt = ParseHeaders(line, *available_metrics);
+    auto headers_opt = ParseHeaders(line, available_metrics);
     if (!headers_opt.has_value())
     {
         return nullptr;
@@ -217,20 +205,16 @@ std::unique_ptr<AvailableMetrics> available_metrics)
         }
     }
 
-    return std::unique_ptr<PerfMetricsData>(new PerfMetricsData(std::move(metric_names),
-                                                                std::move(metric_infos),
-                                                                std::move(records),
-                                                                std::move(available_metrics)));
+    return std::unique_ptr<PerfMetricsData>(
+    new PerfMetricsData(std::move(metric_names), std::move(metric_infos), std::move(records)));
 }
 
-PerfMetricsData::PerfMetricsData(std::vector<std::string>          metric_names,
-                                 std::vector<const MetricInfo*>    metric_infos,
-                                 std::vector<PerfMetricsRecord>    records,
-                                 std::unique_ptr<AvailableMetrics> available_metrics) :
+PerfMetricsData::PerfMetricsData(std::vector<std::string>       metric_names,
+                                 std::vector<const MetricInfo*> metric_infos,
+                                 std::vector<PerfMetricsRecord> records) :
     m_metric_names(std::move(metric_names)),
     m_metric_infos(std::move(metric_infos)),
-    m_records(std::move(records)),
-    m_available_metrics(std::move(available_metrics))
+    m_records(std::move(records))
 {
 }
 
@@ -490,6 +474,16 @@ std::unique_ptr<PerfMetricsData> data)
     result->Update(std::move(data));
     return result;
 }
+
+std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::CreateForTest(
+std::unique_ptr<PerfMetricsData>  data,
+std::unique_ptr<AvailableMetrics> desc)
+{
+    auto result = Create(std::move(data));
+    result->m_owned_desc = std::move(desc);
+    return result;
+}
+
 PerfMetricsDataProvider::~PerfMetricsDataProvider() = default;
 PerfMetricsDataProvider::PerfMetricsDataProvider() :
     m_correlator(new Correlator)
@@ -510,7 +504,10 @@ void PerfMetricsDataProvider::Update(std::unique_ptr<PerfMetricsData> data)
 
 void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
 {
-
+    if (!m_raw_data)
+    {
+        return;
+    }
     const size_t num_metrics = m_raw_data->GetMetricNames().size();
     const auto&  records = m_raw_data->GetRecords();
     m_correlator->Reset();

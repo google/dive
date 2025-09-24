@@ -118,9 +118,8 @@ class PerfMetricsData
 public:
     // Load performance metrics data from a CSV file
     [[nodiscard]] static std::unique_ptr<PerfMetricsData> LoadFromCsv(
-    const std::filesystem::path&      file_path,
-    std::unique_ptr<AvailableMetrics> available_metrics);
-
+    const std::filesystem::path& file_path,
+    const AvailableMetrics&      available_metrics);
     // Get all performance metrics records
     const std::vector<PerfMetricsRecord>& GetRecords() const { return m_records; }
 
@@ -130,17 +129,14 @@ public:
     // Get the information of the performance metrics
     const std::vector<const MetricInfo*>& GetMetricInfos() const { return m_metric_infos; }
 
-    PerfMetricsData(std::vector<std::string>          metric_names,
-                    std::vector<const MetricInfo*>    metric_infos,
-                    std::vector<PerfMetricsRecord>    records,
-                    std::unique_ptr<AvailableMetrics> available_metrics);
+    PerfMetricsData(std::vector<std::string>       metric_names,
+                    std::vector<const MetricInfo*> metric_infos,
+                    std::vector<PerfMetricsRecord> records);
 
 private:
     std::vector<std::string>       m_metric_names;
     std::vector<const MetricInfo*> m_metric_infos;
     std::vector<PerfMetricsRecord> m_records;
-    // Keep available_metrics alive, since m_metric_infos has raw pointers into it.
-    std::unique_ptr<AvailableMetrics> m_available_metrics;
 };
 
 class PerfMetricsDataProvider
@@ -148,6 +144,9 @@ class PerfMetricsDataProvider
 public:
     [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> Create(
     std::unique_ptr<PerfMetricsData> = nullptr);
+    [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> CreateForTest(
+    std::unique_ptr<PerfMetricsData>,
+    std::unique_ptr<AvailableMetrics>);
 
     ~PerfMetricsDataProvider();
     PerfMetricsDataProvider(const PerfMetricsDataProvider&) = delete;
@@ -186,6 +185,8 @@ private:
 
     std::unique_ptr<PerfMetricsData> m_raw_data;
     std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
+
+    std::unique_ptr<AvailableMetrics> m_owned_desc;
 };
 
 }  // namespace Dive

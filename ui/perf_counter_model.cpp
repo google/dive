@@ -43,10 +43,7 @@ std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_me
         return;
     }
 
-    auto
-    perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path,
-                                                           std::make_unique<Dive::AvailableMetrics>(
-                                                           available_metrics->get()));
+    auto perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path, *available_metrics);
     m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(
     std::move(perf_metrics_data));
     m_perf_metrics_data_provider->Analyze();

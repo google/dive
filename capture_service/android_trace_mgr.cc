@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "trace_mgr.h"
 
 #include <string>
@@ -22,30 +22,53 @@ limitations under the License.
 
 #include "common/log.h"
 
+// libwrap symbols, used to manipulate libwrap state.
 extern "C"
 {
     void SetCaptureState(int state);
     void SetCaptureName(const char* name, const char* frame_num);
-}
-
-namespace
-{
-const static std::string kTraceFilePath{ "/sdcard/Download/" };
+    int  GetCaptureFilename(char* buffer, int size);
 }
 
 namespace Dive
 {
+namespace
+{
+// Convert C API to C++. Returns empty string on error.
+std::string GetCaptureFilename()
+{
+    char name[256] = {};
+    int  length = ::GetCaptureFilename(name, sizeof(name));
+    if (length <= 0)
+    {
+        return "";
+    }
+    return std::string(name, length);
+}
+
+// Set trace path between libwrap and AndroidTraceManager to the same value.
+// libwrap is written in C. When tracing is stopped, it uses the trace path to gather all PM4 trace data.
+// AndroidTraceManager is written in C++. It communicates the trace path to the host for download.
+// name and num are included in the file name; there are no prescribed semantics.
+void SynchronizeTraceFilePath(TraceManager& trace_manager, const char* name, int num)
+{
+    SetCaptureName(name, std::to_string(num).c_str());
+
+    std::string capture_filename = GetCaptureFilename();
+    if (capture_filename.empty())
+    {
+        // Try the old behavior as fallback, although this likely won't end well.
+        capture_filename = absl::StrFormat("/sdcard/Download/%s-%04u.rd", name, num);
+    }
+
+    trace_manager.SetTraceFilePath(capture_filename);
+    LOGD("Set capture file path as %s", trace_manager.GetTraceFilePath().c_str());
+}
+}  // namespace
 
 void AndroidTraceManager::TraceByFrame()
 {
-    std::string path = kTraceFilePath + "trace-frame";
-    std::string num = std::to_string(m_frame_num);
-    char        full_path[256];
-    sprintf(full_path, "%s-%04u.rd", path.c_str(), m_frame_num);
-
-    SetTraceFilePath(std::string(full_path));
-    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
-    SetCaptureName(path.c_str(), num.c_str());
+    SynchronizeTraceFilePath(*this, "trace-frame", m_frame_num);
     {
         absl::MutexLock lock(&m_state_lock);
         m_state = TraceState::Triggered;
@@ -55,23 +78,17 @@ void AndroidTraceManager::TraceByFrame()
 void AndroidTraceManager::TraceByDuration()
 {
     m_trace_num++;
-    std::string path = kTraceFilePath + "trace";
-    std::string num = std::to_string(m_trace_num);
-    char        full_path[256];
-    sprintf(full_path, "%s-%04u.rd", path.c_str(), m_trace_num);
-    SetCaptureName(path.c_str(), num.c_str());
+    SynchronizeTraceFilePath(*this, "trace", m_trace_num);
     {
         absl::MutexLock lock(&m_state_lock);
         m_state = TraceState::Triggered;
     }
-    SetTraceFilePath(std::string(full_path));
 
     {
         absl::MutexLock lock(&m_state_lock);
         SetCaptureState(1);
         m_state = TraceState::Tracing;
     }
-    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
 
     // TODO: pass in this duration in stead of hard code a number.
     std::this_thread::sleep_for(std::chrono::milliseconds(3000));

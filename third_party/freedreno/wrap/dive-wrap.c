@@ -31,6 +31,34 @@ limitations under the License.
 static pthread_mutex_t capture_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static int             capture_state = 0;
 
+// Copy the file name that will be used by collect_trace_file() into `buffer` of length `size`.
+// Name will be akin to: printf("/sdcard/Download/%s-%04u.rd", getenv("TESTNUM"), getenv("TESTNAME")).
+// If TESTNUM is not set then "trace-frame" is used.
+// If TESTNAME is not set then "0" is used.
+// See SetCaptureName
+int GetCaptureFilename(char* buffer, int size)
+{
+    if (buffer == NULL || size <= 0) {
+        return -1;
+    }
+
+    const char* num = getenv("TESTNUM");
+    if (num == NULL)
+    {
+        num = "0";
+    }
+    int frame_num = atoi(num);
+
+    const char* name = getenv("TESTNAME");
+    if (name == NULL)
+    {
+        name = "trace-frame";
+    }
+
+    return snprintf(buffer, size, "/sdcard/Download/%s-%04u.rd", name, frame_num);
+}
+
+
 void collect_trace_file(const char* capture_file_path);
 int  IsCapturing()
 {
@@ -47,7 +75,7 @@ void SetCaptureState(int state)
 
     if (state == 0 && capture_state == 1)
     {
-        char path[1024];
+        char path[1024] = {0};
         if (IsGfrxReplayCapture())
         {
 
@@ -68,12 +96,10 @@ void SetCaptureState(int state)
         }
         else
         {
-
-            const char* num = getenv("TESTNUM");
-            if (!num)
-                num = "0";
-            int frame_num = atoi(num);
-            snprintf(path, 1024, "/sdcard/Download/trace-frame-%04u.rd", frame_num);
+            if (GetCaptureFilename(path, sizeof(path)) <= 0)
+            {
+                LOGI("GetCaptureFilename failed! The trace may not be saved properly.");
+            }
         }
         collect_trace_file(path);
     }
@@ -118,8 +144,14 @@ void SetMaxCaptureBufferSize()
     setenv("WRAP_BUF_LEN_CAP", prop_str, 1);
 }
 
+// Name will be akin to: printf("/sdcard/Download/%s-%04u.rd", name, frame_num). However, this is context-dependent.
+// `name` is ignored if NULL. `frame_num` is ignored if NULL.
+// If `name` is never set, the default is context-dependent. For example, GetCaptureFilename() uses "trace-frame"
+// If `frame_num` is never set, the default is context-dependent. For example, GetCaptureFilename() uses "0"
 void SetCaptureName(const char* name, const char* frame_num)
 {
+    // TESTNAME and TESTNUM are testing backdoors that we've hijacked for our own purposes.
+    // They alter where libwrap puts the capture files, particularly in rd_start() and rd_write_section().
     if (name)
     {
         setenv("TESTNAME", name, 1);

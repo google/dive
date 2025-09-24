@@ -48,7 +48,8 @@ target_include_directories(service PRIVATE
 target_link_libraries(service PRIVATE
                       network
                       absl::flags
-                      absl::flags_parse)
+                      absl::flags_parse
+                      absl::strings)
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 add_executable(server server.cc

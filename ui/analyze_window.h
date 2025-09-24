@@ -71,8 +71,8 @@ signals:
 private:
     void                        ShowErrorMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
-    void                        PopulateSettings();
-    void                        UpdateSelectedSettingsList();
+    void                        PopulateMetrics();
+    void                        UpdateSelectedMetricsList();
     std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
                                                  const std::string &suffix) const;
     void                        WaitForReplay(Dive::AndroidDevice &device);
@@ -88,14 +88,14 @@ private:
     absl::Status                GpuTimeReplay(Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file);
 
-    QLabel      *m_settings_list_label;
-    QListWidget *m_settings_list;
+    QLabel      *m_metrics_list_label;
+    QListWidget *m_metrics_list;
 
-    QLabel    *selected_setting_description_label;
-    QTextEdit *selected_setting_description;
+    QLabel    *m_selected_metrics_description_label;
+    QTextEdit *m_selected_metrics_description;
 
-    QLabel      *m_enabled_settings_list_label;
-    QListWidget *m_enabled_settings_list;
+    QLabel      *m_enabled_metrics_list_label;
+    QListWidget *m_enabled_metrics_list;
 
     QHBoxLayout        *m_device_layout;
     QLabel             *m_device_label;
@@ -126,7 +126,6 @@ private:
     QLabel      *m_replay_warning_label;
 
     QHBoxLayout *m_button_layout;
-    QPushButton *m_load_settings_button;
     QPushButton *m_replay_button;
 
     QHBoxLayout                  *m_main_layout;
@@ -136,9 +135,9 @@ private:
     std::string                   m_cur_device;
     QString                       m_selected_capture_file_string;
     QVector<CsvItem>             *m_csv_items;
-    std::vector<std::string>     *m_enabled_settings_vector;
+    std::vector<std::string>     *m_enabled_metrics_vector;
 
-    // Used to store a csv item's key in the enabled settings vector.
+    // Used to store a csv item's key in the enabled metrics vector.
     const int             kDataRole = Qt::UserRole + 1;
     const int             kDefaultFrameCount = 3;
     const std::string     kDefaultReplayButtonText = "Replay";

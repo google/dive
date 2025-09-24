@@ -66,7 +66,7 @@ pushd !GFXR_ROOT_DIR!
     set build=%%b
     
     echo GFXR_ROOT_DIR: !GFXR_ROOT_DIR!
-    call gradlew replay:assemble!build! --console=verbose -Parm64-v8a
+    call gradlew layer:assemble!build! replay:assemble!build! --console=verbose -Parm64-v8a
 ))
 popd
 

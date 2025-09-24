@@ -30,11 +30,8 @@ extern "C"
 #endif
     extern int  IsCapturing();
     extern int  IsGfrxReplayCapture();
-<<<<<<< Updated upstream
-=======
     extern void StartCapture();
     extern void StopCapture();
->>>>>>> Stashed changes
     extern void SetCaptureName(const char* name, const char* frame_num);
 #ifdef __cplusplus
 }

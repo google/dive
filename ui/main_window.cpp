@@ -3136,14 +3136,16 @@ CorrelationTarget            target)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 {
-    m_perf_counter_tab_view->ClearSelection();
-
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
         OnCorrelateCounter(index);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
         return;
+    }
+    else
+    {
+        m_gpu_timing_tab_view->ClearSelection();
     }
 
     m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
@@ -3204,13 +3206,13 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 {
+    m_gpu_timing_tab_view->ClearSelection();
     m_perf_counter_tab_view->ClearSelection();
 
     if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
     {
         ClearViewModelSelection(*m_command_hierarchy_view, false);
-        m_gpu_timing_tab_view->ClearSelection();
         return;
     }
 
@@ -3229,7 +3231,6 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
     if (!found_pm4_draw_call_index.has_value())
     {
         ClearViewModelSelection(*m_command_hierarchy_view, false);
-        m_gpu_timing_tab_view->ClearSelection();
         return;
     }
 
@@ -3353,7 +3354,6 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
 void MainWindow::OnCorrelateCounter(const QModelIndex &index)
 {
     m_perf_counter_tab_view->ClearSelection();
-    m_gpu_timing_tab_view->ClearSelection();
 
     QObject                *sender_object = sender();
     std::optional<uint64_t> found_draw_call_index = 0;
@@ -3361,6 +3361,8 @@ void MainWindow::OnCorrelateCounter(const QModelIndex &index)
 
     if (sender_object == m_pm4_command_hierarchy_view->selectionModel())
     {
+        m_gpu_timing_tab_view->ClearSelection();
+
         if (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
             m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly)
         {
@@ -3397,6 +3399,28 @@ void MainWindow::OnCorrelateCounter(const QModelIndex &index)
         if (found_draw_call_index.has_value())
         {
             found = true;
+        }
+        else
+        {
+            uint64_t source_node_index = (uint64_t)m_gfxr_vulkan_commands_filter_proxy_model
+                                         ->mapToSource(index)
+                                         .internalPointer();
+            Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(
+            source_node_index);
+            bool is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
+                                      (node_type ==
+                                       Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) ||
+                                      (node_type ==
+                                       Dive::NodeType::kGfxrVulkanBeginCommandBufferNode);
+
+            if (is_gpu_timing_node)
+            {
+                return;
+            }
+            else
+            {
+                m_gpu_timing_tab_view->ClearSelection();
+            }
         }
     }
 

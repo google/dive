@@ -156,7 +156,7 @@ std::unique_ptr<AvailableMetrics> available_metrics)
     std::vector<PerfMetricsRecord> records;
     if (!available_metrics)
     {
-        auto available_metrics_path = file_path.parent_path().append("available_settings.csv");
+        auto available_metrics_path = file_path.parent_path().append("available_metrics.csv");
         if (std::filesystem::exists(available_metrics_path))
         {
             available_metrics = AvailableMetrics::LoadFromCsv(available_metrics_path);

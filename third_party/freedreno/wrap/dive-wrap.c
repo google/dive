@@ -82,6 +82,16 @@ void SetCaptureState(int state)
     pthread_mutex_unlock(&capture_state_lock);
 }
 
+void StartCapture()
+{
+    SetCaptureState(1);
+}
+
+void StopCapture()
+{
+    SetCaptureState(0);
+}
+
 // If PROPERTY_NAME has been set, then set the max capture buffer size, otherwise do nothing, which
 // means don't limit the buffer size.
 void SetMaxCaptureBufferSize()

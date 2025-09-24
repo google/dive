@@ -26,6 +26,7 @@ class PerfCounterTabView : public QWidget
     Q_OBJECT
 public:
     explicit PerfCounterTabView(PerfCounterModel &perf_counter_model, QWidget *parent = nullptr);
+    void ClearSelection();
 
 public slots:
     void OnSearchBarVisibilityChange(bool isHidden);
@@ -39,6 +40,7 @@ public slots:
 signals:
     void UpdateSearchInfo(uint64_t curr_item_pos, uint64_t total_search_results);
     void HideOtherSearchBars();
+    void CounterSelected(uint64_t);
 
 private:
     void ConnectSearchBar();

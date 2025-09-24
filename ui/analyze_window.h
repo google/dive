@@ -17,6 +17,7 @@
 #include <QDialog>
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
+#include "dive_core/available_metrics.h"
 
 #pragma once
 
@@ -35,7 +36,7 @@ class MainWindow;
 
 namespace Dive
 {
-class SelectedCaptureFiles;
+class AvailableMetrics;
 }  // namespace Dive
 
 class AnalyzeDialog : public QDialog
@@ -43,17 +44,19 @@ class AnalyzeDialog : public QDialog
     // Data structure to hold a single item from the CSV
     struct CsvItem
     {
-        QString id;
-        QString type;
-        QString key;
-        QString name;
-        QString description;
+        QString          id;
+        Dive::MetricType type;
+        QString          key;
+        QString          name;
+        QString          description;
     };
 
     Q_OBJECT
 
 public:
-    AnalyzeDialog(QWidget *parent = 0);
+    AnalyzeDialog(
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
+    QWidget                                                            *parent = nullptr);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
     void SetSelectedCaptureFile(const QString &filePath);
@@ -64,7 +67,9 @@ private slots:
     void OnReplay();
 signals:
     void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(const QString &file_path);
+    void OnDisplayPerfCounterResults(
+    const std::filesystem::path                                        &file_path,
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
     void OnDisplayGpuTimingResults(const QString &file_path);
     void ReloadCapture(const QString &file_path);
 
@@ -136,7 +141,7 @@ private:
     QString                       m_selected_capture_file_string;
     QVector<CsvItem>             *m_csv_items;
     std::vector<std::string>     *m_enabled_metrics_vector;
-
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> m_available_metrics;
     // Used to store a csv item's key in the enabled metrics vector.
     const int             kDataRole = Qt::UserRole + 1;
     const int             kDefaultFrameCount = 3;

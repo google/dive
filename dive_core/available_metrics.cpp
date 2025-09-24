@@ -122,4 +122,17 @@ MetricType AvailableMetrics::GetMetricType(const std::string& key) const
     return info ? info->m_metric_type : MetricType::kUnknown;
 }
 
+std::vector<std::string> AvailableMetrics::GetAllMetricKeys() const
+{
+    std::vector<std::string> keys;
+    keys.reserve(m_metrics.size());
+
+    for (const auto& pair : m_metrics)
+    {
+        keys.push_back(pair.first);
+    }
+
+    return keys;
+}
+
 }  // namespace Dive

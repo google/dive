@@ -17,6 +17,8 @@
 #include <QStringList>
 #include <QDebug>
 
+#include "dive_core/available_metrics.h"
+
 PerfCounterModel::PerfCounterModel(QObject *parent) :
     QAbstractItemModel(parent)
 {
@@ -24,72 +26,60 @@ PerfCounterModel::PerfCounterModel(QObject *parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::OnPerfCounterResultsGenerated(const QString &file_path)
+void PerfCounterModel::OnPerfCounterResultsGenerated(
+const std::filesystem::path                                        &file_path,
+std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics)
 {
     emit beginResetModel();
 
-    m_csv_data.clear();
     m_search_results.clear();
     m_search_iterator = nullptr;
     m_headers.clear();
     m_column_count = 0;
 
-    if (file_path.length() == 0)
+    if (file_path.empty() || !available_metrics.has_value())
     {
         emit endResetModel();
         return;
     }
 
-    ParseCsv(file_path);
+    auto
+    perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path,
+                                                           std::make_unique<Dive::AvailableMetrics>(
+                                                           available_metrics->get()));
+    m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(
+    std::move(perf_metrics_data));
+    m_perf_metrics_data_provider->Analyze();
+    LoadData();
     emit endResetModel();
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::ParseCsv(const QString &file_path)
+void PerfCounterModel::LoadData()
 {
-    QFile file(file_path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    QStringList headers;
+
+    for (const auto &header_str : m_perf_metrics_data_provider->GetRecordHeader())
     {
-        qDebug() << "Could not open file:" << file.errorString();
-        return;
+        headers.append(QString::fromStdString(header_str));
     }
 
-    QTextStream in(&file);
-    if (!in.atEnd())
-    {
-        QString headerLine = in.readLine();
-        m_headers = headerLine.split(',');
-        m_column_count = m_headers.size();
-    }
-    else
-    {
-        file.close();
-        return;
-    }
-
-    while (!in.atEnd())
-    {
-        QString     line = in.readLine();
-        QStringList fields = line.split(',');
-
-        if (fields.size() == m_column_count)
-        {
-            // Remove quotes from all fields
-            for (QString &field : fields)
-            {
-                field.replace('"', "");
-            }
-            m_csv_data.append(fields);
-        }
-    }
-    file.close();
+    m_headers = headers;
+    m_column_count = static_cast<int>(m_headers.size());
+    m_perf_metrics_record = m_perf_metrics_data_provider->GetComputedRecords();
 }
 
 //--------------------------------------------------------------------------------------------------
 QModelIndex PerfCounterModel::index(int row, int column, const QModelIndex &parent) const
 {
-    if (parent.isValid() || row < 0 || row >= m_csv_data.size() || column < 0 ||
-        column >= columnCount())
+    if (parent.isValid() || !m_perf_metrics_data_provider)
+    {
+        return QModelIndex();
+    }
+
+    const size_t num_rows = m_perf_metrics_record.size();
+
+    if (row < 0 || static_cast<size_t>(row) >= num_rows || column < 0 || column >= columnCount())
     {
         return QModelIndex();
     }
@@ -105,30 +95,76 @@ QModelIndex PerfCounterModel::parent(const QModelIndex &index) const
 //--------------------------------------------------------------------------------------------------
 int PerfCounterModel::rowCount(const QModelIndex &parent) const
 {
-    if (parent.isValid())
+    if (parent.isValid() || !m_perf_metrics_data_provider)
     {
         return 0;
     }
-    return m_csv_data.size();
+    return static_cast<int>(m_perf_metrics_record.size());
 }
 
 //--------------------------------------------------------------------------------------------------
 int PerfCounterModel::columnCount(const QModelIndex &parent) const
 {
-    return m_column_count;
+    return static_cast<int>(m_headers.size());
 }
 
-//--------------------------------------------------------------------------------------------------
 QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || role != Qt::DisplayRole)
+    if (!index.isValid() || role != Qt::DisplayRole || !m_perf_metrics_data_provider)
     {
         return QVariant();
     }
 
-    if (index.row() < m_csv_data.size() && index.column() < m_csv_data.at(index.row()).size())
+    int row = index.row();
+    int col = index.column();
+
+    if (static_cast<size_t>(row) >= m_perf_metrics_record.size())
     {
-        return m_csv_data.at(index.row()).at(index.column());
+        return QVariant();
+    }
+
+    const auto &record = m_perf_metrics_record.at(row);
+
+    if (col >= m_headers.length())
+    {
+        return QVariant();
+    }
+
+    if (col < static_cast<int>(Dive::kFixedPerfMetricsDataHeaderCount))
+    {
+        switch (col)
+        {
+        case Dive::kContextID:
+            return QVariant(QString::number(record.m_context_id));
+        case Dive::kProcessID:
+            return QVariant(QString::number(record.m_process_id));
+        case Dive::kFrameID:
+            return QVariant(QString::number(record.m_frame_id));
+        case Dive::kCmdBufferID:
+            return QVariant(QString::number(record.m_cmd_buffer_id));
+        case Dive::kDrawID:
+            return record.m_draw_id;
+        case Dive::kDrawLabel:
+            return record.m_draw_label;
+        case Dive::kProgramID:
+            return QVariant(QString::number(record.m_program_id));
+        case Dive::kDrawType:
+            return record.m_draw_type;
+        case Dive::kLRZState:
+            return record.m_lrz_state;
+        default:
+            return QVariant();
+        }
+    }
+
+    int metric_col_index = col - Dive::kFixedPerfMetricsDataHeaderCount;
+
+    if (static_cast<size_t>(metric_col_index) < record.m_metric_values.size())
+    {
+        const auto &metric_value = record.m_metric_values.at(metric_col_index);
+
+        return std::visit([](const auto &value) { return QVariant::fromValue(value); },
+                          metric_value);
     }
 
     return QVariant();

@@ -324,20 +324,7 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 	} else if (type == RD_CHIP_ID) {
 		chip_id = *(uint64_t *)buf;
 	}
-	if (type == RD_CHIP_ID) {
-		chip_id = *(uint64_t *)buf;
-	}
 
-
-	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
-		const char *name = getenv("TESTNAME");
-		if (!name)
-			name = "unknown";
-		rd_start(device_fd, name, "");
-		df = get_file(device_fd);
-		assert(df != NULL);
-		printf("opened rd, %"LOG_PRI_FILE"\n", df->log_fd);
-	}
 	// GOOGLE: Don't capture if not in capturing mode.
 	if(!IsCapturing()) {
 		return;

@@ -35,6 +35,7 @@ public:
     bool         IsDataCoreInitialized() const { return m_data_core != nullptr; }
     absl::Status LoadGfxrFile(const std::string& original_gfxr_file_path);
     absl::Status WriteNewGfxrFile(const std::string& new_gfxr_file_path);
+    absl::Status RemoveGfxrBlocks(std::vector<int> block_ids);
 
 private:
     std::unique_ptr<Dive::DataCore> m_data_core = nullptr;

@@ -117,7 +117,6 @@ signals:
     void SetSaveMenuStatus(bool);
     void SetSaveAsMenuStatus(bool);
     void FileLoaded();
-    void CorrelateCounter(uint64_t);
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
@@ -128,7 +127,6 @@ public slots:
     void OnOpenVulkanCallMenu(const QPoint &pos);
     void OnCorrelateVulkanDrawCall(const QModelIndex &);
     void OnCorrelatePm4DrawCall(const QModelIndex &);
-    void OnCorrelateCounter(const QModelIndex &);
     void OnCounterSelected(uint64_t);
     void OnGpuTimingDataSelected(uint64_t);
     void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
@@ -192,7 +190,9 @@ private:
     void                    ResetEventSearchBar();
     void                    ResetPm4EventSearchBar();
     void                    ResetHorizontalScroll(const DiveTreeView &tree_view);
+    void                    ResetVerticalScroll(const DiveTreeView &tree_view);
     void                    ClearViewModelSelection(DiveTreeView &tree_view, bool should_clear_tab);
+    void                    CorrelateCounter(const QModelIndex &index, bool called_from_gfxr_view);
     std::optional<uint64_t> GetDrawCallIndexFromProxyIndex(
     const QModelIndex           &proxy_index,
     const QAbstractProxyModel   &proxy_model,
@@ -314,7 +314,6 @@ private:
     int         m_previous_tab_index = -1;
     bool        m_gfxr_capture_loaded = false;
     bool        m_correlated_capture_loaded = false;
-    bool        m_gpu_time_correlation_from_command_hierarchy = true;
 
     EventSelection *m_event_selection;
 

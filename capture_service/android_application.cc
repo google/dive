@@ -202,6 +202,8 @@ absl::Status VulkanApplication::Cleanup()
     LOGD("Cleanup Vulkan application %s\n", m_package.c_str());
     if (m_gfxr_enabled)
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global gpu_debug_layers \\\"\\\""));
+
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
@@ -345,6 +347,8 @@ absl::Status OpenXRApplication::Cleanup()
     LOGD("OpenXRApplication %s cleanup.\n", m_package.c_str());
     if (m_gfxr_enabled)
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global gpu_debug_layers \\\"\\\""));
+
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
         RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));

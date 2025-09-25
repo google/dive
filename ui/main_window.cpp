@@ -99,6 +99,31 @@ kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
 static constexpr const char *kMetricsFilePath = ":/resources/available_metrics.csv";
 static constexpr const char *kMetricsFileName = "available_metrics.csv";
 
+namespace
+{
+
+std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
+{
+    std::vector<std::filesystem::path> search_paths{
+        std::filesystem::path{ "./install" },
+        std::filesystem::path{ "../../build_android/Release/bin" },
+        std::filesystem::path{ "../../install" },
+        std::filesystem::path{ "./" },
+    };
+
+    for (const auto &p : search_paths)
+    {
+        auto result_path = p / name;
+        if (std::filesystem::exists(result_path))
+        {
+            return std::filesystem::canonical(result_path);
+        }
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
 void SetTabAvailable(QTabWidget *widget, int index, bool available)
 {
     if (index < 0)
@@ -1593,39 +1618,59 @@ void MainWindow::OnSearchTrigger()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::LoadAvailableMetrics()
 {
-    QFile input_file(QString::fromStdString(kMetricsFilePath));
-    if (!input_file.open(QIODevice::ReadOnly))
+    std::optional<std::filesystem::path> metrics_description_file_path = std::nullopt;
+    if (auto profile_plugin_folder = ResolveAssetPath(Dive::kProfilingPluginFolderName))
     {
-        std::cerr << "Failed to open resource file: " << kMetricsFilePath << std::endl;
+        auto file_path = *profile_plugin_folder / kMetricsFileName;
+        if (std::filesystem::exists(file_path))
+        {
+            metrics_description_file_path = file_path;
+        }
+    }
+
+    std::optional<QTemporaryDir> temp_dir;
+    if (!metrics_description_file_path)
+    {
+        QFile input_file(QString::fromStdString(kMetricsFilePath));
+        if (!input_file.open(QIODevice::ReadOnly))
+        {
+            std::cerr << "Failed to open resource file: " << kMetricsFilePath << std::endl;
+            return;
+        }
+
+        QByteArray file_contents = input_file.readAll();
+        input_file.close();
+
+        temp_dir.emplace();
+        if (!temp_dir->isValid())
+        {
+            std::cerr << "Failed to create temporary directory." << std::endl;
+            return;
+        }
+
+        // Get the temporary file path as a QString
+        QString temp_file_path = QDir(temp_dir->path()).filePath(kMetricsFileName);
+
+        QFile temp_file(temp_file_path);
+        if (!temp_file.open(QIODevice::WriteOnly))
+        {
+            std::cerr << "Failed to create temporary file: " << temp_file_path.toStdString()
+                      << std::endl;
+            return;
+        }
+
+        temp_file.write(file_contents);
+        temp_file.close();
+
+        metrics_description_file_path = std::filesystem::path(temp_file_path.toStdString());
+    }
+
+    if (!metrics_description_file_path)
+    {
         return;
     }
 
-    QByteArray file_contents = input_file.readAll();
-    input_file.close();
-
-    QTemporaryDir temp_dir;
-    if (!temp_dir.isValid())
-    {
-        std::cerr << "Failed to create temporary directory." << std::endl;
-        return;
-    }
-
-    // Get the temporary file path as a QString
-    QString temp_file_path = QDir(temp_dir.path()).filePath(kMetricsFileName);
-
-    QFile temp_file(temp_file_path);
-    if (!temp_file.open(QIODevice::WriteOnly))
-    {
-        std::cerr << "Failed to create temporary file: " << temp_file_path.toStdString()
-                  << std::endl;
-        return;
-    }
-
-    temp_file.write(file_contents);
-    temp_file.close();
-
-    m_available_metrics = Dive::AvailableMetrics::LoadFromCsv(
-    std::filesystem::path(temp_file_path.toStdString()));
+    m_available_metrics = Dive::AvailableMetrics::LoadFromCsv(*metrics_description_file_path);
 }
 
 //--------------------------------------------------------------------------------------------------

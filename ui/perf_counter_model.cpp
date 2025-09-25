@@ -43,10 +43,7 @@ std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_me
         return;
     }
 
-    auto
-    perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path,
-                                                           std::make_unique<Dive::AvailableMetrics>(
-                                                           available_metrics->get()));
+    auto perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path, *available_metrics);
     m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(
     std::move(perf_metrics_data));
     m_perf_metrics_data_provider->Analyze();
@@ -163,8 +160,7 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
     {
         const auto &metric_value = record.m_metric_values.at(metric_col_index);
 
-        return std::visit([](const auto &value) { return QVariant::fromValue(value); },
-                          metric_value);
+        return QString::number(metric_value, 'f', 1);
     }
 
     return QVariant();

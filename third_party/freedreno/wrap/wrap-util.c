@@ -550,7 +550,7 @@ void collect_trace_file(const char* capture_file_path)
 		pthread_mutex_lock(&write_lock);
 		LOG_CLOSE_FILE(df->log_fd);
 		df->log_fd = LOG_NULL_FILE;
-		df->device_id = -1;
+		df->device_fd = -1;
 		pthread_mutex_unlock(&write_lock);
 		if(-1 == append_file(capture_file_path, df->file_name))
 		{

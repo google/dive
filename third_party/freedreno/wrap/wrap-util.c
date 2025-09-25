@@ -540,8 +540,8 @@ void collect_trace_file(const char* capture_file_path)
 	// Could remove(full_path). However, that is susceptible to TOCTOU problems.
 	// Prefer to open the target file once and keep it open for the duration of collection.
 	int concatenated_log_fd = open(full_path, O_CREAT | O_TRUNC | O_WRONLY);
-	if (concatenated_log_fd < 0) {
-		LOGI("Failed to open `%s` to collect traces. Can't collect traces. Error: %s", full_path, strerror(concatenated_log_fd));
+	if (concatenated_log_fd == -1) {
+		LOGI("Failed to open `%s` to collect traces. Can't collect traces. Error: %s", full_path, strerror(errno));
 		return;
 	}
 
@@ -569,9 +569,8 @@ void collect_trace_file(const char* capture_file_path)
         }
 	}
 
-	int close_result = close(concatenated_log_fd);
-	if (close_result < 0) {
-		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", full_path, strerror(close_result));
+	if (close(concatenated_log_fd) == -1) {
+		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", full_path, strerror(errno));
 	}
 }
 void hexdump(const void *data, int size)

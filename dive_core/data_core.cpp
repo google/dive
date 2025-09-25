@@ -369,15 +369,39 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                                    type7_header->opcode,
                                                    m_state_tracker);
 
-            DIVE_ASSERT(sync_type != SyncType::kNone);  // Sanity check
-            if (sync_type == SyncType::kSysMemToGmemResolve)
-                event_info.m_type = EventInfo::EventType::kSysmemToGmemResolve;
-            else if (sync_type == SyncType::kGmemToSysMemResolve)
+            switch (sync_type)
+            {
+            case SyncType::kGmemToSysMemResolve:
                 event_info.m_type = EventInfo::EventType::kGmemToSysmemResolve;
-            else if (sync_type == SyncType::kClearGmem)
+                break;
+            case SyncType::kGmemToSysMemResolveAndClearGmem:
+                event_info.m_type = EventInfo::EventType::kGmemToSysMemResolveAndClearGmem;
+                break;
+            case SyncType::kClearGmem:
                 event_info.m_type = EventInfo::EventType::kClearGmem;
-            else
-                event_info.m_type = EventInfo::EventType::kSync;
+                break;
+            case SyncType::kSysMemToGmemResolve:
+                event_info.m_type = EventInfo::EventType::kSysmemToGmemResolve;
+                break;
+            case SyncType::kWaitMemWrites:
+                event_info.m_type = EventInfo::EventType::kWaitMemWrites;
+                break;
+            case SyncType::kWaitForIdle:
+                event_info.m_type = EventInfo::EventType::kWaitForIdle;
+                break;
+            case SyncType::kWaitForMe:
+                event_info.m_type = EventInfo::EventType::kWaitForMe;
+                break;
+            case SyncType::kEventWriteStart:
+                event_info.m_type = EventInfo::EventType::kEventWriteStart;
+                break;
+            case SyncType::kEventWriteEnd:
+                event_info.m_type = EventInfo::EventType::kEventWriteEnd;
+                break;
+            default:
+                DIVE_ASSERT(false);  // Sanity check
+                break;
+            }
         }
 
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();

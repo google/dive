@@ -19,6 +19,7 @@
 #include <sstream>
 #include <numeric>
 #include <set>
+#include <array>
 
 #include "dive_core/data_core.h"
 #include "pm4_info.h"
@@ -120,13 +121,15 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     // Number of CpWaitForIdle()
     // Number of prefetches
     // Number of loads/stores to GMEM
-    enum Stats
+    enum Stats : uint32_t
     {
         kBinningDraws,
         kDirectDraws,
         kTiledDraws,
         kDispatches,
-        kSyncs,
+        kWaitMemWrites,
+        kWaitForIdle,
+        kWaitForMe,
         kDepthTestEnabled,
         kDepthWriteEnabled,
         kEarlyZ,
@@ -152,54 +155,63 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         kMaxGPRs,
         kMedianGPRs,
         kTotalResolves,
-        kSysmemToGmemResolves,
         kGmemToSysmemResolves,
+        kGmemToSysmemAndClearGmemResolves,
         kClearGmemResolves,
+        kSysmemToGmemResolves,
         kNumStats
     };
-    const char *stats_desc[kNumStats] = {
-        "Num Draws (BINNING)",
-        "Num Draws (DIRECT)",
-        "Num Draws (TILED)",
-        "Num Dispatches",
-        "Num Syncs",
-        "Num Draws with Depth Test Enabled",
-        "Num Draws with Depth Write Enabled",
-        "Num Draws with EarlyZ",
-        "Num Draws with LateZ",
-        "Num Draws with Early LRZ & LateZ",
-        "Num Draws with LRZ Enabled",
-        "Num Draws with LRZ Write Enabled",
-        "Num Draws with culling enabled",
-        "Total indices in all draws (includes non-indexed draws)",
-        "\tMin indices in a single draw",
-        "\tMax indices in a single draw",
-        "\tMedian indices in a single draw",
-        "Number of unique shaders",
-        "\tNumber of BINNING VS",
-        "\tNumber of non-BINNING VS",
-        "\tNumber of non-VS Shaders",
-        "Total instructions in all shaders",
-        "\tMin instructions in a single shader",
-        "\tMax instructions in a single shader",
-        "\tMedian instructions in a single shader",
-        "Total GPRs in all shaders",
-        "\tMin GPRs in a single shader",
-        "\tMax GPRs in a single shader",
-        "\tMedian GPRs in a single shader",
-        "Total resolves",
-        "\tSysMem to Gmem Resolves",
-        "\tGmem to SysMem Resolves",
-        "\tGmem Clears",
+
+    constexpr std::array kStatMap = {
+        std::pair(kBinningDraws, "Num Draws (BINNING)"),
+        std::pair(kDirectDraws, "Num Draws (DIRECT)"),
+        std::pair(kTiledDraws, "Num Draws (TILED)"),
+        std::pair(kDispatches, "Num Dispatches"),
+        std::pair(kWaitMemWrites, "Num WaitMemWrites"),
+        std::pair(kWaitForIdle, "Num WaitForIdle"),
+        std::pair(kWaitForMe, "Num WaitForMe"),
+        std::pair(kDepthTestEnabled, "Num Draws with Depth Test Enabled"),
+        std::pair(kDepthWriteEnabled, "Num Draws with Depth Write Enabled"),
+        std::pair(kEarlyZ, "Num Draws with EarlyZ"),
+        std::pair(kLateZ, "Num Draws with LateZ"),
+        std::pair(kEarlyLRZLateZ, "Num Draws with Early LRZ & LateZ"),
+        std::pair(kLrzEnabled, "Num Draws with LRZ Enabled"),
+        std::pair(kLrzWriteEnabled, "Num Draws with LRZ Write Enabled"),
+        std::pair(kCullModeEnabled, "Num Draws with culling enabled"),
+        std::pair(kTotalIndices, "Total indices in all draws (includes non-indexed draws)"),
+        std::pair(kMinIndices, "\tMin indices in a single draw"),
+        std::pair(kMaxIndices, "\tMax indices in a single draw"),
+        std::pair(kMedianIndices, "\tMedian indices in a single draw"),
+        std::pair(kShaders, "Number of unique shaders"),
+        std::pair(kBinningVS, "\tNumber of BINNING VS"),
+        std::pair(kNonBinningVS, "\tNumber of non-BINNING VS"),
+        std::pair(kNonVS, "\tNumber of non-VS Shaders"),
+        std::pair(kTotalInstructions, "Total instructions in all shaders"),
+        std::pair(kMinInstructions, "\tMin instructions in a single shader"),
+        std::pair(kMaxInstructions, "\tMax instructions in a single shader"),
+        std::pair(kMedianInstructions, "\tMedian instructions in a single shader"),
+        std::pair(kTotalGPRs, "Total GPRs in all shaders"),
+        std::pair(kMinGPRs, "\tMin GPRs in a single shader"),
+        std::pair(kMaxGPRs, "\tMax GPRs in a single shader"),
+        std::pair(kMedianGPRs, "\tMedian GPRs in a single shader"),
+        std::pair(kTotalResolves, "Total resolves"),
+        std::pair(kGmemToSysmemResolves, "\tGmem to SysMem Resolves"),
+        std::pair(kGmemToSysmemAndClearGmemResolves, "\tGmem to SysMem Resolves and Clear Gmem"),
+        std::pair(kClearGmemResolves, "\tGmem Clears"),
+        std::pair(kSysmemToGmemResolves, "\tSysMem to Gmem Resolves"),
     };
-#ifndef NDEBUG
-    // Ensure all elements of stats_desc are initialized
-    // Indirect way to ensure the right number of initializers are provided above
-    for (uint32_t i = 0; i < kNumStats; ++i)
-    {
-        assert(stats_desc[i] != nullptr);
-    }
-#endif
+
+    static_assert(kStatMap.size() == kNumStats,
+                  "ERROR: The 'Stat' enum and the 'kStatMap' descriptions are out of sync!");
+
+    constexpr std::array<const char *, kNumStats> kStatDescriptions = [&] {
+        std::array<const char *, kNumStats> arr{};
+        for (const auto &pair : kStatMap)
+        {
+            arr[pair.first] = pair.second;
+        }
+        return arr;
+    }();
 
     // Wrappers with an operator< so that they can be stored in an std::set
     struct Viewport
@@ -279,14 +291,20 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
 
         if (info.m_type == Dive::EventInfo::EventType::kDispatch)
             stats_list[kDispatches]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kSync)
-            stats_list[kSyncs]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kSysmemToGmemResolve)
-            GATHER_RESOLVES(SysmemToGmem);
+        else if (info.m_type == Dive::EventInfo::EventType::kWaitMemWrites)
+            stats_list[kWaitMemWrites]++;
+        else if (info.m_type == Dive::EventInfo::EventType::kWaitForIdle)
+            stats_list[kWaitForIdle]++;
+        else if (info.m_type == Dive::EventInfo::EventType::kWaitForMe)
+            stats_list[kWaitForMe]++;
         else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysmemResolve)
             GATHER_RESOLVES(GmemToSysmem);
+        else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysMemResolveAndClearGmem)
+            GATHER_RESOLVES(GmemToSysmemAndClearGmem);
         else if (info.m_type == Dive::EventInfo::EventType::kClearGmem)
             GATHER_RESOLVES(ClearGmem);
+        else if (info.m_type == Dive::EventInfo::EventType::kSysmemToGmemResolve)
+            GATHER_RESOLVES(SysmemToGmem);
         else if (info.m_type == Dive::EventInfo::EventType::kDraw)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinning)
@@ -383,7 +401,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
 
     for (uint32_t i = 0; i < kNumStats; ++i)
     {
-        ostream << stats_desc[i] << ": " << stats_list[i] << std::endl;
+        ostream << kStatDescriptions[i] << ": " << stats_list[i] << std::endl;
     }
 
     // Print out all unique viewports

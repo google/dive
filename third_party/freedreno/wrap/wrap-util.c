@@ -564,8 +564,10 @@ void collect_trace_file(const char* capture_file_path)
 			{
 				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);
 			}
-			// delete the file that has been concatenated. 
-			remove(df->file_name);
+			else
+			{
+				remove(df->file_name);
+			}
         }
 	}
 

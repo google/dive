@@ -232,5 +232,8 @@ void PerfCounterTabView::DisconnectSearchBar()
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnCorrelateCounter(uint64_t index)
 {
-    m_perf_counter_view->selectRow(index);
+    if (auto row = m_perf_counter_model.GetRowFromDrawIndex(index))
+    {
+        m_perf_counter_view->selectRow(*row);
+    }
 }

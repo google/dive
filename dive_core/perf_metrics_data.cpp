@@ -35,6 +35,15 @@
 
 namespace Dive
 {
+namespace
+{
+
+bool IsMetricsRecordDrawOrDispatch(const PerfMetricsRecord& record)
+{
+    return record.m_draw_type == 1 || record.m_draw_type == 3;
+}
+
+}  // namespace
 
 namespace
 {
@@ -220,15 +229,19 @@ class PerfMetricsDataProvider::Correlator
 public:
     using DrawRef = uint64_t;
     using PatternIndex = size_t;
+    using DrawIndex = uint64_t;
     static constexpr PatternIndex kInvalidPatternIndex = std::numeric_limits<PatternIndex>::max();
+    static constexpr DrawIndex    kInvalidDrawIndex = std::numeric_limits<DrawIndex>::max();
 
     void Reset()
     {
         m_draws.clear();
-        m_draw_to_index.clear();
+        m_draw_to_offset.clear();
 
         m_pattern_size = 0;
         m_record_to_index.clear();
+        m_draw_index_to_offset.clear();
+        m_offset_to_draw_index.clear();
     }
 
     void AnalyzeCommands(const CommandHierarchy&);
@@ -261,14 +274,28 @@ public:
         return m_draws[offset];
     }
 
-    std::optional<PatternIndex> GetPatternIndex(DrawRef ref) const
+    std::optional<PatternIndex> GetPatternIndexFromDrawIndex(DrawIndex draw_index) const
     {
-        auto iter = m_draw_to_index.find(ref);
-        if (iter == m_draw_to_index.end())
+        if (draw_index >= m_draw_index_to_offset.size())
         {
             return std::nullopt;
         }
-        return iter->second;
+        auto offset = m_draw_index_to_offset[draw_index];
+        if (offset >= m_pattern_size)
+        {
+            return std::nullopt;
+        }
+        return offset;
+    }
+
+    std::optional<PatternIndex> GetPatternIndex(DrawRef ref) const
+    {
+        auto iter = m_draw_to_offset.find(ref);
+        if (iter == m_draw_to_offset.end())
+        {
+            return std::nullopt;
+        }
+        return GetPatternIndexFromDrawIndex(iter->second);
     }
 
 private:
@@ -286,10 +313,12 @@ private:
                                     const PerfMetricsRecord* end);
 
     std::vector<DrawRef>                      m_draws;
-    std::unordered_map<DrawRef, PatternIndex> m_draw_to_index;
+    std::unordered_map<DrawRef, PatternIndex> m_draw_to_offset;
 
     size_t                    m_pattern_size;
     std::vector<PatternIndex> m_record_to_index;
+    std::vector<PatternIndex> m_draw_index_to_offset;
+    std::vector<DrawIndex>    m_offset_to_draw_index;
 };
 
 void PerfMetricsDataProvider::Correlator::ExtractDraws(
@@ -299,7 +328,7 @@ std::unordered_map<uint64_t, uint64_t>& out_mapping)
 {
     // TODO: extract the command buffer pattern.
 
-    std::unordered_map<uint64_t, uint64_t> draw_to_index;
+    std::unordered_map<uint64_t, uint64_t> draw_to_offset;
 
     // First instance of the draw call in the command stream (from binning pass).
     std::vector<uint64_t> actual_draws;
@@ -319,7 +348,7 @@ std::unordered_map<uint64_t, uint64_t>& out_mapping)
             size_t base = actual_draws.size() - alias_draws.size();
             for (size_t i = 0; i < alias_draws.size(); ++i)
             {
-                draw_to_index[alias_draws[i]] = base + i;
+                draw_to_offset[alias_draws[i]] = base + i;
             }
         }
         alias_draws.clear();
@@ -343,8 +372,10 @@ std::unordered_map<uint64_t, uint64_t>& out_mapping)
                 draws = &alias_draws;
             }
         }
-        if (!Dive::IsDrawDispatchNode(node_type))
+        if (!Dive::IsDrawDispatchNode(node_type) &&
+            node_type != Dive::NodeType::kGfxrVulkanDrawCommandNode)
         {
+            // Note: what if both pm4 node and vulkan draw command node exist?
             continue;
         }
         draws->push_back(i);
@@ -352,15 +383,15 @@ std::unordered_map<uint64_t, uint64_t>& out_mapping)
     dedupe();
     for (size_t i = 0; i < actual_draws.size(); ++i)
     {
-        draw_to_index[actual_draws[i]] = i;
+        draw_to_offset[actual_draws[i]] = i;
     }
     out_draws = std::move(actual_draws);
-    out_mapping = std::move(draw_to_index);
+    out_mapping = std::move(draw_to_offset);
 }
 
 void PerfMetricsDataProvider::Correlator::AnalyzeCommands(const CommandHierarchy& command_hierarchy)
 {
-    ExtractDraws(command_hierarchy, m_draws, m_draw_to_index);
+    ExtractDraws(command_hierarchy, m_draws, m_draw_to_offset);
 }
 
 bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatures&    signatures,
@@ -423,7 +454,19 @@ const std::vector<PerfMetricsRecord>& records)
         emit_frame(frame_start, records.size());
     }
 
-    if (!m_draws.empty() && m_draws.size() != template_frame_size)
+    std::vector<PatternIndex> draw_index_to_offset;
+    std::vector<DrawIndex>    offset_to_draw_index;
+    offset_to_draw_index.resize(template_frame_size, kInvalidDrawIndex);
+    for (size_t i = 0; i < template_frame_size; ++i)
+    {
+        if (IsMetricsRecordDrawOrDispatch(records[template_frame_start + i]))
+        {
+            offset_to_draw_index[i] = draw_index_to_offset.size();
+            draw_index_to_offset.push_back(i);
+        }
+    }
+
+    if (!m_draws.empty() && m_draws.size() != draw_index_to_offset.size())
     {
         // Draw pattern is different between capture file and metric file.
         return;
@@ -462,6 +505,8 @@ const std::vector<PerfMetricsRecord>& records)
 
     m_pattern_size = template_frame_size;
     m_record_to_index = std::move(record_to_index);
+    m_draw_index_to_offset = std::move(draw_index_to_offset);
+    m_offset_to_draw_index = std::move(offset_to_draw_index);
 }
 
 std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::Create(
@@ -603,6 +648,17 @@ std::optional<uint64_t> PerfMetricsDataProvider::GetCorrelatedComputedRecordInde
 uint64_t draw_ref) const
 {
     return m_correlator->GetPatternIndex(draw_ref);
+}
+std::optional<uint64_t> PerfMetricsDataProvider::GetComputedRecordIndexFromDrawIndex(
+uint64_t draw_index) const
+{
+    return m_correlator->GetPatternIndexFromDrawIndex(draw_index);
+}
+
+std::optional<uint64_t> PerfMetricsDataProvider::GetDrawIndexFromComputedRecordIndex(
+uint64_t record_index) const
+{
+    return m_correlator->GetPatternIndexFromDrawIndex(record_index);
 }
 
 const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const

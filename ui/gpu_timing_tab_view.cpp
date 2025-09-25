@@ -141,6 +141,8 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
 {
+    QItemSelectionModel *selection_model = m_table_view->selectionModel();
+    QSignalBlocker       blocker(selection_model);
     // Verify that the number of rows in the model is consistent with the rows of
     // m_timed_event_indices
     if (m_model.rowCount() != static_cast<int>(m_timed_event_indices.size()))
@@ -158,6 +160,8 @@ void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
         return;
     }
     m_table_view->selectRow(row);
+    m_table_view->update();
+    m_table_view->viewport()->update();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -166,7 +170,7 @@ void GpuTimingTabView::OnSelectionChanged(const QModelIndex &index)
     // Resize columns to fit the content
     ResizeColumns();
     int selected_row = index.row();
-    if (static_cast<size_t>(selected_row) < m_timed_event_indices.size())
+    if (static_cast<size_t>(selected_row) < m_timed_event_indices.size() && selected_row >= 0)
     {
         emit GpuTimingDataSelected(m_timed_event_indices.at(selected_row));
     }

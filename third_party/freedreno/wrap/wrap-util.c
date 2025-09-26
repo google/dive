@@ -531,7 +531,7 @@ void collect_trace_file(const char* capture_file_path)
 {
 	LOGD("capture_file_path is %s", capture_file_path);
 
-	// Could remove(full_path). However, that is susceptible to TOCTOU problems.
+	// Could remove(capture_file_path). However, that is susceptible to TOCTOU problems.
 	// Prefer to open the target file once and keep it open for the duration of collection.
 	int concatenated_log_fd = creat(capture_file_path, 0644);
 	if (concatenated_log_fd == -1) {

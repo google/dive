@@ -535,7 +535,7 @@ void collect_trace_file(const char* capture_file_path)
 	// Prefer to open the target file once and keep it open for the duration of collection.
 	int concatenated_log_fd = creat(capture_file_path, 0644);
 	if (concatenated_log_fd == -1) {
-		LOGI("Failed to open `%s` to collect traces. Can't collect traces. Error: %s", full_path, strerror(errno));
+		LOGI("Failed to open `%s` to collect traces. Can't collect traces. Error: %s", capture_file_path, strerror(errno));
 		return;
 	}
 

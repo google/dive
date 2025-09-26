@@ -59,4 +59,10 @@ kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65
 inline constexpr int
 kPortRange = 7;  // A small range of ports should be enough to find an available one
 
+// GPU clock
+inline constexpr uint32_t kPinGpuClockMHz = 545;
+inline constexpr char     kDeviceGpuMinClockPath[] = "/sys/kernel/gpu/gpu_min_clock";
+inline constexpr char     kDeviceGpuMaxClockPath[] = "/sys/kernel/gpu/gpu_max_clock";
+inline constexpr char     kDeviceCurFreqPath[] = "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq";
+
 }  // namespace Dive

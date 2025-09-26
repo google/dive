@@ -61,33 +61,26 @@
 #define CHECK_AND_TRACK_STATE(stats_enum, ...) \
     CHECK_AND_TRACK_STATE_N(__VA_ARGS__)(stats_enum, __VA_ARGS__)
 
-#define GATHER_TOTAL_MIN_MAX_MEDIAN(array_name, type)                                     \
-    {                                                                                     \
-        std::sort(array_name.begin(), array_name.end());                                  \
-        size_t n = array_name.size();                                                     \
-        if (n % 2 != 0)                                                                   \
-        {                                                                                 \
-            stats_list[kMedian##type] = array_name[n / 2];                                \
-        }                                                                                 \
-        else                                                                              \
-        {                                                                                 \
-            auto mid1 = array_name[n / 2 - 1];                                            \
-            auto mid2 = array_name[n / 2];                                                \
-            stats_list[kMedian##type] = (uint64_t)((float)(mid1 + mid2) / 2.0f);          \
-        }                                                                                 \
-        stats_list[kMin##type] = *std::min_element(array_name.begin(), array_name.end()); \
-        stats_list[kMax##type] = *std::max_element(array_name.begin(), array_name.end()); \
-        stats_list[kTotal##type] = std::accumulate(array_name.begin(),                    \
-                                                   array_name.end(),                      \
-                                                   (uint64_t)0);                          \
+#define GATHER_TOTAL_MIN_MAX_MEDIAN(array_name, type)                                            \
+    {                                                                                            \
+        std::sort(array_name.begin(), array_name.end());                                         \
+        size_t n = array_name.size();                                                            \
+        if (n % 2 != 0)                                                                          \
+        {                                                                                        \
+            stats_list[Stats::kMedian##type] = array_name[n / 2];                                \
+        }                                                                                        \
+        else                                                                                     \
+        {                                                                                        \
+            auto mid1 = array_name[n / 2 - 1];                                                   \
+            auto mid2 = array_name[n / 2];                                                       \
+            stats_list[Stats::kMedian##type] = (uint64_t)((float)(mid1 + mid2) / 2.0f);          \
+        }                                                                                        \
+        stats_list[Stats::kMin##type] = *std::min_element(array_name.begin(), array_name.end()); \
+        stats_list[Stats::kMax##type] = *std::max_element(array_name.begin(), array_name.end()); \
+        stats_list[Stats::kTotal##type] = std::accumulate(array_name.begin(),                    \
+                                                          array_name.end(),                      \
+                                                          (uint64_t)0);                          \
     }
-
-#define GATHER_RESOLVES(type)            \
-    do                                   \
-    {                                    \
-        stats_list[kTotalResolves]++;    \
-        stats_list[k##type##Resolves]++; \
-    } while (0)
 
 #define PRINT_FIELD(name, value, last_item)                                          \
     {                                                                                \
@@ -121,91 +114,95 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     // Number of CpWaitForIdle()
     // Number of prefetches
     // Number of loads/stores to GMEM
-    enum Stats : uint32_t
+    struct Stats
     {
-        kBinningDraws,
-        kDirectDraws,
-        kTiledDraws,
-        kDispatches,
-        kWaitMemWrites,
-        kWaitForIdle,
-        kWaitForMe,
-        kDepthTestEnabled,
-        kDepthWriteEnabled,
-        kEarlyZ,
-        kLateZ,
-        kEarlyLRZLateZ,
-        kLrzEnabled,
-        kLrzWriteEnabled,
-        kCullModeEnabled,
-        kTotalIndices,
-        kMinIndices,
-        kMaxIndices,
-        kMedianIndices,
-        kShaders,
-        kBinningVS,
-        kNonBinningVS,
-        kNonVS,
-        kTotalInstructions,
-        kMinInstructions,
-        kMaxInstructions,
-        kMedianInstructions,
-        kTotalGPRs,
-        kMinGPRs,
-        kMaxGPRs,
-        kMedianGPRs,
-        kTotalResolves,
-        kGmemToSysmemResolves,
-        kGmemToSysmemAndClearGmemResolves,
-        kClearGmemResolves,
-        kSysmemToGmemResolves,
-        kNumStats
+        enum Type : uint32_t
+        {
+            kBinningDraws,
+            kDirectDraws,
+            kTiledDraws,
+            kDispatches,
+            kWaitMemWrites,
+            kWaitForIdle,
+            kWaitForMe,
+            kDepthTestEnabled,
+            kDepthWriteEnabled,
+            kEarlyZ,
+            kLateZ,
+            kEarlyLRZLateZ,
+            kLrzEnabled,
+            kLrzWriteEnabled,
+            kCullModeEnabled,
+            kTotalIndices,
+            kMinIndices,
+            kMaxIndices,
+            kMedianIndices,
+            kShaders,
+            kBinningVS,
+            kNonBinningVS,
+            kNonVS,
+            kTotalInstructions,
+            kMinInstructions,
+            kMaxInstructions,
+            kMedianInstructions,
+            kTotalGPRs,
+            kMinGPRs,
+            kMaxGPRs,
+            kMedianGPRs,
+            kTotalResolves,
+            kGmemToSysmemResolves,
+            kGmemToSysmemAndClearGmemResolves,
+            kClearGmemResolves,
+            kSysmemToGmemResolves,
+            kNumStats
+        };
     };
 
     constexpr std::array kStatMap = {
-        std::pair(kBinningDraws, "Num Draws (BINNING)"),
-        std::pair(kDirectDraws, "Num Draws (DIRECT)"),
-        std::pair(kTiledDraws, "Num Draws (TILED)"),
-        std::pair(kDispatches, "Num Dispatches"),
-        std::pair(kWaitMemWrites, "Num WaitMemWrites"),
-        std::pair(kWaitForIdle, "Num WaitForIdle"),
-        std::pair(kWaitForMe, "Num WaitForMe"),
-        std::pair(kDepthTestEnabled, "Num Draws with Depth Test Enabled"),
-        std::pair(kDepthWriteEnabled, "Num Draws with Depth Write Enabled"),
-        std::pair(kEarlyZ, "Num Draws with EarlyZ"),
-        std::pair(kLateZ, "Num Draws with LateZ"),
-        std::pair(kEarlyLRZLateZ, "Num Draws with Early LRZ & LateZ"),
-        std::pair(kLrzEnabled, "Num Draws with LRZ Enabled"),
-        std::pair(kLrzWriteEnabled, "Num Draws with LRZ Write Enabled"),
-        std::pair(kCullModeEnabled, "Num Draws with culling enabled"),
-        std::pair(kTotalIndices, "Total indices in all draws (includes non-indexed draws)"),
-        std::pair(kMinIndices, "\tMin indices in a single draw"),
-        std::pair(kMaxIndices, "\tMax indices in a single draw"),
-        std::pair(kMedianIndices, "\tMedian indices in a single draw"),
-        std::pair(kShaders, "Number of unique shaders"),
-        std::pair(kBinningVS, "\tNumber of BINNING VS"),
-        std::pair(kNonBinningVS, "\tNumber of non-BINNING VS"),
-        std::pair(kNonVS, "\tNumber of non-VS Shaders"),
-        std::pair(kTotalInstructions, "Total instructions in all shaders"),
-        std::pair(kMinInstructions, "\tMin instructions in a single shader"),
-        std::pair(kMaxInstructions, "\tMax instructions in a single shader"),
-        std::pair(kMedianInstructions, "\tMedian instructions in a single shader"),
-        std::pair(kTotalGPRs, "Total GPRs in all shaders"),
-        std::pair(kMinGPRs, "\tMin GPRs in a single shader"),
-        std::pair(kMaxGPRs, "\tMax GPRs in a single shader"),
-        std::pair(kMedianGPRs, "\tMedian GPRs in a single shader"),
-        std::pair(kTotalResolves, "Total resolves"),
-        std::pair(kGmemToSysmemResolves, "\tGmem to SysMem Resolves"),
-        std::pair(kGmemToSysmemAndClearGmemResolves, "\tGmem to SysMem Resolves and Clear Gmem"),
-        std::pair(kClearGmemResolves, "\tGmem Clears"),
-        std::pair(kSysmemToGmemResolves, "\tSysMem to Gmem Resolves"),
+        std::pair(Stats::kBinningDraws, "Num Draws (BINNING)"),
+        std::pair(Stats::kDirectDraws, "Num Draws (DIRECT)"),
+        std::pair(Stats::kTiledDraws, "Num Draws (TILED)"),
+        std::pair(Stats::kDispatches, "Num Dispatches"),
+        std::pair(Stats::kWaitMemWrites, "Num WaitMemWrites"),
+        std::pair(Stats::kWaitForIdle, "Num WaitForIdle"),
+        std::pair(Stats::kWaitForMe, "Num WaitForMe"),
+        std::pair(Stats::kDepthTestEnabled, "Num Draws with Depth Test Enabled"),
+        std::pair(Stats::kDepthWriteEnabled, "Num Draws with Depth Write Enabled"),
+        std::pair(Stats::kEarlyZ, "Num Draws with EarlyZ"),
+        std::pair(Stats::kLateZ, "Num Draws with LateZ"),
+        std::pair(Stats::kEarlyLRZLateZ, "Num Draws with Early LRZ & LateZ"),
+        std::pair(Stats::kLrzEnabled, "Num Draws with LRZ Enabled"),
+        std::pair(Stats::kLrzWriteEnabled, "Num Draws with LRZ Write Enabled"),
+        std::pair(Stats::kCullModeEnabled, "Num Draws with culling enabled"),
+        std::pair(Stats::kTotalIndices, "Total indices in all draws (includes non-indexed draws)"),
+        std::pair(Stats::kMinIndices, "\tMin indices in a single draw"),
+        std::pair(Stats::kMaxIndices, "\tMax indices in a single draw"),
+        std::pair(Stats::kMedianIndices, "\tMedian indices in a single draw"),
+        std::pair(Stats::kShaders, "Number of unique shaders"),
+        std::pair(Stats::kBinningVS, "\tNumber of BINNING VS"),
+        std::pair(Stats::kNonBinningVS, "\tNumber of non-BINNING VS"),
+        std::pair(Stats::kNonVS, "\tNumber of non-VS Shaders"),
+        std::pair(Stats::kTotalInstructions, "Total instructions in all shaders"),
+        std::pair(Stats::kMinInstructions, "\tMin instructions in a single shader"),
+        std::pair(Stats::kMaxInstructions, "\tMax instructions in a single shader"),
+        std::pair(Stats::kMedianInstructions, "\tMedian instructions in a single shader"),
+        std::pair(Stats::kTotalGPRs, "Total GPRs in all shaders"),
+        std::pair(Stats::kMinGPRs, "\tMin GPRs in a single shader"),
+        std::pair(Stats::kMaxGPRs, "\tMax GPRs in a single shader"),
+        std::pair(Stats::kMedianGPRs, "\tMedian GPRs in a single shader"),
+        std::pair(Stats::kTotalResolves, "Total resolves"),
+        std::pair(Stats::kGmemToSysmemResolves, "\tGmem to SysMem Resolves"),
+        std::pair(Stats::kGmemToSysmemAndClearGmemResolves,
+                  "\tGmem to SysMem Resolves and Clear Gmem"),
+        std::pair(Stats::kClearGmemResolves, "\tGmem Clears"),
+        std::pair(Stats::kSysmemToGmemResolves, "\tSysMem to Gmem Resolves"),
     };
 
-    static_assert(kStatMap.size() == kNumStats,
+    static_assert(kStatMap.size() == Stats::kNumStats,
                   "ERROR: The 'Stat' enum and the 'kStatMap' descriptions are out of sync!");
 
-    constexpr std::array<const char *, kNumStats> kStatDescriptions = [&] {
-        std::array<const char *, kNumStats> arr{};
+    constexpr std::array<const char *, Stats::kNumStats> kStatDescriptions = [&] {
+        std::array<const char *, Stats::kNumStats> arr{};
         for (const auto &[stat, description] : kStatMap)
         {
             arr[stat] = description;
@@ -254,7 +251,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         }
     };
 
-    uint64_t stats_list[kNumStats] = {};
+    uint64_t stats_list[Stats::kNumStats] = {};
 
     size_t                          event_count = meta_data.m_event_info.size();
     const Dive::EventStateInfo     &event_state = meta_data.m_event_state;
@@ -289,30 +286,35 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             num_draws_in_pass = 0;
         }
 
+        const auto GatherResolves = [&](Stats::Type resolve_type) {
+            stats_list[Stats::kTotalResolves]++;
+            stats_list[resolve_type]++;
+        };
+
         if (info.m_type == Dive::EventInfo::EventType::kDispatch)
-            stats_list[kDispatches]++;
+            stats_list[Stats::kDispatches]++;
         else if (info.m_type == Dive::EventInfo::EventType::kWaitMemWrites)
-            stats_list[kWaitMemWrites]++;
+            stats_list[Stats::kWaitMemWrites]++;
         else if (info.m_type == Dive::EventInfo::EventType::kWaitForIdle)
-            stats_list[kWaitForIdle]++;
+            stats_list[Stats::kWaitForIdle]++;
         else if (info.m_type == Dive::EventInfo::EventType::kWaitForMe)
-            stats_list[kWaitForMe]++;
+            stats_list[Stats::kWaitForMe]++;
         else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysmemResolve)
-            GATHER_RESOLVES(GmemToSysmem);
+            GatherResolves(Stats::kGmemToSysmemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysMemResolveAndClearGmem)
-            GATHER_RESOLVES(GmemToSysmemAndClearGmem);
+            GatherResolves(Stats::kGmemToSysmemAndClearGmemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kClearGmem)
-            GATHER_RESOLVES(ClearGmem);
+            GatherResolves(Stats::kClearGmemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kSysmemToGmemResolve)
-            GATHER_RESOLVES(SysmemToGmem);
+            GatherResolves(Stats::kSysmemToGmemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kDraw)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinning)
-                stats_list[kBinningDraws]++;
+                stats_list[Stats::kBinningDraws]++;
             else if (info.m_render_mode == Dive::RenderModeType::kDirect)
-                stats_list[kDirectDraws]++;
+                stats_list[Stats::kDirectDraws]++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
-                stats_list[kTiledDraws]++;
+                stats_list[Stats::kTiledDraws]++;
 
             num_draws_in_pass++;
             if (info.m_num_indices != 0)
@@ -323,26 +325,30 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
 
             if (info.m_render_mode != Dive::RenderModeType::kBinning)
             {
-                CHECK_AND_TRACK_STATE(kDepthTestEnabled, DepthTestEnabled);
-                CHECK_AND_TRACK_STATE(kDepthWriteEnabled, DepthTestEnabled, DepthWriteEnabled);
+                CHECK_AND_TRACK_STATE(Stats::kDepthTestEnabled, DepthTestEnabled);
+                CHECK_AND_TRACK_STATE(Stats::kDepthWriteEnabled,
+                                      DepthTestEnabled,
+                                      DepthWriteEnabled);
                 if (event_state_it->DepthTestEnabled())
                 {
-                    CHECK_AND_TRACK_STATE_EQUAL(kEarlyZ, ZTestMode, A6XX_EARLY_Z);
-                    CHECK_AND_TRACK_STATE_EQUAL(kLateZ, ZTestMode, A6XX_LATE_Z);
-                    CHECK_AND_TRACK_STATE_EQUAL(kEarlyLRZLateZ, ZTestMode, A6XX_EARLY_LRZ_LATE_Z);
+                    CHECK_AND_TRACK_STATE_EQUAL(Stats::kEarlyZ, ZTestMode, A6XX_EARLY_Z);
+                    CHECK_AND_TRACK_STATE_EQUAL(Stats::kLateZ, ZTestMode, A6XX_LATE_Z);
+                    CHECK_AND_TRACK_STATE_EQUAL(Stats::kEarlyLRZLateZ,
+                                                ZTestMode,
+                                                A6XX_EARLY_LRZ_LATE_Z);
                 }
             }
             if ((info.m_render_mode == Dive::RenderModeType::kDirect) ||
                 (info.m_render_mode == Dive::RenderModeType::kBinning))
             {
-                CHECK_AND_TRACK_STATE(kLrzEnabled, DepthTestEnabled, LRZEnabled);
-                CHECK_AND_TRACK_STATE(kLrzWriteEnabled,
+                CHECK_AND_TRACK_STATE(Stats::kLrzEnabled, DepthTestEnabled, LRZEnabled);
+                CHECK_AND_TRACK_STATE(Stats::kLrzWriteEnabled,
                                       DepthTestEnabled,
                                       DepthWriteEnabled,
                                       LRZWrite);
             }
 
-            CHECK_AND_TRACK_STATE_NOT_EQUAL(kCullModeEnabled, CullMode, VK_CULL_MODE_NONE);
+            CHECK_AND_TRACK_STATE_NOT_EQUAL(Stats::kCullModeEnabled, CullMode, VK_CULL_MODE_NONE);
 
             for (uint32_t v = 0; v < 16; ++v)
             {
@@ -377,18 +383,18 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
     {
         std::vector<size_t>   shaders_num_instructions;
         std::vector<uint32_t> shaders_num_gprs;
-        stats_list[kShaders] = meta_data.m_shaders.size();
+        stats_list[Stats::kShaders] = meta_data.m_shaders.size();
         for (const Dive::ShaderReference &ref : shader_ref_set)
         {
             if (ref.m_stage == Dive::ShaderStage::kShaderStageVs)
             {
                 if (ref.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kBINNING)
-                    stats_list[kBinningVS]++;
+                    stats_list[Stats::kBinningVS]++;
                 else
-                    stats_list[kNonBinningVS]++;
+                    stats_list[Stats::kNonBinningVS]++;
             }
             else
-                stats_list[kNonVS]++;
+                stats_list[Stats::kNonVS]++;
 
             const Dive::Disassembly &disass = meta_data.m_shaders[ref.m_shader_index];
             shaders_num_instructions.push_back(disass.GetNumInstructions());
@@ -399,7 +405,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         GATHER_TOTAL_MIN_MAX_MEDIAN(shaders_num_gprs, GPRs);
     }
 
-    for (uint32_t i = 0; i < kNumStats; ++i)
+    for (uint32_t i = 0; i < Stats::kNumStats; ++i)
     {
         ostream << kStatDescriptions[i] << ": " << stats_list[i] << std::endl;
     }

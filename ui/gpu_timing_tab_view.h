@@ -40,6 +40,11 @@ public:
 public slots:
     void OnModelReset();
     void OnEventSelectionChanged(const QModelIndex &model_index);
+    void OnSelectionChanged(const QModelIndex &index);
+    void ClearSelection();
+
+signals:
+    void GpuTimingDataSelected(uint64_t);
 
 private:
     void ResizeColumns();

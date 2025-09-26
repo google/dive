@@ -206,9 +206,9 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
 
     constexpr std::array<const char *, kNumStats> kStatDescriptions = [&] {
         std::array<const char *, kNumStats> arr{};
-        for (const auto &pair : kStatMap)
+        for (const auto &[stat, description] : kStatMap)
         {
-            arr[pair.first] = pair.second;
+            arr[stat] = description;
         }
         return arr;
     }();

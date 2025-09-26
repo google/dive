@@ -399,7 +399,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                 event_info.m_type = EventInfo::EventType::kEventWriteEnd;
                 break;
             default:
-                DIVE_ASSERT(false);  // Sanity check
+                DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
                 break;
             }
         }

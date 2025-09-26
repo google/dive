@@ -535,36 +535,29 @@ int append_file(const char *target, const char *src)
 // GOOGLE: Close all opened trace fd
 void collect_trace_file(const char* capture_file_path)
 {
-	char full_path[PATH_MAX];
-#if defined (COMPRESS_TRACE)
-	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
-#else
-	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
-#endif
-	LOGD("full_path is %s", full_path);
+	LOGD("capture_file_path is %s", capture_file_path);
 
 	for (int i = 0; i < MAX_DEVICE_FILES; i++)
 	{
 		struct device_file* df = &device_files[i];
-		int fd = 	df->device_fd ;
-		if(fd != -1)
+		int fd = df->device_fd;
+		if(fd == -1 || df->log_fd == LOG_NULL_FILE)
 		{
-			struct device_file *df = get_file(fd);
-			if (df == NULL)
-					continue;
-			LOGD("device_fd %d, log_fd %"LOG_PRI_FILE", filename %s closed in collect_trace_file \n",
-				fd, df->log_fd, df->file_name);
-			pthread_mutex_lock(&write_lock);
-			LOG_CLOSE_FILE(df->log_fd);
-			df->log_fd = LOG_NULL_FILE;
-			pthread_mutex_unlock(&write_lock);
-			if(-1 == append_file(full_path, df->file_name))
-			{
-				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);
-			}
-			// delete the file that has been concatenated. 
-			remove(df->file_name);
-        }
+			continue;
+		}
+		LOGD("device_fd %d, log_fd %"LOG_PRI_FILE", filename %s closed in collect_trace_file \n",
+			fd, df->log_fd, df->file_name);
+		pthread_mutex_lock(&write_lock);
+		LOG_CLOSE_FILE(df->log_fd);
+		df->log_fd = LOG_NULL_FILE;
+		df->device_fd = -1;
+		pthread_mutex_unlock(&write_lock);
+		if(-1 == append_file(capture_file_path, df->file_name))
+		{
+			LOGI("Failed to append file %s to target file %s\n", df->file_name, capture_file_path);
+		}
+		// delete the file that has been concatenated. 
+		remove(df->file_name);
 	}
 }
 void hexdump(const void *data, int size)

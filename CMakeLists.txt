@@ -18,8 +18,6 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive)
 
-option(DIVE_UI_WIN32 "(Windows-only) Build Dive UI as WIN32 GUI application instead of a console application. This will supress logging to stdout." ON)
-
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 
@@ -112,7 +110,7 @@ if(NOT ANDROID)
     add_subdirectory(plugins)
 else()
     if(NOT CMAKE_HOST_WIN32)
-        set(DIVE_GFXR_GRADLE_CONSOLE "verbose" CACHE LIST "Value of --console to use when building GFXR with Gradle")
+        set(DIVE_GFXR_GRADLE_CONSOLE "verbose" CACHE STRING "Value of --console to use when building GFXR with Gradle")
         message(CHECK_START "Build gfxr for android")
         execute_process(
             COMMAND ./gradlew layer:assemble${CMAKE_BUILD_TYPE} replay:assemble${CMAKE_BUILD_TYPE} --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}

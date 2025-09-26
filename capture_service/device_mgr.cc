@@ -259,6 +259,7 @@ absl::Status AndroidDevice::CleanupDevice()
     LOGD("Cleanup device %s\n", m_serial.c_str());
 
     UnpinGpuClock().IgnoreError();
+    Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
 
     if (m_original_state.m_root_access_requested)
     {
@@ -515,12 +516,23 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
 {
     LOGD("RunReplayApk(): starting\n");
 
-    bool pinned_clock = true;
-    auto ret = m_device->PinGpuClock(kPinGpuClockMHz);
+    bool trouble_pinning_clock = false;
+    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
     if (!ret.ok())
     {
-        LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
-        pinned_clock = false;
+        LOGW("WARNING: Could not disable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
+        trouble_pinning_clock = true;
+    }
+
+    if (!trouble_pinning_clock)
+    {
+        ret = m_device->PinGpuClock(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
+            trouble_pinning_clock = true;
+        }
     }
 
     std::string updated_replay_args = replay_args;
@@ -654,7 +666,7 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
         return res.status();
     }
 
-    if (pinned_clock)
+    if (!trouble_pinning_clock)
     {
         auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
         if (!ret.ok())
@@ -667,6 +679,13 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
         {
             LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
         }
+    }
+
+    ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
+    if (!ret.ok())
+    {
+        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
     }
 
     LOGD("RunReplayApk(): completed\n");
@@ -685,12 +704,23 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
 
     LOGD("RunProfilingOnReplay(): starting\n");
 
-    bool pinned_clock = true;
-    auto ret = m_device->PinGpuClock(kPinGpuClockMHz);
+    bool trouble_pinning_clock = false;
+    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
     if (!ret.ok())
     {
-        LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
-        pinned_clock = false;
+        LOGW("WARNING: Could not disable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
+        trouble_pinning_clock = true;
+    }
+
+    if (!trouble_pinning_clock)
+    {
+        ret = m_device->PinGpuClock(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
+            trouble_pinning_clock = true;
+        }
     }
 
     // Deploy libraries and binaries
@@ -753,7 +783,7 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
                                             kProfilingPluginFolderName);
     RETURN_IF_ERROR(m_device->Adb().Run(clean_cmd));
 
-    if (pinned_clock)
+    if (!trouble_pinning_clock)
     {
         auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
         if (!ret.ok())
@@ -766,6 +796,13 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
         {
             LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
         }
+    }
+
+    ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
+    if (!ret.ok())
+    {
+        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
     }
 
     return absl::OkStatus();

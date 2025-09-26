@@ -565,7 +565,7 @@ void collect_trace_file(const char* capture_file_path)
 	}
 
 	if (close(concatenated_log_fd) == -1) {
-		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", full_path, strerror(errno));
+		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", capture_file_path, strerror(errno));
 	}
 }
 void hexdump(const void *data, int size)

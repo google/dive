@@ -60,49 +60,39 @@ SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, addr, sizeof(packet)));
         SyncType type = SyncType::kNone;
 
-        // Be more specific with certain ccu operations
         if (packet.bitfields0.EVENT == vgt_event_type::CCU_RESOLVE)
         {
-            uint32_t rb_blit_info_offset = GetRegOffsetByName("RB_BLIT_INFO");
-            if (state_tracker.IsRegSet(rb_blit_info_offset))
+            uint32_t rb_resolve_operation_offset = GetRegOffsetByName("RB_RESOLVE_OPERATION");
+            if (state_tracker.IsRegSet(rb_resolve_operation_offset))
             {
-                RB_BLIT_INFO rb_blit_info;
-                rb_blit_info.u32All = state_tracker.GetRegValue(rb_blit_info_offset);
-
-                // TODO(wangra): update mesa code to handle this correctly
-                // We have encountered the case where rb_blit_info.bitfields.GMEM == 0 but
-                // rb_blit_info.bitfields.UNK0 == 1 The register 0x88e3 has been updated
-                // https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/src/freedreno/registers/adreno/a6xx.xml?ref_type=heads#L1712
-                // The 1st 2 bits are actually TYPE
-                // If rb_blit_info.bitfields.GMEM bit is set, it means either BLIT_EVENT_CLEAR
-                // or BLIT_EVENT_LOAD In my case, the value means BLIT_EVENT_STORE_AND_CLEAR
-
-                enum EBlitEventType : uint8_t
-                {
-                    BLIT_EVENT_STORE = 0x0,
-                    BLIT_EVENT_STORE_AND_CLEAR = 0x1,
-                    BLIT_EVENT_CLEAR = 0x2,
-                    BLIT_EVENT_LOAD = 0x3,
-                };
-
-                EBlitEventType event_type = static_cast<EBlitEventType>(
-                (rb_blit_info.bitfields.GMEM << 1) | (rb_blit_info.bitfields.UNK0));
-
-                switch (event_type)
+                RB_RESOLVE_OPERATION rb_resolve_operation;
+                rb_resolve_operation.u32All = state_tracker.GetRegValue(
+                rb_resolve_operation_offset);
+                switch (rb_resolve_operation.bitfields.TYPE)
                 {
                 case BLIT_EVENT_STORE:
-                    type = SyncType::kGmemToSysMemResolve;
+                    if (rb_resolve_operation.bitfields.DEPTH)
+                        type = SyncType::kDepthGmemToSysMemResolve;
+                    else
+                        type = SyncType::kColorGmemToSysMemResolve;
                     break;
                 case BLIT_EVENT_STORE_AND_CLEAR:
-                    type = SyncType::kGmemToSysMemResolveAndClearGmem;
+                    if (rb_resolve_operation.bitfields.DEPTH)
+                        type = SyncType::kDepthGmemToSysMemResolveAndClear;
+                    else
+                        type = SyncType::kColorGmemToSysMemResolveAndClear;
                     break;
                 case BLIT_EVENT_CLEAR:
-                    type = SyncType::kClearGmem;
+                    if (rb_resolve_operation.bitfields.DEPTH)
+                        type = SyncType::kDepthClearGmem;
+                    else
+                        type = SyncType::kColorClearGmem;
                     break;
                 case BLIT_EVENT_LOAD:
-                    type = SyncType::kSysMemToGmemResolve;
-                    break;
-                default:
+                    if (rb_resolve_operation.bitfields.DEPTH)
+                        type = SyncType::kDepthSysMemToGmemResolve;
+                    else
+                        type = SyncType::kColorSysMemToGmemResolve;
                     break;
                 }
             }
@@ -168,11 +158,9 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
         }
         else if (packet.bitfields0.SOURCE_SELECT == DI_SRC_SEL_DMA)  // Indexed draw
         {
-            uint64_t addr = ((uint64_t)packet.bitfields5.INDX_BASE_HI << 32) |
-                            (uint64_t)packet.bitfields4.INDX_BASE_LO;
             string_stream << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
                           << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
-                          << "IndexBase:" << std::hex << "0x" << addr << ")";
+                          << "IndexBase:" << std::hex << "0x" << packet.INDX_BASE << ")";
         }
         else
         {
@@ -270,12 +258,10 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     {
         PM4_CP_EXEC_CS_INDIRECT packet;
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
-        uint64_t addr = ((uint64_t)packet.bitfields2.ADDR_HI << 32) |
-                        (uint64_t)packet.bitfields1.ADDR_LO;
-        string_stream << "ExecCsIndirect(x:" << packet.bitfields3.LOCALSIZEX << ","
-                      << "y:" << packet.bitfields3.LOCALSIZEY << ","
-                      << "z:" << packet.bitfields3.LOCALSIZEZ << ","
-                      << "Addr:" << std::hex << "0x" << addr << std::dec << ")";
+        string_stream << "ExecCsIndirect(x:" << packet.bitfields2.LOCALSIZEX << ","
+                      << "y:" << packet.bitfields2.LOCALSIZEY << ","
+                      << "z:" << packet.bitfields2.LOCALSIZEZ << ","
+                      << "Addr:" << std::hex << "0x" << packet.ADDR << std::dec << ")";
     }
     else if (opcode == CP_EXEC_CS)
     {
@@ -329,20 +315,31 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
                                                va_addr,
                                                opcode,
                                                state_tracker);
-
         switch (sync_type)
         {
-        case SyncType::kGmemToSysMemResolve:
-            string_stream << "Resolve(GMem-To-Sysmem)";
+        case SyncType::kColorSysMemToGmemResolve:
+            string_stream << "Resolve(Color,SysMem-To-Gmem)";
             break;
-        case SyncType::kGmemToSysMemResolveAndClearGmem:
-            string_stream << "Resolve(GMem-To-Sysmem)AndClearGmem";
+        case SyncType::kColorGmemToSysMemResolve:
+            string_stream << "Resolve(Color,Gmem-To-SysMem)";
             break;
-        case SyncType::kClearGmem:
-            string_stream << "Resolve(ClearGmem)";
+        case SyncType::kColorGmemToSysMemResolveAndClear:
+            string_stream << "Resolve(Color,Gmem-To-SysMem,ClearGmem)";
             break;
-        case SyncType::kSysMemToGmemResolve:
-            string_stream << "Resolve(SysMem-To-Gmem)";
+        case SyncType::kColorClearGmem:
+            string_stream << "Resolve(Color,ClearGmem)";
+            break;
+        case SyncType::kDepthSysMemToGmemResolve:
+            string_stream << "Resolve(Depth,SysMem-To-Gmem)";
+            break;
+        case SyncType::kDepthGmemToSysMemResolve:
+            string_stream << "Resolve(Depth,Gmem-To-SysMem)";
+            break;
+        case SyncType::kDepthGmemToSysMemResolveAndClear:
+            string_stream << "Resolve(Depth,Gmem-To-SysMem,ClearGmem)";
+            break;
+        case SyncType::kDepthClearGmem:
+            string_stream << "Resolve(Depth,ClearGmem)";
             break;
         default:
         {

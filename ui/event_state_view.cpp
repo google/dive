@@ -955,8 +955,8 @@ Dive::EventStateInfo::ConstIterator prev_event_state_it)
         case A6XX_LATE_Z:
             s = "Late Z";
             break;
-        case A6XX_EARLY_LRZ_LATE_Z:
-            s = "Early Z LRZ Late Z";
+        case A6XX_EARLY_Z_LATE_Z:
+            s = "Early Z Late Z";
             break;
         case A6XX_INVALID_ZTEST:
             s = "Invalid ZTest";

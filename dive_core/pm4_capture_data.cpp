@@ -1101,9 +1101,9 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_fil
                 auto info = fd_dev_info(&dev_id);
                 // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid
                 // values
-                if (info != nullptr)
+                if (info.chip != 0)
                 {
-                    SetGPUID(info->chip * 100);
+                    SetGPUID(info.chip * 100);
                 }
             }
         }

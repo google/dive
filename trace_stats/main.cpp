@@ -129,7 +129,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             kDepthWriteEnabled,
             kEarlyZ,
             kLateZ,
-            kEarlyLRZLateZ,
+            kEarlyZLateZ,
             kLrzEnabled,
             kLrzWriteEnabled,
             kCullModeEnabled,
@@ -150,10 +150,11 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             kMaxGPRs,
             kMedianGPRs,
             kTotalResolves,
-            kGmemToSysmemResolves,
-            kGmemToSysmemAndClearGmemResolves,
+            kColorSysMemToGmemResolves,
+            kColorGmemToSysMemResolves,
+            kDepthSysMemToGmemResolves,
+            kDepthGmemToSysMemResolves,
             kClearGmemResolves,
-            kSysmemToGmemResolves,
             kNumStats
         };
     };
@@ -170,7 +171,7 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         std::pair(Stats::kDepthWriteEnabled, "Num Draws with Depth Write Enabled"),
         std::pair(Stats::kEarlyZ, "Num Draws with EarlyZ"),
         std::pair(Stats::kLateZ, "Num Draws with LateZ"),
-        std::pair(Stats::kEarlyLRZLateZ, "Num Draws with Early LRZ & LateZ"),
+        std::pair(Stats::kEarlyZLateZ, "Num Draws with EarlyZ & LateZ"),
         std::pair(Stats::kLrzEnabled, "Num Draws with LRZ Enabled"),
         std::pair(Stats::kLrzWriteEnabled, "Num Draws with LRZ Write Enabled"),
         std::pair(Stats::kCullModeEnabled, "Num Draws with culling enabled"),
@@ -191,11 +192,11 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         std::pair(Stats::kMaxGPRs, "\tMax GPRs in a single shader"),
         std::pair(Stats::kMedianGPRs, "\tMedian GPRs in a single shader"),
         std::pair(Stats::kTotalResolves, "Total resolves"),
-        std::pair(Stats::kGmemToSysmemResolves, "\tGmem to SysMem Resolves"),
-        std::pair(Stats::kGmemToSysmemAndClearGmemResolves,
-                  "\tGmem to SysMem Resolves and Clear Gmem"),
+        std::pair(Stats::kColorSysMemToGmemResolves, "\tColor SysMem to Gmem Resolves"),
+        std::pair(Stats::kColorGmemToSysMemResolves, "\tColor Gmem to SysMem Resolves"),
+        std::pair(Stats::kDepthSysMemToGmemResolves, "\tDepth SysMem to Gmem Resolves"),
+        std::pair(Stats::kDepthGmemToSysMemResolves, "\tDepth Gmem to SysMem Resolves"),
         std::pair(Stats::kClearGmemResolves, "\tGmem Clears"),
-        std::pair(Stats::kSysmemToGmemResolves, "\tSysMem to Gmem Resolves"),
     };
 
     static_assert(kStatMap.size() == Stats::kNumStats,
@@ -270,14 +271,16 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
         if (info.m_render_mode != cur_type)
         {
 #ifndef NDEBUG
-            if (cur_type == Dive::RenderModeType::kBinning)
+            if (cur_type == Dive::RenderModeType::kBinningVis ||
+                cur_type == Dive::RenderModeType::kBinningDirect)
                 ostream << "Binning pass " << num_binning_passes << ": " << num_draws_in_pass
                         << std::endl;
             else if (cur_type == Dive::RenderModeType::kTiled)
                 ostream << "Tiling pass " << num_tiling_passes << ": " << num_draws_in_pass
                         << std::endl;
 #endif
-            if (info.m_render_mode == Dive::RenderModeType::kBinning)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
                 num_binning_passes++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
                 num_tiling_passes++;
@@ -299,17 +302,22 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             stats_list[Stats::kWaitForIdle]++;
         else if (info.m_type == Dive::EventInfo::EventType::kWaitForMe)
             stats_list[Stats::kWaitForMe]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysmemResolve)
-            GatherResolves(Stats::kGmemToSysmemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kGmemToSysMemResolveAndClearGmem)
-            GatherResolves(Stats::kGmemToSysmemAndClearGmemResolves);
+        else if (info.m_type == Dive::EventInfo::EventType::kColorSysMemToGmemResolve)
+            GatherResolves(Stats::kColorSysMemToGmemResolves);
+        else if (info.m_type == Dive::EventInfo::EventType::kColorGmemToSysMemResolve ||
+                 info.m_type == Dive::EventInfo::EventType::kColorGmemToSysMemResolveAndClear)
+            GatherResolves(Stats::kColorGmemToSysMemResolves);
+        else if (info.m_type == Dive::EventInfo::EventType::kDepthSysMemToGmemResolve)
+            GatherResolves(Stats::kDepthSysMemToGmemResolves);
+        else if (info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolve ||
+                 info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolveAndClear)
+            GatherResolves(Stats::kDepthGmemToSysMemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kClearGmem)
             GatherResolves(Stats::kClearGmemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kSysmemToGmemResolve)
-            GatherResolves(Stats::kSysmemToGmemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kDraw)
         {
-            if (info.m_render_mode == Dive::RenderModeType::kBinning)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
                 stats_list[Stats::kBinningDraws]++;
             else if (info.m_render_mode == Dive::RenderModeType::kDirect)
                 stats_list[Stats::kDirectDraws]++;
@@ -323,7 +331,8 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
             const uint32_t event_id = static_cast<uint32_t>(i);
             auto event_state_it = event_state.find(static_cast<Dive::EventStateId>(event_id));
 
-            if (info.m_render_mode != Dive::RenderModeType::kBinning)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
             {
                 CHECK_AND_TRACK_STATE(Stats::kDepthTestEnabled, DepthTestEnabled);
                 CHECK_AND_TRACK_STATE(Stats::kDepthWriteEnabled,
@@ -333,13 +342,14 @@ void GatherAndPrintStats(const Dive::CaptureMetadata &meta_data, std::ostream &o
                 {
                     CHECK_AND_TRACK_STATE_EQUAL(Stats::kEarlyZ, ZTestMode, A6XX_EARLY_Z);
                     CHECK_AND_TRACK_STATE_EQUAL(Stats::kLateZ, ZTestMode, A6XX_LATE_Z);
-                    CHECK_AND_TRACK_STATE_EQUAL(Stats::kEarlyLRZLateZ,
+                    CHECK_AND_TRACK_STATE_EQUAL(Stats::kEarlyZLateZ,
                                                 ZTestMode,
-                                                A6XX_EARLY_LRZ_LATE_Z);
+                                                A6XX_EARLY_Z_LATE_Z);
                 }
             }
-            if ((info.m_render_mode == Dive::RenderModeType::kDirect) ||
-                (info.m_render_mode == Dive::RenderModeType::kBinning))
+            if (info.m_render_mode == Dive::RenderModeType::kDirect ||
+                info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
             {
                 CHECK_AND_TRACK_STATE(Stats::kLrzEnabled, DepthTestEnabled, LRZEnabled);
                 CHECK_AND_TRACK_STATE(Stats::kLrzWriteEnabled,

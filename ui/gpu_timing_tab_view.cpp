@@ -174,6 +174,12 @@ void GpuTimingTabView::OnSelectionChanged(const QModelIndex &index)
     {
         emit GpuTimingDataSelected(m_timed_event_indices.at(selected_row));
     }
+    else
+    {
+        qDebug() << "GpuTimingTabView::OnSelectionChanged() ERROR: selected row (" << selected_row
+                 << ") is out of range of collected indices of timed Vulkan events: "
+                 << m_timed_event_indices.size() << ". Non-gpu timed event selected.";
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

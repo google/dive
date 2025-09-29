@@ -37,9 +37,15 @@ public:
     void CollectIndicesFromModel(const QAbstractItemModel &command_hierarchy_model,
                                  const QModelIndex        &parent_index);
 
+    void ClearSelection();
+
 public slots:
     void OnModelReset();
     void OnEventSelectionChanged(const QModelIndex &model_index);
+    void OnSelectionChanged(const QModelIndex &index);
+
+signals:
+    void GpuTimingDataSelected(uint64_t);
 
 private:
     void ResizeColumns();

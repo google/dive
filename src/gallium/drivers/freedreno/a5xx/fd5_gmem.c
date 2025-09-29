@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -44,7 +26,7 @@
 
 static void
 emit_mrt(struct fd_ringbuffer *ring, unsigned nr_bufs,
-         struct pipe_surface **bufs, const struct fd_gmem_stateobj *gmem)
+         struct pipe_surface *bufs, const struct fd_gmem_stateobj *gmem)
 {
    enum a5xx_tile_mode tile_mode;
    unsigned i;
@@ -65,8 +47,8 @@ emit_mrt(struct fd_ringbuffer *ring, unsigned nr_bufs,
          tile_mode = TILE5_LINEAR;
       }
 
-      if ((i < nr_bufs) && bufs[i]) {
-         struct pipe_surface *psurf = bufs[i];
+      if ((i < nr_bufs) && bufs[i].texture) {
+         struct pipe_surface *psurf = &bufs[i];
          enum pipe_format pformat = psurf->format;
 
          rsc = fd_resource(psurf->texture);
@@ -77,21 +59,21 @@ emit_mrt(struct fd_ringbuffer *ring, unsigned nr_bufs,
          sint = util_format_is_pure_sint(pformat);
          uint = util_format_is_pure_uint(pformat);
 
-         assert(psurf->u.tex.first_layer == psurf->u.tex.last_layer);
+         assert(psurf->first_layer == psurf->last_layer);
 
-         offset = fd_resource_offset(rsc, psurf->u.tex.level,
-                                     psurf->u.tex.first_layer);
+         offset = fd_resource_offset(rsc, psurf->level,
+                                     psurf->first_layer);
 
          if (gmem) {
             stride = gmem->bin_w * gmem->cbuf_cpp[i];
             size = stride * gmem->bin_h;
             base = gmem->cbuf_base[i];
          } else {
-            stride = fd_resource_pitch(rsc, psurf->u.tex.level);
-            size = fd_resource_layer_stride(rsc, psurf->u.tex.level);
+            stride = fd_resource_pitch(rsc, psurf->level);
+            size = fd_resource_layer_stride(rsc, psurf->level);
 
             tile_mode =
-               fd_resource_tile_mode(psurf->texture, psurf->u.tex.level);
+               fd_resource_tile_mode(psurf->texture, psurf->level);
          }
       }
 
@@ -106,7 +88,7 @@ emit_mrt(struct fd_ringbuffer *ring, unsigned nr_bufs,
             COND(srgb, A5XX_RB_MRT_BUF_INFO_COLOR_SRGB));
       OUT_RING(ring, A5XX_RB_MRT_PITCH(stride));
       OUT_RING(ring, A5XX_RB_MRT_ARRAY_PITCH(size));
-      if (gmem || (i >= nr_bufs) || !bufs[i]) {
+      if (gmem || (i >= nr_bufs) || !bufs[i].texture) {
          OUT_RING(ring, base);       /* RB_MRT[i].BASE_LO */
          OUT_RING(ring, 0x00000000); /* RB_MRT[i].BASE_HI */
       } else {
@@ -134,7 +116,7 @@ static void
 emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
         const struct fd_gmem_stateobj *gmem)
 {
-   if (zsbuf) {
+   if (zsbuf->texture) {
       struct fd_resource *rsc = fd_resource(zsbuf->texture);
       enum a5xx_depth_format fmt = fd5_pipe2depth(zsbuf->format);
       uint32_t cpp = rsc->layout.cpp;
@@ -145,8 +127,8 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
          stride = cpp * gmem->bin_w;
          size = stride * gmem->bin_h;
       } else {
-         stride = fd_resource_pitch(rsc, zsbuf->u.tex.level);
-         size = fd_resource_layer_stride(rsc, zsbuf->u.tex.level);
+         stride = fd_resource_pitch(rsc, zsbuf->level);
+         size = fd_resource_layer_stride(rsc, zsbuf->level);
       }
 
       OUT_PKT4(ring, REG_A5XX_RB_DEPTH_BUFFER_INFO, 5);
@@ -156,7 +138,7 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
          OUT_RING(ring, 0x00000000);          /* RB_DEPTH_BUFFER_BASE_HI */
       } else {
          OUT_RELOC(ring, rsc->bo,
-            fd_resource_offset(rsc, zsbuf->u.tex.level, zsbuf->u.tex.first_layer),
+            fd_resource_offset(rsc, zsbuf->level, zsbuf->first_layer),
             0, 0); /* RB_DEPTH_BUFFER_BASE_LO/HI */
       }
       OUT_RING(ring, A5XX_RB_DEPTH_BUFFER_PITCH(stride));
@@ -173,7 +155,7 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
       if (rsc->lrz) {
          OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_BUFFER_BASE_LO, 3);
          OUT_RELOC(ring, rsc->lrz, 0x1000, 0, 0);
-         OUT_RING(ring, A5XX_GRAS_LRZ_BUFFER_PITCH(rsc->lrz_pitch));
+         OUT_RING(ring, A5XX_GRAS_LRZ_BUFFER_PITCH(rsc->lrz_layout.lrz_pitch));
 
          OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_FAST_CLEAR_BUFFER_BASE_LO, 2);
          OUT_RELOC(ring, rsc->lrz, 0, 0, 0);
@@ -193,8 +175,8 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
             stride = 1 * gmem->bin_w;
             size = stride * gmem->bin_h;
          } else {
-            stride = fd_resource_pitch(rsc->stencil, zsbuf->u.tex.level);
-            size = fd_resource_layer_stride(rsc, zsbuf->u.tex.level);
+            stride = fd_resource_pitch(rsc->stencil, zsbuf->level);
+            size = fd_resource_layer_stride(rsc, zsbuf->level);
          }
 
          OUT_PKT4(ring, REG_A5XX_RB_STENCIL_INFO, 5);
@@ -204,7 +186,7 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
             OUT_RING(ring, 0x00000000);          /* RB_STENCIL_BASE_HI */
          } else {
             OUT_RELOC(ring, rsc->stencil->bo,
-               fd_resource_offset(rsc->stencil, zsbuf->u.tex.level, zsbuf->u.tex.first_layer),
+               fd_resource_offset(rsc->stencil, zsbuf->level, zsbuf->first_layer),
                       0, 0); /* RB_STENCIL_BASE_LO/HI */
          }
          OUT_RING(ring, A5XX_RB_STENCIL_PITCH(stride));
@@ -368,7 +350,7 @@ emit_binning_pass(struct fd_batch *batch) assert_dt
    OUT_PKT4(ring, REG_A5XX_VPC_MODE_CNTL, 1);
    OUT_RING(ring, A5XX_VPC_MODE_CNTL_BINNING_PASS);
 
-   fd5_event_write(batch, ring, UNK_2C, false);
+   fd5_event_write(batch, ring, VSC_BINNING_START, false);
 
    OUT_PKT4(ring, REG_A5XX_RB_WINDOW_OFFSET, 1);
    OUT_RING(ring, A5XX_RB_WINDOW_OFFSET_X(0) | A5XX_RB_WINDOW_OFFSET_Y(0));
@@ -378,7 +360,7 @@ emit_binning_pass(struct fd_batch *batch) assert_dt
 
    fd_reset_wfi(batch);
 
-   fd5_event_write(batch, ring, UNK_2D, false);
+   fd5_event_write(batch, ring, VSC_BINNING_END, false);
 
    fd5_event_write(batch, ring, CACHE_FLUSH_TS, true);
 
@@ -422,7 +404,7 @@ fd5_emit_tile_init(struct fd_batch *batch) assert_dt
    OUT_PKT4(ring, REG_A5XX_RB_CCU_CNTL, 1);
    OUT_RING(ring, 0x7c13c080); /* RB_CCU_CNTL */
 
-   emit_zs(ring, pfb->zsbuf, batch->gmem_state);
+   emit_zs(ring, &pfb->zsbuf, batch->gmem_state);
    emit_mrt(ring, pfb->nr_cbufs, pfb->cbufs, batch->gmem_state);
 
    /* Enable stream output for the first pass (likely the binning). */
@@ -512,7 +494,7 @@ emit_mem2gmem_surf(struct fd_batch *batch, uint32_t base,
    struct fd_resource *rsc = fd_resource(psurf->texture);
    uint32_t stride, size;
 
-   assert(psurf->u.tex.first_layer == psurf->u.tex.last_layer);
+   assert(psurf->first_layer == psurf->last_layer);
 
    if (buf == BLIT_S)
       rsc = rsc->stencil;
@@ -531,10 +513,10 @@ emit_mem2gmem_surf(struct fd_batch *batch, uint32_t base,
                A5XX_RB_MRT_BUF_INFO_COLOR_FORMAT(format) |
                   A5XX_RB_MRT_BUF_INFO_COLOR_TILE_MODE(rsc->layout.tile_mode) |
                   A5XX_RB_MRT_BUF_INFO_COLOR_SWAP(WZYX));
-      OUT_RING(ring, A5XX_RB_MRT_PITCH(fd_resource_pitch(rsc, psurf->u.tex.level)));
-      OUT_RING(ring, A5XX_RB_MRT_ARRAY_PITCH(fd_resource_layer_stride(rsc, psurf->u.tex.level)));
+      OUT_RING(ring, A5XX_RB_MRT_PITCH(fd_resource_pitch(rsc, psurf->level)));
+      OUT_RING(ring, A5XX_RB_MRT_ARRAY_PITCH(fd_resource_layer_stride(rsc, psurf->level)));
       OUT_RELOC(ring, rsc->bo,
-         fd_resource_offset(rsc, psurf->u.tex.level, psurf->u.tex.first_layer),
+         fd_resource_offset(rsc, psurf->level, psurf->first_layer),
          0, 0); /* BASE_LO/HI */
 
       buf = BLIT_MRT0;
@@ -574,7 +556,7 @@ fd5_emit_tile_mem2gmem(struct fd_batch *batch, const struct fd_tile *tile)
     */
 
    emit_mrt(ring, pfb->nr_cbufs, pfb->cbufs, NULL);
-   //	emit_zs(ring, pfb->zsbuf, NULL);
+   //	emit_zs(ring, &pfb->zsbuf, NULL);
 
    OUT_PKT4(ring, REG_A5XX_RB_CNTL, 1);
    OUT_RING(ring, A5XX_RB_CNTL_WIDTH(gmem->bin_w) |
@@ -583,23 +565,23 @@ fd5_emit_tile_mem2gmem(struct fd_batch *batch, const struct fd_tile *tile)
    if (fd_gmem_needs_restore(batch, tile, FD_BUFFER_COLOR)) {
       unsigned i;
       for (i = 0; i < pfb->nr_cbufs; i++) {
-         if (!pfb->cbufs[i])
+         if (!pfb->cbufs[i].texture)
             continue;
          if (!(batch->restore & (PIPE_CLEAR_COLOR0 << i)))
             continue;
-         emit_mem2gmem_surf(batch, gmem->cbuf_base[i], pfb->cbufs[i],
+         emit_mem2gmem_surf(batch, gmem->cbuf_base[i], &pfb->cbufs[i],
                             BLIT_MRT0 + i);
       }
    }
 
    if (fd_gmem_needs_restore(batch, tile,
                              FD_BUFFER_DEPTH | FD_BUFFER_STENCIL)) {
-      struct fd_resource *rsc = fd_resource(pfb->zsbuf->texture);
+      struct fd_resource *rsc = fd_resource(pfb->zsbuf.texture);
 
       if (!rsc->stencil || fd_gmem_needs_restore(batch, tile, FD_BUFFER_DEPTH))
-         emit_mem2gmem_surf(batch, gmem->zsbuf_base[0], pfb->zsbuf, BLIT_ZS);
+         emit_mem2gmem_surf(batch, gmem->zsbuf_base[0], &pfb->zsbuf, BLIT_ZS);
       if (rsc->stencil && fd_gmem_needs_restore(batch, tile, FD_BUFFER_STENCIL))
-         emit_mem2gmem_surf(batch, gmem->zsbuf_base[1], pfb->zsbuf, BLIT_S);
+         emit_mem2gmem_surf(batch, gmem->zsbuf_base[1], &pfb->zsbuf, BLIT_S);
    }
 }
 
@@ -615,7 +597,7 @@ fd5_emit_tile_renderprep(struct fd_batch *batch, const struct fd_tile *tile)
    OUT_RING(ring,
             A5XX_RB_CNTL_WIDTH(gmem->bin_w) | A5XX_RB_CNTL_HEIGHT(gmem->bin_h));
 
-   emit_zs(ring, pfb->zsbuf, gmem);
+   emit_zs(ring, &pfb->zsbuf, gmem);
    emit_mrt(ring, pfb->nr_cbufs, pfb->cbufs, gmem);
    emit_msaa(ring, pfb->samples);
 }
@@ -640,10 +622,10 @@ emit_gmem2mem_surf(struct fd_batch *batch, uint32_t base,
       rsc = rsc->stencil;
 
    offset =
-      fd_resource_offset(rsc, psurf->u.tex.level, psurf->u.tex.first_layer);
-   pitch = fd_resource_pitch(rsc, psurf->u.tex.level);
+      fd_resource_offset(rsc, psurf->level, psurf->first_layer);
+   pitch = fd_resource_pitch(rsc, psurf->level);
 
-   assert(psurf->u.tex.first_layer == psurf->u.tex.last_layer);
+   assert(psurf->first_layer == psurf->last_layer);
 
    OUT_PKT4(ring, REG_A5XX_RB_BLIT_FLAG_DST_LO, 4);
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_LO */
@@ -651,14 +633,14 @@ emit_gmem2mem_surf(struct fd_batch *batch, uint32_t base,
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_PITCH */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_ARRAY_PITCH */
 
-   tiled = fd_resource_tile_mode(psurf->texture, psurf->u.tex.level);
+   tiled = fd_resource_tile_mode(psurf->texture, psurf->level);
 
    OUT_PKT4(ring, REG_A5XX_RB_RESOLVE_CNTL_3, 5);
    OUT_RING(ring, 0x00000004 | /* XXX RB_RESOLVE_CNTL_3 */
                      COND(tiled, A5XX_RB_RESOLVE_CNTL_3_TILED));
    OUT_RELOC(ring, rsc->bo, offset, 0, 0); /* RB_BLIT_DST_LO/HI */
    OUT_RING(ring, A5XX_RB_BLIT_DST_PITCH(pitch));
-   OUT_RING(ring, A5XX_RB_BLIT_DST_ARRAY_PITCH(fd_resource_layer_stride(rsc, psurf->u.tex.level)));
+   OUT_RING(ring, A5XX_RB_BLIT_DST_ARRAY_PITCH(fd_resource_layer_stride(rsc, psurf->level)));
 
    OUT_PKT4(ring, REG_A5XX_RB_BLIT_CNTL, 1);
    OUT_RING(ring, A5XX_RB_BLIT_CNTL_BUF(buf));
@@ -678,22 +660,22 @@ fd5_emit_tile_gmem2mem(struct fd_batch *batch, const struct fd_tile *tile)
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
 
    if (batch->resolve & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL)) {
-      struct fd_resource *rsc = fd_resource(pfb->zsbuf->texture);
+      struct fd_resource *rsc = fd_resource(pfb->zsbuf.texture);
 
       if (!rsc->stencil || (batch->resolve & FD_BUFFER_DEPTH))
-         emit_gmem2mem_surf(batch, gmem->zsbuf_base[0], pfb->zsbuf, BLIT_ZS);
+         emit_gmem2mem_surf(batch, gmem->zsbuf_base[0], &pfb->zsbuf, BLIT_ZS);
       if (rsc->stencil && (batch->resolve & FD_BUFFER_STENCIL))
-         emit_gmem2mem_surf(batch, gmem->zsbuf_base[1], pfb->zsbuf, BLIT_S);
+         emit_gmem2mem_surf(batch, gmem->zsbuf_base[1], &pfb->zsbuf, BLIT_S);
    }
 
    if (batch->resolve & FD_BUFFER_COLOR) {
       unsigned i;
       for (i = 0; i < pfb->nr_cbufs; i++) {
-         if (!pfb->cbufs[i])
+         if (!pfb->cbufs[i].texture)
             continue;
          if (!(batch->resolve & (PIPE_CLEAR_COLOR0 << i)))
             continue;
-         emit_gmem2mem_surf(batch, gmem->cbuf_base[i], pfb->cbufs[i],
+         emit_gmem2mem_surf(batch, gmem->cbuf_base[i], &pfb->cbufs[i],
                             BLIT_MRT0 + i);
       }
    }
@@ -775,7 +757,7 @@ fd5_emit_sysmem_prep(struct fd_batch *batch) assert_dt
 
    patch_draws(batch, IGNORE_VISIBILITY);
 
-   emit_zs(ring, pfb->zsbuf, NULL);
+   emit_zs(ring, &pfb->zsbuf, NULL);
    emit_mrt(ring, pfb->nr_cbufs, pfb->cbufs, NULL);
    emit_msaa(ring, pfb->samples);
 }

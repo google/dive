@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+struct radeon_info;
+
 enum radeon_family
 {
    CHIP_UNKNOWN = 0,
@@ -105,6 +107,7 @@ enum radeon_family
    CHIP_NAVI10,         /* Radeon 5600, 5700 */
    CHIP_NAVI12,         /* Radeon Pro 5600M */
    CHIP_NAVI14,         /* Radeon 5300, 5500 */
+   CHIP_GFX1013,        /* AMD BC-250 */
    /* GFX10.3 (RDNA 2) */
    CHIP_NAVI21,         /* Radeon 6800, 6900 (formerly "Sienna Cichlid") */
    CHIP_NAVI22,         /* Radeon 6700 (formerly "Navy Flounder") */
@@ -113,11 +116,20 @@ enum radeon_family
    CHIP_NAVI24,         /* Radeon 6400, 6500 (formerly "Beige Goby") */
    CHIP_REMBRANDT,      /* Ryzen 6000 (formerly "Yellow Carp") */
    CHIP_RAPHAEL_MENDOCINO, /* Ryzen 7000(X), Ryzen 7045, Ryzen 7020 */
-   CHIP_GFX1100,
-   CHIP_GFX1101,
-   CHIP_GFX1102,
-   CHIP_GFX1103_R1,
-   CHIP_GFX1103_R2,
+   /* GFX11 (RDNA 3) */
+   CHIP_NAVI31,         /* Radeon 7900 */
+   CHIP_NAVI32,         /* Radeon 7800, 7700 */
+   CHIP_NAVI33,         /* Radeon 7600, 7700S (mobile) */
+   CHIP_PHOENIX,        /* Ryzen Z1 Extreme, Ryzen 7040, Ryzen 8040 */
+   CHIP_PHOENIX2,       /* Ryzen Z1, Ryzen 8040 */
+   /* GFX11.5 (RDNA 3.5) */
+   CHIP_GFX1150,
+   CHIP_GFX1151,
+   CHIP_GFX1152,
+   CHIP_GFX1153,
+   /* GFX12 (RDNA 4) */
+   CHIP_GFX1200,
+   CHIP_GFX1201,
    CHIP_LAST,
 };
 
@@ -138,6 +150,8 @@ enum amd_gfx_level
    GFX10,
    GFX10_3,
    GFX11,
+   GFX11_5,
+   GFX12,
 
    NUM_GFX_VERSIONS,
 };
@@ -154,6 +168,7 @@ enum amd_ip_type
    AMD_IP_VCN_ENC,
    AMD_IP_VCN_UNIFIED = AMD_IP_VCN_ENC,
    AMD_IP_VCN_JPEG,
+   AMD_IP_VPE,
    AMD_NUM_IP_TYPES,
 };
 
@@ -196,12 +211,82 @@ enum vcn_version{
    VCN_4_0_2,
    VCN_4_0_3,
    VCN_4_0_4,
+   VCN_4_0_5,
+   VCN_4_0_6,
+
+   VCN_5_0_0,
+   VCN_5_0_1,
+};
+
+#define VPE_VERSION_VALUE(major, minor, rev) (((major) << 16) | ((minor) << 8) | (rev))
+
+enum vpe_version {
+   VPE_UNKNOWN = 0,
+   VPE_6_1_0   = VPE_VERSION_VALUE(6, 1, 0),
+   VPE_6_1_1   = VPE_VERSION_VALUE(6, 1, 1),
+   VPE_6_1_2   = VPE_VERSION_VALUE(6, 1, 2),
+   VPE_6_1_3   = VPE_VERSION_VALUE(6, 1, 3),
+};
+
+#define SDMA_VERSION_VALUE(major, minor) (((major) << 8) | (minor))
+
+enum sdma_version {
+   SDMA_UNKNOWN = 0,
+   /* GFX6 */
+   SDMA_1_0 = SDMA_VERSION_VALUE(1, 0),
+
+   /* GFX7 */
+   SDMA_2_0 = SDMA_VERSION_VALUE(2, 0),
+
+   /* GFX8 */
+   SDMA_2_4 = SDMA_VERSION_VALUE(2, 4),
+   SDMA_3_0 = SDMA_VERSION_VALUE(3, 0),
+   SDMA_3_1 = SDMA_VERSION_VALUE(3, 1),
+
+   /* GFX9 */
+   SDMA_4_0 = SDMA_VERSION_VALUE(4, 0),
+   SDMA_4_1 = SDMA_VERSION_VALUE(4, 1),
+   SDMA_4_2 = SDMA_VERSION_VALUE(4, 2),
+   SDMA_4_4 = SDMA_VERSION_VALUE(4, 4),
+
+   /* GFX10 */
+   SDMA_5_0 = SDMA_VERSION_VALUE(5, 0),
+
+   /* GFX10.3 */
+   SDMA_5_2 = SDMA_VERSION_VALUE(5, 2),
+
+   /* GFX11 */
+   SDMA_6_0 = SDMA_VERSION_VALUE(6, 0),
+
+   /* GFX11.5 */
+   SDMA_6_1 = SDMA_VERSION_VALUE(6, 1),
+
+   /* GFX12 */
+   SDMA_7_0 = SDMA_VERSION_VALUE(7, 0),
+};
+
+/* The enum values match PAL so they can be written into RRA files. */
+enum rt_version {
+   RT_NONE = 0x0,
+
+   RT_1_0 = 0x1,
+
+   /* GFX10.3 */
+   RT_1_1 = 0x2,
+
+   /* GFX11 */
+   RT_2_0 = 0x3,
+
+   RT_3_0 = 0x4,
+
+   /* GFX12 */
+   RT_3_1 = 0x6,
 };
 
 const char *ac_get_family_name(enum radeon_family family);
 enum amd_gfx_level ac_get_gfx_level(enum radeon_family family);
-unsigned ac_get_family_id(enum radeon_family family);
 const char *ac_get_llvm_processor_name(enum radeon_family family);
+const char *ac_get_ip_type_string(const struct radeon_info *info, enum amd_ip_type ip_type);
 
 #ifdef __cplusplus
 }

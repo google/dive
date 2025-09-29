@@ -84,7 +84,7 @@ llvmpipe_destroy(struct pipe_context *pipe)
 
    util_unreference_framebuffer_state(&llvmpipe->framebuffer);
 
-   for (enum pipe_shader_type s = PIPE_SHADER_VERTEX; s < PIPE_SHADER_MESH_TYPES; s++) {
+   for (mesa_shader_stage s = MESA_SHADER_VERTEX; s < MESA_SHADER_MESH_STAGES; s++) {
       for (i = 0; i < ARRAY_SIZE(llvmpipe->sampler_views[0]); i++) {
          pipe_sampler_view_reference(&llvmpipe->sampler_views[s][i], NULL);
       }
@@ -107,10 +107,7 @@ llvmpipe_destroy(struct pipe_context *pipe)
 
    llvmpipe_sampler_matrix_destroy(llvmpipe);
 
-#ifndef USE_GLOBAL_LLVM_CONTEXT
-   LLVMContextDispose(llvmpipe->context);
-#endif
-   llvmpipe->context = NULL;
+   lp_context_destroy(&llvmpipe->context);
 
    align_free(llvmpipe);
 }
@@ -127,9 +124,11 @@ do_flush(struct pipe_context *pipe,
 
 static void
 llvmpipe_fence_server_sync(struct pipe_context *pipe,
-                           struct pipe_fence_handle *fence)
+                           struct pipe_fence_handle *fence,
+                           uint64_t value)
 {
    struct lp_fence *f = (struct lp_fence *)fence;
+   assert(!value);
 
    if (!f->issued)
       return;
@@ -256,24 +255,30 @@ llvmpipe_create_context(struct pipe_screen *screen, void *priv,
 
    llvmpipe_init_sampler_matrix(llvmpipe);
 
+#ifdef HAVE_LIBDRM
+   llvmpipe_init_fence_funcs(&llvmpipe->pipe);
+#endif
+
 #ifdef USE_GLOBAL_LLVM_CONTEXT
-   llvmpipe->context = LLVMGetGlobalContext();
-#else
-   llvmpipe->context = LLVMContextCreate();
-#endif
-
-   if (!llvmpipe->context)
-      goto fail;
-
+   llvmpipe->context.ref = LLVMGetGlobalContext();
+   llvmpipe->context.owned = false;
 #if LLVM_VERSION_MAJOR == 15
-   LLVMContextSetOpaquePointers(llvmpipe->context, false);
+   if (llvmpipe->context.ref) {
+      LLVMContextSetOpaquePointers(llvmpipe->context.ref, false);
+   }
 #endif
+#else
+   lp_context_create(&llvmpipe->context);
+#endif
+
+   if (!llvmpipe->context.ref)
+      goto fail;
 
    /*
     * Create drawing context and plug our rendering stage into it.
     */
    llvmpipe->draw = draw_create_with_llvm_context(&llvmpipe->pipe,
-                                                  llvmpipe->context);
+                                                  &llvmpipe->context);
    if (!llvmpipe->draw)
       goto fail;
 
@@ -319,7 +324,7 @@ llvmpipe_create_context(struct pipe_screen *screen, void *priv,
 
    /* plug in AA line/point stages */
    draw_install_aaline_stage(llvmpipe->draw, &llvmpipe->pipe);
-   draw_install_aapoint_stage(llvmpipe->draw, &llvmpipe->pipe, nir_type_bool32);
+   draw_install_aapoint_stage(llvmpipe->draw, &llvmpipe->pipe, nir_type_bool1);
    draw_install_pstipple_stage(llvmpipe->draw, &llvmpipe->pipe);
 
    /* convert points and lines into triangles:

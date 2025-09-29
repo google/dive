@@ -21,8 +21,10 @@
  * IN THE SOFTWARE.
  */
 
+#include "intel_nir.h"
 #include "brw_nir_rt.h"
 #include "brw_nir_rt_builder.h"
+#include "intel_nir.h"
 
 static bool
 resize_deref(nir_builder *b, nir_deref_instr *deref,
@@ -53,11 +55,11 @@ resize_deref(nir_builder *b, nir_deref_instr *deref,
 }
 
 static bool
-lower_rt_io_derefs(nir_shader *shader)
+lower_rt_io_derefs(nir_shader *shader, const struct intel_device_info *devinfo)
 {
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
 
-   bool progress = false;
+   nir_metadata metadata = nir_metadata_all;
 
    unsigned num_shader_call_vars = 0;
    nir_foreach_variable_with_modes(var, shader, nir_var_shader_call_data)
@@ -83,23 +85,35 @@ lower_rt_io_derefs(nir_shader *shader)
       call_data_addr =
          brw_nir_rt_load_scratch(&b, BRW_BTD_STACK_CALL_DATA_PTR_OFFSET, 8,
                                  1, 64);
-      progress = true;
+      metadata &= nir_metadata_control_flow;
    }
 
-   gl_shader_stage stage = shader->info.stage;
+   mesa_shader_stage stage = shader->info.stage;
    nir_def *hit_attrib_addr = NULL;
    if (num_ray_hit_attrib_vars > 0) {
       assert(stage == MESA_SHADER_ANY_HIT ||
              stage == MESA_SHADER_CLOSEST_HIT ||
              stage == MESA_SHADER_INTERSECTION);
-      nir_def *hit_addr =
-         brw_nir_rt_mem_hit_addr(&b, stage == MESA_SHADER_CLOSEST_HIT);
-      /* The vec2 barycentrics are in 2nd and 3rd dwords of MemHit */
-      nir_def *bary_addr = nir_iadd_imm(&b, hit_addr, 4);
-      hit_attrib_addr = nir_bcsel(&b, nir_load_leaf_procedural_intel(&b),
-                                      brw_nir_rt_hit_attrib_data_addr(&b),
-                                      bary_addr);
-      progress = true;
+      hit_attrib_addr = brw_nir_rt_hit_attrib_data_addr(&b);
+
+      /* For tri, we store tri_bary at hit_attrib_data_addr.
+       * The reason we don't directly provide the address where u and v is
+       * located is that for Xe3+ u and v needs extra unorm_to_float
+       * calculation, so we write the computed value to hit_attrib_data_addr
+       * for shader to dereference.
+       */
+      nir_push_if(&b, nir_inot(&b, nir_load_leaf_procedural_intel(&b)));
+      {
+         nir_def* tri_bary =
+            brw_nir_rt_load_tri_bary_from_addr(&b,
+                                               brw_nir_rt_stack_addr(&b),
+                                               stage == MESA_SHADER_CLOSEST_HIT,
+                                               devinfo);
+         nir_store_global(&b, hit_attrib_addr, 4, tri_bary, 0x3);
+      }
+      nir_pop_if(&b, NULL);
+
+      metadata &= nir_metadata_none;
    }
 
    nir_foreach_block(block, impl) {
@@ -116,10 +130,8 @@ lower_rt_io_derefs(nir_shader *shader)
                   nir_build_deref_cast(&b, call_data_addr,
                                        nir_var_function_temp,
                                        deref->var->type, 0);
-               nir_def_rewrite_uses(&deref->def,
-                                        &cast->def);
-               nir_instr_remove(&deref->instr);
-               progress = true;
+               nir_def_replace(&deref->def, &cast->def);
+               metadata &= nir_metadata_control_flow;
             }
          } else if (nir_deref_mode_is(deref, nir_var_ray_hit_attrib)) {
             deref->modes = nir_var_function_temp;
@@ -129,10 +141,8 @@ lower_rt_io_derefs(nir_shader *shader)
                   nir_build_deref_cast(&b, hit_attrib_addr,
                                        nir_var_function_temp,
                                        deref->type, 0);
-               nir_def_rewrite_uses(&deref->def,
-                                        &cast->def);
-               nir_instr_remove(&deref->instr);
-               progress = true;
+               nir_def_replace(&deref->def, &cast->def);
+               metadata &= nir_metadata_control_flow;
             }
          }
 
@@ -142,18 +152,11 @@ lower_rt_io_derefs(nir_shader *shader)
           */
          if (nir_deref_mode_is(deref, nir_var_function_temp) &&
              resize_deref(&b, deref, 1, 64))
-            progress = true;
+            metadata &= nir_metadata_control_flow;
       }
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(metadata != nir_metadata_all, impl, metadata);
 }
 
 /** Lowers ray-tracing shader I/O and scratch access
@@ -192,25 +195,25 @@ lower_rt_io_derefs(nir_shader *shader)
  * variable down the call stack.
  */
 static void
-lower_rt_io_and_scratch(nir_shader *nir)
+lower_rt_io_and_scratch(nir_shader *nir, const struct intel_device_info *devinfo)
 {
    /* First, we to ensure all the I/O variables have explicit types.  Because
     * these are shader-internal and don't come in from outside, they don't
     * have an explicit memory layout and we have to assign them one.
     */
-   NIR_PASS_V(nir, nir_lower_vars_to_explicit_types,
+   NIR_PASS(_, nir, nir_lower_vars_to_explicit_types,
               nir_var_function_temp |
               nir_var_shader_call_data |
               nir_var_ray_hit_attrib,
               glsl_get_natural_size_align_bytes);
 
    /* Now patch any derefs to I/O vars */
-   NIR_PASS_V(nir, lower_rt_io_derefs);
+   NIR_PASS(_, nir, lower_rt_io_derefs, devinfo);
 
    /* Finally, lower any remaining function_temp, mem_constant, or
     * ray_hit_attrib access to 64-bit global memory access.
     */
-   NIR_PASS_V(nir, nir_lower_explicit_io,
+   NIR_PASS(_, nir, nir_lower_explicit_io,
               nir_var_function_temp |
               nir_var_mem_constant |
               nir_var_ray_hit_attrib,
@@ -334,54 +337,48 @@ lower_ray_walk_intrinsics(nir_shader *shader,
       }
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_none);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_none);
 }
 
 void
-brw_nir_lower_raygen(nir_shader *nir)
+brw_nir_lower_raygen(nir_shader *nir, const struct intel_device_info *devinfo)
 {
    assert(nir->info.stage == MESA_SHADER_RAYGEN);
-   NIR_PASS_V(nir, brw_nir_lower_shader_returns);
-   lower_rt_io_and_scratch(nir);
+   NIR_PASS(_, nir, brw_nir_lower_shader_returns);
+   lower_rt_io_and_scratch(nir, devinfo);
 }
 
 void
 brw_nir_lower_any_hit(nir_shader *nir, const struct intel_device_info *devinfo)
 {
    assert(nir->info.stage == MESA_SHADER_ANY_HIT);
-   NIR_PASS_V(nir, brw_nir_lower_shader_returns);
-   NIR_PASS_V(nir, lower_ray_walk_intrinsics, devinfo);
-   lower_rt_io_and_scratch(nir);
+   NIR_PASS(_, nir, brw_nir_lower_shader_returns);
+   NIR_PASS(_, nir, lower_ray_walk_intrinsics, devinfo);
+   lower_rt_io_and_scratch(nir, devinfo);
 }
 
 void
-brw_nir_lower_closest_hit(nir_shader *nir)
+brw_nir_lower_closest_hit(nir_shader *nir, const struct intel_device_info *devinfo)
 {
    assert(nir->info.stage == MESA_SHADER_CLOSEST_HIT);
-   NIR_PASS_V(nir, brw_nir_lower_shader_returns);
-   lower_rt_io_and_scratch(nir);
+   NIR_PASS(_, nir, brw_nir_lower_shader_returns);
+   lower_rt_io_and_scratch(nir, devinfo);
 }
 
 void
-brw_nir_lower_miss(nir_shader *nir)
+brw_nir_lower_miss(nir_shader *nir, const struct intel_device_info *devinfo)
 {
    assert(nir->info.stage == MESA_SHADER_MISS);
-   NIR_PASS_V(nir, brw_nir_lower_shader_returns);
-   lower_rt_io_and_scratch(nir);
+   NIR_PASS(_, nir, brw_nir_lower_shader_returns);
+   lower_rt_io_and_scratch(nir, devinfo);
 }
 
 void
-brw_nir_lower_callable(nir_shader *nir)
+brw_nir_lower_callable(nir_shader *nir, const struct intel_device_info *devinfo)
 {
    assert(nir->info.stage == MESA_SHADER_CALLABLE);
-   NIR_PASS_V(nir, brw_nir_lower_shader_returns);
-   lower_rt_io_and_scratch(nir);
+   NIR_PASS(_, nir, brw_nir_lower_shader_returns);
+   lower_rt_io_and_scratch(nir, devinfo);
 }
 
 void
@@ -391,20 +388,19 @@ brw_nir_lower_combined_intersection_any_hit(nir_shader *intersection,
 {
    assert(intersection->info.stage == MESA_SHADER_INTERSECTION);
    assert(any_hit == NULL || any_hit->info.stage == MESA_SHADER_ANY_HIT);
-   NIR_PASS_V(intersection, brw_nir_lower_shader_returns);
-   NIR_PASS_V(intersection, brw_nir_lower_intersection_shader,
+   NIR_PASS(_, intersection, brw_nir_lower_shader_returns);
+   NIR_PASS(_, intersection, brw_nir_lower_intersection_shader,
               any_hit, devinfo);
-   NIR_PASS_V(intersection, lower_ray_walk_intrinsics, devinfo);
-   lower_rt_io_and_scratch(intersection);
+   NIR_PASS(_, intersection, lower_ray_walk_intrinsics, devinfo);
+   lower_rt_io_and_scratch(intersection, devinfo);
 }
 
 static nir_def *
 build_load_uniform(nir_builder *b, unsigned offset,
                    unsigned num_components, unsigned bit_size)
 {
-   return nir_load_uniform(b, num_components, bit_size, nir_imm_int(b, 0),
-                           .base = offset,
-                           .range = num_components * bit_size / 8);
+   return nir_load_inline_data_intel(b, num_components, bit_size,
+                                     .base = offset);
 }
 
 #define load_trampoline_param(b, name, num_components, bit_size) \
@@ -417,7 +413,7 @@ brw_nir_create_raygen_trampoline(const struct brw_compiler *compiler,
 {
    const struct intel_device_info *devinfo = compiler->devinfo;
    const nir_shader_compiler_options *nir_options =
-      compiler->nir_options[MESA_SHADER_COMPUTE];
+      &compiler->nir_options[MESA_SHADER_COMPUTE];
 
    STATIC_ASSERT(sizeof(struct brw_rt_raygen_trampoline_params) == 32);
 
@@ -454,7 +450,7 @@ brw_nir_create_raygen_trampoline(const struct brw_compiler *compiler,
    nir_def *raygen_bsr_addr =
       nir_if_phi(&b, raygen_indirect_bsr_addr, raygen_param_bsr_addr);
 
-   nir_def *global_id = nir_load_workgroup_id_zero_base(&b);
+   nir_def *global_id = nir_load_workgroup_id(&b);
    nir_def *simd_channel = nir_load_subgroup_invocation(&b);
    nir_def *local_x =
       nir_ubfe(&b, simd_channel, nir_imm_int(&b, 0),
@@ -499,7 +495,8 @@ brw_nir_create_raygen_trampoline(const struct brw_compiler *compiler,
    struct brw_nir_compiler_opts opts = {};
    brw_preprocess_nir(compiler, nir, &opts);
 
-   NIR_PASS_V(nir, brw_nir_lower_rt_intrinsics, devinfo);
+   struct brw_cs_prog_key key = {};
+   NIR_PASS(_, nir, brw_nir_lower_rt_intrinsics, &key.base, devinfo);
 
    b = nir_builder_create(nir_shader_get_entrypoint(b.shader));
    /* brw_nir_lower_rt_intrinsics will leave us with a btd_global_arg_addr
@@ -519,15 +516,13 @@ brw_nir_create_raygen_trampoline(const struct brw_compiler *compiler,
          b.cursor = nir_before_instr(&intrin->instr);
          nir_def *global_arg_addr =
             load_trampoline_param(&b, rt_disp_globals_addr, 1, 64);
-         nir_def_rewrite_uses(&intrin->def,
-                                  global_arg_addr);
-         nir_instr_remove(instr);
+         nir_def_replace(&intrin->def, global_arg_addr);
       }
    }
 
-   NIR_PASS_V(nir, brw_nir_lower_cs_intrinsics);
+   NIR_PASS(_, nir, brw_nir_lower_cs_intrinsics, devinfo, NULL);
 
-   brw_nir_optimize(nir, compiler);
+   brw_nir_optimize(nir, devinfo);
 
    return nir;
 }

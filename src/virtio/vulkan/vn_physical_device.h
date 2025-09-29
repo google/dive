@@ -17,32 +17,47 @@
 
 #include "vn_wsi.h"
 
-struct vn_physical_device_properties {
-   VkPhysicalDeviceProperties vulkan_1_0;
-   VkPhysicalDeviceVulkan11Properties vulkan_1_1;
-   VkPhysicalDeviceVulkan12Properties vulkan_1_2;
-   VkPhysicalDeviceVulkan13Properties vulkan_1_3;
-
-   /* KHR */
-   VkPhysicalDevicePushDescriptorPropertiesKHR push_descriptor;
-
-   /* EXT */
-   VkPhysicalDeviceConservativeRasterizationPropertiesEXT
-      conservative_rasterization;
-   VkPhysicalDeviceCustomBorderColorPropertiesEXT custom_border_color;
-   VkPhysicalDeviceLineRasterizationPropertiesEXT line_rasterization;
-   VkPhysicalDeviceMultiDrawPropertiesEXT multi_draw;
-   VkPhysicalDevicePCIBusInfoPropertiesEXT pci_bus_info;
-   VkPhysicalDeviceProvokingVertexPropertiesEXT provoking_vertex;
-   VkPhysicalDeviceRobustness2PropertiesEXT robustness_2;
-   VkPhysicalDeviceTransformFeedbackPropertiesEXT transform_feedback;
-   VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT
-      vertex_attribute_divisor;
-};
-
 struct vn_format_properties_entry {
    atomic_bool valid;
-   VkFormatProperties properties;
+   VkFormatProperties props;
+   VkFormatProperties3 props3;
+   VkBool32 srpq;
+};
+
+struct vn_image_format_properties {
+   VkImageFormatProperties2 format;
+   VkResult cached_result;
+
+   VkExternalImageFormatProperties ext_image;
+   VkHostImageCopyDevicePerformanceQuery host_copy;
+   VkImageCompressionPropertiesEXT compression;
+   VkSamplerYcbcrConversionImageFormatProperties ycbcr_conversion;
+   VkFilterCubicImageViewImageFormatPropertiesEXT filter_cubic;
+};
+
+struct vn_image_format_cache_entry {
+   struct vn_image_format_properties properties;
+   uint8_t key[SHA1_DIGEST_LENGTH];
+   struct list_head head;
+};
+
+struct vn_image_format_properties_cache {
+   struct hash_table *ht;
+   struct list_head lru;
+   simple_mtx_t mutex;
+
+   struct {
+      uint32_t cache_hit_count;
+      uint32_t cache_miss_count;
+      uint32_t cache_skip_count;
+   } debug;
+};
+
+struct vn_layered_api_properties {
+   VkPhysicalDeviceLayeredApiPropertiesKHR api;
+   VkPhysicalDeviceLayeredApiVulkanPropertiesKHR vk;
+   VkPhysicalDeviceDriverProperties driver;
+   VkPhysicalDeviceIDProperties id;
 };
 
 struct vn_physical_device {
@@ -58,6 +73,9 @@ struct vn_physical_device {
     */
    uint32_t renderer_version;
 
+   /* For maintenance7 layered api properties. */
+   struct vn_layered_api_properties layered_properties;
+
    /* Between the driver and the app, base.base.supported_extensions is what
     * we advertise.
     *
@@ -67,16 +85,31 @@ struct vn_physical_device {
    struct vk_device_extension_table renderer_extensions;
    uint32_t *extension_spec_versions;
 
-   struct vn_physical_device_properties properties;
-   enum VkDriverId renderer_driver_id;
+   /* passthrough ray tracing support */
+   bool ray_tracing;
+
+   /* Venus feedback encounters cacheline overflush issue on Intel JSL, and
+    * has to workaround by further aligning up the feedback buffer alignment.
+    */
+   uint32_t wa_min_fb_align;
+
+   VkDriverId renderer_driver_id;
+
+   /* Static storage so that host copy properties query can be done once. */
+   VkImageLayout copy_src_layouts[64];
+   VkImageLayout copy_dst_layouts[64];
 
    VkQueueFamilyProperties2 *queue_family_properties;
+   VkQueueFamilyGlobalPriorityProperties *global_priority_properties;
    uint32_t queue_family_count;
    bool sparse_binding_disabled;
+   /* Track the queue family index to emulate a second queue. -1 means no
+    * emulation is needed. To be noted that the emulation is a workaround for
+    * Android 14+ UI framework and it does not handle wait-before-signal.
+    */
+   int emulate_second_queue;
 
-   VkPhysicalDeviceMemoryProperties2 memory_properties;
-   uint32_t coherent_uncached;
-   uint32_t incoherent_cached;
+   VkPhysicalDeviceMemoryProperties memory_properties;
 
    struct {
       VkExternalMemoryHandleTypeFlagBits renderer_handle_type;
@@ -97,9 +130,11 @@ struct vn_physical_device {
 
    simple_mtx_t format_update_mutex;
    struct util_sparse_array format_properties;
+
+   struct vn_image_format_properties_cache image_format_cache;
 };
 VK_DEFINE_HANDLE_CASTS(vn_physical_device,
-                       base.base.base,
+                       base.vk.base,
                        VkPhysicalDevice,
                        VK_OBJECT_TYPE_PHYSICAL_DEVICE)
 

@@ -26,18 +26,17 @@
  */
 
 #include "brw_cfg.h"
+#include "util/u_dynarray.h"
 #include "brw_shader.h"
 
-/** @file brw_cfg.cpp
+/** @file
  *
  * Walks the shader instructions generated and creates a set of basic
  * blocks with successor/predecessor edges connecting them.
  */
 
-using namespace brw;
-
 static bblock_t *
-pop_stack(exec_list *list)
+pop_stack(brw_exec_list *list)
 {
    bblock_link *link = (bblock_link *)list->get_tail();
    bblock_t *block = link->block;
@@ -46,7 +45,7 @@ pop_stack(exec_list *list)
    return block;
 }
 
-static exec_node *
+static brw_exec_node *
 link(void *mem_ctx, bblock_t *block, enum bblock_link_kind kind)
 {
    bblock_link *l = new(mem_ctx) bblock_link(block, kind);
@@ -54,7 +53,7 @@ link(void *mem_ctx, bblock_t *block, enum bblock_link_kind kind)
 }
 
 void
-push_stack(exec_list *list, void *mem_ctx, bblock_t *block)
+push_stack(brw_exec_list *list, void *mem_ctx, bblock_t *block)
 {
    /* The kind of the link is immaterial, but we need to provide one since
     * this is (ab)using the edge data structure in order to implement a stack.
@@ -63,7 +62,7 @@ push_stack(exec_list *list, void *mem_ctx, bblock_t *block)
 }
 
 bblock_t::bblock_t(cfg_t *cfg) :
-   cfg(cfg), start_ip(0), end_ip(0), end_ip_delta(0), num(0)
+   cfg(cfg), num_instructions(0), num(0)
 {
    instructions.make_empty();
    parents.make_empty();
@@ -78,96 +77,53 @@ bblock_t::add_successor(void *mem_ctx, bblock_t *successor,
    children.push_tail(::link(mem_ctx, successor, kind));
 }
 
-bool
-bblock_t::is_predecessor_of(const bblock_t *block,
-                            enum bblock_link_kind kind) const
+void
+bblock_t::insert_before(brw_inst *inst, brw_exec_node *ref)
 {
-   foreach_list_typed_safe (bblock_link, parent, link, &block->parents) {
-      if (parent->block == this && parent->kind <= kind) {
-         return true;
-      }
-   }
+   assert(inst != ref);
+   assert(!inst->block || inst->block == this);
 
-   return false;
-}
+   num_instructions++;
+   cfg->total_instructions++;
 
-bool
-bblock_t::is_successor_of(const bblock_t *block,
-                          enum bblock_link_kind kind) const
-{
-   foreach_list_typed_safe (bblock_link, child, link, &block->children) {
-      if (child->block == this && child->kind <= kind) {
-         return true;
-      }
-   }
-
-   return false;
-}
-
-static bool
-ends_block(const backend_instruction *inst)
-{
-   enum opcode op = inst->opcode;
-
-   return op == BRW_OPCODE_IF ||
-          op == BRW_OPCODE_ELSE ||
-          op == BRW_OPCODE_CONTINUE ||
-          op == BRW_OPCODE_BREAK ||
-          op == BRW_OPCODE_DO ||
-          op == BRW_OPCODE_WHILE;
-}
-
-static bool
-starts_block(const backend_instruction *inst)
-{
-   enum opcode op = inst->opcode;
-
-   return op == BRW_OPCODE_DO ||
-          op == BRW_OPCODE_ENDIF;
-}
-
-bool
-bblock_t::can_combine_with(const bblock_t *that) const
-{
-   if ((const bblock_t *)this->link.next != that)
-      return false;
-
-   if (ends_block(this->end()) ||
-       starts_block(that->start()))
-      return false;
-
-   return true;
+   ref->brw_exec_node::insert_before(inst);
+   inst->block = this;
 }
 
 void
-bblock_t::combine_with(bblock_t *that)
+bblock_t::remove(brw_inst *inst)
 {
-   assert(this->can_combine_with(that));
-   foreach_list_typed (bblock_link, link, link, &that->parents) {
-      assert(link->block == this);
+   if (brw_exec_list_is_singular(&instructions)) {
+      inst = brw_transform_inst(*cfg->s, inst, BRW_OPCODE_NOP);
+      inst->dst = brw_reg();
+      inst->size_written = 0;
+      return;
    }
 
-   this->end_ip = that->end_ip;
-   this->instructions.append_list(&that->instructions);
+   assert(num_instructions > 0);
+   assert(cfg->total_instructions > 0);
+   num_instructions--;
+   cfg->total_instructions--;
 
-   this->cfg->remove_block(that);
+   inst->brw_exec_node::remove();
+   inst->block = NULL;
+
+   if (num_instructions == 0)
+      cfg->remove_block(this);
 }
 
-void
-bblock_t::dump() const
+static void
+append_inst(bblock_t *block, brw_inst *inst)
 {
-   const backend_shader *s = this->cfg->s;
-
-   int ip = this->start_ip;
-   foreach_inst_in_block(backend_instruction, inst, this) {
-      fprintf(stderr, "%5d: ", ip);
-      s->dump_instruction(inst);
-      ip++;
-   }
+   assert(inst->block == NULL);
+   inst->block = block;
+   block->instructions.push_tail(inst);
+   block->num_instructions++;
+   block->cfg->total_instructions++;
 }
 
-cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
-   s(s)
+cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
+   s(s), total_instructions(0)
 {
    mem_ctx = ralloc_context(NULL);
    block_list.make_empty();
@@ -180,23 +136,29 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
    bblock_t *entry = new_block();
    bblock_t *cur_if = NULL;    /**< BB ending with IF. */
    bblock_t *cur_else = NULL;  /**< BB ending with ELSE. */
-   bblock_t *cur_endif = NULL; /**< BB starting with ENDIF. */
    bblock_t *cur_do = NULL;    /**< BB starting with DO. */
    bblock_t *cur_while = NULL; /**< BB immediately following WHILE. */
-   exec_list if_stack, else_stack, do_stack, while_stack;
+   brw_exec_list if_stack, else_stack, do_stack, while_stack;
    bblock_t *next;
 
    set_next_block(&cur, entry, ip);
 
-   foreach_in_list_safe(backend_instruction, inst, instructions) {
+   brw_foreach_in_list_safe(brw_inst, inst, instructions) {
       /* set_next_block wants the post-incremented ip */
       ip++;
 
-      inst->exec_node::remove();
+      inst->brw_exec_node::remove();
 
       switch (inst->opcode) {
+      case SHADER_OPCODE_FLOW:
+         append_inst(cur, inst);
+         next = new_block();
+         cur->add_successor(mem_ctx, next, bblock_link_logical);
+         set_next_block(&cur, next, ip);
+         break;
+
       case BRW_OPCODE_IF:
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
 	 /* Push our information onto a stack so we can recover from
 	  * nested ifs.
@@ -206,7 +168,6 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 
 	 cur_if = cur;
 	 cur_else = NULL;
-         cur_endif = NULL;
 
 	 /* Set up our immediately following block, full of "then"
 	  * instructions.
@@ -218,7 +179,7 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 	 break;
 
       case BRW_OPCODE_ELSE:
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
          cur_else = cur;
 
@@ -231,6 +192,8 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 	 break;
 
       case BRW_OPCODE_ENDIF: {
+         bblock_t *cur_endif;
+
          if (cur->instructions.is_empty()) {
             /* New block was just created; use it. */
             cur_endif = cur;
@@ -242,7 +205,7 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
             set_next_block(&cur, cur_endif, ip - 1);
          }
 
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
          if (cur_else) {
             cur_else->add_successor(mem_ctx, cur_endif, bblock_link_logical);
@@ -282,7 +245,7 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
             set_next_block(&cur, cur_do, ip - 1);
          }
 
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
          /* Represent divergent execution of the loop as a pair of alternative
           * edges coming out of the DO instruction: For any physical iteration
@@ -317,7 +280,7 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 	 break;
 
       case BRW_OPCODE_CONTINUE:
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
          /* A conditional CONTINUE may start a region of divergent control
           * flow until the start of the next loop iteration (*not* until the
@@ -345,7 +308,7 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 	 break;
 
       case BRW_OPCODE_BREAK:
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
          /* A conditional BREAK instruction may start a region of divergent
           * control flow until the end of the loop if the condition is
@@ -371,7 +334,7 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 	 break;
 
       case BRW_OPCODE_WHILE:
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 
          assert(cur_do != NULL && cur_while != NULL);
 
@@ -398,12 +361,10 @@ cfg_t::cfg_t(const backend_shader *s, exec_list *instructions) :
 	 break;
 
       default:
-         cur->instructions.push_tail(inst);
+         append_inst(cur, inst);
 	 break;
       }
    }
-
-   cur->end_ip = ip - 1;
 
    make_block_array();
 }
@@ -416,44 +377,97 @@ cfg_t::~cfg_t()
 void
 cfg_t::remove_block(bblock_t *block)
 {
-   foreach_list_typed_safe (bblock_link, predecessor, link, &block->parents) {
+   brw_foreach_list_typed_safe (bblock_link, predecessor, link, &block->parents) {
+      /* cfg_t::validate checks that predecessor and successor lists are well
+       * formed, so it is known that the loop here would find exactly one
+       * block. Set old_link_kind to silence "variable used but not set"
+       * warnings.
+       */
+      bblock_link_kind old_link_kind = bblock_link_logical;
+
       /* Remove block from all of its predecessors' successor lists. */
-      foreach_list_typed_safe (bblock_link, successor, link,
+      brw_foreach_list_typed_safe (bblock_link, successor, link,
                                &predecessor->block->children) {
          if (block == successor->block) {
+            old_link_kind = successor->kind;
             successor->link.remove();
             ralloc_free(successor);
+            break;
          }
       }
 
       /* Add removed-block's successors to its predecessors' successor lists. */
-      foreach_list_typed (bblock_link, successor, link, &block->children) {
-         if (!successor->block->is_successor_of(predecessor->block,
-                                                successor->kind)) {
+      brw_foreach_list_typed (bblock_link, successor, link, &block->children) {
+         bool need_to_link = true;
+         bblock_link_kind new_link_kind = MAX2(old_link_kind, successor->kind);
+
+         brw_foreach_list_typed_safe (bblock_link, child, link, &predecessor->block->children) {
+            /* There is already a link between the two blocks. If the links
+             * are the same kind or the link is logical, do nothing. If the
+             * existing link is physical and the proposed new link is logical,
+             * promote the existing link to logical.
+             *
+             * This is accomplished by taking the minimum of the existing link
+             * kind and the proposed link kind.
+             */
+            if (child->block == successor->block) {
+               child->kind = MIN2(child->kind, new_link_kind);
+               need_to_link = false;
+               break;
+            }
+         }
+
+         if (need_to_link) {
             predecessor->block->children.push_tail(link(mem_ctx,
                                                         successor->block,
-                                                        successor->kind));
+                                                        new_link_kind));
          }
       }
    }
 
-   foreach_list_typed_safe (bblock_link, successor, link, &block->children) {
+   brw_foreach_list_typed_safe (bblock_link, successor, link, &block->children) {
+      /* cfg_t::validate checks that predecessor and successor lists are well
+       * formed, so it is known that the loop here would find exactly one
+       * block. Set old_link_kind to silence "variable used but not set"
+       * warnings.
+       */
+      bblock_link_kind old_link_kind = bblock_link_logical;
+
       /* Remove block from all of its childrens' parents lists. */
-      foreach_list_typed_safe (bblock_link, predecessor, link,
+      brw_foreach_list_typed_safe (bblock_link, predecessor, link,
                                &successor->block->parents) {
          if (block == predecessor->block) {
+            old_link_kind = predecessor->kind;
             predecessor->link.remove();
             ralloc_free(predecessor);
          }
       }
 
       /* Add removed-block's predecessors to its successors' predecessor lists. */
-      foreach_list_typed (bblock_link, predecessor, link, &block->parents) {
-         if (!predecessor->block->is_predecessor_of(successor->block,
-                                                    predecessor->kind)) {
+      brw_foreach_list_typed (bblock_link, predecessor, link, &block->parents) {
+         bool need_to_link = true;
+         bblock_link_kind new_link_kind = MAX2(old_link_kind, predecessor->kind);
+
+         brw_foreach_list_typed_safe (bblock_link, parent, link, &successor->block->parents) {
+            /* There is already a link between the two blocks. If the links
+             * are the same kind or the link is logical, do nothing. If the
+             * existing link is physical and the proposed new link is logical,
+             * promote the existing link to logical.
+             *
+             * This is accomplished by taking the minimum of the existing link
+             * kind and the proposed link kind.
+             */
+            if (parent->block == predecessor->block) {
+               parent->kind = MIN2(parent->kind, new_link_kind);
+               need_to_link = false;
+               break;
+            }
+         }
+
+         if (need_to_link) {
             successor->block->parents.push_tail(link(mem_ctx,
                                                      predecessor->block,
-                                                     predecessor->kind));
+                                                     new_link_kind));
          }
       }
    }
@@ -480,11 +494,6 @@ cfg_t::new_block()
 void
 cfg_t::set_next_block(bblock_t **cur, bblock_t *block, int ip)
 {
-   if (*cur) {
-      (*cur)->end_ip = ip - 1;
-   }
-
-   block->start_ip = ip;
    block->num = num_blocks++;
    block_list.push_tail(&block->link);
    *cur = block;
@@ -503,115 +512,154 @@ cfg_t::make_block_array()
 }
 
 void
-cfg_t::dump()
-{
-   const idom_tree *idom = (s ? &s->idom_analysis.require() : NULL);
-
-   foreach_block (block, this) {
-      if (idom && idom->parent(block))
-         fprintf(stderr, "START B%d IDOM(B%d)", block->num,
-                 idom->parent(block)->num);
-      else
-         fprintf(stderr, "START B%d IDOM(none)", block->num);
-
-      foreach_list_typed(bblock_link, link, link, &block->parents) {
-         fprintf(stderr, " <%cB%d",
-                 link->kind == bblock_link_logical ? '-' : '~',
-                 link->block->num);
-      }
-      fprintf(stderr, "\n");
-      if (s != NULL)
-         block->dump();
-      fprintf(stderr, "END B%d", block->num);
-      foreach_list_typed(bblock_link, link, link, &block->children) {
-         fprintf(stderr, " %c>B%d",
-                 link->kind == bblock_link_logical ? '-' : '~',
-                 link->block->num);
-      }
-      fprintf(stderr, "\n");
-   }
-}
-
-/* Calculates the immediate dominator of each block, according to "A Simple,
- * Fast Dominance Algorithm" by Keith D. Cooper, Timothy J. Harvey, and Ken
- * Kennedy.
- *
- * The authors claim that for control flow graphs of sizes normally encountered
- * (less than 1000 nodes) that this algorithm is significantly faster than
- * others like Lengauer-Tarjan.
- */
-idom_tree::idom_tree(const backend_shader *s) :
-   num_parents(s->cfg->num_blocks),
-   parents(new bblock_t *[num_parents]())
-{
-   bool changed;
-
-   parents[0] = s->cfg->blocks[0];
-
-   do {
-      changed = false;
-
-      foreach_block(block, s->cfg) {
-         if (block->num == 0)
-            continue;
-
-         bblock_t *new_idom = NULL;
-         foreach_list_typed(bblock_link, parent_link, link, &block->parents) {
-            if (parent(parent_link->block)) {
-               new_idom = (new_idom ? intersect(new_idom, parent_link->block) :
-                           parent_link->block);
-            }
-         }
-
-         if (parent(block) != new_idom) {
-            parents[block->num] = new_idom;
-            changed = true;
-         }
-      }
-   } while (changed);
-}
-
-idom_tree::~idom_tree()
-{
-   delete[] parents;
-}
-
-bblock_t *
-idom_tree::intersect(bblock_t *b1, bblock_t *b2) const
-{
-   /* Note, the comparisons here are the opposite of what the paper says
-    * because we index blocks from beginning -> end (i.e. reverse post-order)
-    * instead of post-order like they assume.
-    */
-   while (b1->num != b2->num) {
-      while (b1->num > b2->num)
-         b1 = parent(b1);
-      while (b2->num > b1->num)
-         b2 = parent(b2);
-   }
-   assert(b1);
-   return b1;
-}
-
-void
-idom_tree::dump() const
-{
-   printf("digraph DominanceTree {\n");
-   for (unsigned i = 0; i < num_parents; i++)
-      printf("\t%d -> %d\n", parents[i]->num, i);
-   printf("}\n");
-}
-
-void
 cfg_t::dump_cfg()
 {
    printf("digraph CFG {\n");
    for (int b = 0; b < num_blocks; b++) {
       bblock_t *block = this->blocks[b];
 
-      foreach_list_typed_safe (bblock_link, child, link, &block->children) {
+      brw_foreach_list_typed_safe (bblock_link, child, link, &block->children) {
          printf("\t%d -> %d\n", b, child->block->num);
       }
    }
    printf("}\n");
 }
+
+void
+brw_calculate_cfg(brw_shader &s)
+{
+   if (s.cfg)
+      return;
+   s.cfg = new(s.mem_ctx) cfg_t(&s, &s.instructions);
+}
+
+#define cfgv_assert(assertion)                                          \
+   {                                                                    \
+      if (!(assertion)) {                                               \
+         fprintf(stderr, "ASSERT: CFG validation in %s failed!\n", stage_abbrev); \
+         fprintf(stderr, "%s:%d: '%s' failed\n", __FILE__, __LINE__, #assertion);  \
+         abort();                                                       \
+      }                                                                 \
+   }
+
+#ifndef NDEBUG
+void
+cfg_t::validate(const char *stage_abbrev)
+{
+   unsigned counted_total_instructions = 0;
+
+   foreach_block(block, this) {
+      brw_foreach_list_typed(bblock_link, successor, link, &block->children) {
+         /* Each successor of a block must have one predecessor link back to
+          * the block.
+          */
+         bool successor_links_back_to_predecessor = false;
+         bblock_t *succ_block = successor->block;
+
+         brw_foreach_list_typed(bblock_link, predecessor, link, &succ_block->parents) {
+            if (predecessor->block == block) {
+               cfgv_assert(!successor_links_back_to_predecessor);
+               cfgv_assert(successor->kind == predecessor->kind);
+               successor_links_back_to_predecessor = true;
+            }
+         }
+
+         cfgv_assert(successor_links_back_to_predecessor);
+
+         /* Each successor block must appear only once in the list of
+          * successors.
+          */
+         brw_foreach_list_typed_from(bblock_link, later_successor, link,
+                                 &block->children, successor->link.next) {
+            cfgv_assert(successor->block != later_successor->block);
+         }
+      }
+
+      brw_foreach_list_typed(bblock_link, predecessor, link, &block->parents) {
+         /* Each predecessor of a block must have one successor link back to
+          * the block.
+          */
+         bool predecessor_links_back_to_successor = false;
+         bblock_t *pred_block = predecessor->block;
+
+         brw_foreach_list_typed(bblock_link, successor, link, &pred_block->children) {
+            if (successor->block == block) {
+               cfgv_assert(!predecessor_links_back_to_successor);
+               cfgv_assert(successor->kind == predecessor->kind);
+               predecessor_links_back_to_successor = true;
+            }
+         }
+
+         cfgv_assert(predecessor_links_back_to_successor);
+
+         /* Each precessor block must appear only once in the list of
+          * precessors.
+          */
+         brw_foreach_list_typed_from(bblock_link, later_precessor, link,
+                                 &block->parents, predecessor->link.next) {
+            cfgv_assert(predecessor->block != later_precessor->block);
+         }
+      }
+
+      cfgv_assert(!block->instructions.is_empty());
+
+      unsigned num_instructions = 0;
+      foreach_inst_in_block(brw_inst, inst, block) {
+         cfgv_assert(block == inst->block);
+         num_instructions++;
+      }
+      cfgv_assert(num_instructions == block->num_instructions);
+
+      counted_total_instructions += num_instructions;
+
+      brw_inst *first_inst = block->start();
+      if (first_inst->opcode == BRW_OPCODE_DO) {
+         /* DO instructions both begin and end a block, so the DO instruction
+          * must be the only instruction in the block.
+          */
+         cfgv_assert(brw_exec_list_is_singular(&block->instructions));
+
+         /* A block starting with DO should have exactly two successors. One
+          * is a physical link to the block starting after the WHILE
+          * instruction. The other is a logical link to the block starting the
+          * body of the loop.
+          */
+         bblock_t *physical_block = nullptr;
+         bblock_t *logical_block = nullptr;
+
+         brw_foreach_list_typed(bblock_link, child, link, &block->children) {
+            if (child->kind == bblock_link_physical) {
+               cfgv_assert(physical_block == nullptr);
+               physical_block = child->block;
+            } else {
+               cfgv_assert(logical_block == nullptr);
+               logical_block = child->block;
+            }
+         }
+
+         cfgv_assert(logical_block != nullptr);
+         cfgv_assert(physical_block != nullptr);
+
+         /* A flow block (block ending with SHADER_OPCODE_FLOW) is
+          * used to ensure that the block right after DO is always
+          * present even if it doesn't have actual instructions.
+          *
+          * This way predicated WHILE and CONTINUE don't need to be
+          * repaired when adding instructions right after the DO.
+          * They will point to the flow block whether is empty or not.
+          */
+         cfgv_assert(logical_block->end()->opcode == SHADER_OPCODE_FLOW);
+      }
+
+      brw_inst *last_inst = block->end();
+      if (last_inst->opcode == SHADER_OPCODE_FLOW) {
+         /* A flow block only has one successor -- the instruction disappears
+          * when generating code.
+          */
+         cfgv_assert(block->children.length() == 1);
+      }
+   }
+
+   cfgv_assert(counted_total_instructions == total_instructions);
+}
+#endif

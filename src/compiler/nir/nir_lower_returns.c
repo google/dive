@@ -163,7 +163,7 @@ lower_returns_in_if(nir_if *if_stmt, struct lower_returns_state *state)
 static bool
 lower_returns_in_block(nir_block *block, struct lower_returns_state *state)
 {
-   if (block->predecessors->entries == 0 &&
+   if (block->predecessors.entries == 0 &&
        block != nir_start_block(state->builder.impl)) {
       /* This block is unreachable.  Delete it and everything after it. */
       nir_cf_list list;
@@ -261,7 +261,7 @@ lower_returns_in_cf_list(struct exec_list *cf_list,
          break;
 
       default:
-         unreachable("Invalid inner CF node type");
+         UNREACHABLE("Invalid inner CF node type");
       }
    }
 
@@ -286,11 +286,11 @@ nir_lower_returns_impl(nir_function_impl *impl)
    progress = progress || state.removed_unreachable_code;
 
    if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_none);
+      nir_progress(true, impl, nir_metadata_none);
       nir_rematerialize_derefs_in_use_blocks_impl(impl);
       nir_repair_ssa_impl(impl);
    } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
+      nir_no_progress(impl);
    }
 
    return progress;

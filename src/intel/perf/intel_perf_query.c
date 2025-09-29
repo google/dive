@@ -35,8 +35,6 @@
 #include "perf/intel_perf_query.h"
 #include "perf/intel_perf_regs.h"
 
-#include "drm-uapi/i915_drm.h"
-
 #include "util/compiler.h"
 #include "util/u_math.h"
 
@@ -45,8 +43,6 @@
 #define MI_RPC_BO_SIZE                (4096)
 #define MI_FREQ_OFFSET_BYTES          (256)
 #define MI_PERF_COUNTERS_OFFSET_BYTES (260)
-
-#define ALIGN(x, y) (((x) + (y)-1) & ~((y)-1))
 
 #define MAP_READ  (1 << 0)
 #define MAP_WRITE (1 << 1)
@@ -164,12 +160,14 @@
  * free_sample_buffers list before allocating a new buffer.
  */
 struct oa_sample_buf {
-   struct exec_node link;
+   struct brw_exec_node link;
    int refcount;
    int len;
-   uint8_t buf[I915_PERF_OA_SAMPLE_SIZE * 10];
    uint32_t last_timestamp;
+   uint8_t buf[];
 };
+
+#define oa_sample_buf_buf_length(perf) (perf->oa_sample_size * 10)
 
 /**
  * gen representation of a performance query object.
@@ -213,7 +211,7 @@ struct intel_perf_query_object
           *
           * (See struct brw_oa_sample_buf description for more details)
           */
-         struct exec_node *samples_head;
+         struct brw_exec_node *samples_head;
 
          /**
           * false while in the unaccumulated_elements list, and set to
@@ -261,10 +259,10 @@ struct intel_perf_context {
    int current_oa_format;
 
    /* List of buffers containing OA reports */
-   struct exec_list sample_buffers;
+   struct brw_exec_list sample_buffers;
 
    /* Cached list of empty sample buffers */
-   struct exec_list free_sample_buffers;
+   struct brw_exec_list free_sample_buffers;
 
    int n_active_oa_queries;
    int n_active_pipeline_stats_queries;
@@ -310,7 +308,7 @@ static bool
 inc_n_users(struct intel_perf_context *perf_ctx)
 {
    if (perf_ctx->n_oa_users == 0 &&
-       intel_ioctl(perf_ctx->oa_stream_fd, I915_PERF_IOCTL_ENABLE, 0) < 0)
+       intel_perf_stream_set_state(perf_ctx->perf, perf_ctx->oa_stream_fd, true) < 0)
    {
       return false;
    }
@@ -329,7 +327,7 @@ dec_n_users(struct intel_perf_context *perf_ctx)
     */
    --perf_ctx->n_oa_users;
    if (perf_ctx->n_oa_users == 0 &&
-       intel_ioctl(perf_ctx->oa_stream_fd, I915_PERF_IOCTL_DISABLE, 0) < 0)
+       intel_perf_stream_set_state(perf_ctx->perf, perf_ctx->oa_stream_fd, false) < 0)
    {
       DBG("WARNING: Error disabling gen perf stream: %m\n");
    }
@@ -353,59 +351,15 @@ intel_perf_close(struct intel_perf_context *perfquery,
 bool
 intel_perf_open(struct intel_perf_context *perf_ctx,
                 int metrics_set_id,
-                int report_format,
+                uint64_t report_format,
                 int period_exponent,
                 int drm_fd,
                 uint32_t ctx_id,
                 bool enable)
 {
-   uint64_t properties[DRM_I915_PERF_PROP_MAX * 2];
-   uint32_t p = 0;
-
-   /* Single context sampling if valid context id. */
-   if (ctx_id != INTEL_PERF_INVALID_CTX_ID) {
-      properties[p++] = DRM_I915_PERF_PROP_CTX_HANDLE;
-      properties[p++] = ctx_id;
-   }
-
-   /* Include OA reports in samples */
-   properties[p++] = DRM_I915_PERF_PROP_SAMPLE_OA;
-   properties[p++] = true;
-
-   /* OA unit configuration */
-   properties[p++] = DRM_I915_PERF_PROP_OA_METRICS_SET;
-   properties[p++] = metrics_set_id;
-
-   properties[p++] = DRM_I915_PERF_PROP_OA_FORMAT;
-   properties[p++] = report_format;
-
-   properties[p++] = DRM_I915_PERF_PROP_OA_EXPONENT;
-   properties[p++] = period_exponent;
-
-   /* If global SSEU is available, pin it to the default. This will ensure on
-    * Gfx11 for instance we use the full EU array. Initially when perf was
-    * enabled we would use only half on Gfx11 because of functional
-    * requirements.
-    *
-    * Temporary disable this option on Gfx12.5+, kernel doesn't appear to
-    * support it.
-    */
-   if (intel_perf_has_global_sseu(perf_ctx->perf) &&
-       perf_ctx->devinfo->verx10 < 125) {
-      properties[p++] = DRM_I915_PERF_PROP_GLOBAL_SSEU;
-      properties[p++] = to_user_pointer(&perf_ctx->perf->sseu);
-   }
-
-   assert(p <= ARRAY_SIZE(properties));
-
-   struct drm_i915_perf_open_param param = {
-      .flags = I915_PERF_FLAG_FD_CLOEXEC |
-               I915_PERF_FLAG_FD_NONBLOCK |
-               (enable ? 0 : I915_PERF_FLAG_DISABLED),
-      .num_properties = p / 2,
-      .properties_ptr = (uintptr_t) properties,
-   };
-   int fd = intel_ioctl(drm_fd, DRM_IOCTL_I915_PERF_OPEN, &param);
+   int fd = intel_perf_stream_open(perf_ctx->perf, drm_fd, ctx_id,
+                                   metrics_set_id, period_exponent, false,
+                                   enable, NULL);
    if (fd == -1) {
       DBG("Error opening gen perf OA stream: %m\n");
       return false;
@@ -460,15 +414,15 @@ get_metric_id(struct intel_perf_config *perf,
 static struct oa_sample_buf *
 get_free_sample_buf(struct intel_perf_context *perf_ctx)
 {
-   struct exec_node *node = exec_list_pop_head(&perf_ctx->free_sample_buffers);
+   struct brw_exec_node *node = brw_exec_list_pop_head(&perf_ctx->free_sample_buffers);
    struct oa_sample_buf *buf;
 
    if (node)
-      buf = exec_node_data(struct oa_sample_buf, node, link);
+      buf = brw_exec_node_data(struct oa_sample_buf, node, link);
    else {
-      buf = ralloc_size(perf_ctx->perf, sizeof(*buf));
+      buf = ralloc_size(perf_ctx->perf, sizeof(*buf) + oa_sample_buf_buf_length(perf_ctx->perf));
 
-      exec_node_init(&buf->link);
+      brw_exec_node_init(&buf->link);
       buf->refcount = 0;
    }
    buf->len = 0;
@@ -479,22 +433,22 @@ get_free_sample_buf(struct intel_perf_context *perf_ctx)
 static void
 reap_old_sample_buffers(struct intel_perf_context *perf_ctx)
 {
-   struct exec_node *tail_node =
-      exec_list_get_tail(&perf_ctx->sample_buffers);
+   struct brw_exec_node *tail_node =
+      brw_exec_list_get_tail(&perf_ctx->sample_buffers);
    struct oa_sample_buf *tail_buf =
-      exec_node_data(struct oa_sample_buf, tail_node, link);
+      brw_exec_node_data(struct oa_sample_buf, tail_node, link);
 
    /* Remove all old, unreferenced sample buffers walking forward from
     * the head of the list, except always leave at least one node in
     * the list so we always have a node to reference when we Begin
     * a new query.
     */
-   foreach_list_typed_safe(struct oa_sample_buf, buf, link,
+   brw_foreach_list_typed_safe(struct oa_sample_buf, buf, link,
                            &perf_ctx->sample_buffers)
    {
       if (buf->refcount == 0 && buf != tail_buf) {
-         exec_node_remove(&buf->link);
-         exec_list_push_head(&perf_ctx->free_sample_buffers, &buf->link);
+         brw_exec_node_remove(&buf->link);
+         brw_exec_list_push_head(&perf_ctx->free_sample_buffers, &buf->link);
       } else
          return;
    }
@@ -503,11 +457,11 @@ reap_old_sample_buffers(struct intel_perf_context *perf_ctx)
 static void
 free_sample_bufs(struct intel_perf_context *perf_ctx)
 {
-   foreach_list_typed_safe(struct oa_sample_buf, buf, link,
+   brw_foreach_list_typed_safe(struct oa_sample_buf, buf, link,
                            &perf_ctx->free_sample_buffers)
       ralloc_free(buf);
 
-   exec_list_make_empty(&perf_ctx->free_sample_buffers);
+   brw_exec_list_make_empty(&perf_ctx->free_sample_buffers);
 }
 
 
@@ -556,7 +510,7 @@ intel_perf_active_queries(struct intel_perf_context *perf_ctx,
       break;
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 }
@@ -582,6 +536,11 @@ intel_perf_config(struct intel_perf_context *ctx)
    return ctx->perf;
 }
 
+void intel_perf_free_context(struct intel_perf_context *perf_ctx)
+{
+   ralloc_free(perf_ctx);
+}
+
 void
 intel_perf_init_context(struct intel_perf_context *perf_ctx,
                         struct intel_perf_config *perf_cfg,
@@ -605,8 +564,8 @@ intel_perf_init_context(struct intel_perf_context *perf_ctx,
    perf_ctx->unaccumulated_elements = 0;
    perf_ctx->unaccumulated_array_size = 2;
 
-   exec_list_make_empty(&perf_ctx->sample_buffers);
-   exec_list_make_empty(&perf_ctx->free_sample_buffers);
+   brw_exec_list_make_empty(&perf_ctx->sample_buffers);
+   brw_exec_list_make_empty(&perf_ctx->free_sample_buffers);
 
    /* It's convenient to guarantee that this linked list of sample
     * buffers is never empty so we add an empty head so when we
@@ -614,7 +573,7 @@ intel_perf_init_context(struct intel_perf_context *perf_ctx,
     * in this list.
     */
    struct oa_sample_buf *buf = get_free_sample_buf(perf_ctx);
-   exec_list_push_head(&perf_ctx->sample_buffers, &buf->link);
+   brw_exec_list_push_head(&perf_ctx->sample_buffers, &buf->link);
 
    perf_ctx->oa_stream_fd = -1;
    perf_ctx->next_query_start_report_id = 1000;
@@ -746,12 +705,13 @@ snapshot_query_layout(struct intel_perf_context *perf_ctx,
       case INTEL_PERF_QUERY_FIELD_TYPE_SRM_OA_A:
       case INTEL_PERF_QUERY_FIELD_TYPE_SRM_OA_B:
       case INTEL_PERF_QUERY_FIELD_TYPE_SRM_OA_C:
+      case INTEL_PERF_QUERY_FIELD_TYPE_SRM_OA_PEC:
          perf_cfg->vtbl.store_register_mem(perf_ctx->ctx, query->oa.bo,
                                            field->mmio_offset, field->size,
                                            offset + field->location);
          break;
       default:
-         unreachable("Invalid field type");
+         UNREACHABLE("Invalid field type");
       }
    }
 }
@@ -852,7 +812,7 @@ intel_perf_begin_query(struct intel_perf_context *perf_ctx,
       query->oa.bo = perf_cfg->vtbl.bo_alloc(perf_ctx->bufmgr,
                                              "perf. query OA MI_RPC bo",
                                              MI_RPC_BO_SIZE);
-#ifdef DEBUG
+#if MESA_DEBUG
       /* Pre-filling the BO helps debug whether writes landed. */
       void *map = perf_cfg->vtbl.bo_map(perf_ctx->ctx, query->oa.bo, MAP_WRITE);
       memset(map, 0x80, MI_RPC_BO_SIZE);
@@ -871,11 +831,11 @@ intel_perf_begin_query(struct intel_perf_context *perf_ctx,
        * easily ignore earlier samples when processing this query after
        * completion.
        */
-      assert(!exec_list_is_empty(&perf_ctx->sample_buffers));
-      query->oa.samples_head = exec_list_get_tail(&perf_ctx->sample_buffers);
+      assert(!brw_exec_list_is_empty(&perf_ctx->sample_buffers));
+      query->oa.samples_head = brw_exec_list_get_tail(&perf_ctx->sample_buffers);
 
       struct oa_sample_buf *buf =
-         exec_node_data(struct oa_sample_buf, query->oa.samples_head, link);
+         brw_exec_node_data(struct oa_sample_buf, query->oa.samples_head, link);
 
       /* This reference will ensure that future/following sample
        * buffers (that may relate to this query) can't be freed until
@@ -908,7 +868,7 @@ intel_perf_begin_query(struct intel_perf_context *perf_ctx,
       break;
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 
@@ -956,7 +916,7 @@ intel_perf_end_query(struct intel_perf_context *perf_ctx,
       break;
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 }
@@ -985,7 +945,8 @@ intel_perf_read_oa_stream(struct intel_perf_context *perf_ctx,
                           void* buf,
                           size_t nbytes)
 {
-   return read(perf_ctx->oa_stream_fd, buf, nbytes);
+   return intel_perf_stream_read_samples(perf_ctx->perf, perf_ctx->oa_stream_fd,
+                                         buf, nbytes);
 }
 
 enum OaReadStatus {
@@ -999,31 +960,39 @@ read_oa_samples_until(struct intel_perf_context *perf_ctx,
                       uint32_t start_timestamp,
                       uint32_t end_timestamp)
 {
-   struct exec_node *tail_node =
-      exec_list_get_tail(&perf_ctx->sample_buffers);
+   struct brw_exec_node *tail_node =
+      brw_exec_list_get_tail(&perf_ctx->sample_buffers);
    struct oa_sample_buf *tail_buf =
-      exec_node_data(struct oa_sample_buf, tail_node, link);
+      brw_exec_node_data(struct oa_sample_buf, tail_node, link);
    uint32_t last_timestamp =
       tail_buf->len == 0 ? start_timestamp : tail_buf->last_timestamp;
+   bool sample_read = false;
 
    while (1) {
       struct oa_sample_buf *buf = get_free_sample_buf(perf_ctx);
       uint32_t offset;
       int len;
 
-      while ((len = read(perf_ctx->oa_stream_fd, buf->buf,
-                         sizeof(buf->buf))) < 0 && errno == EINTR)
-         ;
+      len = intel_perf_stream_read_samples(perf_ctx->perf,
+                                           perf_ctx->oa_stream_fd,
+                                           buf->buf,
+                                           oa_sample_buf_buf_length(perf_ctx->perf));
 
       if (len <= 0) {
-         exec_list_push_tail(&perf_ctx->free_sample_buffers, &buf->link);
+         brw_exec_list_push_tail(&perf_ctx->free_sample_buffers, &buf->link);
 
          if (len == 0) {
+            if (sample_read)
+               return OA_READ_STATUS_FINISHED;
+
             DBG("Spurious EOF reading i915 perf samples\n");
             return OA_READ_STATUS_ERROR;
          }
 
-         if (errno != EAGAIN) {
+         if (len != -EAGAIN) {
+            if (sample_read)
+               return OA_READ_STATUS_FINISHED;
+
             DBG("Error reading i915 perf samples: %m\n");
             return OA_READ_STATUS_ERROR;
          }
@@ -1039,25 +1008,26 @@ read_oa_samples_until(struct intel_perf_context *perf_ctx,
       }
 
       buf->len = len;
-      exec_list_push_tail(&perf_ctx->sample_buffers, &buf->link);
+      brw_exec_list_push_tail(&perf_ctx->sample_buffers, &buf->link);
 
       /* Go through the reports and update the last timestamp. */
       offset = 0;
       while (offset < buf->len) {
-         const struct drm_i915_perf_record_header *header =
-            (const struct drm_i915_perf_record_header *) &buf->buf[offset];
+         const struct intel_perf_record_header *header =
+            (const struct intel_perf_record_header *) &buf->buf[offset];
          uint32_t *report = (uint32_t *) (header + 1);
 
-         if (header->type == DRM_I915_PERF_RECORD_SAMPLE)
+         if (header->type == INTEL_PERF_RECORD_TYPE_SAMPLE)
             last_timestamp = report[1];
 
          offset += header->size;
+         sample_read = true;
       }
 
       buf->last_timestamp = last_timestamp;
    }
 
-   unreachable("not reached");
+   UNREACHABLE("not reached");
    return OA_READ_STATUS_ERROR;
 }
 
@@ -1107,7 +1077,7 @@ read_oa_samples_for_query(struct intel_perf_context *perf_ctx,
       return false;
    }
 
-   unreachable("invalid read status");
+   UNREACHABLE("invalid read status");
    return false;
 }
 
@@ -1130,7 +1100,7 @@ intel_perf_wait_query(struct intel_perf_context *perf_ctx,
       break;
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 
@@ -1167,7 +1137,7 @@ intel_perf_is_query_ready(struct intel_perf_context *perf_ctx,
               !perf_cfg->vtbl.bo_busy(query->pipeline_stats.bo));
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 
@@ -1205,7 +1175,7 @@ drop_from_unaccumulated_query_list(struct intel_perf_context *perf_ctx,
     */
 
    struct oa_sample_buf *buf =
-      exec_node_data(struct oa_sample_buf, query->oa.samples_head, link);
+      brw_exec_node_data(struct oa_sample_buf, query->oa.samples_head, link);
 
    assert(buf->refcount > 0);
    buf->refcount--;
@@ -1270,7 +1240,7 @@ accumulate_oa_reports(struct intel_perf_context *perf_ctx,
    uint32_t *start;
    uint32_t *last;
    uint32_t *end;
-   struct exec_node *first_samples_node;
+   struct brw_exec_node *first_samples_node;
    bool last_report_ctx_match = true;
    int out_duration = 0;
 
@@ -1307,15 +1277,15 @@ accumulate_oa_reports(struct intel_perf_context *perf_ctx,
     */
    first_samples_node = query->oa.samples_head->next;
 
-   foreach_list_typed_from(struct oa_sample_buf, buf, link,
+   brw_foreach_list_typed_from(struct oa_sample_buf, buf, link,
                            &perf_ctx->sample_buffers,
                            first_samples_node)
    {
       int offset = 0;
 
       while (offset < buf->len) {
-         const struct drm_i915_perf_record_header *header =
-            (const struct drm_i915_perf_record_header *)(buf->buf + offset);
+         const struct intel_perf_record_header *header =
+            (const struct intel_perf_record_header *)(buf->buf + offset);
 
          assert(header->size != 0);
          assert(header->size <= buf->len);
@@ -1323,7 +1293,7 @@ accumulate_oa_reports(struct intel_perf_context *perf_ctx,
          offset += header->size;
 
          switch (header->type) {
-         case DRM_I915_PERF_RECORD_SAMPLE: {
+         case INTEL_PERF_RECORD_TYPE_SAMPLE: {
             uint32_t *report = (uint32_t *)(header + 1);
             bool report_ctx_match = true;
             bool add = true;
@@ -1398,11 +1368,11 @@ accumulate_oa_reports(struct intel_perf_context *perf_ctx,
             break;
          }
 
-         case DRM_I915_PERF_RECORD_OA_BUFFER_LOST:
-             DBG("i915 perf: OA error: all reports lost\n");
+         case INTEL_PERF_RECORD_TYPE_OA_BUFFER_LOST:
+             DBG("perf: OA error: all reports lost\n");
              goto error;
-         case DRM_I915_PERF_RECORD_OA_REPORT_LOST:
-             DBG("i915 perf: OA report lost\n");
+         case INTEL_PERF_RECORD_TYPE_OA_REPORT_LOST:
+             DBG("perf: OA report lost\n");
              break;
          }
       }
@@ -1458,7 +1428,7 @@ intel_perf_delete_query(struct intel_perf_context *perf_ctx,
       break;
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 
@@ -1507,7 +1477,7 @@ get_oa_counter_data(struct intel_perf_context *perf_ctx,
             break;
          default:
             /* So far we aren't using uint32, double or bool32... */
-            unreachable("unexpected counter data type");
+            UNREACHABLE("unexpected counter data type");
          }
 
          if (counter->offset + counter_size > written)
@@ -1607,7 +1577,7 @@ intel_perf_get_query_data(struct intel_perf_context *perf_ctx,
       break;
 
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 
@@ -1640,7 +1610,7 @@ intel_perf_dump_query(struct intel_perf_context *ctx,
           obj->pipeline_stats.bo ? "yes" : "no");
       break;
    default:
-      unreachable("Unknown query type");
+      UNREACHABLE("Unknown query type");
       break;
    }
 }

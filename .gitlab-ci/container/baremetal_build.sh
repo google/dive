@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154 # arch is assigned in previous scripts
 
 set -e
 set -o xtrace
@@ -6,15 +7,12 @@ set -o xtrace
 # Fetch the arm-built rootfs image and unpack it in our x86_64 container (saves
 # network transfer, disk usage, and runtime on test jobs)
 
-# shellcheck disable=SC2154 # arch is assigned in previous scripts
-if curl -X HEAD -s "${ARTIFACTS_PREFIX}/${FDO_UPSTREAM_REPO}/${ARTIFACTS_SUFFIX}/${arch}/done"; then
-  ARTIFACTS_URL="${ARTIFACTS_PREFIX}/${FDO_UPSTREAM_REPO}/${ARTIFACTS_SUFFIX}/${arch}"
-else
-  ARTIFACTS_URL="${ARTIFACTS_PREFIX}/${CI_PROJECT_PATH}/${ARTIFACTS_SUFFIX}/${arch}"
-fi
+# shellcheck disable=SC2034 # S3_BASE_PATH is used in find_s3_project_artifact
+S3_BASE_PATH="${S3_HOST}/${S3_KERNEL_BUCKET}"
+ARTIFACTS_PATH="${LAVA_DISTRIBUTION_TAG}/lava-rootfs.tar.zst"
+ARTIFACTS_URL="$(find_s3_project_artifact "${ARTIFACTS_PATH}")"
 
-curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-    "${ARTIFACTS_URL}"/lava-rootfs.tar.zst -o rootfs.tar.zst
+curl-with-retry -o rootfs.tar.zst "${ARTIFACTS_URL}"
 mkdir -p /rootfs-"$arch"
 tar -C /rootfs-"$arch" '--exclude=./dev/*' --zstd -xf rootfs.tar.zst
 rm rootfs.tar.zst
@@ -23,40 +21,7 @@ if [[ $arch == "arm64" ]]; then
     mkdir -p /baremetal-files
     pushd /baremetal-files
 
-    curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-	-O "${KERNEL_IMAGE_BASE}"/arm64/Image
-    curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-        -O "${KERNEL_IMAGE_BASE}"/arm64/Image.gz
-    curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-        -O "${KERNEL_IMAGE_BASE}"/arm64/cheza-kernel
-
-    DEVICE_TREES=""
-    DEVICE_TREES="$DEVICE_TREES apq8016-sbc.dtb"
-    DEVICE_TREES="$DEVICE_TREES apq8096-db820c.dtb"
-    DEVICE_TREES="$DEVICE_TREES tegra210-p3450-0000.dtb"
-    DEVICE_TREES="$DEVICE_TREES imx8mq-nitrogen.dtb"
-
-    for DTB in $DEVICE_TREES; do
-	curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-            -O "${KERNEL_IMAGE_BASE}/arm64/$DTB"
-    done
-
-    popd
-elif [[ $arch == "armhf" ]]; then
-    mkdir -p /baremetal-files
-    pushd /baremetal-files
-
-    curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-        -O "${KERNEL_IMAGE_BASE}"/armhf/zImage
-
-    DEVICE_TREES=""
-    DEVICE_TREES="$DEVICE_TREES imx6q-cubox-i.dtb"
-    DEVICE_TREES="$DEVICE_TREES tegra124-jetson-tk1.dtb"
-
-    for DTB in $DEVICE_TREES; do
-	curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
-            -O "${KERNEL_IMAGE_BASE}/armhf/$DTB"
-    done
-
+    curl-with-retry -O "${KERNEL_IMAGE_BASE}"/arm64/Image
+    curl-with-retry -O "${KERNEL_IMAGE_BASE}"/arm64/Image.gz
     popd
 fi

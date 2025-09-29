@@ -7,16 +7,15 @@ Haiku. We're actively developing and maintaining several hardware and
 software drivers.
 
 The primary API is OpenGL but there's also support for OpenGL ES, Vulkan,
-EGL, OpenMAX, OpenCL, VDPAU and VA-API.
+EGL, OpenCL and VA-API.
 
 Hardware drivers include:
 
 -  Intel GMA, HD Graphics, Iris. See `Intel's
-   Website <https://01.org/linuxgraphics>`__
+   Website <https://www.intel.com/content/www/us/en/developer/topic-technology/open/overview.html>`__
 -  AMD Radeon series. See
    `RadeonFeature <https://www.x.org/wiki/RadeonFeature>`__
--  NVIDIA GPUs (GeForce 5 / FX and later). See `Nouveau
-   Wiki <https://nouveau.freedesktop.org>`__
+-  NVIDIA GPUs (Maxwell and later). See :doc:`NVK <drivers/nvk>`
 -  Qualcomm Adreno 2xx-6xx. See :doc:`Freedreno
    <drivers/freedreno>`
 -  Broadcom VideoCore 4 and 5. See :doc:`VC4 <drivers/vc4>` and
@@ -24,7 +23,9 @@ Hardware drivers include:
 -  ARM Mali Utgard. See :doc:`Lima <drivers/lima>`
 -  ARM Mali Midgard, Bifrost. See :doc:`Panfrost <drivers/panfrost>`
 -  Vivante GCxxx. See `Etnaviv
-   Wiki <https://github.com/laanwj/etna_viv/wiki>`__
+   Wiki <https://github.com/etnaviv/etna_viv>`__
+-  Older NVIDIA GPUs (GeForce 5 / FX and later). See `Nouveau
+   Wiki <https://nouveau.freedesktop.org>`__
 -  NVIDIA Tegra (K1 and later).
 
 Layered driver include:
@@ -74,3 +75,4 @@ the Git repo. The list includes:
 -  Silicon Integrated Systems
 -  swrast
 -  VIA Unichrome
+-  VDPAU

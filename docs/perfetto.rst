@@ -43,6 +43,12 @@ The exact supported features vary per driver:
    * - Panfrost
      - ``gpu.counters.panfrost``
      -
+   * - V3D
+     - ``gpu.counters.v3d``
+     -
+   * - V3DV
+     - ``gpu.counters.v3d``
+     -
 
 Run
 ---
@@ -58,10 +64,10 @@ To capture a trace with Perfetto you need to take the following steps:
    can be found in ``subprojects/perfetto/test/configs``.
 
 3. Change directory to ``subprojects/perfetto`` and run a
-   `convenience script <https://perfetto.dev/docs/quickstart/linux-tracing#capturing-a-trace>`__
+   `convenience script <https://perfetto.dev/docs/getting-started/system-tracing#recording-your-first-system-trace>`__
    to start the tracing service:
 
-   .. code-block:: console
+   .. code-block:: sh
 
       cd subprojects/perfetto
       CONFIG=<path/to/gpu.cfg> OUT=out/linux_clang_release ./tools/tmux -n
@@ -83,7 +89,7 @@ To capture a trace with Perfetto you need to take the following steps:
 To be a bit more explicit, here is a listing of commands reproducing
 the steps above :
 
-.. code-block:: console
+.. code-block:: sh
 
    # Configure Mesa with perfetto
    mesa $ meson . build -Dperfetto=true -Dvulkan-drivers=intel,broadcom -Dgallium-drivers=
@@ -110,7 +116,14 @@ CPU Tracing
 Mesa's CPU tracepoints (``MESA_TRACE_*``) use Perfetto track events when
 Perfetto is enabled.  They use ``mesa.default`` and ``mesa.slow`` categories.
 
-Currently, only EGL and Freedreno have CPU tracepoints.
+Currently, only EGL and the following drivers have CPU tracepoints.
+
+- Freedreno
+- Panfrost
+- Turnip
+- V3D
+- VC4
+- V3DV
 
 Vulkan data sources
 ~~~~~~~~~~~~~~~~~~~
@@ -124,7 +137,7 @@ actually collecting traces.
 This can be achieved by setting the :envvar:`MESA_GPU_TRACES`
 environment variable before starting a Vulkan application :
 
-.. code-block:: console
+.. code-block:: sh
 
    MESA_GPU_TRACES=perfetto ./build/my_vulkan_app
 
@@ -139,7 +152,7 @@ Freedreno / Turnip
 The Freedreno PPS driver needs root access to read system-wide
 performance counters, so you can simply run it with sudo:
 
-.. code-block:: console
+.. code-block:: sh
 
    sudo ./build/src/tool/pps/pps-producer
 
@@ -147,16 +160,16 @@ Intel
 ^^^^^
 
 The Intel PPS driver needs root access to read system-wide
-`RenderBasic <https://www.intel.com/content/www/us/en/develop/documentation/vtune-help/top/reference/gpu-metrics-reference.html>`__
+`RenderBasic <https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-0/gpu-metrics-reference.html>`__
 performance counters, so you can simply run it with sudo:
 
-.. code-block:: console
+.. code-block:: sh
 
    sudo ./build/src/tool/pps/pps-producer
 
 Another option to enable access wide data without root permissions would be running the following:
 
-.. code-block:: console
+.. code-block:: sh
 
    sudo sysctl dev.i915.perf_stream_paranoid=0
 
@@ -165,7 +178,7 @@ Alternatively using the ``CAP_PERFMON`` permission on the binary should work too
 A particular metric set can also be selected to capture a different
 set of HW counters :
 
-.. code-block:: console
+.. code-block:: sh
 
    INTEL_PERFETTO_METRIC_SET=RasterizerAndPixelBackend ./build/src/tool/pps/pps-producer
 
@@ -173,7 +186,7 @@ Vulkan applications can also be instrumented to be Perfetto producers.
 To enable this for given application, set the environment variable as
 follow :
 
-.. code-block:: console
+.. code-block:: sh
 
    PERFETTO_TRACE=1 my_vulkan_app
 
@@ -188,7 +201,7 @@ To run the producer, follow these two simple steps:
 
 1. Enable Panfrost unstable ioctls via kernel parameter:
 
-   .. code-block:: console
+   .. code-block:: sh
 
       modprobe panfrost unstable_ioctls=1
 
@@ -196,9 +209,20 @@ To run the producer, follow these two simple steps:
 
 2. Run the producer:
 
-   .. code-block:: console
+   .. code-block:: sh
 
       ./build/pps-producer
+
+V3D / V3DV
+----------
+
+As we can only have one performance monitor active at a given time, we can only monitor
+32 performance counters. There is a need to define the performance counters of interest
+for pps_producer using the environment variable ``V3D_DS_COUNTER``.
+
+.. code-block:: sh
+
+   V3D_DS_COUNTER=cycle-count,CLE-bin-thread-active-cycles,CLE-render-thread-active-cycles,QPU-total-uniform-cache-hit ./src/tool/pps/pps-producer
 
 Troubleshooting
 ---------------
@@ -210,7 +234,7 @@ If the convenience script ``tools/tmux`` keeps copying artifacts to your
 ``SSH_TARGET`` without starting the tmux session, make sure you have ``tmux``
 installed in your system.
 
-.. code-block:: console
+.. code-block:: sh
 
    apt install tmux
 

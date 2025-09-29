@@ -1,24 +1,6 @@
 /*
- * Copyright (c) 2012 Rob Clark <robdclark@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012 Rob Clark <robdclark@gmail.com>
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __CFFDEC_H__
@@ -53,6 +35,7 @@ struct cffdec_options {
    int summary;
    int allregs;
    int dump_textures;
+   int dump_bindless;
    int decode_markers;
    char *script;
 
@@ -80,8 +63,13 @@ struct cffdec_options {
    struct {
       uint64_t base;
       uint32_t rem;
+      uint32_t size;
       bool crash_found : 1;
    } ibs[4];
+
+   /* Ringbuffer addresses are non-contiguous so we use the host address.
+    */
+   uint32_t *rb_host_base;
 };
 
 /**
@@ -114,6 +102,7 @@ bool regacc_push(struct regacc *regacc, uint32_t regbase, uint32_t dword);
 void printl(int lvl, const char *fmt, ...);
 const char *pktname(unsigned opc);
 uint32_t regbase(const char *name);
+int enumval(const char *enumname, const char *enumval);
 const char *regname(uint32_t regbase, int color);
 bool reg_written(uint32_t regbase);
 uint32_t reg_lastval(uint32_t regbase);

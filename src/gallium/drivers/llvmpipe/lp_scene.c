@@ -75,7 +75,7 @@ lp_scene_create(struct lp_setup_context *setup)
 
    (void) mtx_init(&scene->mutex, mtx_plain);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    /* Do some scene limit sanity checks here */
    {
       size_t maxBins = TILES_X * TILES_Y;
@@ -167,49 +167,36 @@ init_scene_texture(struct lp_scene_surface *ssurf, struct pipe_surface *psurf)
       return;
    }
 
-   if (llvmpipe_resource_is_texture(psurf->texture)) {
-      ssurf->stride = llvmpipe_resource_stride(psurf->texture,
-                                               psurf->u.tex.level);
-      ssurf->layer_stride = llvmpipe_layer_stride(psurf->texture,
-                                                           psurf->u.tex.level);
-      ssurf->sample_stride = llvmpipe_sample_stride(psurf->texture);
+   ssurf->stride = llvmpipe_resource_stride(psurf->texture,
+                                             psurf->level);
+   ssurf->layer_stride = llvmpipe_layer_stride(psurf->texture,
+                                                         psurf->level);
+   ssurf->sample_stride = llvmpipe_sample_stride(psurf->texture);
 
-      ssurf->map = llvmpipe_resource_map(psurf->texture,
-                                         psurf->u.tex.level,
-                                         psurf->u.tex.first_layer,
-                                         LP_TEX_USAGE_READ_WRITE);
-      ssurf->format_bytes = util_format_get_blocksize(psurf->format);
-      ssurf->nr_samples = util_res_sample_count(psurf->texture);
-   } else {
-      struct llvmpipe_resource *lpr = llvmpipe_resource(psurf->texture);
-      unsigned pixstride = util_format_get_blocksize(psurf->format);
-      ssurf->stride = psurf->texture->width0;
-      ssurf->layer_stride = 0;
-      ssurf->sample_stride = 0;
-      ssurf->nr_samples = 1;
-      ssurf->map = lpr->data;
-      ssurf->map += psurf->u.buf.first_element * pixstride;
-      ssurf->format_bytes = util_format_get_blocksize(psurf->format);
-   }
+   ssurf->map = llvmpipe_resource_map(psurf->texture,
+                                       psurf->level,
+                                       psurf->first_layer,
+                                       LP_TEX_USAGE_READ_WRITE);
+   assert(ssurf->map);
+   ssurf->format_bytes = util_format_get_blocksize(psurf->format);
+   ssurf->nr_samples = util_res_sample_count(psurf->texture);
+   ssurf->base_layer = psurf->first_layer;
+   ssurf->layer_count = psurf->last_layer - psurf->first_layer + 1;
 }
 
 
 void
 lp_scene_begin_rasterization(struct lp_scene *scene)
 {
-   const struct pipe_framebuffer_state *fb = &scene->fb;
-
    //LP_DBG(DEBUG_RAST, "%s\n", __func__);
 
    for (unsigned i = 0; i < scene->fb.nr_cbufs; i++) {
-      struct pipe_surface *cbuf = scene->fb.cbufs[i];
-      init_scene_texture(&scene->cbufs[i], cbuf);
+      struct pipe_surface *cbuf = &scene->fb.cbufs[i];
+      init_scene_texture(&scene->cbufs[i], cbuf->texture ? cbuf : NULL);
    }
 
-   if (fb->zsbuf) {
-      struct pipe_surface *zsbuf = scene->fb.zsbuf;
-      init_scene_texture(&scene->zsbuf, zsbuf);
-   }
+   struct pipe_surface *zsbuf = &scene->fb.zsbuf;
+   init_scene_texture(&scene->zsbuf, zsbuf->texture ? zsbuf : NULL);
 }
 
 
@@ -224,11 +211,11 @@ lp_scene_end_rasterization(struct lp_scene *scene)
    /* Unmap color buffers */
    for (unsigned i = 0; i < scene->fb.nr_cbufs; i++) {
       if (scene->cbufs[i].map) {
-         struct pipe_surface *cbuf = scene->fb.cbufs[i];
+         struct pipe_surface *cbuf = &scene->fb.cbufs[i];
          if (llvmpipe_resource_is_texture(cbuf->texture)) {
             llvmpipe_resource_unmap(cbuf->texture,
-                                    cbuf->u.tex.level,
-                                    cbuf->u.tex.first_layer);
+                                    cbuf->level,
+                                    cbuf->first_layer);
          }
          scene->cbufs[i].map = NULL;
       }
@@ -236,10 +223,10 @@ lp_scene_end_rasterization(struct lp_scene *scene)
 
    /* Unmap z/stencil buffer */
    if (scene->zsbuf.map) {
-      struct pipe_surface *zsbuf = scene->fb.zsbuf;
+      struct pipe_surface *zsbuf = &scene->fb.zsbuf;
       llvmpipe_resource_unmap(zsbuf->texture,
-                              zsbuf->u.tex.level,
-                              zsbuf->u.tex.first_layer);
+                              zsbuf->level,
+                              zsbuf->first_layer);
       scene->zsbuf.map = NULL;
    }
 
@@ -524,10 +511,10 @@ lp_scene_is_resource_referenced(const struct lp_scene *scene,
 
    /* check the render targets */
    for (unsigned j = 0; j < scene->fb.nr_cbufs; j++) {
-     if (scene->fb.cbufs[j] && scene->fb.cbufs[j]->texture == resource)
+     if (scene->fb.cbufs[j].texture == resource)
        return LP_REFERENCED_FOR_READ | LP_REFERENCED_FOR_WRITE;
    }
-   if (scene->fb.zsbuf && scene->fb.zsbuf->texture == resource) {
+   if (scene->fb.zsbuf.texture == resource) {
      return LP_REFERENCED_FOR_READ | LP_REFERENCED_FOR_WRITE;
    }
 
@@ -635,30 +622,23 @@ lp_scene_begin_binning(struct lp_scene *scene,
     */
    unsigned max_layer = ~0;
    for (unsigned i = 0; i < scene->fb.nr_cbufs; i++) {
-      struct pipe_surface *cbuf = scene->fb.cbufs[i];
-      if (cbuf) {
+      struct pipe_surface *cbuf = &scene->fb.cbufs[i];
+      if (cbuf->texture) {
          if (llvmpipe_resource_is_texture(cbuf->texture)) {
             max_layer = MIN2(max_layer,
-                             cbuf->u.tex.last_layer - cbuf->u.tex.first_layer);
+                             cbuf->last_layer - cbuf->first_layer);
          } else {
             max_layer = 0;
          }
       }
    }
 
-   if (fb->zsbuf) {
-      struct pipe_surface *zsbuf = scene->fb.zsbuf;
-      max_layer = MIN2(max_layer, zsbuf->u.tex.last_layer - zsbuf->u.tex.first_layer);
+   if (fb->zsbuf.texture) {
+      struct pipe_surface *zsbuf = &scene->fb.zsbuf;
+      max_layer = MIN2(max_layer, zsbuf->last_layer - zsbuf->first_layer);
    }
 
    scene->fb_max_layer = max_layer;
-   scene->fb_max_samples = util_framebuffer_get_num_samples(fb);
-   if (scene->fb_max_samples == 4) {
-      for (unsigned i = 0; i < 4; i++) {
-         scene->fixed_sample_pos[i][0] = util_iround(lp_sample_pos_4x[i][0] * FIXED_ONE);
-         scene->fixed_sample_pos[i][1] = util_iround(lp_sample_pos_4x[i][1] * FIXED_ONE);
-      }
-   }
 }
 
 

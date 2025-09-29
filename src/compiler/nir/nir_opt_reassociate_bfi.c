@@ -63,13 +63,9 @@
 
 static bool
 nir_opt_reassociate_bfi_instr(nir_builder *b,
-                              nir_instr *instr,
+                              nir_alu_instr *bfiCD0,
                               UNUSED void *cb_data)
 {
-   if (instr->type != nir_instr_type_alu)
-      return false;
-
-   nir_alu_instr *bfiCD0 = nir_instr_as_alu(instr);
    if (bfiCD0->op != nir_op_bfi || bfiCD0->def.num_components != 1)
       return false;
 
@@ -90,10 +86,10 @@ nir_opt_reassociate_bfi_instr(nir_builder *b,
    nir_src *use = list_first_entry(&bfiCD0->def.uses,
                                    nir_src, use_link);
 
-   if (use->parent_instr->type != nir_instr_type_alu)
+   if (nir_src_parent_instr(use)->type != nir_instr_type_alu)
       return false;
 
-   nir_alu_instr *bfiABx = nir_instr_as_alu(use->parent_instr);
+   nir_alu_instr *bfiABx = nir_instr_as_alu(nir_src_parent_instr(use));
    if (bfiABx->op != nir_op_bfi || bfiABx->def.num_components != 1)
       return false;
 
@@ -134,11 +130,6 @@ nir_opt_reassociate_bfi_instr(nir_builder *b,
 bool
 nir_opt_reassociate_bfi(nir_shader *shader)
 {
-   bool progress = nir_shader_instructions_pass(shader,
-                                                nir_opt_reassociate_bfi_instr,
-                                                nir_metadata_block_index |
-                                                   nir_metadata_dominance,
-                                                NULL);
-
-   return progress;
+   return nir_shader_alu_pass(shader, nir_opt_reassociate_bfi_instr,
+                              nir_metadata_control_flow, NULL);
 }

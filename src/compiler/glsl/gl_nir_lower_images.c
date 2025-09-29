@@ -26,7 +26,7 @@
  *
  * Lower image operations by turning the image_deref_* into a image_* on an
  * index number or bindless_image_* intrinsic on a load_deref of the previous
- * deref source. All applicable indicies are also set so that fetching the
+ * deref source. All applicable indices are also set so that fetching the
  * variable in the backend wouldn't be needed anymore.
  */
 
@@ -109,7 +109,6 @@ bool
 gl_nir_lower_images(nir_shader *shader, bool bindless_only)
 {
    return nir_shader_instructions_pass(shader, lower_instr,
-                                       nir_metadata_block_index |
-                                       nir_metadata_dominance,
+                                       nir_metadata_control_flow,
                                        &bindless_only);
 }

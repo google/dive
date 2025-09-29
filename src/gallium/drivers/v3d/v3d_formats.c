@@ -33,13 +33,11 @@
  */
 
 #include "util/macros.h"
-
 #include "v3d_context.h"
-#include "v3d_format_table.h"
 
 /* The format internal types are the same across V3D versions */
-#define V3D_VERSION 33
-#include "broadcom/cle/v3dx_pack.h"
+#define V3D_VERSION 42
+#include "v3d_format_table.h"
 
 bool
 v3d_rt_format_supported(const struct v3d_device_info *devinfo,
@@ -53,7 +51,7 @@ v3d_rt_format_supported(const struct v3d_device_info *devinfo,
         return vf->rt_type != V3D_OUTPUT_IMAGE_FORMAT_NO;
 }
 
-uint8_t
+enum V3DX(Output_Image_Format)
 v3d_get_rt_format(const struct v3d_device_info *devinfo, enum pipe_format f)
 {
         const struct v3d_format *vf = v3d_X(devinfo, get_format_desc)(f);
@@ -73,7 +71,7 @@ v3d_tex_format_supported(const struct v3d_device_info *devinfo,
         return vf != NULL;
 }
 
-uint8_t
+enum V3DX(Texture_Data_Formats)
 v3d_get_tex_format(const struct v3d_device_info *devinfo, enum pipe_format f)
 {
         const struct v3d_format *vf = v3d_X(devinfo, get_format_desc)(f);
@@ -143,4 +141,54 @@ v3d_format_supports_tlb_msaa_resolve(const struct v3d_device_info *devinfo,
 
         return internal_type == V3D_INTERNAL_TYPE_8 ||
                internal_type == V3D_INTERNAL_TYPE_16F;
+}
+
+/**
+ * Determines if the R and B channels should be swapped for a given format.
+ * We use the TLB load/store flags for this.
+ */
+bool
+v3d_format_needs_tlb_rb_swap(enum pipe_format format)
+{
+        const struct util_format_description *desc =
+                util_format_description(format);
+
+        return (desc->swizzle[0] == PIPE_SWIZZLE_Z &&
+                format != PIPE_FORMAT_B5G6R5_UNORM);
+}
+
+void
+v3d_format_get_internal_type_and_bpp(const struct v3d_device_info *devinfo,
+                                     enum pipe_format format,
+                                     uint8_t *internal_type,
+                                     uint8_t *internal_bpp)
+{
+
+        if (util_format_is_depth_or_stencil(format)) {
+                if (internal_bpp)
+                        *internal_bpp = 0;
+                if (internal_type) {
+                        switch (format) {
+                        case PIPE_FORMAT_Z16_UNORM:
+                                *internal_type = V3D_INTERNAL_TYPE_DEPTH_16;
+                                return;
+                        case PIPE_FORMAT_Z32_FLOAT:
+                        case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
+                                *internal_type = V3D_INTERNAL_TYPE_DEPTH_32F;
+                                return;
+                        default:
+                                *internal_type = V3D_INTERNAL_TYPE_DEPTH_24;
+                                return;
+                        }
+                }
+        } else {
+                uint32_t bpp, type;
+                enum V3DX(Output_Image_Format) rt_format = v3d_get_rt_format(devinfo, format);
+                v3d_X(devinfo, get_internal_type_bpp_for_output_format)
+                        (rt_format, &type, &bpp);
+                if (internal_bpp)
+                        *internal_bpp = bpp;
+                if (internal_type)
+                        *internal_type = type;
+        }
 }

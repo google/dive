@@ -16,6 +16,7 @@
 #include <xcb/xcb.h>
 #include <xcb/glx.h>
 #include <X11/Xlib-xcb.h>
+#include "dispatch.h"
 
 #if !defined(__GNUC__)
 #  define __builtin_expect(x, y) x
@@ -839,52 +840,4 @@ __indirect_glAreTexturesResident(GLsizei n, const GLuint * textures,
       free(reply);
    }
    return retval;
-}
-
-
-/**
- * This was previously auto-generated, but we need to special-case
- * how we handle writing into the 'residences' buffer when n%4!=0.
- */
-#define X_GLvop_AreTexturesResidentEXT 11
-GLboolean
-glAreTexturesResidentEXT(GLsizei n, const GLuint * textures,
-                         GLboolean * residences)
-{
-   struct glx_context *const gc = __glXGetCurrentContext();
-
-   if (gc->isDirect) {
-      const _glapi_proc *const table = (_glapi_proc *) GET_DISPATCH();
-      PFNGLARETEXTURESRESIDENTEXTPROC p =
-         (PFNGLARETEXTURESRESIDENTEXTPROC) table[332];
-
-      return p(n, textures, residences);
-   }
-   else {
-      struct glx_context *const gc = __glXGetCurrentContext();
-      Display *const dpy = gc->currentDpy;
-      GLboolean retval = (GLboolean) 0;
-      const GLuint cmdlen = 4 + __GLX_PAD((n * 4));
-      if (__builtin_expect((n >= 0) && (dpy != NULL), 1)) {
-         GLubyte const *pc =
-            __glXSetupVendorRequest(gc, X_GLXVendorPrivateWithReply,
-                                    X_GLvop_AreTexturesResidentEXT,
-                                    cmdlen);
-         (void) memcpy((void *) (pc + 0), (void *) (&n), 4);
-         (void) memcpy((void *) (pc + 4), (void *) (textures), (n * 4));
-         if (n & 3) {
-            /* see comments in __indirect_glAreTexturesResident() */
-            GLboolean *res4 = malloc((n + 3) & ~3);
-            retval = (GLboolean) __glXReadReply(dpy, 1, res4, GL_TRUE);
-            memcpy(residences, res4, n);
-            free(res4);
-         }
-         else {
-            retval = (GLboolean) __glXReadReply(dpy, 1, residences, GL_TRUE);
-         }
-         UnlockDisplay(dpy);
-         SyncHandle();
-      }
-      return retval;
-   }
 }

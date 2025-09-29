@@ -25,6 +25,7 @@
 
 #include "vk_object.h"
 
+#include "util/mesa-blake3.h"
 #include "util/u_atomic.h"
 
 #ifdef __cplusplus
@@ -33,6 +34,18 @@ extern "C" {
 
 struct vk_descriptor_set_layout {
    struct vk_object_base base;
+
+   VkDescriptorSetLayoutCreateFlags flags;
+
+   /** Number of dynamic descriptors in this layout */
+   uint32_t dynamic_descriptor_count;
+
+   /* BLAKE3 hash of the descriptor set layout.  This is used by the common
+    * pipeline code to properly cache shaders, including handling pipeline
+    * layouts.  It must be populated by the driver or you risk pipeline cache
+    * collisions.
+    */
+   blake3_hash blake3;
 
    void (*destroy)(struct vk_device *device,
                    struct vk_descriptor_set_layout *layout);
@@ -58,10 +71,12 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(vk_descriptor_set_layout, base,
                                VkDescriptorSetLayout,
                                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT);
 
-void *vk_descriptor_set_layout_zalloc(struct vk_device *device, size_t size);
+void *vk_descriptor_set_layout_zalloc(struct vk_device *device, size_t size,
+                                      const VkDescriptorSetLayoutCreateInfo *pCreateInfo);
 
 void *vk_descriptor_set_layout_multizalloc(struct vk_device *device,
-                                           struct vk_multialloc *ma);
+                                           struct vk_multialloc *ma,
+                                           const VkDescriptorSetLayoutCreateInfo *pCreateInfo);
 
 void vk_descriptor_set_layout_destroy(struct vk_device *device,
                                       struct vk_descriptor_set_layout *layout);
@@ -69,7 +84,7 @@ void vk_descriptor_set_layout_destroy(struct vk_device *device,
 static inline struct vk_descriptor_set_layout *
 vk_descriptor_set_layout_ref(struct vk_descriptor_set_layout *layout)
 {
-   assert(layout && layout->ref_cnt >= 1);
+   assert(layout && p_atomic_read(&layout->ref_cnt) >= 1);
    p_atomic_inc(&layout->ref_cnt);
    return layout;
 }
@@ -78,7 +93,7 @@ static inline void
 vk_descriptor_set_layout_unref(struct vk_device *device,
                                struct vk_descriptor_set_layout *layout)
 {
-   assert(layout && layout->ref_cnt >= 1);
+   assert(layout && p_atomic_read(&layout->ref_cnt) >= 1);
    if (p_atomic_dec_zero(&layout->ref_cnt))
       layout->destroy(device, layout);
 }

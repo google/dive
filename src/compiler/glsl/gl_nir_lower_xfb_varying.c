@@ -162,8 +162,8 @@ gl_nir_lower_xfb_varying(nir_shader *shader, const char *old_var_name,
    if (!get_deref(&b, old_var_name, toplevel_var, &deref, &type))
       return NULL;
 
-   nir_variable *new_variable = rzalloc(shader, nir_variable);
-   new_variable->name = generate_new_name(new_variable, old_var_name);
+   nir_variable *new_variable = nir_variable_create_zeroed(shader);
+   new_variable->name = generate_new_name(shader, old_var_name);
    new_variable->type = type;
    new_variable->data.mode = nir_var_shader_out;
    new_variable->data.location = -1;
@@ -182,7 +182,7 @@ gl_nir_lower_xfb_varying(nir_shader *shader, const char *old_var_name,
             b.cursor = nir_before_instr(nir_block_last_instr(block));
             copy_to_new_var(&b, deref, new_var_deref, type);
          } else if (block == nir_impl_last_block(impl)) {
-            b.cursor = nir_after_instr(nir_block_last_instr(block));
+            b.cursor = nir_after_block(block);
             copy_to_new_var(&b, deref, new_var_deref, type);
          }
       } else {

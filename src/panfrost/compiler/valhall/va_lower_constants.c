@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2025 Arm Ltd.
  * Copyright (C) 2021 Collabora Ltd.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -109,11 +110,36 @@ is_extension_of_16(uint32_t x, bool is_signed)
 }
 
 static bi_index
-va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
-                    bool is_signed, bool staging)
+va_move_const_to_fau(bi_builder *b, uint32_t value)
+{
+   const unsigned push_base = b->shader->inputs->fau_consts.offset;
+   uint32_t *values = b->shader->inputs->fau_consts.values;
+
+   assert(b->shader->inputs->fau_consts.max_amount == 0 || values != NULL);
+   assert(b->shader->fau_consts_count <=
+          b->shader->inputs->fau_consts.max_amount);
+
+   for (unsigned i = 0; i < b->shader->fau_consts_count; ++i) {
+      if (values[i] == value) {
+         const unsigned idx = push_base + i;
+         return bi_fau((enum bir_fau)(BIR_FAU_UNIFORM | (idx >> 1)), idx & 1);
+      }
+   }
+
+   if (b->shader->fau_consts_count < b->shader->inputs->fau_consts.max_amount) {
+      const unsigned int idx = push_base + b->shader->fau_consts_count;
+      values[b->shader->fau_consts_count++] = value;
+      return bi_fau((enum bir_fau)(BIR_FAU_UNIFORM | (idx >> 1)), idx & 1);
+   }
+
+   return bi_null();
+}
+
+static bi_index
+va_lookup_constant(uint32_t value, struct va_src_info info, bool is_signed)
 {
    /* Try the constant as-is */
-   if (!staging) {
+   {
       bi_index lut = va_lut_index_32(value);
       if (!bi_is_null(lut))
          return lut;
@@ -135,8 +161,7 @@ va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
 
    /* Try using a single half of a FP16 constant */
    bool replicated_halves = (value & 0xFFFF) == (value >> 16);
-   if (!staging && info.swizzle && info.size == VA_SIZE_16 &&
-       replicated_halves) {
+   if (info.swizzle && info.size == VA_SIZE_16 && replicated_halves) {
       bi_index lut = va_lut_index_16(value & 0xFFFF);
       if (!bi_is_null(lut))
          return lut;
@@ -150,7 +175,7 @@ va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
    }
 
    /* Try extending a byte */
-   if (!staging && (info.widen || info.lanes || info.lane) &&
+   if ((info.widen || info.lanes || info.lane) &&
        is_extension_of_8(value, is_signed)) {
 
       bi_index lut = va_lut_index_8(value & 0xFF);
@@ -159,7 +184,7 @@ va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
    }
 
    /* Try extending a halfword */
-   if (!staging && info.widen && is_extension_of_16(value, is_signed)) {
+   if (info.widen && is_extension_of_16(value, is_signed)) {
 
       bi_index lut = va_lut_index_16(value & 0xFFFF);
       if (!bi_is_null(lut))
@@ -167,7 +192,7 @@ va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
    }
 
    /* Try demoting the constant to FP16 */
-   if (!staging && info.swizzle && info.size == VA_SIZE_32) {
+   if (info.swizzle && info.size == VA_SIZE_32) {
       bi_index lut = va_demote_constant_fp16(value);
       if (!bi_is_null(lut))
          return lut;
@@ -179,12 +204,69 @@ va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
       }
    }
 
-   /* TODO: Optimize to uniform */
+   return bi_null();
+}
+
+static bi_index
+va_resolve_constant(bi_builder *b, uint32_t value, struct va_src_info info,
+                    bool is_signed, bool staging, bool try_move_to_fau)
+{
+   if (!staging) {
+      bi_index lut = va_lookup_constant(value, info, is_signed);
+      if (!bi_is_null(lut))
+         return lut;
+   }
+
+   if (!staging && try_move_to_fau) {
+      bi_index c = va_move_const_to_fau(b, value);
+      if (!bi_is_null(c))
+         return c;
+   }
+
    return va_mov_imm(b, value);
 }
 
+static uint32_t
+va_resolve_swizzles(bi_context *ctx, bi_instr *I, unsigned s)
+{
+   struct va_src_info info = va_src_info(I->op, s);
+   uint32_t value = I->src[s].value;
+   enum bi_swizzle swz = I->src[s].swizzle;
+
+   /* Resolve any swizzle, keeping in mind the different interpretations
+    * swizzles in different contexts.
+    */
+   if (info.size == VA_SIZE_32) {
+      /* Extracting a half from the 32-bit value */
+      if (swz == BI_SWIZZLE_H00)
+         value = (value & 0xFFFF);
+      else if (swz == BI_SWIZZLE_H11)
+         value = (value >> 16);
+      else
+         assert(swz == BI_SWIZZLE_H01);
+
+      /* FP16 -> FP32 */
+      if (info.swizzle && swz != BI_SWIZZLE_H01)
+         value = fui(_mesa_half_to_float(value));
+   } else if (info.size == VA_SIZE_16) {
+      assert(swz >= BI_SWIZZLE_H00 && swz <= BI_SWIZZLE_H11);
+      value = bi_apply_swizzle(value, swz);
+   } else if (info.size == VA_SIZE_8 && (info.lane || info.lanes)) {
+      /* 8-bit extract */
+      unsigned chan = (swz - BI_SWIZZLE_B0000);
+      assert(chan < 4);
+
+      value = (value >> (8 * chan)) & 0xFF;
+   } else {
+      /* TODO: Any other special handling? */
+      value = bi_apply_swizzle(value, swz);
+   }
+
+   return value;
+}
+
 void
-va_lower_constants(bi_context *ctx, bi_instr *I)
+va_lower_constants(bi_context *ctx, bi_instr *I, struct hash_table_u64 *counts, uint32_t min_fau_count)
 {
    bi_builder b = bi_init_builder(ctx, bi_before_instr(I));
 
@@ -196,52 +278,57 @@ va_lower_constants(bi_context *ctx, bi_instr *I)
          bool is_signed = valhall_opcodes[I->op].is_signed;
          bool staging = (s < valhall_opcodes[I->op].nr_staging_srcs);
          struct va_src_info info = va_src_info(I->op, s);
-         uint32_t value = I->src[s].value;
-         enum bi_swizzle swz = I->src[s].swizzle;
+         const uint32_t value = va_resolve_swizzles(ctx, I, s);
 
-         /* Resolve any swizzle, keeping in mind the different interpretations
-          * swizzles in different contexts.
-          */
-         if (info.size == VA_SIZE_32) {
-            /* Extracting a half from the 32-bit value */
-            if (swz == BI_SWIZZLE_H00)
-               value = (value & 0xFFFF);
-            else if (swz == BI_SWIZZLE_H11)
-               value = (value >> 16);
-            else
-               assert(swz == BI_SWIZZLE_H01);
-
-            /* FP16 -> FP32 */
-            if (info.swizzle && swz != BI_SWIZZLE_H01)
-               value = fui(_mesa_half_to_float(value));
-         } else if (info.size == VA_SIZE_16) {
-            assert(swz >= BI_SWIZZLE_H00 && swz <= BI_SWIZZLE_H11);
-            value = bi_apply_swizzle(value, swz);
-         } else if (info.size == VA_SIZE_8 && (info.lane || info.lanes)) {
-            /* 8-bit extract */
-            unsigned chan = (swz - BI_SWIZZLE_B0000);
-            assert(chan < 4);
-
-            value = (value >> (8 * chan)) & 0xFF;
-         } else {
-            /* TODO: Any other special handling? */
-            value = bi_apply_swizzle(value, swz);
-         }
+         const uint32_t count = (uintptr_t)_mesa_hash_table_u64_search(counts, value);
+         const bool move_to_fau = count >= min_fau_count;
 
          bi_index cons =
-            va_resolve_constant(&b, value, info, is_signed, staging);
+            va_resolve_constant(&b, value, info, is_signed, staging, move_to_fau);
          cons.neg ^= I->src[s].neg;
          I->src[s] = cons;
 
-         /* If we're selecting a single 8-bit lane, we should return a single
-          * 8-bit lane to ensure the result is encodeable. By convention,
-          * applying the lane select puts the desired constant (at least) in the
-          * bottom byte, so we can always select the bottom byte.
+         /* If we're selecting a single lane, we should return a single lane
+          * to ensure the result is encodeable. By convention, applying the
+          * lane select puts the desired constant (at least) in the bottom
+          * byte/half, so we can always select the bottom byte/half.
           */
-         if (info.lane && I->src[s].swizzle == BI_SWIZZLE_H01) {
-            assert(info.size == VA_SIZE_8);
-            I->src[s] = bi_byte(I->src[s], 0);
+         if ((info.lane || info.lanes || info.halfswizzle) &&
+             I->src[s].swizzle == BI_SWIZZLE_H01) {
+            assert(info.size == VA_SIZE_8 || info.size == VA_SIZE_16);
+            if (info.size == VA_SIZE_8)
+               I->src[s] = bi_byte(I->src[s], 0);
+            else if (info.size == VA_SIZE_16)
+               I->src[s] = bi_half(I->src[s], false);
          }
+      }
+   }
+}
+
+void
+va_count_constants(bi_context *ctx, bi_instr *I, struct hash_table_u64 *counts)
+{
+   bi_foreach_src(I, s) {
+      if (I->src[s].type != BI_INDEX_CONSTANT)
+         continue;
+
+      const bool staging = (s < valhall_opcodes[I->op].nr_staging_srcs);
+      if (staging)
+         continue;
+
+      bool is_signed = valhall_opcodes[I->op].is_signed;
+      struct va_src_info info = va_src_info(I->op, s);
+      uint32_t value = va_resolve_swizzles(ctx, I, s);
+
+      bi_index cons = va_lookup_constant(value, info, is_signed);
+
+      const bool can_lut = !bi_is_null(cons);
+
+      /* We want to move constants that can't be created from built-in
+       * constants into the FAU if they are not staging register sources. */
+      if (!can_lut) {
+         uint32_t count = (uintptr_t)_mesa_hash_table_u64_search(counts, value);
+         _mesa_hash_table_u64_insert(counts, value, (void*)(uintptr_t)(count + 1));
       }
    }
 }

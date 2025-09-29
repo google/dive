@@ -28,6 +28,22 @@
 # that are used by a driver. See the various `.$DRIVER-rules` in the
 # corresponding `src/**/ci/gitlab-ci.yml`.
 
+# In case of issues with a farm, here are the people to contact:
+#   farm name        | ci infrastructure used           | admin(s)
+#   -----------------|----------------------------------|---------
+#   anholt           | (decommissioned)                 | @anholt
+#   austriancoder    | ci-tron                          | @austriancoder
+#   collabora        | lava                             | @daniels, @sergi
+#   google-freedreno | none (moving to LAVA)            | @daniels, @sergi
+#   igalia           | baremetal/poe-powered, ci-tron   | @jasuarez, @chema
+#   lima             | lava                             | @enunes
+#   microsoft        | custom                           | @jenatali, @alatiera
+#   ondracka         | ci-tron                          | @ondracka
+#   pengutronix      | lava                             | @hnez, @lynxeye
+#   valve-kws        | ci-tron                          | @mupuf, @eric
+#   valve-mupuf      | ci-tron                          | @mupuf, @eric
+#   vmware           | lava                             | @blu
+
 .microsoft-farm-rules:
   rules:
     - exists: [ .ci-farms-disabled/microsoft ]  # 1. Is disabled, never run
@@ -195,7 +211,6 @@
       when: never
     - !reference [.valve-farm-rules, rules]
 
-
 .austriancoder-farm-rules:
   rules:
     - exists: [ .ci-farms-disabled/austriancoder ]
@@ -216,27 +231,76 @@
       when: never
     - !reference [.austriancoder-farm-rules, rules]
 
-
-.freedreno-farm-rules:
+.vmware-farm-rules:
   rules:
-    - exists: [ .ci-farms-disabled/freedreno ]
+    - exists: [ .ci-farms-disabled/vmware ]
       when: never
-    - changes: [ .ci-farms-disabled/freedreno ]
+    - changes: [ .ci-farms-disabled/vmware ]
       if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: on_success
     - changes: [ .ci-farms-disabled/* ]
       if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
 
-.freedreno-farm-manual-rules:
+.vmware-farm-manual-rules:
   rules:
-    - exists: [ .ci-farms-disabled/freedreno ]
+    - exists: [ .ci-farms-disabled/vmware ]
       when: never
-    - changes: [ .ci-farms-disabled/freedreno ]
+    - changes: [ .ci-farms-disabled/vmware ]
       if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - !reference [.freedreno-farm-rules, rules]
+    - !reference [.vmware-farm-rules, rules]
 
+.ondracka-farm-rules:
+  rules:
+    - exists: [ .ci-farms-disabled/ondracka ]
+      when: never
+    - changes: [ .ci-farms-disabled/ondracka ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: on_success
+    - changes: [ .ci-farms-disabled/* ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+
+.ondracka-farm-manual-rules:
+  rules:
+    - exists: [ .ci-farms-disabled/ondracka ]
+      when: never
+    - changes: [ .ci-farms-disabled/ondracka ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+    - !reference [.ondracka-farm-rules, rules]
+
+
+.pengutronix-farm-rules:
+  rules:
+    - exists: [ .ci-farms-disabled/pengutronix ]
+      when: never
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+      changes: [ .ci-farms-disabled/pengutronix ]
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+      changes: [ .ci-farms-disabled/* ]
+      when: never
+
+.pengutronix-farm-manual-rules:
+  rules:
+    - exists: [ .ci-farms-disabled/pengutronix ]
+      when: never
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+      changes: [ .ci-farms-disabled/pengutronix ]
+      when: never
+    - !reference [.pengutronix-farm-rules, rules]
+
+
+# Temporary placeholder as the devices move across to LAVA.
+.google-freedreno-farm-rules:
+  rules:
+    - when: never
+
+.google-freedreno-farm-manual-rules:
+  rules:
+    - when: never
 
 # Skip container & build jobs when disabling any farm, and run them if any
 # farm gets re-enabled.
@@ -283,8 +347,16 @@
       exists: [ .ci-farms-disabled/austriancoder ]
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/freedreno ]
-      exists: [ .ci-farms-disabled/freedreno ]
+      changes: [ .ci-farms-disabled/ondracka ]
+      exists: [ .ci-farms-disabled/ondracka ]
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [ .ci-farms-disabled/vmware ]
+      exists: [ .ci-farms-disabled/vmware ]
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [ .ci-farms-disabled/pengutronix ]
+      exists: [ .ci-farms-disabled/pengutronix ]
       when: never
     # Any other change to ci-farms/* means some farm is getting re-enabled.
     # Run jobs in Marge pipelines (and let it fallback to manual otherwise)

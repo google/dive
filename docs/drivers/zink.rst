@@ -23,6 +23,10 @@ we can compare the ZINK profiles with Vulkan devices profiles generated with
 `Vulkaninfo <https://vulkan.lunarg.com/doc/view/latest/windows/vulkaninfo.html>`__
 or `downloaded from GPUinfo.org`_
 to establish the feature-levels supported by these drivers.
+You can check a running driver against the Zink profiles by building mesa with
+``--tools=zink`` and running
+``./src/gallium/drivers/zink/check_requirements/zink_check_requirements``
+from the build directory.
 
 OpenGL 2.1
 ^^^^^^^^^^
@@ -300,9 +304,9 @@ variable:
   ``gpl``
     Force using Graphics Pipeline Library for all shaders
   ``rp``
-    Enable renderpass optimizations (for tiling GPUs)
+    Enable render pass optimizations (for tiling GPUs)
   ``norp``
-    Disable renderpass optimizations (for tiling GPUs)
+    Disable render pass optimizations (for tiling GPUs)
   ``map``
     Print info about mapped VRAM
   ``flushsync``
@@ -319,18 +323,36 @@ variable:
     Enable memory allocation debugging
   ``quiet``
     Suppress probably-harmless warnings
+  ``nopc``
+    No precompilation
+  ``msaaopt``
+    Optimize out loads/stores of MSAA attachments (nonconformant)
+  ``rploads``
+    Zap renderpass loads for DONT_CARE
+  ``nogeneral``
+    Disable GENERAL layout usage for supported hardware
 
 Vulkan Validation Layers
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Another useful tool for debugging is the `Vulkan Validation Layers
-<https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/master/README.md>`__.
+<https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/README.md>`__.
 
 The validation layers effectively insert extra checking between Zink and the
 Vulkan driver, pointing out incorrect usage of the Vulkan API. The layers can
-be enabled by setting the environment variable :envvar:`VK_INSTANCE_LAYERS` to
-"VK_LAYER_KHRONOS_validation". You can read more about the Validation Layers
+be enabled by setting the environment variable :envvar:`VK_LOADER_LAYERS_ENABLE` to
+``VK_LAYER_KHRONOS_validation``. You can read more about the Validation Layers
 in the link above.
+
+Apple macOS and MoltenVK
+------------------------
+
+Zink on macOS is experimental with very limited capabilities.
+The Vulkan SDK (1.3.250 or newer) is required to build Zink.
+Set the build option ``-Dmoltenvk-dir=<directory>`` to point at your Vulkan SDK install or MoltenVK build.
+Add Zink to the Gallium drivers build option ``-Dgallium-drivers=zink``.
+If installed using ``brew``, you can set ``-D moltenvk-dir=$(brew --prefix molten-vk)``.
+
 
 IRC
 ---

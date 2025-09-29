@@ -55,6 +55,7 @@ struct ralloc_header
 #ifndef NDEBUG
    /* A canary value used to determine whether a pointer is ralloc'd. */
    unsigned canary;
+   unsigned size;
 #endif
 
    struct ralloc_header *parent;
@@ -139,6 +140,7 @@ ralloc_size(const void *ctx, size_t size)
 
 #ifndef NDEBUG
    info->canary = CANARY;
+   info->size = size;
 #endif
 
    return PTR_FROM_HEADER(info);
@@ -262,6 +264,31 @@ ralloc_free(void *ptr)
    unsafe_free(info);
 }
 
+#ifndef NDEBUG
+static size_t
+ralloc_total_size_internal(const ralloc_header *info)
+{
+   /* Count the block itself. This requires NDEBUG for the statistic. */
+   unsigned sum = align64(info->size + sizeof(ralloc_header),
+                          alignof(ralloc_header));
+
+   /* Recursively count children */
+   ralloc_header *it = info->child;
+   while (it != NULL) {
+      sum += ralloc_total_size_internal(it);
+      it = it->next;
+   }
+
+   return sum;
+}
+
+size_t
+ralloc_total_size(const void *ptr)
+{
+   return ralloc_total_size_internal(get_header(ptr));
+}
+#endif
+
 static void
 unlink_block(ralloc_header *info)
 {
@@ -361,6 +388,18 @@ ralloc_set_destructor(const void *ptr, void(*destructor)(void *))
 {
    ralloc_header *info = get_header(ptr);
    info->destructor = destructor;
+}
+
+void *
+ralloc_memdup(const void *ctx, const void *mem, size_t n)
+{
+   void *ptr = ralloc_size(ctx, n);
+
+   if (unlikely(ptr == NULL))
+      return NULL;
+
+   memcpy(ptr, mem, n);
+   return ptr;
 }
 
 char *
@@ -548,6 +587,7 @@ ralloc_vasprintf_rewrite_tail(char **str, size_t *start, const char *fmt,
 /* The size of a slab. */
 #define SLAB_SIZE (32 * 1024)
 
+#define GC_CONTEXT_CANARY 0xAF6B6C83
 #define GC_CANARY 0xAF6B5B72
 
 enum gc_flags {
@@ -603,6 +643,10 @@ typedef struct gc_slab {
 } gc_slab;
 
 struct gc_ctx {
+#ifndef NDEBUG
+   unsigned canary;
+#endif
+
    /* Array of slabs for fixed-size allocations. Each slab tracks allocations
     * of specific sized blocks. User allocations are rounded up to the nearest
     * fixed size. slabs[N] contains allocations of size
@@ -669,6 +713,9 @@ gc_context(const void *parent)
       list_inithead(&ctx->slabs[i].slabs);
       list_inithead(&ctx->slabs[i].free_slabs);
    }
+#ifndef NDEBUG
+   ctx->canary = GC_CONTEXT_CANARY;
+#endif
    return ctx;
 }
 
@@ -793,23 +840,23 @@ create_slab(gc_ctx *ctx, unsigned bucket)
 }
 
 void *
-gc_alloc_size(gc_ctx *ctx, size_t size, size_t align)
+gc_alloc_size(gc_ctx *ctx, size_t size, size_t alignment)
 {
    assert(ctx);
-   assert(util_is_power_of_two_nonzero(align));
+   assert(util_is_power_of_two_nonzero_uintptr(alignment));
 
-   align = MAX2(align, alignof(gc_block_header));
+   alignment = MAX2(alignment, alignof(gc_block_header));
 
    /* Alignment will add at most align-alignof(gc_block_header) bytes of padding to the header, and
     * the IS_PADDING byte can only encode up to 127.
     */
-   assert((align - alignof(gc_block_header)) <= 127);
+   assert((alignment - alignof(gc_block_header)) <= 127);
 
    /* We can only align as high as the slab is. */
-   assert(align <= HEADER_ALIGN);
+   assert(alignment <= HEADER_ALIGN);
 
-   size_t header_size = align64(sizeof(gc_block_header), align);
-   size = align64(size, align);
+   size_t header_size = align64(sizeof(gc_block_header), alignment);
+   size = align64(size, alignment);
    size += header_size;
 
    gc_block_header *header = NULL;
@@ -836,14 +883,14 @@ gc_alloc_size(gc_ctx *ctx, size_t size, size_t align)
    if ((header_size - 1) != offsetof(gc_block_header, flags))
       ptr[-1] = IS_PADDING | (header_size - sizeof(gc_block_header));
 
-   assert(((uintptr_t)ptr & (align - 1)) == 0);
+   assert(((uintptr_t)ptr & (alignment - 1)) == 0);
    return ptr;
 }
 
 void *
-gc_zalloc_size(gc_ctx *ctx, size_t size, size_t align)
+gc_zalloc_size(gc_ctx *ctx, size_t size, size_t alignment)
 {
-   void *ptr = gc_alloc_size(ctx, size, align);
+   void *ptr = gc_alloc_size(ctx, size, alignment);
 
    if (likely(ptr))
       memset(ptr, 0, size);
@@ -954,7 +1001,6 @@ gc_sweep_end(gc_ctx *ctx)
  * other buffers.
  */
 
-#define MIN_LINEAR_BUFSIZE 2048
 #define SUBALLOC_ALIGNMENT 8
 #define LMAGIC_CONTEXT 0x87b9c7d3
 #define LMAGIC_NODE    0x87b910d3
@@ -966,6 +1012,8 @@ struct linear_ctx {
 #ifndef NDEBUG
    unsigned magic;   /* for debugging */
 #endif
+   unsigned min_buffer_size;
+
    unsigned offset;  /* points to the first unused byte in the latest buffer */
    unsigned size;    /* size of the latest buffer */
    void *latest;     /* the only buffer that has free space */
@@ -1010,25 +1058,40 @@ linear_alloc_child(linear_ctx *ctx, unsigned size)
 
    if (unlikely(ctx->offset + size > ctx->size)) {
       /* allocate a new node */
-      if (likely(size < MIN_LINEAR_BUFSIZE))
-         size = MIN_LINEAR_BUFSIZE;
-      
+      unsigned node_size = size;
+      if (likely(node_size < ctx->min_buffer_size))
+         node_size = ctx->min_buffer_size;
+
       const unsigned canary_size = get_node_canary_size();
-      const unsigned full_size = canary_size + size;
+      const unsigned full_size = canary_size + node_size;
 
       /* linear context is also a ralloc context */
       char *ptr = ralloc_size(ctx, full_size);
       if (unlikely(!ptr))
          return NULL;
 
-      ctx->offset = 0;
-      ctx->size = size;
-      ctx->latest = ptr + canary_size;
 #ifndef NDEBUG
-      linear_node_canary *canary = get_node_canary(ctx->latest);
+      linear_node_canary *canary = (void *) ptr;
       canary->magic = LMAGIC_NODE;
       canary->offset = 0;
 #endif
+
+      /* If the new buffer is going to be full, don't update `latest`
+       * pointer.  Either the current one is also full, so doesn't
+       * matter, or the current one is not full, so there's still chance
+       * to use that space.
+       */
+      if (unlikely(size == node_size)) {
+#ifndef NDEBUG
+         canary->offset = size;
+#endif
+         assert((uintptr_t)(ptr + canary_size) % SUBALLOC_ALIGNMENT == 0);
+         return ptr + canary_size;
+      }
+
+      ctx->offset = 0;
+      ctx->size = node_size;
+      ctx->latest = ptr + canary_size;
    }
 
    void *ptr = (char *)ctx->latest + ctx->offset;
@@ -1046,19 +1109,33 @@ linear_alloc_child(linear_ctx *ctx, unsigned size)
 linear_ctx *
 linear_context(void *ralloc_ctx)
 {
+   const linear_opts opts = {0};
+   return linear_context_with_opts(ralloc_ctx, &opts);
+}
+
+linear_ctx *
+linear_context_with_opts(void *ralloc_ctx, const linear_opts *opts)
+{
    linear_ctx *ctx;
 
    if (unlikely(!ralloc_ctx))
       return NULL;
 
-   const unsigned size = MIN_LINEAR_BUFSIZE;
+   const unsigned default_min_buffer_size = 2048;
+   const unsigned min_buffer_size =
+      MAX2(ALIGN_POT(opts->min_buffer_size, default_min_buffer_size),
+           default_min_buffer_size);
+
+   const unsigned size = min_buffer_size;
    const unsigned canary_size = get_node_canary_size();
    const unsigned full_size =
-      sizeof(linear_ctx) + canary_size + size;                 
+      sizeof(linear_ctx) + canary_size + size;
 
    ctx = ralloc_size(ralloc_ctx, full_size);
    if (unlikely(!ctx))
       return NULL;
+
+   ctx->min_buffer_size = min_buffer_size;
 
    ctx->offset = 0;
    ctx->size = size;
@@ -1100,7 +1177,7 @@ ralloc_steal_linear_context(void *new_ralloc_ctx, linear_ctx *ctx)
 {
    if (unlikely(!ctx))
       return;
- 
+
    assert(ctx->magic == LMAGIC_CONTEXT);
 
    /* Linear context is also the ralloc parent of extra nodes. */
@@ -1265,3 +1342,126 @@ linear_zalloc_child_array(linear_ctx *ctx, size_t size, unsigned count)
 
    return linear_zalloc_child(ctx, size * count);
 }
+
+typedef struct {
+   FILE *f;
+   unsigned indent;
+
+   unsigned ralloc_count;
+   unsigned linear_count;
+   unsigned gc_count;
+
+   /* These don't include padding or metadata from suballocators. */
+   unsigned content_bytes;
+   unsigned ralloc_metadata_bytes;
+   unsigned linear_metadata_bytes;
+   unsigned gc_metadata_bytes;
+
+   bool inside_linear;
+   bool inside_gc;
+} ralloc_print_info_state;
+
+static void
+ralloc_print_info_helper(ralloc_print_info_state *state, const ralloc_header *info)
+{
+   FILE *f = state->f;
+
+   if (f) {
+      for (unsigned i = 0; i < state->indent; i++) fputc(' ', f);
+      fprintf(f, "%p", info);
+   }
+
+   /* TODO: Account for padding used in various places. */
+
+#ifndef NDEBUG
+   assert(info->canary == CANARY);
+   if (f) fprintf(f, " (%d bytes)", info->size);
+   state->content_bytes += info->size;
+   state->ralloc_metadata_bytes += sizeof(ralloc_header);
+
+   const void *ptr = PTR_FROM_HEADER(info);
+   const linear_ctx *lin_ctx = ptr;
+   const gc_ctx *gc_ctx = ptr;
+
+   const bool is_linear = info->size >= sizeof(*lin_ctx) &&
+                          lin_ctx->magic == LMAGIC_CONTEXT;
+   const bool is_gc = info->size >= sizeof(*gc_ctx) &&
+                      gc_ctx->canary == GC_CONTEXT_CANARY;
+
+   if (is_linear) {
+      if (f) fprintf(f, " (linear context)");
+      assert(!state->inside_gc && !state->inside_linear);
+      state->inside_linear = true;
+      state->linear_metadata_bytes += sizeof(linear_ctx);
+      state->content_bytes -= sizeof(linear_ctx);
+      state->linear_count++;
+   } else if (is_gc) {
+      if (f) fprintf(f, " (gc context)");
+      assert(!state->inside_gc && !state->inside_linear);
+      state->inside_gc = true;
+      state->gc_metadata_bytes += sizeof(gc_block_header);
+   } else if (state->inside_linear) {
+      const linear_node_canary *lin_node = ptr;
+      if (lin_node->magic == LMAGIC_NODE) {
+         if (f) fprintf(f, " (linear node buffer)");
+         state->content_bytes -= sizeof(linear_node_canary);
+         state->linear_metadata_bytes += sizeof(linear_node_canary);
+         state->linear_count++;
+      }
+   } else if (state->inside_gc) {
+      if (f) fprintf(f, " (gc slab or large block)");
+      state->gc_count++;
+   }
+#endif
+
+   state->ralloc_count++;
+   if (f) fprintf(f, "\n");
+
+   const ralloc_header *c = info->child;
+   state->indent += 2;
+   while (c != NULL) {
+      ralloc_print_info_helper(state, c);
+      c = c->next;
+   }
+   state->indent -= 2;
+
+#ifndef NDEBUG
+   if (is_linear) state->inside_linear = false;
+   else if (is_gc) state->inside_gc = false;
+#endif
+}
+
+void
+ralloc_print_info(FILE *f, const void *p, unsigned flags)
+{
+   ralloc_print_info_state state = {
+      .f =  ((flags & RALLOC_PRINT_INFO_SUMMARY_ONLY) == 1) ? NULL : f,
+   };
+
+   const ralloc_header *info = get_header(p);
+   ralloc_print_info_helper(&state, info);
+
+   fprintf(f, "==== RALLOC INFO ptr=%p info=%p\n"
+              "ralloc allocations    = %d\n"
+              "  - linear            = %d\n"
+              "  - gc                = %d\n"
+              "  - other             = %d\n",
+              p, info,
+              state.ralloc_count,
+              state.linear_count,
+              state.gc_count,
+              state.ralloc_count - state.linear_count - state.gc_count);
+
+   if (state.content_bytes) {
+      fprintf(f,
+              "content bytes         = %d\n"
+              "ralloc metadata bytes = %d\n"
+              "linear metadata bytes = %d\n",
+              state.content_bytes,
+              state.ralloc_metadata_bytes,
+              state.linear_metadata_bytes);
+   }
+
+   fprintf(f, "====\n");
+}
+

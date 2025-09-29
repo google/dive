@@ -43,6 +43,7 @@
 
 #define MAX_UNIFORM_BUFFERS 16
 #define MAX_INLINE_UNIFORM_BUFFERS 4
+#define MAX_INLINE_UNIFORM_BLOCK_SIZE 4096
 #define MAX_STORAGE_BUFFERS 8
 
 #define MAX_DYNAMIC_UNIFORM_BUFFERS 8
@@ -50,9 +51,9 @@
 #define MAX_DYNAMIC_BUFFERS (MAX_DYNAMIC_UNIFORM_BUFFERS + \
                              MAX_DYNAMIC_STORAGE_BUFFERS)
 
-#define MAX_RENDER_TARGETS 4
-
 #define MAX_MULTIVIEW_VIEW_COUNT 16
+
+#define V3DV_SUPPORTED_SHADER_STAGES 4
 
 /* These are tunable parameters in the HW design, but all the V3D
  * implementations agree.

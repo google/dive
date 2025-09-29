@@ -8,7 +8,7 @@
 #ifndef VN_PROTOCOL_DRIVER_IMAGE_VIEW_H
 #define VN_PROTOCOL_DRIVER_IMAGE_VIEW_H
 
-#include "vn_instance.h"
+#include "vn_ring.h"
 #include "vn_protocol_driver_structs.h"
 
 /* struct VkImageViewUsageCreateInfo chain */
@@ -62,6 +62,61 @@ vn_encode_VkImageViewUsageCreateInfo(struct vn_cs_encoder *enc, const VkImageVie
     vn_encode_VkStructureType(enc, &(VkStructureType){ VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO });
     vn_encode_VkImageViewUsageCreateInfo_pnext(enc, val->pNext);
     vn_encode_VkImageViewUsageCreateInfo_self(enc, val);
+}
+
+/* struct VkImageViewSlicedCreateInfoEXT chain */
+
+static inline size_t
+vn_sizeof_VkImageViewSlicedCreateInfoEXT_pnext(const void *val)
+{
+    /* no known/supported struct */
+    return vn_sizeof_simple_pointer(NULL);
+}
+
+static inline size_t
+vn_sizeof_VkImageViewSlicedCreateInfoEXT_self(const VkImageViewSlicedCreateInfoEXT *val)
+{
+    size_t size = 0;
+    /* skip val->{sType,pNext} */
+    size += vn_sizeof_uint32_t(&val->sliceOffset);
+    size += vn_sizeof_uint32_t(&val->sliceCount);
+    return size;
+}
+
+static inline size_t
+vn_sizeof_VkImageViewSlicedCreateInfoEXT(const VkImageViewSlicedCreateInfoEXT *val)
+{
+    size_t size = 0;
+
+    size += vn_sizeof_VkStructureType(&val->sType);
+    size += vn_sizeof_VkImageViewSlicedCreateInfoEXT_pnext(val->pNext);
+    size += vn_sizeof_VkImageViewSlicedCreateInfoEXT_self(val);
+
+    return size;
+}
+
+static inline void
+vn_encode_VkImageViewSlicedCreateInfoEXT_pnext(struct vn_cs_encoder *enc, const void *val)
+{
+    /* no known/supported struct */
+    vn_encode_simple_pointer(enc, NULL);
+}
+
+static inline void
+vn_encode_VkImageViewSlicedCreateInfoEXT_self(struct vn_cs_encoder *enc, const VkImageViewSlicedCreateInfoEXT *val)
+{
+    /* skip val->{sType,pNext} */
+    vn_encode_uint32_t(enc, &val->sliceOffset);
+    vn_encode_uint32_t(enc, &val->sliceCount);
+}
+
+static inline void
+vn_encode_VkImageViewSlicedCreateInfoEXT(struct vn_cs_encoder *enc, const VkImageViewSlicedCreateInfoEXT *val)
+{
+    assert(val->sType == VK_STRUCTURE_TYPE_IMAGE_VIEW_SLICED_CREATE_INFO_EXT);
+    vn_encode_VkStructureType(enc, &(VkStructureType){ VK_STRUCTURE_TYPE_IMAGE_VIEW_SLICED_CREATE_INFO_EXT });
+    vn_encode_VkImageViewSlicedCreateInfoEXT_pnext(enc, val->pNext);
+    vn_encode_VkImageViewSlicedCreateInfoEXT_self(enc, val);
 }
 
 /* struct VkImageViewMinLodCreateInfoEXT chain */
@@ -133,6 +188,14 @@ vn_sizeof_VkImageViewCreateInfo_pnext(const void *val)
             size += vn_sizeof_VkImageViewCreateInfo_pnext(pnext->pNext);
             size += vn_sizeof_VkImageViewUsageCreateInfo_self((const VkImageViewUsageCreateInfo *)pnext);
             return size;
+        case VK_STRUCTURE_TYPE_IMAGE_VIEW_SLICED_CREATE_INFO_EXT:
+            if (!vn_cs_renderer_protocol_has_extension(419 /* VK_EXT_image_sliced_view_of_3d */))
+                break;
+            size += vn_sizeof_simple_pointer(pnext);
+            size += vn_sizeof_VkStructureType(&pnext->sType);
+            size += vn_sizeof_VkImageViewCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkImageViewSlicedCreateInfoEXT_self((const VkImageViewSlicedCreateInfoEXT *)pnext);
+            return size;
         case VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
@@ -195,6 +258,14 @@ vn_encode_VkImageViewCreateInfo_pnext(struct vn_cs_encoder *enc, const void *val
             vn_encode_VkStructureType(enc, &pnext->sType);
             vn_encode_VkImageViewCreateInfo_pnext(enc, pnext->pNext);
             vn_encode_VkImageViewUsageCreateInfo_self(enc, (const VkImageViewUsageCreateInfo *)pnext);
+            return;
+        case VK_STRUCTURE_TYPE_IMAGE_VIEW_SLICED_CREATE_INFO_EXT:
+            if (!vn_cs_renderer_protocol_has_extension(419 /* VK_EXT_image_sliced_view_of_3d */))
+                break;
+            vn_encode_simple_pointer(enc, pnext);
+            vn_encode_VkStructureType(enc, &pnext->sType);
+            vn_encode_VkImageViewCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkImageViewSlicedCreateInfoEXT_self(enc, (const VkImageViewSlicedCreateInfoEXT *)pnext);
             return;
         case VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO:
             vn_encode_simple_pointer(enc, pnext);
@@ -365,7 +436,7 @@ static inline void vn_decode_vkDestroyImageView_reply(struct vn_cs_decoder *dec,
     /* skip pAllocator */
 }
 
-static inline void vn_submit_vkCreateImageView(struct vn_instance *vn_instance, VkCommandFlagsEXT cmd_flags, VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView, struct vn_instance_submit_command *submit)
+static inline void vn_submit_vkCreateImageView(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView, struct vn_ring_submit_command *submit)
 {
     uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
     void *cmd_data = local_cmd_data;
@@ -377,16 +448,16 @@ static inline void vn_submit_vkCreateImageView(struct vn_instance *vn_instance, 
     }
     const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCreateImageView_reply(device, pCreateInfo, pAllocator, pView) : 0;
 
-    struct vn_cs_encoder *enc = vn_instance_submit_command_init(vn_instance, submit, cmd_data, cmd_size, reply_size);
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
     if (cmd_size) {
         vn_encode_vkCreateImageView(enc, cmd_flags, device, pCreateInfo, pAllocator, pView);
-        vn_instance_submit_command(vn_instance, submit);
+        vn_ring_submit_command(vn_ring, submit);
         if (cmd_data != local_cmd_data)
             free(cmd_data);
     }
 }
 
-static inline void vn_submit_vkDestroyImageView(struct vn_instance *vn_instance, VkCommandFlagsEXT cmd_flags, VkDevice device, VkImageView imageView, const VkAllocationCallbacks* pAllocator, struct vn_instance_submit_command *submit)
+static inline void vn_submit_vkDestroyImageView(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkDevice device, VkImageView imageView, const VkAllocationCallbacks* pAllocator, struct vn_ring_submit_command *submit)
 {
     uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
     void *cmd_data = local_cmd_data;
@@ -398,54 +469,41 @@ static inline void vn_submit_vkDestroyImageView(struct vn_instance *vn_instance,
     }
     const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkDestroyImageView_reply(device, imageView, pAllocator) : 0;
 
-    struct vn_cs_encoder *enc = vn_instance_submit_command_init(vn_instance, submit, cmd_data, cmd_size, reply_size);
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
     if (cmd_size) {
         vn_encode_vkDestroyImageView(enc, cmd_flags, device, imageView, pAllocator);
-        vn_instance_submit_command(vn_instance, submit);
+        vn_ring_submit_command(vn_ring, submit);
         if (cmd_data != local_cmd_data)
             free(cmd_data);
     }
 }
 
-static inline VkResult vn_call_vkCreateImageView(struct vn_instance *vn_instance, VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView)
+static inline VkResult vn_call_vkCreateImageView(struct vn_ring *vn_ring, VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView)
 {
     VN_TRACE_FUNC();
 
-    struct vn_instance_submit_command submit;
-    vn_submit_vkCreateImageView(vn_instance, VK_COMMAND_GENERATE_REPLY_BIT_EXT, device, pCreateInfo, pAllocator, pView, &submit);
-    struct vn_cs_decoder *dec = vn_instance_get_command_reply(vn_instance, &submit);
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCreateImageView(vn_ring, VK_COMMAND_GENERATE_REPLY_BIT_EXT, device, pCreateInfo, pAllocator, pView, &submit);
+    struct vn_cs_decoder *dec = vn_ring_get_command_reply(vn_ring, &submit);
     if (dec) {
         const VkResult ret = vn_decode_vkCreateImageView_reply(dec, device, pCreateInfo, pAllocator, pView);
-        vn_instance_free_command_reply(vn_instance, &submit);
+        vn_ring_free_command_reply(vn_ring, &submit);
         return ret;
     } else {
         return VK_ERROR_OUT_OF_HOST_MEMORY;
     }
 }
 
-static inline void vn_async_vkCreateImageView(struct vn_instance *vn_instance, VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView)
+static inline void vn_async_vkCreateImageView(struct vn_ring *vn_ring, VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView)
 {
-    struct vn_instance_submit_command submit;
-    vn_submit_vkCreateImageView(vn_instance, 0, device, pCreateInfo, pAllocator, pView, &submit);
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCreateImageView(vn_ring, 0, device, pCreateInfo, pAllocator, pView, &submit);
 }
 
-static inline void vn_call_vkDestroyImageView(struct vn_instance *vn_instance, VkDevice device, VkImageView imageView, const VkAllocationCallbacks* pAllocator)
+static inline void vn_async_vkDestroyImageView(struct vn_ring *vn_ring, VkDevice device, VkImageView imageView, const VkAllocationCallbacks* pAllocator)
 {
-    VN_TRACE_FUNC();
-
-    struct vn_instance_submit_command submit;
-    vn_submit_vkDestroyImageView(vn_instance, VK_COMMAND_GENERATE_REPLY_BIT_EXT, device, imageView, pAllocator, &submit);
-    struct vn_cs_decoder *dec = vn_instance_get_command_reply(vn_instance, &submit);
-    if (dec) {
-        vn_decode_vkDestroyImageView_reply(dec, device, imageView, pAllocator);
-        vn_instance_free_command_reply(vn_instance, &submit);
-    }
-}
-
-static inline void vn_async_vkDestroyImageView(struct vn_instance *vn_instance, VkDevice device, VkImageView imageView, const VkAllocationCallbacks* pAllocator)
-{
-    struct vn_instance_submit_command submit;
-    vn_submit_vkDestroyImageView(vn_instance, 0, device, imageView, pAllocator, &submit);
+    struct vn_ring_submit_command submit;
+    vn_submit_vkDestroyImageView(vn_ring, 0, device, imageView, pAllocator, &submit);
 }
 
 #endif /* VN_PROTOCOL_DRIVER_IMAGE_VIEW_H */

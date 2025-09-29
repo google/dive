@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef SVGA_SAMPLER_VIEW_H
 #define SVGA_SAMPLER_VIEW_H
@@ -93,7 +75,7 @@ svga_sampler_view_reference(struct svga_sampler_view **ptr, struct svga_sampler_
 {
    struct svga_sampler_view *old = *ptr;
 
-   if (pipe_reference_described(&(*ptr)->reference, &v->reference, 
+   if (pipe_reference_described(&(*ptr)->reference, &v->reference,
                                 (debug_reference_descriptor)svga_debug_describe_sampler_view))
       svga_destroy_sampler_view_priv(old);
    *ptr = v;
@@ -102,11 +84,11 @@ svga_sampler_view_reference(struct svga_sampler_view **ptr, struct svga_sampler_
 bool
 svga_check_sampler_view_resource_collision(const struct svga_context *svga,
                                            const struct svga_winsys_surface *res,
-                                           enum pipe_shader_type shader);
+                                           mesa_shader_stage shader);
 
 bool
 svga_check_sampler_framebuffer_resource_collision(struct svga_context *svga,
-                                                  enum pipe_shader_type shader);
+                                                  mesa_shader_stage shader);
 
 enum pipe_error
 svga_validate_pipe_sampler_view(struct svga_context *svga,

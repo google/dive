@@ -25,15 +25,13 @@
  *
  */
 
-#ifndef BRW_CFG_H
-#define BRW_CFG_H
-
-#include "brw_ir.h"
-#ifdef __cplusplus
-#include "brw_ir_analysis.h"
-#endif
+#pragma once
 
 struct bblock_t;
+
+#ifdef __cplusplus
+
+#include "brw_inst.h"
 
 /**
  * CFG edge types.
@@ -54,16 +52,14 @@ enum bblock_link_kind {
 };
 
 struct bblock_link {
-#ifdef __cplusplus
    DECLARE_RALLOC_CXX_OPERATORS(bblock_link)
 
    bblock_link(bblock_t *block, enum bblock_link_kind kind)
       : block(block), kind(kind)
    {
    }
-#endif
 
-   struct exec_node link;
+   struct brw_exec_node link;
    struct bblock_t *block;
 
    /* Type of this CFG edge.  Because bblock_link_logical also implies
@@ -73,242 +69,130 @@ struct bblock_link {
    enum bblock_link_kind kind;
 };
 
-struct backend_shader;
+struct brw_shader;
 struct cfg_t;
 
 struct bblock_t {
-#ifdef __cplusplus
    DECLARE_RALLOC_CXX_OPERATORS(bblock_t)
 
    explicit bblock_t(cfg_t *cfg);
 
    void add_successor(void *mem_ctx, bblock_t *successor,
                       enum bblock_link_kind kind);
-   bool is_predecessor_of(const bblock_t *block,
-                          enum bblock_link_kind kind) const;
-   bool is_successor_of(const bblock_t *block,
-                        enum bblock_link_kind kind) const;
-   bool can_combine_with(const bblock_t *that) const;
-   void combine_with(bblock_t *that);
-   void dump() const;
 
-   backend_instruction *start();
-   const backend_instruction *start() const;
-   backend_instruction *end();
-   const backend_instruction *end() const;
+   brw_inst *start();
+   const brw_inst *start() const;
+   brw_inst *end();
+   const brw_inst *end() const;
 
    bblock_t *next();
    const bblock_t *next() const;
    bblock_t *prev();
    const bblock_t *prev() const;
 
-   bool starts_with_control_flow() const;
    bool ends_with_control_flow() const;
 
-   backend_instruction *first_non_control_flow_inst();
-   backend_instruction *last_non_control_flow_inst();
-#endif
+   brw_inst *last_non_control_flow_inst();
 
-   struct exec_node link;
+   void insert_before(brw_inst *inst, brw_exec_node *ref);
+   void remove(brw_inst *inst);
+
+   struct brw_exec_node link;
    struct cfg_t *cfg;
 
-   int start_ip;
-   int end_ip;
+   unsigned num_instructions;
 
-   /**
-    * Change in end_ip since the last time IPs of later blocks were updated.
-    */
-   int end_ip_delta;
-
-   struct exec_list instructions;
-   struct exec_list parents;
-   struct exec_list children;
+   struct brw_exec_list instructions;
+   struct brw_exec_list parents;
+   struct brw_exec_list children;
    int num;
 };
 
-static inline struct backend_instruction *
-bblock_start(struct bblock_t *block)
-{
-   return (struct backend_instruction *)exec_list_get_head(&block->instructions);
-}
-
-static inline const struct backend_instruction *
-bblock_start_const(const struct bblock_t *block)
-{
-   return (const struct backend_instruction *)exec_list_get_head_const(&block->instructions);
-}
-
-static inline struct backend_instruction *
-bblock_end(struct bblock_t *block)
-{
-   return (struct backend_instruction *)exec_list_get_tail(&block->instructions);
-}
-
-static inline const struct backend_instruction *
-bblock_end_const(const struct bblock_t *block)
-{
-   return (const struct backend_instruction *)exec_list_get_tail_const(&block->instructions);
-}
-
-static inline struct bblock_t *
-bblock_next(struct bblock_t *block)
-{
-   if (exec_node_is_tail_sentinel(block->link.next))
-      return NULL;
-
-   return (struct bblock_t *)block->link.next;
-}
-
-static inline const struct bblock_t *
-bblock_next_const(const struct bblock_t *block)
-{
-   if (exec_node_is_tail_sentinel(block->link.next))
-      return NULL;
-
-   return (const struct bblock_t *)block->link.next;
-}
-
-static inline struct bblock_t *
-bblock_prev(struct bblock_t *block)
-{
-   if (exec_node_is_head_sentinel(block->link.prev))
-      return NULL;
-
-   return (struct bblock_t *)block->link.prev;
-}
-
-static inline const struct bblock_t *
-bblock_prev_const(const struct bblock_t *block)
-{
-   if (exec_node_is_head_sentinel(block->link.prev))
-      return NULL;
-
-   return (const struct bblock_t *)block->link.prev;
-}
-
-static inline bool
-bblock_starts_with_control_flow(const struct bblock_t *block)
-{
-   enum opcode op = bblock_start_const(block)->opcode;
-   return op == BRW_OPCODE_DO || op == BRW_OPCODE_ENDIF;
-}
-
-static inline bool
-bblock_ends_with_control_flow(const struct bblock_t *block)
-{
-   enum opcode op = bblock_end_const(block)->opcode;
-   return op == BRW_OPCODE_IF ||
-          op == BRW_OPCODE_ELSE ||
-          op == BRW_OPCODE_WHILE ||
-          op == BRW_OPCODE_BREAK ||
-          op == BRW_OPCODE_CONTINUE;
-}
-
-static inline struct backend_instruction *
-bblock_first_non_control_flow_inst(struct bblock_t *block)
-{
-   struct backend_instruction *inst = bblock_start(block);
-   if (bblock_starts_with_control_flow(block))
-#ifdef __cplusplus
-      inst = (struct backend_instruction *)inst->next;
-#else
-      inst = (struct backend_instruction *)inst->link.next;
-#endif
-   return inst;
-}
-
-static inline struct backend_instruction *
-bblock_last_non_control_flow_inst(struct bblock_t *block)
-{
-   struct backend_instruction *inst = bblock_end(block);
-   if (bblock_ends_with_control_flow(block))
-#ifdef __cplusplus
-      inst = (struct backend_instruction *)inst->prev;
-#else
-      inst = (struct backend_instruction *)inst->link.prev;
-#endif
-   return inst;
-}
-
-#ifdef __cplusplus
-inline backend_instruction *
+inline brw_inst *
 bblock_t::start()
 {
-   return bblock_start(this);
+   return (brw_inst *)brw_exec_list_get_head(&instructions);
 }
 
-inline const backend_instruction *
+inline const brw_inst *
 bblock_t::start() const
 {
-   return bblock_start_const(this);
+   return (const brw_inst *)brw_exec_list_get_head_const(&instructions);
 }
 
-inline backend_instruction *
+inline brw_inst *
 bblock_t::end()
 {
-   return bblock_end(this);
+   return (brw_inst *)brw_exec_list_get_tail(&instructions);
 }
 
-inline const backend_instruction *
+inline const brw_inst *
 bblock_t::end() const
 {
-   return bblock_end_const(this);
+   return (const brw_inst *)brw_exec_list_get_tail_const(&instructions);
 }
 
 inline bblock_t *
 bblock_t::next()
 {
-   return bblock_next(this);
+   if (brw_exec_node_is_tail_sentinel(link.next))
+      return NULL;
+
+   return (struct bblock_t *)link.next;
 }
 
 inline const bblock_t *
 bblock_t::next() const
 {
-   return bblock_next_const(this);
+   if (brw_exec_node_is_tail_sentinel(link.next))
+      return NULL;
+
+   return (const struct bblock_t *)link.next;
 }
 
 inline bblock_t *
 bblock_t::prev()
 {
-   return bblock_prev(this);
+   if (brw_exec_node_is_head_sentinel(link.prev))
+      return NULL;
+
+   return (struct bblock_t *)link.prev;
 }
 
 inline const bblock_t *
 bblock_t::prev() const
 {
-   return bblock_prev_const(this);
-}
+   if (brw_exec_node_is_head_sentinel(link.prev))
+      return NULL;
 
-inline bool
-bblock_t::starts_with_control_flow() const
-{
-   return bblock_starts_with_control_flow(this);
+   return (const struct bblock_t *)link.prev;
 }
 
 inline bool
 bblock_t::ends_with_control_flow() const
 {
-   return bblock_ends_with_control_flow(this);
+   enum opcode op = end()->opcode;
+   return op == BRW_OPCODE_IF ||
+          op == BRW_OPCODE_ELSE ||
+          op == BRW_OPCODE_WHILE ||
+          op == BRW_OPCODE_BREAK ||
+          op == BRW_OPCODE_CONTINUE ||
+          op == SHADER_OPCODE_FLOW;
 }
 
-inline backend_instruction *
-bblock_t::first_non_control_flow_inst()
-{
-   return bblock_first_non_control_flow_inst(this);
-}
-
-inline backend_instruction *
+inline brw_inst *
 bblock_t::last_non_control_flow_inst()
 {
-   return bblock_last_non_control_flow_inst(this);
+   brw_inst *inst = end();
+   if (ends_with_control_flow())
+      inst = (brw_inst *)inst->prev;
+   return inst;
 }
-#endif
 
 struct cfg_t {
-#ifdef __cplusplus
    DECLARE_RALLOC_CXX_OPERATORS(cfg_t)
 
-   cfg_t(const backend_shader *s, exec_list *instructions);
+   cfg_t(brw_shader *s, brw_exec_list *instructions);
    ~cfg_t();
 
    void remove_block(bblock_t *block);
@@ -322,73 +206,48 @@ struct cfg_t {
    void set_next_block(bblock_t **cur, bblock_t *block, int ip);
    void make_block_array();
 
-   void dump();
    void dump_cfg();
 
-   /**
-    * Propagate bblock_t::end_ip_delta data through the CFG.
-    */
-   inline void adjust_block_ips();
-
+#ifdef NDEBUG
+   void validate(UNUSED const char *stage_abbrev) { }
+#else
+   void validate(const char *stage_abbrev);
 #endif
-   const struct backend_shader *s;
+
+   struct brw_shader *s;
    void *mem_ctx;
 
    /** Ordered list (by ip) of basic blocks */
-   struct exec_list block_list;
+   struct brw_exec_list block_list;
    struct bblock_t **blocks;
    int num_blocks;
+
+   unsigned total_instructions;
 };
 
-static inline struct bblock_t *
-cfg_first_block(struct cfg_t *cfg)
-{
-   return (struct bblock_t *)exec_list_get_head(&cfg->block_list);
-}
-
-static inline const struct bblock_t *
-cfg_first_block_const(const struct cfg_t *cfg)
-{
-   return (const struct bblock_t *)exec_list_get_head_const(&cfg->block_list);
-}
-
-static inline struct bblock_t *
-cfg_last_block(struct cfg_t *cfg)
-{
-   return (struct bblock_t *)exec_list_get_tail(&cfg->block_list);
-}
-
-static inline const struct bblock_t *
-cfg_last_block_const(const struct cfg_t *cfg)
-{
-   return (const struct bblock_t *)exec_list_get_tail_const(&cfg->block_list);
-}
-
-#ifdef __cplusplus
 inline bblock_t *
 cfg_t::first_block()
 {
-   return cfg_first_block(this);
+   return (struct bblock_t *)brw_exec_list_get_head(&block_list);
 }
 
 const inline bblock_t *
 cfg_t::first_block() const
 {
-   return cfg_first_block_const(this);
+   return (const struct bblock_t *)brw_exec_list_get_head_const(&block_list);
 }
 
 inline bblock_t *
 cfg_t::last_block()
 {
-   return cfg_last_block(this);
+   return (struct bblock_t *)brw_exec_list_get_tail(&block_list);
 }
 
 const inline bblock_t *
 cfg_t::last_block() const
 {
-   return cfg_last_block_const(this);
+   return (const struct bblock_t *)brw_exec_list_get_tail_const(&block_list);
 }
-#endif
 
 /* Note that this is implemented with a double for loop -- break will
  * break from the inner loop only!
@@ -405,19 +264,19 @@ cfg_t::last_block() const
       foreach_inst_in_block_safe (__type, __inst, __block)
 
 #define foreach_block(__block, __cfg)                          \
-   foreach_list_typed (bblock_t, __block, link, &(__cfg)->block_list)
+   brw_foreach_list_typed (bblock_t, __block, link, &(__cfg)->block_list)
 
 #define foreach_block_reverse(__block, __cfg)                  \
-   foreach_list_typed_reverse (bblock_t, __block, link, &(__cfg)->block_list)
+   brw_foreach_list_typed_reverse (bblock_t, __block, link, &(__cfg)->block_list)
 
 #define foreach_block_safe(__block, __cfg)                     \
-   foreach_list_typed_safe (bblock_t, __block, link, &(__cfg)->block_list)
+   brw_foreach_list_typed_safe (bblock_t, __block, link, &(__cfg)->block_list)
 
 #define foreach_block_reverse_safe(__block, __cfg)             \
-   foreach_list_typed_reverse_safe (bblock_t, __block, link, &(__cfg)->block_list)
+   brw_foreach_list_typed_reverse_safe (bblock_t, __block, link, &(__cfg)->block_list)
 
 #define foreach_inst_in_block(__type, __inst, __block)         \
-   foreach_in_list(__type, __inst, &(__block)->instructions)
+   brw_foreach_in_list(__type, __inst, &(__block)->instructions)
 
 #define foreach_inst_in_block_safe(__type, __inst, __block)    \
    for (__type *__inst = (__type *)__block->instructions.head_sentinel.next, \
@@ -427,10 +286,10 @@ cfg_t::last_block() const
         __next = (__type *)__next->next)
 
 #define foreach_inst_in_block_reverse(__type, __inst, __block) \
-   foreach_in_list_reverse(__type, __inst, &(__block)->instructions)
+   brw_foreach_in_list_reverse(__type, __inst, &(__block)->instructions)
 
 #define foreach_inst_in_block_reverse_safe(__type, __inst, __block) \
-   foreach_in_list_reverse_safe(__type, __inst, &(__block)->instructions)
+   brw_foreach_in_list_reverse_safe(__type, __inst, &(__block)->instructions)
 
 #define foreach_inst_in_block_starting_from(__type, __scan_inst, __inst) \
    for (__type *__scan_inst = (__type *)__inst->next;          \
@@ -442,68 +301,4 @@ cfg_t::last_block() const
         !__scan_inst->is_head_sentinel();                      \
         __scan_inst = (__type *)__scan_inst->prev)
 
-#ifdef __cplusplus
-inline void
-cfg_t::adjust_block_ips()
-{
-   int delta = 0;
-
-   foreach_block(block, this) {
-      block->start_ip += delta;
-      block->end_ip += delta;
-
-      delta += block->end_ip_delta;
-
-      block->end_ip_delta = 0;
-   }
-}
-
-namespace brw {
-   /**
-    * Immediate dominator tree analysis of a shader.
-    */
-   struct idom_tree {
-      idom_tree(const backend_shader *s);
-      ~idom_tree();
-
-      bool
-      validate(const backend_shader *) const
-      {
-         /* FINISHME */
-         return true;
-      }
-
-      analysis_dependency_class
-      dependency_class() const
-      {
-         return DEPENDENCY_BLOCKS;
-      }
-
-      const bblock_t *
-      parent(const bblock_t *b) const
-      {
-         assert(unsigned(b->num) < num_parents);
-         return parents[b->num];
-      }
-
-      bblock_t *
-      parent(bblock_t *b) const
-      {
-         assert(unsigned(b->num) < num_parents);
-         return parents[b->num];
-      }
-
-      bblock_t *
-      intersect(bblock_t *b1, bblock_t *b2) const;
-
-      void
-      dump() const;
-
-   private:
-      unsigned num_parents;
-      bblock_t **parents;
-   };
-}
 #endif
-
-#endif /* BRW_CFG_H */

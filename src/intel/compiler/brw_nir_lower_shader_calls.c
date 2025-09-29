@@ -45,7 +45,7 @@ no_load_scratch_base_ptr_intrinsic(nir_shader *shader)
 }
 
 /** Insert the appropriate return instruction at the end of the shader */
-void
+bool
 brw_nir_lower_shader_returns(nir_shader *shader)
 {
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
@@ -71,7 +71,7 @@ brw_nir_lower_shader_returns(nir_shader *shader)
 
    nir_builder b = nir_builder_create(impl);
 
-   set_foreach(impl->end_block->predecessors, block_entry) {
+   set_foreach(&impl->end_block->predecessors, block_entry) {
       struct nir_block *block = (void *)block_entry->key;
       b.cursor = nir_after_block_before_jump(block);
 
@@ -81,7 +81,7 @@ brw_nir_lower_shader_returns(nir_shader *shader)
           * it ends, we retire the bindless stack ID and no further shaders
           * will be executed.
           */
-         assert(impl->end_block->predecessors->entries == 1);
+         assert(impl->end_block->predecessors.entries == 1);
          brw_nir_btd_retire(&b);
          break;
 
@@ -104,7 +104,7 @@ brw_nir_lower_shader_returns(nir_shader *shader)
           * action at the end.  They simply return back to the previous shader
           * in the call stack.
           */
-         assert(impl->end_block->predecessors->entries == 1);
+         assert(impl->end_block->predecessors.entries == 1);
          brw_nir_btd_return(&b);
          break;
 
@@ -113,12 +113,15 @@ brw_nir_lower_shader_returns(nir_shader *shader)
          break;
 
       default:
-         unreachable("Invalid callable shader stage");
+        {
+         UNREACHABLE("Invalid callable shader stage");
+         return false;
+        }
       }
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
+   nir_progress(true, impl, nir_metadata_control_flow);
+   return true;
 }
 
 static void
@@ -148,7 +151,9 @@ store_resume_addr(nir_builder *b, nir_intrinsic_instr *call)
 static bool
 lower_shader_trace_ray_instr(struct nir_builder *b, nir_instr *instr, void *data)
 {
-   struct brw_bs_prog_key *key = data;
+   const struct brw_nir_lower_shader_calls_state *state = data;
+   const struct intel_device_info *devinfo = state->devinfo;
+   struct brw_bs_prog_key *key = state->key;
 
    if (instr->type != nir_instr_type_intrinsic)
       return false;
@@ -204,7 +209,7 @@ lower_shader_trace_ray_instr(struct nir_builder *b, nir_instr *instr, void *data
    nir_def *hit_sbt_stride_B =
       nir_load_ray_hit_sbt_stride_intel(b);
    nir_def *hit_sbt_offset_B =
-      nir_umul_32x16(b, sbt_offset, nir_u2u32(b, hit_sbt_stride_B));
+      nir_imul(b, sbt_offset, nir_u2u32(b, hit_sbt_stride_B));
    nir_def *hit_sbt_addr =
       nir_iadd(b, nir_load_ray_hit_sbt_addr_intel(b),
                   nir_u2u64(b, hit_sbt_offset_B));
@@ -213,7 +218,7 @@ lower_shader_trace_ray_instr(struct nir_builder *b, nir_instr *instr, void *data
    nir_def *miss_sbt_stride_B =
       nir_load_ray_miss_sbt_stride_intel(b);
    nir_def *miss_sbt_offset_B =
-      nir_umul_32x16(b, miss_index, nir_u2u32(b, miss_sbt_stride_B));
+      nir_imul(b, miss_index, nir_u2u32(b, miss_sbt_stride_B));
    nir_def *miss_sbt_addr =
       nir_iadd(b, nir_load_ray_miss_sbt_addr_intel(b),
                   nir_u2u64(b, miss_sbt_offset_B));
@@ -225,9 +230,6 @@ lower_shader_trace_ray_instr(struct nir_builder *b, nir_instr *instr, void *data
        */
       .ray_flags = nir_ior_imm(b, nir_u2u16(b, ray_flags), key->pipeline_ray_flags),
       .ray_mask = cull_mask,
-      .hit_group_sr_base_ptr = hit_sbt_addr,
-      .hit_group_sr_stride = nir_u2u16(b, hit_sbt_stride_B),
-      .miss_sr_ptr = miss_sbt_addr,
       .orig = ray_orig,
       .t_near = ray_t_min,
       .dir = ray_dir,
@@ -241,7 +243,17 @@ lower_shader_trace_ray_instr(struct nir_builder *b, nir_instr *instr, void *data
        */
       .inst_leaf_ptr = nir_u2u64(b, ray_flags),
    };
-   brw_nir_rt_store_mem_ray(b, &ray_defs, BRW_RT_BVH_LEVEL_WORLD);
+
+   if (devinfo->ver >= 30) {
+      ray_defs.hit_group_index = sbt_offset;
+      ray_defs.miss_shader_index = nir_u2u16(b, miss_index);
+   } else {
+      ray_defs.hit_group_sr_base_ptr = hit_sbt_addr;
+      ray_defs.hit_group_sr_stride = nir_u2u16(b, hit_sbt_stride_B);
+      ray_defs.miss_sr_ptr = miss_sbt_addr;
+   }
+
+   brw_nir_rt_store_mem_ray(b, &ray_defs, BRW_RT_BVH_LEVEL_WORLD, devinfo);
 
    nir_trace_ray_intel(b,
                        nir_load_btd_global_arg_addr_intel(b),
@@ -273,15 +285,15 @@ lower_shader_call_instr(struct nir_builder *b, nir_intrinsic_instr *call,
 }
 
 bool
-brw_nir_lower_shader_calls(nir_shader *shader, struct brw_bs_prog_key *key)
+brw_nir_lower_shader_calls(nir_shader *shader,
+                           struct brw_nir_lower_shader_calls_state *state)
 {
    bool a = nir_shader_instructions_pass(shader,
                                          lower_shader_trace_ray_instr,
                                          nir_metadata_none,
-                                         key);
+                                         state);
    bool b = nir_shader_intrinsics_pass(shader, lower_shader_call_instr,
-                                         nir_metadata_block_index |
-                                         nir_metadata_dominance,
+                                         nir_metadata_control_flow,
                                          NULL);
    return a || b;
 }
@@ -313,7 +325,7 @@ brw_nir_create_trivial_return_shader(const struct brw_compiler *compiler,
                                      void *mem_ctx)
 {
    const nir_shader_compiler_options *nir_options =
-      compiler->nir_options[MESA_SHADER_CALLABLE];
+      &compiler->nir_options[MESA_SHADER_CALLABLE];
 
    nir_builder _b = nir_builder_init_simple_shader(MESA_SHADER_CALLABLE,
                                                    nir_options,
@@ -323,56 +335,57 @@ brw_nir_create_trivial_return_shader(const struct brw_compiler *compiler,
    ralloc_steal(mem_ctx, b->shader);
    nir_shader *nir = b->shader;
 
-   /* Workaround not needed on DG2-G10-C0+ & DG2-G11-B0+ */
-   if ((compiler->devinfo->platform == INTEL_PLATFORM_DG2_G10 &&
-        compiler->devinfo->revision < 8) ||
-       (compiler->devinfo->platform == INTEL_PLATFORM_DG2_G11 &&
-        compiler->devinfo->revision < 4)) {
-      /* Reserve scratch space at the start of the shader's per-thread scratch
-       * space for the return BINDLESS_SHADER_RECORD address and data payload.
-       * When a shader is called, the calling shader will write the return BSR
-       * address in this region of the callee's scratch space.
-       */
-      nir->scratch_size = BRW_BTD_STACK_CALLEE_DATA_SIZE;
+   NIR_PASS(_, nir, brw_nir_lower_shader_returns);
 
-      nir_function_impl *impl = nir_shader_get_entrypoint(nir);
+   return nir;
+}
 
-      b->cursor = nir_before_impl(impl);
+/** Creates a null any-hit shader
+ *
+ * By default, our HW has the ability to handle the fact that a shader is not
+ * available and will execute the next following shader in the tracing call.
+ * For instance, a RAYGEN shader traces a ray, the tracing generates a hit,
+ * but there is no ANYHIT shader available. The HW should follow up by
+ * execution the CLOSESTHIT shader.
+ *
+ * This default behavior can be changed through the RT_CTRL register
+ * (privileged access) and when NULL shader checks are disabled, we assign
+ * this null ahs shader as any hit shader in case app did not provide one.
+ *
+ * In order to ensure the call to the CLOSESTHIT shader, this shader needs to
+ * commit the ray and will not proceed with the BTD return.
+ *
+ * "SW must ensure that callstack handler sends a TraceRay message with
+ *  TraceRay_COMMIT for any hit shader invocation so that it matches with HW
+ *  behavior of trivially accepting that hit."
+ *
+ */
+nir_shader *
+brw_nir_create_null_ahs_shader(const struct brw_compiler *compiler,
+                               void *mem_ctx)
+{
+   const nir_shader_compiler_options *nir_options =
+      &compiler->nir_options[MESA_SHADER_CALLABLE];
 
-      nir_def *shader_type = nir_load_btd_shader_type_intel(b);
+   nir_builder _b = nir_builder_init_simple_shader(MESA_SHADER_CALLABLE,
+                                                   nir_options,
+                                                   "RT Null any-hit shader");
+   nir_builder *b = &_b;
 
-      nir_def *is_intersection_shader =
-         nir_ieq_imm(b, shader_type, GEN_RT_BTD_SHADER_TYPE_INTERSECTION);
-      nir_def *is_anyhit_shader =
-         nir_ieq_imm(b, shader_type, GEN_RT_BTD_SHADER_TYPE_ANY_HIT);
+   ralloc_steal(mem_ctx, b->shader);
+   nir_shader *nir = b->shader;
 
-      nir_def *needs_commit_or_continue =
-         nir_ior(b, is_intersection_shader, is_anyhit_shader);
+   nir->scratch_size = BRW_BTD_STACK_CALLEE_DATA_SIZE;
+   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
 
-      nir_push_if(b, needs_commit_or_continue);
-      {
-         struct brw_nir_rt_mem_hit_defs hit_in = {};
-         brw_nir_rt_load_mem_hit(b, &hit_in, false /* committed */);
+   b->cursor = nir_before_block(nir_start_block(impl));
 
-         nir_def *ray_op =
-            nir_bcsel(b, is_intersection_shader,
-                      nir_imm_int(b, GEN_RT_TRACE_RAY_CONTINUE),
-                      nir_imm_int(b, GEN_RT_TRACE_RAY_COMMIT));
-         nir_def *ray_level = hit_in.bvh_level;
-
-         nir_trace_ray_intel(b,
-                             nir_load_btd_global_arg_addr_intel(b),
-                             ray_level, ray_op,
-                             .synchronous = false);
-      }
-      nir_push_else(b, NULL);
-      {
-         brw_nir_btd_return(b);
-      }
-      nir_pop_if(b, NULL);
-   } else {
-      NIR_PASS_V(nir, brw_nir_lower_shader_returns);
-   }
-
+   struct brw_nir_rt_mem_hit_defs hit_in = {};
+   brw_nir_rt_load_mem_hit(b, &hit_in, false, compiler->devinfo);
+   nir_def *ray_level = hit_in.bvh_level;
+   nir_def *ray_op = nir_imm_int(b, GEN_RT_TRACE_RAY_COMMIT);
+   nir_trace_ray_intel(b,
+                       nir_load_btd_global_arg_addr_intel(b),
+                       ray_level, ray_op);
    return nir;
 }

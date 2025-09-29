@@ -29,6 +29,7 @@
 #include <vulkan/vulkan.h>
 
 #include "hwdef/rogue_hw_defs.h"
+#include "pvr_common.h"
 #include "pvr_csb.h"
 #include "pvr_limits.h"
 #include "pvr_types.h"
@@ -83,6 +84,8 @@ struct pvr_render_job {
       bool has_depth_attachment : 1;
       bool has_stencil_attachment : 1;
       bool requires_spm_scratch_buffer : 1;
+      bool disable_pixel_merging : 1;
+      bool z_only_render : 1;
    };
 
    uint32_t pds_pixel_event_data_offset;
@@ -109,16 +112,8 @@ struct pvr_render_job {
       uint32_t height;
       VkExtent2D physical_extent;
       uint32_t layer_size;
-      enum PVRX(CR_ZLS_FORMAT_TYPE) zls_format;
-      /* FIXME: This should be of type 'enum pvr_memlayout', but this is defined
-       * in pvr_private.h, which causes a circular include dependency. For now,
-       * treat it as a uint32_t. A couple of ways to possibly fix this:
-       *
-       *   1. Merge the contents of this header file into pvr_private.h.
-       *   2. Move 'enum pvr_memlayout' into it a new header that can be
-       *      included by both this header and pvr_private.h.
-       */
-      uint32_t memlayout;
+      enum ROGUE_CR_ZLS_FORMAT_TYPE zls_format;
+      enum pvr_memlayout memlayout;
 
       /* TODO: Is this really necessary? Maybe we can extract all useful
        * information and drop this member. */
@@ -160,7 +155,7 @@ struct pvr_render_job {
    static_assert(ROGUE_NUM_CR_PDS_BGRND_WORDS == 3,
                  "Cannot store all CR_PDS_BGRND words");
    uint64_t pds_bgnd_reg_values[ROGUE_NUM_CR_PDS_BGRND_WORDS];
-   uint64_t pds_pr_bgnd_reg_values[ROGUE_NUM_CR_PDS_BGRND_WORDS];
+   uint64_t pr_pds_bgnd_reg_values[ROGUE_NUM_CR_PDS_BGRND_WORDS];
 };
 
 void pvr_rt_mtile_info_init(const struct pvr_device_info *dev_info,

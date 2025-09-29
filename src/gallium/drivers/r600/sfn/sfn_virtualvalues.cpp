@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2021 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_virtualvalues.h"
@@ -29,6 +9,7 @@
 #include "sfn_alu_defines.h"
 #include "sfn_debug.h"
 #include "sfn_instr.h"
+#include "sfn_instr_alu.h"
 #include "sfn_valuefactory.h"
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -145,7 +126,7 @@ VirtualValue::from_string(const std::string& s)
 
    default:
       std::cerr << "'" << s << "'";
-      unreachable("Unknown register type");
+      UNREACHABLE("Unknown register type");
    }
 }
 
@@ -260,6 +241,27 @@ Register::accept(ConstRegisterVisitor& visitor) const
    visitor.visit(*this);
 }
 
+bool
+Register::can_switch_to_chan(int c)
+{
+   if (pin() != pin_free && pin() != pin_group)
+      return false;
+
+   int free_mask = BITSET_BIT(c);
+   for (auto p : parents()) {
+      auto alu = p->as_alu();
+      if (alu)
+         free_mask &= alu->allowed_dest_chan_mask();
+   }
+
+   for (auto u : uses()) {
+      free_mask &= u->allowed_src_chan_mask();
+      if (!free_mask)
+         return false;
+   }
+   return true;
+}
+
 void
 Register::print(std::ostream& os) const
 {
@@ -269,7 +271,7 @@ Register::print(std::ostream& os) const
       case AddressRegister::idx0: os << "IDX0"; break;
       case AddressRegister::idx1: os << "IDX1"; break;
       default:
-         unreachable("Wrong address ID");
+         UNREACHABLE("Wrong address ID");
       }
       return;
    }
@@ -328,7 +330,7 @@ Register::from_string(const std::string& s)
          pinstr.append(1, s[i]);
          break;
       default:
-         unreachable("Malformed register string");
+         UNREACHABLE("Malformed register string");
       }
    }
 
@@ -530,13 +532,11 @@ operator==(const RegisterVec4& lhs, const RegisterVec4& rhs)
 }
 
 RegisterVec4::Element::Element(const RegisterVec4& parent, int chan):
-    m_parent(parent),
     m_value(new Register(parent.m_sel, chan, pin_none))
 {
 }
 
 RegisterVec4::Element::Element(const RegisterVec4& parent, PRegister value):
-    m_parent(parent),
     m_value(value)
 {
 }
@@ -620,7 +620,7 @@ InlineConstant::print(std::ostream& os) const
    } else if (sel() >= ALU_SRC_PARAM_BASE && sel() < ALU_SRC_PARAM_BASE + 32) {
       os << "Param" << sel() - ALU_SRC_PARAM_BASE << "." << chanchar[chan()];
    } else {
-      unreachable("Unknown inline constant");
+      UNREACHABLE("Unknown inline constant");
    }
 }
 
@@ -725,7 +725,7 @@ InlineConstant::param_from_string(const std::string& s)
       chan = 3;
       break;
    default:
-      unreachable("unsupported channel char");
+      UNREACHABLE("unsupported channel char");
    }
 
    return new InlineConstant(ALU_SRC_PARAM_BASE + param, chan);
@@ -851,7 +851,7 @@ UniformValue::from_string(const std::string& s, ValueFactory *factory)
       chan = 3;
       break;
    default:
-      unreachable("Unknown channel when reading uniform");
+      UNREACHABLE("Unknown channel when reading uniform");
    }
    if (bufid)
       return new UniformValue(index + 512, chan, bufid, bank);
@@ -930,11 +930,21 @@ LocalArray::element(size_t offset, PVirtualValue indirect, uint32_t chan)
    if (indirect) {
       class ResolveDirectArrayElement : public ConstRegisterVisitor {
       public:
-         void visit(const Register& value) { (void)value; };
+         void visit(const Register& value)
+         {
+            if (value.has_flag(Register::ssa)) {
+               assert(value.parents().size() == 1);
+               auto p = (*value.parents().begin())->as_alu();
+               if (p && p->can_propagate_src()) {
+                  auto& s = p->src(0);
+                  s.accept(*this);
+               }
+            }
+         }
          void visit(const LocalArray& value)
          {
             (void)value;
-            unreachable("An array can't be used as address");
+            UNREACHABLE("An array can't be used as address");
          }
          void visit(const LocalArrayValue& value) { (void)value; }
          void visit(const UniformValue& value) { (void)value; }
@@ -943,7 +953,20 @@ LocalArray::element(size_t offset, PVirtualValue indirect, uint32_t chan)
             offset = value.value();
             is_contant = true;
          }
-         void visit(const InlineConstant& value) { (void)value; }
+         void visit(const InlineConstant& value)
+         {
+            switch (value.sel()) {
+            case ALU_SRC_0:
+               offset = 0;
+               is_contant = true;
+               break;
+            case ALU_SRC_1_INT:
+               offset = 1;
+               is_contant = true;
+               break;
+            default:;
+            }
+         }
 
          ResolveDirectArrayElement():
              offset(0),
@@ -1076,6 +1099,7 @@ LocalArrayValue::accept(ConstRegisterVisitor& vistor) const
 void
 LocalArrayValue::add_parent_to_array(Instr *instr)
 {
+   m_array.add_parent(instr);
    if (m_addr)
       m_array.add_parent_to_elements(chan(), instr);
 }

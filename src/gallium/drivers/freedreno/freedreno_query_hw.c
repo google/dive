@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2014 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2014 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -298,22 +280,6 @@ fd_hw_sample_init(struct fd_batch *batch, uint32_t size)
    samp->num_tiles = 0;
    samp->tile_stride = 0;
    batch->next_sample_offset += size;
-
-   if (!batch->query_buf) {
-      struct pipe_screen *pscreen = &batch->ctx->screen->base;
-      struct pipe_resource templ = {
-         .target = PIPE_BUFFER,
-         .format = PIPE_FORMAT_R8_UNORM,
-         .bind = PIPE_BIND_QUERY_BUFFER,
-         .width0 = 0, /* create initially zero size buffer */
-         .height0 = 1,
-         .depth0 = 1,
-         .array_size = 1,
-         .last_level = 0,
-         .nr_samples = 1,
-      };
-      batch->query_buf = pscreen->resource_create(pscreen, &templ);
-   }
 
    pipe_resource_reference(&samp->prsc, batch->query_buf);
 

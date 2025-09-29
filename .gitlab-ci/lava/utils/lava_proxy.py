@@ -1,3 +1,7 @@
+# When changing this file, you need to bump the following
+# .gitlab-ci/image-tags.yml tags:
+# ALPINE_X86_64_LAVA_TRIGGER_TAG
+
 import time
 import traceback
 import urllib
@@ -22,8 +26,6 @@ def setup_lava_proxy():
         config.get("verify_ssl_cert", True),
     )
     proxy = xmlrpc.client.ServerProxy(uri_str, allow_none=True, transport=transport)
-
-    print_log(f'Proxy for {config["uri"]} created.')
 
     return proxy
 

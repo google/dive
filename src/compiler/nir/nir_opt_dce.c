@@ -97,7 +97,7 @@ is_live(BITSET_WORD *defs_live, nir_instr *instr)
       return false;
    }
    default:
-      unreachable("unexpected instr type");
+      UNREACHABLE("unexpected instr type");
    }
 }
 
@@ -176,7 +176,7 @@ dce_cf_list(struct exec_list *cf_list, BITSET_WORD *defs_live,
          /* Fast path if the loop has no continues: we can remove instructions
           * as we mark the others live.
           */
-         struct set *predecessors = nir_loop_first_block(loop)->predecessors;
+         struct set *predecessors = &nir_loop_first_block(loop)->predecessors;
          if (predecessors->entries == 1 &&
              _mesa_set_next_entry(predecessors, NULL)->key == inner_state.preheader) {
             progress |= dce_cf_list(&loop->body, defs_live, parent_loop, dead_instrs);
@@ -211,7 +211,7 @@ dce_cf_list(struct exec_list *cf_list, BITSET_WORD *defs_live,
          break;
       }
       case nir_cf_node_function:
-         unreachable("Invalid cf type");
+         UNREACHABLE("Invalid cf type");
       }
    }
 
@@ -237,14 +237,7 @@ nir_opt_dce_impl(nir_function_impl *impl)
 
    nir_instr_free_list(&dead_instrs);
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool

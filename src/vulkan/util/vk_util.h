@@ -23,9 +23,11 @@
 #ifndef VK_UTIL_H
 #define VK_UTIL_H
 
+#include "compiler/shader_enums.h"
 #include "util/bitscan.h"
 #include "util/macros.h"
-#include "compiler/shader_enums.h"
+#include "c99_compat.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -109,13 +111,6 @@ vk_pnext_iterator_next(struct vk_pnext_iterator *iter)
         !__iter.done; __iter.done = true) \
       for (const VkBaseInStructure *__e = (VkBaseInStructure *)__iter.pos; \
            __e; __e = (VkBaseInStructure *)vk_pnext_iterator_next(&__iter))
-
-static inline void
-vk_copy_struct_guts(VkBaseOutStructure *dst, VkBaseInStructure *src, size_t struct_size)
-{
-   STATIC_ASSERT(sizeof(*dst) == sizeof(*src));
-   memcpy(dst + 1, src + 1, struct_size - sizeof(VkBaseOutStructure));
-}
 
 /**
  * A wrapper for a Vulkan output array. A Vulkan output array is one that
@@ -311,20 +306,15 @@ struct vk_pipeline_cache_header {
 #define VK_ENUM_OFFSET(__enum) \
    ((__enum) >= VK_EXT_OFFSET ? ((__enum) % 1000) : (__enum))
 
-#define typed_memcpy(dest, src, count) do { \
-   STATIC_ASSERT(sizeof(*(src)) == sizeof(*(dest))); \
-   memcpy((dest), (src), (count) * sizeof(*(src))); \
-} while (0)
-
-static inline gl_shader_stage
+static inline mesa_shader_stage
 vk_to_mesa_shader_stage(VkShaderStageFlagBits vk_stage)
 {
    assert(util_bitcount((uint32_t) vk_stage) == 1);
-   return (gl_shader_stage) (ffs((uint32_t) vk_stage) - 1);
+   return (mesa_shader_stage) (ffs((uint32_t) vk_stage) - 1);
 }
 
 static inline VkShaderStageFlagBits
-mesa_to_vk_shader_stage(gl_shader_stage mesa_stage)
+mesa_to_vk_shader_stage(mesa_shader_stage mesa_stage)
 {
    return (VkShaderStageFlagBits) (1 << ((uint32_t) mesa_stage));
 }
@@ -352,14 +342,14 @@ vk_spec_info_to_nir_spirv(const VkSpecializationInfo *spec_info,
 
 #define STACK_ARRAY_SIZE 8
 
-#ifdef __cplusplus
-#define STACK_ARRAY_ZERO_INIT {}
-#else
-#define STACK_ARRAY_ZERO_INIT {0}
-#endif
-
+/* Sometimes gcc may claim -Wmaybe-uninitialized for the stack array in some
+ * places it can't verify that when size is 0 nobody down the call chain reads
+ * the array. Please don't try to fix it by zero-initializing the array here
+ * since it's used in a lot of different places. An "if (size == 0) return;"
+ * may work for you.
+ */
 #define STACK_ARRAY(type, name, size) \
-   type _stack_##name[STACK_ARRAY_SIZE] = STACK_ARRAY_ZERO_INIT; \
+   type _stack_##name[STACK_ARRAY_SIZE]; \
    type *const name = \
      ((size) <= STACK_ARRAY_SIZE ? _stack_##name : (type *)malloc((size) * sizeof(type)))
 
@@ -367,16 +357,78 @@ vk_spec_info_to_nir_spirv(const VkSpecializationInfo *spec_info,
    if (name != _stack_##name) free(name)
 
 static inline uint8_t
-vk_index_type_to_bytes(enum VkIndexType type)
+vk_index_type_to_bytes(VkIndexType type)
 {
    switch (type) {
    case VK_INDEX_TYPE_NONE_KHR:  return 0;
-   case VK_INDEX_TYPE_UINT8_EXT: return 1;
+   case VK_INDEX_TYPE_UINT8_KHR: return 1;
    case VK_INDEX_TYPE_UINT16:    return 2;
    case VK_INDEX_TYPE_UINT32:    return 4;
-   default:                      unreachable("Invalid index type");
+   default:                      UNREACHABLE("Invalid index type");
    }
 }
+
+static inline uint32_t
+vk_index_to_restart(VkIndexType type)
+{
+   switch (type) {
+   case VK_INDEX_TYPE_UINT8_KHR: return 0xff;
+   case VK_INDEX_TYPE_UINT16:    return 0xffff;
+   case VK_INDEX_TYPE_UINT32:    return 0xffffffff;
+   default:                      UNREACHABLE("unexpected index type");
+   }
+}
+
+static inline bool
+vk_descriptor_type_is_dynamic(VkDescriptorType type)
+{
+   switch (type) {
+   case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+   case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+      return true;
+
+   default:
+      return false;
+   }
+}
+
+enum mesa_prim vk_topology_to_mesa(VkPrimitiveTopology topology);
+
+#define VK_PRINT_STR(field, ...) do {                          \
+   memset(field, 0, sizeof(field));                            \
+   UNUSED int i = snprintf(field, sizeof(field), __VA_ARGS__); \
+   assert(i > 0 && i < sizeof(field));                         \
+} while(0)
+
+#define VK_COPY_STR(field, str) do {                           \
+   int len = strlen(str);                                      \
+   assert(len > 0 && len < sizeof(field));                     \
+   memcpy(field, str, len);                                    \
+   memset(field + len, 0, sizeof(field) - len);                \
+} while(0)
+
+#define vk_add_exec_statistic(out, name_, description_, format_enum,           \
+                              format_member, value_)                           \
+   vk_outarray_append_typed(VkPipelineExecutableStatisticKHR, &(out), stat)    \
+   {                                                                           \
+      VK_COPY_STR(stat->name, name_);                                          \
+      VK_COPY_STR(stat->description, description_);                            \
+      stat->format =                                                           \
+         VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_##format_enum##_KHR;          \
+      stat->value.format_member = (value_);                                    \
+   }
+
+#define vk_add_exec_statistic_i64(out, name, description, value)               \
+   vk_add_exec_statistic(out, name, description, INT64, i64, value)
+
+#define vk_add_exec_statistic_u64(out, name, description, value)               \
+   vk_add_exec_statistic(out, name, description, UINT64, u64, value)
+
+#define vk_add_exec_statistic_f64(out, name, description, value)               \
+   vk_add_exec_statistic(out, name, description, FLOAT64, f64, value)
+
+#define vk_add_exec_statistic_bool(out, name, description, value)               \
+   vk_add_exec_statistic(out, name, description, BOOL32, b32, value)
 
 #ifdef __cplusplus
 }

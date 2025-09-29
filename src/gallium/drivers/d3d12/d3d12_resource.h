@@ -48,12 +48,18 @@ struct d3d12_resource {
    unsigned int plane_slice;
    struct pipe_resource* first_plane;
    unsigned mip_levels;
+
    struct sw_displaytarget *dt;
    unsigned dt_refcount; /* For planar resources sharing the dt pointer */
    unsigned dt_stride;
+   struct pipe_resource *dt_proxy;
+
    struct util_range valid_buffer_range;
-   uint32_t bind_counts[PIPE_SHADER_TYPES][D3D12_RESOURCE_BINDING_TYPES];
+   uint32_t bind_counts[MESA_SHADER_STAGES][D3D12_RESOURCE_BINDING_TYPES];
    unsigned generation_id;
+
+   util_once_flag logicop_texture_init_flag;
+   struct pipe_resource *logicop_texture;
 };
 
 struct d3d12_memory_object {
@@ -136,5 +142,8 @@ d3d12_context_resource_init(struct pipe_context *pctx);
 struct pipe_resource *
 d3d12_resource_from_resource(struct pipe_screen *pscreen,
                               ID3D12Resource* inputRes);
+
+struct pipe_resource *
+d3d12_resource_get_logicop_texture(struct d3d12_resource *res);
 
 #endif

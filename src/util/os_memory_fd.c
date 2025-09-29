@@ -30,7 +30,11 @@
 
 #include "detect_os.h"
 
-#if DETECT_OS_UNIX
+#if DETECT_OS_ANDROID
+#include <linux/fcntl.h>
+#endif
+
+#if DETECT_OS_POSIX
 
 #include <string.h>
 #include <fcntl.h>
@@ -40,6 +44,7 @@
 #include "anon_file.h"
 #include "mesa-sha1.h"
 #include "u_math.h"
+#include "u_overflow.h"
 #include "os_memory.h"
 
 /* (Re)define UUID_SIZE to avoid including vulkan.h (or p_defines.h) here. */
@@ -114,9 +119,12 @@ os_malloc_aligned_fd(size_t size, size_t alignment, int *fd, char const *fd_name
     *
     * while checking for overflow.
     */
+   if (util_add_overflow(size_t, size, alignment, &alloc_size))
+      return NULL;
+   size = alloc_size;
+
    const size_t header_size = sizeof(struct memory_header) + sizeof(size_t);
-   if (add_overflow_size_t(size, alignment, &alloc_size) ||
-       add_overflow_size_t(alloc_size, header_size, &alloc_size))
+   if (util_add_overflow(size_t, size, header_size, &alloc_size))
       return NULL;
 
    mem_fd = os_create_anonymous_file(alloc_size, fd_name);
@@ -124,7 +132,7 @@ os_malloc_aligned_fd(size_t size, size_t alignment, int *fd, char const *fd_name
    if(mem_fd < 0)
       return NULL;
 
-#if defined(HAVE_MEMFD_CREATE) || defined(ANDROID)
+#if defined(HAVE_MEMFD_CREATE) || DETECT_OS_ANDROID
    // Seal fd, so no one can grow or shrink the memory.
    if (fcntl(mem_fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_SEAL) != 0)
       goto fail;

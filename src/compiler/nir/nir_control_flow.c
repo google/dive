@@ -48,17 +48,17 @@
 static inline void
 block_add_pred(nir_block *block, nir_block *pred)
 {
-   _mesa_set_add(block->predecessors, pred);
+   _mesa_set_add(&block->predecessors, pred);
 }
 
 static inline void
 block_remove_pred(nir_block *block, nir_block *pred)
 {
-   struct set_entry *entry = _mesa_set_search(block->predecessors, pred);
+   struct set_entry *entry = _mesa_set_search(&block->predecessors, pred);
 
    assert(entry);
 
-   _mesa_set_remove(block->predecessors, entry);
+   _mesa_set_remove(&block->predecessors, entry);
 }
 
 static void
@@ -188,7 +188,7 @@ split_block_beginning(nir_block *block)
    new_block->cf_node.parent = block->cf_node.parent;
    exec_node_insert_node_before(&block->cf_node.node, &new_block->cf_node.node);
 
-   set_foreach(block->predecessors, entry) {
+   set_foreach(&block->predecessors, entry) {
       nir_block *pred = (nir_block *)entry->key;
       replace_successor(pred, block, new_block);
    }
@@ -392,7 +392,7 @@ split_block_cursor(nir_cursor cursor,
       break;
 
    default:
-      unreachable("not reached");
+      UNREACHABLE("not reached");
    }
 
    if (_before)
@@ -438,7 +438,7 @@ nir_loop_add_continue_construct(nir_loop *loop)
    /* change predecessors and successors */
    nir_block *header = nir_loop_first_block(loop);
    nir_block *preheader = nir_block_cf_tree_prev(header);
-   set_foreach(header->predecessors, entry) {
+   set_foreach(&header->predecessors, entry) {
       nir_block *pred = (nir_block *)entry->key;
       if (pred != preheader)
          replace_successor(pred, header, cont);
@@ -455,7 +455,7 @@ nir_loop_remove_continue_construct(nir_loop *loop)
    /* change predecessors and successors */
    nir_block *header = nir_loop_first_block(loop);
    nir_block *cont = nir_loop_first_continue_block(loop);
-   set_foreach(cont->predecessors, entry) {
+   set_foreach(&cont->predecessors, entry) {
       nir_block *pred = (nir_block *)entry->key;
       replace_successor(pred, cont, header);
    }
@@ -495,7 +495,7 @@ nir_handle_add_jump(nir_block *block)
    unlink_block_successors(block);
 
    nir_function_impl *impl = nir_cf_node_get_function(&block->cf_node);
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_progress(true, impl, nir_metadata_none);
 
    switch (jump_instr->type) {
    case nir_jump_return:
@@ -527,7 +527,7 @@ nir_handle_add_jump(nir_block *block)
       break;
 
    default:
-      unreachable("Invalid jump type");
+      UNREACHABLE("Invalid jump type");
    }
 }
 
@@ -554,7 +554,7 @@ nir_handle_remove_jump(nir_block *block, nir_jump_type type)
    unlink_jump(block, type, true);
 
    nir_function_impl *impl = nir_cf_node_get_function(&block->cf_node);
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_progress(true, impl, nir_metadata_none);
 }
 
 static void
@@ -701,7 +701,7 @@ cleanup_cf_node(nir_cf_node *node, nir_function_impl *impl)
       break;
    }
    default:
-      unreachable("Invalid CF node type");
+      UNREACHABLE("Invalid CF node type");
    }
 }
 
@@ -751,7 +751,7 @@ nir_cf_extract(nir_cf_list *extracted, nir_cursor begin, nir_cursor end)
    exec_list_make_empty(&extracted->list);
 
    /* Dominance and other block-related information is toast. */
-   nir_metadata_preserve(extracted->impl, nir_metadata_none);
+   nir_progress(true, extracted->impl, nir_metadata_none);
 
    nir_cf_node *cf_node = &block_begin->cf_node;
    nir_cf_node *cf_node_end = &block_end->cf_node;
@@ -813,10 +813,10 @@ relink_jump_halt_cf_node(nir_cf_node *node, nir_block *end_block)
    }
 
    case nir_cf_node_function:
-      unreachable("Cannot insert a function in a function");
+      UNREACHABLE("Cannot insert a function in a function");
 
    default:
-      unreachable("Invalid CF node type");
+      UNREACHABLE("Invalid CF node type");
    }
 }
 
@@ -859,4 +859,116 @@ nir_cf_delete(nir_cf_list *cf_list)
    foreach_list_typed(nir_cf_node, node, node, &cf_list->list) {
       cleanup_cf_node(node, cf_list->impl);
    }
+}
+
+void
+nir_remove_after_cf_node(nir_cf_node *node)
+{
+   nir_cf_node *end = node;
+   while (!nir_cf_node_is_last(end))
+      end = nir_cf_node_next(end);
+
+   nir_cursor begin = nir_after_cf_node(node);
+   if (begin.option == nir_cursor_before_block) {
+      /* nir_cf_extract() would ignore these phis */
+      nir_function_impl *impl = nir_cf_node_get_function(node);
+      nir_foreach_phi_safe(phi, begin.block) {
+         replace_ssa_def_uses(&phi->def, impl);
+         nir_instr_remove_v(&phi->instr);
+      }
+   }
+
+   nir_cf_list list;
+   nir_cf_extract(&list, begin, nir_after_cf_node(end));
+   nir_cf_delete(&list);
+}
+
+struct block_index {
+   nir_block *block;
+   uint32_t index;
+};
+
+static void
+calc_cfg_post_dfs_indices(nir_function_impl *impl,
+                          nir_block *block,
+                          struct block_index *blocks,
+                          uint32_t *count)
+{
+   if (block == impl->end_block)
+      return;
+
+   assert(block->index < impl->num_blocks);
+
+   if (blocks[block->index].block != NULL) {
+      assert(blocks[block->index].block == block);
+      return;
+   }
+
+   blocks[block->index].block = block;
+
+   for (uint32_t i = 0; i < ARRAY_SIZE(block->successors); i++) {
+      if (block->successors[i] != NULL)
+         calc_cfg_post_dfs_indices(impl, block->successors[i], blocks, count);
+   }
+
+   /* Pre-increment so that unreachable blocks have an index of 0 */
+   blocks[block->index].index = ++(*count);
+}
+
+static int
+rev_cmp_block_index(const void *_a, const void *_b)
+{
+   const struct block_index *a = _a, *b = _b;
+
+   return b->index - a->index;
+}
+
+void
+nir_sort_unstructured_blocks(nir_function_impl *impl)
+{
+   /* Re-index the blocks.
+    *
+    * We hand-roll it here instead of calling the helper because we also want
+    * to assert that there are no structured control-flow constructs.
+    */
+   impl->num_blocks = 0;
+   foreach_list_typed(nir_cf_node, node, node, &impl->body) {
+      nir_block *block = nir_cf_node_as_block(node);
+      block->index = impl->num_blocks++;
+   }
+
+   struct block_index *blocks =
+      rzalloc_array(NULL, struct block_index, impl->num_blocks);
+
+   uint32_t count = 0;
+   calc_cfg_post_dfs_indices(impl, nir_start_block(impl), blocks, &count);
+   assert(count <= impl->num_blocks);
+
+   qsort(blocks, impl->num_blocks, sizeof(*blocks), rev_cmp_block_index);
+
+   struct exec_list dead_blocks;
+   exec_list_move_nodes_to(&impl->body, &dead_blocks);
+
+   for (uint32_t i = 0; i < count; i++) {
+      nir_block *block = blocks[i].block;
+      exec_node_remove(&block->cf_node.node);
+      block->index = i;
+      exec_list_push_tail(&impl->body, &block->cf_node.node);
+   }
+   impl->end_block->index = count;
+
+   for (uint32_t i = count; i < impl->num_blocks; i++) {
+      assert(blocks[i].index == 0);
+      assert(blocks[i].block == NULL);
+   }
+   impl->num_blocks = count;
+
+   foreach_list_typed_safe(nir_cf_node, node, node, &dead_blocks)
+      cleanup_cf_node(node, impl);
+
+   ralloc_free(blocks);
+
+   /* Dominance is toast but we indexed blocks as part of this pass. */
+   impl->valid_metadata &= nir_metadata_dominance;
+   impl->valid_metadata |= nir_metadata_block_index;
 }

@@ -189,7 +189,7 @@ _mesa_array_format_get_datatype(mesa_array_format f)
 static inline int
 _mesa_array_format_datatype_get_size(enum mesa_array_format_datatype type)
 {
-   return 1 << (type & MESA_ARRAY_FORMAT_TYPE_SIZE_MASK);
+   return 1 << ((int)type & MESA_ARRAY_FORMAT_TYPE_SIZE_MASK);
 }
 
 static inline int
@@ -386,6 +386,7 @@ typedef enum pipe_format mesa_format;
 #define MESA_FORMAT_A2R10G10B10_UNORM            PIPE_FORMAT_A2R10G10B10_UNORM
 #define MESA_FORMAT_YCBCR                        PIPE_FORMAT_UYVY
 #define MESA_FORMAT_YCBCR_REV                    PIPE_FORMAT_YUYV
+#define MESA_FORMAT_NV12                         PIPE_FORMAT_NV12
 #define MESA_FORMAT_RG_RB_UNORM8                 PIPE_FORMAT_R8G8_R8B8_UNORM
 #define MESA_FORMAT_RB_RG_UNORM8                 PIPE_FORMAT_R8B8_R8G8_UNORM
 #define MESA_FORMAT_GR_BR_UNORM8                 PIPE_FORMAT_G8R8_B8R8_UNORM
@@ -402,6 +403,7 @@ typedef enum pipe_format mesa_format;
 #define MESA_FORMAT_R_UNORM16                    PIPE_FORMAT_R16_UNORM
 #define MESA_FORMAT_RG_UNORM8                    PIPE_FORMAT_R8G8_UNORM
 #define MESA_FORMAT_RG_UNORM16                   PIPE_FORMAT_R16G16_UNORM
+#define MESA_FORMAT_RGB_UNORM16                  PIPE_FORMAT_R16G16B16_UNORM
 #define MESA_FORMAT_BGR_UNORM8                   PIPE_FORMAT_B8G8R8_UNORM
 #define MESA_FORMAT_RGB_UNORM8                   PIPE_FORMAT_R8G8B8_UNORM
 #define MESA_FORMAT_RGBA_UNORM16                 PIPE_FORMAT_R16G16B16A16_UNORM
@@ -597,6 +599,22 @@ typedef enum pipe_format mesa_format;
 #define MESA_FORMAT_SRGB8_ALPHA8_ASTC_10x10      PIPE_FORMAT_ASTC_10x10_SRGB
 #define MESA_FORMAT_SRGB8_ALPHA8_ASTC_12x10      PIPE_FORMAT_ASTC_12x10_SRGB
 #define MESA_FORMAT_SRGB8_ALPHA8_ASTC_12x12      PIPE_FORMAT_ASTC_12x12_SRGB
+
+#define MESA_FORMAT_RGBA_ASTC_4x4_FLOAT          PIPE_FORMAT_ASTC_4x4_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_5x4_FLOAT          PIPE_FORMAT_ASTC_5x4_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_5x5_FLOAT          PIPE_FORMAT_ASTC_5x5_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_6x5_FLOAT          PIPE_FORMAT_ASTC_6x5_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_6x6_FLOAT          PIPE_FORMAT_ASTC_6x6_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_8x5_FLOAT          PIPE_FORMAT_ASTC_8x5_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_8x6_FLOAT          PIPE_FORMAT_ASTC_8x6_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_8x8_FLOAT          PIPE_FORMAT_ASTC_8x8_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_10x5_FLOAT         PIPE_FORMAT_ASTC_10x5_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_10x6_FLOAT         PIPE_FORMAT_ASTC_10x6_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_10x8_FLOAT         PIPE_FORMAT_ASTC_10x8_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_10x10_FLOAT        PIPE_FORMAT_ASTC_10x10_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_12x10_FLOAT        PIPE_FORMAT_ASTC_12x10_FLOAT
+#define MESA_FORMAT_RGBA_ASTC_12x12_FLOAT        PIPE_FORMAT_ASTC_12x12_FLOAT
+
 #define MESA_FORMAT_RGBA_ASTC_3x3x3              PIPE_FORMAT_ASTC_3x3x3
 #define MESA_FORMAT_RGBA_ASTC_4x3x3              PIPE_FORMAT_ASTC_4x3x3
 #define MESA_FORMAT_RGBA_ASTC_4x4x3              PIPE_FORMAT_ASTC_4x4x3
@@ -727,12 +745,8 @@ _mesa_format_image_size64(mesa_format format, int width,
 extern int32_t
 _mesa_format_row_stride(mesa_format format, int width);
 
-extern void
-_mesa_uncompressed_format_to_type_and_comps(mesa_format format,
-                               GLenum *datatype, GLuint *comps);
-
-extern void
-_mesa_test_formats(void);
+extern GLenum
+_mesa_uncompressed_format_to_type(mesa_format format);
 
 extern mesa_format
 _mesa_get_srgb_format_linear(mesa_format format);

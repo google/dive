@@ -148,7 +148,7 @@ create_mismatch_vert_shader(struct vl_idct *idct)
    struct ureg_dst t_tex;
    struct ureg_dst o_vpos, o_addr[2];
 
-   shader = ureg_create(PIPE_SHADER_VERTEX);
+   shader = ureg_create(MESA_SHADER_VERTEX);
    if (!shader)
       return NULL;
 
@@ -200,7 +200,7 @@ create_mismatch_frag_shader(struct vl_idct *idct)
 
    unsigned i;
 
-   shader = ureg_create(PIPE_SHADER_FRAGMENT);
+   shader = ureg_create(MESA_SHADER_FRAGMENT);
    if (!shader)
       return NULL;
 
@@ -264,7 +264,7 @@ create_stage1_vert_shader(struct vl_idct *idct)
    struct ureg_dst t_tex, t_start;
    struct ureg_dst o_vpos, o_l_addr[2], o_r_addr[2];
 
-   shader = ureg_create(PIPE_SHADER_VERTEX);
+   shader = ureg_create(MESA_SHADER_VERTEX);
    if (!shader)
       return NULL;
 
@@ -327,7 +327,7 @@ create_stage1_frag_shader(struct vl_idct *idct)
    unsigned i;
    int j;
 
-   shader = ureg_create(PIPE_SHADER_FRAGMENT);
+   shader = ureg_create(MESA_SHADER_FRAGMENT);
    if (!shader)
       return NULL;
 
@@ -600,10 +600,11 @@ init_source(struct vl_idct *idct, struct vl_idct_buffer *buffer)
    buffer->fb_state_mismatch.nr_cbufs = 1;
 
    memset(&surf_templ, 0, sizeof(surf_templ));
+   surf_templ.texture = tex;
    surf_templ.format = tex->format;
-   surf_templ.u.tex.first_layer = 0;
-   surf_templ.u.tex.last_layer = 0;
-   buffer->fb_state_mismatch.cbufs[0] = idct->pipe->create_surface(idct->pipe, tex, &surf_templ);
+   surf_templ.first_layer = 0;
+   surf_templ.last_layer = 0;
+   buffer->fb_state_mismatch.cbufs[0] = surf_templ;
 
    buffer->viewport_mismatch.scale[0] = tex->width0;
    buffer->viewport_mismatch.scale[1] = tex->height0;
@@ -621,7 +622,7 @@ cleanup_source(struct vl_idct_buffer *buffer)
 {
    assert(buffer);
 
-   pipe_surface_reference(&buffer->fb_state_mismatch.cbufs[0], NULL);
+   memset(&buffer->fb_state_mismatch.cbufs[0], 0, sizeof(struct pipe_surface));
 
    pipe_sampler_view_reference(&buffer->sampler_views.individual.source, NULL);
 }
@@ -643,13 +644,10 @@ init_intermediate(struct vl_idct *idct, struct vl_idct_buffer *buffer)
    for(i = 0; i < idct->nr_of_render_targets; ++i) {
       memset(&surf_templ, 0, sizeof(surf_templ));
       surf_templ.format = tex->format;
-      surf_templ.u.tex.first_layer = i;
-      surf_templ.u.tex.last_layer = i;
-      buffer->fb_state.cbufs[i] = idct->pipe->create_surface(
-         idct->pipe, tex, &surf_templ);
-
-      if (!buffer->fb_state.cbufs[i])
-         goto error_surfaces;
+      surf_templ.texture = tex;
+      surf_templ.first_layer = i;
+      surf_templ.last_layer = i;
+      buffer->fb_state.cbufs[i] = surf_templ;
    }
 
    buffer->viewport.scale[0] = tex->width0;
@@ -661,23 +659,14 @@ init_intermediate(struct vl_idct *idct, struct vl_idct_buffer *buffer)
    buffer->viewport.swizzle_w = PIPE_VIEWPORT_SWIZZLE_POSITIVE_W;
 
    return true;
-
-error_surfaces:
-   for(i = 0; i < idct->nr_of_render_targets; ++i)
-      pipe_surface_reference(&buffer->fb_state.cbufs[i], NULL);
-
-   return false;
 }
 
 static void
 cleanup_intermediate(struct vl_idct_buffer *buffer)
 {
-   unsigned i;
-
    assert(buffer);
 
-   for(i = 0; i < PIPE_MAX_COLOR_BUFS; ++i)
-      pipe_surface_reference(&buffer->fb_state.cbufs[i], NULL);
+   memset(buffer->fb_state.cbufs, 0, sizeof(buffer->fb_state.cbufs));
 
    pipe_sampler_view_reference(&buffer->sampler_views.individual.intermediate, NULL);
 }
@@ -831,11 +820,11 @@ vl_idct_flush(struct vl_idct *idct, struct vl_idct_buffer *buffer, unsigned num_
    idct->pipe->bind_rasterizer_state(idct->pipe, idct->rs_state);
    idct->pipe->bind_blend_state(idct->pipe, idct->blend);
 
-   idct->pipe->bind_sampler_states(idct->pipe, PIPE_SHADER_FRAGMENT,
+   idct->pipe->bind_sampler_states(idct->pipe, MESA_SHADER_FRAGMENT,
                                    0, 2, idct->samplers);
 
-   idct->pipe->set_sampler_views(idct->pipe, PIPE_SHADER_FRAGMENT, 0, 2, 0,
-                                 false, buffer->sampler_views.stage[0]);
+   idct->pipe->set_sampler_views(idct->pipe, MESA_SHADER_FRAGMENT, 0, 2, 0,
+                                 buffer->sampler_views.stage[0]);
 
    /* mismatch control */
    idct->pipe->set_framebuffer_state(idct->pipe, &buffer->fb_state_mismatch);
@@ -859,9 +848,8 @@ vl_idct_prepare_stage2(struct vl_idct *idct, struct vl_idct_buffer *buffer)
 
    /* second stage */
    idct->pipe->bind_rasterizer_state(idct->pipe, idct->rs_state);
-   idct->pipe->bind_sampler_states(idct->pipe, PIPE_SHADER_FRAGMENT,
+   idct->pipe->bind_sampler_states(idct->pipe, MESA_SHADER_FRAGMENT,
                                    0, 2, idct->samplers);
-   idct->pipe->set_sampler_views(idct->pipe, PIPE_SHADER_FRAGMENT,
-                                 0, 2, 0, false, buffer->sampler_views.stage[1]);
+   idct->pipe->set_sampler_views(idct->pipe, MESA_SHADER_FRAGMENT,
+                                 0, 2, 0, buffer->sampler_views.stage[1]);
 }
-

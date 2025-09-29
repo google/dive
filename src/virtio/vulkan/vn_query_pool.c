@@ -24,10 +24,9 @@ vn_CreateQueryPool(VkDevice device,
                    const VkAllocationCallbacks *pAllocator,
                    VkQueryPool *pQueryPool)
 {
-   VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
    const VkAllocationCallbacks *alloc =
-      pAllocator ? pAllocator : &dev->base.base.alloc;
+      pAllocator ? pAllocator : &dev->base.vk.alloc;
 
    struct vn_query_pool *pool =
       vk_zalloc(alloc, sizeof(*pool), VN_DEFAULT_ALIGN,
@@ -38,6 +37,9 @@ vn_CreateQueryPool(VkDevice device,
    vn_object_base_init(&pool->base, VK_OBJECT_TYPE_QUERY_POOL, &dev->base);
 
    pool->allocator = *alloc;
+   pool->query_count = pCreateInfo->queryCount;
+
+   simple_mtx_init(&pool->mutex, mtx_plain);
 
    switch (pCreateInfo->queryType) {
    case VK_QUERY_TYPE_OCCLUSION:
@@ -82,23 +84,32 @@ vn_CreateQueryPool(VkDevice device,
        */
       pool->result_array_size = 1;
       break;
-   default:
-      unreachable("bad query type");
-      break;
-   }
-
-   if (!VN_PERF(NO_QUERY_FEEDBACK)) {
-      /* Feedback results are always 64 bit and include availability bit
-       * (also 64 bit)
+   case VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR:
+   case VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SERIALIZATION_SIZE_KHR:
+      /*
+       * The value written out is the number of bytes required by a compacted
+       * or a serialized acceleration structure correspondingly. So the query
+       * writes one integer value.
        */
-      const uint32_t slot_size = (pool->result_array_size * 8) + 8;
-      VkResult result = vn_feedback_buffer_create(
-         dev, slot_size * pCreateInfo->queryCount, alloc, &pool->feedback);
-      if (result != VK_SUCCESS) {
-         vn_object_base_fini(&pool->base);
-         vk_free(alloc, pool);
-         return vn_error(dev->instance, result);
-      }
+      pool->result_array_size = 1;
+      break;
+   case VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SIZE_KHR:
+   case VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SERIALIZATION_BOTTOM_LEVEL_POINTERS_KHR:
+      /*
+       * The VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SIZE_KHR is to query the
+       * acceleration structure size on the device timeline.
+       *
+       * SERIALIZATION_BOTTOM_LEVEL_POINTERS is to query the number of bottom
+       * level acceleration structure pointers for serialization.
+       *
+       * So either of these queries only writes one integer value.
+       *
+       */
+      pool->result_array_size = 1;
+      break;
+   default:
+      UNREACHABLE("bad query type");
+      break;
    }
 
    /* Venus has to handle overflow behavior with query feedback to keep
@@ -110,19 +121,23 @@ vn_CreateQueryPool(VkDevice device,
     * value may either wrap or saturate.
     *
     * We detect the renderer side implementation to align with the
-    * implementation specific behavior.
+    * implementation specific behavior when maintenance7 is not enabled.
     */
-   switch (dev->physical_device->renderer_driver_id) {
-   case VK_DRIVER_ID_ARM_PROPRIETARY:
-   case VK_DRIVER_ID_MESA_TURNIP:
-      pool->saturate_on_overflow = true;
-      break;
-   default:
-      break;
-   };
+   const struct vk_features *app_feats = &dev->base.vk.enabled_features;
+   if (!app_feats->maintenance7) {
+      switch (dev->physical_device->renderer_driver_id) {
+      case VK_DRIVER_ID_ARM_PROPRIETARY:
+      case VK_DRIVER_ID_MESA_LLVMPIPE:
+      case VK_DRIVER_ID_MESA_TURNIP:
+         pool->saturate_on_overflow = true;
+         break;
+      default:
+         break;
+      };
+   }
 
    VkQueryPool pool_handle = vn_query_pool_to_handle(pool);
-   vn_async_vkCreateQueryPool(dev->instance, device, pCreateInfo, NULL,
+   vn_async_vkCreateQueryPool(dev->primary_ring, device, pCreateInfo, NULL,
                               &pool_handle);
 
    *pQueryPool = pool_handle;
@@ -135,7 +150,6 @@ vn_DestroyQueryPool(VkDevice device,
                     VkQueryPool queryPool,
                     const VkAllocationCallbacks *pAllocator)
 {
-   VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
    struct vn_query_pool *pool = vn_query_pool_from_handle(queryPool);
    const VkAllocationCallbacks *alloc;
@@ -145,10 +159,12 @@ vn_DestroyQueryPool(VkDevice device,
 
    alloc = pAllocator ? pAllocator : &pool->allocator;
 
-   if (pool->feedback)
-      vn_feedback_buffer_destroy(dev, pool->feedback, alloc);
+   if (pool->fb_buf)
+      vn_feedback_buffer_destroy(dev, pool->fb_buf, alloc);
 
-   vn_async_vkDestroyQueryPool(dev->instance, device, queryPool, NULL);
+   simple_mtx_destroy(&pool->mutex);
+
+   vn_async_vkDestroyQueryPool(dev->primary_ring, device, queryPool, NULL);
 
    vn_object_base_fini(&pool->base);
    vk_free(alloc, pool);
@@ -160,19 +176,18 @@ vn_ResetQueryPool(VkDevice device,
                   uint32_t firstQuery,
                   uint32_t queryCount)
 {
-   VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
    struct vn_query_pool *pool = vn_query_pool_from_handle(queryPool);
 
-   vn_async_vkResetQueryPool(dev->instance, device, queryPool, firstQuery,
+   vn_async_vkResetQueryPool(dev->primary_ring, device, queryPool, firstQuery,
                              queryCount);
-   if (pool->feedback) {
+   if (pool->fb_buf) {
       /* Feedback results are always 64 bit and include availability bit
        * (also 64 bit)
        */
       const uint32_t slot_size = (pool->result_array_size * 8) + 8;
       const uint32_t offset = slot_size * firstQuery;
-      memset(pool->feedback->data + offset, 0, slot_size * queryCount);
+      memset(pool->fb_buf->data + offset, 0, slot_size * queryCount);
    }
 }
 
@@ -189,7 +204,7 @@ vn_get_query_pool_feedback(struct vn_query_pool *pool,
     * (also 64 bit)
     */
    const uint32_t slot_array_size = pool->result_array_size + 1;
-   uint64_t *src = pool->feedback->data;
+   uint64_t *src = pool->fb_buf->data;
    src += slot_array_size * firstQuery;
 
    uint32_t dst_index = 0;
@@ -252,33 +267,29 @@ vn_get_query_pool_feedback(struct vn_query_pool *pool,
    return result;
 }
 
-static VkResult
-vn_query_feedback_wait_ready(struct vn_query_pool *pool,
-                             uint32_t firstQuery,
-                             uint32_t queryCount)
+static void
+vn_query_feedback_wait_ready(struct vn_device *dev,
+                             struct vn_query_pool *pool,
+                             uint32_t first_query,
+                             uint32_t query_count)
 {
-   /* Timeout after 5 seconds */
-   uint64_t timeout = 5000ull * 1000 * 1000;
-   uint64_t abs_timeout_ns = os_time_get_absolute_timeout(timeout);
+   VN_TRACE_FUNC();
 
    /* Feedback results are always 64 bit and include availability bit
     * (also 64 bit)
     */
-   const uint32_t slot_array_size = pool->result_array_size + 1;
-   volatile uint64_t *src = pool->feedback->data;
-   src += (slot_array_size * firstQuery) + pool->result_array_size;
+   const uint32_t step = pool->result_array_size + 1;
+   const uint64_t *avail = (uint64_t *)pool->fb_buf->data +
+                           first_query * step + pool->result_array_size;
 
-   uint32_t src_index = 0;
-   for (uint32_t i = 0; i < queryCount; i++) {
-      while (!src[src_index]) {
-         if (os_time_get_nano() > abs_timeout_ns)
-            return VK_ERROR_DEVICE_LOST;
-
-         thrd_yield();
+   struct vn_relax_state relax_state =
+      vn_relax_init(dev->instance, VN_RELAX_REASON_QUERY);
+   for (uint32_t i = 0, j = 0; i < query_count; i++, j += step) {
+      while (!avail[j]) {
+         vn_relax(&relax_state);
       }
-      src_index += slot_array_size;
    }
-   return VK_SUCCESS;
+   vn_relax_fini(&relax_state);
 }
 
 VkResult
@@ -291,7 +302,6 @@ vn_GetQueryPoolResults(VkDevice device,
                        VkDeviceSize stride,
                        VkQueryResultFlags flags)
 {
-   VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
    struct vn_query_pool *pool = vn_query_pool_from_handle(queryPool);
    const VkAllocationCallbacks *alloc = &pool->allocator;
@@ -305,13 +315,11 @@ vn_GetQueryPoolResults(VkDevice device,
    /* Get results from feedback buffers
     * Not possible for VK_QUERY_RESULT_PARTIAL_BIT
     */
-   if (pool->feedback) {
+   if (pool->fb_buf) {
       /* If wait bit is set, wait poll until query is ready */
-      if (flags & VK_QUERY_RESULT_WAIT_BIT) {
-         result = vn_query_feedback_wait_ready(pool, firstQuery, queryCount);
-         if (result != VK_SUCCESS)
-            return vn_result(dev->instance, result);
-      }
+      if (flags & VK_QUERY_RESULT_WAIT_BIT)
+         vn_query_feedback_wait_ready(dev, pool, firstQuery, queryCount);
+
       result = vn_get_query_pool_feedback(pool, firstQuery, queryCount, pData,
                                           stride, flags);
       return vn_result(dev->instance, result);
@@ -335,8 +343,8 @@ vn_GetQueryPoolResults(VkDevice device,
          return vn_error(dev->instance, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
    result = vn_call_vkGetQueryPoolResults(
-      dev->instance, device, queryPool, firstQuery, queryCount, packed_size,
-      packed_data, packed_stride, packed_flags);
+      dev->primary_ring, device, queryPool, firstQuery, queryCount,
+      packed_size, packed_data, packed_stride, packed_flags);
 
    if (packed_data == pData)
       return vn_result(dev->instance, result);
@@ -382,4 +390,27 @@ vn_GetQueryPoolResults(VkDevice device,
 
    vk_free(alloc, packed_data);
    return vn_result(dev->instance, result);
+}
+
+VkResult
+vn_query_feedback_buffer_init_once(struct vn_device *dev,
+                                   struct vn_query_pool *pool)
+{
+   VkResult result = VK_SUCCESS;
+
+   simple_mtx_lock(&pool->mutex);
+   if (pool->fb_buf)
+      goto out_unlock;
+
+   const uint32_t fb_buf_size =
+      (pool->result_array_size + 1) * sizeof(uint64_t) * pool->query_count;
+   struct vn_feedback_buffer *fb_buf;
+   result =
+      vn_feedback_buffer_create(dev, fb_buf_size, &pool->allocator, &fb_buf);
+   if (result == VK_SUCCESS)
+      pool->fb_buf = fb_buf;
+
+out_unlock:
+   simple_mtx_unlock(&pool->mutex);
+   return result;
 }

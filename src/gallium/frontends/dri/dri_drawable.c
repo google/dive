@@ -96,9 +96,11 @@ dri_st_framebuffer_validate(struct st_context *st,
        pscreen->set_damage_region) {
       struct pipe_resource *resource = textures[ST_ATTACHMENT_BACK_LEFT];
 
-      pscreen->set_damage_region(pscreen, resource,
-                                 drawable->num_damage_rects,
-                                 drawable->damage_rects);
+      if (resource) {
+         pscreen->set_damage_region(pscreen, resource,
+                                    drawable->num_damage_rects,
+                                    drawable->damage_rects);
+      }
    }
 
    if (!out)
@@ -149,17 +151,15 @@ dri_st_framebuffer_flush_swapbuffers(struct st_context *st,
  * This is called when we need to set up GL rendering to a new X window.
  */
 struct dri_drawable *
-dri_create_drawable(struct dri_screen *screen, const struct gl_config *visual,
+dri_create_drawable(struct dri_screen *screen, const struct dri_config *config,
                     bool isPixmap, void *loaderPrivate)
 {
+   const struct gl_config *visual = &config->modes;
    struct dri_drawable *drawable = NULL;
 
-   if (isPixmap)
-      goto fail;		       /* not implemented */
-
    drawable = CALLOC_STRUCT(dri_drawable);
-   if (drawable == NULL)
-      goto fail;
+   if (!drawable)
+      return NULL;
 
    drawable->loaderPrivate = loaderPrivate;
    drawable->refcount = 1;
@@ -181,10 +181,20 @@ dri_create_drawable(struct dri_screen *screen, const struct gl_config *visual,
    drawable->base.ID = p_atomic_inc_return(&drifb_ID);
    drawable->base.fscreen = &screen->base;
 
+   switch (screen->type) {
+   case DRI_SCREEN_DRI3:
+   case DRI_SCREEN_KMS_SWRAST:
+      dri2_init_drawable(drawable, isPixmap, visual->alphaBits);
+      break;
+   case DRI_SCREEN_SWRAST:
+      drisw_init_drawable(drawable, isPixmap, visual->alphaBits);
+      break;
+   case DRI_SCREEN_KOPPER:
+      kopper_init_drawable(drawable, isPixmap, visual->alphaBits);
+      break;
+   }
+
    return drawable;
-fail:
-   FREE(drawable);
-   return NULL;
 }
 
 static void
@@ -203,6 +213,9 @@ dri_destroy_drawable(struct dri_drawable *drawable)
 
    /* Notify the st manager that this drawable is no longer valid */
    st_api_destroy_drawable(&drawable->base);
+
+   if (screen->type == DRI_SCREEN_KOPPER)
+      kopper_destroy_drawable(drawable);
 
    FREE(drawable->damage_rects);
    FREE(drawable);
@@ -252,13 +265,11 @@ dri_drawable_validate_att(struct dri_context *ctx,
 /**
  * These are used for GLX_EXT_texture_from_pixmap
  */
-static void
-dri_set_tex_buffer2(__DRIcontext *pDRICtx, GLint target,
-                    GLint format, __DRIdrawable *dPriv)
+void
+dri_set_tex_buffer2(struct dri_context *ctx, GLint target,
+                    GLint format, struct dri_drawable *drawable)
 {
-   struct dri_context *ctx = dri_context(pDRICtx);
    struct st_context *st = ctx->st;
-   struct dri_drawable *drawable = dri_drawable(dPriv);
    struct pipe_resource *pt;
 
    _mesa_glthread_finish(st->ctx);
@@ -299,21 +310,6 @@ dri_set_tex_buffer2(__DRIcontext *pDRICtx, GLint target,
       st_context_teximage(ctx->st, target, 0, internal_format, pt, false);
    }
 }
-
-static void
-dri_set_tex_buffer(__DRIcontext *pDRICtx, GLint target,
-                   __DRIdrawable *dPriv)
-{
-   dri_set_tex_buffer2(pDRICtx, target, __DRI_TEXTURE_FORMAT_RGBA, dPriv);
-}
-
-const __DRItexBufferExtension driTexBufferExtension = {
-   .base = { __DRI_TEX_BUFFER, 2 },
-
-   .setTexBuffer       = dri_set_tex_buffer,
-   .setTexBuffer2      = dri_set_tex_buffer2,
-   .releaseTexBuffer   = NULL,
-};
 
 /**
  * Get the format and binding of an attachment.
@@ -474,13 +470,11 @@ notify_before_flush_cb(void* _args)
  * \param throttle_reason   the reason for throttling, 0 = no throttling
  */
 void
-dri_flush(__DRIcontext *cPriv,
-          __DRIdrawable *dPriv,
+dri_flush(struct dri_context *ctx,
+          struct dri_drawable *drawable,
           unsigned flags,
           enum __DRI2throttleReason reason)
 {
-   struct dri_context *ctx = dri_context(cPriv);
-   struct dri_drawable *drawable = dri_drawable(dPriv);
    struct st_context *st;
    unsigned flush_flags;
    struct notify_before_flush_cb_args args = { 0 };
@@ -576,30 +570,22 @@ dri_flush(__DRIcontext *cPriv,
  * DRI2 flush extension.
  */
 void
-dri_flush_drawable(__DRIdrawable *dPriv)
+dri_flush_drawable(struct dri_drawable *dPriv)
 {
    struct dri_context *ctx = dri_get_current();
 
    if (ctx)
-      dri_flush(opaque_dri_context(ctx), dPriv, __DRI2_FLUSH_DRAWABLE, -1);
+      dri_flush(ctx, dPriv, __DRI2_FLUSH_DRAWABLE, -1);
 }
 
 /**
  * dri_throttle - A DRI2ThrottleExtension throttling function.
  */
-static void
-dri_throttle(__DRIcontext *cPriv, __DRIdrawable *dPriv,
+void
+dri_throttle(struct dri_context *cPriv, struct dri_drawable *dPriv,
              enum __DRI2throttleReason reason)
 {
    dri_flush(cPriv, dPriv, 0, reason);
 }
-
-
-const __DRI2throttleExtension dri2ThrottleExtension = {
-    .base = { __DRI2_THROTTLE, 1 },
-
-    .throttle          = dri_throttle,
-};
-
 
 /* vim: set sw=3 ts=8 sts=3 expandtab: */

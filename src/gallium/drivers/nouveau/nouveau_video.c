@@ -31,6 +31,7 @@
 #include "util/u_video.h"
 #include "util/format/u_format.h"
 #include "util/u_sampler.h"
+#include "util/u_surface.h"
 
 static int
 nouveau_vpe_init(struct nouveau_decoder *dec) {
@@ -454,11 +455,12 @@ nouveau_decoder_decode_macroblock(struct pipe_video_codec *decoder,
    }
 }
 
-static void
+static int
 nouveau_decoder_end_frame(struct pipe_video_codec *decoder,
                           struct pipe_video_buffer *target,
                           struct pipe_picture_desc *picture)
 {
+   return 0;
 }
 
 static void
@@ -530,7 +532,7 @@ nouveau_create_decoder(struct pipe_context *context,
    ret = nouveau_client_new(screen->device, &dec->client);
    if (ret)
       goto fail;
-   ret = nouveau_pushbuf_create(screen, nouveau_context(context), dec->client, dec->chan, 2, 4096, 1, &dec->push);
+   ret = nouveau_pushbuf_create(screen, nouveau_context(context), dec->client, dec->chan, 2, 4096, &dec->push);
    if (ret)
       goto fail;
    ret = nouveau_bufctx_new(dec->client, NV31_VIDEO_BIND_COUNT, &dec->bufctx);
@@ -725,35 +727,21 @@ error:
    return NULL;
 }
 
-static struct pipe_surface **
+static struct pipe_surface *
 nouveau_video_buffer_surfaces(struct pipe_video_buffer *buffer)
 {
    struct nouveau_video_buffer *buf = (struct nouveau_video_buffer *)buffer;
    struct pipe_surface surf_templ;
-   struct pipe_context *pipe;
    unsigned i;
 
    assert(buf);
 
-   pipe = buf->base.context;
-
    for (i = 0; i < buf->num_planes; ++i ) {
-      if (!buf->surfaces[i]) {
-         memset(&surf_templ, 0, sizeof(surf_templ));
-         surf_templ.format = buf->resources[i]->format;
-         buf->surfaces[i] = pipe->create_surface(pipe, buf->resources[i], &surf_templ);
-         if (!buf->surfaces[i])
-            goto error;
-      }
+      u_surface_default_template(&surf_templ, buf->resources[i]);
+      buf->surfaces[i] = surf_templ;
    }
 
    return buf->surfaces;
-
-error:
-   for (i = 0; i < buf->num_planes; ++i )
-      pipe_surface_reference(&buf->surfaces[i], NULL);
-
-   return NULL;
 }
 
 static void
@@ -765,7 +753,6 @@ nouveau_video_buffer_destroy(struct pipe_video_buffer *buffer)
    assert(buf);
 
    for (i = 0; i < buf->num_planes; ++i) {
-      pipe_surface_reference(&buf->surfaces[i], NULL);
       pipe_sampler_view_reference(&buf->sampler_view_planes[i], NULL);
       pipe_sampler_view_reference(&buf->sampler_view_components[i], NULL);
       pipe_resource_reference(&buf->resources[i], NULL);
@@ -855,12 +842,8 @@ nouveau_screen_get_video_param(struct pipe_screen *pscreen,
    case PIPE_VIDEO_CAP_MAX_WIDTH:
    case PIPE_VIDEO_CAP_MAX_HEIGHT:
       return vl_video_buffer_max_size(pscreen);
-   case PIPE_VIDEO_CAP_PREFERED_FORMAT:
+   case PIPE_VIDEO_CAP_PREFERRED_FORMAT:
       return PIPE_FORMAT_NV12;
-   case PIPE_VIDEO_CAP_PREFERS_INTERLACED:
-      return false;
-   case PIPE_VIDEO_CAP_SUPPORTS_INTERLACED:
-      return false;
    case PIPE_VIDEO_CAP_SUPPORTS_PROGRESSIVE:
       return true;
    case PIPE_VIDEO_CAP_MAX_LEVEL:

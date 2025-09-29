@@ -45,7 +45,7 @@ find_identical_inline_sampler(nir_shader *nir,
       exec_list_push_tail(inline_samplers, &var->node);
       return var;
    }
-   unreachable("Should have at least found the input sampler");
+   UNREACHABLE("Should have at least found the input sampler");
 }
 
 static bool
@@ -84,8 +84,7 @@ nir_dedup_inline_samplers(nir_shader *nir)
    exec_list_make_empty(&inline_samplers);
 
    nir_shader_instructions_pass(nir, nir_dedup_inline_samplers_instr,
-                                nir_metadata_block_index |
-                                   nir_metadata_dominance,
+                                nir_metadata_control_flow,
                                 &inline_samplers);
 
    /* If we found any inline samplers in the instructions pass, they'll now be
@@ -114,6 +113,9 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
 
    ASSERTED int last_loc = -1;
    int num_rd_images = 0, num_wr_images = 0;
+
+   BITSET_ZERO(shader->info.image_buffers);
+   BITSET_ZERO(shader->info.msaa_images);
    nir_foreach_variable_with_modes(var, shader, nir_var_image | nir_var_uniform) {
       if (!glsl_type_is_image(var->type) && !glsl_type_is_texture(var->type))
          continue;
@@ -128,6 +130,17 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
       else
          var->data.driver_location = num_wr_images++;
       var->data.binding = var->data.driver_location;
+
+      switch (glsl_get_sampler_dim(var->type)) {
+      case GLSL_SAMPLER_DIM_BUF:
+         BITSET_SET(shader->info.image_buffers, var->data.binding);
+         break;
+      case GLSL_SAMPLER_DIM_MS:
+         BITSET_SET(shader->info.msaa_images, var->data.binding);
+         break;
+      default:
+         break;
+      }
    }
    shader->info.num_textures = num_rd_images;
    BITSET_ZERO(shader->info.textures_used);
@@ -147,6 +160,7 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
          assert(var->data.location > last_loc);
          last_loc = var->data.location;
          var->data.driver_location = num_samplers++;
+         var->data.binding = var->data.driver_location;
       } else {
          /* CL shouldn't have any sampled images */
          assert(!glsl_type_is_sampler(var->type));
@@ -157,12 +171,6 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
       BITSET_SET_RANGE(shader->info.samplers_used, 0, num_samplers - 1);
 
    nir_builder b = nir_builder_create(impl);
-
-   /* don't need any lowering if we can keep the derefs */
-   if (!lower_image_derefs && !lower_sampler_derefs) {
-      nir_metadata_preserve(impl, nir_metadata_all);
-      return false;
-   }
 
    bool progress = false;
    nir_foreach_block_reverse(block, impl) {
@@ -248,6 +256,18 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
             case nir_intrinsic_image_deref_atomic_swap:
             case nir_intrinsic_image_deref_size:
             case nir_intrinsic_image_deref_samples: {
+
+               /* CL_DEPTH image loads return a scalar value */
+               if (intrin->intrinsic == nir_intrinsic_image_deref_load &&
+                   intrin->def.num_components == 1) {
+                  b.cursor = nir_after_instr(&intrin->instr);
+                  intrin->num_components = 4;
+                  intrin->def.num_components = 4;
+                  nir_def *scalar = nir_channel(&b, &intrin->def, 0);
+                  nir_def_rewrite_uses_after(&intrin->def, scalar);
+                  progress = true;
+               }
+
                if (!lower_image_derefs)
                   break;
 
@@ -271,12 +291,5 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
       }
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }

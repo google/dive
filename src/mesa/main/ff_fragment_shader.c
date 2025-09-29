@@ -365,7 +365,7 @@ register_state_var(struct texenv_fragment_program *p,
    free(name);
 
    var->num_state_slots = 1;
-   var->state_slots = ralloc_array(var, nir_state_slot, 1);
+   var->state_slots = ralloc_array(p->b->shader, nir_state_slot, 1);
    var->data.driver_location = loc;
    memcpy(var->state_slots[0].tokens, tokens,
           sizeof(var->state_slots[0].tokens));
@@ -387,16 +387,18 @@ load_state_var(struct texenv_fragment_program *p,
 }
 
 static nir_def *
-load_input(struct texenv_fragment_program *p, gl_varying_slot slot,
-           const struct glsl_type *type)
+load_input(struct texenv_fragment_program *p, gl_varying_slot slot)
 {
-   nir_variable *var =
-      nir_get_variable_with_location(p->b->shader,
-                                     nir_var_shader_in,
-                                     slot,
-                                     type);
-   var->data.interpolation = INTERP_MODE_NONE;
-   return nir_load_var(p->b, var);
+   nir_def *baryc = nir_load_barycentric_pixel(p->b, 32);
+
+   if (slot != VARYING_SLOT_COL0 && slot != VARYING_SLOT_COL1) {
+      nir_intrinsic_set_interp_mode(nir_def_as_intrinsic(baryc),
+                                    INTERP_MODE_SMOOTH);
+   }
+
+   return nir_load_interpolated_input(p->b, 4, 32, baryc,
+                                      nir_imm_int(p->b, 0),
+                                      .io_semantics.location = slot);
 }
 
 static nir_def *
@@ -411,7 +413,7 @@ static nir_def *
 get_gl_Color(struct texenv_fragment_program *p)
 {
    if (p->state->inputs_available & VARYING_BIT_COL0) {
-      return load_input(p, VARYING_SLOT_COL0, glsl_vec4_type());
+      return load_input(p, VARYING_SLOT_COL0);
    } else {
       return get_current_attrib(p, VERT_ATTRIB_COLOR0);
    }
@@ -752,9 +754,7 @@ load_texture(struct texenv_fragment_program *p, GLuint unit)
    if (!(p->state->inputs_available & (VARYING_BIT_TEX0 << unit))) {
       texcoord = get_current_attrib(p, VERT_ATTRIB_TEX0 + unit);
    } else {
-      texcoord = load_input(p,
-         VARYING_SLOT_TEX0 + unit,
-         glsl_vec4_type());
+      texcoord = load_input(p, VARYING_SLOT_TEX0 + unit);
    }
 
    if (!p->state->unit[unit].enabled) {
@@ -771,6 +771,7 @@ load_texture(struct texenv_fragment_program *p, GLuint unit)
    tex->dest_type = nir_type_float32;
    tex->texture_index = unit;
    tex->sampler_index = unit;
+   tex->can_speculate = true;
 
    tex->sampler_dim =
       _mesa_texture_index_to_sampler_dim(texTarget,
@@ -906,7 +907,7 @@ emit_instructions(struct texenv_fragment_program *p)
 
       nir_def *secondary;
       if (p->state->inputs_available & VARYING_BIT_COL1)
-         secondary = load_input(p, VARYING_SLOT_COL1, glsl_vec4_type());
+         secondary = load_input(p, VARYING_SLOT_COL1);
       else
          secondary = get_current_attrib(p, VERT_ATTRIB_COLOR1);
 
@@ -915,18 +916,8 @@ emit_instructions(struct texenv_fragment_program *p)
       cf = nir_fadd(p->b, spec_result, secondary);
    }
 
-   const char *name =
-      gl_frag_result_name(FRAG_RESULT_COLOR);
-   nir_variable *var =
-      nir_variable_create(p->b->shader, nir_var_shader_out,
-                          glsl_vec4_type(), name);
-
-   var->data.location = FRAG_RESULT_COLOR;
-   var->data.driver_location = p->b->shader->num_outputs++;
-
-   p->b->shader->info.outputs_written |= BITFIELD64_BIT(FRAG_RESULT_COLOR);
-
-   nir_store_var(p->b, var, cf, 0xf);
+   nir_store_output(p->b, cf, nir_imm_int(p->b, 0),
+                    .io_semantics.location = FRAG_RESULT_COLOR);
 }
 
 /**
@@ -934,7 +925,7 @@ emit_instructions(struct texenv_fragment_program *p)
  * current texture env/combine mode.
  */
 static nir_shader *
-create_new_program(struct state_key *key,
+create_new_program(struct gl_context *ctx, struct state_key *key,
                    struct gl_program *program,
                    const nir_shader_compiler_options *options)
 {
@@ -953,7 +944,8 @@ create_new_program(struct state_key *key,
    nir_shader *s = b.shader;
 
    s->info.separate_shader = true;
-   s->info.subgroup_size = SUBGROUP_SIZE_UNIFORM;
+   s->info.api_subgroup_size_draw_uniform = true;
+   s->info.io_lowered = true;
 
    p.b = &b;
 
@@ -962,8 +954,10 @@ create_new_program(struct state_key *key,
 
    nir_validate_shader(b.shader, "after generating ff-vertex shader");
 
-   if (key->fog_mode)
-      NIR_PASS_V(b.shader, st_nir_lower_fog, key->fog_mode, p.state_params);
+   if (key->fog_mode) {
+      NIR_PASS(_, b.shader, st_nir_lower_fog, key->fog_mode, p.state_params,
+               ctx->Const.PackedDriverUniformStorage);
+   }
 
    _mesa_add_separate_state_parameters(program, p.state_params);
    _mesa_free_parameter_list(p.state_params);
@@ -994,10 +988,10 @@ _mesa_get_fixed_func_fragment_program(struct gl_context *ctx)
          return NULL;
 
       const struct nir_shader_compiler_options *options =
-         st_get_nir_compiler_options(ctx->st, MESA_SHADER_FRAGMENT);
+         ctx->screen->nir_options[MESA_SHADER_FRAGMENT];
 
       nir_shader *s =
-         create_new_program(&key, prog, options);
+         create_new_program(ctx, &key, prog, options);
 
       prog->state.type = PIPE_SHADER_IR_NIR;
       prog->nir = s;

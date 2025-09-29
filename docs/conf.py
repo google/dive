@@ -21,6 +21,8 @@
 import os
 import sys
 
+from hawkmoth.util import compiler
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -38,8 +40,9 @@ sys.path.append(os.path.abspath('_exts'))
 # ones.
 extensions = [
     'bootstrap',
-    'breathe',
+    'depfile',
     'formatting',
+    'hawkmoth',
     'nir',
     'redirects',
     'sphinx.ext.graphviz',
@@ -84,7 +87,7 @@ language = 'en'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns = ['header-stubs']
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
@@ -112,32 +115,52 @@ html_copy_source = False
 html_static_path = []
 
 html_extra_path = [
-  '_extra/',
-  'release-maintainers-keys.asc',
-  'features.txt',
-  'libGL.txt',
-  'README.UVD',
-  'README.VCE',
+    '_extra/',
+    'release-maintainers-keys.asc',
+    'features.txt',
+    'libGL.txt',
+    'README.UVD',
+    'README.VCE',
 ]
 
 html_redirects = [
-  ('webmaster', 'https://www.mesa3d.org/website/'),
-  ('developers', 'https://www.mesa3d.org/developers/'),
-  ('thanks', 'https://gitlab.freedesktop.org/mesa/mesa/-/blob/amber/docs/thanks.rst'),
+    ('webmaster', 'https://www.mesa3d.org/website/'),
+    ('developers', 'https://www.mesa3d.org/developers/'),
+    ('thanks', 'https://gitlab.freedesktop.org/mesa/mesa/-/blob/amber/docs/thanks.rst'),
 ]
 
 
 # -- Options for linkcheck ------------------------------------------------
 
 linkcheck_ignore = [
-  r'specs/.*\.spec', # gets copied during the build process
-  r'news:.*', # seems linkcheck doesn't like the news: URI-scheme...
-  r'http://mesa-ci-results.jf.intel.com', # only available for Intel employees
-  r'https://gitlab.com/.*#.*', # needs JS eval
-  r'https://gitlab.freedesktop.org/.*#.*', # needs JS eval
-  r'https://github.com/.*#.*', # needs JS eval
+    r'specs/.*\.spec',  # gets copied during the build process
+    r'news:.*',  # seems linkcheck doesn't like the news: URI-scheme...
+    r'http://mesa-ci-results.jf.intel.com',  # only available for Intel employees
+    r'https://gitlab.com/.*#.*',  # needs JS eval
+    r'https://gitlab.freedesktop.org/.*#.*',  # needs JS eval
+    r'https://github.com/.*#.*',  # needs JS eval
+    r'https://www.intel.com/.*',  # intel.com is blocking the linkcheck user-agent; maybe it can be customized to look like a browser?
+    r'https://sourceforge.net/.*',  # blocking the linkcheck user-agent
+    r'https://.*\.sourceforge\.net/.*',  # blocking the linkcheck user-agent
+    r'https://stackoverflow.com/.*',  # blocking the linkcheck user-agent
+    r'https://(www|dev)\.vulkan\.org/.*',  # blocking the linkcheck user-agent
+    r'https://crates.io/.*',  # blocking the linkcheck user-agent
 ]
 linkcheck_exclude_documents = [r'relnotes/.*']
+
+linkcheck_allowed_redirects = {
+    # Pages that forward the front-page to a wiki or some explore-page
+    'https://www.freedesktop.org': 'https://www.freedesktop.org/wiki/',
+    'https://x.org': 'https://x.org/wiki/',
+    'https://dri.freedesktop.org/': 'https://dri.freedesktop.org/wiki/',
+    'https://gitlab.freedesktop.org/': 'https://gitlab.freedesktop.org/explore/groups',
+    'https://www.sphinx-doc.org/': 'https://www.sphinx-doc.org/en/master/',
+
+    # Pages that requires authentication
+    'https://gitlab.freedesktop.org/admin/runners': 'https://gitlab.freedesktop.org/users/sign_in',
+    'https://gitlab.freedesktop.org/profile/personal_access_tokens': 'https://gitlab.freedesktop.org/users/sign_in',
+    'https://support.broadcom.com/group/ecx/free-downloads': 'https://support.broadcom.com/c/portal/login',
+}
 
 
 # -- Options for HTMLHelp output ------------------------------------------
@@ -200,10 +223,29 @@ texinfo_documents = [
 
 graphviz_output_format = 'svg'
 
-# -- Options for breathe --------------------------------------------------
-breathe_projects = {
-    'mesa' : 'doxygen_xml',
-}
-breathe_default_project = 'mesa'
-breathe_show_define_initializer = True
-breathe_show_enumvalue_initializer = True
+# -- Options for hawkmoth -------------------------------------------------
+
+hawkmoth_root = os.path.abspath(os.pardir)
+mesa_root = os.path.join(os.path.dirname(__file__), os.pardir)
+mesa_build_root = os.environ.get('MESA_BUILD_ROOT')
+hawkmoth_clang = [
+    '-I{}/docs/header-stubs/'.format(mesa_root),
+    '-I{}/include/'.format(mesa_root),
+    '-I{}/src/'.format(mesa_root),
+    '-I{}/src/gallium/include/'.format(mesa_root),
+    '-I{}/src/intel/'.format(mesa_root),
+    '-I{}/src/mesa/'.format(mesa_root),
+    '-I{}/src/vulkan/util'.format(mesa_root),
+    '-I{}/src/'.format(mesa_build_root),
+    '-DHAVE_STRUCT_TIMESPEC',
+    '-DHAVE_PTHREAD',
+    '-DHAVE_ENDIAN_H',
+]
+hawkmoth_clang.extend(compiler.get_include_args())
+
+# helpers for definining parameter direction
+rst_prolog = '''
+.. |in| replace:: **[in]**
+.. |out| replace:: **[out]**
+.. |inout| replace:: **[inout]**
+'''

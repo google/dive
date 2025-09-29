@@ -29,12 +29,13 @@
 #include "util/u_threaded_context.h"
 #include "intel/blorp/blorp.h"
 #include "intel/dev/intel_debug.h"
-#include "intel/compiler/brw_compiler.h"
+#include "intel/compiler/elk/elk_compiler.h"
 #include "crocus_batch.h"
 #include "crocus_fence.h"
 #include "crocus_resource.h"
 #include "crocus_screen.h"
 #include "util/u_blitter.h"
+#include "util/u_framebuffer.h"
 
 struct crocus_bo;
 struct crocus_context;
@@ -50,8 +51,8 @@ struct blorp_params;
 #define CROCUS_MAX_CLIP_PLANES 8
 
 enum crocus_param_domain {
-   BRW_PARAM_DOMAIN_BUILTIN = 0,
-   BRW_PARAM_DOMAIN_IMAGE,
+   ELK_PARAM_DOMAIN_BUILTIN = 0,
+   ELK_PARAM_DOMAIN_IMAGE,
 };
 
 enum {
@@ -59,12 +60,12 @@ enum {
    DRI_CONF_BO_REUSE_ALL
 };
 
-#define BRW_PARAM(domain, val)   (BRW_PARAM_DOMAIN_##domain << 24 | (val))
-#define BRW_PARAM_DOMAIN(param)  ((uint32_t)(param) >> 24)
-#define BRW_PARAM_VALUE(param)   ((uint32_t)(param) & 0x00ffffff)
-#define BRW_PARAM_IMAGE(idx, offset) BRW_PARAM(IMAGE, ((idx) << 8) | (offset))
-#define BRW_PARAM_IMAGE_IDX(value)   (BRW_PARAM_VALUE(value) >> 8)
-#define BRW_PARAM_IMAGE_OFFSET(value)(BRW_PARAM_VALUE(value) & 0xf)
+#define ELK_PARAM(domain, val)   (ELK_PARAM_DOMAIN_##domain << 24 | (val))
+#define ELK_PARAM_DOMAIN(param)  ((uint32_t)(param) >> 24)
+#define ELK_PARAM_VALUE(param)   ((uint32_t)(param) & 0x00ffffff)
+#define ELK_PARAM_IMAGE(idx, offset) ELK_PARAM(IMAGE, ((idx) << 8) | (offset))
+#define ELK_PARAM_IMAGE_IDX(value)   (ELK_PARAM_VALUE(value) >> 8)
+#define ELK_PARAM_IMAGE_OFFSET(value)(ELK_PARAM_VALUE(value) & 0xf)
 
 /**
  * Dirty flags.  When state changes, we flag some combination of these
@@ -364,7 +365,7 @@ struct crocus_binding_table {
  * as well as program data and other packets needed by state upload.
  *
  * There can be several crocus_compiled_shader variants per API-level shader
- * (crocus_uncompiled_shader), due to state-based recompiles (brw_*_prog_key).
+ * (crocus_uncompiled_shader), due to state-based recompiles (elk_*_prog_key).
  */
 struct crocus_compiled_shader {
    /** Reference to the uploaded assembly. */
@@ -374,11 +375,11 @@ struct crocus_compiled_shader {
    uint32_t map_size;
 
    /** The program data (owned by the program cache hash table) */
-   struct brw_stage_prog_data *prog_data;
+   struct elk_stage_prog_data *prog_data;
    uint32_t prog_data_size;
 
    /** A list of system values to be uploaded as uniforms. */
-   enum brw_param_builtin *system_values;
+   enum elk_param_builtin *system_values;
    unsigned num_system_values;
 
    /** Number of constbufs expected by the shader. */
@@ -511,7 +512,7 @@ struct crocus_context {
    struct {
       struct crocus_uncompiled_shader *uncompiled[MESA_SHADER_STAGES];
       struct crocus_compiled_shader *prog[MESA_SHADER_STAGES];
-      struct brw_vue_map *last_vue_map;
+      struct intel_vue_map *last_vue_map;
 
       struct crocus_bo *cache_bo;
       uint32_t cache_next_offset;
@@ -571,6 +572,7 @@ struct crocus_context {
       struct pipe_viewport_state viewports[CROCUS_MAX_VIEWPORTS];
       struct pipe_scissor_state scissors[CROCUS_MAX_VIEWPORTS];
       struct pipe_stencil_ref stencil_ref;
+      PIPE_FB_SURFACES; //STOP USING THIS
       struct pipe_framebuffer_state framebuffer;
       struct pipe_clip_state clip_planes;
 
@@ -604,7 +606,7 @@ struct crocus_context {
        * Array of aux usages for drawing, altered to account for any
        * self-dependencies from resources bound for sampling and rendering.
        */
-      enum isl_aux_usage draw_aux_usage[BRW_MAX_DRAW_BUFFERS];
+      enum isl_aux_usage draw_aux_usage[ELK_MAX_DRAW_BUFFERS];
 
       /** Aux usage of the fb's depth buffer (which may or may not exist). */
       enum isl_aux_usage hiz_usage;
@@ -681,7 +683,7 @@ struct crocus_context {
       uint64_t svbi;
    } state;
 
-   /* BRW_NEW_URB_ALLOCATIONS:
+   /* ELK_NEW_URB_ALLOCATIONS:
     */
    struct {
       uint32_t vsize;                /* vertex size plus header in urb registers */
@@ -754,9 +756,10 @@ struct crocus_context {
 };
 
 #define perf_debug(dbg, ...) do {                      \
+   void *__var = (void*)(dbg);                         \
    if (INTEL_DEBUG(DEBUG_PERF))                        \
       dbg_printf(__VA_ARGS__);                         \
-   if (unlikely(dbg))                                  \
+   if (unlikely(__var))                                \
       util_debug_message(dbg, PERF_INFO, __VA_ARGS__); \
 } while(0)
 
@@ -773,7 +776,7 @@ void crocus_init_resource_functions(struct pipe_context *ctx);
 void crocus_init_perfquery_functions(struct pipe_context *ctx);
 bool crocus_update_compiled_shaders(struct crocus_context *ice);
 void crocus_update_compiled_compute_shader(struct crocus_context *ice);
-void crocus_fill_cs_push_const_buffer(struct brw_cs_prog_data *cs_prog_data,
+void crocus_fill_cs_push_const_buffer(struct elk_cs_prog_data *cs_prog_data,
                                       unsigned threads, uint32_t *dst);
 
 
@@ -835,10 +838,10 @@ void crocus_init_flush_functions(struct pipe_context *ctx);
 
 /* crocus_program.c */
 const struct shader_info *crocus_get_shader_info(const struct crocus_context *ice,
-                                                 gl_shader_stage stage);
+                                                 mesa_shader_stage stage);
 struct crocus_bo *crocus_get_scratch_space(struct crocus_context *ice,
                                            unsigned per_thread_scratch,
-                                           gl_shader_stage stage);
+                                           mesa_shader_stage stage);
 /**
  * Map a <group, index> pair to a binding table index.
  *
@@ -911,10 +914,10 @@ struct crocus_compiled_shader *crocus_upload_shader(struct crocus_context *ice,
                                                     const void *key,
                                                     const void *assembly,
                                                     uint32_t asm_size,
-                                                    struct brw_stage_prog_data *,
+                                                    struct elk_stage_prog_data *,
                                                     uint32_t prog_data_size,
                                                     uint32_t *streamout,
-                                                    enum brw_param_builtin *sysv,
+                                                    enum elk_param_builtin *sysv,
                                                     unsigned num_system_values,
                                                     unsigned num_cbufs,
                                                     const struct crocus_binding_table *bt);
@@ -930,7 +933,7 @@ bool crocus_blorp_upload_shader(struct blorp_batch *blorp_batch,
                                 uint32_t stage,
                                 const void *key, uint32_t key_size,
                                 const void *kernel, uint32_t kernel_size,
-                                const struct brw_stage_prog_data *prog_data,
+                                const void *prog_data,
                                 uint32_t prog_data_size,
                                 uint32_t *kernel_out,
                                 void *prog_data_out);
@@ -940,7 +943,7 @@ bool crocus_blorp_upload_shader(struct blorp_batch *blorp_batch,
 void crocus_predraw_resolve_inputs(struct crocus_context *ice,
                                    struct crocus_batch *batch,
                                    bool *draw_aux_buffer_disabled,
-                                   gl_shader_stage stage,
+                                   mesa_shader_stage stage,
                                    bool consider_framebuffer);
 void crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
                                         struct crocus_batch *batch,

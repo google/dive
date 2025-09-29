@@ -33,6 +33,7 @@
 #include "util/u_hash_table.h"
 #include "util/u_screen.h"
 #include "util/u_transfer_helper.h"
+#include "util/perf/cpu_trace.h"
 #include "util/ralloc.h"
 
 #include <xf86drm.h>
@@ -108,7 +109,7 @@ vc4_screen_destroy(struct pipe_screen *pscreen)
                 screen->ro->destroy(screen->ro);
 
 #ifdef USE_VC4_SIMULATOR
-        vc4_simulator_destroy(screen);
+        vc4_simulator_destroy(screen->sim_file);
 #endif
 
         u_transfer_helper_destroy(pscreen->transfer_helper);
@@ -131,186 +132,101 @@ vc4_has_feature(struct vc4_screen *screen, uint32_t feature)
         return p.value;
 }
 
-static int
-vc4_screen_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
+static void
+vc4_init_shader_caps(struct vc4_screen *screen)
 {
-        struct vc4_screen *screen = vc4_screen(pscreen);
+        for (unsigned i = 0; i <= MESA_SHADER_FRAGMENT; i++) {
+                struct pipe_shader_caps *caps =
+                        (struct pipe_shader_caps *)&screen->base.shader_caps[i];
 
-        switch (param) {
-                /* Supported features (boolean caps). */
-        case PIPE_CAP_VERTEX_COLOR_UNCLAMPED:
-        case PIPE_CAP_FRAGMENT_COLOR_CLAMPED:
-        case PIPE_CAP_NPOT_TEXTURES:
-        case PIPE_CAP_BLEND_EQUATION_SEPARATE:
-        case PIPE_CAP_TEXTURE_MULTISAMPLE:
-        case PIPE_CAP_TEXTURE_SWIZZLE:
-        case PIPE_CAP_TEXTURE_BARRIER:
-        case PIPE_CAP_TGSI_TEXCOORD:
-                return 1;
+                if (i != MESA_SHADER_VERTEX && i != MESA_SHADER_FRAGMENT)
+                        continue;
 
-        case PIPE_CAP_NATIVE_FENCE_FD:
-                return screen->has_syncobj;
+                caps->max_instructions =
+                caps->max_alu_instructions =
+                caps->max_tex_instructions =
+                caps->max_tex_indirections = 16384;
 
-        case PIPE_CAP_TILE_RASTER_ORDER:
-                return vc4_has_feature(screen,
-                                       DRM_VC4_PARAM_SUPPORTS_FIXED_RCL_ORDER);
-
-        case PIPE_CAP_FS_COORD_ORIGIN_UPPER_LEFT:
-        case PIPE_CAP_FS_COORD_PIXEL_CENTER_HALF_INTEGER:
-        case PIPE_CAP_FS_FACE_IS_INTEGER_SYSVAL:
-                return 1;
-
-        case PIPE_CAP_MIXED_FRAMEBUFFER_SIZES:
-        case PIPE_CAP_MIXED_COLOR_DEPTH_BITS:
-                return 1;
-
-                /* Texturing. */
-        case PIPE_CAP_MAX_TEXTURE_2D_SIZE:
-                return 2048;
-        case PIPE_CAP_MAX_TEXTURE_CUBE_LEVELS:
-                return VC4_MAX_MIP_LEVELS;
-        case PIPE_CAP_MAX_TEXTURE_3D_LEVELS:
-                return 0;
-
-        case PIPE_CAP_MAX_VARYINGS:
-                return 8;
-
-        case PIPE_CAP_VENDOR_ID:
-                return 0x14E4;
-        case PIPE_CAP_ACCELERATED:
-                return 1;
-        case PIPE_CAP_VIDEO_MEMORY: {
-                uint64_t system_memory;
-
-                if (!os_get_total_physical_memory(&system_memory))
-                        return 0;
-
-                return (int)(system_memory >> 20);
-        }
-        case PIPE_CAP_UMA:
-                return 1;
-
-        case PIPE_CAP_ALPHA_TEST:
-        case PIPE_CAP_VERTEX_COLOR_CLAMPED:
-        case PIPE_CAP_TWO_SIDED_COLOR:
-        case PIPE_CAP_TEXRECT:
-        case PIPE_CAP_IMAGE_STORE_FORMATTED:
-                return 0;
-
-        case PIPE_CAP_SUPPORTED_PRIM_MODES:
-                return screen->prim_types;
-
-        default:
-                return u_pipe_screen_get_param_defaults(pscreen, param);
+                caps->max_control_flow_depth = screen->has_control_flow;
+                caps->max_inputs = 8;
+                caps->max_outputs = i == MESA_SHADER_FRAGMENT ? 1 : 8;
+                caps->max_temps = 256; /* GL_MAX_PROGRAM_TEMPORARIES_ARB */
+                caps->max_const_buffer0_size = 16 * 1024 * sizeof(float);
+                caps->max_const_buffers = 1;
+                caps->indirect_const_addr = true;
+                caps->integers = true;
+                caps->max_texture_samplers =
+                caps->max_sampler_views = VC4_MAX_TEXTURE_SAMPLERS;
+                caps->supported_irs = 1 << PIPE_SHADER_IR_NIR;
         }
 }
 
-static float
-vc4_screen_get_paramf(struct pipe_screen *pscreen, enum pipe_capf param)
+static void
+vc4_init_screen_caps(struct vc4_screen *screen)
 {
-        switch (param) {
-        case PIPE_CAPF_MIN_LINE_WIDTH:
-        case PIPE_CAPF_MIN_LINE_WIDTH_AA:
-        case PIPE_CAPF_MIN_POINT_SIZE:
-        case PIPE_CAPF_MIN_POINT_SIZE_AA:
-           return 1;
+        struct pipe_caps *caps = (struct pipe_caps *)&screen->base.caps;
 
-        case PIPE_CAPF_POINT_SIZE_GRANULARITY:
-        case PIPE_CAPF_LINE_WIDTH_GRANULARITY:
-           return 0.1;
+        u_init_pipe_screen_caps(&screen->base, 1);
 
-        case PIPE_CAPF_MAX_LINE_WIDTH:
-        case PIPE_CAPF_MAX_LINE_WIDTH_AA:
-                return 32;
+        /* Supported features (boolean caps). */
+        caps->vertex_color_unclamped = true;
+        caps->fragment_color_clamped = true;
+        caps->npot_textures = true;
+        caps->blend_equation_separate = true;
+        caps->texture_multisample = true;
+        caps->texture_swizzle = true;
+        caps->texture_barrier = true;
+        caps->tgsi_texcoord = true;
 
-        case PIPE_CAPF_MAX_POINT_SIZE:
-        case PIPE_CAPF_MAX_POINT_SIZE_AA:
-                return 512.0f;
+        caps->native_fence_fd = screen->has_syncobj;
 
-        case PIPE_CAPF_MAX_TEXTURE_ANISOTROPY:
-                return 0.0f;
-        case PIPE_CAPF_MAX_TEXTURE_LOD_BIAS:
-                return 0.0f;
+        caps->tile_raster_order =
+                vc4_has_feature(screen, DRM_VC4_PARAM_SUPPORTS_FIXED_RCL_ORDER);
 
-        case PIPE_CAPF_MIN_CONSERVATIVE_RASTER_DILATE:
-        case PIPE_CAPF_MAX_CONSERVATIVE_RASTER_DILATE:
-        case PIPE_CAPF_CONSERVATIVE_RASTER_DILATE_GRANULARITY:
-                return 0.0f;
-        default:
-                fprintf(stderr, "unknown paramf %d\n", param);
-                return 0;
-        }
-}
+        caps->fs_coord_origin_upper_left = true;
+        caps->fs_coord_pixel_center_half_integer = true;
+        caps->fs_face_is_integer_sysval = true;
 
-static int
-vc4_screen_get_shader_param(struct pipe_screen *pscreen,
-                            enum pipe_shader_type shader,
-                            enum pipe_shader_cap param)
-{
-        if (shader != PIPE_SHADER_VERTEX &&
-            shader != PIPE_SHADER_FRAGMENT) {
-                return 0;
-        }
+        caps->mixed_framebuffer_sizes = true;
+        caps->mixed_color_depth_bits = true;
 
-        /* this is probably not totally correct.. but it's a start: */
-        switch (param) {
-        case PIPE_SHADER_CAP_MAX_INSTRUCTIONS:
-        case PIPE_SHADER_CAP_MAX_ALU_INSTRUCTIONS:
-        case PIPE_SHADER_CAP_MAX_TEX_INSTRUCTIONS:
-        case PIPE_SHADER_CAP_MAX_TEX_INDIRECTIONS:
-                return 16384;
+        /* Texturing. */
+        caps->max_texture_2d_size = 2048;
+        caps->max_texture_cube_levels = VC4_MAX_MIP_LEVELS;
+        caps->max_texture_3d_levels = 0;
 
-        case PIPE_SHADER_CAP_MAX_CONTROL_FLOW_DEPTH:
-                return vc4_screen(pscreen)->has_control_flow;
+        caps->max_varyings = 8;
 
-        case PIPE_SHADER_CAP_MAX_INPUTS:
-                return 8;
-        case PIPE_SHADER_CAP_MAX_OUTPUTS:
-                return shader == PIPE_SHADER_FRAGMENT ? 1 : 8;
-        case PIPE_SHADER_CAP_MAX_TEMPS:
-                return 256; /* GL_MAX_PROGRAM_TEMPORARIES_ARB */
-        case PIPE_SHADER_CAP_MAX_CONST_BUFFER0_SIZE:
-                return 16 * 1024 * sizeof(float);
-        case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
-                return 1;
-        case PIPE_SHADER_CAP_CONT_SUPPORTED:
-                return 0;
-        case PIPE_SHADER_CAP_INDIRECT_INPUT_ADDR:
-        case PIPE_SHADER_CAP_INDIRECT_OUTPUT_ADDR:
-        case PIPE_SHADER_CAP_INDIRECT_TEMP_ADDR:
-                return 0;
-        case PIPE_SHADER_CAP_INDIRECT_CONST_ADDR:
-                return 1;
-        case PIPE_SHADER_CAP_SUBROUTINES:
-                return 0;
-        case PIPE_SHADER_CAP_TGSI_SQRT_SUPPORTED:
-                return 0;
-        case PIPE_SHADER_CAP_INTEGERS:
-                return 1;
-        case PIPE_SHADER_CAP_INT64_ATOMICS:
-        case PIPE_SHADER_CAP_FP16:
-        case PIPE_SHADER_CAP_FP16_DERIVATIVES:
-        case PIPE_SHADER_CAP_FP16_CONST_BUFFERS:
-        case PIPE_SHADER_CAP_INT16:
-        case PIPE_SHADER_CAP_GLSL_16BIT_CONSTS:
-        case PIPE_SHADER_CAP_DROUND_SUPPORTED:
-        case PIPE_SHADER_CAP_TGSI_ANY_INOUT_DECL_RANGE:
-                return 0;
-        case PIPE_SHADER_CAP_MAX_TEXTURE_SAMPLERS:
-        case PIPE_SHADER_CAP_MAX_SAMPLER_VIEWS:
-                return VC4_MAX_TEXTURE_SAMPLERS;
-        case PIPE_SHADER_CAP_SUPPORTED_IRS:
-                return 1 << PIPE_SHADER_IR_NIR;
-        case PIPE_SHADER_CAP_MAX_SHADER_BUFFERS:
-        case PIPE_SHADER_CAP_MAX_SHADER_IMAGES:
-        case PIPE_SHADER_CAP_MAX_HW_ATOMIC_COUNTERS:
-        case PIPE_SHADER_CAP_MAX_HW_ATOMIC_COUNTER_BUFFERS:
-                return 0;
-        default:
-                fprintf(stderr, "unknown shader param %d\n", param);
-                return 0;
-        }
-        return 0;
+        caps->vendor_id = 0x14E4;
+
+        uint64_t system_memory;
+        caps->video_memory = os_get_total_physical_memory(&system_memory) ?
+                system_memory >> 20 : 0;
+
+        caps->uma = true;
+
+        caps->alpha_test = false;
+        caps->vertex_color_clamped = false;
+        caps->two_sided_color = false;
+        caps->texrect = false;
+        caps->image_store_formatted = false;
+        caps->clip_planes = 0;
+
+        caps->supported_prim_modes = screen->prim_types;
+
+        caps->min_line_width =
+        caps->min_line_width_aa =
+        caps->min_point_size =
+        caps->min_point_size_aa = 1;
+
+        caps->point_size_granularity =
+        caps->line_width_granularity = 0.1;
+
+        caps->max_line_width =
+        caps->max_line_width_aa = 32;
+
+        caps->max_point_size =
+        caps->max_point_size_aa = 512.0f;
 }
 
 static bool
@@ -554,9 +470,6 @@ vc4_screen_create(int fd, const struct pipe_screen_config *config,
 
         pscreen->destroy = vc4_screen_destroy;
         pscreen->get_screen_fd = vc4_screen_get_fd;
-        pscreen->get_param = vc4_screen_get_param;
-        pscreen->get_paramf = vc4_screen_get_paramf;
-        pscreen->get_shader_param = vc4_screen_get_shader_param;
         pscreen->context_create = vc4_context_create;
         pscreen->is_format_supported = vc4_screen_is_format_supported;
 
@@ -592,15 +505,17 @@ vc4_screen_create(int fd, const struct pipe_screen_config *config,
         vc4_mesa_debug = debug_get_option_vc4_debug();
 
 #ifdef USE_VC4_SIMULATOR
-        vc4_simulator_init(screen);
+        screen->sim_file = vc4_simulator_init(screen);
 #endif
 
         vc4_resource_screen_init(pscreen);
 
+        for (unsigned i = 0; i <= MESA_SHADER_COMPUTE; i++)
+           pscreen->nir_options[i] = vc4_screen_get_compiler_options(pscreen, i);
+
         pscreen->get_name = vc4_screen_get_name;
         pscreen->get_vendor = vc4_screen_get_vendor;
         pscreen->get_device_vendor = vc4_screen_get_vendor;
-        pscreen->get_compiler_options = vc4_screen_get_compiler_options;
         pscreen->query_dmabuf_modifiers = vc4_screen_query_dmabuf_modifiers;
         pscreen->is_dmabuf_modifier_supported = vc4_screen_is_dmabuf_modifier_supported;
 
@@ -618,6 +533,8 @@ vc4_screen_create(int fd, const struct pipe_screen_config *config,
                              BITFIELD_BIT(MESA_PRIM_TRIANGLE_STRIP) |
                              BITFIELD_BIT(MESA_PRIM_TRIANGLE_FAN);
 
+        vc4_init_shader_caps(screen);
+        vc4_init_screen_caps(screen);
 
         return pscreen;
 

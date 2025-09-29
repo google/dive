@@ -147,17 +147,6 @@ overwrite_incomplete_primitives(struct state *state, unsigned stream)
    assert(state->count_vtx_per_prim);
 
    nir_builder *b = state->builder;
-   enum mesa_prim outprim = b->shader->info.gs.output_primitive;
-   unsigned outprim_min_vertices;
-
-   if (outprim == MESA_PRIM_POINTS)
-      outprim_min_vertices = 1;
-   else if (outprim == MESA_PRIM_LINE_STRIP)
-      outprim_min_vertices = 2;
-   else if (outprim == MESA_PRIM_TRIANGLE_STRIP)
-      outprim_min_vertices = 3;
-   else
-      unreachable("Invalid GS output primitive type.");
 
    /* Total count of vertices emitted so far. */
    nir_def *vtxcnt_total =
@@ -169,7 +158,7 @@ overwrite_incomplete_primitives(struct state *state, unsigned stream)
 
    /* See if the current primitive is a incomplete */
    nir_def *is_inc_prim =
-      nir_ilt_imm(b, vtxcnt_per_primitive, outprim_min_vertices);
+      nir_ilt_imm(b, vtxcnt_per_primitive, nir_verts_in_output_prim(b->shader));
 
    /* Number of vertices in the incomplete primitive */
    nir_def *num_inc_vtx =
@@ -279,7 +268,7 @@ append_set_vertex_and_primitive_count(nir_block *end_block, struct state *state)
    /* Insert the new intrinsic in all of the predecessors of the end block,
     * but before any jump instructions (return).
     */
-   set_foreach(end_block->predecessors, entry) {
+   set_foreach(&end_block->predecessors, entry) {
       nir_block *pred = (nir_block *)entry->key;
       b->cursor = nir_after_block_before_jump(pred);
 
@@ -314,7 +303,8 @@ append_set_vertex_and_primitive_count(nir_block *end_block, struct state *state)
                prim_cnt = nir_undef(b, 1, 32);
          }
 
-         nir_set_vertex_and_primitive_count(b, vtx_cnt, prim_cnt, stream);
+         nir_set_vertex_and_primitive_count(b, vtx_cnt, prim_cnt,
+                                            nir_undef(b, 1, 32), stream);
          state->progress = true;
       }
    }
@@ -329,7 +319,7 @@ append_set_vertex_and_primitive_count(nir_block *end_block, struct state *state)
 static bool
 a_block_needs_set_vertex_and_primitive_count(nir_block *end_block, bool per_stream)
 {
-   set_foreach(end_block->predecessors, entry) {
+   set_foreach(&end_block->predecessors, entry) {
       nir_block *pred = (nir_block *)entry->key;
 
       for (unsigned stream = 0; stream < NIR_MAX_XFB_STREAMS; ++stream) {
@@ -382,6 +372,7 @@ nir_lower_gs_intrinsics(nir_shader *shader, nir_lower_gs_intrinsics_flags option
    }
 
    struct state state;
+   memset(&state, 0, sizeof(state));
    state.progress = false;
    state.count_prims = count_primitives;
    state.count_vtx_per_prim = count_vtx_per_prim;
@@ -440,7 +431,7 @@ nir_lower_gs_intrinsics(nir_shader *shader, nir_lower_gs_intrinsics_flags option
    /* This only works because we have a single main() function. */
    append_set_vertex_and_primitive_count(impl->end_block, &state);
 
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_progress(true, impl, nir_metadata_none);
 
    return state.progress;
 }

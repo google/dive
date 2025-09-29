@@ -300,7 +300,7 @@ bool pvr_dump_buffer_hex(struct pvr_dump_buffer_ctx *ctx, uint64_t nr_bytes);
 static inline void __pvr_dump_buffer_advance(struct pvr_dump_buffer_ctx *ctx,
                                              const uint64_t nr_bytes)
 {
-   ctx->ptr += nr_bytes;
+   ctx->ptr = (uint8_t *)ctx->ptr + nr_bytes;
    ctx->remaining_size -= nr_bytes;
 }
 
@@ -321,7 +321,7 @@ static inline bool pvr_dump_buffer_advance(struct pvr_dump_buffer_ctx *ctx,
 static inline void __pvr_dump_buffer_rewind(struct pvr_dump_buffer_ctx *ctx,
                                             const uint32_t nr_bytes)
 {
-   ctx->ptr -= nr_bytes;
+   ctx->ptr = (uint8_t *)ctx->ptr - nr_bytes;
    ctx->remaining_size += nr_bytes;
 }
 
@@ -353,9 +353,9 @@ static inline bool pvr_dump_buffer_truncate(struct pvr_dump_buffer_ctx *ctx,
    return true;
 }
 
-static inline const void *restrict
-pvr_dump_buffer_peek(struct pvr_dump_buffer_ctx *const restrict ctx,
-                     const uint64_t nr_bytes)
+static inline const void *restrict pvr_dump_buffer_peek(
+   struct pvr_dump_buffer_ctx *const restrict ctx,
+   const uint64_t nr_bytes)
 {
    if (!ctx->base.ok || !pvr_dump_ctx_require_top(&ctx->base))
       return NULL;
@@ -368,9 +368,9 @@ pvr_dump_buffer_peek(struct pvr_dump_buffer_ctx *const restrict ctx,
    return ctx->ptr;
 }
 
-static inline const void *restrict
-pvr_dump_buffer_take(struct pvr_dump_buffer_ctx *const restrict ctx,
-                     const uint64_t nr_bytes)
+static inline const void *restrict pvr_dump_buffer_take(
+   struct pvr_dump_buffer_ctx *const restrict ctx,
+   const uint64_t nr_bytes)
 {
    const void *const ptr = pvr_dump_buffer_peek(ctx, nr_bytes);
 

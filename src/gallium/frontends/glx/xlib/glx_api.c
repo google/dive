@@ -41,6 +41,8 @@
 #include "xm_api.h"
 #include "main/errors.h"
 #include "main/config.h"
+#include "dispatch.h"
+#include "mesa/glapi/glapi/glapi.h"
 #include "util/compiler.h"
 #include "util/u_math.h"
 #include "util/u_memory.h"
@@ -423,7 +425,7 @@ get_visual( Display *dpy, int scr, unsigned int depth, int xclass )
          return vis;
       }
       else {
-         free((void *) vis);
+         XFree((void *) vis);
          return NULL;
       }
    }
@@ -1368,7 +1370,7 @@ glXCopyContext( Display *dpy, GLXContext src, GLXContext dst,
    XMesaContext xm_dst = dst->xmesaContext;
    (void) dpy;
    if (GetCurrentContext() == src) {
-      glFlush();
+      CALL_Flush(GET_DISPATCH(), ());
    }
    XMesaCopyContext(xm_src, xm_dst, mask);
 }

@@ -85,7 +85,6 @@ private:
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
-    std::string                 GetReplayArgs();
     absl::Status                Pm4Replay(Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file);
     absl::Status                PerfCounterReplay(Dive::DeviceManager &device_manager,

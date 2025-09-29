@@ -535,25 +535,6 @@ const std::string   &local_asset_file_path)
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string AnalyzeDialog::GetReplayArgs()
-{
-    int         frame_count = m_frame_count_box->value();
-    std::string args = "--loop-single-frame";
-    if (frame_count > 0)
-    {
-
-        args += " --loop-single-frame-count " + std::to_string(frame_count);
-    }
-
-    if (m_gpu_time_enabled)
-    {
-        args += " --enable-gpu-time";
-    }
-
-    return args;
-}
-
-//--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
 {
     m_replay_button->setEnabled(is_enabled);
@@ -578,22 +559,18 @@ std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_st
 absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
 {
-    std::string replay_args = GetReplayArgs();
-    if (m_dump_pm4_enabled)
-    {
-        // Dump Pm4 does not support the loop-single-frame and loop-single-frame-count arguments
-        replay_args = "";
-        SetReplayButton("Replaying with dump_pm4 enabled...", false);
-    }
-    else
-    {
-        SetReplayButton("Replaying...", false);
-    }
+    SetReplayButton("Replaying with PM4 dump enabled...", false);
+    Dive::GfxrReplaySettings replay_settings;
+    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.local_download_dir = m_local_capture_file_directory.string();
 
-    return device_manager.RunReplayApk(remote_gfxr_file,
-                                       replay_args,
-                                       m_dump_pm4_enabled,
-                                       m_local_capture_file_directory.string());
+    // Special override for PM4 dump
+    replay_settings.loop_single_frame = true;
+    replay_settings.loop_single_frame_count = 2;
+
+    replay_settings.enable_dump_pm4 = true;
+
+    return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -601,24 +578,37 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
                                               const std::string   &remote_gfxr_file)
 {
     SetReplayButton("Replaying with perf counter settings...", false);
+    Dive::GfxrReplaySettings replay_settings;
+    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.local_download_dir = m_local_capture_file_directory.string();
 
-    return device_manager.RunProfilingOnReplay(remote_gfxr_file,
-                                               *m_enabled_metrics_vector,
-                                               m_local_capture_file_directory.string());
+    int frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame = (frame_count == 1) ? false : true;
+    replay_settings.loop_single_frame_count = frame_count;
+
+    replay_settings.enable_perf_counters = true;
+    replay_settings.metrics = *m_enabled_metrics_vector;
+
+    return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file)
 {
-    std::string replay_args = GetReplayArgs();
-    SetReplayButton("Replaying with gpu_time enabled...", false);
+    SetReplayButton("Replaying with GPU timing enabled...", false);
 
-    // Run gpu time replay with dump_pm4 disabled
-    return device_manager.RunReplayApk(remote_gfxr_file,
-                                       replay_args,
-                                       false,
-                                       m_local_capture_file_directory.string());
+    Dive::GfxrReplaySettings replay_settings;
+    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.local_download_dir = m_local_capture_file_directory.string();
+
+    int frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame = (frame_count == 1) ? false : true;
+    replay_settings.loop_single_frame_count = frame_count;
+
+    replay_settings.enable_gpu_time = true;
+
+    return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------

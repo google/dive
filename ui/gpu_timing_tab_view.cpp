@@ -37,6 +37,11 @@ GpuTimingTabView::GpuTimingTabView(GpuTimingModel               &gpu_timing_mode
                      &QAbstractItemModel::modelReset,
                      this,
                      &GpuTimingTabView::OnModelReset);
+
+    QObject::connect(m_table_view->selectionModel(),
+                     &QItemSelectionModel::currentChanged,
+                     this,
+                     &GpuTimingTabView::OnSelectionChanged);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -136,6 +141,8 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
 {
+    QItemSelectionModel *selection_model = m_table_view->selectionModel();
+    QSignalBlocker       blocker(selection_model);
     // Verify that the number of rows in the model is consistent with the rows of
     // m_timed_event_indices
     if (m_model.rowCount() != static_cast<int>(m_timed_event_indices.size()))
@@ -149,8 +156,38 @@ void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
     int row = EventIndexToRow(model_index);
     if (row < 0)
     {
-        m_table_view->clearSelection();
+        ClearSelection();
         return;
     }
     m_table_view->selectRow(row);
+    m_table_view->update();
+    m_table_view->viewport()->update();
+}
+
+//--------------------------------------------------------------------------------------------------
+void GpuTimingTabView::OnSelectionChanged(const QModelIndex &index)
+{
+    // Resize columns to fit the content
+    ResizeColumns();
+    int selected_row = index.row();
+    if (static_cast<size_t>(selected_row) < m_timed_event_indices.size() && selected_row >= 0)
+    {
+        emit GpuTimingDataSelected(m_timed_event_indices.at(selected_row));
+    }
+    else
+    {
+        qDebug() << "GpuTimingTabView::OnSelectionChanged() ERROR: selected row (" << selected_row
+                 << ") is out of range of collected indices of timed Vulkan events: "
+                 << m_timed_event_indices.size() << ". Non-gpu timed event selected.";
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void GpuTimingTabView::ClearSelection()
+{
+    QItemSelectionModel *selection_model = m_table_view->selectionModel();
+    if (selection_model)
+    {
+        selection_model->clear();
+    }
 }

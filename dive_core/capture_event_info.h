@@ -90,10 +90,15 @@ struct EventInfo
         kDraw,
         kDispatch,
         kBlit,
-        kSysmemToGmemResolve,
         kGmemToSysmemResolve,
+        kGmemToSysMemResolveAndClearGmem,
         kClearGmem,
-        kSync
+        kSysmemToGmemResolve,
+        kWaitMemWrites,
+        kWaitForIdle,
+        kWaitForMe,
+        kEventWriteStart,
+        kEventWriteEnd,
     };
     EventType m_type;
 
@@ -111,9 +116,10 @@ enum class SyncType
 
     // Various configurations of a resolve/clear
     // Interpreted versions of a vgt_event_type::CCU_RESOLVE
-    kSysMemToGmemResolve,
     kGmemToSysMemResolve,
+    kGmemToSysMemResolveAndClearGmem,
     kClearGmem,
+    kSysMemToGmemResolve,
 
     kWaitMemWrites,
     kWaitForIdle,

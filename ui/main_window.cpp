@@ -93,8 +93,7 @@ static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] =
     "FirstTilePassOnly",
     "BinningAndFirstTilePass"
 };
-constexpr DiveFilterModel::FilterMode
-kDefaultFilterMode = DiveFilterModel::kBinningAndFirstTilePass;
+constexpr DiveFilterModel::FilterMode kDefaultFilterMode = DiveFilterModel::kFirstTilePassOnly;
 
 static constexpr const char *kMetricsFilePath = ":/resources/available_metrics.csv";
 static constexpr const char *kMetricsFileName = "available_metrics.csv";
@@ -883,6 +882,9 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     // Collect the gfxr draw call indices
     m_gfxr_vulkan_commands_filter_proxy_model->CollectGfxrDrawCallIndices();
 
+    // Collect the PM4 draw call indices for the current filter
+    m_filter_model->CollectPm4DrawCallIndices(QModelIndex());
+
     // Iterate m_gfxr_vulkan_command_hierarchy_model to collect the indices of the vulkan events
     // where gpu timing data will be collected
     m_gpu_timing_tab_view->CollectIndicesFromModel(*m_gfxr_vulkan_command_hierarchy_model,
@@ -976,6 +978,9 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
         // TODO (b/185579518): disable the dropdown list for vulkan events.
     }
     m_command_hierarchy_model->EndResetModel();
+
+    // Collect the PM4 draw call indices for the current filter
+    m_filter_model->CollectPm4DrawCallIndices(QModelIndex());
 
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;

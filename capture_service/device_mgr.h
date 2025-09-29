@@ -119,6 +119,13 @@ public:
                               bool               delete_after_retrieve = true,
                               const std::string &new_file_name = "");
 
+    // Pins GPU clock to freq_mhz [MHz]
+    absl::Status             PinGpuClock(uint32_t freq_mhz) const;
+    absl::Status             UnpinGpuClock() const;
+    absl::StatusOr<uint32_t> GetGpuFrequency() const;
+    // Checks if the current GPU clock frequency is expected_freq_mhz [MHz]
+    absl::Status IsGpuClockPinned(uint32_t expected_freq_mhz) const;
+
 private:
     const std::string                   m_serial;
     DeviceInfo                          m_dev_info;

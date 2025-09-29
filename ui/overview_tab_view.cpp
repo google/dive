@@ -19,50 +19,40 @@
 #include <QVBoxLayout>
 
 #include "dive_core/data_core.h"
-#include "event_selection_model.h"
+#include "trace_stats/trace_stats.h"
 #include "most_expensive_events_view.h"
 #include "overview_tab_view.h"
+#include "draw_dispatch_stats_tab_view.h"
 #include "problems_view.h"
+#include "tile_stats_tab_view.h"
+#include "misc_stats_tab_view.h"
 
 // =================================================================================================
 // OverviewTabView
 // =================================================================================================
 OverviewTabView::OverviewTabView(const Dive::CaptureMetadata &capture_metadata,
-                                 EventSelection              &event_selection)
+                                 const Dive::CaptureStats    &stats)
 {
-    m_problems_view = new ProblemsView(capture_metadata.m_command_hierarchy);
-    m_expensive_events_view = new MostExpensiveEventsView(capture_metadata);
+
+    m_draw_dispatch_statistics_view = new DrawDispatchStatsTabView(stats);
+    m_tile_statistics_view = new TileStatsTabView(stats);
+    m_misc_statistics_view = new MiscStatsTabView(stats);
 
     m_tab_widget = new QTabWidget();
-    m_problems_view_tab_index = m_tab_widget->addTab(m_problems_view, "Problems");
-    m_expensive_events_view_tab_index = m_tab_widget->addTab(m_expensive_events_view,
-                                                             "Most Expensive Events");
+    m_draw_dispatch_statistics_view_index = m_tab_widget->addTab(m_draw_dispatch_statistics_view,
+                                                                 "Draw/Dispatch Stats");
+    m_tile_statistics_view_tab_index = m_tab_widget->addTab(m_tile_statistics_view, "Tile Stats");
+    m_misc_statistics_view_tab_index = m_tab_widget->addTab(m_misc_statistics_view, "Misc Stats");
 
     QVBoxLayout *main_layout = new QVBoxLayout();
     main_layout->addWidget(m_tab_widget);
     setLayout(main_layout);
 }
 
-//--------------------------------------------------------------------------------------------------
-void OverviewTabView::Update(const Dive::LogRecord *log_ptr)
+// --------------------------------------------------------------------------------------------------
+void OverviewTabView::LoadStatistics()
 {
-    // Show warning icon if any entries detected
-    if (log_ptr->GetNumEntries() > 0)
-    {
-        QIcon warning_icon = qApp->style()->standardIcon(QStyle::SP_MessageBoxWarning);
-        m_tab_widget->setTabIcon(m_tab_widget->indexOf(m_problems_view), warning_icon);
-    }
-    else
-    {
-        m_tab_widget->setTabIcon(m_tab_widget->indexOf(m_problems_view), QIcon());
-    }
-
-    m_problems_view->Update(log_ptr);
-    m_expensive_events_view->Update();
-}
-
-//--------------------------------------------------------------------------------------------------
-void OverviewTabView::UpdateTabAvailability()
-{
-    SetTabAvailable(m_tab_widget, m_expensive_events_view_tab_index, true);
+    m_tile_statistics_view->LoadStatistics();
+    m_draw_dispatch_statistics_view->LoadStatistics();
+    m_misc_statistics_view->LoadStatistics();
 }

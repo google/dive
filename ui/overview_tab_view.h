@@ -19,8 +19,9 @@
 #pragma once
 
 // Forward declaration
-class ProblemsView;
-class MostExpensiveEventsView;
+class TileStatsTabView;
+class DrawDispatchStatsTabView;
+class MiscStatsTabView;
 class EventSelection;
 class QTabWidget;
 
@@ -31,6 +32,7 @@ namespace Dive
 {
 class LogRecord;
 struct CaptureMetadata;
+struct CaptureStats;
 };  // namespace Dive
 
 class OverviewTabView : public QFrame
@@ -38,15 +40,16 @@ class OverviewTabView : public QFrame
     Q_OBJECT
 
 public:
-    OverviewTabView(const Dive::CaptureMetadata &capture_metadata, EventSelection &event_selection);
+    OverviewTabView(const Dive::CaptureMetadata &capture_metadata, const Dive::CaptureStats &stats);
 
-    void Update(const Dive::LogRecord *log_ptr);
-    void UpdateTabAvailability();
+    void LoadStatistics();
 
 private:
-    QTabWidget              *m_tab_widget;
-    ProblemsView            *m_problems_view;
-    int                      m_problems_view_tab_index;
-    MostExpensiveEventsView *m_expensive_events_view;
-    int                      m_expensive_events_view_tab_index;
+    QTabWidget               *m_tab_widget;
+    DrawDispatchStatsTabView *m_draw_dispatch_statistics_view;
+    int                       m_draw_dispatch_statistics_view_index;
+    TileStatsTabView         *m_tile_statistics_view;
+    int                       m_tile_statistics_view_tab_index;
+    MiscStatsTabView         *m_misc_statistics_view;
+    int                       m_misc_statistics_view_tab_index;
 };

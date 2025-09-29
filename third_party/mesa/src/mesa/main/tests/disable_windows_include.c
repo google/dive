@@ -98,7 +98,6 @@
 #include <mesa/main/queryobj.h>
 #include <mesa/main/rastpos.h>
 #include <mesa/main/readpix.h>
-#include <mesa/main/remap.h>
 #include <mesa/main/renderbuffer.h>
 #include <mesa/main/samplerobj.h>
 #include <mesa/main/scissor.h>
@@ -179,7 +178,6 @@
 #include <mesa/state_tracker/st_shader_cache.h>
 #include <mesa/state_tracker/st_texture.h>
 #include <mesa/state_tracker/st_util.h>
-#include <mesa/state_tracker/st_vdpau.h>
 #include <mesa/vbo/vbo.h>
 #include <mesa/vbo/vbo_attrib.h>
 #include <mesa/vbo/vbo_exec.h>

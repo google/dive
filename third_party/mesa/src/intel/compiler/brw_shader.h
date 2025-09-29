@@ -19,180 +19,386 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
+ *
+ * Authors:
+ *    Eric Anholt <eric@anholt.net>
+ *
  */
 
-#ifndef BRW_SHADER_H
-#define BRW_SHADER_H
+#pragma once
 
-#include <stdint.h>
+#include "brw_analysis.h"
 #include "brw_cfg.h"
 #include "brw_compiler.h"
+#include "brw_inst.h"
 #include "compiler/nir/nir.h"
-
-#ifdef __cplusplus
-#include "brw_ir_analysis.h"
-#include "brw_ir_allocator.h"
-
-enum instruction_scheduler_mode {
-   SCHEDULE_PRE,
-   SCHEDULE_PRE_NON_LIFO,
-   SCHEDULE_PRE_LIFO,
-   SCHEDULE_POST,
-   SCHEDULE_NONE,
-};
+#include "brw_analysis.h"
+#include "brw_thread_payload.h"
 
 #define UBO_START ((1 << 16) - 4)
 
-struct backend_shader {
-protected:
+struct brw_shader_stats {
+   const char *scheduler_mode;
+   unsigned promoted_constants;
+   unsigned spill_count;
+   unsigned fill_count;
+   unsigned max_register_pressure;
+   unsigned non_ssa_registers_after_nir;
+};
 
-   backend_shader(const struct brw_compiler *compiler,
-                  const struct brw_compile_params *params,
-                  const nir_shader *shader,
-                  struct brw_stage_prog_data *stage_prog_data,
-                  bool debug_enabled);
+enum brw_shader_phase {
+   BRW_SHADER_PHASE_INITIAL = 0,
+   BRW_SHADER_PHASE_AFTER_NIR,
+   BRW_SHADER_PHASE_AFTER_OPT_LOOP,
+   BRW_SHADER_PHASE_AFTER_EARLY_LOWERING,
+   BRW_SHADER_PHASE_AFTER_MIDDLE_LOWERING,
+   BRW_SHADER_PHASE_AFTER_LATE_LOWERING,
+   BRW_SHADER_PHASE_AFTER_REGALLOC,
 
+   /* Larger value than any other phase. */
+   BRW_SHADER_PHASE_INVALID,
+};
+
+struct brw_shader_params
+{
+   const struct brw_compiler *compiler;
+   void *mem_ctx;
+
+   const nir_shader *nir;
+   const brw_base_prog_key *key;
+   brw_stage_prog_data *prog_data;
+
+   unsigned dispatch_width;
+
+   /* Fragment shader. */
+   unsigned num_polygons;
+   const int *per_primitive_offsets;
+
+   bool needs_register_pressure;
+   void *log_data;
+   bool debug_enabled;
+
+   debug_archiver *archiver;
+};
+
+struct brw_shader
+{
 public:
-   virtual ~backend_shader();
+   brw_shader(const brw_shader_params *params);
+   ~brw_shader();
+
+   void assign_curb_setup();
+   void convert_attr_sources_to_hw_regs(brw_inst *inst);
+   void calculate_payload_ranges(bool allow_spilling,
+                                 unsigned payload_node_count,
+                                 int *payload_last_use_ip) const;
+   void invalidate_analysis(brw_analysis_dependency_class c);
+
+   void vfail(const char *msg, va_list args);
+   void fail(const char *msg, ...);
+   void limit_dispatch_width(unsigned n, const char *msg);
+
+   void emit_urb_writes(const brw_reg &gs_vertex_count = brw_reg());
+   void emit_gs_control_data_bits(const brw_reg &vertex_count);
+   brw_reg gs_urb_channel_mask(const brw_reg &dword_index);
+   brw_reg gs_urb_per_slot_dword_index(const brw_reg &vertex_count);
+   bool mark_last_urb_write_with_eot();
+   void emit_cs_terminate();
 
    const struct brw_compiler *compiler;
    void *log_data; /* Passed to compiler->*_log functions */
 
    const struct intel_device_info * const devinfo;
    const nir_shader *nir;
-   struct brw_stage_prog_data * const stage_prog_data;
 
    /** ralloc context for temporary data used during compile */
    void *mem_ctx;
 
-   /**
-    * List of either fs_inst or vec4_instruction (inheriting from
-    * backend_instruction)
-    */
-   exec_list instructions;
+   /** List of brw_inst. */
+   brw_exec_list instructions;
 
    cfg_t *cfg;
-   brw_analysis<brw::idom_tree, backend_shader> idom_analysis;
 
-   gl_shader_stage stage;
+   mesa_shader_stage stage;
    bool debug_enabled;
-   const char *stage_name;
-   const char *stage_abbrev;
 
-   brw::simple_allocator alloc;
+   /* VGRF allocation. */
+   struct {
+      /** Array of sizes for each allocation, in REG_SIZE units. */
+      unsigned *sizes;
 
-   virtual void dump_instruction_to_file(const backend_instruction *inst, FILE *file) const = 0;
-   virtual void dump_instructions_to_file(FILE *file) const;
+      /** Total number of VGRFs allocated. */
+      unsigned count;
 
-   /* Convenience functions based on the above. */
-   void dump_instruction(const backend_instruction *inst, FILE *file = stderr) const {
-      dump_instruction_to_file(inst, file);
+      unsigned capacity;
+   } alloc;
+
+   const brw_base_prog_key *const key;
+
+   struct brw_stage_prog_data *prog_data;
+
+   brw_analysis<brw_live_variables, brw_shader> live_analysis;
+   brw_analysis<brw_register_pressure, brw_shader> regpressure_analysis;
+   brw_analysis<brw_performance, brw_shader> performance_analysis;
+   brw_analysis<brw_idom_tree, brw_shader> idom_analysis;
+   brw_analysis<brw_def_analysis, brw_shader> def_analysis;
+   brw_analysis<brw_ip_ranges, brw_shader> ip_ranges_analysis;
+
+   /** Number of uniform variable components visited. */
+   unsigned uniforms;
+
+   /** Byte-offset for the next available spot in the scratch space buffer. */
+   unsigned last_scratch;
+
+   brw_reg frag_depth;
+   brw_reg frag_stencil;
+   brw_reg sample_mask;
+   brw_reg outputs[VARYING_SLOT_MAX];
+   brw_reg dual_src_output;
+   int first_non_payload_grf;
+
+   enum brw_shader_phase phase;
+
+   bool failed;
+   char *fail_msg;
+
+   /* Use the vs_payload(), fs_payload(), etc. to access the right payload. */
+   brw_thread_payload *payload_;
+
+#define DEFINE_PAYLOAD_ACCESSOR(TYPE, NAME, ASSERTION)   \
+   TYPE &NAME() {                                        \
+      assert(ASSERTION);                                 \
+      return *static_cast<TYPE *>(this->payload_);       \
+   }                                                     \
+   const TYPE &NAME() const {                            \
+      assert(ASSERTION);                                 \
+      return *static_cast<const TYPE *>(this->payload_); \
    }
-   void dump_instructions(const char *name = nullptr) const;
 
-   void calculate_cfg();
+   DEFINE_PAYLOAD_ACCESSOR(brw_thread_payload,     payload,     true);
+   DEFINE_PAYLOAD_ACCESSOR(brw_vs_thread_payload,  vs_payload,  stage == MESA_SHADER_VERTEX);
+   DEFINE_PAYLOAD_ACCESSOR(brw_tcs_thread_payload, tcs_payload, stage == MESA_SHADER_TESS_CTRL);
+   DEFINE_PAYLOAD_ACCESSOR(brw_tes_thread_payload, tes_payload, stage == MESA_SHADER_TESS_EVAL);
+   DEFINE_PAYLOAD_ACCESSOR(brw_gs_thread_payload,  gs_payload,  stage == MESA_SHADER_GEOMETRY);
+   DEFINE_PAYLOAD_ACCESSOR(brw_fs_thread_payload,  fs_payload,  stage == MESA_SHADER_FRAGMENT);
+   DEFINE_PAYLOAD_ACCESSOR(brw_cs_thread_payload,  cs_payload,
+                           mesa_shader_stage_uses_workgroup(stage));
+   DEFINE_PAYLOAD_ACCESSOR(brw_task_mesh_thread_payload, task_mesh_payload,
+                           stage == MESA_SHADER_TASK || stage == MESA_SHADER_MESH);
+   DEFINE_PAYLOAD_ACCESSOR(brw_bs_thread_payload, bs_payload,
+                           stage >= MESA_SHADER_RAYGEN && stage <= MESA_SHADER_CALLABLE);
 
-   virtual void invalidate_analysis(brw::analysis_dependency_class c);
+   bool source_depth_to_render_target;
+
+   brw_reg pixel_x;
+   brw_reg pixel_y;
+   brw_reg pixel_z;
+   brw_reg wpos_w;
+   brw_reg pixel_w;
+   brw_reg delta_xy[INTEL_BARYCENTRIC_MODE_COUNT];
+   brw_reg final_gs_vertex_count;
+   brw_reg control_data_bits;
+   brw_reg invocation_id;
+
+   struct {
+      unsigned control_data_bits_per_vertex;
+      unsigned control_data_header_size_bits;
+   } gs;
+
+   struct {
+      /* Offset of per-primitive locations in bytes */
+      int per_primitive_offsets[VARYING_SLOT_MAX];
+   } fs;
+
+   unsigned grf_used;
+   bool spilled_any_registers;
+   bool needs_register_pressure;
+
+   const unsigned dispatch_width; /**< 8, 16 or 32 */
+   const unsigned max_polygons;
+   unsigned max_dispatch_width;
+
+   /* The API selected subgroup size */
+   unsigned api_subgroup_size; /**< 0, 8, 16, 32 */
+
+   unsigned next_address_register_nr;
+
+   struct brw_shader_stats shader_stats;
+
+   debug_archiver *archiver;
+
+   void debug_optimizer(const nir_shader *nir,
+                        const char *pass_name,
+                        int iteration, int pass_num) const;
+
+   /* Used to allocate instructions, see brw_new_inst() and brw_clone_inst(). */
+   struct {
+      void *mem_ctx;
+      unsigned cap;
+      char *beg;
+      char *end;
+
+      unsigned total_cap;
+   } inst_arena;
 };
 
-#else
-struct backend_shader;
-#endif /* __cplusplus */
+void brw_print_instructions(const brw_shader &s, FILE *file = stderr);
 
-enum brw_reg_type brw_type_for_base_type(const struct glsl_type *type);
-uint32_t brw_math_function(enum opcode op);
-const char *brw_instruction_name(const struct brw_isa_info *isa,
-                                 enum opcode op);
-bool brw_saturate_immediate(enum brw_reg_type type, struct brw_reg *reg);
-bool brw_negate_immediate(enum brw_reg_type type, struct brw_reg *reg);
-bool brw_abs_immediate(enum brw_reg_type type, struct brw_reg *reg);
+void brw_print_instruction(const brw_shader &s, const brw_inst *inst,
+                           FILE *file = stderr,
+                           const brw_def_analysis *defs = nullptr);
 
-bool opt_predicated_break(struct backend_shader *s);
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* brw_fs_reg_allocate.cpp */
-void brw_fs_alloc_reg_sets(struct brw_compiler *compiler);
-
-/* brw_vec4_reg_allocate.cpp */
-void brw_vec4_alloc_reg_set(struct brw_compiler *compiler);
-
-/* brw_disasm.c */
-extern const char *const conditional_modifier[16];
-extern const char *const pred_ctrl_align16[16];
-
-/* Per-thread scratch space is a power-of-two multiple of 1KB. */
-static inline unsigned
-brw_get_scratch_size(int size)
-{
-   return MAX2(1024, util_next_power_of_two(size));
-}
-
-
-static inline nir_variable_mode
-brw_nir_no_indirect_mask(const struct brw_compiler *compiler,
-                         gl_shader_stage stage)
-{
-   const struct intel_device_info *devinfo = compiler->devinfo;
-   const bool is_scalar = compiler->scalar_stage[stage];
-   nir_variable_mode indirect_mask = (nir_variable_mode) 0;
-
-   switch (stage) {
-   case MESA_SHADER_VERTEX:
-   case MESA_SHADER_FRAGMENT:
-      indirect_mask |= nir_var_shader_in;
-      break;
-
-   case MESA_SHADER_GEOMETRY:
-      if (!is_scalar)
-         indirect_mask |= nir_var_shader_in;
-      break;
-
-   default:
-      /* Everything else can handle indirect inputs */
-      break;
-   }
-
-   if (is_scalar && stage != MESA_SHADER_TESS_CTRL &&
-                    stage != MESA_SHADER_TASK &&
-                    stage != MESA_SHADER_MESH)
-      indirect_mask |= nir_var_shader_out;
-
-   /* On HSW+, we allow indirects in scalar shaders.  They get implemented
-    * using nir_lower_vars_to_explicit_types and nir_lower_explicit_io in
-    * brw_postprocess_nir.
-    *
-    * We haven't plumbed through the indirect scratch messages on gfx6 or
-    * earlier so doing indirects via scratch doesn't work there. On gfx7 and
-    * earlier the scratch space size is limited to 12kB.  If we allowed
-    * indirects as scratch all the time, we may easily exceed this limit
-    * without having any fallback.
-    */
-   if (is_scalar && devinfo->verx10 <= 70)
-      indirect_mask |= nir_var_function_temp;
-
-   return indirect_mask;
-}
-
-bool brw_texture_offset(const nir_tex_instr *tex, unsigned src,
-                        uint32_t *offset_bits);
+void brw_print_swsb(FILE *f, const struct intel_device_info *devinfo, const tgl_swsb swsb);
 
 /**
- * Scratch data used when compiling a GLSL geometry shader.
+ * Return the flag register used in fragment shaders to keep track of live
+ * samples.  On Gfx7+ we use f1.0-f1.1 to allow discard jumps in SIMD32
+ * dispatch mode.
  */
-struct brw_gs_compile
+static inline unsigned
+sample_mask_flag_subreg(const brw_shader &s)
 {
-   struct brw_gs_prog_key key;
-   struct brw_vue_map input_vue_map;
-
-   unsigned control_data_bits_per_vertex;
-   unsigned control_data_header_size_bits;
-};
-
-#ifdef __cplusplus
+   assert(s.stage == MESA_SHADER_FRAGMENT);
+   return 2;
 }
+
+inline brw_reg
+brw_dynamic_msaa_flags(const struct brw_wm_prog_data *wm_prog_data)
+{
+   return brw_uniform_reg(wm_prog_data->msaa_flags_param, BRW_TYPE_UD);
+}
+
+inline brw_reg
+brw_dynamic_per_primitive_remap(const struct brw_wm_prog_data *wm_prog_data)
+{
+   return brw_uniform_reg(wm_prog_data->per_primitive_remap_param, BRW_TYPE_UD);
+}
+
+enum intel_barycentric_mode brw_barycentric_mode(const struct brw_wm_prog_key *key,
+                                                 nir_intrinsic_instr *intr);
+
+uint32_t brw_fb_write_msg_control(const brw_inst *inst,
+                                  const struct brw_wm_prog_data *prog_data);
+
+void brw_compute_urb_setup_index(struct brw_wm_prog_data *wm_prog_data);
+
+int brw_get_subgroup_id_param_index(const intel_device_info *devinfo,
+                                    const brw_stage_prog_data *prog_data);
+
+void brw_from_nir(brw_shader *s);
+
+void brw_shader_phase_update(brw_shader &s, enum brw_shader_phase phase);
+
+#ifndef NDEBUG
+void brw_validate(const brw_shader &s);
+#else
+static inline void brw_validate(const brw_shader &s) {}
 #endif
 
-#endif /* BRW_SHADER_H */
+void brw_calculate_cfg(brw_shader &s);
+
+void brw_optimize(brw_shader &s);
+
+enum brw_instruction_scheduler_mode {
+   BRW_SCHEDULE_PRE_LATENCY,
+   BRW_SCHEDULE_PRE,
+   BRW_SCHEDULE_PRE_NON_LIFO,
+   BRW_SCHEDULE_PRE_LIFO,
+   BRW_SCHEDULE_POST,
+   BRW_SCHEDULE_NONE,
+};
+
+class brw_instruction_scheduler;
+
+brw_instruction_scheduler *brw_prepare_scheduler(brw_shader &s, void *mem_ctx);
+void brw_schedule_instructions_pre_ra(brw_shader &s, brw_instruction_scheduler *sched,
+                                      brw_instruction_scheduler_mode mode);
+void brw_schedule_instructions_post_ra(brw_shader &s);
+
+void brw_allocate_registers(brw_shader &s, bool allow_spilling);
+bool brw_assign_regs(brw_shader &s, bool allow_spilling, bool spill_all);
+void brw_assign_regs_trivial(brw_shader &s);
+
+bool brw_lower_3src_null_dest(brw_shader &s);
+bool brw_lower_alu_restrictions(brw_shader &s);
+bool brw_lower_barycentrics(brw_shader &s);
+bool brw_lower_bfloat_conversion(brw_shader &s, brw_inst *inst);
+bool brw_lower_constant_loads(brw_shader &s);
+bool brw_lower_csel(brw_shader &s);
+bool brw_lower_derivatives(brw_shader &s);
+bool brw_lower_dpas(brw_shader &s);
+bool brw_lower_find_live_channel(brw_shader &s);
+bool brw_lower_indirect_mov(brw_shader &s);
+bool brw_lower_integer_multiplication(brw_shader &s);
+bool brw_lower_load_payload(brw_shader &s);
+bool brw_lower_load_subgroup_invocation(brw_shader &s);
+bool brw_lower_logical_sends(brw_shader &s);
+bool brw_lower_pack(brw_shader &s);
+bool brw_lower_regioning(brw_shader &s);
+bool brw_lower_scalar_fp64_MAD(brw_shader &s);
+bool brw_lower_scoreboard(brw_shader &s);
+bool brw_lower_send_descriptors(brw_shader &s);
+bool brw_lower_send_gather(brw_shader &s);
+bool brw_lower_sends_overlapping_payload(brw_shader &s);
+bool brw_lower_simd_width(brw_shader &s);
+bool brw_lower_src_modifiers(brw_shader &s, brw_inst *inst, unsigned i);
+bool brw_lower_sub_sat(brw_shader &s);
+bool brw_lower_subgroup_ops(brw_shader &s);
+bool brw_lower_uniform_pull_constant_loads(brw_shader &s);
+void brw_lower_vgrfs_to_fixed_grfs(brw_shader &s);
+
+bool brw_opt_address_reg_load(brw_shader &s);
+bool brw_opt_algebraic(brw_shader &s);
+bool brw_opt_bank_conflicts(brw_shader &s);
+bool brw_opt_cmod_propagation(brw_shader &s);
+bool brw_opt_combine_constants(brw_shader &s);
+bool brw_opt_combine_convergent_txf(brw_shader &s);
+bool brw_opt_compact_virtual_grfs(brw_shader &s);
+bool brw_opt_constant_fold_instruction(brw_shader &s, brw_inst *inst);
+bool brw_opt_copy_propagation(brw_shader &s);
+bool brw_opt_copy_propagation_defs(brw_shader &s);
+bool brw_opt_cse_defs(brw_shader &s);
+bool brw_opt_dead_code_eliminate(brw_shader &s);
+bool brw_opt_eliminate_find_live_channel(brw_shader &s);
+bool brw_opt_register_coalesce(brw_shader &s);
+bool brw_opt_remove_extra_rounding_modes(brw_shader &s);
+bool brw_opt_remove_redundant_halts(brw_shader &s);
+bool brw_opt_saturate_propagation(brw_shader &s);
+bool brw_opt_send_gather_to_send(brw_shader &s);
+bool brw_opt_send_to_send_gather(brw_shader &s);
+bool brw_opt_split_sends(brw_shader &s);
+bool brw_opt_split_virtual_grfs(brw_shader &s);
+bool brw_opt_zero_samples(brw_shader &s);
+
+bool brw_workaround_emit_dummy_mov_instruction(brw_shader &s);
+bool brw_workaround_memory_fence_before_eot(brw_shader &s);
+bool brw_workaround_nomask_control_flow(brw_shader &s);
+bool brw_workaround_source_arf_before_eot(brw_shader &s);
+
+/* Helpers. */
+unsigned brw_get_lowered_simd_width(const brw_shader *shader,
+                                    const brw_inst *inst);
+
+brw_reg brw_allocate_vgrf(brw_shader &s, brw_reg_type type, unsigned count);
+brw_reg brw_allocate_vgrf_units(brw_shader &s, unsigned units_of_REGSIZE);
+
+bool brw_insert_load_reg(brw_shader &s);
+bool brw_lower_load_reg(brw_shader &s);
+
+brw_inst *brw_new_inst(brw_shader &s, enum opcode opcode, unsigned exec_size,
+                       const brw_reg &dst, unsigned num_srcs);
+brw_inst *brw_clone_inst(brw_shader &s, const brw_inst *inst);
+
+/* Transform the opcode/num_sources of an instruction.  All the fields in
+ * brw_inst are maintained and any previous sources still visible.  Additional
+ * sources will be uninitialized.
+ *
+ * All instructions can be transformed to an instruction of BASE kind.
+ * All non-BASE instructions can be transformed to an instruction of SEND kind.
+ *
+ * If new_num_srcs is UINT_MAX a default will be picked based on the opcode.
+ * Not all opcodes have a default.
+ */
+brw_inst *brw_transform_inst(brw_shader &s, brw_inst *inst, enum opcode new_opcode,
+                             unsigned new_num_srcs = UINT_MAX);
+

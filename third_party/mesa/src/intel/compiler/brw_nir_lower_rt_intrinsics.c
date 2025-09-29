@@ -25,6 +25,24 @@
 #include "brw_nir_rt_builder.h"
 
 static nir_def *
+nir_build_vec3_mat_mult_col_major(nir_builder *b, nir_def *vec,
+                                  nir_def *matrix[], bool translation)
+{
+   nir_def *result_components[3] = {
+      nir_channel(b, matrix[3], 0),
+      nir_channel(b, matrix[3], 1),
+      nir_channel(b, matrix[3], 2),
+   };
+   for (unsigned i = 0; i < 3; ++i) {
+      for (unsigned j = 0; j < 3; ++j) {
+         nir_def *v = nir_fmul(b, nir_channels(b, vec, 1 << j), nir_channels(b, matrix[j], 1 << i));
+         result_components[i] = (translation || j) ? nir_fadd(b, result_components[i], v) : v;
+      }
+   }
+   return nir_vec(b, result_components, 3);
+}
+
+static nir_def *
 build_leaf_is_procedural(nir_builder *b, struct brw_nir_rt_mem_hit_defs *hit)
 {
    switch (b->shader->info.stage) {
@@ -44,8 +62,9 @@ build_leaf_is_procedural(nir_builder *b, struct brw_nir_rt_mem_hit_defs *hit)
    }
 }
 
-static void
+static bool
 lower_rt_intrinsics_impl(nir_function_impl *impl,
+                         const struct brw_base_prog_key *key,
                          const struct intel_device_info *devinfo)
 {
    bool progress = false;
@@ -54,12 +73,12 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
    nir_builder *b = &build;
 
    struct brw_nir_rt_globals_defs globals;
-   brw_nir_rt_load_globals(b, &globals);
+   brw_nir_rt_load_globals(b, &globals, devinfo);
 
    nir_def *hotzone_addr = brw_nir_rt_sw_hotzone_addr(b, devinfo);
    nir_def *hotzone = nir_load_global(b, hotzone_addr, 16, 4, 32);
 
-   gl_shader_stage stage = b->shader->info.stage;
+   mesa_shader_stage stage = b->shader->info.stage;
    struct brw_nir_rt_mem_ray_defs world_ray_in = {};
    struct brw_nir_rt_mem_ray_defs object_ray_in = {};
    struct brw_nir_rt_mem_hit_defs hit_in = {};
@@ -68,14 +87,14 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
    case MESA_SHADER_CLOSEST_HIT:
    case MESA_SHADER_INTERSECTION:
       brw_nir_rt_load_mem_hit(b, &hit_in,
-                              stage == MESA_SHADER_CLOSEST_HIT);
+                              stage == MESA_SHADER_CLOSEST_HIT, devinfo);
       brw_nir_rt_load_mem_ray(b, &object_ray_in,
-                              BRW_RT_BVH_LEVEL_OBJECT);
+                              BRW_RT_BVH_LEVEL_OBJECT, devinfo);
       FALLTHROUGH;
 
    case MESA_SHADER_MISS:
       brw_nir_rt_load_mem_ray(b, &world_ray_in,
-                              BRW_RT_BVH_LEVEL_WORLD);
+                              BRW_RT_BVH_LEVEL_WORLD, devinfo);
       break;
 
    default:
@@ -134,9 +153,16 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
             nir_instr_remove(instr);
             break;
 
-         case nir_intrinsic_load_uniform: {
-            /* We don't want to lower this in the launch trampoline. */
-            if (stage == MESA_SHADER_COMPUTE)
+         case nir_intrinsic_load_uniform:
+         case nir_intrinsic_load_push_constant:
+            /* We don't want to lower this in the launch trampoline.
+             *
+             * Also if the driver chooses to use an inline push address, we
+             * can do all the loading of the push constant in
+             * assign_curb_setup() (more efficient as we can do NoMask
+             * instructions for address calculations).
+             */
+            if (stage == MESA_SHADER_COMPUTE || key->uses_inline_push_addr)
                break;
 
             sysval = brw_nir_load_global_const(b, intrin,
@@ -144,7 +170,6 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
                         BRW_RT_PUSH_CONST_OFFSET);
 
             break;
-         }
 
          case nir_intrinsic_load_ray_launch_id:
             sysval = nir_channels(b, hotzone, 0xe);
@@ -163,11 +188,29 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
             break;
 
          case nir_intrinsic_load_ray_object_origin:
-            sysval = object_ray_in.orig;
+            if (stage == MESA_SHADER_CLOSEST_HIT) {
+               struct brw_nir_rt_bvh_instance_leaf_defs leaf;
+               brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr,
+                                                 devinfo);
+
+               sysval = nir_build_vec3_mat_mult_col_major(
+                  b, world_ray_in.orig, leaf.world_to_object, true);
+            } else {
+               sysval = object_ray_in.orig;
+            }
             break;
 
          case nir_intrinsic_load_ray_object_direction:
-            sysval = object_ray_in.dir;
+            if (stage == MESA_SHADER_CLOSEST_HIT) {
+               struct brw_nir_rt_bvh_instance_leaf_defs leaf;
+               brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr,
+                                                 devinfo);
+
+               sysval = nir_build_vec3_mat_mult_col_major(
+                  b, world_ray_in.dir, leaf.world_to_object, false);
+            } else {
+               sysval = object_ray_in.dir;
+            }
             break;
 
          case nir_intrinsic_load_ray_t_min:
@@ -190,21 +233,21 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
 
          case nir_intrinsic_load_instance_id: {
             struct brw_nir_rt_bvh_instance_leaf_defs leaf;
-            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr);
+            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr, devinfo);
             sysval = leaf.instance_index;
             break;
          }
 
          case nir_intrinsic_load_ray_object_to_world: {
             struct brw_nir_rt_bvh_instance_leaf_defs leaf;
-            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr);
+            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr, devinfo);
             sysval = leaf.object_to_world[nir_intrinsic_column(intrin)];
             break;
          }
 
          case nir_intrinsic_load_ray_world_to_object: {
             struct brw_nir_rt_bvh_instance_leaf_defs leaf;
-            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr);
+            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr, devinfo);
             sysval = leaf.world_to_object[nir_intrinsic_column(intrin)];
             break;
          }
@@ -239,13 +282,13 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
             nir_def *geometry_index_dw =
                nir_load_global(b, nir_iadd_imm(b, hit_in.prim_leaf_ptr, 4), 4,
                                1, 32);
-            sysval = nir_iand_imm(b, geometry_index_dw, BITFIELD_MASK(29));
+            sysval = nir_iand_imm(b, geometry_index_dw, BITFIELD_MASK(24));
             break;
          }
 
          case nir_intrinsic_load_ray_instance_custom_index: {
             struct brw_nir_rt_bvh_instance_leaf_defs leaf;
-            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr);
+            brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr, devinfo);
             sysval = leaf.instance_id;
             break;
          }
@@ -340,18 +383,14 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
          progress = true;
 
          if (sysval) {
-            nir_def_rewrite_uses(&intrin->def,
-                                     sysval);
-            nir_instr_remove(&intrin->instr);
+            nir_def_replace(&intrin->def, sysval);
          }
       }
    }
 
-   nir_metadata_preserve(impl,
-                         progress ?
-                         nir_metadata_none :
-                         (nir_metadata_block_index |
-                          nir_metadata_dominance));
+   nir_progress(progress, impl, nir_metadata_none);
+
+   return progress;
 }
 
 /** Lower ray-tracing system values and intrinsics
@@ -376,11 +415,15 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
  * argument pointer system values for BTD dispatch: btd_local_arg_addr and
  * btd_global_arg_addr.
  */
-void
+bool
 brw_nir_lower_rt_intrinsics(nir_shader *nir,
+                            const struct brw_base_prog_key *key,
                             const struct intel_device_info *devinfo)
 {
+   bool progress = false;
    nir_foreach_function_impl(impl, nir) {
-      lower_rt_intrinsics_impl(impl, devinfo);
+      progress |= lower_rt_intrinsics_impl(impl, key, devinfo);
    }
+
+   return progress;
 }

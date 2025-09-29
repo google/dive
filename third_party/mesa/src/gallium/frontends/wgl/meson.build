@@ -1,31 +1,9 @@
 # Copyright © 2018 Intel Corporation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 inc_wgl = include_directories('.')
-_c_args_wgl = []
-if not with_shared_glapi
-  # prevent _glapi_* from being declared __declspec(dllimport)
-  _c_args_wgl += '-D_GLAPI_NO_EXPORTS'
-endif
 
-_wgl_deps = [idep_xmlconfig, driver_zink]
+_wgl_deps = [idep_xmlconfig, driver_zink, idep_mesautilformat]
 if with_gallium_zink
   _wgl_deps += idep_vulkan_wsi_defines
 endif
@@ -59,10 +37,9 @@ libwgl = static_library(
   files_libwgl,
   c_args : [
     '-D_GDI32_',             # prevent wgl* being declared __declspec(dllimport)
-    _c_args_wgl
   ],
   include_directories : [
-    inc_include, inc_src, inc_gallium, inc_gallium_aux, inc_mapi, inc_mesa,
+    inc_include, inc_src, inc_gallium, inc_gallium_aux, inc_mesa,
   ],
   dependencies : _wgl_deps,
 )

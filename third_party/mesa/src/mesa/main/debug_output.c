@@ -34,6 +34,7 @@
 #include "version.h"
 #include "util/hash_table.h"
 #include "util/list.h"
+#include "util/log.h"
 #include "util/u_memory.h"
 #include "api_exec_decl.h"
 
@@ -733,7 +734,7 @@ _debug_message(void *data,
       severity = MESA_DEBUG_SEVERITY_NOTIFICATION;
       break;
    default:
-      unreachable("invalid debug type");
+      UNREACHABLE("invalid debug type");
    }
    _mesa_gl_vdebugf(ctx, id, source, type, severity, fmt, args);
 }

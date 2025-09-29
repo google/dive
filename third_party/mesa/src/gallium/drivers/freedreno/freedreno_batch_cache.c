@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -85,7 +67,9 @@ struct fd_batch_key {
    uint16_t ctx_seqno;
    struct {
       struct pipe_resource *texture;
-      union pipe_surface_desc u;
+      unsigned first_layer:16;
+      unsigned last_layer:16;
+      unsigned level;
       uint8_t pos, samples;
       uint16_t format;
    } surf[0];
@@ -141,9 +125,61 @@ fd_bc_fini(struct fd_batch_cache *cache)
    _mesa_hash_table_destroy(cache->ht, NULL);
 }
 
-/* Flushes all batches in the batch cache.  Used at glFlush() and similar times. */
+/* Find a batch that depends on last_batch (recursively if needed).
+ * The returned batch should not be depended on by any other batch.
+ */
+static struct fd_batch *
+find_dependee(struct fd_context *ctx, struct fd_batch *last_batch)
+   assert_dt
+{
+   struct fd_batch_cache *cache = &ctx->screen->batch_cache;
+   struct fd_batch *batch;
+
+   foreach_batch (batch, cache, cache->batch_mask) {
+      if (batch->ctx == ctx && fd_batch_has_dep(batch, last_batch)) {
+         fd_batch_reference_locked(&last_batch, batch);
+         return find_dependee(ctx, last_batch);
+      }
+   }
+
+   return last_batch;
+}
+
+/* This returns the last batch to be flushed.  This is _approximately_ the
+ * last batch to be modified, but it could be a batch that depends on the
+ * last modified batch.
+ */
+struct fd_batch *
+fd_bc_last_batch(struct fd_context *ctx)
+{
+   struct fd_batch_cache *cache = &ctx->screen->batch_cache;
+   struct fd_batch *batch, *last_batch = NULL;
+
+   fd_screen_lock(ctx->screen);
+
+   foreach_batch (batch, cache, cache->batch_mask) {
+      if (batch->ctx == ctx) {
+         if (!last_batch ||
+             /* Note: fd_fence_before() handles rollover for us: */
+             fd_fence_before(last_batch->update_seqno, batch->update_seqno)) {
+            fd_batch_reference_locked(&last_batch, batch);
+         }
+      }
+   }
+
+   if (last_batch)
+      last_batch = find_dependee(ctx, last_batch);
+
+   fd_screen_unlock(ctx->screen);
+
+   return last_batch;
+}
+
+/* Make the current batch depend on all other batches.  So all other
+ * batches will be flushed before the current batch.
+ */
 void
-fd_bc_flush(struct fd_context *ctx, bool deferred) assert_dt
+fd_bc_add_flush_deps(struct fd_context *ctx, struct fd_batch *last_batch)
 {
    struct fd_batch_cache *cache = &ctx->screen->batch_cache;
 
@@ -155,6 +191,14 @@ fd_bc_flush(struct fd_context *ctx, bool deferred) assert_dt
    struct fd_batch *batch;
    unsigned n = 0;
 
+   assert(last_batch->ctx == ctx);
+
+#ifndef NDEBUG
+   struct fd_batch *tmp = fd_bc_last_batch(ctx);
+   assert(tmp == last_batch);
+   fd_batch_reference(&tmp, NULL);
+#endif
+
    fd_screen_lock(ctx->screen);
 
    foreach_batch (batch, cache, cache->batch_mask) {
@@ -163,63 +207,18 @@ fd_bc_flush(struct fd_context *ctx, bool deferred) assert_dt
       }
    }
 
-   /* deferred flush doesn't actually flush, but it marks every other
-    * batch associated with the context as dependent on the current
-    * batch.  So when the current batch gets flushed, all other batches
-    * that came before also get flushed.
-    */
-   if (deferred) {
-      struct fd_batch *current_batch = fd_context_batch(ctx);
-      struct fd_batch *deps[ARRAY_SIZE(cache->batches)] = {0};
-      unsigned ndeps = 0;
+   for (unsigned i = 0; i < n; i++) {
+      if (batches[i] && (batches[i] != last_batch)) {
+         /* fd_bc_last_batch() should ensure that no other batch depends
+          * on last_batch.  This is needed to avoid dependency loop.
+          */
+         assert(!fd_batch_has_dep(batches[i], last_batch));
 
-      /* To avoid a dependency loop, pull out any batches that already
-       * have a dependency on the current batch.  This ensures the
-       * following loop adding a dependency to the current_batch, all
-       * remaining batches do not have a direct or indirect dependency
-       * on the current_batch.
-       *
-       * The batches that have a dependency on the current batch will
-       * be flushed immediately (after dropping screen lock) instead
-       */
-      for (unsigned i = 0; i < n; i++) {
-         if ((batches[i] != current_batch) &&
-             fd_batch_has_dep(batches[i], current_batch)) {
-            /* We can't immediately flush while we hold the screen lock,
-             * but that doesn't matter.  We just want to skip adding any
-             * deps that would result in a loop, we can flush after we've
-             * updated the dependency graph and dropped the lock.
-             */
-            fd_batch_reference_locked(&deps[ndeps++], batches[i]);
-            fd_batch_reference_locked(&batches[i], NULL);
-         }
-      }
-
-      for (unsigned i = 0; i < n; i++) {
-         if (batches[i] && (batches[i] != current_batch) &&
-               (batches[i]->ctx == current_batch->ctx)) {
-            fd_batch_add_dep(current_batch, batches[i]);
-         }
-      }
-
-      fd_batch_reference_locked(&current_batch, NULL);
-
-      fd_screen_unlock(ctx->screen);
-
-      /* If we have any batches that we could add a dependency on (unlikely)
-       * flush them immediately.
-       */
-      for (unsigned i = 0; i < ndeps; i++) {
-         fd_batch_flush(deps[i]);
-         fd_batch_reference(&deps[i], NULL);
-      }
-   } else {
-      fd_screen_unlock(ctx->screen);
-
-      for (unsigned i = 0; i < n; i++) {
-         fd_batch_flush(batches[i]);
+         fd_batch_add_dep(last_batch, batches[i]);
       }
    }
+
+   fd_screen_unlock(ctx->screen);
 
    for (unsigned i = 0; i < n; i++) {
       fd_batch_reference(&batches[i], NULL);
@@ -440,6 +439,34 @@ alloc_batch_locked(struct fd_batch_cache *cache, struct fd_context *ctx,
    return batch;
 }
 
+static void
+alloc_query_buf(struct fd_context *ctx, struct fd_batch *batch)
+{
+   if (batch->query_buf)
+      return;
+
+   if ((ctx->screen->gen < 3) || (ctx->screen->gen > 4))
+      return;
+
+   /* For gens that use fd_hw_query, pre-allocate an initially zero-sized
+    * (unbacked) query buffer.  This simplifies draw/grid/etc-time resource
+    * tracking.
+    */
+   struct pipe_screen *pscreen = &ctx->screen->base;
+   struct pipe_resource templ = {
+      .target = PIPE_BUFFER,
+      .format = PIPE_FORMAT_R8_UNORM,
+      .bind = PIPE_BIND_QUERY_BUFFER,
+      .width0 = 0, /* create initially zero size buffer */
+      .height0 = 1,
+      .depth0 = 1,
+      .array_size = 1,
+      .last_level = 0,
+      .nr_samples = 1,
+   };
+   batch->query_buf = pscreen->resource_create(pscreen, &templ);
+}
+
 struct fd_batch *
 fd_bc_alloc_batch(struct fd_context *ctx, bool nondraw)
 {
@@ -456,6 +483,8 @@ fd_bc_alloc_batch(struct fd_context *ctx, bool nondraw)
    fd_screen_lock(ctx->screen);
    batch = alloc_batch_locked(cache, ctx, nondraw);
    fd_screen_unlock(ctx->screen);
+
+   alloc_query_buf(ctx, batch);
 
    if (batch && nondraw)
       fd_context_switch_to(ctx, batch);
@@ -480,16 +509,15 @@ batch_from_key(struct fd_context *ctx, struct fd_batch_key *key) assert_dt
    }
 
    batch = alloc_batch_locked(cache, ctx, false);
-#ifdef DEBUG
+#if MESA_DEBUG
    DBG("%p: hash=0x%08x, %ux%u, %u layers, %u samples", batch, hash, key->width,
        key->height, key->layers, key->samples);
    for (unsigned idx = 0; idx < key->num_surfs; idx++) {
-      DBG("%p:  surf[%u]: %p (%s) (%u,%u / %u,%u,%u)", batch,
+      DBG("%p:  surf[%u]: %p (%s) (%u,%u,%u)", batch,
           key->surf[idx].pos, key->surf[idx].texture,
           util_format_name(key->surf[idx].format),
-          key->surf[idx].u.buf.first_element, key->surf[idx].u.buf.last_element,
-          key->surf[idx].u.tex.first_layer, key->surf[idx].u.tex.last_layer,
-          key->surf[idx].u.tex.level);
+          key->surf[idx].first_layer, key->surf[idx].last_layer,
+          key->surf[idx].level);
    }
 #endif
    if (!batch)
@@ -517,10 +545,12 @@ batch_from_key(struct fd_context *ctx, struct fd_batch_key *key) assert_dt
 
 static void
 key_surf(struct fd_batch_key *key, unsigned idx, unsigned pos,
-         struct pipe_surface *psurf)
+         const struct pipe_surface *psurf)
 {
    key->surf[idx].texture = psurf->texture;
-   key->surf[idx].u = psurf->u;
+   key->surf[idx].level = psurf->level;
+   key->surf[idx].first_layer = psurf->first_layer;
+   key->surf[idx].last_layer = psurf->last_layer;
    key->surf[idx].pos = pos;
    key->surf[idx].samples = MAX2(1, psurf->nr_samples);
    key->surf[idx].format = psurf->format;
@@ -530,7 +560,7 @@ struct fd_batch *
 fd_batch_from_fb(struct fd_context *ctx,
                  const struct pipe_framebuffer_state *pfb)
 {
-   unsigned idx = 0, n = pfb->nr_cbufs + (pfb->zsbuf ? 1 : 0);
+   unsigned idx = 0, n = pfb->nr_cbufs + (pfb->zsbuf.texture ? 1 : 0);
    struct fd_batch_key *key = key_alloc(n);
 
    key->width = pfb->width;
@@ -539,18 +569,20 @@ fd_batch_from_fb(struct fd_context *ctx,
    key->samples = util_framebuffer_get_num_samples(pfb);
    key->ctx_seqno = ctx->seqno;
 
-   if (pfb->zsbuf)
-      key_surf(key, idx++, 0, pfb->zsbuf);
+   if (pfb->zsbuf.texture)
+      key_surf(key, idx++, 0, &pfb->zsbuf);
 
    for (unsigned i = 0; i < pfb->nr_cbufs; i++)
-      if (pfb->cbufs[i])
-         key_surf(key, idx++, i + 1, pfb->cbufs[i]);
+      if (pfb->cbufs[i].texture)
+         key_surf(key, idx++, i + 1, &pfb->cbufs[i]);
 
    key->num_surfs = idx;
 
    fd_screen_lock(ctx->screen);
    struct fd_batch *batch = batch_from_key(ctx, key);
    fd_screen_unlock(ctx->screen);
+
+   alloc_query_buf(ctx, batch);
 
    fd_batch_set_fb(batch, pfb);
 

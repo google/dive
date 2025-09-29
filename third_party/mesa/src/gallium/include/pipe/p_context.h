@@ -79,12 +79,22 @@ struct pipe_video_buffer;
 struct pipe_video_codec;
 struct pipe_viewport_state;
 struct pipe_compute_state;
+struct pipe_ml_operation;
+struct pipe_tensor;
 union pipe_color_union;
 union pipe_query_result;
 struct u_log_context;
 struct u_upload_mgr;
 struct util_debug_callback;
 struct u_vbuf;
+struct pipe_context;
+
+typedef void (*pipe_draw_func)(struct pipe_context *pipe,
+                               const struct pipe_draw_info *info,
+                               unsigned drawid_offset,
+                               const struct pipe_draw_indirect_info *indirect,
+                               const struct pipe_draw_start_count_bias *draws,
+                               unsigned num_draws);
 
 /**
  * Gallium rendering context.  Basically:
@@ -129,8 +139,8 @@ struct pipe_context {
     *
     * Caps:
     * - Always supported: Direct multi draws
-    * - PIPE_CAP_MULTI_DRAW_INDIRECT: Indirect multi draws
-    * - PIPE_CAP_MULTI_DRAW_INDIRECT_PARAMS: Indirect draw count
+    * - pipe_caps.multi_draw_indirect: Indirect multi draws
+    * - pipe_caps.multi_draw_indirect_params: Indirect draw count
     *
     * Differences against glMultiDraw and glMultiMode:
     * - "info->mode" and "draws->index_bias" are always constant due to the lack
@@ -149,12 +159,7 @@ struct pipe_context {
     * \param draws         array of (start, count) pairs for direct draws
     * \param num_draws     number of direct draws; 1 for indirect multi draws
     */
-   void (*draw_vbo)(struct pipe_context *pipe,
-                    const struct pipe_draw_info *info,
-                    unsigned drawid_offset,
-                    const struct pipe_draw_indirect_info *indirect,
-                    const struct pipe_draw_start_count_bias *draws,
-                    unsigned num_draws);
+   pipe_draw_func draw_vbo;
 
    /**
     * Multi draw for display lists.
@@ -341,11 +346,11 @@ struct pipe_context {
    /**
     * Called when a shader program is linked.
     * \param handles  Array of shader handles attached to this program.
-    *                 The size of the array is \c PIPE_SHADER_TYPES, and each
+    *                 The size of the array is \c MESA_SHADER_STAGES, and each
     *                 position contains the corresponding \c pipe_shader_state*
     *                 or \c pipe_compute_state*, or \c NULL.
     *                 E.g. You can retrieve the fragment shader handle with
-    *                      \c handles[PIPE_SHADER_FRAGMENT]
+    *                      \c handles[MESA_SHADER_FRAGMENT]
     */
    void (*link_shader)(struct pipe_context *, void** handles);
    /*@}*/
@@ -362,7 +367,7 @@ struct pipe_context {
    void * (*create_sampler_state)(struct pipe_context *,
                                   const struct pipe_sampler_state *);
    void   (*bind_sampler_states)(struct pipe_context *,
-                                 enum pipe_shader_type shader,
+                                 mesa_shader_stage shader,
                                  unsigned start_slot, unsigned num_samplers,
                                  void **samplers);
    void   (*delete_sampler_state)(struct pipe_context *, void *);
@@ -405,6 +410,15 @@ struct pipe_context {
    void * (*create_vertex_elements_state)(struct pipe_context *,
                                           unsigned num_elements,
                                           const struct pipe_vertex_element *);
+   /**
+    * Bind vertex elements state.
+    *
+    * Frontends MUST call set_vertex_buffers after bind_vertex_elements_state
+    * and before the next draw. This ensures the driver can apply the state
+    * change before the next draw. Drivers MAY use this constraint to merge
+    * vertex elements and vertex buffers in set_vertex_buffers instead of
+    * in draw_vbo.
+    */
    void   (*bind_vertex_elements_state)(struct pipe_context *, void *);
    void   (*delete_vertex_elements_state)(struct pipe_context *, void *);
 
@@ -435,6 +449,9 @@ struct pipe_context {
    void (*set_min_samples)(struct pipe_context *,
                            unsigned min_samples);
 
+   /* Called to set user clip plane state.  Unused on GL drivers with
+    * !caps->clip_planes.
+    */
    void (*set_clip_state)(struct pipe_context *,
                           const struct pipe_clip_state *);
 
@@ -443,13 +460,10 @@ struct pipe_context {
     *
     * \param shader           Shader stage
     * \param index            Buffer binding slot index within a shader stage
-    * \param take_ownership   The callee takes ownership of the buffer reference.
-    *                         (the callee shouldn't increment the ref count)
     * \param buf              Constant buffer parameters
     */
    void (*set_constant_buffer)(struct pipe_context *,
-                               enum pipe_shader_type shader, uint index,
-                               bool take_ownership,
+                               mesa_shader_stage shader, uint index,
                                const struct pipe_constant_buffer *buf);
 
    /**
@@ -469,7 +483,7 @@ struct pipe_context {
     * fields if they don't want this or if they don't implement this.
     */
    void (*set_inlinable_constants)(struct pipe_context *,
-                                   enum pipe_shader_type shader,
+                                   mesa_shader_stage shader,
                                    uint num_values, uint32_t *values);
 
    void (*set_framebuffer_state)(struct pipe_context *,
@@ -521,10 +535,9 @@ struct pipe_context {
                                const struct pipe_viewport_state *);
 
    void (*set_sampler_views)(struct pipe_context *,
-                             enum pipe_shader_type shader,
+                             mesa_shader_stage shader,
                              unsigned start_slot, unsigned num_views,
                              unsigned unbind_num_trailing_slots,
-                             bool take_ownership,
                              struct pipe_sampler_view **views);
 
    void (*set_tess_state)(struct pipe_context *,
@@ -559,7 +572,7 @@ struct pipe_context {
     *                          used with loads. If unsure, set to ~0.
     */
    void (*set_shader_buffers)(struct pipe_context *,
-                              enum pipe_shader_type shader,
+                              mesa_shader_stage shader,
                               unsigned start_slot, unsigned count,
                               const struct pipe_shader_buffer *buffers,
                               unsigned writable_bitmask);
@@ -596,7 +609,7 @@ struct pipe_context {
     *                   be bound.
     */
    void (*set_shader_images)(struct pipe_context *,
-                             enum pipe_shader_type shader,
+                             mesa_shader_stage shader,
                              unsigned start_slot, unsigned count,
                              unsigned unbind_num_trailing_slots,
                              const struct pipe_image_view *images);
@@ -604,17 +617,14 @@ struct pipe_context {
    /**
     * Bind an array of vertex buffers to the specified slots.
     *
+    * count must be equal to the maximum used vertex buffer index + 1
+    * in vertex elements or 0.
+    *
     * \param count           number of consecutive vertex buffers to bind.
-    * \param unbind_num_trailing_slots  unbind slots after the bound slots
-    * \param take_ownership the caller holds buffer references and they
-    *                        should be taken over by the callee. This means
-    *                        that drivers shouldn't increment reference counts.
     * \param buffers         array of the buffers to bind
     */
    void (*set_vertex_buffers)(struct pipe_context *,
-                              unsigned num_buffers,
-                              unsigned unbind_num_trailing_slots,
-                              bool take_ownership,
+                              unsigned count,
                               const struct pipe_vertex_buffer *);
 
    /*@}*/
@@ -634,9 +644,10 @@ struct pipe_context {
                                         struct pipe_stream_output_target *);
 
    void (*set_stream_output_targets)(struct pipe_context *,
-                              unsigned num_targets,
-                              struct pipe_stream_output_target **targets,
-                              const unsigned *offsets);
+                                     unsigned num_targets,
+                                     struct pipe_stream_output_target **targets,
+                                     const unsigned *offsets,
+                                     enum mesa_prim output_prim);
 
    uint32_t (*stream_output_target_offset)(struct pipe_stream_output_target *target);
 
@@ -673,6 +684,20 @@ struct pipe_context {
                                 struct pipe_resource *src,
                                 unsigned src_level,
                                 const struct pipe_box *src_box);
+
+   /**
+    * Perform a copy between an image and a buffer in either direction.
+    * buffer_stride=0 or buffer_layer_stride=0 means tightly packed on that axis
+    * Resources with nr_samples > 1 are not allowed.
+    */
+   void (*image_copy_buffer)(struct pipe_context *pipe,
+                             struct pipe_resource *dst,
+                             struct pipe_resource *src,
+                             unsigned buffer_offset,
+                             unsigned buffer_stride,
+                             unsigned buffer_layer_stride,
+                             unsigned level,
+                             const struct pipe_box *box);
 
    /* Optimal hardware path for blitting pixels.
     * Scaling, format conversion, up- and downsampling (resolve) are allowed.
@@ -795,13 +820,15 @@ struct pipe_context {
     * Insert commands to have GPU wait for fence to be signaled.
     */
    void (*fence_server_sync)(struct pipe_context *pipe,
-                             struct pipe_fence_handle *fence);
+                             struct pipe_fence_handle *fence,
+                             uint64_t timeline_value);
 
    /**
     * Insert commands to have the GPU signal a fence.
     */
    void (*fence_server_signal)(struct pipe_context *pipe,
-                               struct pipe_fence_handle *fence);
+                               struct pipe_fence_handle *fence,
+                               uint64_t timeline_value);
 
    /**
     * Create a view on a texture to be used by a shader stage.
@@ -821,6 +848,19 @@ struct pipe_context {
     *       the context which created the view is still alive.
     */
    void (*sampler_view_destroy)(struct pipe_context *ctx,
+                                struct pipe_sampler_view *view);
+
+   /**
+    * Signal the driver that the frontend has released a view on a texture.
+    *
+    * \param ctx the current context
+    * \param view the view to be released
+    *
+    * \note The current context may not be the context in which the view was
+    *       created (view->context). Following this call, the driver has full
+    *       ownership of the view.
+    */
+   void (*sampler_view_release)(struct pipe_context *ctx,
                                 struct pipe_sampler_view *view);
 
 
@@ -917,6 +957,13 @@ struct pipe_context {
                            unsigned level, struct pipe_box *box, bool commit);
 
    /**
+    * Signal the driver that the frontend has released a resource.
+    *
+    * Following this call, the driver has full ownership of the resource.
+    */
+   void (*resource_release)(struct pipe_context *, struct pipe_resource *);
+
+   /**
     * Creates a video codec for a specific video format/profile
     */
    struct pipe_video_codec *(*create_video_codec)(struct pipe_context *context,
@@ -946,22 +993,6 @@ struct pipe_context {
 
    uint32_t (*get_compute_state_subgroup_size)(struct pipe_context *, void *,
                                                const uint32_t block[3]);
-
-   /**
-    * Bind an array of shader resources that will be used by the
-    * compute program.  Any resources that were previously bound to
-    * the specified range will be unbound after this call.
-    *
-    * \param start      first resource to bind.
-    * \param count      number of consecutive resources to bind.
-    * \param resources  array of pointers to the resources to bind, it
-    *                   should contain at least \a count elements
-    *                   unless it's NULL, in which case no new
-    *                   resources will be bound.
-    */
-   void (*set_compute_resources)(struct pipe_context *,
-                                 unsigned start, unsigned count,
-                                 struct pipe_surface **resources);
 
    /**
     * Bind an array of buffers to be mapped into the address space of
@@ -1069,7 +1100,7 @@ struct pipe_context {
     *
     * (2) implement GL's InvalidateBufferData. For backwards compatibility,
     * you must only rely on the usability for this purpose when
-    * PIPE_CAP_INVALIDATE_BUFFER is enabled.
+    * pipe_caps.invalidate_buffer is enabled.
     */
    void (*invalidate_resource)(struct pipe_context *ctx,
                                struct pipe_resource *resource);
@@ -1222,6 +1253,69 @@ struct pipe_context {
                                                      struct winsys_handle *handle,
                                                      unsigned usage );
 
+   /**
+    * Checks whether an operation can be accelerated by this context.
+    *
+    * \param ctx         pipe context
+    * \param operation   pipe_ml_operation to be checked
+    * \return            whether the context can accelerate this operation
+    */
+    bool (*ml_operation_supported)(struct pipe_context *context, const struct pipe_ml_operation *operation);
+
+   /**
+    * Compiles a ML subgraph, to be executed later. The returned pipe_ml_subgraph
+    * should contain all information needed to execute the subgraph with as
+    * little effort as strictly needed.
+    *
+    * \param ctx         pipe context
+    * \param operations  array containing the definitions of the operations in the graph
+    * \param count       number of operations
+    * \return            a newly allocated pipe_ml_subgraph
+    */
+   struct pipe_ml_subgraph *(*ml_subgraph_create)(struct pipe_context *context,
+                                                  const struct pipe_ml_operation *operations,
+                                                  unsigned count);
+
+   /**
+    * Invokes a ML subgraph for a given input tensor.
+    *
+    * \param ctx         pipe context
+    * \param subgraph    previously-compiled subgraph
+    * \param inputs_count number of input tensors to copy in
+    * \param input_idxs   array with the indices of input tensors
+    * \param inputs       array of buffers to copy the tensor data from
+    * \param is_signed    per-buffer signed integer flag
+    */
+   void (*ml_subgraph_invoke)(struct pipe_context *context,
+                              struct pipe_ml_subgraph *subgraph,
+                              unsigned inputs_count,
+                              unsigned input_idxs[],
+                              void *inputs[], bool is_signed[]);
+
+   /**
+    * After a ML subgraph has been invoked, copy the contents of the output
+    * tensors to the provided buffers.
+    * 
+    * \param ctx           pipe context
+    * \param subgraph      previously-executed subgraph
+    * \param outputs_count number of output tensors to copy out
+    * \param output_idxs   array with the indices of output tensors
+    * \param outputs       array of buffers to copy the tensor data to
+    * \param is_signed     per-buffer signed integer flag
+    */
+   void (*ml_subgraph_read_output)(struct pipe_context *context,
+                                   struct pipe_ml_subgraph *subgraph,
+                                   unsigned outputs_count, unsigned output_idxs[],
+                                   void *outputs[], bool is_signed[]);
+
+   /**
+    * Release all resources allocated by the implementation of ml_subgraph_create
+    * 
+    * \param ctx           pipe context
+    * \param subgraph      subgraph to release
+    */
+   void (*ml_subgraph_destroy)(struct pipe_context *context,
+                               struct pipe_ml_subgraph *subgraph);
 };
 
 

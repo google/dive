@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_optimizer.h"
@@ -375,7 +355,11 @@ CopyPropFwdVisitor::visit(AluInstr *instr)
 
    auto mov_block_id = instr->block_id();
 
-   while(ii != ie) {
+   /** libc++ seems to invalidate the end iterator too if a std::set is
+    *  made empty by an erase operation,
+    *  https://gitlab.freedesktop.org/mesa/mesa/-/issues/7931
+    */
+   while(ii != ie && !dest->uses().empty()) {
       auto i = *ii;
       auto target_block_id = i->block_id();
 
@@ -640,7 +624,8 @@ CopyPropFwdVisitor::propagate_to(RegisterVec4& value, Instr *instr)
 
          value.set_value(i, new_src[i]);
 
-         if (new_src[i]->pin() != pin_fully) {
+         if (new_src[i]->pin() != pin_fully &&
+             new_src[i]->pin() != pin_chgr) {
             if (new_src[i]->pin() == pin_chan)
                new_src[i]->set_pin(pin_chgr);
             else
@@ -819,7 +804,52 @@ public:
    bool has_group_dest;
 };
 
+class HasVecSrcVisitor : public ConstInstrVisitor {
+public:
+   HasVecSrcVisitor():
+       has_group_src(false)
+   {
+   }
 
+   void visit(UNUSED const AluInstr& instr) override { }
+   void visit(UNUSED const AluGroup& instr) override { }
+   void visit(UNUSED const FetchInstr& instr) override  { };
+   void visit(UNUSED const Block& instr) override { };
+   void visit(UNUSED const ControlFlowInstr& instr) override{ }
+   void visit(UNUSED const IfInstr& instr) override{ }
+   void visit(UNUSED const LDSAtomicInstr& instr) override { };
+   void visit(UNUSED const LDSReadInstr& instr) override { };
+
+   void visit(const TexInstr& instr) override { check(instr.src()); }
+   void visit(const ExportInstr& instr) override { check(instr.value()); }
+   void visit(const GDSInstr& instr) override { check(instr.src()); }
+
+   // No swizzling supported, so we want to keep the register group
+   void visit(UNUSED const ScratchIOInstr& instr) override  { has_group_src = true; };
+   void visit(UNUSED const StreamOutInstr& instr) override { has_group_src = true; }
+   void visit(UNUSED const MemRingOutInstr& instr) override { has_group_src = true; }
+   void visit(UNUSED const RatInstr& instr) override { has_group_src = true; };
+
+   void visit(UNUSED const EmitVertexInstr& instr) override { }
+
+   // We always emit at least two values
+   void visit(UNUSED const WriteTFInstr& instr) override { has_group_src = true; };
+
+
+   void check(const RegisterVec4& value);
+
+   bool has_group_src;
+};
+
+void HasVecSrcVisitor::check(const RegisterVec4& value)
+{
+   int nval = 0;
+   for (int i = 0; i < 4 && nval < 2; ++i) {
+      if (value[i]->chan() < 4)
+         ++nval;
+   }
+   has_group_src = nval > 1;
+}
 
 bool
 simplify_source_vectors(Shader& sh)
@@ -853,7 +883,14 @@ SimplifySourceVecVisitor::visit(TexInstr *instr)
                      break;
                }
 
-               if (check_dests.has_group_dest)
+               HasVecSrcVisitor check_src;
+               for (auto p : src[i]->uses()) {
+                  p->accept(check_src);
+                  if (check_src.has_group_src)
+                     break;
+               }
+
+               if (check_dests.has_group_dest || check_src.has_group_src)
                   break;
 
                if (src[i]->pin() == pin_group)

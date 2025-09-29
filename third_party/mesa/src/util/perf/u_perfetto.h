@@ -25,34 +25,50 @@
 #define _UTIL_PERFETTO_H
 
 #include "util/u_atomic.h"
+#include "util/detect_os.h"
+
+// On Unix, pass a clockid_t to designate which clock was used to gather the timestamp
+// On Windows, this paramter is ignored, and it's expected that `timestamp` comes from QueryPerformanceCounter
+#if DETECT_OS_POSIX
+#include <time.h>
+typedef clockid_t perfetto_clock_id;
+#else
+typedef int32_t perfetto_clock_id;
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-enum util_perfetto_category {
-   UTIL_PERFETTO_CATEGORY_DEFAULT,
-   UTIL_PERFETTO_CATEGORY_SLOW,
-
-   UTIL_PERFETTO_CATEGORY_COUNT,
-};
-
 #ifdef HAVE_PERFETTO
 
-extern int util_perfetto_category_states[UTIL_PERFETTO_CATEGORY_COUNT];
+extern int util_perfetto_tracing_state;
 
 void util_perfetto_init(void);
 
 static inline bool
-util_perfetto_is_category_enabled(enum util_perfetto_category category)
+util_perfetto_is_tracing_enabled(void)
 {
-   return p_atomic_read_relaxed(&util_perfetto_category_states[category]);
+   return p_atomic_read_relaxed(&util_perfetto_tracing_state);
 }
 
-void util_perfetto_trace_begin(enum util_perfetto_category category,
-                               const char *name);
+void util_perfetto_set_default_clock(perfetto_clock_id default_clock);
 
-void util_perfetto_trace_end(enum util_perfetto_category category);
+void util_perfetto_trace_begin(const char *name);
+
+void util_perfetto_trace_end(void);
+
+void util_perfetto_trace_begin_flow(const char *fname, uint64_t id);
+
+void util_perfetto_counter_set(const char *name, double value);
+
+void util_perfetto_trace_full_begin(const char *name, uint64_t track_id, uint64_t id, perfetto_clock_id clock, uint64_t timestamp);
+
+void util_perfetto_trace_full_end(const char *name, uint64_t track_id, perfetto_clock_id clock, uint64_t timestamp);
+
+uint64_t util_perfetto_next_id(void);
+
+uint64_t util_perfetto_new_track(const char *name);
 
 #else /* HAVE_PERFETTO */
 
@@ -62,20 +78,52 @@ util_perfetto_init(void)
 }
 
 static inline bool
-util_perfetto_is_category_enabled(enum util_perfetto_category category)
+util_perfetto_is_tracing_enabled(void)
 {
    return false;
 }
 
 static inline void
-util_perfetto_trace_begin(enum util_perfetto_category category,
-                          const char *name)
+util_perfetto_set_default_clock(perfetto_clock_id clock)
 {
 }
 
 static inline void
-util_perfetto_trace_end(enum util_perfetto_category category)
+util_perfetto_trace_begin(const char *name)
 {
+}
+
+static inline void
+util_perfetto_trace_end(void)
+{
+}
+
+static inline void util_perfetto_trace_begin_flow(const char *fname, uint64_t id)
+{
+}
+
+static inline void
+util_perfetto_trace_full_begin(const char *name, uint64_t track_id, uint64_t id, perfetto_clock_id clock, uint64_t timestamp)
+{
+}
+
+static inline void
+util_perfetto_trace_full_end(const char *name, uint64_t track_id, perfetto_clock_id clock, uint64_t timestamp)
+{
+}
+
+static inline void util_perfetto_counter_set(const char *name, double value)
+{
+}
+
+static inline uint64_t util_perfetto_next_id(void)
+{
+   return 0;
+}
+
+static inline uint64_t util_perfetto_new_track(const char *name)
+{
+   return 0;
 }
 
 #endif /* HAVE_PERFETTO */

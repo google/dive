@@ -1,35 +1,33 @@
+# When changing this file, you need to bump the following
+# .gitlab-ci/image-tags.yml tags:
+# ALPINE_X86_64_LAVA_TRIGGER_TAG
+
+import logging
 import os
-import re
-from enum import Enum
 
 
-class LavaFarm(Enum):
-    """Enum class representing the different LAVA farms."""
-
-    LIMA = 1
-    COLLABORA = 2
-    UNKNOWN = 3
-
-
-LAVA_FARM_RUNNER_PATTERNS: dict[LavaFarm, str] = {
-    # Lima pattern comes first, since it has the same prefix as the
-    # Collabora pattern.
-    LavaFarm.LIMA: r"^mesa-ci-[\x01-\x7F]+-lava-lima$",
-    LavaFarm.COLLABORA: r"^mesa-ci-[\x01-\x7F]+-lava-[\x01-\x7F]+$",
-    LavaFarm.UNKNOWN: r"^[\x01-\x7F]+",
-}
-
-
-def get_lava_farm() -> LavaFarm:
+def get_lava_farm() -> str:
     """
-    Returns the LAVA farm based on the RUNNER_TAG environment variable.
+    Returns the LAVA farm based on the FARM environment variable.
 
     :return: The LAVA farm
     """
-    runner_tag: str = os.getenv("RUNNER_TAG", "unknown")
+    farm: str = os.getenv("FARM", "unknown")
 
-    for farm, pattern in LAVA_FARM_RUNNER_PATTERNS.items():
-        if re.match(pattern, runner_tag):
-            return farm
+    if farm == "unknown":
+        logging.warning("FARM environment variable is not set, using unknown")
 
-    raise ValueError(f"Unknown LAVA runner tag: {runner_tag}")
+    return farm.lower()
+
+def get_lava_boot_method() -> str:
+    """
+    Returns the LAVA boot method based on the BOOT_METHOD environment variable.
+
+    :return: The LAVA boot method
+    """
+    boot_method: str = os.getenv("BOOT_METHOD", "unknown")
+
+    if boot_method == "unknown":
+        logging.warning("BOOT_METHOD environment variable is not set, using unknown")
+
+    return boot_method.lower()

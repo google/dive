@@ -27,6 +27,8 @@
 #include <vulkan/vulkan.h>
 #include <xf86drm.h>
 
+#include "pco/pco_data.h"
+#include "pco_uscgen_programs.h"
 #include "pvr_private.h"
 #include "pvr_types.h"
 #include "pvr_winsys.h"
@@ -90,7 +92,7 @@ VkResult pvr_winsys_helper_heap_alloc(struct pvr_winsys_heap *const heap,
       .heap = heap,
    };
 
-   assert(util_is_power_of_two_nonzero(alignment));
+   assert(util_is_power_of_two_nonzero64(alignment));
 
    /* pvr_srv_winsys_buffer_create() page aligns the size. We must do the same
     * here to ensure enough heap space is allocated to be able to map the
@@ -138,7 +140,7 @@ void pvr_winsys_helper_heap_free(struct pvr_winsys_vma *const vma)
  */
 static VkResult
 pvr_buffer_create_and_map(struct pvr_winsys *const ws,
-                          heap_alloc_reserved_func heap_alloc_reserved,
+                          heap_alloc_carveout_func heap_alloc_carveout,
                           struct pvr_winsys_heap *heap,
                           pvr_dev_addr_t dev_addr,
                           uint64_t size,
@@ -150,7 +152,7 @@ pvr_buffer_create_and_map(struct pvr_winsys *const ws,
    VkResult result;
 
    /* Address should not be NULL, this function is used to allocate and map
-    * reserved addresses and is only supposed to be used internally.
+    * carveout addresses and is only supposed to be used internally.
     */
    assert(dev_addr.addr);
 
@@ -163,7 +165,7 @@ pvr_buffer_create_and_map(struct pvr_winsys *const ws,
    if (result != VK_SUCCESS)
       goto err_out;
 
-   result = heap_alloc_reserved(heap, dev_addr, size, alignment, &vma);
+   result = heap_alloc_carveout(heap, dev_addr, size, alignment, &vma);
    if (result != VK_SUCCESS)
       goto err_pvr_winsys_buffer_destroy;
 
@@ -203,7 +205,7 @@ static void inline pvr_buffer_destroy_and_unmap(struct pvr_winsys_vma *vma)
 
 VkResult pvr_winsys_helper_allocate_static_memory(
    struct pvr_winsys *const ws,
-   heap_alloc_reserved_func heap_alloc_reserved,
+   heap_alloc_carveout_func heap_alloc_carveout,
    struct pvr_winsys_heap *const general_heap,
    struct pvr_winsys_heap *const pds_heap,
    struct pvr_winsys_heap *const usc_heap,
@@ -217,7 +219,7 @@ VkResult pvr_winsys_helper_allocate_static_memory(
    VkResult result;
 
    result = pvr_buffer_create_and_map(ws,
-                                      heap_alloc_reserved,
+                                      heap_alloc_carveout,
                                       general_heap,
                                       general_heap->static_data_carveout_addr,
                                       general_heap->static_data_carveout_size,
@@ -227,7 +229,7 @@ VkResult pvr_winsys_helper_allocate_static_memory(
       goto err_out;
 
    result = pvr_buffer_create_and_map(ws,
-                                      heap_alloc_reserved,
+                                      heap_alloc_carveout,
                                       pds_heap,
                                       pds_heap->static_data_carveout_addr,
                                       pds_heap->static_data_carveout_size,
@@ -237,7 +239,7 @@ VkResult pvr_winsys_helper_allocate_static_memory(
       goto err_pvr_buffer_destroy_and_unmap_general;
 
    result = pvr_buffer_create_and_map(ws,
-                                      heap_alloc_reserved,
+                                      heap_alloc_carveout,
                                       usc_heap,
                                       usc_heap->static_data_carveout_addr,
                                       pds_heap->static_data_carveout_size,
@@ -277,20 +279,18 @@ static void pvr_setup_static_vdm_sync(uint8_t *const pds_ptr,
                                       uint8_t *const usc_ptr,
                                       uint64_t usc_sync_offset_in_bytes)
 {
-   /* TODO: this needs to be auto-generated */
-   const uint8_t state_update[] = { 0x44, 0xA0, 0x80, 0x05,
-                                    0x00, 0x00, 0x00, 0xFF };
-
    struct pvr_pds_kickusc_program ppp_state_update_program = { 0 };
+   const pco_precomp_data *precomp_data =
+      (pco_precomp_data *)pco_usclib_common[VS_NOP_COMMON];
 
    memcpy(usc_ptr + usc_sync_offset_in_bytes,
-          state_update,
-          sizeof(state_update));
+          precomp_data->binary,
+          precomp_data->size_dwords * sizeof(uint32_t));
 
    pvr_pds_setup_doutu(&ppp_state_update_program.usc_task_control,
                        usc_sync_offset_in_bytes,
-                       0,
-                       PVRX(PDSINST_DOUTU_SAMPLE_RATE_INSTANCE),
+                       precomp_data->temps,
+                       ROGUE_PDSINST_DOUTU_SAMPLE_RATE_INSTANCE,
                        false);
 
    pvr_pds_kick_usc(&ppp_state_update_program,

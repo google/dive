@@ -36,6 +36,9 @@
 extern "C" {
 #endif
 
+struct vk_object_base;
+struct VkDebugUtilsObjectNameInfoEXT;
+
 enum intel_ds_api {
    INTEL_DS_API_OPENGL,
    INTEL_DS_API_VULKAN,
@@ -59,6 +62,24 @@ enum intel_ds_stall_flag {
    INTEL_DS_PSS_STALL_SYNC_BIT               = BITFIELD_BIT(14),
    INTEL_DS_END_OF_PIPE_BIT                  = BITFIELD_BIT(15),
    INTEL_DS_CCS_CACHE_FLUSH_BIT              = BITFIELD_BIT(16),
+   INTEL_DS_L3_FABRIC_FLUSH_BIT              = BITFIELD_BIT(17),
+};
+
+enum intel_ds_tracepoint_flags {
+   /**
+    * Whether the tracepoint's timestamp must be recorded with as an
+    * end-of-pipe timestamp.
+    */
+   INTEL_DS_TRACEPOINT_FLAG_END_OF_PIPE    = BITFIELD_BIT(0),
+   /**
+    * Whether this tracepoint's timestamp is recorded on the compute pipeline.
+    */
+   INTEL_DS_TRACEPOINT_FLAG_END_CS         = BITFIELD_BIT(1),
+   /**
+    * Whether this tracepoint doesn't generate a timestamp but instead repeats
+    * the last one.
+    */
+   INTEL_DS_TRACEPOINT_FLAG_REPEAST_LAST   = BITFIELD_BIT(2),
 };
 
 /* Convert internal driver PIPE_CONTROL stall bits to intel_ds_stall_flag. */
@@ -71,6 +92,8 @@ enum intel_ds_queue_stage {
    INTEL_DS_QUEUE_STAGE_INTERNAL_OPS,
    INTEL_DS_QUEUE_STAGE_STALL,
    INTEL_DS_QUEUE_STAGE_COMPUTE,
+   INTEL_DS_QUEUE_STAGE_AS,
+   INTEL_DS_QUEUE_STAGE_RT,
    INTEL_DS_QUEUE_STAGE_RENDER_PASS,
    INTEL_DS_QUEUE_STAGE_BLORP,
    INTEL_DS_QUEUE_STAGE_DRAW,
@@ -93,14 +116,6 @@ struct intel_ds_device {
    /* Clock identifier for this device. */
    uint32_t gpu_clock_id;
 
-   /* The timestamp at the point where we first emitted the clock_sync..
-    * this  will be a *later* timestamp that the first GPU traces (since
-    * we capture the first clock_sync from the CPU *after* the first GPU
-    * tracepoints happen).  To avoid confusing perfetto we need to drop
-    * the GPU traces with timestamps before this.
-    */
-   uint64_t sync_gpu_ts;
-
    /* Next timestamp after which we should resend a clock correlation. */
    uint64_t next_clock_sync_ns;
 
@@ -111,6 +126,9 @@ struct intel_ds_device {
     * IntelRenderpassDataSource::Trace)
     */
    uint64_t event_id;
+
+   /* Tracepoint name perfetto identifiers for each of the events. */
+   uint64_t tracepoint_iids[96];
 
    /* Protects submissions of u_trace data to trace_context */
    simple_mtx_t trace_context_mutex;
@@ -189,6 +207,7 @@ void intel_ds_flush_data_fini(struct intel_ds_flush_data *data);
 void intel_ds_queue_flush_data(struct intel_ds_queue *queue,
                                struct u_trace *ut,
                                struct intel_ds_flush_data *data,
+                               uint32_t frame_nr,
                                bool free_data);
 
 void intel_ds_device_process(struct intel_ds_device *device, bool eof);
@@ -199,6 +218,12 @@ uint64_t intel_ds_begin_submit(struct intel_ds_queue *queue);
 void intel_ds_end_submit(struct intel_ds_queue *queue,
                          uint64_t start_ts);
 
+void intel_ds_perfetto_set_debug_utils_object_name(struct intel_ds_device *device,
+   const struct VkDebugUtilsObjectNameInfoEXT *pNameInfo);
+
+void intel_ds_perfetto_refresh_debug_utils_object_name(struct intel_ds_device *device,
+   const struct vk_object_base *object);
+
 #else
 
 static inline uint64_t intel_ds_begin_submit(struct intel_ds_queue *queue)
@@ -208,6 +233,16 @@ static inline uint64_t intel_ds_begin_submit(struct intel_ds_queue *queue)
 
 static inline void intel_ds_end_submit(struct intel_ds_queue *queue,
                                        uint64_t start_ts)
+{
+}
+
+static inline void intel_ds_perfetto_set_debug_utils_object_name(struct intel_ds_device *device,
+   const struct VkDebugUtilsObjectNameInfoEXT *pNameInfo)
+{
+}
+
+static inline void intel_ds_perfetto_refresh_debug_utils_object_name(struct intel_ds_device *device,
+   const struct vk_object_base *object)
 {
 }
 

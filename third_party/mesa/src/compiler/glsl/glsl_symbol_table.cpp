@@ -27,7 +27,7 @@
 
 class symbol_table_entry {
 public:
-   DECLARE_LINEAR_ALLOC_CXX_OPERATORS(symbol_table_entry);
+   DECLARE_LINEAR_ALLOC_CXX_OPERATORS(symbol_table_entry,,);
 
    bool add_interface(const glsl_type *i, enum ir_variable_mode mode)
    {
@@ -59,23 +59,6 @@ public:
       }
    }
 
-   const glsl_type *get_interface(enum ir_variable_mode mode)
-   {
-      switch (mode) {
-      case ir_var_uniform:
-         return ibu;
-      case ir_var_shader_storage:
-         return iss;
-      case ir_var_shader_in:
-         return ibi;
-      case ir_var_shader_out:
-         return ibo;
-      default:
-         assert(!"Unsupported interface variable mode!");
-         return NULL;
-      }
-   }
-
    symbol_table_entry(ir_variable *v)               :
       v(v), f(0), t(0), ibu(0), iss(0), ibi(0), ibo(0), a(0) {}
    symbol_table_entry(ir_function *f)               :
@@ -85,7 +68,7 @@ public:
    symbol_table_entry(const glsl_type *t, enum ir_variable_mode mode) :
       v(0), f(0), t(0), ibu(0), iss(0), ibi(0), ibo(0), a(0)
    {
-      assert(t->is_interface());
+      assert(glsl_type_is_interface(t));
       add_interface(t, mode);
    }
    symbol_table_entry(const class ast_type_specifier *a):
@@ -175,7 +158,7 @@ bool glsl_symbol_table::add_type(const char *name, const glsl_type *t)
 bool glsl_symbol_table::add_interface(const char *name, const glsl_type *i,
                                       enum ir_variable_mode mode)
 {
-   assert(i->is_interface());
+   assert(glsl_type_is_interface(i));
    symbol_table_entry *entry = get_entry(name);
    if (entry == NULL) {
       symbol_table_entry *entry =
@@ -220,14 +203,6 @@ bool glsl_symbol_table::add_default_precision_qualifier(const char *type_name,
    return _mesa_symbol_table_replace_symbol(table, name, entry) == 0;
 }
 
-void glsl_symbol_table::add_global_function(ir_function *f)
-{
-   symbol_table_entry *entry = new(linalloc) symbol_table_entry(f);
-   int added = _mesa_symbol_table_add_global_symbol(table, f->name, entry);
-   assert(added == 0);
-   (void)added;
-}
-
 ir_variable *glsl_symbol_table::get_variable(const char *name)
 {
    symbol_table_entry *entry = get_entry(name);
@@ -238,13 +213,6 @@ const glsl_type *glsl_symbol_table::get_type(const char *name)
 {
    symbol_table_entry *entry = get_entry(name);
    return entry != NULL ? entry->t : NULL;
-}
-
-const glsl_type *glsl_symbol_table::get_interface(const char *name,
-                                                  enum ir_variable_mode mode)
-{
-   symbol_table_entry *entry = get_entry(name);
-   return entry != NULL ? entry->get_interface(mode) : NULL;
 }
 
 ir_function *glsl_symbol_table::get_function(const char *name)
@@ -280,15 +248,5 @@ glsl_symbol_table::disable_variable(const char *name)
    symbol_table_entry *entry = get_entry(name);
    if (entry != NULL) {
       entry->v = NULL;
-   }
-}
-
-void
-glsl_symbol_table::replace_variable(const char *name,
-                                    ir_variable *v)
-{
-   symbol_table_entry *entry = get_entry(name);
-   if (entry != NULL) {
-      entry->v = v;
    }
 }

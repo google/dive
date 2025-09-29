@@ -76,7 +76,8 @@ _mesa_initialize_context( struct gl_context *ctx,
                           bool no_error,
                           const struct gl_config *visual,
                           struct gl_context *share_list,
-                          const struct dd_function_table *driverFunctions);
+                          const struct dd_function_table *driverFunctions,
+                          const struct st_config_options *options);
 
 extern struct _glapi_table *
 _mesa_alloc_dispatch_table(bool glthread);
@@ -91,7 +92,7 @@ extern bool
 _mesa_initialize_dispatch_tables(struct gl_context *ctx);
 
 extern struct _glapi_table *
-_mesa_new_nop_table(unsigned numEntries, bool glthread);
+_mesa_new_nop_table(bool glthread);
 
 extern void
 _mesa_free_context_data(struct gl_context *ctx, bool destroy_debug_output);
@@ -108,6 +109,9 @@ _mesa_share_state(struct gl_context *ctx, struct gl_context *ctxToShare);
 
 extern struct gl_context *
 _mesa_get_current_context(void);
+
+extern void
+_mesa_noop_entrypoint(const char *name);
 
 /*@}*/
 
@@ -346,6 +350,34 @@ _mesa_is_gles32(const struct gl_context *ctx)
 
 
 static inline bool
+_mesa_is_gles2_compatible(const struct gl_context *ctx)
+{
+   return _mesa_is_gles2(ctx) || _mesa_has_ARB_ES2_compatibility(ctx);
+}
+
+
+static inline bool
+_mesa_is_gles3_compatible(const struct gl_context *ctx)
+{
+   return _mesa_is_gles3(ctx) || _mesa_has_ARB_ES3_compatibility(ctx);
+}
+
+
+static inline bool
+_mesa_is_gles31_compatible(const struct gl_context *ctx)
+{
+   return _mesa_is_gles31(ctx) || _mesa_has_ARB_ES3_1_compatibility(ctx);
+}
+
+
+static inline bool
+_mesa_is_gles32_compatible(const struct gl_context *ctx)
+{
+   return _mesa_is_gles32(ctx) || _mesa_has_ARB_ES3_2_compatibility(ctx);
+}
+
+
+static inline bool
 _mesa_is_no_error_enabled(const struct gl_context *ctx)
 {
    return ctx->Const.ContextFlags & GL_CONTEXT_FLAG_NO_ERROR_BIT_KHR;
@@ -459,6 +491,20 @@ _mesa_has_texture_view(const struct gl_context *ctx)
 }
 
 static inline bool
+_mesa_has_texture_multisample(const struct gl_context *ctx)
+{
+   return _mesa_has_ARB_texture_multisample(ctx) ||
+          _mesa_is_gles31(ctx);
+}
+
+static inline bool
+_mesa_has_texture_multisample_array(const struct gl_context *ctx)
+{
+   return _mesa_has_ARB_texture_multisample(ctx) ||
+          _mesa_has_OES_texture_storage_multisample_2d_array(ctx);
+}
+
+static inline bool
 _mesa_hw_select_enabled(const struct gl_context *ctx)
 {
    return ctx->RenderMode == GL_SELECT &&
@@ -488,6 +534,15 @@ _mesa_has_pipeline_statistics(const struct gl_context *ctx)
           (_mesa_is_desktop_gl(ctx) && ctx->Version >= 46);
 }
 
+static inline bool
+_mesa_has_internalformat_query(const struct gl_context *ctx)
+{
+   return _mesa_has_ARB_internalformat_query(ctx) ||
+          _mesa_is_gles3(ctx);
+}
+
+void
+_mesa_clear_releasebufs(struct gl_context *ctx);
 #ifdef __cplusplus
 }
 #endif

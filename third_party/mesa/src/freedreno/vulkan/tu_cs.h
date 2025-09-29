@@ -147,7 +147,15 @@ void
 tu_cs_set_writeable(struct tu_cs *cs, bool writeable);
 
 VkResult
-tu_cs_begin_sub_stream(struct tu_cs *cs, uint32_t size, struct tu_cs *sub_cs);
+tu_cs_begin_sub_stream_aligned(struct tu_cs *cs, uint32_t count,
+                               uint32_t size, struct tu_cs *sub_cs);
+
+static inline VkResult
+tu_cs_begin_sub_stream(struct tu_cs *cs, uint32_t size, struct tu_cs *sub_cs)
+{
+   return tu_cs_begin_sub_stream_aligned(cs, size, 1, sub_cs);
+}
+
 
 VkResult
 tu_cs_alloc(struct tu_cs *cs,
@@ -443,8 +451,7 @@ tu_cond_exec_start(struct tu_cs *cs, uint32_t cond_flags)
    assert(cs->cond_stack_depth < TU_COND_EXEC_STACK_SIZE);
 
    ASSERTED enum compare_mode mode =
-      (enum compare_mode)((cond_flags & CP_COND_REG_EXEC_0_MODE__MASK) >>
-                          CP_COND_REG_EXEC_0_MODE__SHIFT);
+      (enum compare_mode) pkt_field_get(CP_COND_REG_EXEC_0_MODE, cond_flags);
    assert(mode == PRED_TEST || mode == RENDER_MODE || mode == THREAD_MODE);
 
    tu_cs_emit_pkt7(cs, CP_COND_REG_EXEC, 2);
@@ -479,6 +486,12 @@ tu_cond_exec_end(struct tu_cs *cs)
       cs->cur = cs->cur - 3;
    }
 }
+
+uint64_t
+tu_cs_emit_data_nop(struct tu_cs *cs,
+                    const uint32_t *data,
+                    uint32_t size,
+                    uint32_t align);
 
 /* Temporary struct for tracking a register state to be written, used by
  * a6xx-pack.h and tu_cs_emit_regs()

@@ -228,10 +228,9 @@ nv50_hw_sm_end_query(struct nv50_context *nv50, struct nv50_hw_query *hq)
 
    if (unlikely(!screen->pm.prog)) {
       struct nv50_program *prog = CALLOC_STRUCT(nv50_program);
-      prog->type = PIPE_SHADER_COMPUTE;
+      prog->type = MESA_SHADER_COMPUTE;
       prog->translated = true;
       prog->max_gpr = 7;
-      prog->parm_size = 8;
       prog->code = (uint32_t *)nv50_read_hw_sm_counters_code;
       prog->code_size = sizeof(nv50_read_hw_sm_counters_code);
       screen->pm.prog = prog;
@@ -269,9 +268,7 @@ nv50_hw_sm_end_query(struct nv50_context *nv50, struct nv50_hw_query *hq)
       info.block[i] = block[i];
       info.grid[i] = grid[i];
    }
-   info.pc = 0;
-   info.input = input;
-   pipe->launch_grid(pipe, &info);
+   nv50_launch_grid_with_input(pipe, &info, input, 8);
    pipe->bind_compute_state(pipe, old);
 
    nouveau_bufctx_reset(nv50->bufctx_cp, NV50_BIND_CP_QUERY);

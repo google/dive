@@ -23,133 +23,81 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#include <GL/gl.h> /* dri_interface needs GL types */
-#include <GL/internal/dri_interface.h>
+#include <GL/gl.h> /* mesa_interface needs GL types */
+#include "mesa_interface.h"
 
 #include "drm-uapi/drm_fourcc.h"
 #include "loader_dri_helper.h"
 #include "util/driconf.h"
 
-__DRIimage *loader_dri_create_image(__DRIscreen *screen,
-                                    const __DRIimageExtension *image,
-                                    uint32_t width, uint32_t height,
-                                    uint32_t dri_format, uint32_t dri_usage,
-                                    const uint64_t *modifiers,
-                                    unsigned int modifiers_count,
-                                    void *loaderPrivate)
+
+/* Creating a DRIImage accepts a pipe_format, whilst DRM-based platforms
+ * like GBM, Wayland, and X11, all deal strictly in DRM FourCCs. Map
+ * between the two worlds. */
+static const struct {
+   enum pipe_format pipe;
+   uint32_t fourcc;
+} pipe_format_to_fourcc[] = {
+   { PIPE_FORMAT_R8_UNORM, DRM_FORMAT_R8 },
+   { PIPE_FORMAT_R16_UNORM, DRM_FORMAT_R16 },
+   { PIPE_FORMAT_RG88_UNORM, DRM_FORMAT_GR88 },
+   { PIPE_FORMAT_RG1616_UNORM, DRM_FORMAT_GR1616 },
+   { PIPE_FORMAT_B5G6R5_UNORM, DRM_FORMAT_RGB565 },
+   { PIPE_FORMAT_B5G5R5A1_UNORM, DRM_FORMAT_ARGB1555 },
+   { PIPE_FORMAT_R5G5B5A1_UNORM, DRM_FORMAT_ABGR1555 },
+   { PIPE_FORMAT_B4G4R4A4_UNORM, DRM_FORMAT_ARGB4444 },
+   { PIPE_FORMAT_R4G4B4A4_UNORM, DRM_FORMAT_ABGR4444 },
+   { PIPE_FORMAT_B8G8R8_UNORM, DRM_FORMAT_RGB888 },
+   { PIPE_FORMAT_R8G8B8_UNORM, DRM_FORMAT_BGR888 },
+   { PIPE_FORMAT_B8G8R8X8_SRGB, __DRI_IMAGE_FOURCC_SXRGB8888 },
+   { PIPE_FORMAT_B8G8R8A8_SRGB, __DRI_IMAGE_FOURCC_SARGB8888 },
+   { PIPE_FORMAT_R8G8B8A8_SRGB, __DRI_IMAGE_FOURCC_SABGR8888 },
+   { PIPE_FORMAT_X8B8G8R8_UNORM, DRM_FORMAT_RGBX8888 },
+   { PIPE_FORMAT_A8B8G8R8_UNORM, DRM_FORMAT_RGBA8888 },
+   { PIPE_FORMAT_X8R8G8B8_UNORM, DRM_FORMAT_BGRX8888 },
+   { PIPE_FORMAT_A8R8G8B8_UNORM, DRM_FORMAT_BGRA8888 },
+   { PIPE_FORMAT_B8G8R8X8_UNORM, DRM_FORMAT_XRGB8888 },
+   { PIPE_FORMAT_B8G8R8A8_UNORM, DRM_FORMAT_ARGB8888 },
+   { PIPE_FORMAT_R8G8B8X8_UNORM, DRM_FORMAT_XBGR8888 },
+   { PIPE_FORMAT_R8G8B8A8_UNORM, DRM_FORMAT_ABGR8888 },
+   { PIPE_FORMAT_B10G10R10X2_UNORM, DRM_FORMAT_XRGB2101010 },
+   { PIPE_FORMAT_B10G10R10A2_UNORM, DRM_FORMAT_ARGB2101010 },
+   { PIPE_FORMAT_R10G10B10X2_UNORM, DRM_FORMAT_XBGR2101010 },
+   { PIPE_FORMAT_R10G10B10A2_UNORM, DRM_FORMAT_ABGR2101010 },
+   { PIPE_FORMAT_R16G16B16X16_UNORM, DRM_FORMAT_XBGR16161616 },
+   { PIPE_FORMAT_R16G16B16A16_UNORM, DRM_FORMAT_ABGR16161616 },
+   { PIPE_FORMAT_R16G16B16X16_FLOAT, DRM_FORMAT_XBGR16161616F },
+   { PIPE_FORMAT_R16G16B16A16_FLOAT, DRM_FORMAT_ABGR16161616F },
+   { PIPE_FORMAT_R16_FLOAT, DRM_FORMAT_R16F },
+   { PIPE_FORMAT_R32_FLOAT, DRM_FORMAT_R32F },
+   { PIPE_FORMAT_R16G16_FLOAT, DRM_FORMAT_GR1616F },
+   { PIPE_FORMAT_R32G32_FLOAT, DRM_FORMAT_GR3232F },
+   { PIPE_FORMAT_R16G16B16_UNORM, DRM_FORMAT_BGR161616 },
+   { PIPE_FORMAT_R16G16B16_FLOAT, DRM_FORMAT_BGR161616F },
+   { PIPE_FORMAT_R32G32B32_FLOAT, DRM_FORMAT_BGR323232F },
+   { PIPE_FORMAT_R32G32B32A32_FLOAT, DRM_FORMAT_ABGR32323232F },
+};
+
+enum pipe_format
+loader_fourcc_to_pipe_format(uint32_t fourcc)
 {
-   if (modifiers && modifiers_count > 0 &&
-       image->base.version > 14 && image->createImageWithModifiers) {
-      bool has_valid_modifier = false;
-      int i;
-
-      /* It's acceptable to create an image with INVALID modifier in the list,
-       * but it cannot be on the only modifier (since it will certainly fail
-       * later). While we could easily catch this after modifier creation, doing
-       * the check here is a convenient debug check likely pointing at whatever
-       * interface the client is using to build its modifier list.
-       */
-      for (i = 0; i < modifiers_count; i++) {
-         if (modifiers[i] != DRM_FORMAT_MOD_INVALID) {
-            has_valid_modifier = true;
-            break;
-         }
-      }
-      if (!has_valid_modifier)
-         return NULL;
-
-      if (image->base.version >= 19 && image->createImageWithModifiers2)
-         return image->createImageWithModifiers2(screen, width, height,
-                                                 dri_format, modifiers,
-                                                 modifiers_count, dri_usage,
-                                                 loaderPrivate);
-      else
-         return image->createImageWithModifiers(screen, width, height,
-                                                dri_format, modifiers,
-                                                modifiers_count, loaderPrivate);
+   for (int i = 0; i < ARRAY_SIZE(pipe_format_to_fourcc); i++) {
+      if (pipe_format_to_fourcc[i].fourcc == fourcc)
+         return pipe_format_to_fourcc[i].pipe;
    }
 
-   /* No modifier given or fallback to the legacy createImage allowed */
-   return image->createImage(screen, width, height, dri_format, dri_usage,
-                             loaderPrivate);
+   return PIPE_FORMAT_NONE;
 }
 
-static int dri_vblank_mode(__DRIscreen *driScreen, const __DRI2configQueryExtension *config)
+uint32_t
+loader_pipe_format_to_fourcc(enum pipe_format pipe)
 {
-   GLint vblank_mode = DRI_CONF_VBLANK_DEF_INTERVAL_1;
-
-   if (config)
-      config->configQueryi(driScreen, "vblank_mode", &vblank_mode);
-
-   return vblank_mode;
-}
-
-int dri_get_initial_swap_interval(__DRIscreen *driScreen,
-                                  const __DRI2configQueryExtension *config)
-{
-   int vblank_mode = dri_vblank_mode(driScreen, config);
-
-   switch (vblank_mode) {
-   case DRI_CONF_VBLANK_NEVER:
-   case DRI_CONF_VBLANK_DEF_INTERVAL_0:
-      return 0;
-   case DRI_CONF_VBLANK_DEF_INTERVAL_1:
-   case DRI_CONF_VBLANK_ALWAYS_SYNC:
-   default:
-      return 1;
-   }
-}
-
-bool dri_valid_swap_interval(__DRIscreen *driScreen,
-                             const __DRI2configQueryExtension *config, int interval)
-{
-   int vblank_mode = dri_vblank_mode(driScreen, config);
-
-   switch (vblank_mode) {
-   case DRI_CONF_VBLANK_NEVER:
-      if (interval != 0)
-         return false;
-      break;
-   case DRI_CONF_VBLANK_ALWAYS_SYNC:
-      if (interval <= 0)
-         return false;
-      break;
-   default:
-      break;
+   for (int i = 0; i < ARRAY_SIZE(pipe_format_to_fourcc); i++) {
+      if (pipe_format_to_fourcc[i].pipe == pipe)
+         return pipe_format_to_fourcc[i].fourcc;
    }
 
-   return true;
-}
-
-/* the DRIimage createImage function takes __DRI_IMAGE_FORMAT codes, while
- * the createImageFromFds call takes DRM_FORMAT codes. To avoid
- * complete confusion, just deal in __DRI_IMAGE_FORMAT codes for now and
- * translate to DRM_FORMAT codes in the call to createImageFromFds
- */
-int
-loader_image_format_to_fourcc(int format)
-{
-
-   /* Convert from __DRI_IMAGE_FORMAT to DRM_FORMAT (sigh) */
-   switch (format) {
-   case __DRI_IMAGE_FORMAT_SARGB8: return __DRI_IMAGE_FOURCC_SARGB8888;
-   case __DRI_IMAGE_FORMAT_SABGR8: return __DRI_IMAGE_FOURCC_SABGR8888;
-   case __DRI_IMAGE_FORMAT_SXRGB8: return __DRI_IMAGE_FOURCC_SXRGB8888;
-   case __DRI_IMAGE_FORMAT_RGB565: return DRM_FORMAT_RGB565;
-   case __DRI_IMAGE_FORMAT_XRGB8888: return DRM_FORMAT_XRGB8888;
-   case __DRI_IMAGE_FORMAT_ARGB8888: return DRM_FORMAT_ARGB8888;
-   case __DRI_IMAGE_FORMAT_ABGR8888: return DRM_FORMAT_ABGR8888;
-   case __DRI_IMAGE_FORMAT_XBGR8888: return DRM_FORMAT_XBGR8888;
-   case __DRI_IMAGE_FORMAT_XRGB2101010: return DRM_FORMAT_XRGB2101010;
-   case __DRI_IMAGE_FORMAT_ARGB2101010: return DRM_FORMAT_ARGB2101010;
-   case __DRI_IMAGE_FORMAT_XBGR2101010: return DRM_FORMAT_XBGR2101010;
-   case __DRI_IMAGE_FORMAT_ABGR2101010: return DRM_FORMAT_ABGR2101010;
-   case __DRI_IMAGE_FORMAT_ABGR16161616: return DRM_FORMAT_ABGR16161616;
-   case __DRI_IMAGE_FORMAT_XBGR16161616: return DRM_FORMAT_XBGR16161616;
-   case __DRI_IMAGE_FORMAT_XBGR16161616F: return DRM_FORMAT_XBGR16161616F;
-   case __DRI_IMAGE_FORMAT_ABGR16161616F: return DRM_FORMAT_ABGR16161616F;
-   }
-   return 0;
+   return DRM_FORMAT_INVALID;
 }
 
 #ifdef HAVE_X11_PLATFORM

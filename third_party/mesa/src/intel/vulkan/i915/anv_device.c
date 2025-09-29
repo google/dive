@@ -22,8 +22,9 @@
 
 #include "i915/anv_device.h"
 #include "anv_private.h"
+#include "vk_debug_utils.h"
 
-#include "common/intel_defines.h"
+#include "common/i915/intel_defines.h"
 #include "common/i915/intel_gem.h"
 
 #include "drm-uapi/i915_drm.h"
@@ -41,7 +42,7 @@ vk_priority_to_i915(VkQueueGlobalPriorityKHR priority)
    case VK_QUEUE_GLOBAL_PRIORITY_REALTIME_KHR:
       return INTEL_CONTEXT_REALTIME_PRIORITY;
    default:
-      unreachable("Invalid priority");
+      UNREACHABLE("Invalid priority");
    }
 }
 
@@ -102,10 +103,29 @@ anv_i915_physical_device_get_parameters(struct anv_physical_device *device)
       return result;
    }
 
-   if (intel_gem_get_param(fd, I915_PARAM_HAS_EXEC_ASYNC, &val))
-      device->has_exec_async = val;
-   if (intel_gem_get_param(fd, I915_PARAM_HAS_EXEC_CAPTURE, &val))
-      device->has_exec_capture = val;
+   if (!intel_gem_get_param(fd, I915_PARAM_HAS_EXEC_ASYNC, &val) || !val) {
+      result = vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
+                         "kernel missing exec async support");
+      return result;
+   }
+
+   if (!intel_gem_get_param(fd, I915_PARAM_HAS_EXEC_CAPTURE, &val) || !val) {
+      result = vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
+                         "kernel missing exec capture support");
+      return result;
+   }
+
+   if (!intel_gem_get_param(fd, I915_PARAM_HAS_EXEC_TIMELINE_FENCES, &val) || !val) {
+      result = vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
+                         "kernel missing exec capture support");
+      return result;
+   }
+
+   if (!i915_gem_supports_dma_buf_sync_file(fd)) {
+      result = vk_errorf(device, VK_ERROR_INCOMPATIBLE_DRIVER,
+                         "kernel missing dma-buf sync file import/export");
+      return result;
+   }
 
    /* Start with medium; sorted low to high */
    const VkQueueGlobalPriorityKHR priorities[] = {
@@ -120,9 +140,6 @@ anv_i915_physical_device_get_parameters(struct anv_physical_device *device)
          break;
       device->max_context_priority = priorities[i];
    }
-
-   if (intel_gem_get_param(fd, I915_PARAM_HAS_EXEC_TIMELINE_FENCES, &val))
-      device->has_exec_timeline = val;
 
    if (intel_gem_get_context_param(fd, 0, I915_CONTEXT_PARAM_VM, &value))
       device->has_vm_control = value;
@@ -252,6 +269,8 @@ anv_i915_device_setup_context(struct anv_device *device,
                               const VkDeviceCreateInfo *pCreateInfo,
                               const uint32_t num_queues)
 {
+   device->protected_session_id = I915_PROTECTED_CONTENT_DEFAULT_SESSION;
+
    if (device->physical->has_vm_control)
       return anv_i915_device_setup_vm(device);
 
@@ -263,6 +282,7 @@ anv_i915_device_setup_context(struct anv_device *device,
       assert(num_queues <= 64);
       enum intel_engine_class engine_classes[64];
       int engine_count = 0;
+      enum intel_gem_create_context_flags flags = 0;
       for (uint32_t i = 0; i < pCreateInfo->queueCreateInfoCount; i++) {
          const VkDeviceQueueCreateInfo *queueCreateInfo =
             &pCreateInfo->pQueueCreateInfos[i];
@@ -274,8 +294,12 @@ anv_i915_device_setup_context(struct anv_device *device,
 
          for (uint32_t j = 0; j < queueCreateInfo->queueCount; j++)
             engine_classes[engine_count++] = queue_family->engine_class;
+
+         if (pCreateInfo->pQueueCreateInfos[i].flags &
+             VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT)
+            flags |= INTEL_GEM_CREATE_CONTEXT_EXT_PROTECTED_FLAG;
       }
-      if (!intel_gem_create_context_engines(device->fd, 0 /* flags */,
+      if (!intel_gem_create_context_engines(device->fd, flags,
                                             physical_device->engine_info,
                                             engine_count, engine_classes,
                                             device->vm_id,
@@ -354,6 +378,12 @@ anv_i915_device_check_status(struct vk_device *vk_device)
    } else {
       result = anv_gem_context_get_reset_stats(device, device->context_id);
    }
+
+   if (result != VK_SUCCESS)
+      return result;
+
+   if (INTEL_DEBUG(DEBUG_SHADER_PRINT))
+      result = vk_check_printf_status(vk_device, &device->printf);
 
    return result;
 }

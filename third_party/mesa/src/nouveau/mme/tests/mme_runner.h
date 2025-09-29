@@ -12,7 +12,7 @@ struct nouveau_ws_contxt;
 struct nouveau_ws_device;
 
 #include "nv_push.h"
-#include "nvk_cl9097.h"
+#include "nv_push_cl9097.h"
 
 #define DATA_BO_SIZE 4096
 #define DATA_DWORDS 1024
@@ -53,9 +53,7 @@ private:
    struct nouveau_ws_context *ctx;
    struct nouveau_ws_bo *data_bo;
    struct nouveau_ws_bo *push_bo;
-#if NVK_NEW_UAPI == 1
    uint32_t syncobj;
-#endif
    void *push_map;
    struct nv_push push;
 };

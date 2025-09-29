@@ -1,22 +1,5 @@
 # Copyright © 2017 Intel Corporation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 # inc_util only depends inc_include, this folder and nothing else under src
 # so we use include_directories('..') instead of inc_src to tell the fact
@@ -39,12 +22,16 @@ files_mesa_util = files(
   'blend.h',
   'blob.c',
   'blob.h',
+  'box.h',
   'build_id.c',
   'build_id.h',
+  'cnd_monotonic.c',
   'cnd_monotonic.h',
   'compiler.h',
   'compress.c',
   'compress.h',
+  'thread_sched.c',
+  'thread_sched.h',
   'crc32.c',
   'crc32.h',
   'dag.c',
@@ -57,6 +44,7 @@ files_mesa_util = files(
   'enum_operators.h',
   'fast_idiv_by_const.c',
   'fast_idiv_by_const.h',
+  'float8.c',
   'format_r11g11b10f.h',
   'format_rgb9e5.h',
   'format_srgb.h',
@@ -69,11 +57,14 @@ files_mesa_util = files(
   'half_float.h',
   'hash_table.c',
   'hash_table.h',
+  'helpers.c',
+  'helpers.h',
   'hex.h',
   'u_idalloc.c',
   'u_idalloc.h',
   'list.h',
   'log.c',
+  'lut.c',
   'macros.h',
   'memstream.c',
   'memstream.h',
@@ -81,14 +72,18 @@ files_mesa_util = files(
   'mesa-sha1.h',
   'mesa-blake3.c',
   'mesa-blake3.h',
+  'os_drm.h',
   'os_time.c',
   'os_time.h',
   'os_file.c',
+  'os_file_notify.c',
   'os_memory_fd.c',
   'os_misc.c',
   'os_misc.h',
   'os_socket.c',
   'os_socket.h',
+  'pb_slab.c',
+  'pb_slab.h',
   'ptralloc.h',
   'perf/u_trace.h',
   'perf/u_trace.c',
@@ -105,6 +100,8 @@ files_mesa_util = files(
   'ralloc.h',
   'rand_xor.c',
   'rand_xor.h',
+  'range_minimum_query.c',
+  'range_minimum_query.h',
   'rb_tree.c',
   'rb_tree.h',
   'register_allocate.c',
@@ -124,9 +121,14 @@ files_mesa_util = files(
   'sparse_array.h',
   'string_buffer.c',
   'string_buffer.h',
+  'strndup.c',
   'strndup.h',
   'strtod.c',
   'strtod.h',
+  'texcompress_astc_luts.cpp',
+  'texcompress_astc_luts.h',
+  'texcompress_astc_luts_wrap.cpp',
+  'texcompress_astc_luts_wrap.h',
   'timespec.h',
   'u_atomic.c',
   'u_atomic.h',
@@ -142,6 +144,9 @@ files_mesa_util = files(
   'u_pointer.h',
   'u_queue.c',
   'u_queue.h',
+  'u_range_remap.c',
+  'u_range_remap.h',
+  'u_string.c',
   'u_string.h',
   'u_thread.c',
   'u_thread.h',
@@ -160,6 +165,8 @@ files_mesa_util = files(
   'u_cpu_detect.h',
   'u_printf.c',
   'u_printf.h',
+  'u_overflow.h',
+  'u_tristate.h',
   'u_worklist.c',
   'u_worklist.h',
   'vl_vlc.h',
@@ -215,6 +222,18 @@ format_srgb = custom_target(
   capture : true,
 )
 
+shader_stats_h = custom_target(
+  input : ['process_shader_stats.py', 'shader_stats.rnc', 'shader_stats.xml'],
+  output : 'shader_stats.h',
+  command : [prog_python, '@INPUT@'],
+  capture : true,
+)
+files_mesa_util += shader_stats_h
+
+# subdir format provide files_mesa_format
+subdir('format')
+files_mesa_util += files_mesa_format
+
 deps_for_libmesa_util = [
   dep_zlib,
   dep_clock,
@@ -227,15 +246,20 @@ deps_for_libmesa_util = [
   dep_unwind,
   dep_futex,
   idep_blake3,
-  idep_mesautilc11
+  idep_mesautilc11,
+  idep_mesautilformat,
 ]
+
+if dep_libdrm.found()
+  files_mesa_util += files('u_sync_provider.c', 'u_sync_provider.h')
+  deps_for_libmesa_util += dep_libdrm
+endif
 
 if with_platform_android
   deps_for_libmesa_util += dep_android
   files_debug_stack = files('u_debug_stack_android.cpp')
 else
   files_debug_stack = files(
-    'dbghelp.h',
     'u_debug_stack.c',
     'u_debug_symbol.c',
     'u_debug_symbol.h',
@@ -262,32 +286,38 @@ if with_gpuvis
   )
 endif
 
+if with_sysprof
+  files_mesa_util += files(
+    'perf/u_sysprof.c',
+    'perf/u_sysprof.h',
+  )
+  deps_for_libmesa_util += dep_sysprof
+endif
+
 u_trace_py = files('perf/u_trace.py')
 
-libmesa_util_sse41 = static_library(
-  'mesa_util_sse41',
+libmesa_util_simd = static_library(
+  'mesa_util_simd',
   files('streaming-load-memcpy.c'),
   c_args : [c_msvc_compat_args, sse41_args],
   include_directories : [inc_util],
   gnu_symbol_visibility : 'hidden',
+  build_by_default : false,
 )
-
-# subdir format provide files_mesa_format
-subdir('format')
-files_mesa_util += files_mesa_format
 
 _libmesa_util = static_library(
   'mesa_util',
   [files_mesa_util, files_debug_stack, format_srgb],
   include_directories : [inc_util, include_directories('format')],
   dependencies : deps_for_libmesa_util,
-  link_with: [libmesa_util_sse41],
+  link_with: [libmesa_util_simd],
   c_args : [c_msvc_compat_args],
   gnu_symbol_visibility : 'hidden',
   build_by_default : false
 )
 
 idep_mesautil = declare_dependency(
+  sources : [shader_stats_h],
   link_with : _libmesa_util,
   include_directories : [inc_util],
   dependencies : deps_for_libmesa_util,
@@ -332,6 +362,19 @@ idep_xmlconfig = declare_dependency(
 files_xxd = files('xxd.py')
 glsl2spirv = files('glsl2spirv.py')
 
+devenv.set('DRIRC_CONFIGDIR', meson.current_source_dir())
+
+_libparson = static_library(
+  'parson',
+  ['parson.c', 'parson.h'],
+  gnu_symbol_visibility : 'hidden',
+  build_by_default : false,
+)
+
+idep_parson = declare_dependency(
+  link_with :  _libparson,
+)
+
 if with_tests
   # DRI_CONF macros use designated initializers (required for union
   # initializaiton), so we need c++2a since gtest forces us to use c++
@@ -358,13 +401,17 @@ if with_tests
     'tests/dag_test.cpp',
     'tests/fast_idiv_by_const_test.cpp',
     'tests/fast_urem_by_const_test.cpp',
+    'tests/float8_test.cpp',
     'tests/gc_alloc_tests.cpp',
     'tests/half_float_test.cpp',
     'tests/int_min_max.cpp',
     'tests/linear_test.cpp',
+    'tests/list_test.cpp',
+    'tests/lut_test.cpp',
     'tests/mesa-sha1_test.cpp',
     'tests/os_mman_test.cpp',
     'tests/perf/u_trace_test.cpp',
+    'tests/range_minimum_query_test.cpp',
     'tests/rb_tree_test.cpp',
     'tests/register_allocate_test.cpp',
     'tests/roundeven_test.cpp',
@@ -375,6 +422,8 @@ if with_tests
     'tests/u_call_once_test.cpp',
     'tests/u_debug_stack_test.cpp',
     'tests/u_debug_test.cpp',
+    'tests/u_dl_test.cpp',
+    'tests/u_memstream_test.cpp',
     'tests/u_printf_test.cpp',
     'tests/u_qsort_test.cpp',
     'tests/vector_test.cpp',
@@ -402,6 +451,7 @@ if with_tests
     ),
     suite : ['util'],
     protocol : 'gtest',
+    is_parallel : false,
     timeout : 180,
   )
 

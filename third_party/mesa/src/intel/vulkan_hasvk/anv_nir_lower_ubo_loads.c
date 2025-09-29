@@ -22,6 +22,7 @@
  */
 
 #include "anv_nir.h"
+#include "nir.h"
 #include "nir_builder.h"
 
 static bool
@@ -44,7 +45,7 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
    unsigned byte_size = bit_size / 8;
 
    nir_def *val;
-   if (nir_src_is_const(load->src[1])) {
+   if (!nir_src_is_divergent(&load->src[0]) && nir_src_is_const(load->src[1])) {
       uint32_t offset = nir_src_as_uint(load->src[1]);
 
       /* Things should be component-aligned. */
@@ -58,17 +59,18 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
       /* Load two just in case we go over a 64B boundary */
       nir_def *data[2];
       for (unsigned i = 0; i < 2; i++) {
-         nir_def *pred;
+         nir_def *addr = nir_iadd_imm(b, base_addr, aligned_offset + i * 64);
+
+         data[i] = nir_load_global_constant_uniform_block_intel(
+            b, 16, 32, addr,
+            .access = nir_intrinsic_access(load),
+            .align_mul = 64);
          if (bound) {
-            pred = nir_igt_imm(b, bound, aligned_offset + i * 64 + 63);
-         } else {
-            pred = nir_imm_true(b);
+            data[i] = nir_bcsel(b,
+                                nir_igt_imm(b, bound, aligned_offset + i * 64 + 63),
+                                data[i],
+                                nir_imm_int(b, 0));
          }
-
-         nir_def *addr = nir_iadd_imm(b, base_addr,
-                                          aligned_offset + i * 64);
-
-         data[i] = nir_load_global_const_block_intel(b, 16, addr, pred);
       }
 
       val = nir_extract_bits(b, data, 2, suboffset * 8,
@@ -105,8 +107,7 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
       }
    }
 
-   nir_def_rewrite_uses(&load->def, val);
-   nir_instr_remove(&load->instr);
+   nir_def_replace(&load->def, val);
 
    return true;
 }
@@ -114,6 +115,8 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
 bool
 anv_nir_lower_ubo_loads(nir_shader *shader)
 {
+   nir_divergence_analysis(shader);
+
    return nir_shader_intrinsics_pass(shader, lower_ubo_load_instr,
                                        nir_metadata_none,
                                        NULL);

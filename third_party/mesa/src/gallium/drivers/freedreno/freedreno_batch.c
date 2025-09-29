@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -118,6 +100,10 @@ fd_batch_create(struct fd_context *ctx, bool nondraw)
          batch->binning = alloc_ring(batch, 0x100000, 0);
       }
    }
+
+   /* Pre-attach private BOs: */
+   for (unsigned i = 0; i < ctx->num_private_bos; i++)
+      fd_ringbuffer_attach_bo(batch->gmem, ctx->private_bos[i]);
 
    batch->subpass = subpass_create(batch);
 
@@ -403,10 +389,10 @@ fd_batch_set_fb(struct fd_batch *batch, const struct pipe_framebuffer_state *pfb
 
    util_copy_framebuffer_state(&batch->framebuffer, pfb);
 
-   if (!pfb->zsbuf)
+   if (!pfb->zsbuf.texture)
       return;
 
-   struct fd_resource *zsbuf = fd_resource(pfb->zsbuf->texture);
+   struct fd_resource *zsbuf = fd_resource(pfb->zsbuf.texture);
 
    /* Switching back to a batch we'd previously started constructing shouldn't
     * result in a different lrz.  The dependency tracking should avoid another
@@ -525,8 +511,6 @@ fd_batch_resource_write(struct fd_batch *batch, struct fd_resource *rsc)
    if (track->write_batch == batch)
       return;
 
-   fd_batch_write_prep(batch, rsc);
-
    if (rsc->stencil)
       fd_batch_resource_write(batch, rsc->stencil);
 
@@ -547,8 +531,10 @@ fd_batch_resource_write(struct fd_batch *batch, struct fd_resource *rsc)
           * ctx dependencies and let the app have the undefined behavior
           * it asked for:
           */
-         if (track->write_batch->ctx != batch->ctx)
+         if (track->write_batch->ctx != batch->ctx) {
+            fd_ringbuffer_attach_bo(batch->draw, rsc->bo);
             return;
+         }
 
          flush_write_batch(rsc);
       }
@@ -570,6 +556,8 @@ fd_batch_resource_write(struct fd_batch *batch, struct fd_resource *rsc)
    fd_batch_reference_locked(&track->write_batch, batch);
 
    fd_batch_add_resource(batch, rsc);
+
+   fd_batch_write_prep(batch, rsc);
 }
 
 void
@@ -595,6 +583,7 @@ fd_batch_resource_read_slowpath(struct fd_batch *batch, struct fd_resource *rsc)
           * by avoiding cross-ctx dependencies and let the app have the
           * undefined behavior it asked for:
           */
+         fd_ringbuffer_attach_bo(batch->draw, rsc->bo);
          return;
       }
 

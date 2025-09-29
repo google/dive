@@ -24,6 +24,7 @@
 #define VK_SAMPLER_H
 
 #include "vk_object.h"
+#include "vk_ycbcr_conversion.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +43,75 @@ bool vk_border_color_is_int(VkBorderColor color);
 VkClearColorValue
 vk_sampler_border_color_value(const VkSamplerCreateInfo *pCreateInfo,
                               VkFormat *format_out);
+
+/* This struct needs to be hashable mem-comparable */
+PRAGMA_DIAGNOSTIC_PUSH
+PRAGMA_DIAGNOSTIC_ERROR(-Wpadded)
+struct vk_sampler_state {
+   /* Taken straight from VkSamplerCreateInfo */
+   VkSamplerCreateFlags flags;
+   VkFilter mag_filter;
+   VkFilter min_filter;
+   VkSamplerMipmapMode mipmap_mode;
+   VkSamplerAddressMode address_mode_u;
+   VkSamplerAddressMode address_mode_v;
+   VkSamplerAddressMode address_mode_w;
+   float mip_lod_bias;
+   float max_anisotropy;
+   VkCompareOp compare_op;
+   float min_lod;
+   float max_lod;
+   VkBorderColor border_color;
+
+   /* Booleans moved here for better packing */
+   bool anisotropy_enable;
+   bool compare_enable;
+   bool unnormalized_coordinates;
+
+   /** VkSamplerBorderColorComponentMappingCreateInfoEXT::srgb */
+   bool image_view_is_srgb;
+
+   bool has_ycbcr_conversion;
+   bool _pad[3];
+
+   /** Format of paired image views or VK_FORMAT_UNDEFINED
+    *
+    * This is taken either from VkSamplerYcbcrConversionCreateInfo::format or
+    * VkSamplerCustomBorderColorCreateInfoEXT::format.
+    */
+   VkFormat format;
+
+   /** Border color value
+    *
+    * If VkSamplerCreateInfo::borderColor is one of the Vulkan 1.0 enumerated
+    * border colors, this will be the VkClearColorValue representation of that
+    * value. VkSamplerCreateInfo::borderColor is VK_BORDER_COLOR_*_CUSTOM_EXT,
+    * this is VkSamplerCustomBorderColorCreateInfoEXT::customBorderColor.
+    */
+   VkClearColorValue border_color_value;
+
+   /** VkSamplerBorderColorComponentMappingCreateInfoEXT::components */
+   VkComponentMapping border_color_component_mapping;
+
+   /**
+    * VkSamplerReductionModeCreateInfo::reductionMode or
+    * VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE.
+    */
+   VkSamplerReductionMode reduction_mode;
+
+   /** VkSamplerYcbcrConversionInfo::conversion or NULL
+    *
+    * We ensure that this is always NULL whenever vk_sampler::format is not a
+    * YCbCr format.  This is important on Android where YCbCr conversion
+    * objects are required for all EXTERNAL formats, even if they are not
+    * YCbCr formats.
+    */
+   struct vk_ycbcr_conversion_state ycbcr_conversion;
+};
+PRAGMA_DIAGNOSTIC_POP
+
+void vk_sampler_state_init(struct vk_sampler_state *state,
+                           const VkSamplerCreateInfo *pCreateInfo);
 
 struct vk_sampler {
    struct vk_object_base base;
@@ -82,6 +152,11 @@ struct vk_sampler {
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vk_sampler, base, VkSampler,
                                VK_OBJECT_TYPE_SAMPLER);
+
+void vk_sampler_init(struct vk_device *device,
+                     struct vk_sampler *sampler,
+                     const VkSamplerCreateInfo *pCreateInfo);
+void vk_sampler_finish(struct vk_sampler *sampler);
 
 void *vk_sampler_create(struct vk_device *device,
                         const VkSamplerCreateInfo *pCreateInfo,

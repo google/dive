@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2022 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "util/u_inlines.h"
 #include "pipe/p_defines.h"
@@ -53,7 +35,7 @@
 static const struct tgsi_token *
 get_dummy_fragment_shader(void)
 {
-#ifdef DEBUG
+#if MESA_DEBUG
    static const float color[4] = { 1.0, 0.0, 0.0, 0.0 }; /* red */
 #else
    static const float color[4] = { 0.0, 0.0, 0.0, 0.0 }; /* black */
@@ -63,7 +45,7 @@ get_dummy_fragment_shader(void)
    struct ureg_src src;
    struct ureg_dst dst;
 
-   ureg = ureg_create(PIPE_SHADER_FRAGMENT);
+   ureg = ureg_create(MESA_SHADER_FRAGMENT);
    if (!ureg)
       return NULL;
 
@@ -119,7 +101,7 @@ make_fs_key(const struct svga_context *svga,
             struct svga_fragment_shader *fs,
             struct svga_compile_key *key)
 {
-   const enum pipe_shader_type shader = PIPE_SHADER_FRAGMENT;
+   const mesa_shader_stage shader = MESA_SHADER_FRAGMENT;
    unsigned i;
 
    memset(key, 0, sizeof *key);
@@ -171,14 +153,14 @@ make_fs_key(const struct svga_context *svga,
 
       if (svga->curr.gs) {
          key->fs.aa_point = (svga->curr.rast->templ.point_smooth &&
-			     shader->info.gs.in_prim == MESA_PRIM_POINTS &&
+                             shader->info.gs.in_prim == MESA_PRIM_POINTS &&
                              (svga->curr.rast->pointsize > 1.0 ||
                               shader->info.writes_psize));
 
          if (key->fs.aa_point) {
             assert(svga->curr.gs->aa_point_coord_index != -1);
             key->fs.aa_point_coord_index = svga->curr.gs->aa_point_coord_index;
-	 }
+         }
       }
    }
 
@@ -186,21 +168,21 @@ make_fs_key(const struct svga_context *svga,
     * requires that the incoming fragment color be white.  This change
     * achieves that by creating a variant of the current fragment
     * shader that overrides all output colors with 1,1,1,1
-    *   
+    *
     * This will work for most shaders, including those containing
     * TEXKIL and/or depth-write.  However, it will break on the
     * combination of xor-logicop plus alphatest.
     *
     * Ultimately, we could implement alphatest in the shader using
     * texkil prior to overriding the outgoing fragment color.
-    *   
+    *
     * SVGA_NEW_BLEND
     */
    key->fs.white_fragments = svga->curr.blend->need_white_fragments;
 
    key->fs.alpha_to_one = svga->curr.blend->alpha_to_one;
 
-#ifdef DEBUG
+#if MESA_DEBUG
    /*
     * We expect a consistent set of samplers and sampler views.
     * Do some debug checks/warnings here.
@@ -305,7 +287,7 @@ make_fs_key(const struct svga_context *svga,
    if (fs->base.info.fs.color0_writes_all_cbufs ||
        svga->curr.blend->need_white_fragments) {
       /* Replicate color0 output (or white) to N colorbuffers */
-      key->fs.write_color0_to_n_cbufs = svga->curr.framebuffer.nr_cbufs;
+      key->fs.write_color0_to_n_cbufs = svga->curr.framebuffer.base.nr_cbufs;
    }
 
    return PIPE_OK;
@@ -423,7 +405,7 @@ done:
    return ret;
 }
 
-struct svga_tracked_state svga_hw_fs = 
+struct svga_tracked_state svga_hw_fs =
 {
    "fragment shader (hwtnl)",
    (SVGA_NEW_FS |

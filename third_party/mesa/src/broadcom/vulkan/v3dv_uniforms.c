@@ -27,15 +27,6 @@
 
 #include "v3dv_private.h"
 
-/* The only version specific structure that we need is
- * TMU_CONFIG_PARAMETER_1. This didn't seem to change significantly from
- * previous V3D versions and we don't expect that to change, so for now let's
- * just hardcode the V3D version here.
- */
-#define V3D_VERSION 41
-#include "broadcom/common/v3d_macros.h"
-#include "broadcom/cle/v3dx_pack.h"
-
 /* Our Vulkan resource indices represent indices in descriptor maps which
  * include all shader stages, so we need to size the arrays below
  * accordingly. For now we only support a maximum of 3 stages: VS, GS, FS.
@@ -106,7 +97,7 @@ check_push_constants_ubo(struct v3dv_cmd_buffer *cmd_buffer,
                       cmd_buffer->push_constants_resource.bo);
 
       if (!cmd_buffer->push_constants_resource.bo) {
-         fprintf(stderr, "Failed to allocate memory for push constants\n");
+         mesa_loge("Failed to allocate memory for push constants\n");
          abort();
       }
 
@@ -114,7 +105,7 @@ check_push_constants_ubo(struct v3dv_cmd_buffer *cmd_buffer,
                             cmd_buffer->push_constants_resource.bo,
                             cmd_buffer->push_constants_resource.bo->size);
       if (!ok) {
-         fprintf(stderr, "failed to map push constants buffer\n");
+         mesa_loge("failed to map push constants buffer\n");
          abort();
       }
    } else {
@@ -223,11 +214,8 @@ write_tmu_p1(struct v3dv_cmd_buffer *cmd_buffer,
    /* Set unnormalized coordinates flag from sampler object */
    uint32_t p1_packed = v3d_unit_data_get_offset(data);
    if (sampler->unnormalized_coordinates) {
-      struct V3DX(TMU_CONFIG_PARAMETER_1) p1_unpacked;
-      V3DX(TMU_CONFIG_PARAMETER_1_unpack)((uint8_t *)&p1_packed, &p1_unpacked);
-      p1_unpacked.unnormalized_coordinates = true;
-      V3DX(TMU_CONFIG_PARAMETER_1_pack)(NULL, (uint8_t *)&p1_packed,
-                                        &p1_unpacked);
+      v3d_pack_unnormalized_coordinates(&cmd_buffer->device->devinfo, &p1_packed,
+                                        sampler->unnormalized_coordinates);
    }
 
    cl_aligned_u32(uniforms, sampler_state_reloc.bo->offset +
@@ -411,7 +399,7 @@ get_texture_size_from_image_view(struct v3dv_image_view *image_view,
       assert(image_view->vk.image);
       return image_view->vk.image->samples;
    default:
-      unreachable("Bad texture size field");
+      UNREACHABLE("Bad texture size field");
    }
 }
 
@@ -427,7 +415,7 @@ get_texture_size_from_buffer_view(struct v3dv_buffer_view *buffer_view,
       return buffer_view->num_elements;
    /* Only size can be queried for texel buffers  */
    default:
-      unreachable("Bad texture size field for texel buffers");
+      UNREACHABLE("Bad texture size field for texel buffers");
    }
 }
 
@@ -463,7 +451,7 @@ get_texture_size(struct v3dv_cmd_buffer *cmd_buffer,
       return get_texture_size_from_buffer_view(descriptor->buffer_view,
                                                contents, data);
    default:
-      unreachable("Wrong descriptor for getting texture size");
+      UNREACHABLE("Wrong descriptor for getting texture size");
    }
 }
 
@@ -480,6 +468,7 @@ v3dv_write_uniforms_wg_offsets(struct v3dv_cmd_buffer *cmd_buffer,
    struct v3dv_job *job = cmd_buffer->state.job;
    assert(job);
    assert(job->cmd_buffer == cmd_buffer);
+   struct v3d_device_info *devinfo = &cmd_buffer->device->devinfo;
 
    struct texture_bo_list tex_bos = { 0 };
    struct state_bo_list state_bos = { 0 };
@@ -498,7 +487,6 @@ v3dv_write_uniforms_wg_offsets(struct v3dv_cmd_buffer *cmd_buffer,
    struct v3dv_cl_reloc uniform_stream = v3dv_cl_get_address(&job->indirect);
 
    struct v3dv_cl_out *uniforms = cl_start(&job->indirect);
-
    for (int i = 0; i < uinfo->count; i++) {
       uint32_t data = uinfo->data[i];
 
@@ -520,17 +508,21 @@ v3dv_write_uniforms_wg_offsets(struct v3dv_cmd_buffer *cmd_buffer,
                               cmd_buffer, pipeline, variant->stage);
          break;
 
-      case QUNIFORM_VIEWPORT_X_SCALE:
-         cl_aligned_f(&uniforms, dynamic->viewport.scale[0][0] * 256.0f);
+      case QUNIFORM_VIEWPORT_X_SCALE: {
+         cl_aligned_f(&uniforms, dynamic->viewport.scale[0][0] *
+                                 devinfo->clipper_xy_granularity);
          break;
+      }
 
-      case QUNIFORM_VIEWPORT_Y_SCALE:
-         cl_aligned_f(&uniforms, dynamic->viewport.scale[0][1] * 256.0f);
+      case QUNIFORM_VIEWPORT_Y_SCALE: {
+         cl_aligned_f(&uniforms, dynamic->viewport.scale[0][1] *
+                                 devinfo->clipper_xy_granularity);
          break;
+      }
 
       case QUNIFORM_VIEWPORT_Z_OFFSET: {
          float translate_z;
-         v3dv_cmd_buffer_state_get_viewport_z_xform(&cmd_buffer->state, 0,
+         v3dv_cmd_buffer_state_get_viewport_z_xform(cmd_buffer, 0,
                                                     &translate_z, NULL);
          cl_aligned_f(&uniforms, translate_z);
          break;
@@ -538,7 +530,7 @@ v3dv_write_uniforms_wg_offsets(struct v3dv_cmd_buffer *cmd_buffer,
 
       case QUNIFORM_VIEWPORT_Z_SCALE: {
          float scale_z;
-         v3dv_cmd_buffer_state_get_viewport_z_xform(&cmd_buffer->state, 0,
+         v3dv_cmd_buffer_state_get_viewport_z_xform(cmd_buffer, 0,
                                                     NULL, &scale_z);
          cl_aligned_f(&uniforms, scale_z);
          break;
@@ -624,10 +616,8 @@ v3dv_write_uniforms_wg_offsets(struct v3dv_cmd_buffer *cmd_buffer,
          } else {
             assert(cmd_buffer->vk.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY);
             num_layers = 2048;
-#if DEBUG
-            fprintf(stderr, "Skipping gl_LayerID shader sanity check for "
-                            "secondary command buffer\n");
-#endif
+            mesa_logd("Skipping gl_LayerID shader sanity check for "
+                      "secondary command buffer\n");
          }
          cl_aligned_u32(&uniforms, num_layers);
          break;
@@ -666,8 +656,35 @@ v3dv_write_uniforms_wg_offsets(struct v3dv_cmd_buffer *cmd_buffer,
          cl_aligned_u32(&uniforms, pipeline->spill.size_per_thread);
          break;
 
+      case QUNIFORM_DRAW_ID:
+         cl_aligned_u32(&uniforms, job->cmd_buffer->state.draw_id);
+         break;
+
+      case QUNIFORM_LINE_WIDTH:
+         cl_aligned_u32(&uniforms,
+                        job->cmd_buffer->vk.dynamic_graphics_state.rs.line.width);
+         break;
+
+      case QUNIFORM_AA_LINE_WIDTH:
+         cl_aligned_u32(&uniforms,
+                        v3dv_get_aa_line_width(pipeline, job->cmd_buffer));
+         break;
+
+      case QUNIFORM_BLEND_CONSTANT_R:
+         cl_aligned_f(&uniforms, job->cmd_buffer->vk.dynamic_graphics_state.cb.blend_constants[0]);
+         break;
+      case QUNIFORM_BLEND_CONSTANT_G:
+         cl_aligned_f(&uniforms, job->cmd_buffer->vk.dynamic_graphics_state.cb.blend_constants[1]);
+         break;
+      case QUNIFORM_BLEND_CONSTANT_B:
+         cl_aligned_f(&uniforms, job->cmd_buffer->vk.dynamic_graphics_state.cb.blend_constants[2]);
+         break;
+      case QUNIFORM_BLEND_CONSTANT_A:
+         cl_aligned_f(&uniforms, job->cmd_buffer->vk.dynamic_graphics_state.cb.blend_constants[3]);
+         break;
+
       default:
-         unreachable("unsupported quniform_contents uniform type\n");
+         UNREACHABLE("unsupported quniform_contents uniform type\n");
       }
    }
 

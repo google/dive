@@ -62,7 +62,7 @@ static inline void ensure_vk_object_map(void)
       vk_object_to_data = _mesa_hash_table_u64_create(NULL);
 }
 
-#define HKEY(obj) ((uint64_t)(obj))
+#define HKEY(obj) ((uintptr_t)(obj))
 #define FIND(type, obj) ((type *)find_object_data(HKEY(obj)))
 
 static void *find_object_data(uint64_t obj)
@@ -181,7 +181,7 @@ static VkLayerDeviceCreateInfo *get_device_chain_info(const VkDeviceCreateInfo *
           ((VkLayerDeviceCreateInfo *) item)->function == func)
          return (VkLayerDeviceCreateInfo *)item;
    }
-   unreachable("device chain info not found");
+   UNREACHABLE("device chain info not found");
    return NULL;
 }
 
@@ -285,7 +285,7 @@ static VkLayerInstanceCreateInfo *get_instance_chain_info(const VkInstanceCreate
           ((VkLayerInstanceCreateInfo *) item)->function == func)
          return (VkLayerInstanceCreateInfo *) item;
    }
-   unreachable("instance chain info not found");
+   UNREACHABLE("instance chain info not found");
    return NULL;
 }
 

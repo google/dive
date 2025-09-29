@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2011 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2011-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 
 #include "util/format/u_formats.h"
@@ -29,8 +11,11 @@
 #include "util/format/u_format.h"
 #include "util/u_memory.h"
 
+#include "pipe/p_shader_tokens.h"
+
 #include "svga_winsys.h"
 #include "svga_screen.h"
+#include "svga_surface.h"
 #include "svga_format.h"
 
 
@@ -227,6 +212,7 @@ svga_format_entry(enum pipe_format format)
       return &format_conversion_table[format];
 }
 
+
 /**
  * Translate a gallium vertex format to a vgpu10 vertex format.
  * Also, return any special vertex format flags.
@@ -297,17 +283,14 @@ svga_translate_format(const struct svga_screen *ss,
    if (ss->sws->have_vgpu10) {
       if (bind & (PIPE_BIND_VERTEX_BUFFER | PIPE_BIND_INDEX_BUFFER)) {
          return entry->vertex_format;
-      }
-      else if (bind & PIPE_BIND_SCANOUT) {
+      } else if (bind & PIPE_BIND_SCANOUT) {
          return svga_translate_screen_target_format_vgpu10(format);
-      }
-      else if (bind & PIPE_BIND_SHADER_IMAGE) {
+      } else if (bind & PIPE_BIND_SHADER_IMAGE) {
          if (format_conversion_table[format].flags & TF_UAV)
             return format_conversion_table[format].pixel_format;
          else
             return SVGA3D_FORMAT_INVALID;
-      }
-      else {
+      } else {
          if ((format_conversion_table[format].flags & TF_SM5) &&
              !ss->sws->have_sm5)
             return SVGA3D_FORMAT_INVALID;
@@ -316,7 +299,7 @@ svga_translate_format(const struct svga_screen *ss,
       }
    }
 
-   switch(format) {
+   switch (format) {
    case PIPE_FORMAT_B8G8R8A8_UNORM:
       return SVGA3D_A8R8G8B8;
    case PIPE_FORMAT_B8G8R8X8_UNORM:
@@ -1371,68 +1354,68 @@ static const struct format_cap format_cap_table[] = {
    },
    {
       "SVGA3D_BC4_UNORM",
-     SVGA3D_BC4_UNORM,
-     SVGA3D_DEVCAP_DXFMT_BC4_UNORM,
-     4, 4, 8, 0
+      SVGA3D_BC4_UNORM,
+      SVGA3D_DEVCAP_DXFMT_BC4_UNORM,
+      4, 4, 8, 0
    },
    {
       "SVGA3D_BC5_UNORM",
-     SVGA3D_BC5_UNORM,
-     SVGA3D_DEVCAP_DXFMT_BC5_UNORM,
-     4, 4, 16, 0
+      SVGA3D_BC5_UNORM,
+      SVGA3D_DEVCAP_DXFMT_BC5_UNORM,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_B4G4R4A4_UNORM",
-	  SVGA3D_B4G4R4A4_UNORM,
+      SVGA3D_B4G4R4A4_UNORM,
       0, 0, 0, 0
    },
    {
       "SVGA3D_BC6H_TYPELESS",
-     SVGA3D_BC6H_TYPELESS,
-     SVGA3D_DEVCAP_DXFMT_BC6H_TYPELESS,
-     4, 4, 16, 0
+      SVGA3D_BC6H_TYPELESS,
+      SVGA3D_DEVCAP_DXFMT_BC6H_TYPELESS,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_BC6H_UF16",
-     SVGA3D_BC6H_UF16,
-     SVGA3D_DEVCAP_DXFMT_BC6H_UF16,
-     4, 4, 16, 0
+      SVGA3D_BC6H_UF16,
+      SVGA3D_DEVCAP_DXFMT_BC6H_UF16,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_BC6H_SF16",
-     SVGA3D_BC6H_SF16,
-     SVGA3D_DEVCAP_DXFMT_BC6H_SF16,
-     4, 4, 16, 0
+      SVGA3D_BC6H_SF16,
+      SVGA3D_DEVCAP_DXFMT_BC6H_SF16,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_BC7_TYPELESS",
-     SVGA3D_BC7_TYPELESS,
-     SVGA3D_DEVCAP_DXFMT_BC7_TYPELESS,
-     4, 4, 16, 0
+      SVGA3D_BC7_TYPELESS,
+      SVGA3D_DEVCAP_DXFMT_BC7_TYPELESS,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_BC7_UNORM",
-     SVGA3D_BC7_UNORM,
-     SVGA3D_DEVCAP_DXFMT_BC6H_TYPELESS,
-     4, 4, 16, 0
+      SVGA3D_BC7_UNORM,
+      SVGA3D_DEVCAP_DXFMT_BC6H_TYPELESS,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_BC7_UNORM_SRGB",
-     SVGA3D_BC7_UNORM_SRGB,
-     SVGA3D_DEVCAP_DXFMT_BC6H_TYPELESS,
-     4, 4, 16, 0
+      SVGA3D_BC7_UNORM_SRGB,
+      SVGA3D_DEVCAP_DXFMT_BC6H_TYPELESS,
+      4, 4, 16, 0
    },
    {
       "SVGA3D_AYUV",
-     SVGA3D_AYUV,
-     0,
-     1, 1, 4, 0
+      SVGA3D_AYUV,
+      0,
+      1, 1, 4, 0
    },
    {
       "SVGA3D_R11G11B10_TYPELESS",
-     SVGA3D_R11G11B10_TYPELESS,
-     SVGA3D_DEVCAP_DXFMT_R11G11B10_FLOAT,
-     1, 1, 4, 0
+      SVGA3D_R11G11B10_TYPELESS,
+      SVGA3D_DEVCAP_DXFMT_R11G11B10_FLOAT,
+      1, 1, 4, 0
    }
 };
 
@@ -1473,10 +1456,8 @@ check_format_tables(void)
    static bool first_call = true;
 
    if (first_call) {
-      unsigned i;
-
       STATIC_ASSERT(ARRAY_SIZE(format_cap_table) == SVGA3D_FORMAT_MAX);
-      for (i = 0; i < ARRAY_SIZE(format_cap_table); i++) {
+      for (unsigned i = 0; i < ARRAY_SIZE(format_cap_table); i++) {
          assert(format_cap_table[i].format == i);
       }
 
@@ -1682,7 +1663,7 @@ svga_get_format_cap(struct svga_screen *ss,
    SVGA3dDevCapResult result;
    const struct format_cap *entry;
 
-#ifdef DEBUG
+#if MESA_DEBUG
    check_format_tables();
 #else
    (void) check_format_tables;
@@ -1713,7 +1694,7 @@ svga_get_dx_format_cap(struct svga_screen *ss,
    struct svga_winsys_screen *sws = ss->sws;
    const struct format_cap *entry;
 
-#ifdef DEBUG
+#if MESA_DEBUG
    check_format_tables();
 #else
    (void) check_format_tables;
@@ -1738,8 +1719,7 @@ svga_get_dx_format_cap(struct svga_screen *ss,
            format == SVGA3D_R24_UNORM_X8)) {
          caps->u |= SVGA3D_DXFMT_SHADER_SAMPLE;
       }
-   }
-   else {
+   } else {
       caps->u = entry->defaultOperations;
    }
 
@@ -1839,22 +1819,17 @@ svga_get_texture_datatype(enum pipe_format format)
    if (desc->layout == UTIL_FORMAT_LAYOUT_PLAIN ) {
       if (util_format_is_depth_or_stencil(format)) {
          t = TGSI_RETURN_TYPE_FLOAT; /* XXX revisit this */
-      }
-      else if (desc->channel[0].type == UTIL_FORMAT_TYPE_FLOAT) {
+      } else if (desc->channel[0].type == UTIL_FORMAT_TYPE_FLOAT) {
          t = TGSI_RETURN_TYPE_FLOAT;
-      }
-      else if (desc->channel[0].type == UTIL_FORMAT_TYPE_UNSIGNED) {
+      } else if (desc->channel[0].type == UTIL_FORMAT_TYPE_UNSIGNED) {
          t = desc->channel[0].normalized ? TGSI_RETURN_TYPE_UNORM : TGSI_RETURN_TYPE_UINT;
-      }
-      else if (desc->channel[0].type == UTIL_FORMAT_TYPE_SIGNED) {
+      } else if (desc->channel[0].type == UTIL_FORMAT_TYPE_SIGNED) {
          t = desc->channel[0].normalized ? TGSI_RETURN_TYPE_SNORM : TGSI_RETURN_TYPE_SINT;
-      }
-      else {
+      } else {
          assert(!"Unexpected channel type in svga_get_texture_datatype()");
          t = TGSI_RETURN_TYPE_FLOAT;
       }
-   }
-   else {
+   } else {
       /* compressed format, shared exponent format, etc. */
       switch (format) {
       case PIPE_FORMAT_DXT1_RGB:
@@ -1900,11 +1875,10 @@ svga_get_texture_datatype(enum pipe_format format)
 bool
 svga_has_any_integer_cbufs(const struct svga_context *svga)
 {
-   unsigned i;
-   for (i = 0; i < PIPE_MAX_COLOR_BUFS; ++i) {
-      struct pipe_surface *cbuf = svga->curr.framebuffer.cbufs[i];
+   for (unsigned i = 0; i < PIPE_MAX_COLOR_BUFS; ++i) {
+      const struct svga_surface *cbuf = svga->curr.framebuffer.cbufs[i];
 
-      if (cbuf && util_format_is_pure_integer(cbuf->format)) {
+      if (cbuf && cbuf->base.texture && util_format_is_pure_integer(cbuf->base.format)) {
          return true;
       }
    }
@@ -2143,14 +2117,13 @@ svga_format_is_shareable(const struct svga_screen *ss,
 {
    SVGA3dSurfaceFormat default_format =
       svga_translate_format(ss, pformat, bind);
-   int i;
 
    if (default_format == SVGA3D_FORMAT_INVALID)
       return false;
    if (default_format == sformat)
       return true;
 
-   for (i = 0; i < ARRAY_SIZE(format_compats); ++i) {
+   for (unsigned i = 0; i < ARRAY_SIZE(format_compats); ++i) {
       if (format_compats[i].pformat == pformat) {
          const SVGA3dSurfaceFormat *compat_format =
             format_compats[i].compat_format;
@@ -2212,9 +2185,6 @@ svga_is_format_supported(struct pipe_screen *screen,
                          unsigned bindings)
 {
    struct svga_screen *ss = svga_screen(screen);
-   SVGA3dSurfaceFormat svga_format;
-   SVGA3dSurfaceFormatCaps caps;
-   SVGA3dSurfaceFormatCaps mask;
 
    assert(bindings);
    assert(!ss->sws->have_vgpu10);
@@ -2223,7 +2193,8 @@ svga_is_format_supported(struct pipe_screen *screen,
    if (sample_count > 1)
       return false;
 
-   svga_format = svga_translate_format(ss, format, bindings);
+   const SVGA3dSurfaceFormat svga_format =
+      svga_translate_format(ss, format, bindings);
    if (svga_format == SVGA3D_FORMAT_INVALID) {
       return false;
    }
@@ -2269,6 +2240,7 @@ svga_is_format_supported(struct pipe_screen *screen,
    /*
     * Query the host capabilities.
     */
+   SVGA3dSurfaceFormatCaps caps;
    svga_get_format_cap(ss, svga_format, &caps);
 
    if (bindings & PIPE_BIND_RENDER_TARGET) {
@@ -2281,6 +2253,7 @@ svga_is_format_supported(struct pipe_screen *screen,
       }
    }
 
+   SVGA3dSurfaceFormatCaps mask;
    mask.value = 0;
    if (bindings & PIPE_BIND_RENDER_TARGET)
       mask.value |= SVGA3DFORMAT_OP_OFFSCREEN_RENDERTARGET;
@@ -2313,8 +2286,6 @@ svga_is_dx_format_supported(struct pipe_screen *screen,
                             unsigned bindings)
 {
    struct svga_screen *ss = svga_screen(screen);
-   SVGA3dSurfaceFormat svga_format;
-   SVGA3dDevCapResult caps;
    unsigned int mask = 0;
 
    assert(bindings);
@@ -2325,7 +2296,6 @@ svga_is_dx_format_supported(struct pipe_screen *screen,
       return (ss->sws->have_gl43 && (sample_count <= ss->forcedSampleCount));
 
    if (sample_count > 1) {
-
       /* No MSAA support for shader image */
       if (bindings & PIPE_BIND_SHADER_IMAGE)
          return false;
@@ -2344,18 +2314,21 @@ svga_is_dx_format_supported(struct pipe_screen *screen,
     */
 
    if (bindings & PIPE_BIND_VERTEX_BUFFER) {
+      SVGA3dSurfaceFormat svga_format;
       unsigned flags;
       svga_translate_vertex_format_vgpu10(format, &svga_format, &flags);
       return svga_format != SVGA3D_FORMAT_INVALID;
    }
 
    if (bindings & PIPE_BIND_SAMPLER_VIEW && target == PIPE_BUFFER) {
+      SVGA3dSurfaceFormat svga_format;
       unsigned flags;
       svga_translate_texture_buffer_view_format(format, &svga_format, &flags);
       return svga_format != SVGA3D_FORMAT_INVALID;
    }
 
-   svga_format = svga_translate_format(ss, format, bindings);
+   const SVGA3dSurfaceFormat svga_format =
+      svga_translate_format(ss, format, bindings);
    if (svga_format == SVGA3D_FORMAT_INVALID) {
       return false;
    }
@@ -2395,6 +2368,7 @@ svga_is_dx_format_supported(struct pipe_screen *screen,
    /*
     * Query the host capabilities.
     */
+   SVGA3dDevCapResult caps;
    svga_get_dx_format_cap(ss, svga_format, &caps);
 
    if (bindings & PIPE_BIND_RENDER_TARGET) {

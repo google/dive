@@ -22,8 +22,8 @@
  */
 
 #include "vk_rmv_common.h"
-#include "vulkan/runtime/vk_buffer.h"
-#include "vulkan/runtime/vk_device.h"
+#include "vk_buffer.h"
+#include "vk_device.h"
 
 void
 vk_memory_trace_init(struct vk_device *device, const struct vk_rmv_device_info *device_info)
@@ -59,7 +59,7 @@ vk_memory_trace_finish(struct vk_device *device)
       }
    }
    util_dynarray_fini(&device->memory_trace_data.tokens);
-   if (_mesa_hash_table_num_entries(device->memory_trace_data.handle_table->table))
+   if (_mesa_hash_table_num_entries(&device->memory_trace_data.handle_table->table))
       fprintf(stderr,
               "mesa: Unfreed resources detected at device destroy, there may be memory leaks!\n");
    _mesa_hash_table_u64_destroy(device->memory_trace_data.handle_table);

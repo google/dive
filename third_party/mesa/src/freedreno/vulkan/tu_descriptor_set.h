@@ -10,10 +10,13 @@
 
 #include "vk_descriptor_set_layout.h"
 
-/* The hardware supports 5 descriptor sets, but we reserve 1 for dynamic
- * descriptors and input attachments.
+#include "tu_sampler.h"
+
+/* The hardware supports up to 8 descriptor sets since A7XX.
+ * Note: This is the maximum across generations, not the maximum for a
+ * particular generation so it should only be used for allocation.
  */
-#define MAX_SETS 4
+#define MAX_SETS 8
 
 /* I have no idea what the maximum size is, but the hardware supports very
  * large numbers of descriptors (at least 2^16). This limit is based on
@@ -92,14 +95,10 @@ struct tu_pipeline_layout
    {
       struct tu_descriptor_set_layout *layout;
       uint32_t size;
-      uint32_t dynamic_offset_start;
    } set[MAX_SETS];
-
-   bool independent_sets;
 
    uint32_t num_sets;
    uint32_t push_constant_size;
-   uint32_t dynamic_offset_size;
 
    unsigned char sha1[20];
 };
@@ -201,19 +200,6 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(tu_descriptor_update_template, base,
                                VkDescriptorUpdateTemplate,
                                VK_OBJECT_TYPE_DESCRIPTOR_UPDATE_TEMPLATE)
 
-struct tu_sampler_ycbcr_conversion {
-   struct vk_object_base base;
-
-   VkFormat format;
-   VkSamplerYcbcrModelConversion ycbcr_model;
-   VkSamplerYcbcrRange ycbcr_range;
-   VkComponentMapping components;
-   VkChromaLocation chroma_offsets[2];
-   VkFilter chroma_filter;
-};
-VK_DEFINE_NONDISP_HANDLE_CASTS(tu_sampler_ycbcr_conversion, base, VkSamplerYcbcrConversion,
-                               VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION)
-
 void
 tu_update_descriptor_sets(const struct tu_device *device,
                           VkDescriptorSet overrideSet,
@@ -237,7 +223,7 @@ tu_immutable_samplers(const struct tu_descriptor_set_layout *set,
                                  binding->immutable_samplers_offset);
 }
 
-static inline const struct tu_sampler_ycbcr_conversion *
+static inline const struct vk_ycbcr_conversion_state *
 tu_immutable_ycbcr_samplers(const struct tu_descriptor_set_layout *set,
                             const struct tu_descriptor_set_binding_layout *binding)
 {
@@ -245,8 +231,8 @@ tu_immutable_ycbcr_samplers(const struct tu_descriptor_set_layout *set,
       return NULL;
 
    return (
-      struct tu_sampler_ycbcr_conversion *) ((const char *) set +
-                                             binding->ycbcr_samplers_offset);
+      struct vk_ycbcr_conversion_state *) ((const char *) set +
+                                           binding->ycbcr_samplers_offset);
 }
 
 #endif /* TU_DESCRIPTOR_SET_H */

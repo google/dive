@@ -24,8 +24,8 @@ DRI drivers for X.org.
 
 -  See the `DRI website <https://dri.freedesktop.org/>`__ for more
    information.
--  See `01.org <https://01.org/linuxgraphics>`__ for more information
-   about Intel drivers.
+-  See `01.org <https://www.intel.com/content/www/us/en/developer/topic-technology/open/overview.html>`__
+   for more information about Intel drivers.
 -  See `nouveau.freedesktop.org <https://nouveau.freedesktop.org>`__ for
    more information about Nouveau drivers.
 -  See
@@ -125,8 +125,8 @@ popular and feature-complete.
 2.1 What's the easiest way to install Mesa?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you're using a Linux-based system, your distro CD most likely already
-has Mesa packages (like RPM or DEB) which you can easily install.
+If you're using a Linux-based system, your distribution
+most likely already includes Mesa packages.
 
 2.2 I get undefined symbols such as bgnpolygon, v3f, etc...
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -167,8 +167,6 @@ Basically you'll want the following:
    the OpenGL extensions header
 ``/usr/include/GL/glxext.h``
    the OpenGL GLX extensions header
-``/usr/include/GL/osmesa.h``
-   the Mesa off-screen rendering header
 ``/usr/lib/libGL.so``
    a symlink to ``libGL.so.1``
 ``/usr/lib/libGL.so.1``

@@ -45,7 +45,7 @@
 #include "postprocess/pp_filters.h"
 #include "postprocess/pp_private.h"
 
-#include "util/u_box.h"
+#include "util/box.h"
 #include "util/u_sampler.h"
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
@@ -104,8 +104,8 @@ pp_jimenezmlaa_run(struct pp_queue_t *ppq, struct pipe_resource *in,
    cb.user_buffer = constants;
 
    struct pipe_context *pipe = ppq->p->pipe;
-   pipe->set_constant_buffer(pipe, PIPE_SHADER_VERTEX, 0, false, &cb);
-   pipe->set_constant_buffer(pipe, PIPE_SHADER_FRAGMENT, 0, false, &cb);
+   pipe_upload_constant_buffer0(pipe, MESA_SHADER_VERTEX, &cb);
+   pipe_upload_constant_buffer0(pipe, MESA_SHADER_FRAGMENT, &cb);
 
    mstencil.stencil[0].enabled = 1;
    mstencil.stencil[0].valuemask = mstencil.stencil[0].writemask = ~0;
@@ -132,9 +132,9 @@ pp_jimenezmlaa_run(struct pp_queue_t *ppq, struct pipe_resource *in,
 
    {
       const struct pipe_sampler_state *samplers[] = {&p->sampler_point};
-      cso_set_samplers(p->cso, PIPE_SHADER_FRAGMENT, 1, samplers);
+      cso_set_samplers(p->cso, MESA_SHADER_FRAGMENT, 1, samplers);
    }
-   pipe->set_sampler_views(pipe, PIPE_SHADER_FRAGMENT, 0, 1, 0, false, &p->view);
+   pipe->set_sampler_views(pipe, MESA_SHADER_FRAGMENT, 0, 1, 0, &p->view);
 
    cso_set_vertex_shader_handle(p->cso, ppq->shaders[n][1]);    /* offsetvs */
    cso_set_fragment_shader_handle(p->cso, ppq->shaders[n][2]);
@@ -162,18 +162,17 @@ pp_jimenezmlaa_run(struct pp_queue_t *ppq, struct pipe_resource *in,
    {
       const struct pipe_sampler_state *samplers[] =
          {&p->sampler_point, &p->sampler_point, &p->sampler};
-      cso_set_samplers(p->cso, PIPE_SHADER_FRAGMENT, 3, samplers);
+      cso_set_samplers(p->cso, MESA_SHADER_FRAGMENT, 3, samplers);
    }
 
    arr[0] = p->view;
-   pipe->set_sampler_views(pipe, PIPE_SHADER_FRAGMENT, 0, 3, 0, false, arr);
+   pipe->set_sampler_views(pipe, MESA_SHADER_FRAGMENT, 0, 3, 0, arr);
 
    cso_set_vertex_shader_handle(p->cso, ppq->shaders[n][0]);    /* passvs */
    cso_set_fragment_shader_handle(p->cso, ppq->shaders[n][3]);
 
    pp_filter_draw(p);
    pp_filter_end_pass(p);
-   pipe_sampler_view_reference(&arr[1], NULL);
 
 
    /* Third pass: smoothed edges */
@@ -185,7 +184,7 @@ pp_jimenezmlaa_run(struct pp_queue_t *ppq, struct pipe_resource *in,
 
    /* Blit the input to the output */
    pp_blit(p->pipe, in, 0, 0,
-           w, h, 0, p->framebuffer.cbufs[0],
+           w, h, 0, &p->framebuffer.cbufs[0],
            0, 0, w, h);
 
    u_sampler_view_default_template(&v_tmp, in, in->format);
@@ -194,11 +193,11 @@ pp_jimenezmlaa_run(struct pp_queue_t *ppq, struct pipe_resource *in,
    {
       const struct pipe_sampler_state *samplers[] =
          {&p->sampler_point, &p->sampler_point};
-      cso_set_samplers(p->cso, PIPE_SHADER_FRAGMENT, 2, samplers);
+      cso_set_samplers(p->cso, MESA_SHADER_FRAGMENT, 2, samplers);
    }
 
    arr[1] = p->view;
-   pipe->set_sampler_views(pipe, PIPE_SHADER_FRAGMENT, 0, 2, 0, false, arr);
+   pipe->set_sampler_views(pipe, MESA_SHADER_FRAGMENT, 0, 2, 0, arr);
 
    cso_set_vertex_shader_handle(p->cso, ppq->shaders[n][1]);    /* offsetvs */
    cso_set_fragment_shader_handle(p->cso, ppq->shaders[n][4]);
@@ -208,10 +207,11 @@ pp_jimenezmlaa_run(struct pp_queue_t *ppq, struct pipe_resource *in,
 
    pp_filter_draw(p);
    pp_filter_end_pass(p);
-   pipe_sampler_view_reference(&arr[0], NULL);
+   pipe->sampler_view_release(pipe, arr[0]);
+   pipe->sampler_view_release(pipe, arr[1]);
 
    p->blend.rt[0].blend_enable = 0;
-   p->framebuffer.zsbuf = NULL;
+   memset(&p->framebuffer.zsbuf, 0, sizeof(p->framebuffer.zsbuf));
 }
 
 /** The init function of the MLAA filter. */
@@ -338,4 +338,3 @@ pp_jimenezmlaa_free(struct pp_queue_t *ppq, unsigned int n)
 {
    pipe_resource_reference(&ppq->areamaptex, NULL);
 }
-

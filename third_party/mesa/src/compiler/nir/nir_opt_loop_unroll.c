@@ -56,7 +56,7 @@ loop_prepare_for_unroll(nir_loop *loop)
    /* Lower phis at the top level of the loop body */
    foreach_list_typed_safe(nir_cf_node, node, node, &loop->body) {
       if (nir_cf_node_block == node->type) {
-         nir_lower_phis_to_regs_block(nir_cf_node_as_block(node));
+         nir_lower_phis_to_regs_block(nir_cf_node_as_block(node), false);
       }
    }
 
@@ -64,7 +64,7 @@ loop_prepare_for_unroll(nir_loop *loop)
    nir_block *block_after_loop =
       nir_cf_node_as_block(nir_cf_node_next(&loop->cf_node));
 
-   nir_lower_phis_to_regs_block(block_after_loop);
+   nir_lower_phis_to_regs_block(block_after_loop, false);
 
    /* Remove jump if it's the last instruction in the loop */
    nir_instr *last_instr = nir_block_last_instr(nir_loop_last_block(loop));
@@ -637,6 +637,19 @@ is_access_out_of_bounds(nir_loop_terminator *term, nir_deref_instr *deref,
    return false;
 }
 
+static bool
+comparison_contains_instr(nir_scalar cond_scalar, nir_instr *instr)
+{
+   if (nir_is_terminator_condition_with_two_inputs(cond_scalar)) {
+      nir_alu_instr *comparison =
+         nir_def_as_alu(cond_scalar.def);
+      return comparison->src[0].src.ssa->parent_instr == instr ||
+             comparison->src[1].src.ssa->parent_instr == instr;
+   }
+
+   return false;
+}
+
 /* If we know an array access is going to be out of bounds remove or replace
  * the access with an undef. This can later result in the entire loop being
  * removed by nir_opt_dead_cf().
@@ -677,6 +690,36 @@ remove_out_of_bounds_induction_use(nir_shader *shader, nir_loop *loop,
             if (is_access_out_of_bounds(term, nir_src_as_deref(intrin->src[0]),
                                         trip_count)) {
                if (intrin->intrinsic == nir_intrinsic_load_deref) {
+                  nir_alu_instr *term_alu =
+                     nir_def_as_alu(term->nif->condition.ssa);
+                  b.cursor = nir_before_instr(term->nif->condition.ssa->parent_instr);
+
+                  /* If the out of bounds load is used in the comparison of the
+                   * loop terminator replace the condition with true so that the
+                   * loop can be removed.
+                   */
+                  bool exit_on_true = !term->continue_from_then;
+                  if (term_alu->op == nir_op_ior && exit_on_true) {
+                     nir_scalar src0_cond_scalar = { term_alu->src[0].src.ssa, 0 };
+                     nir_scalar src1_cond_scalar = { term_alu->src[1].src.ssa, 0 };
+
+                     bool replaced_comparison = false;
+                     if (comparison_contains_instr(src0_cond_scalar, instr)) {
+                        nir_def *t = nir_imm_true(&b);
+                        nir_def_rewrite_uses(term_alu->src[0].src.ssa, t);
+                        replaced_comparison = true;
+                     }
+
+                     if (comparison_contains_instr(src1_cond_scalar, instr)) {
+                        nir_def *t = nir_imm_true(&b);
+                        nir_def_rewrite_uses(term_alu->src[1].src.ssa, t);
+                        replaced_comparison = true;
+                     }
+
+                     if (replaced_comparison)
+                        continue;
+                  }
+
                   nir_def *undef =
                      nir_undef(&b, intrin->def.num_components,
                                intrin->def.bit_size);
@@ -760,12 +803,8 @@ partial_unroll(nir_shader *shader, nir_loop *loop, unsigned trip_count)
 
    /* Insert break back into terminator */
    nir_jump_instr *brk = nir_jump_instr_create(shader, nir_jump_break);
-   nir_if *nif = nir_block_get_following_if(nir_loop_first_block(new_loop));
-   if (terminator->continue_from_then) {
-      nir_instr_insert_after_block(nir_if_last_else_block(nif), &brk->instr);
-   } else {
-      nir_instr_insert_after_block(nir_if_last_then_block(nif), &brk->instr);
-   }
+   nir_block *break_block = _mesa_hash_table_search(remap_table, terminator->break_block)->data;
+   nir_instr_insert_after_block(break_block, &brk->instr);
 
    /* Delete the original loop header and body */
    nir_cf_delete(&lp_header);
@@ -967,7 +1006,7 @@ process_loops(nir_shader *sh, nir_cf_node *cf_node, bool *has_nested_loop_out,
       break;
    }
    default:
-      unreachable("unknown cf node type");
+      UNREACHABLE("unknown cf node type");
    }
 
    const bool unrolled_child_block = progress;
@@ -1131,10 +1170,10 @@ nir_opt_loop_unroll_impl(nir_function_impl *impl,
                                       &has_nested_loop);
 
    if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_none);
+      nir_progress(true, impl, nir_metadata_none);
       nir_lower_reg_intrinsics_to_ssa_impl(impl);
    } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
+      nir_no_progress(impl);
    }
 
    return progress;

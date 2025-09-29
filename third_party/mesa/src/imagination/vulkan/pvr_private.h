@@ -38,6 +38,8 @@
 
 #include "compiler/shader_enums.h"
 #include "hwdef/rogue_hw_defs.h"
+#include "pco/pco.h"
+#include "pco/pco_data.h"
 #include "pvr_border.h"
 #include "pvr_clear.h"
 #include "pvr_common.h"
@@ -48,21 +50,23 @@
 #include "pvr_job_render.h"
 #include "pvr_limits.h"
 #include "pvr_pds.h"
-#include "pvr_shader_factory.h"
+#include "pvr_usc.h"
 #include "pvr_spm.h"
 #include "pvr_types.h"
 #include "pvr_winsys.h"
-#include "rogue/rogue.h"
 #include "util/bitscan.h"
 #include "util/format/u_format.h"
 #include "util/log.h"
 #include "util/macros.h"
+#include "util/mesa-sha1.h"
 #include "util/simple_mtx.h"
 #include "util/u_dynarray.h"
 #include "util/u_math.h"
 #include "vk_buffer.h"
+#include "vk_buffer_view.h"
 #include "vk_command_buffer.h"
 #include "vk_device.h"
+#include "vk_enum_to_str.h"
 #include "vk_graphics_state.h"
 #include "vk_image.h"
 #include "vk_instance.h"
@@ -70,7 +74,6 @@
 #include "vk_physical_device.h"
 #include "vk_queue.h"
 #include "vk_sync.h"
-#include "vulkan/util/vk_enum_to_str.h"
 #include "wsi_common.h"
 
 #ifdef HAVE_VALGRIND
@@ -89,7 +92,6 @@ struct pvr_free_list;
 struct pvr_graphics_pipeline;
 struct pvr_instance;
 struct pvr_render_ctx;
-struct rogue_compiler;
 
 struct pvr_physical_device {
    struct vk_physical_device vk;
@@ -97,28 +99,34 @@ struct pvr_physical_device {
    /* Back-pointer to instance */
    struct pvr_instance *instance;
 
-   char *name;
    char *render_path;
    char *display_path;
 
+   /* primary node (cardN) of the render device */
+   dev_t primary_devid;
+   /* render node (renderN) of the render device */
+   dev_t render_devid;
+
    struct pvr_winsys *ws;
    struct pvr_device_info dev_info;
-
    struct pvr_device_runtime_info dev_runtime_info;
 
    VkPhysicalDeviceMemoryProperties memory;
 
-   uint8_t pipeline_cache_uuid[VK_UUID_SIZE];
-
    struct wsi_device wsi_device;
 
-   struct rogue_compiler *compiler;
+   pco_ctx *pco_ctx;
+
+   uint8_t device_uuid[SHA1_DIGEST_LENGTH];
+   uint8_t cache_uuid[SHA1_DIGEST_LENGTH];
 };
 
 struct pvr_instance {
    struct vk_instance vk;
 
    uint32_t active_device_count;
+
+   uint8_t driver_build_sha[SHA1_DIGEST_LENGTH];
 };
 
 struct pvr_queue {
@@ -138,6 +146,7 @@ struct pvr_queue {
 struct pvr_vertex_binding {
    struct pvr_buffer *buffer;
    VkDeviceSize offset;
+   VkDeviceSize size;
 };
 
 struct pvr_pds_upload {
@@ -191,8 +200,8 @@ struct pvr_device {
 
    /* Compute shaders for queries. */
    struct pvr_compute_query_shader availability_shader;
-   struct pvr_compute_query_shader *copy_results_shaders;
-   struct pvr_compute_query_shader *reset_queries_shaders;
+   struct pvr_compute_query_shader reset_queries_shader;
+   struct pvr_compute_query_shader copy_results_shader;
 
    struct pvr_suballocator suballoc_general;
    struct pvr_suballocator suballoc_pds;
@@ -247,8 +256,7 @@ struct pvr_device {
          uint32_t texture_program_pds_temps_count;
          /* Size in dwords. */
          uint32_t texture_program_data_size;
-      } pds_clear_attachment_program_info
-         [PVR_CLEAR_ATTACHMENT_PROGRAM_COUNT_WITH_HOLES];
+      } pds_clear_attachment_program_info[PVR_NUM_CLEAR_ATTACH_SHADERS];
    } static_clear_state;
 
    struct {
@@ -261,7 +269,7 @@ struct pvr_device {
 
          uint32_t pds_texture_program_data_size;
          uint32_t pds_texture_program_temps_count;
-      } load_program[PVR_SPM_LOAD_PROGRAM_COUNT];
+      } load_program[PVR_NUM_SPM_LOAD_SHADERS];
    } spm_load_state;
 
    struct pvr_device_tile_buffer_state {
@@ -342,19 +350,20 @@ struct pvr_image_view {
     * We create separate texture states for sampling, storage and input
     * attachment cases.
     */
-   uint64_t texture_state[PVR_TEXTURE_STATE_MAX_ENUM][2];
+   struct pvr_image_descriptor image_state[PVR_TEXTURE_STATE_MAX_ENUM];
 };
 
-struct pvr_buffer_view {
-   struct vk_object_base base;
+#define PVR_BUFFER_VIEW_WIDTH 8192U
 
-   uint64_t range;
-   VkFormat format;
+struct pvr_buffer_view {
+   struct vk_buffer_view vk;
+
+   uint32_t num_rows;
 
    /* Prepacked Texture dword 0 and 1. It will be copied to the descriptor
     * during pvr_UpdateDescriptorSets().
     */
-   uint64_t texture_state[2];
+   struct pvr_image_descriptor image_state;
 };
 
 #define PVR_TRANSFER_MAX_SOURCES 10U
@@ -404,7 +413,7 @@ struct pvr_transfer_cmd_source {
    /* In the case of a simple 1:1 copy, this setting does not affect the output
     * but will affect performance. Use clamp to edge when possible.
     */
-   /* This is of type enum PVRX(TEXSTATE_ADDRMODE). */
+   /* This is of type enum ROGUE_TEXSTATE_ADDRMODE. */
    int addr_mode;
 
    /* Source filtering method. */
@@ -504,9 +513,11 @@ struct pvr_sub_cmd_gfx {
     */
    bool frag_uses_texture_rw;
 
-   bool has_occlusion_query;
+   bool has_query;
 
    bool wait_on_previous_transfer;
+
+   bool has_depth_feedback;
 };
 
 struct pvr_sub_cmd_compute {
@@ -558,8 +569,6 @@ struct pvr_sub_cmd_event {
       } wait;
 
       struct pvr_sub_cmd_event_barrier {
-         bool in_render_pass;
-
          /* Stages to wait for. */
          uint32_t wait_for_stage_mask;
          /* Stages to wait at. */
@@ -614,7 +623,7 @@ struct pvr_ppp_state {
 
    struct {
       /* TODO: Can we get rid of the "control" field? */
-      struct PVRX(TA_STATE_ISPCTL) control_struct;
+      struct ROGUE_TA_STATE_ISPCTL control_struct;
       uint32_t control;
 
       uint32_t front_a;
@@ -689,6 +698,13 @@ struct pvr_cmd_buffer_draw_state {
    bool draw_indexed;
 };
 
+struct pvr_push_constants {
+   uint8_t data[PVR_MAX_PUSH_CONSTANTS_SIZE];
+   unsigned bytes_updated;
+   pvr_dev_addr_t dev_addr;
+   bool dirty;
+};
+
 struct pvr_cmd_buffer_state {
    /* Pipeline binding. */
    const struct pvr_graphics_pipeline *gfx_pipeline;
@@ -701,7 +717,7 @@ struct pvr_cmd_buffer_state {
 
    struct pvr_ppp_state ppp_state;
 
-   struct PVRX(TA_STATE_HEADER) emit_header;
+   struct ROGUE_TA_STATE_HEADER emit_header;
 
    struct pvr_vertex_binding vertex_bindings[PVR_MAX_VERTEX_INPUT_BINDINGS];
 
@@ -711,17 +727,6 @@ struct pvr_cmd_buffer_state {
       VkIndexType type;
    } index_buffer_binding;
 
-   struct {
-      uint8_t data[PVR_MAX_PUSH_CONSTANTS_SIZE];
-      VkShaderStageFlags dirty_stages;
-      /* Indicates if the whole push constants buffer was uploaded. This avoids
-       * having to upload the same stuff twice when the push constant range
-       * covers both gfx and compute.
-       */
-      bool uploaded;
-      pvr_dev_addr_t dev_addr;
-   } push_constants;
-
    /* Array size of barriers_needed is based on number of sync pipeline
     * stages.
     */
@@ -729,6 +734,8 @@ struct pvr_cmd_buffer_state {
 
    struct pvr_descriptor_state gfx_desc_state;
    struct pvr_descriptor_state compute_desc_state;
+
+   struct pvr_push_constants push_consts[PVR_STAGE_ALLOCATION_COUNT];
 
    VkFormat depth_format;
 
@@ -832,12 +839,6 @@ struct pvr_cmd_buffer {
    struct list_head sub_cmds;
 };
 
-struct pvr_pipeline_cache {
-   struct vk_object_base base;
-
-   struct pvr_device *device;
-};
-
 struct pvr_stage_allocation_descriptor_state {
    struct pvr_pds_upload pds_code;
    /* Since we upload the code segment separately from the data segment
@@ -861,50 +862,21 @@ struct pvr_pds_attrib_program {
 };
 
 struct pvr_pipeline_stage_state {
-   uint32_t const_shared_reg_count;
-   uint32_t const_shared_reg_offset;
    uint32_t pds_temps_count;
-
-   uint32_t coefficient_size;
-
-   /* True if this shader uses any atomic operations. */
-   bool uses_atomic_ops;
-
-   /* True if this shader uses both texture reads and texture writes. */
-   bool uses_texture_rw;
-
-   /* Only used for compute stage. */
-   bool uses_barrier;
-
-   /* True if this shader has side effects */
-   bool has_side_effects;
-
-   /* True if this shader is simply a nop.end. */
-   bool empty_program;
 };
 
 struct pvr_compute_shader_state {
    /* Pointer to a buffer object that contains the shader binary. */
-   struct pvr_suballoc_bo *bo;
+   struct pvr_suballoc_bo *shader_bo;
 
-   bool uses_atomic_ops;
-   bool uses_barrier;
-   /* E.g. GLSL shader uses gl_NumWorkGroups. */
-   bool uses_num_workgroups;
-
-   uint32_t const_shared_reg_count;
-   uint32_t input_register_count;
-   uint32_t work_size;
-   uint32_t coefficient_register_count;
+   /* Buffer object for the coefficient update shader binary. */
+   struct pvr_suballoc_bo *coeff_update_shader_bo;
+   uint32_t coeff_update_shader_temps;
 };
 
 struct pvr_vertex_shader_state {
    /* Pointer to a buffer object that contains the shader binary. */
-   struct pvr_suballoc_bo *bo;
-   uint32_t entry_offset;
-
-   /* 2 since we only need STATE_VARYING{0,1} state words. */
-   uint32_t varying[2];
+   struct pvr_suballoc_bo *shader_bo;
 
    struct pvr_pds_attrib_program
       pds_attrib_programs[PVR_PDS_VERTEX_ATTRIB_PROGRAM_COUNT];
@@ -912,59 +884,47 @@ struct pvr_vertex_shader_state {
    struct pvr_pipeline_stage_state stage_state;
    /* FIXME: Move this into stage_state? */
    struct pvr_stage_allocation_descriptor_state descriptor_state;
-   uint32_t vertex_input_size;
-   uint32_t vertex_output_size;
-   uint32_t user_clip_planes_mask;
 };
 
 struct pvr_fragment_shader_state {
    /* Pointer to a buffer object that contains the shader binary. */
-   struct pvr_suballoc_bo *bo;
-   uint32_t entry_offset;
+   struct pvr_suballoc_bo *shader_bo;
 
    struct pvr_pipeline_stage_state stage_state;
    /* FIXME: Move this into stage_state? */
    struct pvr_stage_allocation_descriptor_state descriptor_state;
-   enum PVRX(TA_PASSTYPE) pass_type;
+   enum ROGUE_TA_PASSTYPE pass_type;
+   enum ROGUE_PDSINST_DOUTU_SAMPLE_RATE sample_rate;
 
-   struct pvr_pds_upload pds_coeff_program;
+   struct pvr_pds_coeff_loading_program pds_coeff_program;
+   uint32_t *pds_coeff_program_buffer;
+
    struct pvr_pds_upload pds_fragment_program;
 };
 
 struct pvr_pipeline {
    struct vk_object_base base;
-
    enum pvr_pipeline_type type;
-
-   /* Saved information from pCreateInfo. */
-   struct pvr_pipeline_layout *layout;
+   struct vk_pipeline_layout *layout;
+   VkPipelineCreateFlags2KHR pipeline_flags;
 };
 
 struct pvr_compute_pipeline {
    struct pvr_pipeline base;
 
+   pco_data cs_data;
+
    struct pvr_compute_shader_state shader_state;
-
-   struct {
-      uint32_t base_workgroup : 1;
-   } flags;
-
    struct pvr_stage_allocation_descriptor_state descriptor_state;
 
-   struct pvr_pds_upload primary_program;
-   struct pvr_pds_info primary_program_info;
+   struct pvr_pds_upload pds_cs_program;
+   struct pvr_pds_info pds_cs_program_info;
 
-   struct pvr_pds_base_workgroup_program {
-      struct pvr_pds_upload code_upload;
-
-      uint32_t *data_section;
-      /* Offset within the PDS data section at which the base workgroup id
-       * resides.
-       */
-      uint32_t base_workgroup_data_patching_offset;
-
-      struct pvr_pds_info info;
-   } primary_base_workgroup_variant_program;
+   uint32_t *pds_cs_data_section;
+   uint32_t base_workgroup_data_patching_offset;
+   uint32_t num_workgroups_data_patching_offset;
+   uint32_t num_workgroups_indirect_src_patching_offset;
+   uint32_t num_workgroups_indirect_src_dma_patching_offset;
 };
 
 struct pvr_graphics_pipeline {
@@ -973,7 +933,10 @@ struct pvr_graphics_pipeline {
    struct vk_dynamic_graphics_state dynamic_state;
 
    /* Derived and other state */
-   size_t stage_indices[MESA_SHADER_FRAGMENT + 1];
+   size_t stage_indices[MESA_SHADER_STAGES];
+
+   pco_data vs_data;
+   pco_data fs_data;
 
    struct {
       struct pvr_vertex_shader_state vertex;
@@ -1102,6 +1065,11 @@ struct pvr_render_pass_attachment {
    uint32_t index;
 };
 
+struct pvr_render_input_attachment {
+   uint32_t attachment_idx;
+   VkImageAspectFlags aspect_mask;
+};
+
 struct pvr_render_subpass {
    /* Saved information from pCreateInfo. */
    /* The number of samples per color attachment (or depth attachment if
@@ -1115,7 +1083,7 @@ struct pvr_render_subpass {
    uint32_t *resolve_attachments;
 
    uint32_t input_count;
-   uint32_t *input_attachments;
+   struct pvr_render_input_attachment *input_attachments;
 
    uint32_t depth_stencil_attachment;
 
@@ -1167,8 +1135,8 @@ struct pvr_load_op {
 
    struct pvr_suballoc_bo *usc_frag_prog_bo;
    uint32_t const_shareds_count;
-   uint32_t shareds_dest_offset;
    uint32_t shareds_count;
+   uint32_t num_tile_buffers;
 
    struct pvr_pds_upload pds_frag_prog;
 
@@ -1195,6 +1163,8 @@ struct pvr_load_op {
 #define PVR_NO_DEPTH_CLEAR_TO_REG (-1)
       /* If >= 0, write a depth clear value to the specified pixel output. */
       int32_t depth_clear_to_reg;
+
+      const struct usc_mrt_setup *mrt_setup;
    } clears_loads_state;
 };
 
@@ -1216,7 +1186,8 @@ CHECK_MASK_SIZE(pvr_load_op,
 #undef CHECK_MASK_SIZE
 
 uint32_t pvr_calc_fscommon_size_and_tiles_in_flight(
-   const struct pvr_physical_device *pdevice,
+   const struct pvr_device_info *dev_info,
+   const struct pvr_device_runtime_info *dev_runtime_info,
    uint32_t fs_common_size,
    uint32_t min_tiles_in_flight);
 
@@ -1288,6 +1259,17 @@ to_pvr_graphics_pipeline(struct pvr_pipeline *pipeline)
    return container_of(pipeline, struct pvr_graphics_pipeline, base);
 }
 
+static inline struct pvr_device *vk_to_pvr_device(struct vk_device *device)
+{
+   return container_of(device, struct pvr_device, vk);
+}
+
+static inline struct pvr_descriptor_set_layout *
+vk_to_pvr_descriptor_set_layout(struct vk_descriptor_set_layout *layout)
+{
+   return container_of(layout, struct pvr_descriptor_set_layout, vk);
+}
+
 static inline const struct pvr_image *
 vk_to_pvr_image(const struct vk_image *image)
 {
@@ -1339,7 +1321,7 @@ pvr_stage_mask(VkPipelineStageFlags2 stage_mask)
 }
 
 static inline enum pvr_pipeline_stage_bits
-pvr_stage_mask_src(VkPipelineStageFlags2KHR stage_mask)
+pvr_stage_mask_src(VkPipelineStageFlags2 stage_mask)
 {
    /* If the source is bottom of pipe, all stages will need to be waited for. */
    if (stage_mask & VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
@@ -1349,7 +1331,7 @@ pvr_stage_mask_src(VkPipelineStageFlags2KHR stage_mask)
 }
 
 static inline enum pvr_pipeline_stage_bits
-pvr_stage_mask_dst(VkPipelineStageFlags2KHR stage_mask)
+pvr_stage_mask_dst(VkPipelineStageFlags2 stage_mask)
 {
    /* If the destination is top of pipe, all stages should be blocked by prior
     * commands.
@@ -1387,11 +1369,8 @@ pvr_cmd_buffer_set_error_unwarned(struct pvr_cmd_buffer *cmd_buffer,
 VkResult pvr_pds_fragment_program_create_and_upload(
    struct pvr_device *device,
    const VkAllocationCallbacks *allocator,
-   const struct pvr_suballoc_bo *fragment_shader_bo,
-   uint32_t fragment_temp_count,
-   enum rogue_msaa_mode msaa_mode,
-   bool has_phase_rate_change,
-   struct pvr_pds_upload *const pds_upload_out);
+   pco_shader *fs,
+   struct pvr_fragment_shader_state *fragment_state);
 
 VkResult pvr_pds_unitex_state_program_create_and_upload(
    struct pvr_device *device,
@@ -1455,14 +1434,6 @@ void pvr_reset_graphics_dirty_state(struct pvr_cmd_buffer *const cmd_buffer,
 const struct pvr_renderpass_hwsetup_subpass *
 pvr_get_hw_subpass(const struct pvr_render_pass *pass, const uint32_t subpass);
 
-void pvr_descriptor_size_info_init(
-   const struct pvr_device *device,
-   VkDescriptorType type,
-   struct pvr_descriptor_size_info *const size_info_out);
-
-#define PVR_FROM_HANDLE(__pvr_type, __name, __handle) \
-   VK_FROM_HANDLE(__pvr_type, __name, __handle)
-
 VK_DEFINE_HANDLE_CASTS(pvr_cmd_buffer,
                        vk.base,
                        VkCommandBuffer,
@@ -1483,10 +1454,6 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_device_memory,
                                VkDeviceMemory,
                                VK_OBJECT_TYPE_DEVICE_MEMORY)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_image, vk.base, VkImage, VK_OBJECT_TYPE_IMAGE)
-VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_pipeline_cache,
-                               base,
-                               VkPipelineCache,
-                               VK_OBJECT_TYPE_PIPELINE_CACHE)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_buffer,
                                vk.base,
                                VkBuffer,
@@ -1496,30 +1463,21 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_image_view,
                                VkImageView,
                                VK_OBJECT_TYPE_IMAGE_VIEW)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_buffer_view,
-                               base,
+                               vk.base,
                                VkBufferView,
                                VK_OBJECT_TYPE_BUFFER_VIEW)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_descriptor_set_layout,
-                               base,
+                               vk.base,
                                VkDescriptorSetLayout,
                                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_descriptor_set,
                                base,
                                VkDescriptorSet,
                                VK_OBJECT_TYPE_DESCRIPTOR_SET)
-VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_event, base, VkEvent, VK_OBJECT_TYPE_EVENT)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_descriptor_pool,
                                base,
                                VkDescriptorPool,
                                VK_OBJECT_TYPE_DESCRIPTOR_POOL)
-VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_sampler,
-                               base,
-                               VkSampler,
-                               VK_OBJECT_TYPE_SAMPLER)
-VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_pipeline_layout,
-                               base,
-                               VkPipelineLayout,
-                               VK_OBJECT_TYPE_PIPELINE_LAYOUT)
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_pipeline,
                                base,
                                VkPipeline,
@@ -1536,30 +1494,6 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_render_pass,
                                base,
                                VkRenderPass,
                                VK_OBJECT_TYPE_RENDER_PASS)
-
-/**
- * Warn on ignored extension structs.
- *
- * The Vulkan spec requires us to ignore unsupported or unknown structs in
- * a pNext chain. In debug mode, emitting warnings for ignored structs may
- * help us discover structs that we should not have ignored.
- *
- *
- * From the Vulkan 1.0.38 spec:
- *
- *    Any component of the implementation (the loader, any enabled layers,
- *    and drivers) must skip over, without processing (other than reading the
- *    sType and pNext members) any chained structures with sType values not
- *    defined by extensions supported by that component.
- */
-#define pvr_debug_ignored_stype(sType)                  \
-   do {                                                 \
-      const VkStructureType _type = (sType);            \
-      mesa_logd("%s: ignored VkStructureType %s(%u)\n", \
-                __func__,                               \
-                vk_StructureType_to_str(_type),         \
-                _type);                                 \
-   } while (0)
 
 #define PVR_CHECK_COMMAND_BUFFER_BUILDING_STATE(cmd_buffer)                  \
    do {                                                                      \
@@ -1609,7 +1543,7 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_render_pass,
    } while (0)
 
 /* A non-fatal assert. Useful for debugging. */
-#ifdef DEBUG
+#if MESA_DEBUG
 #   define pvr_assert(x)                                           \
       ({                                                           \
          if (unlikely(!(x)))                                       \

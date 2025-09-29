@@ -1,5 +1,5 @@
 /*
- * Copyright Â 2019 Alyssa Rosenzweig
+ * Copyright © 2019 Alyssa Rosenzweig
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,7 @@
 #ifndef NIR_BLEND_H
 #define NIR_BLEND_H
 
-#include "compiler/nir/nir.h"
+#include "compiler/nir/nir_defines.h"
 #include "util/blend.h"
 #include "util/format/u_formats.h"
 
@@ -59,7 +59,7 @@ typedef struct {
    bool scalar_blend_const;
 } nir_lower_blend_options;
 
-void nir_lower_blend(nir_shader *shader,
+bool nir_lower_blend(nir_shader *shader,
                      const nir_lower_blend_options *options);
 
 #endif

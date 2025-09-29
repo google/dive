@@ -92,15 +92,11 @@ lower_any_hit_for_intersection(nir_shader *any_hit)
                break;
 
             case nir_intrinsic_load_ray_t_max:
-               nir_def_rewrite_uses(&intrin->def,
-                                        hit_t);
-               nir_instr_remove(&intrin->instr);
+               nir_def_replace(&intrin->def, hit_t);
                break;
 
             case nir_intrinsic_load_ray_hit_kind:
-               nir_def_rewrite_uses(&intrin->def,
-                                        hit_kind);
-               nir_instr_remove(&intrin->instr);
+               nir_def_replace(&intrin->def, hit_kind);
                break;
 
             default:
@@ -136,7 +132,20 @@ lower_any_hit_for_intersection(nir_shader *any_hit)
    return impl;
 }
 
-void
+static void
+build_accept_ray(nir_builder *b)
+{
+   /* Set the "valid" bit in mem_hit */
+   nir_def *ray_addr = brw_nir_rt_mem_hit_addr(b, false /* committed */);
+   nir_def *flags_dw_addr = nir_iadd_imm(b, ray_addr, 12);
+   nir_store_global(b, flags_dw_addr, 4,
+                    nir_ior(b, nir_load_global(b, flags_dw_addr, 4, 1, 32),
+                            nir_imm_int(b, 1 << 16)), 0x1 /* write_mask */);
+
+   nir_accept_ray_intersection(b);
+}
+
+bool
 brw_nir_lower_intersection_shader(nir_shader *intersection,
                                   const nir_shader *any_hit,
                                   const struct intel_device_info *devinfo)
@@ -147,7 +156,7 @@ brw_nir_lower_intersection_shader(nir_shader *intersection,
    struct hash_table *any_hit_var_remap = NULL;
    if (any_hit) {
       nir_shader *any_hit_tmp = nir_shader_clone(dead_ctx, any_hit);
-      NIR_PASS_V(any_hit_tmp, nir_opt_dce);
+      NIR_PASS(_, any_hit_tmp, nir_opt_dce);
       any_hit_impl = lower_any_hit_for_intersection(any_hit_tmp);
       any_hit_var_remap = _mesa_pointer_hash_table_create(dead_ctx);
    }
@@ -162,20 +171,13 @@ brw_nir_lower_intersection_shader(nir_shader *intersection,
       nir_local_variable_create(impl, glsl_bool_type(), "ray_commit");
    nir_store_var(b, commit, nir_imm_false(b), 0x1);
 
-   assert(impl->end_block->predecessors->entries == 1);
-   set_foreach(impl->end_block->predecessors, block_entry) {
+   assert(impl->end_block->predecessors.entries == 1);
+   set_foreach(&impl->end_block->predecessors, block_entry) {
       struct nir_block *block = (void *)block_entry->key;
       b->cursor = nir_after_block_before_jump(block);
       nir_push_if(b, nir_load_var(b, commit));
       {
-         /* Set the "valid" bit in mem_hit */
-         nir_def *ray_addr = brw_nir_rt_mem_hit_addr(b, false /* committed */);
-         nir_def *flags_dw_addr = nir_iadd_imm(b, ray_addr, 12);
-         nir_store_global(b, flags_dw_addr, 4,
-            nir_ior(b, nir_load_global(b, flags_dw_addr, 4, 1, 32),
-                       nir_imm_int(b, 1 << 16)), 0x1 /* write_mask */);
-
-         nir_accept_ray_intersection(b);
+         build_accept_ray(b);
       }
       nir_push_else(b, NULL);
       {
@@ -196,7 +198,15 @@ brw_nir_lower_intersection_shader(nir_shader *intersection,
                nir_def *hit_t = intrin->src[0].ssa;
                nir_def *hit_kind = intrin->src[1].ssa;
                nir_def *min_t = nir_load_ray_t_min(b);
-               nir_def *max_t = nir_load_global(b, t_addr, 4, 1, 32);
+
+               struct brw_nir_rt_mem_ray_defs ray_def;
+               brw_nir_rt_load_mem_ray(b, &ray_def, BRW_RT_BVH_LEVEL_WORLD,
+                                       devinfo);
+
+               struct brw_nir_rt_mem_hit_defs hit_in = {};
+               brw_nir_rt_load_mem_hit(b, &hit_in, false, devinfo);
+
+               nir_def *max_t = ray_def.t_far;
 
                /* bool commit_tmp = false; */
                nir_variable *commit_tmp =
@@ -227,9 +237,55 @@ brw_nir_lower_intersection_shader(nir_shader *intersection,
                   nir_push_if(b, nir_load_var(b, commit_tmp));
                   {
                      nir_store_var(b, commit, nir_imm_true(b), 0x1);
-                     nir_store_global(b, t_addr, 4,
-                                      nir_vec2(b, hit_t, hit_kind),
-                                      0x3);
+
+                     nir_def *ray_addr =
+                        brw_nir_rt_mem_ray_addr(b, brw_nir_rt_stack_addr(b), BRW_RT_BVH_LEVEL_WORLD);
+
+                     nir_store_global(b, nir_iadd_imm(b, ray_addr, 16 + 12), 4,  hit_t, 0x1);
+                     if (devinfo->ver >= 30) {
+                        /* For Xe3+, the most significant 8 bits of the second
+                         * DW in the potential hit are used to store
+                         * hitGroupIndex0, which will later be used by HW to
+                         * reconstruct the whole hitGroupIndex while issuing a
+                         * TRACE_RAY_COMMIT. So we can't corrupt the data
+                         * stored here. We can still use the lower 24bits to
+                         * store aabb_hit_kind tho.
+                         */
+                        nir_def *potential_hit_dword_1 =
+                           brw_nir_rt_load(b, nir_iadd_imm(b, t_addr, 4), 4, 1, 32);
+                        nir_def *hit_group_index_0 =
+                           nir_iand_imm(b, potential_hit_dword_1, 0xff000000);
+
+                        /* Chop off hit_kind and make it only 24bits. This
+                         * prevents the hit_group_index_0 to be corrupted, but
+                         * also implies the application shouldn't pass a
+                         * gl_HitKindEXT that uses more than 24bits.
+                         */
+                        nir_def *hit_kind_24b = nir_iand_imm(b, hit_kind, 0xffffff);
+                        nir_store_global(b, t_addr, 4,
+                                         nir_vec2(b,
+                                                  nir_fmin(b, hit_t, hit_in.t),
+                                                  nir_ior(b, hit_group_index_0, hit_kind_24b)),
+                                         0x3);
+
+                     } else {
+                        nir_store_global(b, t_addr, 4,
+                                         nir_vec2(b, nir_fmin(b, hit_t, hit_in.t), hit_kind),
+                                         0x3);
+                     }
+
+                     /* There may be multiple reportIntersection() calls in
+                      * the shader, so if terminateOnFirstHit was requested,
+                      * accept the hit now. The lowering of
+                      * accept_ray_intersection will handle the rest.
+                      */
+                     nir_def *terminate = nir_test_mask(b, nir_load_ray_flags(b),
+                                                        BRW_RT_RAY_FLAG_TERMINATE_ON_FIRST_HIT);
+                     nir_push_if(b, terminate);
+                     {
+                        build_accept_ray(b);
+                     }
+                     nir_pop_if(b, NULL);
                   }
                   nir_pop_if(b, NULL);
                }
@@ -252,10 +308,11 @@ brw_nir_lower_intersection_shader(nir_shader *intersection,
          }
       }
    }
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_progress(true, impl, nir_metadata_none);
 
    /* We did some inlining; have to re-index SSA defs */
    nir_index_ssa_defs(impl);
 
    ralloc_free(dead_ctx);
+   return true;
 }

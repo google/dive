@@ -38,6 +38,7 @@
 #include "pipe/p_defines.h"
 #include "util/u_thread.h"
 #include "util/list.h"
+#include "util/vma.h"
 #include "gallivm/lp_bld.h"
 #include "gallivm/lp_bld_misc.h"
 
@@ -62,8 +63,6 @@ struct llvmpipe_screen
    struct lp_cs_tpool *cs_tpool;
    mtx_t cs_mutex;
 
-   bool allow_cl;
-
    mtx_t late_mutex;
    bool late_init_done;
 
@@ -73,6 +72,20 @@ struct llvmpipe_screen
    char renderer_string[100];
 
    struct disk_cache *disk_shader_cache;
+
+#if defined(HAVE_LIBDRM) && defined(HAVE_LINUX_UDMABUF_H)
+   int udmabuf_fd;
+#endif
+
+#if DETECT_OS_LINUX
+   int fd_mem_alloc;
+   mtx_t mem_mutex;
+   uint64_t mem_file_size;
+   struct util_vma_heap mem_heap;
+#endif
+
+   struct llvmpipe_memory_allocation *dummy_dmabuf;
+   int dummy_sync_fd;
 };
 
 

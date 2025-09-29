@@ -28,7 +28,7 @@
 #include <stdint.h>
 #include <vulkan/vulkan_core.h>
 
-#include "compiler/nir/nir.h"
+#include "compiler/glsl_types.h"
 #include "compiler/shader_enums.h"
 #include "pipe/p_state.h"
 
@@ -47,7 +47,7 @@ struct pipe_stream_output_info;
 
 struct spirv_shader *
 nir_to_spirv(struct nir_shader *s, const struct zink_shader_info *so_info,
-             uint32_t spirv_version);
+             const struct zink_screen *screen);
 
 void
 spirv_shader_delete(struct spirv_shader *s);
@@ -74,7 +74,7 @@ zink_sampler_type(const struct glsl_type *type)
    case GLSL_SAMPLER_DIM_BUF:
       return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
    default:
-      unreachable("unimplemented");
+      UNREACHABLE("unimplemented");
    }
    return 0;
 }
@@ -95,12 +95,10 @@ zink_image_type(const struct glsl_type *type)
    case GLSL_SAMPLER_DIM_BUF:
       return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
    default:
-      unreachable("unimplemented");
+      UNREACHABLE("unimplemented");
    }
    return 0;
 }
-
-struct nir_shader;
 
 bool
 zink_nir_lower_b2b(struct nir_shader *shader);

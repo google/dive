@@ -21,7 +21,8 @@ template = """\
 extern const struct glsl_type glsl_type_builtin_${t["name"]};
 %endfor
 
-#endif /* _BUILTIN_TYPES_ */"""
+#endif /* _BUILTIN_TYPES_ */
+"""
 
 if len(sys.argv) < 2:
     print('Missing output argument', file=sys.stderr)
@@ -29,5 +30,5 @@ if len(sys.argv) < 2:
 
 output = sys.argv[1]
 
-with open(output, 'w') as f:
+with open(output, 'w', encoding='utf-8') as f:
     f.write(Template(template).render(BUILTIN_TYPES=BUILTIN_TYPES))

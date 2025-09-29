@@ -33,48 +33,6 @@
 #include "tr_context.h"
 #include "tr_texture.h"
 
-
-struct pipe_surface *
-trace_surf_create(struct trace_context *tr_ctx,
-                  struct pipe_resource *res,
-                  struct pipe_surface *surface)
-{
-   struct trace_surface *tr_surf;
-
-   if (!surface)
-      goto error;
-
-   assert(surface->texture == res);
-
-   tr_surf = CALLOC_STRUCT(trace_surface);
-   if (!tr_surf)
-      goto error;
-
-   memcpy(&tr_surf->base, surface, sizeof(struct pipe_surface));
-   tr_surf->base.context = &tr_ctx->base;
-
-   pipe_reference_init(&tr_surf->base.reference, 1);
-   tr_surf->base.texture = NULL;
-   pipe_resource_reference(&tr_surf->base.texture, res);
-   tr_surf->surface = surface;
-
-   return &tr_surf->base;
-
-error:
-   pipe_surface_reference(&surface, NULL);
-   return NULL;
-}
-
-
-void
-trace_surf_destroy(struct trace_surface *tr_surf)
-{
-   pipe_resource_reference(&tr_surf->base.texture, NULL);
-   pipe_surface_reference(&tr_surf->surface, NULL);
-   FREE(tr_surf);
-}
-
-
 struct pipe_transfer *
 trace_transfer_create(struct trace_context *tr_ctx,
 		      struct pipe_resource *res,
@@ -116,10 +74,6 @@ trace_transfer_destroy(struct trace_context *tr_context,
    FREE(tr_trans);
 }
 
-/* Arbitrarily large refcount to "avoid having the driver bypass the samplerview wrapper and destroying
-the samplerview prematurely" see 7f5a3530125 ("aux/trace: use private refcounts for samplerviews") */
-#define SAMPLER_VIEW_PRIVATE_REFCOUNT 100000000
-
 struct pipe_sampler_view *
 trace_sampler_view_create(struct trace_context *tr_ctx,
                   struct pipe_resource *tr_res,
@@ -133,16 +87,12 @@ trace_sampler_view_create(struct trace_context *tr_ctx,
    pipe_resource_reference(&tr_view->base.texture, tr_res);
    tr_view->base.context = &tr_ctx->base;
    tr_view->sampler_view = view;
-   view->reference.count += SAMPLER_VIEW_PRIVATE_REFCOUNT;
-   tr_view->refcount = SAMPLER_VIEW_PRIVATE_REFCOUNT;
    return &tr_view->base;
 }
 
 void
 trace_sampler_view_destroy(struct trace_sampler_view *tr_view)
 {
-   p_atomic_add(&tr_view->sampler_view->reference.count, -tr_view->refcount);
-   pipe_sampler_view_reference(&tr_view->sampler_view, NULL);
    pipe_resource_reference(&tr_view->base.texture, NULL);
    FREE(tr_view);
 }
@@ -152,11 +102,6 @@ trace_sampler_view_unwrap(struct trace_sampler_view *tr_view)
 {
    if (!tr_view)
       return NULL;
-   tr_view->refcount--;
-   if (!tr_view->refcount) {
-      tr_view->refcount = SAMPLER_VIEW_PRIVATE_REFCOUNT;
-      p_atomic_add(&tr_view->sampler_view->reference.count, tr_view->refcount);
-   }
    return tr_view->sampler_view;
 }
 

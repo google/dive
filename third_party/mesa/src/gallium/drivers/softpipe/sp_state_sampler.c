@@ -49,7 +49,7 @@
  */
 static void
 softpipe_bind_sampler_states(struct pipe_context *pipe,
-                             enum pipe_shader_type shader,
+                             mesa_shader_stage shader,
                              unsigned start,
                              unsigned num,
                              void **samplers)
@@ -57,7 +57,7 @@ softpipe_bind_sampler_states(struct pipe_context *pipe,
    struct softpipe_context *softpipe = softpipe_context(pipe);
    unsigned i;
 
-   assert(shader < PIPE_SHADER_TYPES);
+   assert(shader < MESA_SHADER_STAGES);
    assert(start + num <= ARRAY_SIZE(softpipe->samplers[shader]));
 
    draw_flush(softpipe->draw);
@@ -75,7 +75,7 @@ softpipe_bind_sampler_states(struct pipe_context *pipe,
       softpipe->num_samplers[shader] = j;
    }
 
-   if (shader == PIPE_SHADER_VERTEX || shader == PIPE_SHADER_GEOMETRY) {
+   if (shader == MESA_SHADER_VERTEX || shader == MESA_SHADER_GEOMETRY) {
       draw_set_samplers(softpipe->draw,
                         shader,
                         softpipe->samplers[shader],
@@ -97,17 +97,16 @@ softpipe_sampler_view_destroy(struct pipe_context *pipe,
 
 void
 softpipe_set_sampler_views(struct pipe_context *pipe,
-                           enum pipe_shader_type shader,
+                           mesa_shader_stage shader,
                            unsigned start,
                            unsigned num,
                            unsigned unbind_num_trailing_slots,
-                           bool take_ownership,
                            struct pipe_sampler_view **views)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
    uint i;
 
-   assert(shader < PIPE_SHADER_TYPES);
+   assert(shader < MESA_SHADER_STAGES);
    assert(start + num <= ARRAY_SIZE(softpipe->sampler_views[shader]));
 
    draw_flush(softpipe->draw);
@@ -119,12 +118,7 @@ softpipe_set_sampler_views(struct pipe_context *pipe,
          &softpipe->tgsi.sampler[shader]->sp_sview[start + i];
       struct pipe_sampler_view **pview = &softpipe->sampler_views[shader][start + i];
 
-      if (take_ownership) {
-         pipe_sampler_view_reference(pview, NULL);
-         *pview = views[i];
-      } else {
-         pipe_sampler_view_reference(pview, views[i]);
-      }
+      pipe_sampler_view_reference(pview, views[i]);
       sp_tex_tile_cache_set_sampler_view(softpipe->tex_cache[shader][start + i],
                                          views[i]);
       /*
@@ -158,7 +152,7 @@ softpipe_set_sampler_views(struct pipe_context *pipe,
       softpipe->num_sampler_views[shader] = j;
    }
 
-   if (shader == PIPE_SHADER_VERTEX || shader == PIPE_SHADER_GEOMETRY) {
+   if (shader == MESA_SHADER_VERTEX || shader == MESA_SHADER_GEOMETRY) {
       draw_set_sampler_views(softpipe->draw,
                              shader,
                              softpipe->sampler_views[shader],
@@ -182,7 +176,7 @@ prepare_shader_sampling(
    struct softpipe_context *sp,
    unsigned num,
    struct pipe_sampler_view **views,
-   enum pipe_shader_type shader_type,
+   mesa_shader_stage shader_type,
    struct pipe_resource *mapped_tex[PIPE_MAX_SHADER_SAMPLER_VIEWS])
 {
 
@@ -305,7 +299,7 @@ softpipe_prepare_vertex_sampling(struct softpipe_context *sp,
                                  unsigned num,
                                  struct pipe_sampler_view **views)
 {
-   prepare_shader_sampling(sp, num, views, PIPE_SHADER_VERTEX,
+   prepare_shader_sampling(sp, num, views, MESA_SHADER_VERTEX,
                            sp->mapped_vs_tex);
 }
 
@@ -315,7 +309,7 @@ softpipe_cleanup_vertex_sampling(struct softpipe_context *ctx)
    unsigned i;
    for (i = 0; i < ARRAY_SIZE(ctx->mapped_vs_tex); i++) {
       sp_sampler_view_display_target_unmap(
-         ctx, ctx->sampler_views[PIPE_SHADER_VERTEX][i]);
+         ctx, ctx->sampler_views[MESA_SHADER_VERTEX][i]);
       pipe_resource_reference(&ctx->mapped_vs_tex[i], NULL);
    }
 }
@@ -329,7 +323,7 @@ softpipe_prepare_geometry_sampling(struct softpipe_context *sp,
                                    unsigned num,
                                    struct pipe_sampler_view **views)
 {
-   prepare_shader_sampling(sp, num, views, PIPE_SHADER_GEOMETRY,
+   prepare_shader_sampling(sp, num, views, MESA_SHADER_GEOMETRY,
                            sp->mapped_gs_tex);
 }
 
@@ -339,7 +333,7 @@ softpipe_cleanup_geometry_sampling(struct softpipe_context *ctx)
    unsigned i;
    for (i = 0; i < ARRAY_SIZE(ctx->mapped_gs_tex); i++) {
       sp_sampler_view_display_target_unmap(
-         ctx, ctx->sampler_views[PIPE_SHADER_GEOMETRY][i]);
+         ctx, ctx->sampler_views[MESA_SHADER_GEOMETRY][i]);
       pipe_resource_reference(&ctx->mapped_gs_tex[i], NULL);
    }
 }
@@ -355,5 +349,6 @@ softpipe_init_sampler_funcs(struct pipe_context *pipe)
    pipe->create_sampler_view = softpipe_create_sampler_view;
    pipe->set_sampler_views = softpipe_set_sampler_views;
    pipe->sampler_view_destroy = softpipe_sampler_view_destroy;
+   pipe->sampler_view_release = u_default_sampler_view_release;
+   pipe->resource_release = u_default_resource_release;
 }
-

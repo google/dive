@@ -31,16 +31,15 @@ _mesa_glthread_ProgramChanged(struct gl_context *ctx)
 {
    struct glthread_state *glthread = &ctx->GLThread;
 
-   /* Track the last change. */
-   p_atomic_set(&glthread->LastProgramChangeBatch, glthread->next);
-   _mesa_glthread_flush_batch(ctx);
+   /* Track the last change to shader programs. */
+   _mesa_glthread_fence_call(ctx, &glthread->LastProgramChangeBatch);
 }
 
 uint32_t
 _mesa_unmarshal_GetActiveUniform(struct gl_context *ctx,
                                  const struct marshal_cmd_GetActiveUniform *restrict cmd)
 {
-   unreachable("never executed");
+   UNREACHABLE("never executed");
    return 0;
 }
 
@@ -48,11 +47,7 @@ static void
 wait_for_glLinkProgram(struct gl_context *ctx)
 {
    /* Wait for the last glLinkProgram call. */
-   int batch = p_atomic_read(&ctx->GLThread.LastProgramChangeBatch);
-   if (batch != -1) {
-      util_queue_fence_wait(&ctx->GLThread.batches[batch].fence);
-      assert(p_atomic_read(&ctx->GLThread.LastProgramChangeBatch) == -1);
-   }
+   _mesa_glthread_wait_for_call(ctx, &ctx->GLThread.LastProgramChangeBatch);
 }
 
 void GLAPIENTRY
@@ -88,7 +83,7 @@ uint32_t
 _mesa_unmarshal_GetUniformLocation(struct gl_context *ctx,
                                    const struct marshal_cmd_GetUniformLocation *restrict cmd)
 {
-   unreachable("never executed");
+   UNREACHABLE("never executed");
    return 0;
 }
 

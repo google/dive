@@ -130,7 +130,7 @@ util_fast_log2(float x)
 static inline int
 util_ifloor(float f)
 {
-#if defined(USE_X86_ASM) && defined(__GNUC__) && defined(__i386__)
+#if DETECT_ARCH_X86 && DETECT_CC_GCC
    /*
     * IEEE floor for computers that round to nearest or even.
     * 'f' must be between -4194304 and 4194303.
@@ -284,7 +284,7 @@ util_half_inf_sign(int16_t x)
    return (x < 0) ? -1 : 1;
 }
 
-
+#ifndef __OPENCL_VERSION__
 /**
  * Return float bits.
  */
@@ -304,6 +304,35 @@ uif(uint32_t ui)
    return fi.f;
 }
 
+#else
+static inline uint32_t
+fui(float f)
+{
+   return as_uint(f);
+}
+
+static inline float
+uif(uint32_t ui)
+{
+   return as_float(ui);
+}
+#endif
+
+static inline uint64_t
+dui( double f )
+{
+   union di di;
+   di.d = f;
+   return di.ui;
+}
+
+static inline double
+uid(uint64_t ui)
+{
+   union di di;
+   di.ui = ui;
+   return di.d;
+}
 
 /**
  * Convert uint8_t to float in [0, 1].
@@ -619,26 +648,6 @@ util_memcpy_cpu_to_le32(void * restrict dest, const void * restrict src, size_t 
 }
 
 /**
- * Clamp X to [MIN, MAX].
- * This is a macro to allow float, int, uint, etc. types.
- * We arbitrarily turn NaN into MIN.
- */
-#define CLAMP( X, MIN, MAX )  ( (X)>(MIN) ? ((X)>(MAX) ? (MAX) : (X)) : (MIN) )
-
-/* Syntax sugar occuring frequently in graphics code */
-#define SATURATE( X ) CLAMP(X, 0.0f, 1.0f)
-
-#define MIN2( A, B )   ( (A)<(B) ? (A) : (B) )
-#define MAX2( A, B )   ( (A)>(B) ? (A) : (B) )
-
-#define MIN3( A, B, C ) ((A) < (B) ? MIN2(A, C) : MIN2(B, C))
-#define MAX3( A, B, C ) ((A) > (B) ? MAX2(A, C) : MAX2(B, C))
-
-#define MIN4( A, B, C, D ) ((A) < (B) ? MIN3(A, C, D) : MIN3(B, C, D))
-#define MAX4( A, B, C, D ) ((A) > (B) ? MAX3(A, C, D) : MAX3(B, C, D))
-
-
-/**
  * Align a value up to an alignment value
  *
  * If \c value is not already aligned to the requested alignment value, it
@@ -653,8 +662,8 @@ util_memcpy_cpu_to_le32(void * restrict dest, const void * restrict src, size_t 
 #if defined(ALIGN)
 #undef ALIGN
 #endif
-static inline uintptr_t
-ALIGN(uintptr_t value, int32_t alignment)
+static inline uint32_t
+ALIGN(uint32_t value, uint32_t alignment)
 {
    assert(util_is_power_of_two_nonzero(alignment));
    return ALIGN_POT(value, alignment);
@@ -706,6 +715,16 @@ align64(uint64_t value, uint64_t alignment)
 }
 
 /**
+ * Align a value(uintptr_t, intptr_t, ptrdiff_t), only works pot alignemnts.
+ */
+static inline uintptr_t
+align_uintptr(uintptr_t value, uintptr_t alignment)
+{
+   assert(util_is_power_of_two_nonzero_uintptr(alignment));
+   return ALIGN_POT(value, alignment);
+}
+
+/**
  * Works like align but on npot alignments.
  */
 static inline size_t
@@ -714,6 +733,12 @@ util_align_npot(size_t value, size_t alignment)
    if (value % alignment)
       return value + (alignment - (value % alignment));
    return value;
+}
+
+static inline size_t
+util_round_down_npot(size_t value, size_t alignment)
+{
+   return value - (value % alignment);
 }
 
 static inline unsigned
@@ -816,6 +841,23 @@ util_clamped_uadd(unsigned a, unsigned b)
       res = ~0U;
    }
    return res;
+}
+
+/**
+ * Checks the value 'n' is aligned to 'a'.
+ * The alignment must be a power of two.
+ */
+static inline bool
+util_is_aligned(uintmax_t n, uintmax_t a)
+{
+   assert((a != 0) && ((a & (a - 1)) == 0));
+   return (n & (a - 1)) == 0;
+}
+
+static inline bool
+util_is_sint16(int x)
+{
+   return x >= INT16_MIN && x <= INT16_MAX;
 }
 
 #ifdef __cplusplus

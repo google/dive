@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 static void *
-u_trace_pipe_create_ts_buffer(struct u_trace_context *utctx, uint32_t size)
+u_trace_pipe_create_buffer(struct u_trace_context *utctx, uint64_t size_B)
 {
    struct pipe_context *ctx = utctx->pctx;
 
@@ -42,7 +42,7 @@ u_trace_pipe_create_ts_buffer(struct u_trace_context *utctx, uint32_t size)
       .target     = PIPE_BUFFER,
       .format     = PIPE_FORMAT_R8_UNORM,
       .bind       = PIPE_BIND_QUERY_BUFFER | PIPE_BIND_LINEAR,
-      .width0     = size,
+      .width0     = size_B,
       .height0    = 1,
       .depth0     = 1,
       .array_size = 1,
@@ -52,7 +52,7 @@ u_trace_pipe_create_ts_buffer(struct u_trace_context *utctx, uint32_t size)
 }
 
 static void
-u_trace_pipe_delete_ts_buffer(struct u_trace_context *utctx, void *timestamps)
+u_trace_pipe_delete_buffer(struct u_trace_context *utctx, void *timestamps)
 {
    struct pipe_resource *buffer = timestamps;
    pipe_resource_reference(&buffer, NULL);
@@ -61,15 +61,23 @@ u_trace_pipe_delete_ts_buffer(struct u_trace_context *utctx, void *timestamps)
 void
 u_trace_pipe_context_init(struct u_trace_context *utctx,
                           struct pipe_context *pctx,
+                          uint32_t timestamp_size_B,
+                          uint32_t max_indirect_size_B,
                           u_trace_record_ts record_timestamp,
                           u_trace_read_ts read_timestamp,
+                          u_trace_capture_data capture_data,
+                          u_trace_get_data get_data,
                           u_trace_delete_flush_data delete_flush_data)
 {
    u_trace_context_init(utctx, pctx,
-                        u_trace_pipe_create_ts_buffer,
-                        u_trace_pipe_delete_ts_buffer,
+                        timestamp_size_B,
+                        max_indirect_size_B,
+                        u_trace_pipe_create_buffer,
+                        u_trace_pipe_delete_buffer,
                         record_timestamp,
                         read_timestamp,
+                        capture_data,
+                        get_data,
                         delete_flush_data);
 }
 
@@ -82,12 +90,12 @@ trace_framebuffer_state(struct u_trace *ut, void *cs, const struct pipe_framebuf
    trace_framebuffer(ut, cs, pfb);
 
    for (unsigned i = 0; i < pfb->nr_cbufs; i++) {
-      if (pfb->cbufs[i]) {
-         trace_surface(ut, cs, pfb->cbufs[i]);
+      if (pfb->cbufs[i].texture) {
+         trace_surface(ut, cs, &pfb->cbufs[i]);
       }
    }
-   if (pfb->zsbuf) {
-      trace_surface(ut, cs, pfb->zsbuf);
+   if (pfb->zsbuf.texture) {
+      trace_surface(ut, cs, &pfb->zsbuf);
    }
 }
 

@@ -165,7 +165,7 @@ validate_expand_mode(midgard_src_expand_mode expand_mode,
       break;
 
    default:
-      unreachable("Invalid expand mode");
+      UNREACHABLE("Invalid expand mode");
       break;
    }
 }
@@ -250,7 +250,7 @@ print_ldst_read_reg(FILE *fp, unsigned reg)
       fprintf(fp, "0");
       break;
    default:
-      unreachable("Invalid load/store register read");
+      UNREACHABLE("Invalid load/store register read");
    }
 }
 
@@ -274,7 +274,7 @@ print_tex_reg(FILE *fp, unsigned reg, bool is_write)
       fprintf(fp, "%s%d", str, select);
       break;
    default:
-      unreachable("Invalid texture register");
+      UNREACHABLE("Invalid texture register");
    }
 }
 
@@ -328,7 +328,7 @@ midgard_alu_special_arg_mod(midgard_alu_op op, unsigned arg)
 }
 
 static void
-print_quad_word(FILE *fp, uint32_t *words, unsigned tabs)
+print_quad_word(FILE *fp, const uint32_t *words, unsigned tabs)
 {
    unsigned i;
 
@@ -353,7 +353,7 @@ bits_for_mode(midgard_reg_mode mode)
    case midgard_reg_mode_64:
       return 64;
    default:
-      unreachable("Invalid reg mode");
+      UNREACHABLE("Invalid reg mode");
       return 0;
    }
 }
@@ -485,7 +485,7 @@ print_vec_swizzle(FILE *fp, unsigned swizzle, midgard_src_expand_mode expand,
       break;
 
    default:
-      unreachable("Invalid expand mode");
+      UNREACHABLE("Invalid expand mode");
       break;
    }
 
@@ -563,7 +563,7 @@ print_vector_constants(FILE *fp, unsigned src_binary,
             c += !upper * 4;
             break;
          default:
-            unreachable("invalid expand mode");
+            UNREACHABLE("invalid expand mode");
             break;
          }
       } else if (bits == 32 && !expands) {
@@ -590,7 +590,7 @@ print_vector_constants(FILE *fp, unsigned src_binary,
             c += !upper * 8;
             break;
          default:
-            unreachable("invalid expand mode");
+            UNREACHABLE("invalid expand mode");
             break;
          }
 
@@ -1143,7 +1143,7 @@ num_alu_fields_enabled(uint32_t control_word)
 }
 
 static bool
-print_alu_word(disassemble_context *ctx, FILE *fp, uint32_t *words,
+print_alu_word(disassemble_context *ctx, FILE *fp, const uint32_t *words,
                unsigned num_quad_words, unsigned tabs, unsigned next,
                bool verbose)
 {
@@ -1280,7 +1280,7 @@ print_varying_parameters(FILE *fp, midgard_load_store_word *word)
       fprintf(fp, ".perspectivew");
       break;
    default:
-      unreachable("invalid varying modifier");
+      UNREACHABLE("invalid varying modifier");
       break;
    }
 }
@@ -1479,7 +1479,7 @@ print_load_store_instr(disassemble_context *ctx, FILE *fp, uint64_t data,
 }
 
 static void
-print_load_store_word(disassemble_context *ctx, FILE *fp, uint32_t *word,
+print_load_store_word(disassemble_context *ctx, FILE *fp, const uint32_t *word,
                       bool verbose)
 {
    midgard_load_store *load_store = (midgard_load_store *)word;
@@ -1527,7 +1527,7 @@ print_texture_format(FILE *fp, int format)
       DEFINE_CASE(0, "cube");
 
    default:
-      unreachable("Bad format");
+      UNREACHABLE("Bad format");
    }
 }
 
@@ -1562,7 +1562,7 @@ sampler_type_name(enum mali_sampler_type t)
 }
 
 static void
-print_texture_barrier(FILE *fp, uint32_t *word)
+print_texture_barrier(FILE *fp, const uint32_t *word)
 {
    midgard_texture_barrier_word *barrier = (midgard_texture_barrier_word *)word;
 
@@ -1649,8 +1649,14 @@ partial_exection_mode(enum midgard_partial_execution mode)
    }
 }
 
+static int
+s4_to_int(int val) {
+   int sign_bit = val & 8;
+   return (val ^ sign_bit) - sign_bit;
+}
+
 static void
-print_texture_word(disassemble_context *ctx, FILE *fp, uint32_t *word,
+print_texture_word(disassemble_context *ctx, FILE *fp, const uint32_t *word,
                    unsigned tabs, unsigned in_reg_base, unsigned out_reg_base)
 {
    midgard_texture_word *texture = (midgard_texture_word *)word;
@@ -1759,9 +1765,9 @@ print_texture_word(disassemble_context *ctx, FILE *fp, uint32_t *word,
    } else if (texture->offset) {
       /* Only select ops allow negative immediate offsets, verify */
 
-      signed offset_x = (texture->offset & 0xF);
-      signed offset_y = ((texture->offset >> 4) & 0xF);
-      signed offset_z = ((texture->offset >> 8) & 0xF);
+      int offset_x = s4_to_int(texture->offset & 0xF);
+      int offset_y = s4_to_int((texture->offset >> 4) & 0xF);
+      int offset_z = s4_to_int((texture->offset >> 8) & 0xF);
 
       bool neg_x = offset_x < 0;
       bool neg_y = offset_y < 0;
@@ -1820,16 +1826,16 @@ print_texture_word(disassemble_context *ctx, FILE *fp, uint32_t *word,
 }
 
 void
-disassemble_midgard(FILE *fp, uint8_t *code, size_t size, unsigned gpu_id,
+disassemble_midgard(FILE *fp, const void *code, size_t size, unsigned gpu_id,
                     bool verbose)
 {
-   uint32_t *words = (uint32_t *)code;
+   const uint32_t *words = (const uint32_t *)code;
    unsigned num_words = size / 4;
    int tabs = 0;
 
    bool branch_forward = false;
 
-   int last_next_tag = -1;
+   unsigned last_next_tag = TAG_BREAK;
 
    unsigned i = 0;
 

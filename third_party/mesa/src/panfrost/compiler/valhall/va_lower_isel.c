@@ -22,8 +22,26 @@
  */
 
 #include "bi_builder.h"
+#include "compiler.h"
 #include "va_compiler.h"
 #include "valhall.h"
+#include "compiler.h"
+
+static bi_instr *
+lower_swz_v4i8(bi_builder *b, bi_instr *I)
+{
+   /* IADD.v4u8 is gone on v11 */
+   if (b->shader->arch >= 11) {
+      bi_index srcs[4] = {I->src[0], I->src[0], I->src[0], I->src[0]};
+      unsigned channels[4];
+      bool valid_swizzle =
+         bi_swizzle_to_byte_channels(I->src[0].swizzle, channels);
+      assert(valid_swizzle);
+      return bi_make_vec_to(b, I->dest[0], srcs, channels, 4, 8);
+   }
+
+   return bi_iadd_v4u8_to(b, I->dest[0], I->src[0], bi_zero(), false);
+}
 
 static bi_instr *
 lower(bi_builder *b, bi_instr *I)
@@ -35,7 +53,7 @@ lower(bi_builder *b, bi_instr *I)
       return bi_iadd_v2u16_to(b, I->dest[0], I->src[0], bi_zero(), false);
 
    case BI_OPCODE_SWZ_V4I8:
-      return bi_iadd_v4u8_to(b, I->dest[0], I->src[0], bi_zero(), false);
+      return lower_swz_v4i8(b, I);
 
    case BI_OPCODE_ICMP_I32:
       return bi_icmp_or_u32_to(b, I->dest[0], I->src[0], I->src[1], bi_zero(),
@@ -86,8 +104,9 @@ lower(bi_builder *b, bi_instr *I)
    case BI_OPCODE_CSEL_V2I16:
       assert(I->cmpf == BI_CMPF_EQ || I->cmpf == BI_CMPF_NE);
 
-      I->op = (I->op == BI_OPCODE_CSEL_I32) ? BI_OPCODE_CSEL_U32
-                                            : BI_OPCODE_CSEL_V2U16;
+      bi_set_opcode(I,
+                    (I->op == BI_OPCODE_CSEL_I32) ? BI_OPCODE_CSEL_U32
+                                                  : BI_OPCODE_CSEL_V2U16);
       return NULL;
 
    /* Jump -> conditional branch with condition tied to true. */
@@ -100,14 +119,27 @@ lower(bi_builder *b, bi_instr *I)
          return bi_branchzi(b, bi_zero(), I->src[0], BI_CMPF_EQ);
       }
 
+   case BI_OPCODE_AXCHG_I64:
+      bi_set_opcode(I, BI_OPCODE_ATOM_RETURN_I64);
+      I->atom_opc = BI_ATOM_OPC_AXCHG;
+      I->sr_count = 2;
+      return NULL;
+
    case BI_OPCODE_AXCHG_I32:
-      I->op = BI_OPCODE_ATOM_RETURN_I32;
+      bi_set_opcode(I, BI_OPCODE_ATOM_RETURN_I32);
       I->atom_opc = BI_ATOM_OPC_AXCHG;
       I->sr_count = 1;
       return NULL;
 
+   case BI_OPCODE_ACMPXCHG_I64:
+      bi_set_opcode(I, BI_OPCODE_ATOM_RETURN_I64);
+      I->atom_opc = BI_ATOM_OPC_ACMPXCHG;
+      /* Reads 4, this is special cased in bir.c */
+      I->sr_count = 2;
+      return NULL;
+
    case BI_OPCODE_ACMPXCHG_I32:
-      I->op = BI_OPCODE_ATOM_RETURN_I32;
+      bi_set_opcode(I, BI_OPCODE_ATOM_RETURN_I32);
       I->atom_opc = BI_ATOM_OPC_ACMPXCHG;
       /* Reads 2, this is special cased in bir.c */
       I->sr_count = 1;
@@ -115,7 +147,7 @@ lower(bi_builder *b, bi_instr *I)
 
    case BI_OPCODE_ATOM_RETURN_I32:
       if (bi_is_null(I->dest[0]))
-         I->op = BI_OPCODE_ATOM_I32;
+         bi_set_opcode(I, BI_OPCODE_ATOM_I32);
 
       return NULL;
 

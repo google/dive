@@ -39,7 +39,7 @@
 #include "vbo/vbo.h"
 #include "util/list.h"
 #include "cso_cache/cso_context.h"
-
+#include "util/u_cpu_detect.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,8 +52,6 @@ struct gen_mipmap_state;
 struct st_context;
 struct st_program;
 struct u_upload_mgr;
-
-#define ST_L3_PINNING_DISABLED 0xffffffff
 
 struct st_bitmap_cache
 {
@@ -93,6 +91,7 @@ struct drawpix_cache_entry
 {
    GLsizei width, height;
    GLenum format, type;
+   struct gl_pixelmaps pixelmaps;
    const void *user_pointer;  /**< Last user 'pixels' pointer */
    void *image;               /**< Copy of the glDrawPixels image data */
    struct pipe_resource *texture;
@@ -116,10 +115,11 @@ struct st_zombie_sampler_view_node
 struct st_zombie_shader_node
 {
    void *shader;
-   enum pipe_shader_type type;
+   mesa_shader_stage type;
    struct list_head node;
 };
 
+typedef void (*st_update_func_t)(struct st_context *st);
 
 struct st_context
 {
@@ -127,6 +127,9 @@ struct st_context
    struct pipe_screen *screen;
    struct pipe_context *pipe;
    struct cso_context *cso_context;
+
+   /* The list of state update functions. */
+   st_update_func_t update_functions[ST_NUM_ATOMS];
 
    struct pipe_frontend_screen *frontend_screen; /* e.g. dri_screen */
    void *frontend_context; /* e.g. dri_context */
@@ -136,10 +139,11 @@ struct st_context
    struct draw_stage *selection_stage;  /**< For GL_SELECT rendermode */
    struct draw_stage *rastpos_stage;  /**< For glRasterPos */
 
-   unsigned pin_thread_counter; /* for L3 thread pinning on AMD Zen */
+   unsigned work_counter; /* for L3 thread pinning on AMD Zen and resource pruning */
 
    GLboolean clamp_frag_color_in_shader;
    GLboolean clamp_vert_color_in_shader;
+   bool thread_scheduler_disabled;
    bool has_stencil_export; /**< can do shader stencil export? */
    bool has_time_elapsed;
    bool has_etc1;
@@ -159,7 +163,6 @@ struct st_context
    bool force_specialized_compute_transfer;
    bool force_persample_in_shader;
    bool has_shareable_shaders;
-   bool has_half_float_packing;
    bool has_multi_draw_indirect;
    bool has_indirect_partial_stride;
    bool has_occlusion_query;
@@ -172,6 +175,7 @@ struct st_context
    bool lower_flatshade;
    bool lower_alpha_test;
    bool lower_point_size;
+   bool add_point_size;
    bool lower_two_sided_color;
    bool lower_ucp;
    bool prefer_real_buffer_in_constbuf0;
@@ -194,7 +198,7 @@ struct st_context
     * This means it has only 1 variant, not counting glBitmap and
     * glDrawPixels.
     */
-   bool shader_has_one_variant[MESA_SHADER_STAGES];
+   bool shader_has_one_variant[MESA_SHADER_MESH_STAGES];
 
    bool needs_texcoord_semantic;
    bool apply_texture_swizzle_to_border_color;
@@ -207,6 +211,7 @@ struct st_context
 
    bool validate_all_dirty_states;
    bool can_null_texture;
+   bool is_threaded_context;
 
    /* driver supports scissored clears */
    bool can_scissor_clear;
@@ -222,8 +227,8 @@ struct st_context
       struct pipe_sampler_state frag_samplers[PIPE_MAX_SAMPLERS];
       GLuint num_vert_samplers;
       GLuint num_frag_samplers;
-      GLuint num_sampler_views[PIPE_SHADER_TYPES];
-      unsigned num_images[PIPE_SHADER_TYPES];
+      GLuint num_sampler_views[MESA_SHADER_MESH_STAGES];
+      unsigned num_images[MESA_SHADER_MESH_STAGES];
       struct pipe_clip_state clip;
       unsigned constbuf0_enabled_shader_mask;
       unsigned fb_width;
@@ -252,7 +257,7 @@ struct st_context
    } state;
 
    /** This masks out unused shader resources. Only valid in draw calls. */
-   uint64_t active_states;
+   st_state_bitset active_states;
 
    /**
     * The number of currently active queries (excluding timer queries).
@@ -268,9 +273,14 @@ struct st_context
          struct gl_program *gp;  /**< Currently bound geometry program */
          struct gl_program *fp;  /**< Currently bound fragment program */
          struct gl_program *cp;   /**< Currently bound compute program */
+         struct gl_program *tp; /**< Currently bound task program */
+         struct gl_program *mp; /**< Currently bound mesh program */
       };
-      struct gl_program *current_program[MESA_SHADER_STAGES];
+      struct gl_program *current_program[MESA_SHADER_MESH_STAGES];
    };
+
+   struct util_dynarray release_resources;
+   unsigned release_counter;
 
    struct st_common_variant *vp_variant;
 
@@ -327,7 +337,7 @@ struct st_context
       void *upload_fs[5][2];
       /**
        * For drivers supporting formatless storing
-       * (PIPE_CAP_IMAGE_STORE_FORMATTED) it is a pointer to the download FS;
+       * (pipe_caps.image_store_formatted) it is a pointer to the download FS;
        * for those not supporting it, it is a pointer to an array of
        * PIPE_FORMAT_COUNT elements, where each element is a pointer to the
        * download FS using that PIPE_FORMAT as the storing format.
@@ -358,12 +368,10 @@ struct st_context
 
    void *winsys_drawable_handle;
 
-   /* The number of vertex buffers from the last call of validate_arrays. */
-   unsigned last_num_vbuffers;
    bool uses_user_vertex_buffers;
 
-   unsigned last_used_atomic_bindings[PIPE_SHADER_TYPES];
-   unsigned last_num_ssbos[PIPE_SHADER_TYPES];
+   unsigned last_used_atomic_bindings[MESA_SHADER_MESH_STAGES];
+   unsigned last_num_ssbos[MESA_SHADER_MESH_STAGES];
 
    int32_t draw_stamp;
    int32_t read_stamp;
@@ -374,8 +382,8 @@ struct st_context
 
    /* Array of bound texture/image handles which are resident in the context.
     */
-   struct st_bound_handles bound_texture_handles[PIPE_SHADER_TYPES];
-   struct st_bound_handles bound_image_handles[PIPE_SHADER_TYPES];
+   struct st_bound_handles bound_texture_handles[MESA_SHADER_MESH_STAGES];
+   struct st_bound_handles bound_image_handles[MESA_SHADER_MESH_STAGES];
 
    /* Winsys buffers */
    struct list_head winsys_buffers;
@@ -474,16 +482,12 @@ st_save_zombie_sampler_view(struct st_context *st,
 
 extern void
 st_save_zombie_shader(struct st_context *st,
-                      enum pipe_shader_type type,
+                      mesa_shader_stage type,
                       struct pipe_shader_state *shader);
 
 
 void
 st_context_free_zombie_objects(struct st_context *st);
-
-const struct nir_shader_compiler_options *
-st_get_nir_compiler_options(struct st_context *st, gl_shader_stage stage);
-
 
 void st_invalidate_state(struct gl_context *ctx);
 void st_set_background_context(struct gl_context *ctx,
@@ -517,9 +521,41 @@ st_api_destroy_drawable(struct pipe_frontend_drawable *drawable);
 void
 st_screen_destroy(struct pipe_frontend_screen *fscreen);
 
-typedef void (*st_update_func_t)(struct st_context *st);
+static inline void
+st_context_apply_scheduler_policy(struct st_context *st)
+{
+   int cpu = util_get_current_cpu();
+   if (cpu >= 0) {
+      struct pipe_context *pipe = st->pipe;
+      uint16_t L3_cache = util_get_cpu_caps()->cpu_to_L3[cpu];
 
-extern st_update_func_t st_update_functions[ST_NUM_ATOMS];
+      if (L3_cache != U_CPU_INVALID_L3) {
+         pipe->set_context_param(pipe,
+                                 PIPE_CONTEXT_PARAM_UPDATE_THREAD_SCHEDULING,
+                                 cpu);
+      }
+   }
+}
+
+static inline void
+st_context_add_work(struct st_context *st)
+{
+
+   /* Apply our thread scheduling policy for better multithreading
+    * performance.
+    */
+   if (unlikely(++st->work_counter % 512 == 0)) {
+      st->work_counter = 0;
+      if (!st->thread_scheduler_disabled)
+         st_context_apply_scheduler_policy(st);
+   }
+}
+
+void
+st_prune_releasebufs(struct st_context *st);
+
+void
+st_add_releasebuf(struct st_context *st, struct pipe_resource *releasebuf);
 
 #ifdef __cplusplus
 }

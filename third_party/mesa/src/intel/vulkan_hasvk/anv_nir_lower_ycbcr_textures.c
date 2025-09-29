@@ -171,7 +171,7 @@ channel_to_component(enum isl_channel_select channel)
    case ISL_CHANNEL_SELECT_ALPHA:
       return 3;
    default:
-      unreachable("invalid channel");
+      UNREACHABLE("invalid channel");
       return 0;
    }
 }
@@ -189,7 +189,7 @@ swizzle_channel(struct isl_swizzle swizzle, unsigned channel)
    case 3:
       return swizzle.a;
    default:
-      unreachable("invalid channel");
+      UNREACHABLE("invalid channel");
       return 0;
    }
 }
@@ -327,8 +327,7 @@ anv_nir_lower_ycbcr_textures_instr(nir_builder *builder,
                                         swizzled_bpcs);
    }
 
-   nir_def_rewrite_uses(&tex->def, result);
-   nir_instr_remove(&tex->instr);
+   nir_def_replace(&tex->def, result);
 
    return true;
 }
@@ -339,7 +338,6 @@ anv_nir_lower_ycbcr_textures(nir_shader *shader,
 {
    return nir_shader_instructions_pass(shader,
                                        anv_nir_lower_ycbcr_textures_instr,
-                                       nir_metadata_block_index |
-                                       nir_metadata_dominance,
+                                       nir_metadata_control_flow,
                                        (void *)layout);
 }

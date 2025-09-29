@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef SVGA_CONTEXT_H
 #define SVGA_CONTEXT_H
@@ -34,8 +16,10 @@
 #include "util/os_time.h"
 
 #include "util/u_blitter.h"
+#include "util/u_framebuffer.h"
 #include "util/list.h"
 
+#include "vm_basic_types.h"
 #include "svga_screen.h"
 #include "svga_state.h"
 #include "svga_winsys.h"
@@ -89,6 +73,7 @@ enum svga_hud {
  * including the zero slot for the default constant buffer.
  */
 #define SVGA_MAX_CONST_BUFS 15
+#define SVGA_MAX_RAW_BUFS   64
 
 /**
  * Maximum constant buffer size that can be set in the
@@ -98,10 +83,10 @@ enum svga_hud {
 #define SVGA_MAX_CONST_BUF_SIZE (4096 * 4 * sizeof(int))
 
 #define CONST0_UPLOAD_ALIGNMENT 256
-#define SVGA_MAX_IMAGES         SVGA3D_MAX_UAVIEWS
-#define SVGA_MAX_SHADER_BUFFERS	SVGA3D_MAX_UAVIEWS
-#define SVGA_MAX_ATOMIC_BUFFERS	SVGA3D_MAX_UAVIEWS
 #define SVGA_MAX_UAVIEWS        SVGA3D_DX11_1_MAX_UAVIEWS
+#define SVGA_MAX_IMAGES         SVGA3D_DX11_MAX_UAVIEWS
+#define SVGA_MAX_SHADER_BUFFERS SVGA3D_DX11_MAX_UAVIEWS
+#define SVGA_MAX_ATOMIC_BUFFERS SVGA3D_DX11_MAX_UAVIEWS
 
 enum svga_surface_state
 {
@@ -114,6 +99,7 @@ enum svga_surface_state
 struct draw_vertex_shader;
 struct draw_fragment_shader;
 struct svga_shader_variant;
+struct svga_surface;
 struct SVGACmdMemory;
 struct util_bitmask;
 
@@ -183,7 +169,8 @@ struct svga_depth_stencil_state {
 #define SVGA_PIPELINE_FLAG_LINES    (1<<MESA_PRIM_LINES)
 #define SVGA_PIPELINE_FLAG_TRIS     (1<<MESA_PRIM_TRIANGLES)
 
-#define SVGA_MAX_FRAMEBUFFER_DEFAULT_SAMPLES 4
+// We support non-attachment/UAV rendering with up to 16 samples.
+#define SVGA_MAX_FRAMEBUFFER_DEFAULT_SAMPLES 16
 
 struct svga_rasterizer_state {
    struct pipe_rasterizer_state templ; /* needed for draw module */
@@ -293,6 +280,18 @@ struct svga_raw_buffer {
    int32 srvid;
 };
 
+/*
+ * Subclass of pipe_framebuffer_state which has dynamically allocated
+ * svga_surface objects.
+ */
+struct svga_framebuffer_state
+{
+   struct pipe_framebuffer_state base;
+
+   struct svga_surface *cbufs[PIPE_MAX_COLOR_BUFS];
+   struct svga_surface *zsbuf;
+};
+
 /* Use to calculate differences between state emitted to hardware and
  * current driver-calculated state.
  */
@@ -300,11 +299,11 @@ struct svga_state
 {
    const struct svga_blend_state *blend;
    const struct svga_depth_stencil_state *depth;
-   const struct svga_sampler_state *sampler[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
+   const struct svga_sampler_state *sampler[MESA_SHADER_STAGES][PIPE_MAX_SAMPLERS];
    const struct svga_velems_state *velems;
 
    struct svga_rasterizer_state *rast;
-   struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS]; /* or texture ID's? */
+   struct pipe_sampler_view *sampler_views[MESA_SHADER_STAGES][PIPE_MAX_SAMPLERS]; /* or texture ID's? */
    struct svga_fragment_shader *fs;
    struct svga_vertex_shader *vs;
    struct svga_geometry_shader *user_gs; /* user-specified GS */
@@ -320,10 +319,11 @@ struct svga_state
     * The size should probably always match with that of
     * svga_shader_emitter_v10.num_shader_consts.
     */
-   struct pipe_constant_buffer constbufs[PIPE_SHADER_TYPES][SVGA_MAX_CONST_BUFS];
-   struct svga_raw_buffer rawbufs[PIPE_SHADER_TYPES][SVGA_MAX_CONST_BUFS];
+   struct pipe_constant_buffer constbufs[MESA_SHADER_STAGES][SVGA_MAX_CONST_BUFS];
+   struct svga_raw_buffer rawbufs[MESA_SHADER_STAGES][SVGA_MAX_RAW_BUFS];
 
-   struct pipe_framebuffer_state framebuffer;
+   struct svga_framebuffer_state framebuffer;
+
    float depthscale;
 
    /* Hack to limit the number of different render targets between
@@ -338,8 +338,9 @@ struct svga_state
    struct pipe_clip_state clip;
    struct pipe_viewport_state viewport[SVGA3D_DX_MAX_VIEWPORTS];
 
-   unsigned num_samplers[PIPE_SHADER_TYPES];
-   unsigned num_sampler_views[PIPE_SHADER_TYPES];
+   bool use_samplers[MESA_SHADER_STAGES];
+   unsigned num_samplers[MESA_SHADER_STAGES];
+   unsigned num_sampler_views[MESA_SHADER_STAGES];
    unsigned num_vertex_buffers;
    enum mesa_prim reduced_prim;
 
@@ -355,12 +356,12 @@ struct svga_state
    float default_tesslevels[6]; /* tessellation (outer[4] + inner[2]) levels */
 
    /* Image views */
-   unsigned num_image_views[PIPE_SHADER_TYPES];
-   struct svga_image_view image_views[PIPE_SHADER_TYPES][SVGA_MAX_IMAGES];
+   unsigned num_image_views[MESA_SHADER_STAGES];
+   struct svga_image_view image_views[MESA_SHADER_STAGES][SVGA_MAX_IMAGES];
 
    /* Shader buffers */
-   unsigned num_shader_buffers[PIPE_SHADER_TYPES];
-   struct svga_shader_buffer shader_buffers[PIPE_SHADER_TYPES][SVGA_MAX_SHADER_BUFFERS];
+   unsigned num_shader_buffers[MESA_SHADER_STAGES];
+   struct svga_shader_buffer shader_buffers[MESA_SHADER_STAGES][SVGA_MAX_SHADER_BUFFERS];
 
    /* HW atomic buffers */
    unsigned num_atomic_buffers;
@@ -390,7 +391,7 @@ struct svga_depthrange {
  */
 struct svga_hw_clear_state
 {
-   struct pipe_framebuffer_state framebuffer;
+   struct svga_framebuffer_state framebuffer;
 
    /* VGPU9 only */
    SVGA3dRect viewport;
@@ -403,7 +404,7 @@ struct svga_hw_clear_state
    unsigned num_prescale;
 
    unsigned num_rendertargets;
-   struct pipe_surface *rtv[SVGA3D_MAX_RENDER_TARGETS];
+   struct pipe_surface *rtv[SVGA3D_DX_MAX_RENDER_TARGETS];
    struct pipe_surface *dsv;
 };
 
@@ -431,7 +432,7 @@ struct svga_hw_draw_state
    struct svga_hw_view_state views[PIPE_MAX_SAMPLERS];
 
    /** VGPU9 constant buffer values */
-   float cb[PIPE_SHADER_TYPES][SVGA3D_CONSTREG_MAX][4];
+   float cb[MESA_SHADER_STAGES][SVGA3D_CONSTREG_MAX][4];
 
    /** Currently bound shaders */
    struct svga_shader_variant *fs;
@@ -442,13 +443,13 @@ struct svga_hw_draw_state
    struct svga_shader_variant *cs;
 
    /** Currently bound constant buffer, per shader stage */
-   struct pipe_resource *constbuf[PIPE_SHADER_TYPES][SVGA_MAX_CONST_BUFS];
-   struct svga_constant_buffer constbufoffsets[PIPE_SHADER_TYPES][SVGA_MAX_CONST_BUFS];
-   struct svga_raw_buffer rawbufs[PIPE_SHADER_TYPES][SVGA_MAX_CONST_BUFS];
-   unsigned enabled_rawbufs[PIPE_SHADER_TYPES];
+   struct pipe_resource *constbuf[MESA_SHADER_STAGES][SVGA_MAX_CONST_BUFS];
+   struct svga_constant_buffer constbufoffsets[MESA_SHADER_STAGES][SVGA_MAX_CONST_BUFS];
+   struct svga_raw_buffer rawbufs[MESA_SHADER_STAGES][SVGA_MAX_RAW_BUFS];
+   uint64_t enabled_rawbufs[MESA_SHADER_STAGES];
 
    /** Bitmask of enabled constant buffers */
-   unsigned enabled_constbufs[PIPE_SHADER_TYPES];
+   unsigned enabled_constbufs[MESA_SHADER_STAGES];
 
    /**
     * These are used to reduce the number of times we call u_upload_unmap()
@@ -476,27 +477,28 @@ struct svga_hw_draw_state
    SVGA3dSurfaceFormat ib_format;
    unsigned ib_offset;
 
-   unsigned num_samplers[PIPE_SHADER_TYPES];
-   SVGA3dSamplerId samplers[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
+   unsigned num_samplers[MESA_SHADER_STAGES];
+   SVGA3dSamplerId samplers[MESA_SHADER_STAGES][PIPE_MAX_SAMPLERS];
 
-   unsigned num_sampler_views[PIPE_SHADER_TYPES];
+   unsigned num_sampler_views[MESA_SHADER_STAGES];
    struct pipe_sampler_view
-      *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
+      *sampler_views[MESA_SHADER_STAGES][PIPE_MAX_SAMPLERS];
 
    /* used for rebinding */
-   unsigned default_constbuf_size[PIPE_SHADER_TYPES];
+   unsigned default_constbuf_size[MESA_SHADER_STAGES];
 
    bool rasterizer_discard; /* set if rasterization is disabled */
    bool has_backed_views;   /* set if any of the rtv/dsv is a backed surface view */
 
    /* Image Views */
    int uavSpliceIndex;
-   unsigned num_image_views[PIPE_SHADER_TYPES];
-   struct svga_image_view image_views[PIPE_SHADER_TYPES][SVGA_MAX_IMAGES];
+   unsigned num_image_views[MESA_SHADER_STAGES];
+   struct svga_image_view image_views[MESA_SHADER_STAGES][SVGA_MAX_IMAGES];
 
    /* Shader Buffers */
-   unsigned num_shader_buffers[PIPE_SHADER_TYPES];
-   struct svga_shader_buffer shader_buffers[PIPE_SHADER_TYPES][SVGA_MAX_SHADER_BUFFERS];
+   unsigned num_shader_buffers[MESA_SHADER_STAGES];
+   struct svga_shader_buffer shader_buffers[MESA_SHADER_STAGES][SVGA_MAX_SHADER_BUFFERS];
+   uint64_t enabled_raw_shaderbufs[MESA_SHADER_STAGES];
 
    /* HW Atomic Buffers */
    unsigned num_atomic_buffers;
@@ -513,7 +515,7 @@ struct svga_hw_draw_state
    struct svga_winsys_surface *csUAViews[SVGA_MAX_UAVIEWS];
 
    /* starting uav index for each shader */
-   unsigned uav_start_index[PIPE_SHADER_TYPES];
+   unsigned uav_start_index[MESA_SHADER_STAGES];
 
    /* starting uav index for HW atomic buffers */
    unsigned uav_atomic_buf_index;
@@ -644,10 +646,13 @@ struct svga_context
       uint64_t dirty[SVGA_STATE_MAX];
 
       /** bitmasks of which const buffers are changed */
-      unsigned dirty_constbufs[PIPE_SHADER_TYPES];
+      unsigned dirty_constbufs[MESA_SHADER_STAGES];
 
-      /** bitmasks of which const buffers to be bound as raw buffers */
-      unsigned raw_constbufs[PIPE_SHADER_TYPES];
+      /** bitmasks of which const buffers to be bound as srv raw buffers */
+      unsigned raw_constbufs[MESA_SHADER_STAGES];
+
+      /** bitmasks of which shader buffers to be bound as srv raw buffers */
+      uint64_t raw_shaderbufs[MESA_SHADER_STAGES];
 
       unsigned texture_timestamp;
       unsigned uav_timestamp[2];
@@ -1018,6 +1023,24 @@ svga_use_sampler_state_mapping(const struct svga_context *svga,
            num_sampler_states > SVGA3D_DX_MAX_SAMPLERS);
 }
 
+
+static inline void
+svga_set_curr_shader_use_samplers_flag(struct svga_context *svga,
+                                       mesa_shader_stage shader_type,
+                                       bool use_samplers)
+{
+   svga->curr.use_samplers[shader_type] = use_samplers;
+}
+
+
+static inline bool
+svga_curr_shader_use_samplers(const struct svga_context *svga,
+                              mesa_shader_stage shader_type)
+{
+   return svga->curr.use_samplers[shader_type];
+}
+
+
 /**
  * If the Gallium HUD is enabled, this will return the current time.
  * Otherwise, just return zero.
@@ -1033,7 +1056,7 @@ svga_get_time(struct svga_context *svga)
  * function call with an error value, the purpose is to trigger and test
  * retry path handling.
  */
-#ifdef DEBUG
+#if MESA_DEBUG
 
 /*
  * Optionally replace a function call with a PIPE_ERROR_OUT_OF_MEMORY

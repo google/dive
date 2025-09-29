@@ -32,6 +32,7 @@
 #include "vk_util.h"
 #include "stdarg.h"
 #include "util/u_dynarray.h"
+#include "util/u_printf.h"
 
 void
 vk_debug_message(struct vk_instance *instance,
@@ -80,6 +81,69 @@ vk_debug_message_instance(struct vk_instance *instance,
           (messenger->type & types))
          messenger->callback(severity, types, &cbData, messenger->data);
    }
+}
+
+void
+vk_address_binding_report(struct vk_instance *instance,
+                          struct vk_object_base *object, 
+                          uint64_t base_address,
+                          uint64_t size,
+                          VkDeviceAddressBindingTypeEXT type)
+{
+   if (list_is_empty(&instance->debug_utils.callbacks))
+      return;
+
+   VkDeviceAddressBindingCallbackDataEXT addr_binding = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_CALLBACK_DATA_EXT,
+      .flags = object->client_visible ? 0 : VK_DEVICE_ADDRESS_BINDING_INTERNAL_OBJECT_BIT_EXT,
+      .baseAddress = base_address,
+      .size = size,
+      .bindingType = type,
+   };
+
+   VkDebugUtilsObjectNameInfoEXT object_name_info = {
+         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+         .pNext = NULL,
+         .objectType = object->type,
+         .objectHandle = (uint64_t)(uintptr_t)object,
+         .pObjectName = object->object_name,
+   };
+
+   VkDebugUtilsMessengerCallbackDataEXT cb_data = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT,
+      .pNext = &addr_binding,
+      .objectCount = 1,
+      .pObjects = &object_name_info,
+   };
+
+   vk_debug_message(instance, VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+                    VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+                    &cb_data);
+}
+
+void
+vk_emit_device_memory_report(struct vk_device* device,
+                             VkDeviceMemoryReportEventTypeEXT type,
+                             uint64_t mem_obj_id,
+                             VkDeviceSize size,
+                             VkObjectType obj_type,
+                             uint64_t obj_handle,
+                             uint32_t heap_index)
+{
+   assert(device->memory_reports);
+
+   const VkDeviceMemoryReportCallbackDataEXT report = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_MEMORY_REPORT_CALLBACK_DATA_EXT,
+      .type = type,
+      .memoryObjectId = mem_obj_id,
+      .size = size,
+      .objectType = obj_type,
+      .objectHandle = obj_handle,
+      .heapIndex = heap_index,
+   };
+
+   for (uint32_t i = 0; i < device->memory_report_count; i++)
+      device->memory_reports[i].callback(&report, device->memory_reports[i].data);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -153,24 +217,123 @@ vk_common_DestroyDebugUtilsMessengerEXT(
    vk_free2(&instance->alloc, pAllocator, messenger);
 }
 
+static VkResult
+vk_common_set_object_name_locked(
+   struct vk_device *device,
+   const VkDebugUtilsObjectNameInfoEXT *pNameInfo)
+{
+   if (unlikely(device->swapchain_name == NULL)) {
+      /* Even though VkSwapchain/Surface are non-dispatchable objects, we know
+       * a priori that these are actually pointers so we can use
+       * the pointer hash table for them.
+       */
+      device->swapchain_name = _mesa_pointer_hash_table_create(NULL);
+      if (device->swapchain_name == NULL)
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   char *object_name = vk_strdup(&device->alloc, pNameInfo->pObjectName,
+                                 VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (object_name == NULL)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   struct hash_entry *entry =
+      _mesa_hash_table_search(device->swapchain_name,
+                              (void *)(uintptr_t)pNameInfo->objectHandle);
+   if (unlikely(entry == NULL)) {
+      entry = _mesa_hash_table_insert(device->swapchain_name,
+                                      (void *)(uintptr_t)pNameInfo->objectHandle,
+                                      object_name);
+      if (entry == NULL) {
+         vk_free(&device->alloc, object_name);
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   } else {
+      vk_free(&device->alloc, entry->data);
+      entry->data = object_name;
+   }
+   return VK_SUCCESS;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL
+vk_common_DebugMarkerSetObjectNameEXT(
+   VkDevice _device,
+   const VkDebugMarkerObjectNameInfoEXT *pNameInfo)
+{
+   VK_FROM_HANDLE(vk_device, device, _device);
+
+   assert(pNameInfo->sType == VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT);
+
+   VkObjectType object_type;
+   switch (pNameInfo->objectType) {
+   case VK_DEBUG_REPORT_OBJECT_TYPE_SURFACE_KHR_EXT:
+      object_type = VK_OBJECT_TYPE_SURFACE_KHR;
+      break;
+   case VK_DEBUG_REPORT_OBJECT_TYPE_SWAPCHAIN_KHR_EXT:
+      object_type = VK_OBJECT_TYPE_SWAPCHAIN_KHR;
+      break;
+   case VK_DEBUG_REPORT_OBJECT_TYPE_DEBUG_REPORT_CALLBACK_EXT_EXT:
+      object_type = VK_OBJECT_TYPE_DEBUG_REPORT_CALLBACK_EXT;
+      break;
+   case VK_DEBUG_REPORT_OBJECT_TYPE_DISPLAY_KHR_EXT:
+      object_type = VK_OBJECT_TYPE_DISPLAY_KHR;
+      break;
+   case VK_DEBUG_REPORT_OBJECT_TYPE_DISPLAY_MODE_KHR_EXT:
+      object_type = VK_OBJECT_TYPE_DISPLAY_MODE_KHR;
+      break;
+   case VK_DEBUG_REPORT_OBJECT_TYPE_VALIDATION_CACHE_EXT_EXT:
+      object_type = VK_OBJECT_TYPE_VALIDATION_CACHE_EXT;
+      break;
+   default:
+      object_type = (VkObjectType)pNameInfo->objectType;
+      break;
+   }
+
+   VkDebugUtilsObjectNameInfoEXT name_info = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = object_type,
+      .objectHandle = pNameInfo->object,
+      .pObjectName = pNameInfo->pObjectName,
+   };
+
+   return device->dispatch_table.SetDebugUtilsObjectNameEXT(_device, &name_info);
+}
+
 VKAPI_ATTR VkResult VKAPI_CALL
 vk_common_SetDebugUtilsObjectNameEXT(
    VkDevice _device,
    const VkDebugUtilsObjectNameInfoEXT *pNameInfo)
 {
    VK_FROM_HANDLE(vk_device, device, _device);
+
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+   if (pNameInfo->objectType == VK_OBJECT_TYPE_SWAPCHAIN_KHR ||
+       pNameInfo->objectType == VK_OBJECT_TYPE_SURFACE_KHR) {
+#else
+   if (pNameInfo->objectType == VK_OBJECT_TYPE_SURFACE_KHR) {
+#endif
+      mtx_lock(&device->swapchain_name_mtx);
+      VkResult res = vk_common_set_object_name_locked(device, pNameInfo);
+      mtx_unlock(&device->swapchain_name_mtx);
+      return res;
+   }
+
    struct vk_object_base *object =
       vk_object_base_from_u64_handle(pNameInfo->objectHandle,
                                      pNameInfo->objectType);
 
+   assert(object->device != NULL || object->instance != NULL);
+   VkAllocationCallbacks *alloc = object->device != NULL ?
+      &object->device->alloc : &object->instance->alloc;
    if (object->object_name) {
-      vk_free(&device->alloc, object->object_name);
+      vk_free(alloc, object->object_name);
       object->object_name = NULL;
    }
-   object->object_name = vk_strdup(&device->alloc, pNameInfo->pObjectName,
-                                   VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (!object->object_name)
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   if (pNameInfo->pObjectName != NULL) {
+      object->object_name = vk_strdup(alloc, pNameInfo->pObjectName,
+                                      VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      if (!object->object_name)
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    return VK_SUCCESS;
 }
@@ -321,4 +484,15 @@ vk_common_QueueInsertDebugUtilsLabelEXT(
                                 &queue->labels,
                                 pLabelInfo);
    queue->region_begin = false;
+}
+
+VkResult
+vk_check_printf_status(struct vk_device *dev, struct u_printf_ctx *ctx)
+{
+   if (u_printf_check_abort(stdout, ctx)) {
+      vk_device_set_lost(dev, "GPU abort.");
+      return VK_ERROR_DEVICE_LOST;
+   } else {
+      return VK_SUCCESS;
+   }
 }

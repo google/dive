@@ -47,7 +47,7 @@
 
 #include "draw_vertex_header.h"
 
-#ifdef DRAW_LLVM_AVAILABLE
+#if DRAW_LLVM_AVAILABLE
 struct gallivm_state;
 #endif
 
@@ -55,7 +55,7 @@ struct gallivm_state;
  * The max stage the draw stores resources for.
  * i.e. vs, tcs, tes, gs. no fs/cs/ms/ts.
  */
-#define DRAW_MAX_SHADER_STAGE (PIPE_SHADER_GEOMETRY + 1)
+#define DRAW_MAX_SHADER_STAGE (MESA_SHADER_GEOMETRY + 1)
 
 /**
  * The largest possible index of a vertex that can be fetched.
@@ -248,6 +248,8 @@ struct draw_context
       bool bypass_clip_points_lines;
    } driver;
 
+   unsigned fpstate;      /**< saved FP state */
+
    bool quads_always_flatshade_last;
 
    bool flushing;         /**< debugging/sanity */
@@ -354,6 +356,8 @@ struct draw_context
    /* Clip derived state:
     */
    float plane[DRAW_TOTAL_CLIP_PLANES][4];
+
+   uint32_t viewmask;
 
    /* If a prim stage introduces new vertex attributes, they'll be stored here
     */

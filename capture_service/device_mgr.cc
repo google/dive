@@ -95,7 +95,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             "--loop-single-frame-count");
         }
         validated_settings.loop_single_frame_count = stoi(*(it + 1));
-        split_args.erase(it, it + 1);
+        split_args.erase(it, it + 2);
     }
     it = std::find(split_args.begin(), split_args.end(), "--enable-gpu-time");
     if (it != split_args.end())

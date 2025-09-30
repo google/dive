@@ -171,7 +171,7 @@ ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr rep
 
 ABSL_FLAG(bool, dump_pm4, false, "dump pm4 for gfxr replay");
 
-ABSL_FLAG(bool, enable_perf_counters, false, "enable perf couters for gfxr replay.");
+ABSL_FLAG(bool, enable_perf_counters, false, "enable perf counters for gfxr replay.");
 
 ABSL_FLAG(std::vector<std::string>,
           metrics,

@@ -277,12 +277,13 @@ void TraceStats::PrintTraceStats(std::ostream &ostream)
 
     for (const Viewport &vp : m_capture_stats.m_viewports)
     {
-        ostream << viewport_stats_desc[kViewport_x] << ": " << (int)vp.m_vk_viewport.x << ", "
-                << viewport_stats_desc[kViewport_y] << ": " << (int)vp.m_vk_viewport.y << ", "
-                << viewport_stats_desc[kViewport_width] << ": " << (int)vp.m_vk_viewport.width
-                << ", " << viewport_stats_desc[kViewport_height] << ": "
-                << (int)vp.m_vk_viewport.height << ", " << viewport_stats_desc[kViewport_minDepth]
-                << ": " << std::fixed << std::setprecision(1) << vp.m_vk_viewport.minDepth << ", "
+        ostream << "\t" << viewport_stats_desc[kViewport_x] << ": " << (int)vp.m_vk_viewport.x
+                << ", " << viewport_stats_desc[kViewport_y] << ": " << (int)vp.m_vk_viewport.y
+                << ", " << viewport_stats_desc[kViewport_width] << ": "
+                << (int)vp.m_vk_viewport.width << ", " << viewport_stats_desc[kViewport_height]
+                << ": " << (int)vp.m_vk_viewport.height << ", "
+                << viewport_stats_desc[kViewport_minDepth] << ": " << std::fixed
+                << std::setprecision(1) << vp.m_vk_viewport.minDepth << ", "
                 << viewport_stats_desc[kViewport_maxDepth] << ": " << std::fixed
                 << std::setprecision(1) << vp.m_vk_viewport.maxDepth << "\n";
     }
@@ -291,11 +292,11 @@ void TraceStats::PrintTraceStats(std::ostream &ostream)
 
     for (const WindowScissor &ws : m_capture_stats.m_window_scissors)
     {
-        ostream << window_scissor_stats_desc[kWindowScissors_tl_x] << ": " << ws.m_tl_x << ", "
-                << window_scissor_stats_desc[kWindowScissors_br_x] << ": " << ws.m_br_x << ", "
-                << window_scissor_stats_desc[kWindowScissors_tl_y] << ": " << ws.m_tl_y << ", "
-                << window_scissor_stats_desc[kWindowScissors_br_y] << ": " << ws.m_br_y << ", "
-                << window_scissor_stats_desc[kWindowScissors_Width] << ": "
+        ostream << "\t" << window_scissor_stats_desc[kWindowScissors_tl_x] << ": " << ws.m_tl_x
+                << ", " << window_scissor_stats_desc[kWindowScissors_br_x] << ": " << ws.m_br_x
+                << ", " << window_scissor_stats_desc[kWindowScissors_tl_y] << ": " << ws.m_tl_y
+                << ", " << window_scissor_stats_desc[kWindowScissors_br_y] << ": " << ws.m_br_y
+                << ", " << window_scissor_stats_desc[kWindowScissors_Width] << ": "
                 << (ws.m_br_x - ws.m_tl_x + 1) << ", "
                 << window_scissor_stats_desc[kWindowScissors_Height] << ": "
                 << (ws.m_br_y - ws.m_tl_y + 1) << "\n";

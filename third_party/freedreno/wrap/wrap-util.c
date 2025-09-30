@@ -545,9 +545,6 @@ void collect_trace_file(const char* capture_file_path)
 		int fd = 	df->device_fd ;
 		if(fd != -1)
 		{
-			struct device_file *df = get_file(fd);
-			if (df == NULL)
-					continue;
 			LOGD("device_fd %d, log_fd %"LOG_PRI_FILE", filename %s closed in collect_trace_file \n",
 				fd, df->log_fd, df->file_name);
 			pthread_mutex_lock(&write_lock);

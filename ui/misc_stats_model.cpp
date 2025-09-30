@@ -92,7 +92,7 @@ int MiscStatsModel::rowCount(const QModelIndex &parent) const
     {
         return 0;
     }
-    return kMiscStats.size();
+    return static_cast<int>(kMiscStats.size());
 }
 
 //--------------------------------------------------------------------------------------------------

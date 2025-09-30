@@ -116,7 +116,7 @@ int DrawDispatchStatsModel::rowCount(const QModelIndex &parent) const
     {
         return 0;
     }
-    return kDrawDispatchStats.size();
+    return static_cast<int>(kDrawDispatchStats.size());
 }
 
 //--------------------------------------------------------------------------------------------------

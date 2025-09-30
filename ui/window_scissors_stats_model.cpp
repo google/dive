@@ -73,7 +73,7 @@ int WindowScissorsStatsModel::rowCount(const QModelIndex &parent) const
     {
         return 0;
     }
-    return m_window_scissors.size();
+    return static_cast<int>(m_window_scissors.size());
 }
 
 //--------------------------------------------------------------------------------------------------

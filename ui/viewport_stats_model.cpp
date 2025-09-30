@@ -72,7 +72,7 @@ int ViewportStatsModel::rowCount(const QModelIndex &parent) const
     {
         return 0;
     }
-    return m_viewports.size();
+    return static_cast<int>(m_viewports.size());
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -59,6 +59,14 @@ struct DeviceState
     bool        m_is_root_shell = false;
 };
 
+enum class GfxrReplayOptions
+{
+    kNormal,
+    kPm4Dump,       // PM4 data will be captured, producing .rd trace
+    kPerfCounters,  // Perf Counter data will be collected using a plugin, producing .csv artifact
+    kGpuTiming,     // GPU timing data will be collected, producing .csv artifact
+};
+
 struct GfxrReplaySettings
 {
     std::string remote_capture_path = "";
@@ -76,20 +84,10 @@ struct GfxrReplaySettings
     int  loop_single_frame_count = -1;
 
     // ----------------------------------------------------------------------
-    // NOTE: The following options (denoted by enable_*) are mutually exclusive
+    GfxrReplayOptions run_type = GfxrReplayOptions::kNormal;
 
-    // If enabled, PM4 data will be captured and the .rd file downloaded to
-    // local_download_dir
-    bool enable_dump_pm4 = false;
-
-    // If enabled, perf counter data will be collected using a plugin and the .csv file
-    // downloaded to local_download_dir
-    bool                     enable_perf_counters = false;
+    // Additional settings used only with kPerfCounters
     std::vector<std::string> metrics = {};
-
-    // If enabled, GPU timing data will be collected and the .csv file downloaded to
-    // local_download_dir
-    bool enable_gpu_time = false;
 };
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates

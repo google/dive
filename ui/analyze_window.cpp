@@ -568,7 +568,7 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     replay_settings.loop_single_frame = true;
     replay_settings.loop_single_frame_count = 2;
 
-    replay_settings.enable_dump_pm4 = true;
+    replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -586,7 +586,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     replay_settings.loop_single_frame = (frame_count == 1) ? false : true;
     replay_settings.loop_single_frame_count = frame_count;
 
-    replay_settings.enable_perf_counters = true;
+    replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
     replay_settings.metrics = *m_enabled_metrics_vector;
 
     return device_manager.RunReplayApk(replay_settings);
@@ -606,7 +606,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     replay_settings.loop_single_frame = (frame_count == 1) ? false : true;
     replay_settings.loop_single_frame_count = frame_count;
 
-    replay_settings.enable_gpu_time = true;
+    replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
     return device_manager.RunReplayApk(replay_settings);
 }

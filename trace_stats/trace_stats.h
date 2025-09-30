@@ -71,16 +71,16 @@ struct WindowScissor
 
 struct CaptureStats
 {
-    std::array<uint64_t, Dive::Stats::kNumStats> stats_list = {};
+    std::array<uint64_t, Dive::Stats::kNumStats> m_stats_list = {};
 
-    std::vector<uint32_t> event_num_indices;
+    std::vector<uint32_t> m_event_num_indices;
 
-    std::vector<Dive::ShaderReference> shader_ref_set;
-    std::vector<Viewport>              viewports;
-    std::vector<WindowScissor>         window_scissors;
+    std::vector<Dive::ShaderReference> m_shader_ref_set;
+    std::vector<Viewport>              m_viewports;
+    std::vector<WindowScissor>         m_window_scissors;
 
-    uint32_t num_binning_passes = 0;
-    uint32_t num_tiling_passes = 0;
+    uint32_t m_num_binning_passes = 0;
+    uint32_t m_num_tiling_passes = 0;
 };
 
 class TraceStats

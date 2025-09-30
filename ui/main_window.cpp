@@ -45,6 +45,7 @@
 #include "command_buffer_view.h"
 #include "command_model.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/dive_file_container.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
 #include "object_names.h"
@@ -148,6 +149,8 @@ MainWindow::MainWindow()
     // Output logs to both the "record" as well as console output
     m_log_compound.AddLog(&m_log_record);
     m_log_compound.AddLog(&m_log_console);
+
+    m_file_container = std::make_unique<Dive::DiveFileContainer>();
 
     m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
 
@@ -784,6 +787,7 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
+        std::cerr << file_name << std::endl;
         HideOverlay();
         QString error_msg;
         if (load_res == Dive::CaptureData::LoadResult::kFileIoError)
@@ -1064,8 +1068,11 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file)
+bool MainWindow::LoadFile(const std::string &ref_file_name, bool is_temp_file)
 {
+    m_file_container->Load(ref_file_name);
+    std::string file_name = m_file_container->GetMainFilePath();
+
     // Check the file type to determine what is loaded.
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
 
@@ -1423,6 +1430,10 @@ void MainWindow::closeEvent(QCloseEvent *closeEvent)
     }
     if (m_trace_dig)
         m_trace_dig->Cleanup();
+    if (m_file_container)
+    {
+        m_file_container->Cleanup();
+    }
     closeEvent->accept();
 }
 
@@ -1458,27 +1469,30 @@ void MainWindow::OnSaveCapture()
     {
         file_name += ".dive";
     }
-    QFile target_file(file_name);
-    if (target_file.exists())
     {
-        switch (QMessageBox::question(this,
-                                      QString("File already exists"),
-                                      (QString("Do you want to replace the existing capture?")),
-                                      QMessageBox::Yes | QMessageBox::No,
-                                      QMessageBox::No))
+        QFile target_file(file_name);
+        if (target_file.exists())
         {
-        case QMessageBox::Yes:
-            target_file.remove();
-            break;
-        case QMessageBox::No:
-            return OnSaveCapture();
-        default:
-            DIVE_ASSERT(false);
+            switch (QMessageBox::question(this,
+                                          QString("File already exists"),
+                                          (QString("Do you want to replace the existing capture?")),
+                                          QMessageBox::Yes | QMessageBox::No,
+                                          QMessageBox::No))
+            {
+            case QMessageBox::Yes:
+                target_file.remove();
+                break;
+            case QMessageBox::No:
+                return OnSaveCapture();
+            default:
+                DIVE_ASSERT(false);
+            }
         }
     }
 
     bool save_result = false;
     bool is_saving_new_capture = m_unsaved_capture_path == m_capture_file.toStdString();
+    /*
     // Save the newly captured file by rename and existing capture by copy.
     if (is_saving_new_capture)
     {
@@ -1488,6 +1502,8 @@ void MainWindow::OnSaveCapture()
     {
         save_result = QFile::copy(m_capture_file, file_name);
     }
+    */
+    save_result = m_file_container->Save(file_name.toStdString());
 
     if (save_result)
     {
@@ -3350,8 +3366,9 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
         }
     }
 
-    if (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
-        m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly)
+    if (m_pm4_command_hierarchy_view->model() != nullptr &&
+        (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
+         m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly))
     {
         std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
                                                       m_pm4_command_hierarchy_view->model())

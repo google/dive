@@ -70,6 +70,7 @@ enum class EventMode;
 
 namespace Dive
 {
+class DiveFileContainer;
 class DataCore;
 class PluginLoader;
 class AvailableMetrics;
@@ -225,6 +226,8 @@ private:
         MaxRecentFiles = 3
     };
     QAction *m_recent_file_actions[MaxRecentFiles];
+
+    std::unique_ptr<Dive::DiveFileContainer> m_file_container;
 
     ProgressTrackerCallback         m_progress_tracker;
     std::unique_ptr<Dive::DataCore> m_data_core;

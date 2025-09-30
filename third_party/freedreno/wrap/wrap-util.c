@@ -529,13 +529,7 @@ int append_file(int fd_target, const char *src)
 // In the process, all log files are closed and all inprogress files are deleted.
 void collect_trace_file(const char* capture_file_path)
 {
-	char full_path[PATH_MAX];
-#if defined (COMPRESS_TRACE)
-	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
-#else
-	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
-#endif
-	LOGD("full_path is %s", full_path);
+	LOGD("capture_file_path is %s", capture_file_path);
 
 	// Could remove(capture_file_path). However, that is susceptible to TOCTOU problems.
 	// Prefer to open the target file once and keep it open for the duration of collection.

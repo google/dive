@@ -408,6 +408,7 @@ MainWindow::MainWindow()
         m_shader_view = new ShaderView(*m_data_core);
 
         m_trace_stats = new Dive::TraceStats();
+        m_capture_stats = new Dive::CaptureStats();
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
                                                   *m_capture_stats);
         m_event_state_view = new EventStateView(*m_data_core);

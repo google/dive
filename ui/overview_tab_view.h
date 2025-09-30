@@ -15,6 +15,7 @@
 */
 
 #include <QFrame>
+#include <qpushbutton.h>
 
 #pragma once
 
@@ -45,6 +46,9 @@ public:
     void LoadStatistics();
 
 private:
+    void CopyStatistics();
+
+    QPushButton              *m_clipboard_button;
     QTabWidget               *m_tab_widget;
     DrawDispatchStatsTabView *m_draw_dispatch_statistics_view;
     int                       m_draw_dispatch_statistics_view_index;
@@ -52,4 +56,6 @@ private:
     int                       m_tile_statistics_view_tab_index;
     MiscStatsTabView         *m_misc_statistics_view;
     int                       m_misc_statistics_view_tab_index;
+
+    const Dive::CaptureStats &m_stats;
 };

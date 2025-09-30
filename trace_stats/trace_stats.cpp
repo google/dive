@@ -88,11 +88,12 @@ namespace Dive
     } while (0)
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
+void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
+                                  CaptureStats                &capture_stats)
 {
-    m_capture_stats = CaptureStats();  // Reset any previous stats
+    capture_stats = CaptureStats();  // Reset any previous stats
 
-    std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = m_capture_stats.m_stats_list;
+    std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = capture_stats.m_stats_list;
 
     size_t                      event_count = meta_data.m_event_info.size();
     const Dive::EventStateInfo &event_state = meta_data.m_event_state;
@@ -107,9 +108,9 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
         if (info.m_render_mode != cur_type)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinning)
-                m_capture_stats.m_num_binning_passes++;
+                capture_stats.m_num_binning_passes++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
-                m_capture_stats.m_num_tiling_passes++;
+                capture_stats.m_num_tiling_passes++;
 
             cur_type = info.m_render_mode;
             num_draws_in_pass = 0;
@@ -147,7 +148,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
 
             num_draws_in_pass++;
             if (info.m_num_indices != 0)
-                m_capture_stats.m_event_num_indices.push_back(info.m_num_indices);
+                capture_stats.m_event_num_indices.push_back(info.m_num_indices);
 
             const uint32_t event_id = static_cast<uint32_t>(i);
             auto event_state_it = event_state.find(static_cast<Dive::EventStateId>(event_id));
@@ -187,7 +188,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
                 {
                     Viewport viewport;
                     viewport.m_vk_viewport = event_state_it->Viewport(v);
-                    m_capture_stats.m_viewports.push_back(viewport);
+                    capture_stats.m_viewports.push_back(viewport);
                 }
             }
 
@@ -200,21 +201,21 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
                 window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
                 window_scissor.m_br_x = event_state_it->WindowScissorBRX();
                 window_scissor.m_br_y = event_state_it->WindowScissorBRY();
-                m_capture_stats.m_window_scissors.push_back(window_scissor);
+                capture_stats.m_window_scissors.push_back(window_scissor);
             }
         }
 
         for (size_t ref = 0; ref < info.m_shader_references.size(); ++ref)
             if (info.m_shader_references[ref].m_shader_index != UINT32_MAX)
-                m_capture_stats.m_shader_ref_set.push_back(info.m_shader_references[ref]);
+                capture_stats.m_shader_ref_set.push_back(info.m_shader_references[ref]);
     }
 
-    stats_list[Dive::Stats::kNumBinnigPasses] = m_capture_stats.m_num_binning_passes;
-    stats_list[Dive::Stats::kNumTilingPasses] = m_capture_stats.m_num_tiling_passes;
+    stats_list[Dive::Stats::kNumBinnigPasses] = capture_stats.m_num_binning_passes;
+    stats_list[Dive::Stats::kNumTilingPasses] = capture_stats.m_num_tiling_passes;
 
-    if (!m_capture_stats.m_event_num_indices.empty())
+    if (!capture_stats.m_event_num_indices.empty())
     {
-        GATHER_TOTAL_MIN_MAX_MEDIAN(m_capture_stats.m_event_num_indices, Indices);
+        GATHER_TOTAL_MIN_MAX_MEDIAN(capture_stats.m_event_num_indices, Indices);
     }
 
     std::vector<size_t>   shaders_num_instructions;
@@ -222,7 +223,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
 
     stats_list[Dive::Stats::kShaders] = meta_data.m_shaders.size();
 
-    for (const Dive::ShaderReference &ref : m_capture_stats.m_shader_ref_set)
+    for (const Dive::ShaderReference &ref : capture_stats.m_shader_ref_set)
     {
         if (ref.m_stage == Dive::ShaderStage::kShaderStageVs)
         {
@@ -250,9 +251,9 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data)
 }
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::PrintTraceStats(std::ostream &ostream)
+void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream)
 {
-    std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = m_capture_stats.m_stats_list;
+    const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = capture_stats.m_stats_list;
 
     DIVE_ASSERT(kStatMap.size() == Stats::kNumStats);
 
@@ -275,7 +276,7 @@ void TraceStats::PrintTraceStats(std::ostream &ostream)
 
     ostream << viewport_stats_desc[kViewport] << ":\n";
 
-    for (const Viewport &vp : m_capture_stats.m_viewports)
+    for (const Viewport &vp : capture_stats.m_viewports)
     {
         ostream << "\t" << viewport_stats_desc[kViewport_x] << ": " << (int)vp.m_vk_viewport.x
                 << ", " << viewport_stats_desc[kViewport_y] << ": " << (int)vp.m_vk_viewport.y
@@ -290,7 +291,7 @@ void TraceStats::PrintTraceStats(std::ostream &ostream)
 
     ostream << window_scissor_stats_desc[kWindowScissors] << ":\n";
 
-    for (const WindowScissor &ws : m_capture_stats.m_window_scissors)
+    for (const WindowScissor &ws : capture_stats.m_window_scissors)
     {
         ostream << "\t" << window_scissor_stats_desc[kWindowScissors_tl_x] << ": " << ws.m_tl_x
                 << ", " << window_scissor_stats_desc[kWindowScissors_br_x] << ": " << ws.m_br_x

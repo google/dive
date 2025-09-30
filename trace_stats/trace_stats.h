@@ -90,16 +90,10 @@ public:
     ~TraceStats() = default;
 
     // Gather the trace statistics from the metadata
-    void GatherTraceStats(const Dive::CaptureMetadata &meta_data);
+    void GatherTraceStats(const Dive::CaptureMetadata &meta_data, CaptureStats &capture_stats);
 
     // Print the capture statistics to the output stream
-    void PrintTraceStats(std::ostream &ostream);
-
-    // Get the capture statistics
-    const CaptureStats &GetCaptureStats() const { return m_capture_stats; };
-
-private:
-    CaptureStats m_capture_stats;
+    void PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream);
 };
 
 }  // namespace Dive

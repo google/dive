@@ -73,9 +73,10 @@ int main(int argc, char **argv)
 
     // Gather Stats...
     const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
+    Dive::CaptureStats           capture_stats;
     Dive::TraceStats             trace_stats;
-    trace_stats.GatherTraceStats(meta_data);
-    trace_stats.PrintTraceStats(*ostream);
+    trace_stats.GatherTraceStats(meta_data, capture_stats);
+    trace_stats.PrintTraceStats(capture_stats, *ostream);
 
     return 1;
 }

@@ -32,7 +32,7 @@ TEST(ValidateGfxrReplaySettingsTest, NoLocalDownloadDirFail)
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(), "Must provide local_download_dir");
+    EXPECT_EQ(ret.status().message(), "Must provide local_download_dir");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, NoRemoteCapturePathFail)
@@ -43,7 +43,7 @@ TEST(ValidateGfxrReplaySettingsTest, NoRemoteCapturePathFail)
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(), "Must provide remote_capture_path");
+    EXPECT_EQ(ret.status().message(), "Must provide remote_capture_path");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrEqualsSignFail)
@@ -56,8 +56,7 @@ TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrEqualsSignFail)
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(),
-                 "replay_flags_str cannot contain '='");
+    EXPECT_EQ(ret.status().message(), "replay_flags_str cannot contain '='");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, DoubleLoopSingleFrameFail)
@@ -71,9 +70,9 @@ TEST(ValidateGfxrReplaySettingsTest, DoubleLoopSingleFrameFail)
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(),
-                 "Do not specify loop_single_frame in GfxrReplaySettings and also as flag "
-                 "--loop-single-frame");
+    EXPECT_EQ(ret.status().message(),
+              "Do not specify loop_single_frame in GfxrReplaySettings and also as flag "
+              "--loop-single-frame");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, MutuallyExclusiveOptionsFail)
@@ -87,9 +86,9 @@ TEST(ValidateGfxrReplaySettingsTest, MutuallyExclusiveOptionsFail)
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(),
-                 "Only one of the following settings allowed: enable_dump_pm4, "
-                 "enable_perf_counters, enable_gpu_time");
+    EXPECT_EQ(ret.status().message(),
+              "Only one of the following settings allowed: enable_dump_pm4, "
+              "enable_perf_counters, enable_gpu_time");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePM4DumpFail)
@@ -102,8 +101,7 @@ TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePM4DumpFail)
     auto ret = ValidateGfxrReplaySettings(rs, false);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kUnimplemented);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(),
-                 "Dump PM4 is only implemented for Adreno GPU");
+    EXPECT_EQ(ret.status().message(), "Dump PM4 is only implemented for Adreno GPU");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePerfCountersFail)
@@ -116,8 +114,7 @@ TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePerfCountersFail)
     auto ret = ValidateGfxrReplaySettings(rs, false);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kUnimplemented);
-    EXPECT_STREQ(std::string(ret.status().message()).c_str(),
-                 "Perf counters feature is only implemented for Adreno GPU");
+    EXPECT_EQ(ret.status().message(), "Perf counters feature is only implemented for Adreno GPU");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, BasicPass)
@@ -128,7 +125,7 @@ TEST(ValidateGfxrReplaySettingsTest, BasicPass)
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_STREQ(ret->replay_flags_str.c_str(), "");
+    EXPECT_EQ(ret->replay_flags_str, "");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrSpacesPass)
@@ -140,7 +137,7 @@ TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrSpacesPass)
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_STREQ(ret->replay_flags_str.c_str(), "");
+    EXPECT_EQ(ret->replay_flags_str, "");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, FlagToFlagPass)
@@ -155,8 +152,8 @@ TEST(ValidateGfxrReplaySettingsTest, FlagToFlagPass)
     EXPECT_EQ(ret->loop_single_frame, true);
     EXPECT_EQ(ret->loop_single_frame_count, 3);
     EXPECT_EQ(ret->enable_gpu_time, true);
-    EXPECT_STREQ(ret->replay_flags_str.c_str(),
-                 "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
+    EXPECT_EQ(ret->replay_flags_str,
+              "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, SettingToFlagPass)
@@ -174,8 +171,8 @@ TEST(ValidateGfxrReplaySettingsTest, SettingToFlagPass)
     EXPECT_EQ(ret->loop_single_frame, true);
     EXPECT_EQ(ret->loop_single_frame_count, 3);
     EXPECT_EQ(ret->enable_gpu_time, true);
-    EXPECT_STREQ(ret->replay_flags_str.c_str(),
-                 "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
+    EXPECT_EQ(ret->replay_flags_str,
+              "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, MixFlagsSettingsPass)
@@ -192,8 +189,8 @@ TEST(ValidateGfxrReplaySettingsTest, MixFlagsSettingsPass)
     EXPECT_EQ(ret->loop_single_frame, true);
     EXPECT_EQ(ret->loop_single_frame_count, 3);
     EXPECT_EQ(ret->enable_gpu_time, true);
-    EXPECT_STREQ(ret->replay_flags_str.c_str(),
-                 "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
+    EXPECT_EQ(ret->replay_flags_str,
+              "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
 }
 
 TEST(DeviceManagerTest, EmptySerialIsInvalidForSelectDevice)

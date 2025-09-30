@@ -100,19 +100,20 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     it = std::find(split_args.begin(), split_args.end(), "--enable-gpu-time");
     if (it != split_args.end())
     {
-        if (settings.enable_gpu_time)
+        if (settings.run_type != GfxrReplayOptions::kNormal)
         {
             return absl::InvalidArgumentError(
-            "Do not specify enable_gpu_time in GfxrReplaySettings and also as flag "
+            "Do not specify run_type = kGpuTiming in GfxrReplaySettings and also as flag "
             "--enable-gpu-time");
         }
-        validated_settings.enable_gpu_time = true;
+        validated_settings.run_type = GfxrReplayOptions::kGpuTiming;
         split_args.erase(it);
     }
 
-    // Ensure no mutually exclusive options are enabled
-    int n_exclusive_settings = 0;
-    if (validated_settings.enable_dump_pm4)
+    // Check for run_type-specific settings
+    switch (validated_settings.run_type)
+    {
+    case GfxrReplayOptions::kPm4Dump:
     {
         if (!is_adreno_gpu)
         {
@@ -122,29 +123,34 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             (!validated_settings.loop_single_frame))
         {
             return absl::InvalidArgumentError(
-            "Looping replay is needed for enable_dump_pm4, ensure "
+            "Looping replay is needed for kPm4Dump, ensure "
             "loop_single_frame is set and loop_single_frame_count is 2");
         }
-        n_exclusive_settings++;
     }
-    if (validated_settings.enable_perf_counters)
+    case GfxrReplayOptions::kPerfCounters:
     {
         if (!is_adreno_gpu)
         {
             return absl::UnimplementedError(
             "Perf counters feature is only implemented for Adreno GPU");
         }
-        n_exclusive_settings++;
+        if ((validated_settings.loop_single_frame_count >= 0) ||
+            (validated_settings.loop_single_frame))
+        {
+            return absl::InvalidArgumentError(
+            "Hardcoded looping is used for kPerfCounters, ensure"
+            "loop_single_frame and loop_single_frame_count are not set");
+        }
+        if (validated_settings.metrics.size() == 0)
+        {
+            return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
+        }
     }
-    if (validated_settings.enable_gpu_time)
+    case GfxrReplayOptions::kGpuTiming:
+    default:
     {
-        n_exclusive_settings++;
+        break;
     }
-    if (n_exclusive_settings > 1)
-    {
-        return absl::InvalidArgumentError(
-        "Only one of the following settings allowed: enable_dump_pm4, "
-        "enable_perf_counters, enable_gpu_time");
     }
 
     // Re-concatenate flags to form a validated replay_flags_str
@@ -157,7 +163,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         split_args.push_back("--loop-single-frame-count");
         split_args.push_back(std::to_string(validated_settings.loop_single_frame_count));
     }
-    if (validated_settings.enable_gpu_time)
+    if (validated_settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
         split_args.push_back("--enable-gpu-time");
     }
@@ -636,7 +642,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     LOGD("RunReplayGfxrScript(): SETUP\n");
     std::filesystem::path parse_remote_capture = settings.remote_capture_path;
 
-    // These are only used if enable_dump_pm4
+    // These are only used if kPm4Dump
     std::string dump_pm4_file_name = parse_remote_capture.stem().string() + ".rd";
     std::string remote_pm4_path = absl::StrFormat("%s/%s",
                                                   kDeviceCapturePath,
@@ -644,7 +650,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     std::string remote_pm4_inprogress_path = absl::StrFormat("%s.inprogress",
                                                              remote_pm4_path.c_str());
 
-    if (settings.enable_dump_pm4)
+    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
         LOGD("RunReplayGfxrScript(): PM4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string cmd = absl::StrFormat("shell setprop %s 1", kEnableReplayPm4DumpPropertyName);
@@ -674,7 +680,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         std::this_thread::sleep_for(std::chrono::seconds(1));
     } while (m_device->IsProcessRunning(kGfxrReplayAppName));
 
-    if (settings.enable_dump_pm4)
+    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
         // Wait for PM4 trace file to be written to.
         do
@@ -691,7 +697,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
              remote_pm4_path.c_str(),
              settings.local_download_dir.c_str());
     }
-    else if (settings.enable_gpu_time)
+    else if (settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
         std::string
                     remote_gpu_time_path = absl::StrFormat("%s/%s",
@@ -716,7 +722,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     }
 
     LOGD("RunReplayGfxrScript(): CLEANUP\n");
-    if (settings.enable_dump_pm4)
+    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
         std::string cmd = absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName);
         m_device->Adb().Run(cmd).IgnoreError();
@@ -815,7 +821,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
 
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;
-    if (valid_settings.enable_perf_counters)
+    if (valid_settings.run_type == GfxrReplayOptions::kPerfCounters)
     {
         ret_run = RunReplayProfilingBinary(valid_settings);
     }
@@ -965,8 +971,8 @@ absl::StatusOr<uint32_t> AndroidDevice::GetGpuFrequency() const
         return res.status();
     }
 
-    // Note: omitting some parsing checks here because this system file is expected to only contain
-    // digits
+    // Note: omitting some parsing checks here because this system file is expected to only
+    // contain digits
     uint32_t freq = stoi(*res);
 
     return freq;

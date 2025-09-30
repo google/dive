@@ -690,10 +690,22 @@ int main(int argc, char** argv)
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = absl::GetFlag(FLAGS_gfxr_replay_file_path);
     replay_settings.local_download_dir = absl::GetFlag(FLAGS_download_dir);
-    replay_settings.enable_dump_pm4 = absl::GetFlag(FLAGS_dump_pm4);
     replay_settings.replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags);
-    replay_settings.enable_perf_counters = absl::GetFlag(FLAGS_enable_perf_counters);
     replay_settings.metrics = absl::GetFlag(FLAGS_metrics);
+
+    if (absl::GetFlag(FLAGS_dump_pm4))
+    {
+        replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
+    }
+    if (absl::GetFlag(FLAGS_enable_perf_counters))
+    {
+        if (replay_settings.run_type != Dive::GfxrReplayOptions::kNormal)
+        {
+            std::cout << "Cannot use --dump_pm4 and --enable_perf_counters both" << std::endl;
+            return 1;
+        }
+        replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
+    }
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();

@@ -970,6 +970,7 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     m_filter_gfxr_commands_combo_box->setEnabled(false);
     m_filter_gfxr_commands_combo_box->hide();
     m_view_mode_combo_box->setEnabled(true);
+    m_pm4_filter_mode_combo_box->setEnabled(false);
 
     ConnectAdrenoRdFileTabs();
 
@@ -1049,6 +1050,7 @@ bool MainWindow::LoadGfxrFile(const std::string &file_name)
     m_filter_mode_combo_box->hide();
     m_filter_gfxr_commands_combo_box->setEnabled(true);
     m_filter_gfxr_commands_combo_box->show();
+    m_pm4_filter_mode_combo_box->setEnabled(false);
 
     m_gfxr_vulkan_command_hierarchy_model->EndResetModel();
 
@@ -3349,8 +3351,9 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
         }
     }
 
-    if (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
-        m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly)
+    if (m_pm4_filter_mode_combo_box->isEnabled() &&
+        (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
+         m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly))
     {
         std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
                                                       m_pm4_command_hierarchy_view->model())

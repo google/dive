@@ -126,6 +126,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             "Looping replay is needed for kPm4Dump, ensure "
             "loop_single_frame is set and loop_single_frame_count is 2");
         }
+        break;
     }
     case GfxrReplayOptions::kPerfCounters:
     {
@@ -138,13 +139,14 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             (validated_settings.loop_single_frame))
         {
             return absl::InvalidArgumentError(
-            "Hardcoded looping is used for kPerfCounters, ensure"
+            "Hardcoded looping is used for kPerfCounters, ensure "
             "loop_single_frame and loop_single_frame_count are not set");
         }
         if (validated_settings.metrics.size() == 0)
         {
             return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
         }
+        break;
     }
     case GfxrReplayOptions::kGpuTiming:
     default:

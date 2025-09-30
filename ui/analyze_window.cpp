@@ -582,10 +582,6 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
 
-    int frame_count = m_frame_count_box->value();
-    replay_settings.loop_single_frame = (frame_count == 1) ? false : true;
-    replay_settings.loop_single_frame_count = frame_count;
-
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
     replay_settings.metrics = *m_enabled_metrics_vector;
 

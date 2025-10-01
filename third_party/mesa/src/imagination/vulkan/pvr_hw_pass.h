@@ -183,9 +183,10 @@ struct pvr_renderpass_hwsetup_subpass {
    struct {
       enum pvr_renderpass_hwsetup_input_access type;
       uint32_t on_chip_rt;
-   } * input_access;
+   } *input_access;
 
    uint8_t output_register_mask;
+   bool has_stencil_self_dep;
 };
 
 struct pvr_renderpass_colorinit {
@@ -255,6 +256,8 @@ struct pvr_renderpass_hwsetup_render {
    bool has_side_effects;
 
    struct pvr_load_op *load_op;
+
+   bool requires_frag_pr;
 };
 
 struct pvr_renderpass_hw_map {

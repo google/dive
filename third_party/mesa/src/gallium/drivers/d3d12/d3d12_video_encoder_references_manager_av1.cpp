@@ -76,12 +76,30 @@ d3d12_video_encoder_references_manager_av1::is_current_frame_used_as_reference()
    return m_isCurrentFrameUsedAsReference;
 }
 
+#if D3D12_VIDEO_USE_NEW_ENCODECMDLIST4_INTERFACE
 void
-d3d12_video_encoder_references_manager_av1::begin_frame(D3D12_VIDEO_ENCODER_PICTURE_CONTROL_CODEC_DATA curFrameData,
-                                                        bool bUsedAsReference,
-                                                        struct pipe_picture_desc *picture)
+d3d12_video_encoder_references_manager_av1::begin_frame1(D3D12_VIDEO_ENCODER_PICTURE_CONTROL_CODEC_DATA1 curFrameData,
+                                                          bool bUsedAsReference,
+                                                          struct pipe_picture_desc *picture)
 {
    m_CurrentFramePicParams = *curFrameData.pAV1PicData;
+   begin_frame_impl(bUsedAsReference, picture);
+}
+#endif // D3D12_VIDEO_USE_NEW_ENCODECMDLIST4_INTERFACE
+
+void
+d3d12_video_encoder_references_manager_av1::begin_frame(D3D12_VIDEO_ENCODER_PICTURE_CONTROL_CODEC_DATA curFrameData,
+                                                         bool bUsedAsReference,
+                                                         struct pipe_picture_desc *picture)
+{
+   m_CurrentFramePicParams = *curFrameData.pAV1PicData;
+   begin_frame_impl(bUsedAsReference, picture);
+}
+
+void
+d3d12_video_encoder_references_manager_av1::begin_frame_impl(bool bUsedAsReference,
+                                                              struct pipe_picture_desc *picture)
+{
    m_isCurrentFrameUsedAsReference = bUsedAsReference;
 
    if (m_CurrentFramePicParams.FrameType == D3D12_VIDEO_ENCODER_AV1_FRAME_TYPE_KEY_FRAME)
@@ -96,7 +114,7 @@ d3d12_video_encoder_references_manager_av1::begin_frame(D3D12_VIDEO_ENCODER_PICT
          reconPic.ReconstructedPictureSubresource;
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    assert(m_PhysicalAllocationsStorage.get_number_of_tracked_allocations() <=
           (NUM_REF_FRAMES + 1));   // pool is not extended beyond maximum expected usage
 
@@ -213,7 +231,7 @@ d3d12_video_encoder_references_manager_av1::print_virtual_dpb_entries()
                 "Number of DPB virtual entries is %" PRIu64 " entries for frame with OrderHint "
                 "%d (PictureIndex %d) are: \n%s \n",
                 m_PhysicalAllocationsStorage.get_number_of_pics_in_dpb(),
-                m_CurrentFrameReferencesData.pVirtualDPBEntries.size(),
+                static_cast<uint64_t>(m_CurrentFrameReferencesData.pVirtualDPBEntries.size()),
                 m_CurrentFramePicParams.OrderHint,
                 m_CurrentFramePicParams.PictureIndex,
                 dpbContents.c_str());
@@ -294,7 +312,22 @@ d3d12_video_encoder_references_manager_av1::get_dpb_physical_slot_refcount_from_
    return refCount;
 }
 
-void
+#if D3D12_VIDEO_USE_NEW_ENCODECMDLIST4_INTERFACE
+bool
+d3d12_video_encoder_references_manager_av1::get_current_frame_picture_control_data1(
+   D3D12_VIDEO_ENCODER_PICTURE_CONTROL_CODEC_DATA1 &codecAllocation)
+{
+   D3D12_VIDEO_ENCODER_PICTURE_CONTROL_CODEC_DATA picData = {};
+   picData.DataSize = codecAllocation.DataSize;
+   picData.pAV1PicData = codecAllocation.pAV1PicData;
+   bool res = get_current_frame_picture_control_data(picData);
+   codecAllocation.DataSize = picData.DataSize;
+   codecAllocation.pAV1PicData = picData.pAV1PicData;
+   return res;
+}
+#endif // D3D12_VIDEO_USE_NEW_ENCODECMDLIST4_INTERFACE
+
+bool
 d3d12_video_encoder_references_manager_av1::get_current_frame_picture_control_data(
    D3D12_VIDEO_ENCODER_PICTURE_CONTROL_CODEC_DATA &codecAllocation)
 {
@@ -314,13 +347,14 @@ d3d12_video_encoder_references_manager_av1::get_current_frame_picture_control_da
       m_CurrentFramePicParams.ReferenceFramesReconPictureDescriptors[i] =
          m_CurrentFrameReferencesData.pVirtualDPBEntries[i];
 
-#ifdef DEBUG   // Otherwise may iterate over structures and do no-op debug_printf
+#if MESA_DEBUG   // Otherwise may iterate over structures and do no-op debug_printf
    print_ref_frame_idx();
    print_virtual_dpb_entries();
    print_physical_resource_references();
 #endif
 
    *codecAllocation.pAV1PicData = m_CurrentFramePicParams;
+   return true;
 }
 
 void

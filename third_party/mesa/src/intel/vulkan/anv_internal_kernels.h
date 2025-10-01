@@ -24,76 +24,74 @@
 #ifndef ANV_GENERATED_INDIRECT_DRAWS_H
 #define ANV_GENERATED_INDIRECT_DRAWS_H
 
-#include <stdint.h>
+#include "libintel_shaders.h"
 
-#define ANV_GENERATED_FLAG_INDEXED    BITFIELD_BIT(0)
-#define ANV_GENERATED_FLAG_PREDICATED BITFIELD_BIT(1)
-#define ANV_GENERATED_FLAG_DRAWID     BITFIELD_BIT(2)
-#define ANV_GENERATED_FLAG_BASE       BITFIELD_BIT(3)
-
-/* This needs to match common_generated_draws.glsl :
- *
- *    layout(set = 0, binding = 3) uniform block
- */
-struct anv_generated_indirect_draw_params {
+struct PACKED anv_gen_indirect_params {
    /* Draw ID buffer address (only used on Gfx9) */
    uint64_t draw_id_addr;
+
    /* Indirect data buffer address (only used on Gfx9) */
    uint64_t indirect_data_addr;
+
+   /* Pointers to workaround instructions */
+   uint64_t wa_insts_addr;
+
    /* Stride between each elements of the indirect data buffer */
    uint32_t indirect_data_stride;
-   uint32_t flags; /* 0-7: bits, 8-15: mocs, 16-23: cmd_dws */
+
+   /* Bitfield of ANV_GENERATED_FLAG_* */
+   uint32_t flags;
+
+   /* MOCS to use for VERTEX_BUFFER_STATE (only used on Gfx9) */
+   uint32_t mocs;
+
+   /* 3DPRIMITIVE instruction size (in bytes) */
+   uint32_t cmd_primitive_size;
+
    /* Base number of the draw ID, it is added to the index computed from the
     * gl_FragCoord
     */
    uint32_t draw_base;
-
-   /* Number of draws to generate */
-   uint32_t draw_count;
 
    /* Maximum number of draws (equals to draw_count for indirect draws without
     * an indirect count)
     */
    uint32_t max_draw_count;
 
+   /* Number of draws to generate in the ring buffer (only useful in ring
+    * buffer mode)
+    */
+   uint32_t ring_count;
+
    /* Instance multiplier for multi view */
    uint32_t instance_multiplier;
+
+   /* Address where to jump at to generate further draws (used with ring mode)
+    */
+   uint64_t gen_addr;
 
    /* Address where to jump at after the generated draw (only used with
     * indirect draw count variants)
     */
    uint64_t end_addr;
-};
 
-struct anv_generated_indirect_params {
-   struct anv_generated_indirect_draw_params draw;
-
-   /* Global address of binding 0 */
-   uint64_t indirect_data_addr;
-
-   /* Global address of binding 1 */
+   /* Destination of the generated draw commands */
    uint64_t generated_cmds_addr;
 
-   /* Global address of binding 2 */
-   uint64_t draw_ids_addr;
+   /* Draw count address (points to the draw_count field in cases) */
+   uint64_t draw_count_addr;
+
+   /* Draw count value for non count variants of draw indirect commands */
+   uint32_t draw_count;
 
    /* CPU side pointer to the previous item when number of draws has to be
     * split into smaller chunks, see while loop in
     * genX(cmd_buffer_emit_indirect_generated_draws)
     */
-   struct anv_generated_indirect_params *prev;
+   struct anv_gen_indirect_params *prev;
 };
 
-#define ANV_COPY_QUERY_FLAG_RESULT64  BITFIELD_BIT(0)
-#define ANV_COPY_QUERY_FLAG_AVAILABLE BITFIELD_BIT(1)
-#define ANV_COPY_QUERY_FLAG_DELTA     BITFIELD_BIT(2)
-#define ANV_COPY_QUERY_FLAG_PARTIAL   BITFIELD_BIT(3)
-
-/* This needs to match common_query_copy.glsl :
- *
- *    layout(set = 0, binding = 2) uniform block
- */
-struct anv_query_copy_shader_params {
+struct PACKED anv_query_copy_params {
    /* ANV_COPY_QUERY_FLAG_* flags */
    uint32_t flags;
 
@@ -119,29 +117,24 @@ struct anv_query_copy_shader_params {
     * very unhappy.
     */
    uint32_t padding;
-};
 
-struct anv_query_copy_params {
-   struct anv_query_copy_shader_params copy;
-
+   /* Address of the query pool */
    uint64_t query_data_addr;
 
+   /* Destination address of the results */
    uint64_t destination_addr;
 };
 
-/* This needs to match memcpy_compute.glsl :
- *
- *    layout(set = 0, binding = 2) uniform block
- */
-struct anv_memcpy_shader_params {
+struct PACKED anv_memcpy_params {
+   /* Number of dwords to copy*/
    uint32_t num_dwords;
-};
 
-struct anv_memcpy_params {
-   struct anv_memcpy_shader_params copy;
+   uint32_t pad;
 
+   /* Source address of the copy */
    uint64_t src_addr;
 
+   /* Destination address of the copy */
    uint64_t dst_addr;
 };
 

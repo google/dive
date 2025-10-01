@@ -1,33 +1,14 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_scheduler.h"
 
+#include "../r600_isa.h"
+
 #include "amd_family.h"
-#include "r600_isa.h"
 #include "sfn_alu_defines.h"
 #include "sfn_debug.h"
 #include "sfn_instr_alugroup.h"
@@ -59,13 +40,19 @@ public:
          if (instr->alu_slots() == 1)
             alu_vec.push_back(instr);
          else
-            alu_groups.push_back(instr->split(m_value_factory));
+            alu_multi_slot.push_back(instr);
       }
    }
    void visit(AluGroup *instr) override { alu_groups.push_back(instr); }
    void visit(TexInstr *instr) override { tex.push_back(instr); }
    void visit(ExportInstr *instr) override { exports.push_back(instr); }
-   void visit(FetchInstr *instr) override { fetches.push_back(instr); }
+   void visit(FetchInstr *instr) override
+   {
+      if (unlikely(instr->has_fetch_flag(FetchInstr::use_tc)))
+         tex.push_back(instr);
+      else
+         fetches.push_back(instr);
+   }
    void visit(Block *instr) override
    {
       for (auto& i : *instr)
@@ -74,14 +61,18 @@ public:
 
    void visit(ControlFlowInstr *instr) override
    {
-      assert(!m_cf_instr);
-      m_cf_instr = instr;
+      if (instr->cf_type() != ControlFlowInstr::cf_wait_ack) {
+         assert(!m_cf_instr);
+         m_cf_instr = instr;
+      } else
+         waitacks.push_back(instr);
    }
 
    void visit(IfInstr *instr) override
    {
       assert(!m_cf_instr);
       m_cf_instr = instr;
+      predicate = instr->predicate();
    }
 
    void visit(EmitVertexInstr *instr) override
@@ -90,15 +81,15 @@ public:
       m_cf_instr = instr;
    }
 
-   void visit(ScratchIOInstr *instr) override { mem_write_instr.push_back(instr); }
+   void visit(ScratchIOInstr *instr) override { free_instr.push_back(instr); }
 
-   void visit(StreamOutInstr *instr) override { mem_write_instr.push_back(instr); }
+   void visit(StreamOutInstr *instr) override { free_instr.push_back(instr); }
 
-   void visit(MemRingOutInstr *instr) override { mem_ring_writes.push_back(instr); }
+   void visit(MemRingOutInstr *instr) override { free_instr.push_back(instr); }
 
-   void visit(GDSInstr *instr) override { gds_op.push_back(instr); }
+   void visit(GDSInstr *instr) override { gds_instr.push_back(instr); }
 
-   void visit(WriteTFInstr *instr) override { write_tf.push_back(instr); }
+   void visit(WriteTFInstr *instr) override { gds_instr.push_back(instr); }
 
    void visit(LDSReadInstr *instr) override
    {
@@ -118,19 +109,20 @@ public:
       }
    }
 
-   void visit(RatInstr *instr) override { rat_instr.push_back(instr); }
+   void visit(RatInstr *instr) override { free_instr.push_back(instr); }
 
    std::list<AluInstr *> alu_trans;
    std::list<AluInstr *> alu_vec;
-   std::list<TexInstr *> tex;
+   std::list<AluInstr *> alu_multi_slot;
+   std::list<InstrWithVectorResult *> tex;
    std::list<AluGroup *> alu_groups;
    std::list<ExportInstr *> exports;
    std::list<FetchInstr *> fetches;
-   std::list<WriteOutInstr *> mem_write_instr;
-   std::list<MemRingOutInstr *> mem_ring_writes;
-   std::list<GDSInstr *> gds_op;
-   std::list<WriteTFInstr *> write_tf;
-   std::list<RatInstr *> rat_instr;
+   std::list<Instr *> free_instr;
+   std::list<Instr *> gds_instr;
+   std::list<Instr *> waitacks;
+
+   AluInstr *predicate{nullptr};
 
    Instr *m_cf_instr{nullptr};
    ValueFactory& m_value_factory;
@@ -167,7 +159,11 @@ private:
    bool collect_ready_type(std::list<T *>& ready, std::list<T *>& orig);
 
    bool collect_ready_alu_vec(std::list<AluInstr *>& ready,
-                              std::list<AluInstr *>& available);
+                              std::list<AluInstr *>& available,
+                              AluInstr **predicate);
+   bool collect_ready_alu_multislot(std::list<AluInstr *>& ready,
+                                    std::list<AluInstr *>& available,
+                                    AluInstr **predicate);
 
    bool schedule_tex(Shader::ShaderBlocks& out_blocks);
    bool schedule_vtx(Shader::ShaderBlocks& out_blocks);
@@ -178,10 +174,11 @@ private:
    template <typename I>
    bool schedule_cf(Shader::ShaderBlocks& out_blocks, std::list<I *>& ready_list);
 
-   bool schedule_alu(Shader::ShaderBlocks& out_blocks);
+   bool schedule_alu(Shader::ShaderBlocks& out_blocks, ValueFactory& vf);
    void start_new_block(Shader::ShaderBlocks& out_blocks, Block::Type type);
 
    bool schedule_alu_to_group_vec(AluGroup *group);
+   bool schedule_alu_multislot_to_group_vec(AluGroup *group, ValueFactory& vf);
    bool schedule_alu_to_group_trans(AluGroup *group, std::list<AluInstr *>& readylist);
 
    bool schedule_exports(Shader::ShaderBlocks& out_blocks,
@@ -198,26 +195,23 @@ private:
    bool check_array_reads(const AluGroup& group);
 
    std::list<AluInstr *> alu_vec_ready;
+   std::list<AluInstr *> alu_multi_slot_ready;
    std::list<AluInstr *> alu_trans_ready;
    std::list<AluGroup *> alu_groups_ready;
-   std::list<TexInstr *> tex_ready;
+   std::list<InstrWithVectorResult *> tex_ready;
    std::list<ExportInstr *> exports_ready;
    std::list<FetchInstr *> fetches_ready;
-   std::list<WriteOutInstr *> memops_ready;
-   std::list<MemRingOutInstr *> mem_ring_writes_ready;
-   std::list<GDSInstr *> gds_ready;
-   std::list<WriteTFInstr *> write_tf_ready;
-   std::list<RatInstr *> rat_instr_ready;
+   std::list<Instr *> free_ready;
+   std::list<Instr *> gds_ready;
+   std::list<Instr *> waitacks_ready;
 
    enum {
       sched_alu,
       sched_tex,
       sched_fetch,
       sched_free,
-      sched_mem_ring,
       sched_gds,
-      sched_write_tf,
-      sched_rat,
+      sched_waitack,
    } current_shed;
 
    ExportInstr *m_last_pos;
@@ -229,7 +223,6 @@ private:
    int m_lds_addr_count{0};
    int m_alu_groups_scheduled{0};
    r600_chip_class m_chip_class;
-   radeon_family m_chip_family;
    bool m_idx0_loading{false};
    bool m_idx1_loading{false};
    bool m_idx0_pending{false};
@@ -284,8 +277,7 @@ BlockScheduler::BlockScheduler(r600_chip_class chip_class,
     m_last_pixel(nullptr),
     m_last_param(nullptr),
     m_current_block(nullptr),
-    m_chip_class(chip_class),
-    m_chip_family(chip_family)
+    m_chip_class(chip_class)
 {
    m_nop_after_rel_dest = chip_family == CHIP_RV770;
 
@@ -340,6 +332,9 @@ BlockScheduler::schedule_block(Block& in_block,
       if (alu_vec_ready.size())
          sfn_log << SfnLog::schedule << "  ALU V:" << alu_vec_ready.size() << "\n";
 
+      if (alu_multi_slot_ready.size())
+         sfn_log << SfnLog::schedule << "  ALU M:" << alu_multi_slot_ready.size() << "\n";
+
       if (alu_trans_ready.size())
          sfn_log << SfnLog::schedule << "  ALU T:" << alu_trans_ready.size() << "\n";
 
@@ -352,28 +347,30 @@ BlockScheduler::schedule_block(Block& in_block,
          sfn_log << SfnLog::schedule << "  TEX:" << tex_ready.size() << "\n";
       if (fetches_ready.size())
          sfn_log << SfnLog::schedule << "  FETCH:" << fetches_ready.size() << "\n";
-      if (mem_ring_writes_ready.size())
-         sfn_log << SfnLog::schedule << "  MEM_RING:" << mem_ring_writes_ready.size()
-                 << "\n";
-      if (memops_ready.size())
-         sfn_log << SfnLog::schedule << "  MEM_OPS:" << mem_ring_writes_ready.size()
-                 << "\n";
+      if (free_ready.size())
+         sfn_log << SfnLog::schedule << "  GENERIC:" << free_ready.size() << "\n";
+      if (gds_ready.size())
+         sfn_log << SfnLog::schedule << "  GDS:" << gds_ready.size() << "\n";
+      if (waitacks_ready.size())
+         sfn_log << SfnLog::schedule << "  WAITACK:" << waitacks_ready.size() << "\n";
 
       if (!m_current_block->lds_group_active() &&
           m_current_block->expected_ar_uses() == 0) {
-         if (last_shed != sched_free && memops_ready.size() > 8)
+         if (last_shed != sched_free && free_ready.size() >= 4)
             current_shed = sched_free;
-         else if (mem_ring_writes_ready.size() > 15)
-            current_shed = sched_mem_ring;
-         else if (rat_instr_ready.size() > 3)
-            current_shed = sched_rat;
          else if (tex_ready.size() > (m_chip_class >= ISA_CC_EVERGREEN ? 15 : 7))
             current_shed = sched_tex;
       }
 
       switch (current_shed) {
+      case sched_waitack:
+         if (waitacks_ready.empty() || !schedule_cf(out_blocks, waitacks_ready)) {
+            current_shed = sched_alu;
+            break;
+         }
+         break;
       case sched_alu:
-         if (!schedule_alu(out_blocks)) {
+         if (!schedule_alu(out_blocks, vf)) {
             assert(!m_current_block->lds_group_active());
             current_shed = sched_tex;
             continue;
@@ -399,32 +396,10 @@ BlockScheduler::schedule_block(Block& in_block,
             schedule_gds(out_blocks, gds_ready);
             last_shed = current_shed;
          }
-         current_shed = sched_mem_ring;
+         current_shed = sched_free;
          continue;
-      case sched_mem_ring:
-         if (mem_ring_writes_ready.empty() ||
-             !schedule_cf(out_blocks, mem_ring_writes_ready)) {
-            current_shed = sched_write_tf;
-            continue;
-         }
-         last_shed = current_shed;
-         break;
-      case sched_write_tf:
-         if (write_tf_ready.empty() || !schedule_gds(out_blocks, write_tf_ready)) {
-            current_shed = sched_rat;
-            continue;
-         }
-         last_shed = current_shed;
-         break;
-      case sched_rat:
-         if (rat_instr_ready.empty() || !schedule_cf(out_blocks, rat_instr_ready)) {
-            current_shed = sched_free;
-            continue;
-         }
-         last_shed = current_shed;
-         break;
       case sched_free:
-         if (memops_ready.empty() || !schedule_cf(out_blocks, memops_ready)) {
+         if (free_ready.empty() || !schedule_cf(out_blocks, free_ready)) {
             current_shed = sched_alu;
             break;
          }
@@ -432,6 +407,12 @@ BlockScheduler::schedule_block(Block& in_block,
       }
 
       have_instr = collect_ready(cir);
+
+      if (alu_vec_ready.empty() && alu_multi_slot_ready.empty() &&
+          alu_trans_ready.empty() && alu_groups_ready.empty() && tex_ready.empty() &&
+          exports_ready.empty() && fetches_ready.empty() && free_ready.empty() &&
+          gds_ready.empty())
+         current_shed = sched_waitack;
    }
 
    /* Emit exports always at end of a block */
@@ -460,6 +441,17 @@ BlockScheduler::schedule_block(Block& in_block,
       fail = true;
    }
 
+   if (!cir.alu_multi_slot.empty()) {
+      std::cerr << "Unscheduled ALU multislot vec ops:\n";
+      for (auto& a : cir.alu_multi_slot) {
+         std::cerr << "   [" << a->block_id() << ":" << a->index() << "]:" << *a << "\n";
+         for (auto& d : a->required_instr())
+            std::cerr << "      R[" << d->block_id() << ":" << d->index() << "]:" << *d
+                      << "\n";
+      }
+      fail = true;
+   }
+
    if (!cir.alu_trans.empty()) {
       std::cerr << "Unscheduled ALU trans ops:\n";
       for (auto& a : cir.alu_trans) {
@@ -470,9 +462,9 @@ BlockScheduler::schedule_block(Block& in_block,
       }
       fail = true;
    }
-   if (!cir.mem_write_instr.empty()) {
+   if (!cir.free_instr.empty()) {
       std::cerr << "Unscheduled MEM ops:\n";
-      for (auto& a : cir.mem_write_instr) {
+      for (auto& a : cir.free_instr) {
          std::cerr << "   " << *a << "\n";
       }
       fail = true;
@@ -511,16 +503,11 @@ BlockScheduler::schedule_block(Block& in_block,
    assert(cir.exports.empty());
    assert(cir.fetches.empty());
    assert(cir.alu_vec.empty());
-   assert(cir.mem_write_instr.empty());
-   assert(cir.mem_ring_writes.empty());
+   assert(cir.free_instr.empty());
 
    assert(!fail);
 
    if (cir.m_cf_instr) {
-      // Assert that if condition is ready
-      if (m_current_block->type() != Block::alu) {
-         start_new_block(out_blocks, Block::alu);
-      }
       m_current_block->push_back(cir.m_cf_instr);
       cir.m_cf_instr->set_scheduled();
    }
@@ -543,16 +530,18 @@ BlockScheduler::finalize()
 }
 
 bool
-BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
+BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks, ValueFactory& vf)
 {
    bool success = false;
    AluGroup *group = nullptr;
+   int expected_ar_uses = m_current_block->expected_ar_uses();
 
    sfn_log << SfnLog::schedule << "Schedule alu with " <<
               m_current_block->expected_ar_uses()
            << " pending AR loads\n";
 
-   bool has_alu_ready = !alu_vec_ready.empty() || !alu_trans_ready.empty();
+   bool has_alu_ready =
+      !alu_vec_ready.empty() || !alu_multi_slot_ready.empty() || !alu_trans_ready.empty();
 
    bool has_lds_ready =
       !alu_vec_ready.empty() && (*alu_vec_ready.begin())->has_lds_access();
@@ -565,6 +554,7 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
       if (m_current_block->type() != Block::alu) {
          start_new_block(out_blocks, Block::alu);
          m_alu_groups_scheduled = 0;
+         expected_ar_uses = 0;
       }
    }
 
@@ -573,6 +563,7 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
     * fetch + read from queue has to be in the same ALU CF block */
    if (!alu_groups_ready.empty() && !has_lds_ready && !has_ar_read_ready) {
       group = *alu_groups_ready.begin();
+      group->update_readport_reserver();
 
       if (!check_array_reads(*group)) {
 
@@ -583,13 +574,18 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
          /* Only start a new CF if we have no pending AR reads */
          if (m_current_block->try_reserve_kcache(*group)) {
             alu_groups_ready.erase(alu_groups_ready.begin());
+
+            for (auto i : *group) {
+               if (i)
+                  i->pin_dest_to_chan();
+            }
             success = true;
          } else {
-            if (m_current_block->expected_ar_uses() == 0) {
+            if (expected_ar_uses == 0) {
                start_new_block(out_blocks, Block::alu);
 
                if (!m_current_block->try_reserve_kcache(*group))
-                  unreachable("Scheduling a group in a new block should always succeed");
+                  UNREACHABLE("Scheduling a group in a new block should always succeed");
                alu_groups_ready.erase(alu_groups_ready.begin());
                sfn_log << SfnLog::schedule << "Schedule ALU group\n";
                success = true;
@@ -612,11 +608,20 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
 
    assert(group);
 
-   int free_slots = group->free_slots();
+   int free_slots = group->free_slot_mask();
 
    while (free_slots && has_alu_ready) {
+
+      if (!alu_multi_slot_ready.empty()) {
+         success |= schedule_alu_multislot_to_group_vec(group, vf);
+         free_slots = group->free_slot_mask();
+      }
+
       if (!alu_vec_ready.empty())
          success |= schedule_alu_to_group_vec(group);
+
+      if (group->has_kill_op())
+         break;
 
       /* Apparently one can't schedule a t-slot if there is already
        * and LDS instruction scheduled.
@@ -641,7 +646,9 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
 
          // AR is loaded but not all uses are done, we don't want
          // to start a new CF here
-         assert(m_current_block->expected_ar_uses() ==0);
+         // TODO this can explode, if kcache reservation fails with
+         // an instruction that also requires AR
+         assert(expected_ar_uses == 0);
 
          // kcache reservation failed, so we have to start a new CF
          start_new_block(out_blocks, Block::alu);
@@ -669,13 +676,13 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
    if (is_index) {
       if (addr->sel() == AddressRegister::idx0 && m_idx0_pending) {
          assert(!group->has_lds_group_start());
-         assert(m_current_block->expected_ar_uses() == 0);
+         assert(expected_ar_uses == 0);
          start_new_block(out_blocks, Block::alu);
          m_current_block->try_reserve_kcache(*group);
       }
       if (addr->sel() == AddressRegister::idx1 && m_idx1_pending) {
          assert(!group->has_lds_group_start());
-         assert(m_current_block->expected_ar_uses() == 0);
+         assert(expected_ar_uses == 0);
          start_new_block(out_blocks, Block::alu);
          m_current_block->try_reserve_kcache(*group);
       }
@@ -691,8 +698,7 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
    m_idx1_pending |= m_idx1_loading;
    m_idx1_loading = false;
 
-   if (!m_current_block->lds_group_active() &&
-       m_current_block->expected_ar_uses() == 0 &&
+   if (!m_current_block->lds_group_active() && expected_ar_uses == 0 &&
        (!addr || is_index)) {
       group->set_instr_flag(Instr::no_lds_or_addr_group);
    }
@@ -705,22 +711,22 @@ BlockScheduler::schedule_alu(Shader::ShaderBlocks& out_blocks)
 
    if (group->has_kill_op()) {
       assert(!group->has_lds_group_start());
-      assert(m_current_block->expected_ar_uses() == 0);
-      start_new_block(out_blocks, Block::alu);
+      assert(expected_ar_uses == 0);
+      start_new_block(out_blocks, Block::unknown);
    }
-
+   group->update_readport_reserver();
    return success;
 }
 
 bool
 BlockScheduler::schedule_tex(Shader::ShaderBlocks& out_blocks)
 {
-   if (m_current_block->type() != Block::tex || m_current_block->remaining_slots() == 0) {
+   if (!tex_ready.empty() && (m_current_block->type() != Block::tex ||
+                              m_current_block->remaining_slots() == 0)) {
       start_new_block(out_blocks, Block::tex);
-      m_current_block->set_instr_flag(Instr::force_cf);
    }
 
-   if (!tex_ready.empty() && m_current_block->remaining_slots() > 0) {
+   if (m_current_block->remaining_slots() > 0) {
       auto ii = tex_ready.begin();
       sfn_log << SfnLog::schedule << "Schedule: " << **ii << "\n";
 
@@ -731,7 +737,7 @@ BlockScheduler::schedule_tex(Shader::ShaderBlocks& out_blocks)
          prep->set_scheduled();
          m_current_block->push_back(prep);
       }
-
+      (*ii)->pin_dest_to_chan();
       (*ii)->set_scheduled();
       m_current_block->push_back(*ii);
       tex_ready.erase(ii);
@@ -743,7 +749,8 @@ BlockScheduler::schedule_tex(Shader::ShaderBlocks& out_blocks)
 bool
 BlockScheduler::schedule_vtx(Shader::ShaderBlocks& out_blocks)
 {
-   if (m_current_block->type() != Block::vtx || m_current_block->remaining_slots() == 0) {
+   if (!fetches_ready.empty() && (m_current_block->type() != Block::vtx ||
+                                  m_current_block->remaining_slots() == 0)) {
       start_new_block(out_blocks, Block::vtx);
       m_current_block->set_instr_flag(Instr::force_cf);
    }
@@ -784,18 +791,13 @@ BlockScheduler::start_new_block(Shader::ShaderBlocks& out_blocks, Block::Type ty
 
 void BlockScheduler::maybe_split_alu_block(Shader::ShaderBlocks& out_blocks)
 {
-   // TODO: needs fixing
-   if (m_current_block->remaining_slots() > 0) {
-      out_blocks.push_back(m_current_block);
-      return;
-   }
 
    int used_slots = 0;
    int pending_slots = 0;
 
    Instr *next_block_start = nullptr;
    for (auto cur_group : *m_current_block) {
-      /* This limit is a bit fishy, it should be 128 */
+
       if (used_slots + pending_slots + cur_group->slots() < 128) {
          if (cur_group->can_start_alu_block()) {
             next_block_start = cur_group;
@@ -809,6 +811,7 @@ void BlockScheduler::maybe_split_alu_block(Shader::ShaderBlocks& out_blocks)
          next_block_start->set_instr_flag(Instr::force_cf);
          used_slots = pending_slots;
          pending_slots = cur_group->slots();
+         next_block_start = cur_group;
       }
    }
 
@@ -839,6 +842,8 @@ void BlockScheduler::maybe_split_alu_block(Shader::ShaderBlocks& out_blocks)
       if (group->has_lds_group_end())
          sub_block->lds_group_end();
 
+      if (group->require_push())
+         sub_block->cf_start()->promote_alu_cf(ControlFlowInstr::cf_alu_push_before);
    }
    if (!sub_block->empty())
       out_blocks.push_back(sub_block);
@@ -864,6 +869,8 @@ BlockScheduler::schedule_alu_to_group_vec(AluGroup *group)
    bool success = false;
    auto i = alu_vec_ready.begin();
    auto e = alu_vec_ready.end();
+   bool group_has_kill = false;
+   bool group_has_update_pred = false;
    while (i != e) {
       sfn_log << SfnLog::schedule << "Try schedule to vec " << **i;
 
@@ -872,9 +879,21 @@ BlockScheduler::schedule_alu_to_group_vec(AluGroup *group)
          continue;
       }
 
-      // precausion: don't kill while we hae LDS queue reads in the pipeline
-      if ((*i)->is_kill() && m_current_block->lds_group_active())
+      bool is_kill = (*i)->is_kill();
+      bool does_update_pred = (*i)->has_alu_flag(alu_update_pred);
+
+      // don't kill while we hae LDS queue reads in the pipeline
+      if (is_kill && (m_current_block->lds_group_active())) {
+         ++i;
          continue;
+      }
+
+      // don't put a kill and an update of the predicate into the
+      // same group
+      if ((group_has_kill && does_update_pred) || (group_has_update_pred && is_kill)) {
+         ++i;
+         continue;
+      }
 
       if (!m_current_block->try_reserve_kcache(**i)) {
          sfn_log << SfnLog::schedule << " failed (kcache)\n";
@@ -883,6 +902,8 @@ BlockScheduler::schedule_alu_to_group_vec(AluGroup *group)
       }
 
       if (group->add_vec_instructions(*i)) {
+         (*i)->pin_dest_to_chan();
+         group_has_update_pred |= (*i)->has_alu_flag(alu_update_pred);
          auto old_i = i;
          ++i;
          if ((*old_i)->has_alu_flag(alu_is_lds)) {
@@ -922,10 +943,87 @@ BlockScheduler::schedule_alu_to_group_vec(AluGroup *group)
 
          alu_vec_ready.erase(old_i);
          success = true;
+
+         group_has_kill |= is_kill;
+
          sfn_log << SfnLog::schedule << " success\n";
       } else {
          ++i;
          sfn_log << SfnLog::schedule << " failed\n";
+      }
+   }
+   return success;
+}
+
+bool
+BlockScheduler::schedule_alu_multislot_to_group_vec(AluGroup *group, ValueFactory& vf)
+{
+   assert(group);
+   assert(!alu_multi_slot_ready.empty());
+
+   bool success = false;
+   auto i = alu_multi_slot_ready.begin();
+   auto e = alu_multi_slot_ready.end();
+
+   while (i != e && util_bitcount(group->free_slot_mask()) > 1) {
+
+      auto dest = (*i)->dest();
+
+      bool can_merge = false;
+      unsigned allowed_dest_chan_mask = (*i)->allowed_dest_chan_mask();
+      while (allowed_dest_chan_mask) {
+
+         auto required_mask = (*i)->required_channels_mask();
+
+         if ((group->free_slot_mask() & required_mask) == required_mask) {
+            can_merge = true;
+            break;
+         }
+
+         allowed_dest_chan_mask &= ~BITFIELD_BIT((*i)->dest_chan());
+         int new_chan = u_bit_scan(&allowed_dest_chan_mask);
+
+         if (!dest->can_switch_to_chan(new_chan))
+            break;
+
+         if (dest)
+            dest->set_chan(new_chan);
+         else
+            (*i)->set_allowed_dest_chan_mask(BITSET_BIT(new_chan));
+      }
+
+      if (!can_merge) {
+         ++i;
+         continue;
+      }
+
+      if (check_array_reads(**i)) {
+         ++i;
+         continue;
+      }
+
+      if (!m_current_block->try_reserve_kcache(**i)) {
+         sfn_log << SfnLog::schedule << " failed (kcache)\n";
+         ++i;
+         continue;
+      }
+
+      if ((*i)->split(*group)) {
+         success = true;
+         auto old_i = i;
+         ++i;
+
+         auto addr = std::get<0>((*old_i)->indirect_addr());
+         if (addr && addr->has_flag(Register::addr_or_idx))
+            m_current_block->dec_expected_ar_uses();
+
+         alu_multi_slot_ready.erase(old_i);
+      } else {
+         if ((group->free_slot_mask() & 0xf) == 0xf) {
+            std::cerr << **i << "\n";
+            UNREACHABLE("Splitting into an empty slot must not fail");
+         }
+         ++i;
       }
    }
    return success;
@@ -955,6 +1053,7 @@ BlockScheduler::schedule_alu_to_group_trans(AluGroup *group,
       }
 
       if (group->add_trans_instructions(*i)) {
+         (*i)->pin_dest_to_chan();
          auto old_i = i;
          ++i;
          auto addr = std::get<0>((*old_i)->indirect_addr());
@@ -997,6 +1096,7 @@ BlockScheduler::schedule_block(std::list<I *>& ready_list)
       auto ii = ready_list.begin();
       sfn_log << SfnLog::schedule << "Schedule: " << **ii << " "
               << m_current_block->remaining_slots() << "\n";
+      (*ii)->pin_dest_to_chan();
       (*ii)->set_scheduled();
       m_current_block->push_back(*ii);
       ready_list.erase(ii);
@@ -1040,16 +1140,42 @@ BlockScheduler::collect_ready(CollectInstructions& available)
 {
    sfn_log << SfnLog::schedule << "Ready instructions\n";
    bool result = false;
-   result |= collect_ready_alu_vec(alu_vec_ready, available.alu_vec);
    result |= collect_ready_type(alu_trans_ready, available.alu_trans);
    result |= collect_ready_type(alu_groups_ready, available.alu_groups);
-   result |= collect_ready_type(gds_ready, available.gds_op);
+   result |= collect_ready_type(gds_ready, available.gds_instr);
    result |= collect_ready_type(tex_ready, available.tex);
    result |= collect_ready_type(fetches_ready, available.fetches);
-   result |= collect_ready_type(memops_ready, available.mem_write_instr);
-   result |= collect_ready_type(mem_ring_writes_ready, available.mem_ring_writes);
-   result |= collect_ready_type(write_tf_ready, available.write_tf);
-   result |= collect_ready_type(rat_instr_ready, available.rat_instr);
+   result |= collect_ready_type(free_ready, available.free_instr);
+   result |= collect_ready_type(waitacks_ready, available.waitacks);
+
+   bool may_emit_predicate =
+      !result && available.predicate && available.alu_groups.empty() &&
+      available.alu_trans.empty() && available.gds_instr.empty() &&
+      available.tex.empty() && available.fetches.empty() && available.free_instr.empty();
+
+   if (may_emit_predicate) {
+      if (available.predicate->alu_slots() > 1) {
+         result |= collect_ready_alu_vec(alu_vec_ready, available.alu_vec, nullptr);
+
+         if (!result)
+            result |= collect_ready_alu_multislot(alu_multi_slot_ready,
+                                                  available.alu_multi_slot,
+                                                  &available.predicate);
+      } else {
+         result |= collect_ready_alu_multislot(alu_multi_slot_ready,
+                                               available.alu_multi_slot,
+                                               nullptr);
+         if (!result)
+            result |= collect_ready_alu_vec(alu_vec_ready,
+                                            available.alu_vec,
+                                            &available.predicate);
+      }
+   } else {
+      result |= collect_ready_alu_vec(alu_vec_ready, available.alu_vec, nullptr);
+      result |= collect_ready_alu_multislot(alu_multi_slot_ready,
+                                            available.alu_multi_slot,
+                                            nullptr);
+   }
 
    sfn_log << SfnLog::schedule << "\n";
    return result;
@@ -1057,7 +1183,8 @@ BlockScheduler::collect_ready(CollectInstructions& available)
 
 bool
 BlockScheduler::collect_ready_alu_vec(std::list<AluInstr *>& ready,
-                                     std::list<AluInstr *>& available)
+                                      std::list<AluInstr *>& available,
+                                      AluInstr **predicate)
 {
    auto i = available.begin();
    auto e = available.end();
@@ -1067,9 +1194,9 @@ BlockScheduler::collect_ready_alu_vec(std::list<AluInstr *>& ready,
    }
 
    int max_check = 0;
-   while (i != e && max_check++ < 64) {
-      if (ready.size() < 64 && (*i)->ready()) {
+   while (i != e && max_check++ < 64 && ready.size() < 64) {
 
+      if ((*i)->ready()) {
          int priority = 0;
          /* LDS fetches that use static offsets are usually ready ery fast,
           * so that they would get schedules early, and this leaves the
@@ -1119,6 +1246,13 @@ BlockScheduler::collect_ready_alu_vec(std::list<AluInstr *>& ready,
          ++i;
    }
 
+   if (predicate && *predicate && available.empty() && ready.size() < 16 &&
+       (*predicate)->ready()) {
+      assert((*predicate)->alu_slots() == 1);
+      ready.push_back(*predicate);
+      *predicate = nullptr;
+   }
+
    for (auto& i : ready)
       sfn_log << SfnLog::schedule << "V:  " << *i << "\n";
 
@@ -1128,6 +1262,37 @@ BlockScheduler::collect_ready_alu_vec(std::list<AluInstr *>& ready,
 
    for (auto& i : ready)
       sfn_log << SfnLog::schedule << "V (S):  " << i->priority() << " " << *i << "\n";
+
+   return !ready.empty();
+}
+
+bool
+BlockScheduler::collect_ready_alu_multislot(std::list<AluInstr *>& ready,
+                                            std::list<AluInstr *>& available,
+                                            AluInstr **predicate)
+{
+   auto i = available.begin();
+   auto e = available.end();
+
+   int lookahead = 16;
+   while (i != e && ready.size() < 16 && lookahead-- > 0) {
+      if ((*i)->ready()) {
+         ready.push_back(*i);
+         auto old_i = i;
+         ++i;
+         available.erase(old_i);
+      } else
+         ++i;
+   }
+
+   if (predicate && *predicate && available.empty() && ready.size() < 16 &&
+       (*predicate)->ready()) {
+      ready.push_back(*predicate);
+      *predicate = nullptr;
+   }
+
+   for (auto& i : ready)
+      sfn_log << SfnLog::schedule << "M:  " << *i << "\n";
 
    return !ready.empty();
 }
@@ -1147,7 +1312,7 @@ template <> struct type_char<ExportInstr> {
    static char value() { return 'E';};
 };
 
-template <> struct type_char<TexInstr> {
+template <> struct type_char<InstrWithVectorResult> {
    static char value() { return 'T';};
 };
 
@@ -1171,7 +1336,7 @@ template <> struct type_char<GDSInstr> {
    static char value() { return 'S';};
 };
 
-template <> struct type_char<RatInstr> {
+template <> struct type_char<Instr> {
    static char value() { return 'I';};
 };
 

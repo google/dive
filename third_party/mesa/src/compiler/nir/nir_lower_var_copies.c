@@ -21,7 +21,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "compiler/nir_types.h"
+#include "compiler/glsl_types.h"
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_deref.h"
@@ -96,8 +96,8 @@ nir_lower_deref_copy_instr(nir_builder *b, nir_intrinsic_instr *copy)
    /* Unfortunately, there's just no good way to handle wildcards except to
     * flip the chain around and walk the list from variable to final pointer.
     */
-   nir_deref_instr *dst = nir_instr_as_deref(copy->src[0].ssa->parent_instr);
-   nir_deref_instr *src = nir_instr_as_deref(copy->src[1].ssa->parent_instr);
+   nir_deref_instr *dst = nir_def_as_deref(copy->src[0].ssa);
+   nir_deref_instr *src = nir_def_as_deref(copy->src[1].ssa);
 
    nir_deref_path dst_path, src_path;
    nir_deref_path_init(&dst_path, dst, NULL);
@@ -138,7 +138,6 @@ nir_lower_var_copies(nir_shader *shader)
    shader->info.var_copies_lowered = true;
 
    return nir_shader_intrinsics_pass(shader, lower_var_copies_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
-                                       NULL);
+                                     nir_metadata_control_flow,
+                                     NULL);
 }

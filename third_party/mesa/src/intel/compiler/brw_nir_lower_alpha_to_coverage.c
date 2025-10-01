@@ -58,8 +58,7 @@
 static nir_def *
 build_dither_mask(nir_builder *b, nir_def *color)
 {
-   assert(color->num_components == 4);
-   nir_def *alpha = nir_channel(b, color, 3);
+   nir_def *alpha = nir_channel(b, color, color->num_components - 1);
 
    nir_def *m =
       nir_f2i32(b, nir_fmul_imm(b, nir_fsat(b, alpha), 16.0));
@@ -78,12 +77,9 @@ build_dither_mask(nir_builder *b, nir_def *color)
 }
 
 bool
-brw_nir_lower_alpha_to_coverage(nir_shader *shader,
-                                const struct brw_wm_prog_key *key,
-                                const struct brw_wm_prog_data *prog_data)
+brw_nir_lower_alpha_to_coverage(nir_shader *shader)
 {
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
-   assert(key->alpha_to_coverage != BRW_NEVER);
 
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
 
@@ -106,14 +102,14 @@ brw_nir_lower_alpha_to_coverage(nir_shader *shader,
          if (intrin->intrinsic != nir_intrinsic_store_output)
             continue;
 
-         /* We call nir_lower_io_to_temporaries to lower FS outputs to
+         /* We call nir_lower_io_vars_to_temporaries to lower FS outputs to
           * temporaries with a copy at the end so this should be the last
           * block in the shader.
           */
          assert(block->cf_node.parent == &impl->cf_node);
          assert(nir_cf_node_is_last(&block->cf_node));
 
-         /* See store_output in fs_visitor::nir_emit_fs_intrinsic */
+         /* See store_output in brw_shader::nir_emit_fs_intrinsic */
          const unsigned store_offset = nir_src_as_uint(intrin->src[1]);
          const unsigned driver_location = nir_intrinsic_base(intrin) +
             SET_FIELD(store_offset, BRW_NIR_FRAG_OUTPUT_LOCATION);
@@ -130,6 +126,11 @@ brw_nir_lower_alpha_to_coverage(nir_shader *shader,
 
          if (location == FRAG_RESULT_COLOR ||
              location == FRAG_RESULT_DATA0) {
+            uint32_t mask = nir_intrinsic_write_mask(intrin) <<
+                            nir_intrinsic_component(intrin);
+            /* need the w component */
+            if (!(mask & BITFIELD_BIT(3)))
+               continue;
             assert(color0_write == NULL);
             color0_write = intrin;
          }
@@ -137,22 +138,19 @@ brw_nir_lower_alpha_to_coverage(nir_shader *shader,
    }
 
    /* It's possible that shader_info may be out-of-date and the writes to
-    * either gl_SampleMask or the first color value may have been removed.
+    * either gl_SampleMask, or the first color value may have been removed,
+    * or that the w component is not written.
     * This can happen if, for instance a nir_undef is written to the
     * color value.  In that case, just bail and don't do anything rather
     * than crashing.
+    * It's also possible that the color value isn't actually a vec4.  In this case,
+    * assuming an alpha of 1.0 and letting the sample mask pass through
+    * unaltered seems like the kindest thing to do to apps.
     */
    if (color0_write == NULL || sample_mask_write == NULL)
       goto skip;
 
-   /* It's possible that the color value isn't actually a vec4.  In this case,
-    * assuming an alpha of 1.0 and letting the sample mask pass through
-    * unaltered seems like the kindest thing to do to apps.
-    */
    nir_def *color0 = color0_write->src[0].ssa;
-   if (color0->num_components < 4)
-      goto skip;
-
    nir_def *sample_mask = sample_mask_write->src[0].ssa;
 
    if (sample_mask_write_first) {
@@ -171,22 +169,16 @@ brw_nir_lower_alpha_to_coverage(nir_shader *shader,
    nir_def *dither_mask = build_dither_mask(&b, color0);
    dither_mask = nir_iand(&b, sample_mask, dither_mask);
 
-   if (key->alpha_to_coverage == BRW_SOMETIMES) {
-      nir_def *push_flags =
-         nir_load_uniform(&b, 1, 32, nir_imm_int(&b, prog_data->msaa_flags_param * 4));
-      nir_def *alpha_to_coverage =
-         nir_test_mask(&b, push_flags, BRW_WM_MSAA_FLAG_ALPHA_TO_COVERAGE);
-      dither_mask = nir_bcsel(&b, alpha_to_coverage,
-                              dither_mask, sample_mask_write->src[0].ssa);
-   }
+   nir_def *msaa_flags = nir_load_fs_msaa_intel(&b);
+   nir_def *alpha_to_coverage =
+      nir_test_mask(&b, msaa_flags, INTEL_MSAA_FLAG_ALPHA_TO_COVERAGE);
+   dither_mask = nir_bcsel(&b, alpha_to_coverage,
+                           dither_mask, sample_mask_write->src[0].ssa);
 
    nir_src_rewrite(&sample_mask_write->src[0], dither_mask);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                               nir_metadata_dominance);
-   return true;
+   return nir_progress(true, impl, nir_metadata_control_flow);
 
 skip:
-   nir_metadata_preserve(impl, nir_metadata_all);
-   return false;
+   return nir_no_progress(impl);
 }

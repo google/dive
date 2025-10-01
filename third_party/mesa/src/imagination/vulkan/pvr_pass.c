@@ -32,39 +32,19 @@
 #include "pvr_pds.h"
 #include "pvr_private.h"
 #include "pvr_types.h"
-#include "pvr_usc_fragment_shader.h"
+#include "pvr_usc.h"
 #include "util/macros.h"
-#include "rogue/rogue.h"
 #include "vk_alloc.h"
 #include "vk_format.h"
 #include "vk_log.h"
-
-/*****************************************************************************
-  PDS pre-baked program generation parameters and variables.
-*****************************************************************************/
-/* These would normally be produced by the compiler or other code. We're using
- * them for now just to speed up things. All of these should eventually be
- * removed.
- */
-
-static const struct {
-   /* Indicates the amount of temporaries for the shader. */
-   uint32_t temp_count;
-   enum rogue_msaa_mode msaa_mode;
-   /* Indicates the presence of PHAS instruction. */
-   bool has_phase_rate_change;
-} pvr_pds_fragment_program_params = {
-   .temp_count = 0,
-   .msaa_mode = ROGUE_MSAA_MODE_PIXEL,
-   .has_phase_rate_change = false,
-};
+#include "vk_render_pass.h"
 
 static inline bool pvr_subpass_has_msaa_input_attachment(
    struct pvr_render_subpass *subpass,
    const VkRenderPassCreateInfo2 *pCreateInfo)
 {
    for (uint32_t i = 0; i < subpass->input_count; i++) {
-      const uint32_t attachment = subpass->input_attachments[i];
+      const uint32_t attachment = subpass->input_attachments[i].attachment_idx;
 
       if (pCreateInfo->pAttachments[attachment].samples > 1)
          return true;
@@ -128,7 +108,7 @@ pvr_init_subpass_isp_userpass(struct pvr_renderpass_hwsetup *hw_setup,
 
       for (uint32_t j = 0; j < hw_render->subpass_count; j++) {
          subpasses[subpass_idx].isp_userpass =
-            (j + initial_isp_userpass) & PVRX(CR_ISP_CTL_UPASS_START_SIZE_MAX);
+            (j + initial_isp_userpass) & ROGUE_CR_ISP_CTL_UPASS_START_SIZE_MAX;
          subpass_idx++;
       }
    }
@@ -199,27 +179,98 @@ VkResult pvr_pds_unitex_state_program_create_and_upload(
    return VK_SUCCESS;
 }
 
-/* TODO: pvr_create_subpass_load_op() and pvr_create_render_load_op() are quite
+static VkResult
+pvr_load_op_shader_generate(struct pvr_device *device,
+                            const VkAllocationCallbacks *allocator,
+                            struct pvr_load_op *load_op)
+{
+   const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
+   const uint32_t cache_line_size = rogue_get_slc_cache_line_size(dev_info);
+
+   pco_shader *loadop = pvr_uscgen_loadop(device->pdevice->pco_ctx, load_op);
+
+   VkResult result = pvr_gpu_upload_usc(device,
+                                        pco_shader_binary_data(loadop),
+                                        pco_shader_binary_size(loadop),
+                                        cache_line_size,
+                                        &load_op->usc_frag_prog_bo);
+
+   if (result != VK_SUCCESS) {
+      ralloc_free(loadop);
+      return result;
+   }
+
+   const bool msaa = load_op->clears_loads_state.unresolved_msaa_mask &
+                     load_op->clears_loads_state.rt_load_mask;
+
+   /* TODO: amend this once the hardcoded shaders have been removed. */
+   struct pvr_fragment_shader_state fragment_state = {
+      .shader_bo = load_op->usc_frag_prog_bo,
+      .sample_rate = msaa ? ROGUE_PDSINST_DOUTU_SAMPLE_RATE_FULL
+                          : ROGUE_PDSINST_DOUTU_SAMPLE_RATE_INSTANCE,
+      .pds_fragment_program = load_op->pds_frag_prog,
+   };
+
+   result = pvr_pds_fragment_program_create_and_upload(device,
+                                                       allocator,
+                                                       loadop,
+                                                       &fragment_state);
+
+   load_op->temps_count = pco_shader_data(loadop)->common.temps;
+   ralloc_free(loadop);
+
+   load_op->usc_frag_prog_bo = fragment_state.shader_bo;
+   load_op->pds_frag_prog = fragment_state.pds_fragment_program;
+
+   if (result != VK_SUCCESS)
+      goto err_free_usc_frag_prog_bo;
+
+   /* Manually hard coding `texture_kicks` to 1 since we'll pack everything into
+    * one buffer to be DMAed. See `pvr_load_op_data_create_and_upload()`, where
+    * we upload the buffer and upload the code section.
+    */
+   result = pvr_pds_unitex_state_program_create_and_upload(
+      device,
+      allocator,
+      1U,
+      0U,
+      &load_op->pds_tex_state_prog);
+   if (result != VK_SUCCESS)
+      goto err_free_pds_frag_prog;
+
+   return VK_SUCCESS;
+
+err_free_pds_frag_prog:
+   pvr_bo_suballoc_free(load_op->pds_frag_prog.pvr_bo);
+
+err_free_usc_frag_prog_bo:
+   pvr_bo_suballoc_free(load_op->usc_frag_prog_bo);
+
+   return result;
+}
+
+/* TODO: pvr_subpass_load_op_init() and pvr_render_load_op_init() are quite
  * similar. See if we can dedup them?
  */
 static VkResult
-pvr_create_subpass_load_op(struct pvr_device *device,
-                           const VkAllocationCallbacks *allocator,
-                           const struct pvr_render_pass *pass,
-                           struct pvr_renderpass_hwsetup_render *hw_render,
-                           uint32_t hw_subpass_idx,
-                           struct pvr_load_op **const load_op_out)
+pvr_subpass_load_op_init(struct pvr_device *device,
+                         const VkAllocationCallbacks *allocator,
+                         const struct pvr_render_pass *pass,
+                         struct pvr_renderpass_hwsetup_render *hw_render,
+                         uint32_t hw_subpass_idx)
 {
    const struct pvr_renderpass_hwsetup_subpass *hw_subpass =
       &hw_render->subpasses[hw_subpass_idx];
    const struct pvr_render_subpass *subpass =
       &pass->subpasses[hw_subpass->index];
+   struct pvr_load_op *load_op;
+   VkResult result;
 
-   struct pvr_load_op *load_op = vk_zalloc2(&device->vk.alloc,
-                                            allocator,
-                                            sizeof(*load_op),
-                                            8,
-                                            VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+   load_op = vk_zalloc2(&device->vk.alloc,
+                        allocator,
+                        sizeof(*load_op),
+                        8,
+                        VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
    if (!load_op)
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
@@ -232,8 +283,11 @@ pvr_create_subpass_load_op(struct pvr_device *device,
       case VK_ATTACHMENT_LOAD_OP_LOAD:
          assert(z_replicate < PVR_LOAD_OP_CLEARS_LOADS_MAX_RTS);
          load_op->clears_loads_state.rt_load_mask = BITFIELD_BIT(z_replicate);
+
+         assert(subpass->depth_stencil_attachment != VK_ATTACHMENT_UNUSED);
          load_op->clears_loads_state.dest_vk_format[z_replicate] =
-            VK_FORMAT_D32_SFLOAT;
+            pass->attachments[subpass->depth_stencil_attachment].vk_format;
+
          break;
 
       case VK_ATTACHMENT_LOAD_OP_CLEAR:
@@ -254,7 +308,7 @@ pvr_create_subpass_load_op(struct pvr_device *device,
          pass->attachments[attachment_idx].vk_format;
 
       if (pass->attachments[attachment_idx].sample_count > 1)
-         load_op->clears_loads_state.unresolved_msaa_mask = BITFIELD_BIT(i);
+         load_op->clears_loads_state.unresolved_msaa_mask |= BITFIELD_BIT(i);
 
       if (hw_subpass->color_initops[i] == VK_ATTACHMENT_LOAD_OP_LOAD)
          load_op->clears_loads_state.rt_load_mask |= BITFIELD_BIT(i);
@@ -264,19 +318,27 @@ pvr_create_subpass_load_op(struct pvr_device *device,
 
    load_op->is_hw_object = false;
    load_op->subpass = subpass;
+   load_op->clears_loads_state.mrt_setup = &hw_subpass->setup;
 
-   *load_op_out = load_op;
+   result = pvr_load_op_shader_generate(device, allocator, load_op);
+   if (result != VK_SUCCESS) {
+      vk_free2(&device->vk.alloc, allocator, load_op);
+      return result;
+   }
+
+   hw_render->subpasses[hw_subpass_idx].load_op = load_op;
 
    return VK_SUCCESS;
 }
 
 static VkResult
-pvr_create_render_load_op(struct pvr_device *device,
-                          const VkAllocationCallbacks *allocator,
-                          const struct pvr_render_pass *pass,
-                          const struct pvr_renderpass_hwsetup_render *hw_render,
-                          struct pvr_load_op **const load_op_out)
+pvr_render_load_op_init(struct pvr_device *device,
+                        const VkAllocationCallbacks *allocator,
+                        const struct pvr_render_pass *pass,
+                        struct pvr_renderpass_hwsetup_render *hw_render)
 {
+   VkResult result;
+
    struct pvr_load_op *load_op = vk_zalloc2(&device->vk.alloc,
                                             allocator,
                                             sizeof(*load_op),
@@ -296,7 +358,7 @@ pvr_create_render_load_op(struct pvr_device *device,
          pass->attachments[color_init->index].vk_format;
 
       if (pass->attachments[color_init->index].sample_count > 1)
-         load_op->clears_loads_state.unresolved_msaa_mask = BITFIELD_BIT(i);
+         load_op->clears_loads_state.unresolved_msaa_mask |= BITFIELD_BIT(i);
 
       if (color_init->op == VK_ATTACHMENT_LOAD_OP_LOAD)
          load_op->clears_loads_state.rt_load_mask |= BITFIELD_BIT(i);
@@ -306,66 +368,17 @@ pvr_create_render_load_op(struct pvr_device *device,
 
    load_op->is_hw_object = true;
    load_op->hw_render = hw_render;
+   load_op->clears_loads_state.mrt_setup = &hw_render->init_setup;
 
-   *load_op_out = load_op;
-
-   return VK_SUCCESS;
-}
-
-static VkResult
-pvr_generate_load_op_shader(struct pvr_device *device,
-                            const VkAllocationCallbacks *allocator,
-                            struct pvr_renderpass_hwsetup_render *hw_render,
-                            struct pvr_load_op *load_op)
-{
-   const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
-   const uint32_t cache_line_size = rogue_get_slc_cache_line_size(dev_info);
-
-   VkResult result = pvr_gpu_upload_usc(device,
-                                        pvr_usc_fragment_shader,
-                                        sizeof(pvr_usc_fragment_shader),
-                                        cache_line_size,
-                                        &load_op->usc_frag_prog_bo);
-   if (result != VK_SUCCESS)
+   result = pvr_load_op_shader_generate(device, allocator, load_op);
+   if (result != VK_SUCCESS) {
+      vk_free2(&device->vk.alloc, allocator, load_op);
       return result;
+   }
 
-   result = pvr_pds_fragment_program_create_and_upload(
-      device,
-      allocator,
-      load_op->usc_frag_prog_bo,
-      pvr_pds_fragment_program_params.temp_count,
-      pvr_pds_fragment_program_params.msaa_mode,
-      pvr_pds_fragment_program_params.has_phase_rate_change,
-      &load_op->pds_frag_prog);
-   if (result != VK_SUCCESS)
-      goto err_free_usc_frag_prog_bo;
-
-   result = pvr_pds_unitex_state_program_create_and_upload(
-      device,
-      allocator,
-      1U,
-      0U,
-      &load_op->pds_tex_state_prog);
-   if (result != VK_SUCCESS)
-      goto err_free_pds_frag_prog;
-
-   /* FIXME: These should be based on the USC and PDS programs, but are hard
-    * coded for now.
-    */
-   load_op->const_shareds_count = 1;
-   load_op->shareds_dest_offset = 0;
-   load_op->shareds_count = 1;
-   load_op->temps_count = 1;
+   hw_render->load_op = load_op;
 
    return VK_SUCCESS;
-
-err_free_pds_frag_prog:
-   pvr_bo_suballoc_free(load_op->pds_frag_prog.pvr_bo);
-
-err_free_usc_frag_prog_bo:
-   pvr_bo_suballoc_free(load_op->usc_frag_prog_bo);
-
-   return result;
 }
 
 static void pvr_load_op_destroy(struct pvr_device *device,
@@ -415,16 +428,136 @@ pvr_is_load_op_needed(const struct pvr_render_pass *pass,
    return false;
 }
 
+static void
+pvr_render_pass_load_ops_cleanup(struct pvr_device *device,
+                                 const VkAllocationCallbacks *pAllocator,
+                                 struct pvr_render_pass *pass)
+{
+   if (!pass)
+      return;
+
+   for (uint32_t i = 0; i < pass->hw_setup->render_count; i++) {
+      struct pvr_renderpass_hwsetup_render *hw_render =
+         &pass->hw_setup->renders[i];
+
+      for (uint32_t j = 0; j < hw_render->subpass_count; j++) {
+         if (hw_render->subpasses[j].load_op) {
+            pvr_load_op_destroy(device,
+                                pAllocator,
+                                hw_render->subpasses[j].load_op);
+         }
+      }
+
+      if (hw_render->load_op)
+         pvr_load_op_destroy(device, pAllocator, hw_render->load_op);
+   }
+}
+
+static inline VkResult pvr_render_add_missing_output_register_write(
+   struct pvr_renderpass_hwsetup_render *hw_render,
+   const VkAllocationCallbacks *allocator)
+{
+   const uint32_t last = hw_render->init_setup.num_render_targets;
+   struct usc_mrt_resource *mrt_resources;
+
+   /* Add a dummy output register use to the HW render setup if it has no
+    * output registers in use.
+    */
+   if (pvr_has_output_register_writes(hw_render))
+      return VK_SUCCESS;
+
+   hw_render->init_setup.num_render_targets++;
+
+   mrt_resources = vk_realloc(allocator,
+                              hw_render->init_setup.mrt_resources,
+                              hw_render->init_setup.num_render_targets *
+                                 sizeof(*mrt_resources),
+                              8U,
+                              VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (!mrt_resources)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+   hw_render->init_setup.mrt_resources = mrt_resources;
+
+   mrt_resources[last].type = USC_MRT_RESOURCE_TYPE_OUTPUT_REG;
+   mrt_resources[last].reg.output_reg = 0U;
+   mrt_resources[last].reg.offset = 0U;
+   mrt_resources[last].intermediate_size = 4U;
+   mrt_resources[last].mrt_desc.intermediate_size = 4U;
+   mrt_resources[last].mrt_desc.priority = 0U;
+   mrt_resources[last].mrt_desc.valid_mask[0U] = ~0;
+   mrt_resources[last].mrt_desc.valid_mask[1U] = ~0;
+   mrt_resources[last].mrt_desc.valid_mask[2U] = ~0;
+   mrt_resources[last].mrt_desc.valid_mask[3U] = ~0;
+
+   return VK_SUCCESS;
+}
+
+static VkResult
+pvr_render_pass_load_ops_setup(struct pvr_device *device,
+                               const VkAllocationCallbacks *allocator,
+                               struct pvr_render_pass *pass)
+{
+   VkResult result;
+
+   for (uint32_t i = 0; i < pass->hw_setup->render_count; i++) {
+      struct pvr_renderpass_hwsetup_render *hw_render =
+         &pass->hw_setup->renders[i];
+
+      if (hw_render->tile_buffers_count) {
+         result = pvr_device_tile_buffer_ensure_cap(
+            device,
+            hw_render->tile_buffers_count,
+            hw_render->eot_setup.tile_buffer_size);
+         if (result != VK_SUCCESS)
+            goto err_load_op_cleanup;
+      }
+
+      assert(!hw_render->load_op);
+
+      if (hw_render->color_init_count != 0U) {
+         result =
+            pvr_render_add_missing_output_register_write(hw_render, allocator);
+         if (result != VK_SUCCESS)
+            goto err_load_op_cleanup;
+
+         result = pvr_render_load_op_init(device, allocator, pass, hw_render);
+         if (result != VK_SUCCESS)
+            goto err_load_op_cleanup;
+      }
+
+      for (uint32_t j = 0; j < hw_render->subpass_count; j++) {
+         if (!pvr_is_load_op_needed(pass, hw_render, j))
+            continue;
+
+         result =
+            pvr_subpass_load_op_init(device, allocator, pass, hw_render, j);
+         if (result != VK_SUCCESS)
+            goto err_load_op_cleanup;
+      }
+   }
+
+   return VK_SUCCESS;
+
+err_load_op_cleanup:
+   pvr_render_pass_load_ops_cleanup(device, allocator, pass);
+
+   return result;
+}
+
 VkResult pvr_CreateRenderPass2(VkDevice _device,
                                const VkRenderPassCreateInfo2 *pCreateInfo,
                                const VkAllocationCallbacks *pAllocator,
                                VkRenderPass *pRenderPass)
 {
    struct pvr_render_pass_attachment *attachments;
-   PVR_FROM_HANDLE(pvr_device, device, _device);
+   VK_FROM_HANDLE(pvr_device, device, _device);
+   const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
    struct pvr_render_subpass *subpasses;
    const VkAllocationCallbacks *alloc;
    size_t subpass_attachment_count;
+   size_t subpass_input_attachment_count;
+   struct pvr_render_input_attachment *subpass_input_attachments;
    uint32_t *subpass_attachments;
    struct pvr_render_pass *pass;
    uint32_t *dep_list;
@@ -445,17 +578,23 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
                      pCreateInfo->subpassCount);
 
    subpass_attachment_count = 0;
+   subpass_input_attachment_count = 0;
    for (uint32_t i = 0; i < pCreateInfo->subpassCount; i++) {
       const VkSubpassDescription2 *desc = &pCreateInfo->pSubpasses[i];
       subpass_attachment_count +=
-         desc->inputAttachmentCount + desc->colorAttachmentCount +
+         desc->colorAttachmentCount +
          (desc->pResolveAttachments ? desc->colorAttachmentCount : 0);
+      subpass_input_attachment_count += desc->inputAttachmentCount;
    }
 
    vk_multialloc_add(&ma,
                      &subpass_attachments,
                      __typeof__(*subpass_attachments),
                      subpass_attachment_count);
+   vk_multialloc_add(&ma,
+                     &subpass_input_attachments,
+                     __typeof__(*subpass_input_attachments),
+                     subpass_input_attachment_count);
    vk_multialloc_add(&ma,
                      &dep_list,
                      __typeof__(*dep_list),
@@ -494,9 +633,17 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
       attachment->vk_format = desc->format;
       attachment->sample_count = desc->samples;
       attachment->initial_layout = desc->initialLayout;
-      attachment->is_pbe_downscalable =
-         pvr_format_is_pbe_downscalable(attachment->vk_format);
       attachment->index = i;
+
+      /* On cores without gs_rta_support, PBE resolves might depend on writes
+       * that occur within the deferred RTA clears that happen after the PBE has
+       * written. Since the driver doesn't know at renderpass creation whether
+       * RTA clears are needed, PBE resolves can't be used.
+       */
+      attachment->is_pbe_downscalable =
+         PVR_HAS_FEATURE(dev_info, gs_rta_support) &&
+         pvr_format_is_pbe_downscalable(&device->pdevice->dev_info,
+                                        attachment->vk_format);
 
       if (attachment->sample_count > pass->max_sample_count)
          pass->max_sample_count = attachment->sample_count;
@@ -522,13 +669,32 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
       struct pvr_render_subpass *subpass = &pass->subpasses[i];
 
       subpass->pipeline_bind_point = desc->pipelineBindPoint;
-      subpass->sample_count = 1;
+
+      /* From the Vulkan spec. 1.3.265
+       * VUID-VkSubpassDescription2-multisampledRenderToSingleSampled-06872:
+       *
+       *   "If none of the VK_AMD_mixed_attachment_samples extension, the
+       *   VK_NV_framebuffer_mixed_samples extension, or the
+       *   multisampledRenderToSingleSampled feature are enabled, all
+       *   attachments in pDepthStencilAttachment or pColorAttachments that are
+       *   not VK_ATTACHMENT_UNUSED must have the same sample count"
+       *
+       */
+      subpass->sample_count = VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM;
+
+      if (desc->pDepthStencilAttachment) {
+         uint32_t index = desc->pDepthStencilAttachment->attachment;
+
+         if (index != VK_ATTACHMENT_UNUSED)
+            subpass->sample_count = pass->attachments[index].sample_count;
+
+         subpass->depth_stencil_attachment = index;
+      } else {
+         subpass->depth_stencil_attachment = VK_ATTACHMENT_UNUSED;
+      }
 
       subpass->color_count = desc->colorAttachmentCount;
       if (subpass->color_count > 0) {
-         bool has_used_color_attachment = false;
-         uint32_t index;
-
          subpass->color_attachments = subpass_attachments;
          subpass_attachments += subpass->color_count;
 
@@ -539,18 +705,16 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
             if (subpass->color_attachments[j] == VK_ATTACHMENT_UNUSED)
                continue;
 
-            index = subpass->color_attachments[j];
-            subpass->sample_count = pass->attachments[index].sample_count;
-            has_used_color_attachment = true;
-         }
-
-         if (!has_used_color_attachment && desc->pDepthStencilAttachment &&
-             desc->pDepthStencilAttachment->attachment !=
-                VK_ATTACHMENT_UNUSED) {
-            index = desc->pDepthStencilAttachment->attachment;
-            subpass->sample_count = pass->attachments[index].sample_count;
+            if (subpass->sample_count == VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM) {
+               uint32_t index;
+               index = subpass->color_attachments[j];
+               subpass->sample_count = pass->attachments[index].sample_count;
+            }
          }
       }
+
+      if (subpass->sample_count == VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM)
+         subpass->sample_count = VK_SAMPLE_COUNT_1_BIT;
 
       if (desc->pResolveAttachments) {
          subpass->resolve_attachments = subpass_attachments;
@@ -564,20 +728,15 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
 
       subpass->input_count = desc->inputAttachmentCount;
       if (subpass->input_count > 0) {
-         subpass->input_attachments = subpass_attachments;
-         subpass_attachments += subpass->input_count;
+         subpass->input_attachments = subpass_input_attachments;
+         subpass_input_attachments += subpass->input_count;
 
          for (uint32_t j = 0; j < subpass->input_count; j++) {
-            subpass->input_attachments[j] =
+            subpass->input_attachments[j].attachment_idx =
                desc->pInputAttachments[j].attachment;
+            subpass->input_attachments[j].aspect_mask =
+               desc->pInputAttachments[j].aspectMask;
          }
-      }
-
-      if (desc->pDepthStencilAttachment) {
-         subpass->depth_stencil_attachment =
-            desc->pDepthStencilAttachment->attachment;
-      } else {
-         subpass->depth_stencil_attachment = VK_ATTACHMENT_UNUSED;
       }
 
       /* Give the dependencies a slice of the subpass_attachments array. */
@@ -601,10 +760,16 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
           dep->dstSubpass != VK_SUBPASS_EXTERNAL &&
           dep->srcSubpass != dep->dstSubpass) {
          struct pvr_render_subpass *subpass = &pass->subpasses[dep->dstSubpass];
+         bool is_dep_fb_local =
+            vk_subpass_dependency_is_fb_local(dep,
+                                              dep->srcStageMask,
+                                              dep->dstStageMask);
 
          subpass->dep_list[subpass->dep_count] = dep->srcSubpass;
-         if (pvr_subpass_has_msaa_input_attachment(subpass, pCreateInfo))
+         if (pvr_subpass_has_msaa_input_attachment(subpass, pCreateInfo) ||
+             !is_dep_fb_local) {
             subpass->flush_on_dep[subpass->dep_count] = true;
+         }
 
          subpass->dep_count++;
       }
@@ -620,118 +785,15 @@ VkResult pvr_CreateRenderPass2(VkDevice _device,
 
    pvr_init_subpass_isp_userpass(pass->hw_setup, pass, pass->subpasses);
 
-   for (uint32_t i = 0; i < pass->hw_setup->render_count; i++) {
-      struct pvr_renderpass_hwsetup_render *hw_render =
-         &pass->hw_setup->renders[i];
-      struct pvr_load_op *load_op = NULL;
-
-      if (hw_render->tile_buffers_count) {
-         result = pvr_device_tile_buffer_ensure_cap(
-            device,
-            hw_render->tile_buffers_count,
-            hw_render->eot_setup.tile_buffer_size);
-         if (result != VK_SUCCESS)
-            goto err_free_pass;
-      }
-
-      assert(!hw_render->load_op);
-
-      if (hw_render->color_init_count != 0U) {
-         if (!pvr_has_output_register_writes(hw_render)) {
-            const uint32_t last = hw_render->init_setup.num_render_targets;
-            struct usc_mrt_resource *mrt_resources;
-
-            hw_render->init_setup.num_render_targets++;
-
-            mrt_resources =
-               vk_realloc(alloc,
-                          hw_render->init_setup.mrt_resources,
-                          hw_render->init_setup.num_render_targets *
-                             sizeof(*mrt_resources),
-                          8U,
-                          VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-            if (!mrt_resources) {
-               result = vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
-               goto err_load_op_destroy;
-            }
-
-            hw_render->init_setup.mrt_resources = mrt_resources;
-
-            mrt_resources[last].type = USC_MRT_RESOURCE_TYPE_OUTPUT_REG;
-            mrt_resources[last].reg.output_reg = 0U;
-            mrt_resources[last].reg.offset = 0U;
-            mrt_resources[last].intermediate_size = 4U;
-            mrt_resources[last].mrt_desc.intermediate_size = 4U;
-            mrt_resources[last].mrt_desc.priority = 0U;
-            mrt_resources[last].mrt_desc.valid_mask[0U] = ~0;
-            mrt_resources[last].mrt_desc.valid_mask[1U] = ~0;
-            mrt_resources[last].mrt_desc.valid_mask[2U] = ~0;
-            mrt_resources[last].mrt_desc.valid_mask[3U] = ~0;
-         }
-
-         result = pvr_create_render_load_op(device,
-                                            pAllocator,
-                                            pass,
-                                            hw_render,
-                                            &load_op);
-         if (result != VK_SUCCESS)
-            goto err_load_op_destroy;
-
-         result =
-            pvr_generate_load_op_shader(device, pAllocator, hw_render, load_op);
-         if (result != VK_SUCCESS) {
-            vk_free2(&device->vk.alloc, pAllocator, load_op);
-            goto err_load_op_destroy;
-         }
-
-         hw_render->load_op = load_op;
-      }
-
-      for (uint32_t j = 0; j < hw_render->subpass_count; j++) {
-         if (!pvr_is_load_op_needed(pass, hw_render, j))
-            continue;
-
-         result = pvr_create_subpass_load_op(device,
-                                             pAllocator,
-                                             pass,
-                                             hw_render,
-                                             j,
-                                             &load_op);
-         if (result != VK_SUCCESS) {
-            vk_free2(&device->vk.alloc, pAllocator, load_op);
-            goto err_load_op_destroy;
-         }
-
-         result =
-            pvr_generate_load_op_shader(device, pAllocator, hw_render, load_op);
-         if (result != VK_SUCCESS)
-            goto err_load_op_destroy;
-
-         hw_render->subpasses[j].load_op = load_op;
-      }
-   }
+   result = pvr_render_pass_load_ops_setup(device, alloc, pass);
+   if (result != VK_SUCCESS)
+      goto err_destroy_renderpass_hwsetup;
 
    *pRenderPass = pvr_render_pass_to_handle(pass);
 
    return VK_SUCCESS;
 
-err_load_op_destroy:
-   for (uint32_t i = 0; i < pass->hw_setup->render_count; i++) {
-      struct pvr_renderpass_hwsetup_render *hw_render =
-         &pass->hw_setup->renders[i];
-
-      for (uint32_t j = 0; j < hw_render->subpass_count; j++) {
-         if (hw_render->subpasses[j].load_op) {
-            pvr_load_op_destroy(device,
-                                pAllocator,
-                                hw_render->subpasses[j].load_op);
-         }
-      }
-
-      if (hw_render->load_op)
-         pvr_load_op_destroy(device, pAllocator, hw_render->load_op);
-   }
-
+err_destroy_renderpass_hwsetup:
    pvr_destroy_renderpass_hwsetup(alloc, pass->hw_setup);
 
 err_free_pass:
@@ -745,30 +807,16 @@ void pvr_DestroyRenderPass(VkDevice _device,
                            VkRenderPass _pass,
                            const VkAllocationCallbacks *pAllocator)
 {
-   PVR_FROM_HANDLE(pvr_device, device, _device);
-   PVR_FROM_HANDLE(pvr_render_pass, pass, _pass);
+   VK_FROM_HANDLE(pvr_device, device, _device);
+   VK_FROM_HANDLE(pvr_render_pass, pass, _pass);
+   const VkAllocationCallbacks *allocator = pAllocator ? pAllocator
+                                                       : &device->vk.alloc;
 
    if (!pass)
       return;
 
-   for (uint32_t i = 0; i < pass->hw_setup->render_count; i++) {
-      struct pvr_renderpass_hwsetup_render *hw_render =
-         &pass->hw_setup->renders[i];
-
-      for (uint32_t j = 0; j < hw_render->subpass_count; j++) {
-         if (hw_render->subpasses[j].load_op) {
-            pvr_load_op_destroy(device,
-                                pAllocator,
-                                hw_render->subpasses[j].load_op);
-         }
-      }
-
-      if (hw_render->load_op)
-         pvr_load_op_destroy(device, pAllocator, hw_render->load_op);
-   }
-
-   pvr_destroy_renderpass_hwsetup(pAllocator ? pAllocator : &device->vk.alloc,
-                                  pass->hw_setup);
+   pvr_render_pass_load_ops_cleanup(device, allocator, pass);
+   pvr_destroy_renderpass_hwsetup(allocator, pass->hw_setup);
    vk_object_base_finish(&pass->base);
    vk_free2(&device->vk.alloc, pAllocator, pass);
 }
@@ -777,7 +825,7 @@ void pvr_GetRenderAreaGranularity(VkDevice _device,
                                   VkRenderPass renderPass,
                                   VkExtent2D *pGranularity)
 {
-   PVR_FROM_HANDLE(pvr_device, device, _device);
+   VK_FROM_HANDLE(pvr_device, device, _device);
    const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
 
    /* Granularity does not depend on any settings in the render pass, so return

@@ -1,32 +1,14 @@
 /*
  * Copyright © 2018 Valve Corporation
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "aco_ir.h"
 
 #include "util/u_debug.h"
 
-#ifdef LLVM_AVAILABLE
+#if AMD_LLVM_AVAILABLE
 #if defined(_MSC_VER) && defined(restrict)
 #undef restrict
 #endif
@@ -60,7 +42,9 @@ void
 print_block_markers(FILE* output, Program* program, const std::vector<bool>& referenced_blocks,
                     unsigned* next_block, unsigned pos)
 {
-   while (*next_block < program->blocks.size() && pos == program->blocks[*next_block].offset) {
+   while (*next_block < program->blocks.size() && pos >= program->blocks[*next_block].offset) {
+      assert(pos == program->blocks[*next_block].offset ||
+             program->blocks[*next_block].instructions.empty());
       if (referenced_blocks[*next_block])
          fprintf(output, "BB%u:\n", *next_block);
       (*next_block)++;
@@ -98,6 +82,7 @@ print_constant_data(FILE* output, Program* program)
    }
 }
 
+#ifndef _WIN32
 /**
  * Determines the GPU type to use for CLRXdisasm
  */
@@ -146,11 +131,10 @@ to_clrx_device_name(amd_gfx_level gfx_level, radeon_family family)
       switch (family) {
       case CHIP_NAVI10: return "gfx1010";
       case CHIP_NAVI12: return "gfx1011";
+      case CHIP_GFX1013: return "gfx1013";
       default: return nullptr;
       }
-   case GFX10_3:
-   case GFX11: return nullptr;
-   default: unreachable("Invalid chip class!"); return nullptr;
+   default: return nullptr;
    }
 }
 
@@ -172,6 +156,7 @@ get_branch_target(char** output, Program* program, const std::vector<bool>& refe
    }
    return false;
 }
+#endif
 
 bool
 print_asm_clrx(Program* program, std::vector<uint32_t>& binary, unsigned exec_size, FILE* output)
@@ -181,6 +166,7 @@ print_asm_clrx(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
 #else
    char path[] = "/tmp/fileXXXXXX";
    char line[2048], command[128];
+   bool ret = false;
    FILE* p;
    int fd;
 
@@ -192,8 +178,10 @@ print_asm_clrx(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
       return true;
 
    for (unsigned i = 0; i < exec_size; i++) {
-      if (write(fd, &binary[i], 4) == -1)
+      if (write(fd, &binary[i], 4) == -1) {
+         ret = true;
          goto fail;
+      }
    }
 
    sprintf(command, "clrxdisasm --gpuType=%s -r %s", gpu_type, path);
@@ -203,6 +191,7 @@ print_asm_clrx(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
       if (!fgets(line, sizeof(line), p)) {
          fprintf(output, "clrxdisasm not found\n");
          pclose(p);
+         ret = true;
          goto fail;
       }
 
@@ -259,16 +248,14 @@ print_asm_clrx(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
       print_constant_data(output, program);
    }
 
-   return false;
-
 fail:
    close(fd);
    unlink(path);
-   return true;
+   return ret;
 #endif
 }
 
-#ifdef LLVM_AVAILABLE
+#if AMD_LLVM_AVAILABLE
 std::pair<bool, size_t>
 disasm_instr(amd_gfx_level gfx_level, LLVMDisasmContextRef disasm, uint32_t* binary,
              unsigned exec_size, size_t pos, char* outline, unsigned outline_size)
@@ -331,14 +318,23 @@ print_asm_llvm(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
                            llvm::StringRef(block_names[block_names.size() - 1].data()), 0);
    }
 
-   const char* features = "";
+   std::string features = "";
    if (program->gfx_level >= GFX10 && program->wave_size == 64) {
-      features = "+wavefrontsize64";
+      features += "+wavefrontsize64";
    }
+
+   /* Older versions have very incomplete true16 support. */
+#if LLVM_VERSION_MAJOR >= 20
+   if (program->gfx_level >= GFX11) {
+      if (!features.empty())
+         features += ",";
+      features += "+real-true16";
+   }
+#endif
 
    LLVMDisasmContextRef disasm =
       LLVMCreateDisasmCPUFeatures("amdgcn-mesa-mesa3d", ac_get_llvm_processor_name(program->family),
-                                  features, &symbols, 0, NULL, NULL);
+                                  features.c_str(), &symbols, 0, NULL, NULL);
 
    size_t pos = 0;
    bool invalid = false;
@@ -347,7 +343,7 @@ print_asm_llvm(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
    unsigned prev_size = 0;
    unsigned prev_pos = 0;
    unsigned repeat_count = 0;
-   while (pos < exec_size) {
+   while (pos <= exec_size) {
       bool new_block =
          next_block < program->blocks.size() && pos == program->blocks[next_block].offset;
       if (pos + prev_size <= exec_size && prev_pos != pos && !new_block &&
@@ -362,6 +358,10 @@ print_asm_llvm(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
       }
 
       print_block_markers(output, program, referenced_blocks, &next_block, pos);
+
+      /* For empty last block, only print block marker. */
+      if (pos == exec_size)
+         break;
 
       char outline[1024];
       std::pair<bool, size_t> res = disasm_instr(program->gfx_level, disasm, binary.data(),
@@ -382,14 +382,14 @@ print_asm_llvm(Program* program, std::vector<uint32_t>& binary, unsigned exec_si
 
    return invalid;
 }
-#endif /* LLVM_AVAILABLE */
+#endif /* AMD_LLVM_AVAILABLE */
 
 } /* end namespace */
 
 bool
 check_print_asm_support(Program* program)
 {
-#ifdef LLVM_AVAILABLE
+#if AMD_LLVM_AVAILABLE
    if (program->gfx_level >= GFX8) {
       /* LLVM disassembler only supports GFX8+ */
       const char* name = ac_get_llvm_processor_name(program->family);
@@ -410,7 +410,7 @@ check_print_asm_support(Program* program)
 #ifndef _WIN32
    /* Check if CLRX disassembler binary is available and can disassemble the program */
    return to_clrx_device_name(program->gfx_level, program->family) &&
-          system("clrxdisasm --version") == 0;
+          system("clrxdisasm --version > /dev/null 2>&1") == 0;
 #else
    return false;
 #endif
@@ -420,7 +420,7 @@ check_print_asm_support(Program* program)
 bool
 print_asm(Program* program, std::vector<uint32_t>& binary, unsigned exec_size, FILE* output)
 {
-#ifdef LLVM_AVAILABLE
+#if AMD_LLVM_AVAILABLE
    if (program->gfx_level >= GFX8) {
       return print_asm_llvm(program, binary, exec_size, output);
    }

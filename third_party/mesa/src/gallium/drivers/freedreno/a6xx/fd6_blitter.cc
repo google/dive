@@ -1,25 +1,7 @@
 /*
- * Copyright (C) 2017 Rob Clark <robclark@freedesktop.org>
+ * Copyright © 2017 Rob Clark <robclark@freedesktop.org>
  * Copyright © 2018 Google, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -30,7 +12,9 @@
 #include "util/format_srgb.h"
 #include "util/half_float.h"
 #include "util/u_dump.h"
+#include "util/u_helpers.h"
 #include "util/u_log.h"
+#include "util/u_transfer.h"
 #include "util/u_surface.h"
 
 #include "freedreno_blitter.h"
@@ -107,7 +91,7 @@ fd6_ifmt(enum a6xx_format fmt)
       return R2D_FLOAT16;
 
    default:
-      unreachable("bad format");
+      UNREACHABLE("bad format");
       return (enum a6xx_2d_ifmt)0;
    }
 }
@@ -179,15 +163,15 @@ static void
 dump_blit_info(const struct pipe_blit_info *info)
 {
    util_dump_blit_info(stderr, info);
-   fprintf(stderr, "\ndst resource: ");
+   fprintf(stderr, "\n\tdst resource: ");
    util_dump_resource(stderr, info->dst.resource);
    if (is_ubwc(info->dst.resource, info->dst.level))
       fprintf(stderr, " (ubwc)");
-   fprintf(stderr, "\nsrc resource: ");
+   fprintf(stderr, "\n\tsrc resource: ");
    util_dump_resource(stderr, info->src.resource);
    if (is_ubwc(info->src.resource, info->src.level))
       fprintf(stderr, " (ubwc)");
-   fprintf(stderr, "\n");
+   fprintf(stderr, "\n\n");
 }
 
 static bool
@@ -202,20 +186,46 @@ can_do_blit(const struct pipe_blit_info *info)
    fail_if(!ok_format(info->src.format));
    fail_if(!ok_format(info->dst.format));
 
+   /* using the 2d path seems to canonicalize NaNs when the source format
+    * is a 16-bit floating point format, likely because it implicitly
+    * converts to 32 bits.
+    */
+   fail_if(util_format_is_float16(info->src.format) &&
+           util_format_is_float16(info->dst.format));
+
    assert(!util_format_is_compressed(info->src.format));
    assert(!util_format_is_compressed(info->dst.format));
 
    fail_if(!ok_dims(info->src.resource, &info->src.box, info->src.level));
 
-   fail_if(!ok_dims(info->dst.resource, &info->dst.box, info->dst.level));
+   /* We _shouldn't_ be getting negative dst coords, but do as a result of
+    * y-flip in do_blit_framebuffer().  See
+    * dEQP-GLES31.functional.primitive_bounding_box.blit_fbo.blit_fbo_to_default
+    */
+   fail_if(info->dst.box.x < 0);
+   fail_if(info->dst.box.y < 0);
 
    assert(info->dst.box.width >= 0);
    assert(info->dst.box.height >= 0);
    assert(info->dst.box.depth >= 0);
 
    fail_if(info->dst.resource->nr_samples > 1);
+   fail_if(info->src.resource->nr_samples > 1);
 
    fail_if(info->window_rectangle_include);
+
+   /* The blitter can't handle the needed swizzle gymnastics to convert
+    * to/from L/A formats:
+    */
+   fail_if(info->swizzle_enable);
+   if (info->src.format != info->dst.format) {
+      fail_if(util_format_is_luminance(info->dst.format));
+      fail_if(util_format_is_alpha(info->dst.format));
+      fail_if(util_format_is_luminance_alpha(info->dst.format));
+      fail_if(util_format_is_luminance(info->src.format));
+      fail_if(util_format_is_alpha(info->src.format));
+      fail_if(util_format_is_luminance_alpha(info->src.format));
+   }
 
    const struct util_format_description *src_desc =
       util_format_description(info->src.format);
@@ -247,26 +257,48 @@ can_do_clear(const struct pipe_resource *prsc, unsigned level,
    return true;
 }
 
+template <chip CHIP>
 static void
-emit_setup(struct fd_batch *batch)
+emit_setup(struct fd_context *ctx, fd_cs &cs)
 {
-   struct fd_ringbuffer *ring = batch->draw;
-   struct fd_screen *screen = batch->ctx->screen;
-
-   fd6_emit_flushes(batch->ctx, ring,
-                    FD6_FLUSH_CCU_COLOR |
-                    FD6_INVALIDATE_CCU_COLOR |
-                    FD6_FLUSH_CCU_DEPTH |
-                    FD6_INVALIDATE_CCU_DEPTH);
+   fd6_emit_flushes<CHIP>(ctx, cs,
+                          FD6_FLUSH_CCU_COLOR |
+                          FD6_INVALIDATE_CCU_COLOR |
+                          FD6_FLUSH_CCU_DEPTH |
+                          FD6_INVALIDATE_CCU_DEPTH);
 
    /* normal BLIT_OP_SCALE operation needs bypass RB_CCU_CNTL */
-   OUT_WFI5(ring);
-   fd6_emit_ccu_cntl(ring, screen, false);
+   fd6_emit_ccu_cntl<CHIP>(cs, ctx->screen, false);
 }
 
 template <chip CHIP>
 static void
-emit_blit_setup(struct fd_ringbuffer *ring, enum pipe_format pfmt,
+emit_blit_fini(struct fd_context *ctx, fd_cs &cs)
+{
+   const struct fd_dev_info *info = ctx->screen->info;
+
+   fd6_event_write<CHIP>(ctx, cs, FD_LABEL);
+
+   if (info->a6xx.magic.RB_DBG_ECO_CNTL != info->a6xx.magic.RB_DBG_ECO_CNTL_blit) {
+      fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+      fd_pkt4(cs, 1)
+         .add(A6XX_RB_DBG_ECO_CNTL(.dword = info->a6xx.magic.RB_DBG_ECO_CNTL_blit));
+   }
+
+   fd_pkt7(cs, CP_BLIT, 1)
+      .add(CP_BLIT_0(.op = BLIT_OP_SCALE));
+
+   if (info->a6xx.magic.RB_DBG_ECO_CNTL != info->a6xx.magic.RB_DBG_ECO_CNTL_blit) {
+      fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+      fd_pkt4(cs, 1)
+         .add(A6XX_RB_DBG_ECO_CNTL(.dword = info->a6xx.magic.RB_DBG_ECO_CNTL));
+   }
+}
+
+/* nregs: 5 */
+template <chip CHIP>
+static void
+emit_blit_setup(fd_ncrb<CHIP> &ncrb, enum pipe_format pfmt,
                 bool scissor_enable, union pipe_color_union *color,
                 uint32_t unknown_8c01, enum a6xx_rotation rotate)
 {
@@ -279,55 +311,65 @@ emit_blit_setup(struct fd_ringbuffer *ring, enum pipe_format pfmt,
       ifmt = R2D_UNORM8_SRGB;
    }
 
-   uint32_t blit_cntl = A6XX_RB_2D_BLIT_CNTL_MASK(0xf) |
-                        A6XX_RB_2D_BLIT_CNTL_COLOR_FORMAT(fmt) |
-                        A6XX_RB_2D_BLIT_CNTL_IFMT(ifmt) |
-                        A6XX_RB_2D_BLIT_CNTL_ROTATE(rotate) |
-                        COND(color, A6XX_RB_2D_BLIT_CNTL_SOLID_COLOR) |
-                        COND(scissor_enable, A6XX_RB_2D_BLIT_CNTL_SCISSOR);
+   uint32_t blit_cntl = A6XX_RB_A2D_BLT_CNTL_MASK(0xf) |
+                        A6XX_RB_A2D_BLT_CNTL_COLOR_FORMAT(fmt) |
+                        A6XX_RB_A2D_BLT_CNTL_IFMT(ifmt) |
+                        A6XX_RB_A2D_BLT_CNTL_ROTATE(rotate) |
+                        COND(color, A6XX_RB_A2D_BLT_CNTL_SOLID_COLOR) |
+                        COND(scissor_enable, A6XX_RB_A2D_BLT_CNTL_SCISSOR);
 
-   OUT_PKT4(ring, REG_A6XX_RB_2D_BLIT_CNTL, 1);
-   OUT_RING(ring, blit_cntl);
+   ncrb.add(A6XX_RB_A2D_BLT_CNTL(.dword = blit_cntl));
+   ncrb.add(GRAS_A2D_BLT_CNTL(CHIP, .dword = blit_cntl));
 
-   OUT_PKT4(ring, REG_A6XX_GRAS_2D_BLIT_CNTL, 1);
-   OUT_RING(ring, blit_cntl);
+   if (CHIP >= A7XX) {
+      ncrb.add(TPL1_A2D_BLT_CNTL(CHIP,
+         .raw_copy = false,
+         .start_offset_texels = 0,
+         .type = A6XX_TEX_2D,
+      ));
+   }
 
    if (fmt == FMT6_10_10_10_2_UNORM_DEST)
       fmt = FMT6_16_16_16_16_FLOAT;
+
+   enum a6xx_sp_a2d_output_ifmt_type output_ifmt_type;
+   if (util_format_is_pure_uint(pfmt))
+      output_ifmt_type = OUTPUT_IFMT_2D_UINT;
+   else if (util_format_is_pure_sint(pfmt))
+      output_ifmt_type = OUTPUT_IFMT_2D_SINT;
+   else
+      output_ifmt_type = OUTPUT_IFMT_2D_FLOAT;
 
    /* This register is probably badly named... it seems that it's
     * controlling the internal/accumulator format or something like
     * that. It's certainly not tied to only the src format.
     */
-   OUT_REG(ring, SP_2D_DST_FORMAT(
-         CHIP,
-         .sint = util_format_is_pure_sint(pfmt),
-         .uint = util_format_is_pure_uint(pfmt),
-         .color_format = fmt,
-         .srgb = is_srgb,
-         .mask = 0xf,
+   ncrb.add(SP_A2D_OUTPUT_INFO(CHIP,
+      .ifmt_type = output_ifmt_type,
+      .color_format = fmt,
+      .srgb = is_srgb,
+      .mask = 0xf,
    ));
 
-   OUT_PKT4(ring, REG_A6XX_RB_2D_UNKNOWN_8C01, 1);
-   OUT_RING(ring, unknown_8c01);
+   ncrb.add(A6XX_RB_A2D_PIXEL_CNTL(.dword = unknown_8c01));
 }
 
+/* nregs: 4 */
+template <chip CHIP>
 static void
-emit_blit_buffer_dst(struct fd_ringbuffer *ring, struct fd_resource *dst,
-                     unsigned off, unsigned size)
+emit_blit_buffer_dst(fd_ncrb<CHIP> &ncrb, struct fd_resource *dst,
+                     unsigned off, unsigned size, a6xx_format color_format)
 {
-   OUT_REG(ring,
-           A6XX_RB_2D_DST_INFO(
-                 .color_format = FMT6_8_UNORM,
-                 .tile_mode = TILE6_LINEAR,
-                 .color_swap = WZYX,
-           ),
-           A6XX_RB_2D_DST(
-                 .bo = dst->bo,
-                 .bo_offset = off,
-           ),
-           A6XX_RB_2D_DST_PITCH(size),
-   );
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_INFO(
+      .color_format = color_format,
+      .tile_mode = TILE6_LINEAR,
+      .color_swap = WZYX,
+   ));
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_BASE(
+      .bo = dst->bo,
+      .bo_offset = off,
+   ));
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_PITCH(size));
 }
 
 /* buffers need to be handled specially since x/width can exceed the bounds
@@ -335,8 +377,7 @@ emit_blit_buffer_dst(struct fd_ringbuffer *ring, struct fd_resource *dst,
  */
 template <chip CHIP>
 static void
-emit_blit_buffer(struct fd_context *ctx, struct fd_ringbuffer *ring,
-                 const struct pipe_blit_info *info)
+emit_blit_buffer(struct fd_context *ctx, fd_cs &cs, const struct pipe_blit_info *info)
 {
    const struct pipe_box *sbox = &info->src.box;
    const struct pipe_box *dbox = &info->dst.box;
@@ -383,7 +424,8 @@ emit_blit_buffer(struct fd_context *ctx, struct fd_ringbuffer *ring,
    sshift = sbox->x & 0x3f;
    dshift = dbox->x & 0x3f;
 
-   emit_blit_setup<CHIP>(ring, PIPE_FORMAT_R8_UNORM, false, NULL, 0, ROTATE_0);
+   with_ncrb (cs, 5)
+      emit_blit_setup<CHIP>(ncrb, PIPE_FORMAT_R8_UNORM, false, NULL, 0, ROTATE_0);
 
    for (unsigned off = 0; off < sbox->width; off += (0x4000 - 0x40)) {
       unsigned soff, doff, w, p;
@@ -397,99 +439,80 @@ emit_blit_buffer(struct fd_context *ctx, struct fd_ringbuffer *ring,
       assert((soff + w) <= fd_bo_size(src->bo));
       assert((doff + w) <= fd_bo_size(dst->bo));
 
-      /*
-       * Emit source:
-       */
-      OUT_REG(ring,
-              SP_PS_2D_SRC_INFO(
-                    CHIP,
-                    .color_format = FMT6_8_UNORM,
-                    .tile_mode = TILE6_LINEAR,
-                    .color_swap = WZYX,
-                    .unk20 = true,
-                    .unk22 = true,
-              ),
-              SP_PS_2D_SRC_SIZE(
-                    CHIP,
-                    .width = sshift + w,
-                    .height = 1,
-              ),
-              SP_PS_2D_SRC(
-                    CHIP,
-                    .bo = src->bo,
-                    .bo_offset = soff,
-              ),
-              SP_PS_2D_SRC_PITCH(
-                    CHIP,
-                    .pitch = p,
-              ),
-      );
+      with_ncrb (cs, 15) {
+         /*
+          * Emit source:
+          */
+         ncrb.add(TPL1_A2D_SRC_TEXTURE_INFO(CHIP,
+            .color_format = FMT6_8_UNORM,
+            .tile_mode = TILE6_LINEAR,
+            .color_swap = WZYX,
+            .unk20 = true,
+            .unk22 = true,
+         ));
+         ncrb.add(TPL1_A2D_SRC_TEXTURE_SIZE(CHIP,
+            .width = sshift + w,
+            .height = 1,
+         ));
+         ncrb.add(TPL1_A2D_SRC_TEXTURE_BASE(CHIP,
+            .bo = src->bo,
+            .bo_offset = soff,
+         ));
+         ncrb.add(TPL1_A2D_SRC_TEXTURE_PITCH(CHIP, .pitch = p));
 
-      /*
-       * Emit destination:
-       */
-      emit_blit_buffer_dst(ring, dst, doff, p);
+         /*
+          * Emit destination:
+          */
+         emit_blit_buffer_dst<CHIP>(ncrb, dst, doff, p, FMT6_8_UNORM);
+
+         ncrb.add(GRAS_A2D_SRC_XMIN(CHIP, sshift));
+         ncrb.add(GRAS_A2D_SRC_XMAX(CHIP, sshift + w - 1));
+         ncrb.add(GRAS_A2D_SRC_YMIN(CHIP, 0));
+         ncrb.add(GRAS_A2D_SRC_YMAX(CHIP, 0));
+
+         ncrb.add(GRAS_A2D_DEST_TL(CHIP, .x = dshift));
+         ncrb.add(GRAS_A2D_DEST_BR(CHIP, .x = dshift + w - 1));
+      }
 
       /*
        * Blit command:
        */
-      OUT_REG(ring,
-              A6XX_GRAS_2D_SRC_TL_X(sshift),
-              A6XX_GRAS_2D_SRC_BR_X(sshift + w - 1),
-              A6XX_GRAS_2D_SRC_TL_Y(0),
-              A6XX_GRAS_2D_SRC_BR_Y(0),
-      );
-
-      OUT_PKT4(ring, REG_A6XX_GRAS_2D_DST_TL, 2);
-      OUT_RING(ring, A6XX_GRAS_2D_DST_TL_X(dshift) | A6XX_GRAS_2D_DST_TL_Y(0));
-      OUT_RING(ring, A6XX_GRAS_2D_DST_BR_X(dshift + w - 1) |
-                        A6XX_GRAS_2D_DST_BR_Y(0));
-
-      OUT_PKT7(ring, CP_EVENT_WRITE, 1);
-      OUT_RING(ring, LABEL);
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, ctx->screen->info->a6xx.magic.RB_DBG_ECO_CNTL_blit);
-
-      OUT_PKT7(ring, CP_BLIT, 1);
-      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
-
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, 0); /* RB_DBG_ECO_CNTL */
+      emit_blit_fini<CHIP>(ctx, cs);
    }
+}
+
+template <chip CHIP>
+static void
+clear_ubwc_setup(fd_cs &cs)
+{
+   union pipe_color_union color = {};
+   fd_ncrb<CHIP> ncrb(cs, 18);
+
+   emit_blit_setup<CHIP>(ncrb, PIPE_FORMAT_R8_UNORM, false, &color, 0, ROTATE_0);
+
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_INFO(CHIP));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_SIZE(CHIP));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_BASE(CHIP));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_PITCH(CHIP));
+
+   ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW0());
+   ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW1());
+   ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW2());
+   ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW3());
+
+   ncrb.add(GRAS_A2D_SRC_XMIN(CHIP, 0));
+   ncrb.add(GRAS_A2D_SRC_XMAX(CHIP, 0));
+   ncrb.add(GRAS_A2D_SRC_YMIN(CHIP, 0));
+   ncrb.add(GRAS_A2D_SRC_YMAX(CHIP, 0));
 }
 
 template <chip CHIP>
 static void
 fd6_clear_ubwc(struct fd_batch *batch, struct fd_resource *rsc) assert_dt
 {
-   struct fd_ringbuffer *ring = fd_batch_get_prologue(batch);
-   union pipe_color_union color = {};
+   fd_cs cs(fd_batch_get_prologue(batch));
 
-   emit_blit_setup<CHIP>(ring, PIPE_FORMAT_R8_UNORM, false, &color, 0, ROTATE_0);
-
-   OUT_REG(ring,
-           SP_PS_2D_SRC_INFO(CHIP),
-           SP_PS_2D_SRC_SIZE(CHIP),
-           SP_PS_2D_SRC(CHIP),
-           SP_PS_2D_SRC_PITCH(CHIP),
-   );
-
-   OUT_PKT4(ring, REG_A6XX_RB_2D_SRC_SOLID_C0, 4);
-   OUT_RING(ring, 0x00000000);
-   OUT_RING(ring, 0x00000000);
-   OUT_RING(ring, 0x00000000);
-   OUT_RING(ring, 0x00000000);
-
-   OUT_REG(ring,
-           A6XX_GRAS_2D_SRC_TL_X(0),
-           A6XX_GRAS_2D_SRC_BR_X(0),
-           A6XX_GRAS_2D_SRC_TL_Y(0),
-           A6XX_GRAS_2D_SRC_BR_Y(0),
-   );
+   clear_ubwc_setup<CHIP>(cs);
 
    unsigned size = rsc->layout.slices[0].offset;
    unsigned offset = 0;
@@ -510,48 +533,35 @@ fd6_clear_ubwc(struct fd_batch *batch, struct fd_resource *rsc) assert_dt
       /* width is already aligned to a suitable pitch: */
       const unsigned p = w;
 
-      /*
-       * Emit destination:
-       */
-      emit_blit_buffer_dst(ring, rsc, offset, p);
+      with_ncrb (cs, 6) {
+         /*
+          * Emit destination:
+          */
+         emit_blit_buffer_dst<CHIP>(ncrb, rsc, offset, p, FMT6_8_UNORM);
+
+         ncrb.add(GRAS_A2D_DEST_TL(CHIP, .x = 0,     .y = 0));
+         ncrb.add(GRAS_A2D_DEST_BR(CHIP, .x = w - 1, .y = h - 1));
+      }
 
       /*
        * Blit command:
        */
-
-      OUT_PKT4(ring, REG_A6XX_GRAS_2D_DST_TL, 2);
-      OUT_RING(ring, A6XX_GRAS_2D_DST_TL_X(0) | A6XX_GRAS_2D_DST_TL_Y(0));
-      OUT_RING(ring,
-               A6XX_GRAS_2D_DST_BR_X(w - 1) | A6XX_GRAS_2D_DST_BR_Y(h - 1));
-
-      OUT_PKT7(ring, CP_EVENT_WRITE, 1);
-      OUT_RING(ring, LABEL);
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, batch->ctx->screen->info->a6xx.magic.RB_DBG_ECO_CNTL_blit);
-
-      OUT_PKT7(ring, CP_BLIT, 1);
-      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
-
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, 0); /* RB_DBG_ECO_CNTL */
-
+      emit_blit_fini<CHIP>(batch->ctx, cs);
       offset += w * h;
       size -= w * h;
    }
 
-   fd6_emit_flushes(batch->ctx, ring,
-                    FD6_FLUSH_CCU_COLOR |
-                    FD6_FLUSH_CCU_DEPTH |
-                    FD6_FLUSH_CACHE |
-                    FD6_WAIT_FOR_IDLE);
+   fd6_emit_flushes<CHIP>(batch->ctx, cs,
+                          FD6_FLUSH_CCU_COLOR |
+                          FD6_FLUSH_CCU_DEPTH |
+                          FD6_FLUSH_CACHE |
+                          FD6_WAIT_FOR_IDLE);
 }
 
+/* nregs: 10 */
+template <chip CHIP>
 static void
-emit_blit_dst(struct fd_ringbuffer *ring, struct pipe_resource *prsc,
+emit_blit_dst(fd_ncrb<CHIP> &ncrb, struct pipe_resource *prsc,
               enum pipe_format pfmt, unsigned level, unsigned layer)
 {
    struct fd_resource *dst = fd_resource(prsc);
@@ -560,7 +570,8 @@ emit_blit_dst(struct fd_ringbuffer *ring, struct pipe_resource *prsc,
    enum a6xx_tile_mode tile =
          (enum a6xx_tile_mode)fd_resource_tile_mode(prsc, level);
    enum a3xx_color_swap swap =
-         fd6_color_swap(pfmt, (enum a6xx_tile_mode)dst->layout.tile_mode);
+         fd6_color_swap(pfmt, (enum a6xx_tile_mode)dst->layout.tile_mode,
+                        false);
    uint32_t pitch = fd_resource_pitch(dst, level);
    bool ubwc_enabled = fd_resource_ubwc_enabled(dst, level);
    unsigned off = fd_resource_offset(dst, level, layer);
@@ -568,42 +579,45 @@ emit_blit_dst(struct fd_ringbuffer *ring, struct pipe_resource *prsc,
    if (fmt == FMT6_Z24_UNORM_S8_UINT)
       fmt = FMT6_Z24_UNORM_S8_UINT_AS_R8G8B8A8;
 
-   OUT_REG(ring,
-           A6XX_RB_2D_DST_INFO(
-                 .color_format = fmt,
-                 .tile_mode = tile,
-                 .color_swap = swap,
-                 .flags = ubwc_enabled,
-                 .srgb = util_format_is_srgb(pfmt),
-           ),
-           A6XX_RB_2D_DST(
-                 .bo = dst->bo,
-                 .bo_offset = off,
-           ),
-           A6XX_RB_2D_DST_PITCH(pitch),
-   );
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_INFO(
+      .color_format = fmt,
+      .tile_mode = tile,
+      .color_swap = swap,
+      .flags = ubwc_enabled,
+      .srgb = util_format_is_srgb(pfmt),
+   ));
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_BASE(
+      .bo = dst->bo,
+      .bo_offset = off,
+   ));
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_PITCH(pitch));
 
    if (ubwc_enabled) {
-      OUT_PKT4(ring, REG_A6XX_RB_2D_DST_FLAGS, 6);
-      fd6_emit_flag_reference(ring, dst, level, layer);
-      OUT_RING(ring, 0x00000000);
-      OUT_RING(ring, 0x00000000);
-      OUT_RING(ring, 0x00000000);
+      ncrb.add(A6XX_RB_A2D_DEST_FLAG_BUFFER_BASE(
+         dst->bo, fd_resource_ubwc_offset(dst, level, layer)
+      ));
+      ncrb.add(A6XX_RB_A2D_DEST_FLAG_BUFFER_PITCH(
+         .pitch = fdl_ubwc_pitch(&dst->layout, level),
+         .array_pitch = dst->layout.ubwc_layer_size >> 2,
+      ));
+      ncrb.add(A6XX_RB_A2D_DEST_FLAG_BUFFER_BASE_1());
+      ncrb.add(A6XX_RB_A2D_DEST_FLAG_BUFFER_PITCH_1());
    }
 }
 
+/* nregs: 8 */
 template <chip CHIP>
 static void
-emit_blit_src(struct fd_ringbuffer *ring, const struct pipe_blit_info *info,
+emit_blit_src(fd_ncrb<CHIP> &ncrb, const struct pipe_blit_info *info,
               unsigned layer, unsigned nr_samples)
 {
    struct fd_resource *src = fd_resource(info->src.resource);
    enum a6xx_format sfmt =
-      fd6_texture_format(info->src.format, (enum a6xx_tile_mode)src->layout.tile_mode);
+      fd6_texture_format(info->src.format, (enum a6xx_tile_mode)src->layout.tile_mode, false);
    enum a6xx_tile_mode stile =
       (enum a6xx_tile_mode)fd_resource_tile_mode(info->src.resource, info->src.level);
    enum a3xx_color_swap sswap =
-      fd6_texture_swap(info->src.format, (enum a6xx_tile_mode)src->layout.tile_mode);
+      fd6_texture_swap(info->src.format, (enum a6xx_tile_mode)src->layout.tile_mode, false);
    uint32_t pitch = fd_resource_pitch(src, info->src.level);
    bool subwc_enabled = fd_resource_ubwc_enabled(src, info->src.level);
    unsigned soff = fd_resource_offset(src, info->src.level, layer);
@@ -614,64 +628,42 @@ emit_blit_src(struct fd_ringbuffer *ring, const struct pipe_blit_info *info,
    if (info->src.format == PIPE_FORMAT_A8_UNORM)
       sfmt = FMT6_A8_UNORM;
 
-   OUT_REG(ring,
-           SP_PS_2D_SRC_INFO(
-                 CHIP,
-                 .color_format = sfmt,
-                 .tile_mode = stile,
-                 .color_swap = sswap,
-                 .flags = subwc_enabled,
-                 .srgb  = util_format_is_srgb(info->src.format),
-                 .samples = samples,
-                 .filter = (info->filter == PIPE_TEX_FILTER_LINEAR),
-                 .samples_average = (samples > MSAA_ONE) && !info->sample0_only,
-                 .unk20 = true,
-                 .unk22 = true,
-           ),
-           SP_PS_2D_SRC_SIZE(
-                 CHIP,
-                 .width = width,
-                 .height = height,
-           ),
-           SP_PS_2D_SRC(
-                 CHIP,
-                 .bo = src->bo,
-                 .bo_offset = soff,
-           ),
-           SP_PS_2D_SRC_PITCH(
-                 CHIP,
-                 .pitch = pitch,
-           ),
-   );
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_INFO(CHIP,
+      .color_format = sfmt,
+      .tile_mode = stile,
+      .color_swap = sswap,
+      .flags = subwc_enabled,
+      .srgb  = util_format_is_srgb(info->src.format),
+      .samples = samples,
+      .filter = (info->filter == PIPE_TEX_FILTER_LINEAR),
+      .samples_average = (samples > MSAA_ONE) && !info->sample0_only,
+      .unk20 = true,
+      .unk22 = true,
+   ));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_SIZE(CHIP, .width = width, .height = height));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_BASE(CHIP, .bo = src->bo, .bo_offset = soff));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_PITCH(CHIP, .pitch = pitch));
 
    if (subwc_enabled && fd_resource_ubwc_enabled(src, info->src.level)) {
-      OUT_REG(ring,
-              SP_PS_2D_SRC_FLAGS(
-                    CHIP,
-                    .bo = src->bo,
-                    .bo_offset = fd_resource_ubwc_offset(src, info->src.level, layer),
-              ),
-              SP_PS_2D_SRC_FLAGS_PITCH(
-                    CHIP, fdl_ubwc_pitch(&src->layout, info->src.level)),
-      );
+      ncrb.add(TPL1_A2D_SRC_TEXTURE_FLAG_BASE(CHIP,
+         .bo = src->bo,
+         .bo_offset = fd_resource_ubwc_offset(src, info->src.level, layer),
+      ));
+      ncrb.add(TPL1_A2D_SRC_TEXTURE_FLAG_PITCH(CHIP,
+         fdl_ubwc_pitch(&src->layout, info->src.level),
+      ));
    }
 }
 
 template <chip CHIP>
 static void
-emit_blit_texture(struct fd_context *ctx, struct fd_ringbuffer *ring,
-                  const struct pipe_blit_info *info)
+emit_blit_texture_setup(fd_cs &cs, const struct pipe_blit_info *info)
 {
    const struct pipe_box *sbox = &info->src.box;
    const struct pipe_box *dbox = &info->dst.box;
    struct fd_resource *dst;
    int sx1, sy1, sx2, sy2;
    int dx1, dy1, dx2, dy2;
-
-   if (DEBUG_BLIT) {
-      fprintf(stderr, "texture blit: ");
-      dump_blit_info(info);
-   }
 
    dst = fd_resource(info->dst.resource);
 
@@ -696,58 +688,70 @@ emit_blit_texture(struct fd_context *ctx, struct fd_ringbuffer *ring,
 
    enum a6xx_rotation rotate = rotates[mirror_y][mirror_x];
 
-   OUT_REG(ring,
-           A6XX_GRAS_2D_SRC_TL_X(MIN2(sx1, sx2)),
-           A6XX_GRAS_2D_SRC_BR_X(MAX2(sx1, sx2) - 1),
-           A6XX_GRAS_2D_SRC_TL_Y(MIN2(sy1, sy2)),
-           A6XX_GRAS_2D_SRC_BR_Y(MAX2(sy1, sy2) - 1),
-   );
+   fd_ncrb<CHIP> ncrb(cs, 13);
 
-   OUT_REG(ring,
-           A6XX_GRAS_2D_DST_TL(.x = MIN2(dx1, dx2),
-                               .y = MIN2(dy1, dy2)),
-           A6XX_GRAS_2D_DST_BR(.x = MAX2(dx1, dx2) - 1,
-                               .y = MAX2(dy1, dy2) - 1),
-   );
+   ncrb.add(GRAS_A2D_SRC_XMIN(CHIP, MIN2(sx1, sx2)));
+   ncrb.add(GRAS_A2D_SRC_XMAX(CHIP, MAX2(sx1, sx2) - 1));
+   ncrb.add(GRAS_A2D_SRC_YMIN(CHIP, MIN2(sy1, sy2)));
+   ncrb.add(GRAS_A2D_SRC_YMAX(CHIP, MAX2(sy1, sy2) - 1));
+
+   ncrb.add(GRAS_A2D_DEST_TL(CHIP, .x = MIN2(dx1, dx2), .y = MIN2(dy1, dy2)));
+   ncrb.add(GRAS_A2D_DEST_BR(CHIP, .x = MAX2(dx1, dx2) - 1, .y = MAX2(dy1, dy2) - 1));
 
    if (info->scissor_enable) {
-      OUT_PKT4(ring, REG_A6XX_GRAS_2D_RESOLVE_CNTL_1, 2);
-      OUT_RING(ring, A6XX_GRAS_2D_RESOLVE_CNTL_1_X(info->scissor.minx) |
-                        A6XX_GRAS_2D_RESOLVE_CNTL_1_Y(info->scissor.miny));
-      OUT_RING(ring, A6XX_GRAS_2D_RESOLVE_CNTL_1_X(info->scissor.maxx - 1) |
-                        A6XX_GRAS_2D_RESOLVE_CNTL_1_Y(info->scissor.maxy - 1));
+      ncrb.add(GRAS_A2D_SCISSOR_TL(CHIP,
+         .x = info->scissor.minx,
+         .y = info->scissor.miny,
+      ));
+      ncrb.add(GRAS_A2D_SCISSOR_BR(CHIP,
+         .x = info->scissor.maxx - 1,
+         .y = info->scissor.maxy - 1,
+      ));
    }
 
-   emit_blit_setup<CHIP>(ring, info->dst.format, info->scissor_enable, NULL, 0, rotate);
+   emit_blit_setup<CHIP>(ncrb, info->dst.format, info->scissor_enable, NULL, 0, rotate);
+}
+
+template <chip CHIP>
+static void
+emit_blit_texture(struct fd_context *ctx, fd_cs &cs, const struct pipe_blit_info *info)
+{
+   const struct pipe_box *sbox = &info->src.box;
+   const struct pipe_box *dbox = &info->dst.box;
+   struct fd_resource *dst;
+
+   if (DEBUG_BLIT) {
+      fprintf(stderr, "texture blit: ");
+      dump_blit_info(info);
+   }
+
+   emit_blit_texture_setup<CHIP>(cs, info);
+
+   dst = fd_resource(info->dst.resource);
+
+   uint32_t nr_samples = fd_resource_nr_samples(&dst->b.b);
 
    for (unsigned i = 0; i < info->dst.box.depth; i++) {
+      with_ncrb (cs, 18) {
+         emit_blit_src<CHIP>(ncrb, info, sbox->z + i, nr_samples);
+         emit_blit_dst(ncrb, info->dst.resource, info->dst.format, info->dst.level,
+                       dbox->z + i);
+      }
 
-      emit_blit_src<CHIP>(ring, info, sbox->z + i, nr_samples);
-      emit_blit_dst(ring, info->dst.resource, info->dst.format, info->dst.level,
-                    dbox->z + i);
-
-      /*
-       * Blit command:
-       */
-      OUT_PKT7(ring, CP_EVENT_WRITE, 1);
-      OUT_RING(ring, LABEL);
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, ctx->screen->info->a6xx.magic.RB_DBG_ECO_CNTL_blit);
-
-      OUT_PKT7(ring, CP_BLIT, 1);
-      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
-
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, 0); /* RB_DBG_ECO_CNTL */
+      emit_blit_fini<CHIP>(ctx, cs);
    }
 }
 
+static inline uint32_t
+float_to_sbyte(float f)
+{
+   return util_iround(CLAMP(f, -1.0f, 1.0f) * 0x7f) & 0xff;
+}
+
+/* nregs: 4 */
+template <chip CHIP>
 static void
-emit_clear_color(struct fd_ringbuffer *ring, enum pipe_format pfmt,
+emit_clear_color(fd_ncrb<CHIP> &ncrb, enum pipe_format pfmt,
                  union pipe_color_union *color)
 {
    switch (pfmt) {
@@ -766,40 +770,65 @@ emit_clear_color(struct fd_ringbuffer *ring, enum pipe_format pfmt,
       break;
    }
 
-   OUT_PKT4(ring, REG_A6XX_RB_2D_SRC_SOLID_C0, 4);
    switch (fd6_ifmt(fd6_color_format(pfmt, TILE6_LINEAR))) {
    case R2D_UNORM8:
    case R2D_UNORM8_SRGB:
       /* The r2d ifmt is badly named, it also covers the signed case: */
       if (util_format_is_snorm(pfmt)) {
-         OUT_RING(ring, float_to_byte_tex(color->f[0]));
-         OUT_RING(ring, float_to_byte_tex(color->f[1]));
-         OUT_RING(ring, float_to_byte_tex(color->f[2]));
-         OUT_RING(ring, float_to_byte_tex(color->f[3]));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW0(float_to_sbyte(color->f[0])));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW1(float_to_sbyte(color->f[1])));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW2(float_to_sbyte(color->f[2])));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW3(float_to_sbyte(color->f[3])));
       } else {
-         OUT_RING(ring, float_to_ubyte(color->f[0]));
-         OUT_RING(ring, float_to_ubyte(color->f[1]));
-         OUT_RING(ring, float_to_ubyte(color->f[2]));
-         OUT_RING(ring, float_to_ubyte(color->f[3]));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW0(float_to_ubyte(color->f[0])));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW1(float_to_ubyte(color->f[1])));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW2(float_to_ubyte(color->f[2])));
+         ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW3(float_to_ubyte(color->f[3])));
       }
       break;
    case R2D_FLOAT16:
-      OUT_RING(ring, _mesa_float_to_half(color->f[0]));
-      OUT_RING(ring, _mesa_float_to_half(color->f[1]));
-      OUT_RING(ring, _mesa_float_to_half(color->f[2]));
-      OUT_RING(ring, _mesa_float_to_half(color->f[3]));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW0(_mesa_float_to_half(color->f[0])));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW1(_mesa_float_to_half(color->f[1])));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW2(_mesa_float_to_half(color->f[2])));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW3(_mesa_float_to_half(color->f[3])));
       break;
    case R2D_FLOAT32:
    case R2D_INT32:
    case R2D_INT16:
    case R2D_INT8:
    default:
-      OUT_RING(ring, color->ui[0]);
-      OUT_RING(ring, color->ui[1]);
-      OUT_RING(ring, color->ui[2]);
-      OUT_RING(ring, color->ui[3]);
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW0(color->ui[0]));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW1(color->ui[1]));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW2(color->ui[2]));
+      ncrb.add(A6XX_RB_A2D_CLEAR_COLOR_DW3(color->ui[3]));
       break;
    }
+}
+
+template <chip CHIP>
+static void
+clear_lrz_setup(fd_cs &cs, struct fd_resource *zsbuf, struct fd_bo *lrz, double depth)
+{
+   fd_ncrb<CHIP> ncrb(cs, 15);
+
+   ncrb.add(GRAS_A2D_DEST_TL(CHIP, .x = 0, .y = 0));
+   ncrb.add(GRAS_A2D_DEST_BR(CHIP,
+      .x = zsbuf->lrz_layout.lrz_pitch - 1,
+      .y = zsbuf->lrz_layout.lrz_height - 1,
+   ));
+
+   union pipe_color_union clear_color = { .f = {depth} };
+
+   emit_clear_color<CHIP>(ncrb, PIPE_FORMAT_Z16_UNORM, &clear_color);
+   emit_blit_setup<CHIP>(ncrb, PIPE_FORMAT_Z16_UNORM, false, &clear_color, 0, ROTATE_0);
+
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_INFO(
+      .color_format = FMT6_16_UNORM,
+      .tile_mode = TILE6_LINEAR,
+      .color_swap = WZYX,
+   ));
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_BASE(.bo = lrz));
+   ncrb.add(A6XX_RB_A2D_DEST_BUFFER_PITCH(zsbuf->lrz_layout.lrz_pitch * 2));
 }
 
 template <chip CHIP>
@@ -807,7 +836,7 @@ void
 fd6_clear_lrz(struct fd_batch *batch, struct fd_resource *zsbuf,
               struct fd_bo *lrz, double depth)
 {
-   struct fd_ringbuffer *ring = fd_batch_get_prologue(batch);
+   fd_cs cs(fd_batch_get_prologue(batch));
 
    if (DEBUG_BLIT) {
       fprintf(stderr, "lrz clear:\ndst resource: ");
@@ -815,38 +844,16 @@ fd6_clear_lrz(struct fd_batch *batch, struct fd_resource *zsbuf,
       fprintf(stderr, "\n");
    }
 
-   OUT_PKT4(ring, REG_A6XX_GRAS_2D_DST_TL, 2);
-   OUT_RING(ring, A6XX_GRAS_2D_DST_TL_X(0) | A6XX_GRAS_2D_DST_TL_Y(0));
-   OUT_RING(ring, A6XX_GRAS_2D_DST_BR_X(zsbuf->lrz_width - 1) |
-                     A6XX_GRAS_2D_DST_BR_Y(zsbuf->lrz_height - 1));
-
-   union pipe_color_union clear_color = { .f = {depth} };
-
-   emit_clear_color(ring, PIPE_FORMAT_Z16_UNORM, &clear_color);
-   emit_blit_setup<CHIP>(ring, PIPE_FORMAT_Z16_UNORM, false, &clear_color, 0, ROTATE_0);
-
-   OUT_REG(ring,
-           A6XX_RB_2D_DST_INFO(
-                 .color_format = FMT6_16_UNORM,
-                 .tile_mode = TILE6_LINEAR,
-                 .color_swap = WZYX,
-           ),
-           A6XX_RB_2D_DST(
-                 .bo = lrz,
-           ),
-           A6XX_RB_2D_DST_PITCH(zsbuf->lrz_pitch * 2),
-   );
+   clear_lrz_setup<CHIP>(cs, zsbuf, lrz, depth);
 
    /*
     * Blit command:
     */
 
-   OUT_PKT7(ring, CP_BLIT, 1);
-   OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
+   fd_pkt7(cs, CP_BLIT, 1)
+      .add(CP_BLIT_0(.op = BLIT_OP_SCALE));
 }
-
-template void fd6_clear_lrz<A6XX>(struct fd_batch *batch, struct fd_resource *zsbuf, struct fd_bo *lrz, double depth);
-template void fd6_clear_lrz<A7XX>(struct fd_batch *batch, struct fd_resource *zsbuf, struct fd_bo *lrz, double depth);
+FD_GENX(fd6_clear_lrz);
 
 /**
  * Handle conversion of clear color
@@ -854,7 +861,25 @@ template void fd6_clear_lrz<A7XX>(struct fd_batch *batch, struct fd_resource *zs
 static union pipe_color_union
 convert_color(enum pipe_format format, union pipe_color_union *pcolor)
 {
+   const struct util_format_description *desc = util_format_description(format);
    union pipe_color_union color = *pcolor;
+
+   for (unsigned i = 0; i < 4; i++) {
+      unsigned channel = desc->swizzle[i];
+
+      if (desc->channel[channel].normalized)
+         continue;
+
+      switch (desc->channel[channel].type) {
+      case UTIL_FORMAT_TYPE_SIGNED:
+         color.i[i] = MAX2(color.i[i], -(1<<(desc->channel[channel].size - 1)));
+         color.i[i] = MIN2(color.i[i], (1 << (desc->channel[channel].size - 1)) - 1);
+         break;
+      case UTIL_FORMAT_TYPE_UNSIGNED:
+         color.ui[i] = MIN2(color.ui[i], BITFIELD_MASK(desc->channel[channel].size));
+         break;
+      }
+   }
 
    /* For solid-fill blits, the hw isn't going to convert from
     * linear to srgb for us:
@@ -869,14 +894,164 @@ convert_color(enum pipe_format format, union pipe_color_union *pcolor)
          color.f[i] = CLAMP(color.f[i], -1.0f, 1.0f);
    }
 
-   /* Note that float_to_ubyte() already clamps, for the unorm case */
-
    return color;
 }
 
 template <chip CHIP>
+static void
+fd6_clear_buffer(struct pipe_context *pctx,
+                 struct pipe_resource *prsc,
+                 unsigned offset, unsigned size,
+                 const void *clear_value, int clear_value_size)
+{
+   enum pipe_format dst_fmt;
+   union pipe_color_union color;
+
+   switch (clear_value_size) {
+   case 16:
+      dst_fmt = PIPE_FORMAT_R32G32B32A32_UINT;
+      memcpy(&color.ui, clear_value, 16);
+      break;
+   case 8:
+      dst_fmt = PIPE_FORMAT_R32G32_UINT;
+      memcpy(&color.ui, clear_value, 8);
+      memset(&color.ui[2], 0, 8);
+      break;
+   case 4:
+      dst_fmt = PIPE_FORMAT_R32_UINT;
+      memcpy(&color.ui, clear_value, 4);
+      memset(&color.ui[1], 0, 12);
+      break;
+   case 2:
+      dst_fmt = PIPE_FORMAT_R16_UINT;
+      color.ui[0] = *(unsigned short *)clear_value;
+      memset(&color.ui[1], 0, 12);
+      break;
+   case 1:
+      dst_fmt = PIPE_FORMAT_R8_UINT;
+      color.ui[0] = *(unsigned char *)clear_value;
+      memset(&color.ui[1], 0, 12);
+      break;
+   default:
+      dst_fmt = PIPE_FORMAT_NONE;
+      break;
+   }
+
+   /* unsupported clear_value_size and when alignment doesn't match, fallback */
+   if ((dst_fmt == PIPE_FORMAT_NONE) ||
+       (offset % clear_value_size) ||
+       (size % clear_value_size)) {
+      u_default_clear_buffer(pctx, prsc, offset, size, clear_value, clear_value_size);
+      return;
+   }
+
+   if (DEBUG_BLIT) {
+      fprintf(stderr, "buffer clear:\ndst resource: ");
+      util_dump_resource(stderr, prsc);
+      fprintf(stderr, "\n");
+   }
+
+   struct fd_context *ctx = fd_context(pctx);
+   struct fd_resource *rsc = fd_resource(prsc);
+   struct fd_batch *batch = fd_bc_alloc_batch(ctx, true);
+   fd_cs cs(batch->draw);
+
+   fd_screen_lock(ctx->screen);
+   fd_batch_resource_write(batch, rsc);
+   fd_screen_unlock(ctx->screen);
+
+   assert(!batch->flushed);
+
+   /* Marking the batch as needing flush must come after the batch
+    * dependency tracking (resource_read()/resource_write()), as that
+    * can trigger a flush
+    */
+   fd_batch_needs_flush(batch);
+
+   fd_batch_update_queries(batch);
+
+   emit_setup<CHIP>(batch->ctx, cs);
+
+   with_ncrb (cs, 9) {
+      emit_clear_color(ncrb, dst_fmt, &color);
+      emit_blit_setup<CHIP>(ncrb, dst_fmt, false, &color, 0, ROTATE_0);
+   }
+
+   /*
+    * Buffers can have dimensions bigger than max width (0x4000), so
+    * remap into multiple 1d blits to fit within max dimension
+    *
+    * Additionally, the low 6 bits of DST addresses need to be zero (ie.
+    * address aligned to 64 (0x40)) so we need to shift dst x1/x2 to make
+    * up the difference, on top of already splitting up the blit so width
+    * isn't > 16k.
+    */
+
+    /* # of pixels, ie blocks of clear_value_size: */
+   unsigned blocks = size / clear_value_size;
+
+   enum a6xx_format fmt = fd6_color_format(dst_fmt, TILE6_LINEAR);
+
+   while (blocks) {
+      uint32_t dst_x = (offset & 0x3f) / clear_value_size;
+      uint32_t doff  = offset & ~0x3f;
+      uint32_t width = MIN2(blocks, 0x4000 - dst_x);
+
+      with_ncrb (cs, 6) {
+         emit_blit_buffer_dst(ncrb, rsc, doff, 0, fmt);
+
+         ncrb.add(GRAS_A2D_DEST_TL(CHIP, .x = dst_x));
+         ncrb.add(GRAS_A2D_DEST_BR(CHIP, .x = dst_x + width - 1));
+      }
+
+      emit_blit_fini<CHIP>(ctx, cs);
+
+      offset += width * clear_value_size;
+      blocks -= width;
+   }
+
+   fd6_emit_flushes<CHIP>(batch->ctx, cs,
+                          FD6_FLUSH_CCU_COLOR |
+                          FD6_FLUSH_CCU_DEPTH |
+                          FD6_FLUSH_CACHE |
+                          FD6_WAIT_FOR_IDLE);
+
+   fd_batch_flush(batch);
+   fd_batch_reference(&batch, NULL);
+
+   /* Acc query state will have been dirtied by our fd_batch_update_queries, so
+    * the ctx->batch may need to turn its queries back on.
+    */
+   fd_context_dirty(ctx, FD_DIRTY_QUERY);
+}
+
+template <chip CHIP>
+static void
+clear_surface_setup(fd_cs &cs, struct pipe_surface *psurf,
+                    const struct pipe_box *box2d, union pipe_color_union *color,
+                    uint32_t unknown_8c01)
+{
+   uint32_t nr_samples = fd_resource_nr_samples(psurf->texture);
+   fd_ncrb<CHIP> ncrb(cs, 11);
+
+   ncrb.add(GRAS_A2D_DEST_TL(CHIP,
+      .x = box2d->x * nr_samples,
+      .y = box2d->y,
+   ));
+   ncrb.add(GRAS_A2D_DEST_BR(CHIP,
+      .x = (box2d->x + box2d->width) * nr_samples - 1,
+      .y = box2d->y + box2d->height - 1,
+   ));
+
+   union pipe_color_union clear_color = convert_color(psurf->format, color);
+
+   emit_clear_color(ncrb, psurf->format, &clear_color);
+   emit_blit_setup<CHIP>(ncrb, psurf->format, false, &clear_color, unknown_8c01, ROTATE_0);
+}
+
+template <chip CHIP>
 void
-fd6_clear_surface(struct fd_context *ctx, struct fd_ringbuffer *ring,
+fd6_clear_surface(struct fd_context *ctx, fd_cs &cs,
                   struct pipe_surface *psurf, const struct pipe_box *box2d,
                   union pipe_color_union *color, uint32_t unknown_8c01)
 {
@@ -886,48 +1061,16 @@ fd6_clear_surface(struct fd_context *ctx, struct fd_ringbuffer *ring,
       fprintf(stderr, "\n");
    }
 
-   uint32_t nr_samples = fd_resource_nr_samples(psurf->texture);
-   OUT_PKT4(ring, REG_A6XX_GRAS_2D_DST_TL, 2);
-   OUT_RING(ring, A6XX_GRAS_2D_DST_TL_X(box2d->x * nr_samples) |
-                     A6XX_GRAS_2D_DST_TL_Y(box2d->y));
-   OUT_RING(ring, A6XX_GRAS_2D_DST_BR_X((box2d->x + box2d->width) * nr_samples - 1) |
-                     A6XX_GRAS_2D_DST_BR_Y(box2d->y + box2d->height - 1));
+   clear_surface_setup<CHIP>(cs, psurf, box2d, color, unknown_8c01);
 
-   union pipe_color_union clear_color = convert_color(psurf->format, color);
+   for (unsigned i = psurf->first_layer; i <= psurf->last_layer; i++) {
+      with_ncrb (cs, 10)
+         emit_blit_dst(ncrb, psurf->texture, psurf->format, psurf->level, i);
 
-   emit_clear_color(ring, psurf->format, &clear_color);
-   emit_blit_setup<CHIP>(ring, psurf->format, false, &clear_color, unknown_8c01, ROTATE_0);
-
-   for (unsigned i = psurf->u.tex.first_layer; i <= psurf->u.tex.last_layer;
-        i++) {
-      emit_blit_dst(ring, psurf->texture, psurf->format, psurf->u.tex.level, i);
-
-      /*
-       * Blit command:
-       */
-      OUT_PKT7(ring, CP_EVENT_WRITE, 1);
-      OUT_RING(ring, LABEL);
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, ctx->screen->info->a6xx.magic.RB_DBG_ECO_CNTL_blit);
-
-      OUT_PKT7(ring, CP_BLIT, 1);
-      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
-
-      OUT_WFI5(ring);
-
-      OUT_PKT4(ring, REG_A6XX_RB_DBG_ECO_CNTL, 1);
-      OUT_RING(ring, 0); /* RB_DBG_ECO_CNTL */
+      emit_blit_fini<CHIP>(ctx, cs);
    }
 }
-
-template void fd6_clear_surface<A6XX>(struct fd_context *ctx, struct fd_ringbuffer *ring,
-                                      struct pipe_surface *psurf, const struct pipe_box *box2d,
-                                      union pipe_color_union *color, uint32_t unknown_8c01);
-template void fd6_clear_surface<A7XX>(struct fd_context *ctx, struct fd_ringbuffer *ring,
-                                      struct pipe_surface *psurf, const struct pipe_box *box2d,
-                                      union pipe_color_union *color, uint32_t unknown_8c01);
+FD_GENX(fd6_clear_surface);
 
 template <chip CHIP>
 static void
@@ -988,27 +1131,25 @@ fd6_clear_texture(struct pipe_context *pctx, struct pipe_resource *prsc,
 
    fd_batch_update_queries(batch);
 
-   emit_setup(batch);
+   fd_cs cs(batch->draw);
+
+   emit_setup<CHIP>(batch->ctx, cs);
 
    struct pipe_surface surf = {
          .format = prsc->format,
+         .first_layer = box->z,
+         .last_layer = box->depth + box->z - 1,
+         .level = level,
          .texture = prsc,
-         .u = {
-               .tex = {
-                     .level = level,
-                     .first_layer = box->z,
-                     .last_layer = box->depth + box->z - 1,
-               },
-         },
    };
 
-   fd6_clear_surface<CHIP>(ctx, batch->draw, &surf, box, &color, 0);
+   fd6_clear_surface<CHIP>(ctx, cs, &surf, box, &color, 0);
 
-   fd6_emit_flushes(batch->ctx, batch->draw,
-                    FD6_FLUSH_CCU_COLOR |
-                    FD6_FLUSH_CCU_DEPTH |
-                    FD6_FLUSH_CACHE |
-                    FD6_WAIT_FOR_IDLE);
+   fd6_emit_flushes<CHIP>(batch->ctx, cs,
+                          FD6_FLUSH_CCU_COLOR |
+                          FD6_FLUSH_CCU_DEPTH |
+                          FD6_FLUSH_CACHE |
+                          FD6_WAIT_FOR_IDLE);
 
    fd_batch_flush(batch);
    fd_batch_reference(&batch, NULL);
@@ -1020,91 +1161,83 @@ fd6_clear_texture(struct pipe_context *pctx, struct pipe_resource *prsc,
 }
 
 template <chip CHIP>
-void
-fd6_resolve_tile(struct fd_batch *batch, struct fd_ringbuffer *ring,
-                 uint32_t base, struct pipe_surface *psurf, uint32_t unknown_8c01)
+static void
+resolve_tile_setup(struct fd_batch *batch, fd_cs &cs, uint32_t base,
+                   struct pipe_surface *psurf, uint32_t unknown_8c01)
 {
    const struct fd_gmem_stateobj *gmem = batch->gmem_state;
    uint64_t gmem_base = batch->ctx->screen->gmem_base + base;
    uint32_t gmem_pitch = gmem->bin_w * batch->framebuffer.samples *
                          util_format_get_blocksize(psurf->format);
+   unsigned width = pipe_surface_width(psurf);
+   unsigned height = pipe_surface_height(psurf);
+   fd_ncrb<CHIP> ncrb(cs, 26);
 
-   OUT_PKT4(ring, REG_A6XX_GRAS_2D_DST_TL, 2);
-   OUT_RING(ring, A6XX_GRAS_2D_DST_TL_X(0) | A6XX_GRAS_2D_DST_TL_Y(0));
-   OUT_RING(ring, A6XX_GRAS_2D_DST_BR_X(psurf->width - 1) |
-                     A6XX_GRAS_2D_DST_BR_Y(psurf->height - 1));
+   ncrb.add(GRAS_A2D_DEST_TL(CHIP, .x = 0, .y = 0));
+   ncrb.add(GRAS_A2D_DEST_BR(CHIP, .x = width - 1, .y = height - 1));
 
-   OUT_REG(ring,
-           A6XX_GRAS_2D_SRC_TL_X(0),
-           A6XX_GRAS_2D_SRC_BR_X(psurf->width - 1),
-           A6XX_GRAS_2D_SRC_TL_Y(0),
-           A6XX_GRAS_2D_SRC_BR_Y(psurf->height - 1),
-   );
+   ncrb.add(GRAS_A2D_SRC_XMIN(CHIP, 0));
+   ncrb.add(GRAS_A2D_SRC_XMAX(CHIP, width - 1));
+   ncrb.add(GRAS_A2D_SRC_YMIN(CHIP, 0));
+   ncrb.add(GRAS_A2D_SRC_YMAX(CHIP, height - 1));
 
    /* Enable scissor bit, which will take into account the window scissor
     * which is set per-tile
     */
-   emit_blit_setup<CHIP>(ring, psurf->format, true, NULL, unknown_8c01, ROTATE_0);
+   emit_blit_setup<CHIP>(ncrb, psurf->format, true, NULL, unknown_8c01, ROTATE_0);
 
    /* We shouldn't be using GMEM in the layered rendering case: */
-   assert(psurf->u.tex.first_layer == psurf->u.tex.last_layer);
+   assert(psurf->first_layer == psurf->last_layer);
 
-   emit_blit_dst(ring, psurf->texture, psurf->format, psurf->u.tex.level,
-                 psurf->u.tex.first_layer);
+   emit_blit_dst(ncrb, psurf->texture, psurf->format, psurf->level,
+                 psurf->first_layer);
 
    enum a6xx_format sfmt = fd6_color_format(psurf->format, TILE6_LINEAR);
    enum a3xx_msaa_samples samples = fd_msaa_samples(batch->framebuffer.samples);
 
-   OUT_REG(ring,
-           SP_PS_2D_SRC_INFO(
-                 CHIP,
-                 .color_format = sfmt,
-                 .tile_mode = TILE6_2,
-                 .color_swap = WZYX,
-                 .srgb = util_format_is_srgb(psurf->format),
-                 .samples = samples,
-                 .samples_average = samples > MSAA_ONE,
-                 .unk20 = true,
-                 .unk22 = true,
-           ),
-           SP_PS_2D_SRC_SIZE(
-                 CHIP,
-                 .width = psurf->width,
-                 .height = psurf->height,
-           ),
-           SP_PS_2D_SRC(
-                 CHIP,
-                 .qword = gmem_base,
-           ),
-           SP_PS_2D_SRC_PITCH(
-                 CHIP,
-                 .pitch = gmem_pitch,
-           ),
-   );
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_INFO(CHIP,
+      .color_format = sfmt,
+      .tile_mode = TILE6_2,
+      .color_swap = WZYX,
+      .srgb = util_format_is_srgb(psurf->format),
+      .samples = samples,
+      .samples_average = samples > MSAA_ONE,
+      .unk20 = true,
+      .unk22 = true,
+   ));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_SIZE(CHIP,
+      .width = width,
+      .height = height,
+   ));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_BASE(CHIP, .qword = gmem_base));
+   ncrb.add(TPL1_A2D_SRC_TEXTURE_PITCH(CHIP, .pitch = gmem_pitch));
+}
+
+template <chip CHIP>
+void
+fd6_resolve_tile(struct fd_batch *batch, fd_cs &cs, uint32_t base,
+                 struct pipe_surface *psurf, uint32_t unknown_8c01)
+{
+   resolve_tile_setup<CHIP>(batch, cs, base, psurf, unknown_8c01);
 
    /* sync GMEM writes with CACHE. */
-   fd6_cache_inv(batch, ring);
+   fd6_cache_inv<CHIP>(batch->ctx, cs);
 
    /* Wait for CACHE_INVALIDATE to land */
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
-   OUT_PKT7(ring, CP_BLIT, 1);
-   OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
+   fd_pkt7(cs, CP_BLIT, 1)
+      .add(CP_BLIT_0(.op = BLIT_OP_SCALE));
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    /* CP_BLIT writes to the CCU, unlike CP_EVENT_WRITE::BLIT which writes to
     * sysmem, and we generally assume that GMEM renderpasses leave their
     * results in sysmem, so we need to flush manually here.
     */
-   fd6_emit_flushes(batch->ctx, ring,
-                    FD6_FLUSH_CCU_COLOR | FD6_WAIT_FOR_IDLE);
+   fd6_emit_flushes<CHIP>(batch->ctx, cs, FD6_FLUSH_CCU_COLOR | FD6_WAIT_FOR_IDLE);
 }
-
-template void fd6_resolve_tile<A6XX>(struct fd_batch *batch, struct fd_ringbuffer *ring,
-                                     uint32_t base, struct pipe_surface *psurf, uint32_t unknown_8c01);
-template void fd6_resolve_tile<A7XX>(struct fd_batch *batch, struct fd_ringbuffer *ring,
-                                     uint32_t base, struct pipe_surface *psurf, uint32_t unknown_8c01);
+FD_GENX(fd6_resolve_tile);
 
 template <chip CHIP>
 static bool
@@ -1143,32 +1276,34 @@ handle_rgba_blit(struct fd_context *ctx, const struct pipe_blit_info *info)
 
    fd_batch_update_queries(batch);
 
-   emit_setup(batch);
+   fd_cs cs(batch->draw);
+
+   emit_setup<CHIP>(batch->ctx, cs);
 
    DBG_BLIT(info, batch);
 
-   trace_start_blit(&batch->trace, batch->draw, info->src.resource->target,
+   trace_start_blit(&batch->trace, cs.ring(), info->src.resource->target,
                     info->dst.resource->target);
 
    if ((info->src.resource->target == PIPE_BUFFER) &&
        (info->dst.resource->target == PIPE_BUFFER)) {
       assert(src->layout.tile_mode == TILE6_LINEAR);
       assert(dst->layout.tile_mode == TILE6_LINEAR);
-      emit_blit_buffer<CHIP>(ctx, batch->draw, info);
+      emit_blit_buffer<CHIP>(ctx, cs, info);
    } else {
       /* I don't *think* we need to handle blits between buffer <-> !buffer */
       assert(info->src.resource->target != PIPE_BUFFER);
       assert(info->dst.resource->target != PIPE_BUFFER);
-      emit_blit_texture<CHIP>(ctx, batch->draw, info);
+      emit_blit_texture<CHIP>(ctx, cs, info);
    }
 
-   trace_end_blit(&batch->trace, batch->draw);
+   trace_end_blit(&batch->trace, cs.ring());
 
-   fd6_emit_flushes(batch->ctx, batch->draw,
-                    FD6_FLUSH_CCU_COLOR |
-                    FD6_FLUSH_CCU_DEPTH |
-                    FD6_FLUSH_CACHE |
-                    FD6_WAIT_FOR_IDLE);
+   fd6_emit_flushes<CHIP>(batch->ctx, cs,
+                          FD6_FLUSH_CCU_COLOR |
+                          FD6_FLUSH_CCU_DEPTH |
+                          FD6_FLUSH_CACHE |
+                          FD6_WAIT_FOR_IDLE);
 
    fd_batch_flush(batch);
    fd_batch_reference(&batch, NULL);
@@ -1216,8 +1351,7 @@ handle_zs_blit(struct fd_context *ctx,
       dump_blit_info(info);
    }
 
-   if (info->src.format != info->dst.format)
-      return false;
+   fail_if(info->src.format != info->dst.format);
 
    struct fd_resource *src = fd_resource(info->src.resource);
    struct fd_resource *dst = fd_resource(info->dst.resource);
@@ -1362,14 +1496,13 @@ handle_snorm_copy_blit(struct fd_context *ctx,
    assert_dt
 {
    /* If we're interpolating the pixels, we can't just treat the values as unorm. */
-   if (info->filter == PIPE_TEX_FILTER_LINEAR)
-      return false;
+   fail_if(info->filter == PIPE_TEX_FILTER_LINEAR);
 
    struct pipe_blit_info blit = *info;
 
    blit.src.format = blit.dst.format = util_format_snorm_to_unorm(info->src.format);
 
-   return do_rewritten_blit<CHIP>(ctx, &blit);
+   return handle_rgba_blit<CHIP>(ctx, &blit);
 }
 
 template <chip CHIP>
@@ -1403,13 +1536,26 @@ fd6_blitter_init(struct pipe_context *pctx)
    if (FD_DBG(NOBLIT))
       return;
 
+   pctx->clear_buffer = fd6_clear_buffer<CHIP>;
    pctx->clear_texture = fd6_clear_texture<CHIP>;
    ctx->blit = fd6_blit<CHIP>;
 }
+FD_GENX(fd6_blitter_init);
 
-/* Teach the compiler about needed variants: */
-template void fd6_blitter_init<A6XX>(struct pipe_context *pctx);
-template void fd6_blitter_init<A7XX>(struct pipe_context *pctx);
+unsigned
+fd6_tile_mode_for_format(enum pipe_format pfmt)
+{
+   if (!util_is_power_of_two_nonzero(util_format_get_blocksize(pfmt)))
+      return TILE6_LINEAR;
+
+   /* basically just has to be a format we can blit, so uploads/downloads
+    * via linear staging buffer works:
+    */
+   if (ok_format(pfmt))
+      return TILE6_3;
+
+   return TILE6_LINEAR;
+}
 
 unsigned
 fd6_tile_mode(const struct pipe_resource *tmpl)
@@ -1421,11 +1567,5 @@ fd6_tile_mode(const struct pipe_resource *tmpl)
          !util_format_is_depth_or_stencil(tmpl->format))
       return TILE6_LINEAR;
 
-   /* basically just has to be a format we can blit, so uploads/downloads
-    * via linear staging buffer works:
-    */
-   if (ok_format(tmpl->format))
-      return TILE6_3;
-
-   return TILE6_LINEAR;
+   return fd6_tile_mode_for_format(tmpl->format);
 }

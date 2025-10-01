@@ -13,10 +13,11 @@
 
 #include "vn_common.h"
 
-#include "vn_feedback.h"
-
 struct vn_queue {
    struct vn_queue_base base;
+
+   /* emulated queue shares base queue id and ring_idx with another queue */
+   bool emulated;
 
    /* only used if renderer supports multiple timelines */
    uint32_t ring_idx;
@@ -29,8 +30,11 @@ struct vn_queue {
     */
    VkSemaphore sparse_semaphore;
    uint64_t sparse_semaphore_counter;
+
+   /* for vn_queue_submission storage */
+   struct vn_cached_storage storage;
 };
-VK_DEFINE_HANDLE_CASTS(vn_queue, base.base.base, VkQueue, VK_OBJECT_TYPE_QUEUE)
+VK_DEFINE_HANDLE_CASTS(vn_queue, base.vk.base, VkQueue, VK_OBJECT_TYPE_QUEUE)
 
 enum vn_sync_type {
    /* no payload */
@@ -62,6 +66,8 @@ struct vn_sync_payload_external {
    uint32_t ring_seqno;
 };
 
+struct vn_feedback_slot;
+
 struct vn_fence {
    struct vn_object_base base;
 
@@ -80,7 +86,7 @@ struct vn_fence {
    struct vn_sync_payload_external external_payload;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_fence,
-                               base.base,
+                               base.vk,
                                VkFence,
                                VK_OBJECT_TYPE_FENCE)
 
@@ -95,26 +101,24 @@ struct vn_semaphore {
    struct vn_sync_payload temporary;
 
    struct {
-      /* non-NULL if VN_PERF_NO_TIMELINE_SEM_FEEDBACK is disabled */
+      /* non-NULL if VN_PERF_NO_SEMAPHORE_FEEDBACK is disabled */
       struct vn_feedback_slot *slot;
 
-      /* Lists of allocated vn_feedback_src
-       * The pending_src_list tracks vn_feedback_src slots that have
-       * not been signaled since the last submission cleanup.
-       * The free_src_list tracks vn_feedback_src slots that have
-       * signaled and can be reused.
-       * On submission prepare, used vn_feedback_src are moved from
-       * the free list to the pending list. On submission cleanup,
-       * vn_feedback_src of any associated semaphores are checked
-       * and moved to the free list if they were signaled.
-       * vn_feedback_src slots are allocated on demand if the
-       * free_src_list is empty.
+      /* Lists of allocated vn_semaphore_feedback_cmd
+       *
+       * On submission prepare, sfb cmd is cache allocated from the free list
+       * and is moved to the pending list after initialization.
+       *
+       * On submission cleanup, sfb cmds of the owner semaphores are checked
+       * and cached to the free list if they have been "signaled", which is
+       * proxyed via the src slot value having been reached.
        */
-      struct list_head pending_src_list;
-      struct list_head free_src_list;
+      struct list_head pending_cmds;
+      struct list_head free_cmds;
+      uint32_t free_cmd_count;
 
-      /* Lock for accessing free/pending src lists */
-      simple_mtx_t src_lists_mtx;
+      /* Lock for accessing free/pending sfb cmds */
+      simple_mtx_t cmd_mtx;
 
       /* Cached counter value to track if an async sem wait call is needed */
       uint64_t signaled_counter;
@@ -130,7 +134,7 @@ struct vn_semaphore {
    struct vn_sync_payload_external external_payload;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_semaphore,
-                               base.base,
+                               base.vk,
                                VkSemaphore,
                                VK_OBJECT_TYPE_SEMAPHORE)
 
@@ -144,14 +148,8 @@ struct vn_event {
    struct vn_feedback_slot *feedback_slot;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_event,
-                               base.base,
+                               base.vk,
                                VkEvent,
                                VK_OBJECT_TYPE_EVENT)
-
-void
-vn_fence_signal_wsi(struct vn_device *dev, struct vn_fence *fence);
-
-void
-vn_semaphore_signal_wsi(struct vn_device *dev, struct vn_semaphore *sem);
 
 #endif /* VN_QUEUE_H */

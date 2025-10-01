@@ -284,7 +284,7 @@ trace_dump_trace_begin(void)
       atexit(trace_dump_trace_close);
 
       const char *trigger = debug_get_option("GALLIUM_TRACE_TRIGGER", NULL);
-      if (trigger) {
+      if (trigger && __normal_user()) {
          trigger_filename = strdup(trigger);
          trigger_active = false;
       } else
@@ -629,19 +629,6 @@ void trace_dump_ptr(const void *value)
       trace_dump_null();
 }
 
-void trace_dump_surface_ptr(struct pipe_surface *_surface)
-{
-   if (!dumping)
-      return;
-
-   if (_surface) {
-      struct trace_surface *tr_surf = trace_surface(_surface);
-      trace_dump_ptr(tr_surf->surface);
-   } else {
-      trace_dump_null();
-   }
-}
-
 void trace_dump_transfer_ptr(struct pipe_transfer *_transfer)
 {
    if (!dumping)
@@ -655,7 +642,7 @@ void trace_dump_transfer_ptr(struct pipe_transfer *_transfer)
    }
 }
 
-void trace_dump_nir(void *nir)
+void trace_dump_nir(struct nir_shader *nir)
 {
    if (!dumping)
       return;

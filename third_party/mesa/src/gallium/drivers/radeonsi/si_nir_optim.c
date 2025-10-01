@@ -35,12 +35,13 @@ check_instr_depends_on_tex(nir_intrinsic_instr *store)
    int texunit = -1;
    struct set *instrs = _mesa_set_create(NULL, _mesa_hash_pointer,
                                          _mesa_key_pointer_equal);
-   nir_instr_worklist *work = nir_instr_worklist_create();
+   nir_instr_worklist work;
+   nir_instr_worklist_init(&work);
 
    _mesa_set_add(instrs, &store->instr);
-   add_src_instr_to_worklist(&store->src[0], work);
+   add_src_instr_to_worklist(&store->src[0], &work);
 
-   nir_foreach_instr_in_worklist(instr, work) {
+   nir_foreach_instr_in_worklist(instr, &work) {
       /* Don't process an instruction twice */
       if (_mesa_set_search(instrs, instr))
          continue;
@@ -50,7 +51,7 @@ check_instr_depends_on_tex(nir_intrinsic_instr *store)
       if (instr->type == nir_instr_type_alu ||
           instr->type == nir_instr_type_load_const) {
          /* TODO: ubo, etc */
-         if (!nir_foreach_src(instr, add_src_instr_to_worklist, work))
+         if (!nir_foreach_src(instr, add_src_instr_to_worklist, &work))
             break;
          continue;
       } else if (instr->type == nir_instr_type_tex) {
@@ -67,7 +68,7 @@ check_instr_depends_on_tex(nir_intrinsic_instr *store)
       }
    }
 
-   nir_instr_worklist_destroy(work);
+   nir_instr_worklist_fini(&work);
    _mesa_set_destroy(instrs, NULL);
    return texunit;
 }
@@ -83,11 +84,22 @@ get_output_as_const_value(nir_shader *shader, float values[4])
                   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
                   if (intrin->intrinsic == nir_intrinsic_store_output) {
                      nir_const_value *c = nir_src_as_const_value(intrin->src[0]);
-                     if (c) {
+                     if (!c)
+                        return false;
+
+                     if (intrin->src[0].ssa->bit_size == 16 &&
+                         !(nir_intrinsic_src_type(intrin) & nir_type_float))
+                        return false;
+
+                     if (intrin->src[0].ssa->bit_size == 16) {
+                        uint16_t half_values[4];
+                        nir_const_value_to_array(half_values, c, 4, u16);
+                        for (unsigned i = 0; i < 4; i++)
+                           values[i] = _mesa_half_to_float(half_values[i]);
+                     } else {
                         nir_const_value_to_array(values, c, 4, f32);
-                        return true;
                      }
-                     return false;
+                     return true;
                   }
                   FALLTHROUGH;
                }
@@ -120,19 +132,19 @@ store_instr_depends_on_tex(nir_builder *b, nir_intrinsic_instr *intrin,
 
 
 static bool
-replace_tex_by_imm(nir_builder *b, nir_instr *instr, void *state)
+replace_tex_by_imm(nir_builder *b, nir_tex_instr *tex, void *state)
 {
-   if (instr->type != nir_instr_type_tex)
-      return false;
-
-   nir_tex_instr *tex = nir_instr_as_tex(instr);
    struct replace_param *p = (struct replace_param*) state;
 
    if (get_tex_unit(tex) != *(p->texunit))
       return false;
 
    b->cursor = nir_instr_remove(&tex->instr);
-   nir_def *imm = nir_imm_vec4(b, p->value[0], p->value[1], p->value[2], p->value[3]);
+   nir_def *imm;
+   if (tex->def.bit_size == 16)
+      imm = nir_imm_vec4_16(b, p->value[0], p->value[1], p->value[2], p->value[3]);
+   else
+      imm = nir_imm_vec4(b, p->value[0], p->value[1], p->value[2], p->value[3]);
    nir_def_rewrite_uses(&tex->def, imm);
    return true;
 }
@@ -161,9 +173,8 @@ si_nir_is_output_const_if_tex_is_const(nir_shader *shader, float *in, float *out
       assert(*p.texunit != -1);
 
       /* Replace nir_tex_instr using texunit by vec4(v) */
-      nir_shader_instructions_pass(shader, replace_tex_by_imm,
-                                   nir_metadata_block_index |
-                                   nir_metadata_dominance, &p);
+      nir_shader_tex_pass(shader, replace_tex_by_imm,
+                          nir_metadata_control_flow, &p);
 
       /* Optimize the cloned shader */
       bool progress;

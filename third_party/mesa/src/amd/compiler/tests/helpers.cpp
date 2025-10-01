@@ -1,35 +1,18 @@
 /*
  * Copyright © 2020 Valve Corporation
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 #include "helpers.h"
 
+#include "aco_ir.h"
+
 #include "common/amd_family.h"
-#include "vulkan/vk_format.h"
+#include "common/nir/ac_nir.h"
 
 #include <llvm-c/Target.h>
 
 #include <mutex>
-#include <sstream>
 #include <stdio.h>
 
 using namespace aco;
@@ -43,6 +26,11 @@ aco_shader_info info;
 std::unique_ptr<Program> program;
 Builder bld(NULL);
 Temp inputs[16];
+
+static radeon_info rad_info;
+static nir_shader_compiler_options nir_options;
+static nir_builder _nb;
+nir_builder *nb;
 
 static VkInstance instance_cache[CHIP_LAST] = {VK_NULL_HANDLE};
 static VkDevice device_cache[CHIP_LAST] = {VK_NULL_HANDLE};
@@ -124,11 +112,15 @@ setup_cs(const char* input_spec, enum amd_gfx_level gfx_level, enum radeon_famil
             input_spec++;
       }
 
-      aco_ptr<Instruction> startpgm{create_instruction<Pseudo_instruction>(
-         aco_opcode::p_startpgm, Format::PSEUDO, 0, input_classes.size())};
+      PhysReg sgpr_reg{0};
+      PhysReg vgpr_reg{256};
+      aco_ptr<Instruction> startpgm{
+         create_instruction(aco_opcode::p_startpgm, Format::PSEUDO, 0, input_classes.size())};
       for (unsigned i = 0; i < input_classes.size(); i++) {
          inputs[i] = bld.tmp(input_classes[i]);
-         startpgm->definitions[i] = Definition(inputs[i]);
+         PhysReg& reg = input_classes[i].type() == RegType::sgpr ? sgpr_reg : vgpr_reg;
+         startpgm->definitions[i] = Definition(inputs[i], reg);
+         reg = reg.advance(input_classes[i].size() * 4);
       }
       bld.insert(std::move(startpgm));
    }
@@ -136,8 +128,42 @@ setup_cs(const char* input_spec, enum amd_gfx_level gfx_level, enum radeon_famil
    return true;
 }
 
+bool
+setup_nir_cs(enum amd_gfx_level gfx_level, mesa_shader_stage stage, enum radeon_family family, const char* subvariant)
+{
+   if (!set_variant(gfx_level, subvariant))
+      return false;
+
+   if (family == CHIP_UNKNOWN) {
+      switch (gfx_level) {
+      case GFX6: family = CHIP_TAHITI; break;
+      case GFX7: family = CHIP_BONAIRE; break;
+      case GFX8: family = CHIP_POLARIS10; break;
+      case GFX9: family = CHIP_VEGA10; break;
+      case GFX10: family = CHIP_NAVI10; break;
+      case GFX10_3: family = CHIP_NAVI21; break;
+      case GFX11: family = CHIP_NAVI31; break;
+      default: family = CHIP_UNKNOWN; break;
+      }
+   }
+
+   memset(&rad_info, 0, sizeof(rad_info));
+   rad_info.gfx_level = gfx_level;
+   rad_info.family = family;
+
+   memset(&nir_options, 0, sizeof(nir_options));
+   ac_nir_set_options(&rad_info, false, &nir_options);
+
+   glsl_type_singleton_init_or_ref();
+
+   _nb = nir_builder_init_simple_shader(stage, &nir_options, "aco_test");
+   nb = &_nb;
+
+   return true;
+}
+
 void
-finish_program(Program* prog)
+finish_program(Program* prog, bool endpgm, bool dominance)
 {
    for (Block& BB : prog->blocks) {
       for (unsigned idx : BB.linear_preds)
@@ -149,15 +175,19 @@ finish_program(Program* prog)
    for (Block& block : prog->blocks) {
       if (block.linear_succs.size() == 0) {
          block.kind |= block_kind_uniform;
-         Builder(prog, &block).sopp(aco_opcode::s_endpgm);
+         if (endpgm)
+            Builder(prog, &block).sopp(aco_opcode::s_endpgm);
       }
    }
+
+   if (dominance)
+      dominator_tree(program.get());
 }
 
 void
 finish_validator_test()
 {
-   finish_program(program.get());
+   finish_program(program.get(), true, true);
    aco_print_program(program.get(), output);
    fprintf(output, "Validation results:\n");
    if (aco::validate_ir(program.get()))
@@ -169,7 +199,7 @@ finish_validator_test()
 void
 finish_opt_test()
 {
-   finish_program(program.get());
+   finish_program(program.get(), true, true);
    if (!aco::validate_ir(program.get())) {
       fail_test("Validation before optimization failed");
       return;
@@ -185,7 +215,7 @@ finish_opt_test()
 void
 finish_setup_reduce_temp_test()
 {
-   finish_program(program.get());
+   finish_program(program.get(), true, true);
    if (!aco::validate_ir(program.get())) {
       fail_test("Validation before setup_reduce_temp failed");
       return;
@@ -199,26 +229,37 @@ finish_setup_reduce_temp_test()
 }
 
 void
-finish_ra_test(ra_test_policy policy, bool lower)
+finish_lower_subdword_test()
 {
-   finish_program(program.get());
+   finish_program(program.get(), true, true);
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation before lower_subdword failed");
+      return;
+   }
+   aco::lower_subdword(program.get());
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation after lower_subdword failed");
+      return;
+   }
+   aco_print_program(program.get(), output);
+}
+
+void
+finish_ra_test(ra_test_policy policy)
+{
+   finish_program(program.get(), true, true);
    if (!aco::validate_ir(program.get())) {
       fail_test("Validation before register allocation failed");
       return;
    }
 
    program->workgroup_size = program->wave_size;
-   aco::live live_vars = aco::live_var_analysis(program.get());
-   aco::register_allocation(program.get(), live_vars.live_out, policy);
+   aco::live_var_analysis(program.get());
+   aco::register_allocation(program.get(), policy);
 
    if (aco::validate_ra(program.get())) {
       fail_test("Validation after register allocation failed");
       return;
-   }
-
-   if (lower) {
-      aco::ssa_elimination(program.get());
-      aco::lower_to_hw_instr(program.get());
    }
 
    aco_print_program(program.get(), output);
@@ -227,16 +268,68 @@ finish_ra_test(ra_test_policy policy, bool lower)
 void
 finish_optimizer_postRA_test()
 {
-   finish_program(program.get());
+   finish_program(program.get(), true, true);
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation before optimize_postRA failed");
+      return;
+   }
+
    aco::optimize_postRA(program.get());
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation after optimize_postRA failed");
+      return;
+   }
+
    aco_print_program(program.get(), output);
 }
 
 void
 finish_to_hw_instr_test()
 {
-   finish_program(program.get());
+   finish_program(program.get(), true, true);
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation before lower_to_hw_instr failed");
+      return;
+   }
+
    aco::lower_to_hw_instr(program.get());
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation after lower_to_hw_instr failed");
+      return;
+   }
+
+   aco_print_program(program.get(), output);
+}
+
+void
+finish_lower_branches_test()
+{
+   finish_program(program.get(), true, true);
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation before lower_branches failed");
+      return;
+   }
+
+   aco::lower_branches(program.get());
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation after lower_branches failed");
+      return;
+   }
+
+   aco_print_program(program.get(), output);
+}
+
+void
+finish_schedule_vopd_test()
+{
+   finish_program(program.get());
+   aco::schedule_vopd(program.get());
    aco_print_program(program.get(), output);
 }
 
@@ -244,14 +337,14 @@ void
 finish_waitcnt_test()
 {
    finish_program(program.get());
-   aco::insert_wait_states(program.get());
+   aco::insert_waitcnt(program.get());
    aco_print_program(program.get(), output);
 }
 
 void
-finish_insert_nops_test()
+finish_insert_nops_test(bool endpgm)
 {
-   finish_program(program.get());
+   finish_program(program.get(), endpgm);
    aco::insert_NOPs(program.get());
    aco_print_program(program.get(), output);
 }
@@ -279,6 +372,65 @@ finish_assembler_test()
       // TODO: maybe we should use CLRX and skip this test if it's not available?
       for (uint32_t dword : binary)
          fprintf(output, "%.8x\n", dword);
+   }
+}
+
+void
+live_var_analysis_debug_func(void* private_data, enum aco_compiler_debug_level level, const char* message)
+{
+   if (level == ACO_COMPILER_DEBUG_LEVEL_ERROR)
+      *(bool *)private_data = true;
+}
+
+void
+finish_isel_test(enum ac_hw_stage hw_stage, unsigned wave_size)
+{
+   nir_validate_shader(nb->shader, "in finish_isel_test");
+
+   program.reset(new Program);
+   program->debug.func = nullptr;
+   program->debug.private_data = nullptr;
+
+   ac_shader_args args = {};
+
+   aco_compiler_options options = {};
+   options.family = rad_info.family;
+   options.gfx_level = rad_info.gfx_level;
+
+   memset(&info, 0, sizeof(info));
+   info.hw_stage = hw_stage;
+   info.wave_size = wave_size;
+   info.workgroup_size = nb->shader->info.workgroup_size[0] * nb->shader->info.workgroup_size[1] * nb->shader->info.workgroup_size[2];
+
+   memset(&config, 0, sizeof(config));
+
+   select_program(program.get(), 1, &nb->shader, &config, &options, &info, &args);
+   dominator_tree(program.get());
+   if (program->should_repair_ssa)
+      repair_ssa(program.get());
+   lower_phis(program.get());
+
+   ralloc_free(nb->shader);
+   glsl_type_singleton_decref();
+
+   aco_print_program(program.get(), output);
+
+   if (!aco::validate_ir(program.get())) {
+      fail_test("Validation after instruction selection failed");
+      return;
+   }
+   if (!aco::validate_cfg(program.get())) {
+      fail_test("Invalidate CFG");
+      return;
+   }
+
+   bool live_var_fail = false;
+   program->debug.func = &live_var_analysis_debug_func;
+   program->debug.private_data = &live_var_fail;
+   aco::live_var_analysis(program.get());
+   if (live_var_fail) {
+      fail_test("Live var analysis failed");
+      return;
    }
 }
 
@@ -402,18 +554,39 @@ fmax(Temp src0, Temp src1, Builder b)
    return b.vop2(aco_opcode::v_max_f32, b.def(v1), src0, src1);
 }
 
+static Temp
+extract(Temp src, unsigned idx, unsigned size, bool sign_extend, Builder b)
+{
+   if (src.type() == RegType::sgpr)
+      return b.pseudo(aco_opcode::p_extract, b.def(src.regClass()), bld.def(s1, scc), src,
+                      Operand::c32(idx), Operand::c32(size), Operand::c32(sign_extend));
+   else
+      return b.pseudo(aco_opcode::p_extract, b.def(src.regClass()), src, Operand::c32(idx),
+                      Operand::c32(size), Operand::c32(sign_extend));
+}
+
 Temp
 ext_ushort(Temp src, unsigned idx, Builder b)
 {
-   return b.pseudo(aco_opcode::p_extract, b.def(src.regClass()), src, Operand::c32(idx),
-                   Operand::c32(16u), Operand::c32(false));
+   return extract(src, idx, 16, false, b);
+}
+
+Temp
+ext_sshort(Temp src, unsigned idx, Builder b)
+{
+   return extract(src, idx, 16, true, b);
 }
 
 Temp
 ext_ubyte(Temp src, unsigned idx, Builder b)
 {
-   return b.pseudo(aco_opcode::p_extract, b.def(src.regClass()), src, Operand::c32(idx),
-                   Operand::c32(8u), Operand::c32(false));
+   return extract(src, idx, 8, false, b);
+}
+
+Temp
+ext_sbyte(Temp src, unsigned idx, Builder b)
+{
+   return extract(src, idx, 8, true, b);
 }
 
 void
@@ -455,32 +628,30 @@ emit_divergent_if_else(Program* prog, aco::Builder& b, Operand cond, std::functi
    b.reset(if_block);
    Temp saved_exec = b.sop1(Builder::s_and_saveexec, b.def(b.lm, saved_exec_reg),
                             Definition(scc, s1), Definition(exec, b.lm), cond, Operand(exec, b.lm));
-   b.branch(aco_opcode::p_cbranch_nz, Definition(vcc, bld.lm), then_logical->index,
-            then_linear->index);
+   b.branch(aco_opcode::p_cbranch_nz, then_logical->index, then_linear->index);
 
    b.reset(then_logical);
    b.pseudo(aco_opcode::p_logical_start);
    then();
    b.pseudo(aco_opcode::p_logical_end);
-   b.branch(aco_opcode::p_branch, Definition(vcc, bld.lm), invert->index);
+   b.branch(aco_opcode::p_branch, invert->index);
 
    b.reset(then_linear);
-   b.branch(aco_opcode::p_branch, Definition(vcc, bld.lm), invert->index);
+   b.branch(aco_opcode::p_branch, invert->index);
 
    b.reset(invert);
    b.sop2(Builder::s_andn2, Definition(exec, bld.lm), Definition(scc, s1),
           Operand(saved_exec, saved_exec_reg), Operand(exec, bld.lm));
-   b.branch(aco_opcode::p_cbranch_nz, Definition(vcc, bld.lm), else_logical->index,
-            else_linear->index);
+   b.branch(aco_opcode::p_cbranch_nz, else_logical->index, else_linear->index);
 
    b.reset(else_logical);
    b.pseudo(aco_opcode::p_logical_start);
    els();
    b.pseudo(aco_opcode::p_logical_end);
-   b.branch(aco_opcode::p_branch, Definition(vcc, bld.lm), endif_block->index);
+   b.branch(aco_opcode::p_branch, endif_block->index);
 
    b.reset(else_linear);
-   b.branch(aco_opcode::p_branch, Definition(vcc, bld.lm), endif_block->index);
+   b.branch(aco_opcode::p_branch, endif_block->index);
 
    b.reset(endif_block);
    b.pseudo(aco_opcode::p_parallelcopy, Definition(exec, bld.lm),
@@ -498,7 +669,8 @@ get_vk_device(enum amd_gfx_level gfx_level)
    case GFX9: family = CHIP_VEGA10; break;
    case GFX10: family = CHIP_NAVI10; break;
    case GFX10_3: family = CHIP_NAVI21; break;
-   case GFX11: family = CHIP_GFX1100; break;
+   case GFX11: family = CHIP_NAVI31; break;
+   case GFX12: family = CHIP_GFX1201; break;
    default: family = CHIP_UNKNOWN; break;
    }
    return get_vk_device(family);

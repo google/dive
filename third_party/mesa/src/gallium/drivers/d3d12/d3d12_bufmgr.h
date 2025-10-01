@@ -41,7 +41,7 @@ enum d3d12_residency_status {
    d3d12_permanently_resident,
 };
 
-enum batch_bo_reference_state {
+enum batch_bo_reference_state : uint8_t {
    batch_bo_reference_none = 0,
    batch_bo_reference_read = (1 << 0),
    batch_bo_reference_written = (1 << 1),
@@ -71,7 +71,7 @@ struct d3d12_bo {
    uint8_t local_reference_mask[16];
 
    d3d12_context_state_table_entry local_context_states[16];
-   uint8_t local_reference_state[8][16];
+   uint8_t local_reference_state[16][8];
 };
 
 struct d3d12_buffer {
@@ -106,7 +106,7 @@ static inline uint64_t
 d3d12_bo_get_size(struct d3d12_bo *bo)
 {
    if (bo->buffer)
-      return bo->buffer->size;
+      return bo->buffer->base.size;
    else
       return GetDesc(bo->res).Width;
 }

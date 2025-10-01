@@ -68,6 +68,13 @@ enum vl_compositor_rotation
    VL_COMPOSITOR_ROTATE_270
 };
 
+enum vl_compositor_mirror
+{
+   VL_COMPOSITOR_MIRROR_NONE,
+   VL_COMPOSITOR_MIRROR_HORIZONTAL,
+   VL_COMPOSITOR_MIRROR_VERTICAL
+};
+
 /* chroma sample location */
 enum vl_compositor_chroma_location
 {
@@ -77,6 +84,15 @@ enum vl_compositor_chroma_location
    VL_COMPOSITOR_LOCATION_VERTICAL_BOTTOM    = (1 << 2),
    VL_COMPOSITOR_LOCATION_HORIZONTAL_LEFT    = (1 << 3),
    VL_COMPOSITOR_LOCATION_HORIZONTAL_CENTER  = (1 << 4)
+};
+
+enum vl_compositor_plane
+{
+   VL_COMPOSITOR_PLANE_NONE  = 0,
+   VL_COMPOSITOR_PLANE_Y     = (1 << 0),
+   VL_COMPOSITOR_PLANE_U     = (1 << 1),
+   VL_COMPOSITOR_PLANE_V     = (1 << 2),
+   VL_COMPOSITOR_PLANE_UV    = VL_COMPOSITOR_PLANE_U | VL_COMPOSITOR_PLANE_V
 };
 
 struct vl_compositor_layer
@@ -98,6 +114,7 @@ struct vl_compositor_layer
    struct vertex2f zw;
    struct vertex4f colors[4];
    enum vl_compositor_rotation rotate;
+   enum vl_compositor_mirror mirror;
 };
 
 struct vl_compositor_state
@@ -114,6 +131,9 @@ struct vl_compositor_state
    struct vl_compositor_layer layers[VL_COMPOSITOR_MAX_LAYERS];
    bool interlaced;
    unsigned chroma_location;
+
+   vl_csc_matrix csc_matrix;
+   float luma_min, luma_max;
 };
 
 struct vl_compositor
@@ -162,10 +182,8 @@ struct vl_compositor
       struct {
          void *y;
          void *uv;
-      } bob;
-      struct {
-         void *y;
-         void *uv;
+         void *u;
+         void *v;
       } progressive;
    } cs_yuv;
 
@@ -178,13 +196,22 @@ struct vl_compositor
       void *y;
       void *uv;
    } fs_rgb_yuv;
+
+   struct {
+      void *y;
+      void *uv;
+      void *u;
+      void *v;
+   } cs_rgb_yuv;
+
+   bool shaders_initialized;
 };
 
 /**
  * initialize this compositor
  */
 bool
-vl_compositor_init(struct vl_compositor *compositor, struct pipe_context *pipe);
+vl_compositor_init(struct vl_compositor *compositor, struct pipe_context *pipe, bool compute_only);
 
 /**
  * init state bag
@@ -293,6 +320,14 @@ void
 vl_compositor_set_layer_rotation(struct vl_compositor_state *state,
                                  unsigned layer,
                                  enum vl_compositor_rotation rotate);
+
+/**
+ * set the layer mirror
+ */
+void
+vl_compositor_set_layer_mirror(struct vl_compositor_state *state,
+                               unsigned layer,
+                               enum vl_compositor_mirror mirror);
 
 /**
  * deinterlace yuv buffer with full abilities

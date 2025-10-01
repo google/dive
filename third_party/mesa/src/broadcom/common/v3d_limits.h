@@ -24,8 +24,6 @@
 #ifndef V3D_LIMITS_H
 #define V3D_LIMITS_H
 
-#define V3D_CL_MAX_INSTR_SIZE 25
-
 /* Number of channels a QPU thread executes in parallel.  Also known as
  * gl_SubGroupSizeARB.
  */
@@ -42,12 +40,15 @@
 
 #define V3D_MAX_SAMPLES 4
 
-#define V3D_MAX_DRAW_BUFFERS 4
+#define V3D_MAX_DRAW_BUFFERS 8
+#define V3D_MAX_RENDER_TARGETS(ver) (ver < 71 ? 4 : 8)
 
 #define V3D_MAX_POINT_SIZE 512.0f
 #define V3D_MAX_LINE_WIDTH 32
 
 #define V3D_MAX_BUFFER_RANGE (1 << 30)
+
+#define V3D_MAX_SUPERTILES 256
 
 /* Sub-pixel precision bits in the rasterizer */
 #define V3D_COORD_SHIFT 6
@@ -67,5 +68,7 @@
 #define V3D_MAX_MIP_LEVELS 13
 
 #define V3D_MAX_ARRAY_LAYERS 2048
+
+#define V3D_MAX_VERTEX_ATTRIB_DIVISOR 0xffff
 
 #endif /* V3D_LIMITS_H */

@@ -8,10 +8,14 @@
 #include "nvk_private.h"
 #include "nvk_physical_device.h"
 
-#include "vulkan/runtime/vk_sampler.h"
-#include "vulkan/runtime/vk_ycbcr_conversion.h"
+#include "vk_sampler.h"
+#include "vk_ycbcr_conversion.h"
 
-#include "vulkan/util/vk_format.h"
+#include "vk_format.h"
+
+struct nvk_sampler_header {
+   uint32_t bits[8];
+};
 
 struct nvk_sampler {
    struct vk_sampler vk;
@@ -20,16 +24,19 @@ struct nvk_sampler {
 
    struct {
       uint32_t desc_index;
-   } planes[2];
+   } planes[NVK_MAX_SAMPLER_PLANES];
 };
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(nvk_sampler, vk.base, VkSampler,
                                VK_OBJECT_TYPE_SAMPLER)
 
-static void
-nvk_sampler_fill_header(const struct nvk_physical_device *pdev,
-                        const struct VkSamplerCreateInfo *info,
-                        const struct vk_sampler *vk_sampler,
-                        uint32_t *samp);
+struct nvk_sampler_capture {
+   struct {
+      uint32_t desc_index;
+   } planes[NVK_MAX_SAMPLER_PLANES];
+};
+
+struct nvk_sampler_header
+nvk_txf_sampler_header(const struct nvk_physical_device *pdev);
 
 #endif

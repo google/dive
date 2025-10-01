@@ -10,10 +10,10 @@
 
 #include "radeon_drm_winsys.h"
 #include "util/u_thread.h"
-#include "pipebuffer/pb_slab.h"
+#include "util/pb_slab.h"
 
 struct radeon_bo {
-   struct pb_buffer base;
+   struct pb_buffer_lean base;
    union {
       struct {
          struct pb_cache_entry cache_entry;
@@ -56,8 +56,8 @@ struct radeon_slab {
    struct radeon_bo *entries;
 };
 
-void radeon_bo_destroy(void *winsys, struct pb_buffer *_buf);
-bool radeon_bo_can_reclaim(void *winsys, struct pb_buffer *_buf);
+void radeon_bo_destroy(void *winsys, struct pb_buffer_lean *_buf);
+bool radeon_bo_can_reclaim(void *winsys, struct pb_buffer_lean *_buf);
 void radeon_drm_bo_init_functions(struct radeon_drm_winsys *ws);
 
 bool radeon_bo_can_reclaim_slab(void *priv, struct pb_slab_entry *entry);
@@ -66,10 +66,15 @@ struct pb_slab *radeon_bo_slab_alloc(void *priv, unsigned heap,
                                      unsigned group_index);
 void radeon_bo_slab_free(void *priv, struct pb_slab *slab);
 
-static inline
-void radeon_ws_bo_reference(struct radeon_bo **dst, struct radeon_bo *src)
+static inline void
+radeon_ws_bo_reference(struct radeon_winsys *rws, struct radeon_bo **dst,
+                       struct radeon_bo *src)
 {
-   pb_reference((struct pb_buffer**)dst, (struct pb_buffer*)src);
+   struct pb_buffer_lean *p_dst_base = &(*dst)->base;
+
+   radeon_bo_reference(rws, &p_dst_base, (struct pb_buffer_lean*)src);
+
+   *dst = (struct radeon_bo *)p_dst_base;
 }
 
 void *radeon_bo_do_map(struct radeon_bo *bo);

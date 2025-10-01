@@ -18,10 +18,12 @@
 #include <iostream>
 #include "dive_core/common/memory_manager_base.h"
 #include "pm4_info.h"
-
 #ifdef _MSC_VER
 #    include <stdio.h>
 #    include <stdlib.h>
+
+// To avoid warning from disasm.h
+#    pragma warning(disable : 4996)
 #endif
 extern "C"
 {

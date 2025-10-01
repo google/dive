@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2012 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -41,20 +23,10 @@
 #include "fd2_util.h"
 #include "ir2.h"
 
-static struct fd2_shader_stateobj *
-create_shader(struct pipe_context *pctx, gl_shader_stage type)
-{
-   struct fd2_shader_stateobj *so = CALLOC_STRUCT(fd2_shader_stateobj);
-   if (!so)
-      return NULL;
-   so->type = type;
-   so->is_a20x = is_a20x(fd_context(pctx)->screen);
-   return so;
-}
-
 static void
-delete_shader(struct fd2_shader_stateobj *so)
+fd2_shader_state_delete(struct pipe_context *pctx, void *hwcso)
 {
+   struct fd2_shader_stateobj *so = hwcso;
    if (!so)
       return;
    ralloc_free(so->nir);
@@ -64,7 +36,7 @@ delete_shader(struct fd2_shader_stateobj *so)
 }
 
 static void
-emit(struct fd_ringbuffer *ring, gl_shader_stage type,
+emit(struct fd_ringbuffer *ring, mesa_shader_stage type,
      struct ir2_shader_info *info, struct util_dynarray *patches)
 {
    unsigned i;
@@ -90,19 +62,21 @@ ir2_glsl_type_size(const struct glsl_type *type, bool bindless)
 }
 
 static void *
-fd2_fp_state_create(struct pipe_context *pctx,
-                    const struct pipe_shader_state *cso)
+fd2_shader_state_create(struct pipe_context *pctx,
+                        const struct pipe_shader_state *cso)
 {
-   struct fd2_shader_stateobj *so = create_shader(pctx, MESA_SHADER_FRAGMENT);
+   struct fd2_shader_stateobj *so = CALLOC_STRUCT(fd2_shader_stateobj);
    if (!so)
       return NULL;
 
    so->nir = (cso->type == PIPE_SHADER_IR_NIR)
                 ? cso->ir.nir
                 : tgsi_to_nir(cso->tokens, pctx->screen, false);
+   so->type = so->nir->info.stage;
+   so->is_a20x = is_a20x(fd_context(pctx)->screen);
 
-   NIR_PASS_V(so->nir, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
-              ir2_glsl_type_size, (nir_lower_io_options)0);
+   NIR_PASS(_, so->nir, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
+              ir2_glsl_type_size, 0);
 
    if (ir2_optimize_nir(so->nir, true))
       goto fail;
@@ -111,57 +85,19 @@ fd2_fp_state_create(struct pipe_context *pctx,
 
    ir2_compile(so, 0, NULL);
 
-   ralloc_free(so->nir);
-   so->nir = NULL;
-   return so;
-
-fail:
-   delete_shader(so);
-   return NULL;
-}
-
-static void
-fd2_fp_state_delete(struct pipe_context *pctx, void *hwcso)
-{
-   struct fd2_shader_stateobj *so = hwcso;
-   delete_shader(so);
-}
-
-static void *
-fd2_vp_state_create(struct pipe_context *pctx,
-                    const struct pipe_shader_state *cso)
-{
-   struct fd2_shader_stateobj *so = create_shader(pctx, MESA_SHADER_VERTEX);
-   if (!so)
-      return NULL;
-
-   so->nir = (cso->type == PIPE_SHADER_IR_NIR)
-                ? cso->ir.nir
-                : tgsi_to_nir(cso->tokens, pctx->screen, false);
-
-   NIR_PASS_V(so->nir, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
-              ir2_glsl_type_size, (nir_lower_io_options)0);
-
-   if (ir2_optimize_nir(so->nir, true))
-      goto fail;
-
-   so->first_immediate = so->nir->num_uniforms;
-
-   /* compile binning variant now */
-   ir2_compile(so, 0, NULL);
+   /* Free FS NIR now.  VS NIR will need to stick around for the draw variant
+    * later.
+    */
+   if (so->nir->info.stage == MESA_SHADER_FRAGMENT) {
+      ralloc_free(so->nir);
+      so->nir = NULL;
+   }
 
    return so;
 
 fail:
-   delete_shader(so);
+   fd2_shader_state_delete(pctx, so);
    return NULL;
-}
-
-static void
-fd2_vp_state_delete(struct pipe_context *pctx, void *hwcso)
-{
-   struct fd2_shader_stateobj *so = hwcso;
-   delete_shader(so);
 }
 
 static void
@@ -239,9 +175,9 @@ fd2_program_emit(struct fd_context *ctx, struct fd_ringbuffer *ring,
 
    /* clear/gmem2mem/mem2gmem need to be changed to remove this condition */
    if (prog != &ctx->solid_prog && prog != &ctx->blit_prog[0]) {
-      patch_fetches(ctx, vpi, ctx->vtx.vtx, &ctx->tex[PIPE_SHADER_VERTEX]);
+      patch_fetches(ctx, vpi, ctx->vtx.vtx, &ctx->tex[MESA_SHADER_VERTEX]);
       if (fp)
-         patch_fetches(ctx, fpi, NULL, &ctx->tex[PIPE_SHADER_FRAGMENT]);
+         patch_fetches(ctx, fpi, NULL, &ctx->tex[MESA_SHADER_FRAGMENT]);
    }
 
    emit(ring, MESA_SHADER_VERTEX, vpi,
@@ -290,11 +226,11 @@ fd2_prog_init(struct pipe_context *pctx)
    struct ir2_shader_info *info;
    instr_fetch_vtx_t *instr;
 
-   pctx->create_fs_state = fd2_fp_state_create;
-   pctx->delete_fs_state = fd2_fp_state_delete;
+   pctx->create_fs_state = fd2_shader_state_create;
+   pctx->delete_fs_state = fd2_shader_state_delete;
 
-   pctx->create_vs_state = fd2_vp_state_create;
-   pctx->delete_vs_state = fd2_vp_state_delete;
+   pctx->create_vs_state = fd2_shader_state_create;
+   pctx->delete_vs_state = fd2_shader_state_delete;
 
    fd_prog_init(pctx);
 

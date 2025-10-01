@@ -1,25 +1,7 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
  * Copyright © 2018 Google, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -28,6 +10,8 @@
 #include "util/format/u_format.h"
 
 #include "fd6_format_table.h"
+
+#include "freedreno_dev_info.h"
 
 /* Specifies the table of all the formats and their features. Also supplies
  * the helpers that look up various data in those tables.
@@ -68,12 +52,12 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _TC(R8_SRGB,    8_UNORM,                     WZYX),
    _TC(Y8_UNORM,   NV12_Y,                      WZYX),
 
-   FMT(A8_UNORM,   NONE, 8_UNORM, A8_UNORM,     WZYX),
+   _TC(A8_UNORM,   A8_UNORM,                    WZYX),
    _TC(L8_UNORM,   8_UNORM,                     WZYX),
    _TC(L8_SRGB,    8_UNORM,                     WZYX),
    _TC(L8_SNORM,   8_SNORM,                     WZYX),
-   _T_(I8_UNORM,   8_UNORM,                     WZYX),
-   _T_(I8_SNORM,   8_SNORM,                     WZYX),
+   _TC(I8_UNORM,   8_UNORM,                     WZYX),
+   _TC(I8_SNORM,   8_SNORM,                     WZYX),
 
    _T_(A8_UINT,    8_UINT,                      WZYX),
    _T_(A8_SINT,    8_SINT,                      WZYX),
@@ -99,16 +83,16 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _T_(A16_UINT,    16_UINT,                    WZYX),
    _T_(A16_SINT,    16_SINT,                    WZYX),
    _T_(A16_FLOAT,   16_FLOAT,                   WZYX),
-   _T_(L16_UNORM,   16_UNORM,                   WZYX),
-   _T_(L16_SNORM,   16_SNORM,                   WZYX),
-   _T_(L16_UINT,    16_UINT,                    WZYX),
-   _T_(L16_SINT,    16_SINT,                    WZYX),
-   _T_(L16_FLOAT,   16_FLOAT,                   WZYX),
-   _T_(I16_UNORM,   16_UNORM,                   WZYX),
-   _T_(I16_SNORM,   16_SNORM,                   WZYX),
-   _T_(I16_UINT,    16_UINT,                    WZYX),
-   _T_(I16_SINT,    16_SINT,                    WZYX),
-   _T_(I16_FLOAT,   16_FLOAT,                   WZYX),
+   _TC(L16_UNORM,   16_UNORM,                   WZYX),
+   _TC(L16_SNORM,   16_SNORM,                   WZYX),
+   _TC(L16_UINT,    16_UINT,                    WZYX),
+   _TC(L16_SINT,    16_SINT,                    WZYX),
+   _TC(L16_FLOAT,   16_FLOAT,                   WZYX),
+   _TC(I16_UNORM,   16_UNORM,                   WZYX),
+   _TC(I16_SNORM,   16_SNORM,                   WZYX),
+   _TC(I16_UINT,    16_UINT,                    WZYX),
+   _TC(I16_SINT,    16_SINT,                    WZYX),
+   _TC(I16_FLOAT,   16_FLOAT,                   WZYX),
 
    VTC(R8G8_UNORM,   8_8_UNORM,                 WZYX),
    VTC(R8G8_SNORM,   8_8_SNORM,                 WZYX),
@@ -119,12 +103,14 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _TC(R8G8_SRGB,    8_8_UNORM,                 WZYX),
 
    _T_(L8A8_UNORM,   8_8_UNORM,                 WZYX),
+   _T_(L8A8_SNORM,   8_8_SNORM,                 WZYX),
    _T_(L8A8_UINT,    8_8_UINT,                  WZYX),
    _T_(L8A8_SINT,    8_8_SINT,                  WZYX),
 
    _TC(R5G6B5_UNORM,   5_6_5_UNORM,             WZYX),
    _TC(B5G6R5_UNORM,   5_6_5_UNORM,             WXYZ),
 
+   _TC(R5G5B5A1_UNORM, 5_5_5_1_UNORM,           WZYX),
    _TC(B5G5R5A1_UNORM, 5_5_5_1_UNORM,           WXYZ),
    _TC(B5G5R5X1_UNORM, 5_5_5_1_UNORM,           WXYZ),
    _TC(A1R5G5B5_UNORM, 5_5_5_1_UNORM,           ZYXW),
@@ -142,6 +128,10 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    VT_(R8G8B8_SINT,    8_8_8_SINT,              WZYX),
    V__(R8G8B8_USCALED, 8_8_8_UINT,              WZYX),
    V__(R8G8B8_SSCALED, 8_8_8_SINT,              WZYX),
+   VT_(B8G8R8_UNORM,   8_8_8_UNORM,             WXYZ),
+   VT_(B8G8R8_SNORM,   8_8_8_SNORM,             WXYZ),
+   VT_(B8G8R8_UINT,    8_8_8_UINT,              WXYZ),
+   VT_(B8G8R8_SINT,    8_8_8_SINT,              WXYZ),
 
    /* 32-bit */
    V__(R32_UNORM,   32_UNORM,                   WZYX),
@@ -182,6 +172,7 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _TC(R8G8B8A8_SRGB,    8_8_8_8_UNORM,         WZYX),
    _TC(R8G8B8X8_SRGB,    8_8_8_8_UNORM,         WZYX),
    VTC(R8G8B8A8_SNORM,   8_8_8_8_SNORM,         WZYX),
+   VTC(R8G8B8X8_SNORM,   8_8_8_8_SNORM,         WZYX),
    VTC(R8G8B8A8_UINT,    8_8_8_8_UINT,          WZYX),
    VTC(R8G8B8A8_SINT,    8_8_8_8_SINT,          WZYX),
    V__(R8G8B8A8_USCALED, 8_8_8_8_UINT,          WZYX),
@@ -201,11 +192,19 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _TC(X8B8G8R8_UNORM,   8_8_8_8_UNORM,         XYZW),
    _TC(A8B8G8R8_SRGB,    8_8_8_8_UNORM,         XYZW),
    _TC(X8B8G8R8_SRGB,    8_8_8_8_UNORM,         XYZW),
+   VTC(A8B8G8R8_SNORM,   8_8_8_8_SNORM,         XYZW),
+   VTC(X8B8G8R8_SNORM,   8_8_8_8_SNORM,         XYZW),
+   VTC(A8B8G8R8_UINT,    8_8_8_8_UINT,          XYZW),
+   VTC(X8B8G8R8_SINT,    8_8_8_8_SINT,          XYZW),
 
    VTC(A8R8G8B8_UNORM,   8_8_8_8_UNORM,         ZYXW),
    _TC(X8R8G8B8_UNORM,   8_8_8_8_UNORM,         ZYXW),
    _TC(A8R8G8B8_SRGB,    8_8_8_8_UNORM,         ZYXW),
    _TC(X8R8G8B8_SRGB,    8_8_8_8_UNORM,         ZYXW),
+   VTC(A8R8G8B8_SNORM,   8_8_8_8_SNORM,         ZYXW),
+   VTC(X8R8G8B8_SNORM,   8_8_8_8_SNORM,         ZYXW),
+   VTC(A8R8G8B8_UINT,    8_8_8_8_UINT,          ZYXW),
+   VTC(X8R8G8B8_SINT,    8_8_8_8_SINT,          ZYXW),
 
    FMT(R10G10B10A2_UNORM, 10_10_10_2_UNORM, 10_10_10_2_UNORM, 10_10_10_2_UNORM_DEST, WZYX),
    FMT(B10G10R10A2_UNORM, 10_10_10_2_UNORM, 10_10_10_2_UNORM, 10_10_10_2_UNORM_DEST, WXYZ),
@@ -320,14 +319,14 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _T_(BPTC_RGB_FLOAT,  BPTC_FLOAT,             WZYX),
    _T_(BPTC_RGB_UFLOAT, BPTC_UFLOAT,            WZYX),
 
-   _T_(RGTC1_UNORM, RGTC1_UNORM,                WZYX),
-   _T_(RGTC1_SNORM, RGTC1_SNORM,                WZYX),
-   _T_(RGTC2_UNORM, RGTC2_UNORM,                WZYX),
-   _T_(RGTC2_SNORM, RGTC2_SNORM,                WZYX),
-   _T_(LATC1_UNORM, RGTC1_UNORM,                WZYX),
-   _T_(LATC1_SNORM, RGTC1_SNORM,                WZYX),
-   _T_(LATC2_UNORM, RGTC2_UNORM,                WZYX),
-   _T_(LATC2_SNORM, RGTC2_SNORM,                WZYX),
+   _T_(RGTC1_UNORM, RGTC1_UNORM_FAST,           WZYX),
+   _T_(RGTC1_SNORM, RGTC1_SNORM_FAST,           WZYX),
+   _T_(RGTC2_UNORM, RGTC2_UNORM_FAST,           WZYX),
+   _T_(RGTC2_SNORM, RGTC2_SNORM_FAST,           WZYX),
+   _T_(LATC1_UNORM, RGTC1_UNORM_FAST,           WZYX),
+   _T_(LATC1_SNORM, RGTC1_SNORM_FAST,           WZYX),
+   _T_(LATC2_UNORM, RGTC2_UNORM_FAST,           WZYX),
+   _T_(LATC2_SNORM, RGTC2_SNORM_FAST,           WZYX),
 
    _T_(ASTC_4x4,   ASTC_4x4,                    WZYX),
    _T_(ASTC_5x4,   ASTC_5x4,                    WZYX),
@@ -359,8 +358,8 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _T_(ASTC_12x10_SRGB, ASTC_12x10,             WZYX),
    _T_(ASTC_12x12_SRGB, ASTC_12x12,             WZYX),
 
-   _T_(R8G8_R8B8_UNORM, R8G8R8B8_422_UNORM, WZYX), /* YUYV */
-   _T_(G8R8_B8R8_UNORM, G8R8B8R8_422_UNORM, WZYX), /* UYVY */
+   _T_(G8B8_G8R8_UNORM, R8G8R8B8_422_UNORM,     WZYX), /* YUYV */
+   _T_(B8G8_R8G8_UNORM, G8R8B8R8_422_UNORM,     WZYX), /* UYVY */
 
    _T_(R8_G8B8_420_UNORM, R8_G8B8_2PLANE_420_UNORM, WZYX), /* Gallium NV12 */
    _T_(G8_B8R8_420_UNORM, R8_G8B8_2PLANE_420_UNORM, WZYX), /* Vulkan NV12 */
@@ -369,7 +368,8 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
 /* clang-format on */
 
 static enum a3xx_color_swap
-fd6_pipe2swap(enum pipe_format format, enum a6xx_tile_mode tile_mode)
+fd6_pipe2swap(enum pipe_format format, enum a6xx_tile_mode tile_mode,
+              bool is_mutable)
 {
    if (!formats[format].present)
       return WZYX;
@@ -378,7 +378,7 @@ fd6_pipe2swap(enum pipe_format format, enum a6xx_tile_mode tile_mode)
     * other hand, always respects swap.  We should return WZYX such that CCU
     * and TP agree each other.
     */
-   if (tile_mode)
+   if (tile_mode && !is_mutable)
       return WZYX;
 
    return formats[format].swap;
@@ -396,17 +396,18 @@ fd6_vertex_format(enum pipe_format format)
 enum a3xx_color_swap
 fd6_vertex_swap(enum pipe_format format)
 {
-   return fd6_pipe2swap(format, TILE6_LINEAR);
+   return fd6_pipe2swap(format, TILE6_LINEAR, false);
 }
 
 /* convert pipe format to texture sampler format: */
 enum a6xx_format
-fd6_texture_format(enum pipe_format format, enum a6xx_tile_mode tile_mode)
+fd6_texture_format(enum pipe_format format, enum a6xx_tile_mode tile_mode,
+                   bool is_mutable)
 {
    if (!formats[format].present)
       return FMT6_NONE;
 
-   if (!tile_mode) {
+   if (!tile_mode || is_mutable) {
       switch (format) {
       /* Linear ARGB/ABGR1555 has a special format for sampling (tiled
        * 1555/5551 formats always have the same swizzle and layout).
@@ -427,10 +428,30 @@ fd6_texture_format(enum pipe_format format, enum a6xx_tile_mode tile_mode)
    return formats[format].tex;
 }
 
-enum a3xx_color_swap
-fd6_texture_swap(enum pipe_format format, enum a6xx_tile_mode tile_mode)
+bool
+fd6_texture_format_supported(const struct fd_dev_info *info, enum pipe_format format,
+                             enum a6xx_tile_mode tile_mode, bool is_mutable)
 {
-   if (!tile_mode) {
+   if (info->a6xx.is_a702) {
+      /* BPTC is removed */
+      switch (format) {
+      case PIPE_FORMAT_BPTC_RGBA_UNORM:
+      case PIPE_FORMAT_BPTC_SRGBA:
+      case PIPE_FORMAT_BPTC_RGB_FLOAT:
+      case PIPE_FORMAT_BPTC_RGB_UFLOAT:
+         return false;
+      default:
+         break;
+      }
+   }
+   return fd6_texture_format(format, tile_mode, is_mutable) != FMT6_NONE;
+}
+
+enum a3xx_color_swap
+fd6_texture_swap(enum pipe_format format, enum a6xx_tile_mode tile_mode,
+                 bool is_mutable)
+{
+   if (!tile_mode || is_mutable) {
       switch (format) {
       case PIPE_FORMAT_A1R5G5B5_UNORM:
          return WZYX;
@@ -453,7 +474,7 @@ fd6_texture_swap(enum pipe_format format, enum a6xx_tile_mode tile_mode)
    if (format == PIPE_FORMAT_X24S8_UINT)
       return XYZW;
 
-   return fd6_pipe2swap(format, tile_mode);
+   return fd6_pipe2swap(format, tile_mode, is_mutable);
 }
 
 /* convert pipe format to MRT / copydest format used for render-target: */
@@ -470,9 +491,10 @@ fd6_color_format(enum pipe_format format, enum a6xx_tile_mode tile_mode)
 }
 
 enum a3xx_color_swap
-fd6_color_swap(enum pipe_format format, enum a6xx_tile_mode tile_mode)
+fd6_color_swap(enum pipe_format format, enum a6xx_tile_mode tile_mode,
+               bool is_mutable)
 {
-   return fd6_pipe2swap(format, tile_mode);
+   return fd6_pipe2swap(format, tile_mode, is_mutable);
 }
 
 enum a6xx_depth_format

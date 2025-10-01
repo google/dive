@@ -1,24 +1,7 @@
 /*
  * Copyright 2009 Marek Olšák <maraeo@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE. */
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "r300_context.h"
 #include "r300_emit.h"
@@ -69,7 +52,8 @@ static void r300_blitter_begin(struct r300_context* r300, enum r300_blitter_op o
     util_blitter_save_viewport(r300->blitter, &r300->viewport);
     util_blitter_save_scissor(r300->blitter, r300->scissor_state.state);
     util_blitter_save_sample_mask(r300->blitter, *(unsigned*)r300->sample_mask.state, 0);
-    util_blitter_save_vertex_buffer_slot(r300->blitter, r300->vertex_buffer);
+    util_blitter_save_vertex_buffers(r300->blitter, r300->vertex_buffer,
+                                     r300->nr_vertex_buffers);
     util_blitter_save_vertex_elements(r300->blitter, r300->velems);
 
     struct pipe_constant_buffer cb = {
@@ -139,10 +123,10 @@ static bool r300_cbzb_clear_allowed(struct r300_context *r300,
         (struct pipe_framebuffer_state*)r300->fb_state.state;
 
     /* Only color clear allowed, and only one colorbuffer. */
-    if ((clear_buffers & ~PIPE_CLEAR_COLOR) != 0 || fb->nr_cbufs != 1 || !fb->cbufs[0])
+    if ((clear_buffers & ~PIPE_CLEAR_COLOR) != 0 || fb->nr_cbufs != 1 || !fb->cbufs[0].texture)
         return false;
 
-    return r300_surface(fb->cbufs[0])->cbzb_allowed;
+    return r300_surface(r300->fb_cbufs[0])->cbzb_allowed;
 }
 
 static bool r300_fast_zclear_allowed(struct r300_context *r300,
@@ -151,7 +135,7 @@ static bool r300_fast_zclear_allowed(struct r300_context *r300,
     struct pipe_framebuffer_state *fb =
         (struct pipe_framebuffer_state*)r300->fb_state.state;
 
-    return r300_resource(fb->zsbuf->texture)->tex.zmask_dwords[fb->zsbuf->u.tex.level] != 0;
+    return r300_resource(fb->zsbuf.texture)->tex.zmask_dwords[fb->zsbuf.level] != 0;
 }
 
 static bool r300_hiz_clear_allowed(struct r300_context *r300)
@@ -159,7 +143,7 @@ static bool r300_hiz_clear_allowed(struct r300_context *r300)
     struct pipe_framebuffer_state *fb =
         (struct pipe_framebuffer_state*)r300->fb_state.state;
 
-    return r300_resource(fb->zsbuf->texture)->tex.hiz_dwords[fb->zsbuf->u.tex.level] != 0;
+    return r300_resource(fb->zsbuf.texture)->tex.hiz_dwords[fb->zsbuf.level] != 0;
 }
 
 static uint32_t r300_depth_clear_value(enum pipe_format format,
@@ -194,10 +178,10 @@ static void r300_set_clear_color(struct r300_context *r300,
     union util_color uc;
 
     memset(&uc, 0, sizeof(uc));
-    util_pack_color(color->f, fb->cbufs[0]->format, &uc);
+    util_pack_color(color->f, fb->cbufs[0].format, &uc);
 
-    if (fb->cbufs[0]->format == PIPE_FORMAT_R16G16B16A16_FLOAT ||
-        fb->cbufs[0]->format == PIPE_FORMAT_R16G16B16X16_FLOAT) {
+    if (fb->cbufs[0].format == PIPE_FORMAT_R16G16B16A16_FLOAT ||
+        fb->cbufs[0].format == PIPE_FORMAT_R16G16B16X16_FLOAT) {
         /* (0,1,2,3) maps to (B,G,R,A) */
         r300->color_clear_value_gb = uc.h[0] | ((uint32_t)uc.h[1] << 16);
         r300->color_clear_value_ar = uc.h[2] | ((uint32_t)uc.h[3] << 16);
@@ -275,7 +259,7 @@ static void r300_clear(struct pipe_context* pipe,
         bool zmask_clear, hiz_clear;
 
         /* If both depth and stencil are present, they must be cleared together. */
-        if (fb->zsbuf->texture->format == PIPE_FORMAT_S8_UINT_Z24_UNORM &&
+        if (fb->zsbuf.texture->format == PIPE_FORMAT_S8_UINT_Z24_UNORM &&
             (buffers & PIPE_CLEAR_DEPTHSTENCIL) != PIPE_CLEAR_DEPTHSTENCIL) {
             zmask_clear = false;
             hiz_clear = false;
@@ -303,7 +287,7 @@ static void r300_clear(struct pipe_context* pipe,
             if (r300->hyperz_enabled) {
                 if (zmask_clear) {
                     hyperz_dcv = hyperz->zb_depthclearvalue =
-                        r300_depth_clear_value(fb->zsbuf->format, depth, stencil);
+                        r300_depth_clear_value(fb->zsbuf.format, depth, stencil);
 
                     r300_mark_atom_dirty(r300, &r300->zmask_clear);
                     r300_mark_atom_dirty(r300, &r300->gpu_flush);
@@ -323,8 +307,8 @@ static void r300_clear(struct pipe_context* pipe,
     /* Use fast color clear for an AA colorbuffer.
      * The CMASK is shared between all colorbuffers, so we use it
      * if there is only one colorbuffer bound. */
-    if ((buffers & PIPE_CLEAR_COLOR) && fb->nr_cbufs == 1 && fb->cbufs[0] &&
-        r300_resource(fb->cbufs[0]->texture)->tex.cmask_dwords) {
+    if ((buffers & PIPE_CLEAR_COLOR) && fb->nr_cbufs == 1 && fb->cbufs[0].texture &&
+        r300_resource(fb->cbufs[0].texture)->tex.cmask_dwords) {
         /* Try to obtain the access to the CMASK if we don't have one. */
         if (!r300->cmask_access) {
             r300->cmask_access =
@@ -344,12 +328,12 @@ static void r300_clear(struct pipe_context* pipe,
                     /* Don't reference this, so that the texture can be
                      * destroyed while set in cmask_resource.
                      * Then in texture_destroy, we set cmask_resource to NULL. */
-                    r300->screen->cmask_resource = fb->cbufs[0]->texture;
+                    r300->screen->cmask_resource = fb->cbufs[0].texture;
                 }
                 mtx_unlock(&r300->screen->cmask_mutex);
             }
 
-            if (r300->screen->cmask_resource == fb->cbufs[0]->texture) {
+            if (r300->screen->cmask_resource == fb->cbufs[0].texture) {
                 r300_set_clear_color(r300, color);
                 r300_mark_atom_dirty(r300, &r300->cmask_clear);
                 r300_mark_atom_dirty(r300, &r300->gpu_flush);
@@ -359,7 +343,7 @@ static void r300_clear(struct pipe_context* pipe,
     }
     /* Enable CBZB clear. */
     else if (r300_cbzb_clear_allowed(r300, buffers)) {
-        struct r300_surface *surf = r300_surface(fb->cbufs[0]);
+        struct r300_surface *surf = r300_surface(r300->fb_cbufs[0]);
 
         hyperz->zb_depthclearvalue =
                 r300_depth_clear_cb_value(surf->base.format, color->f);
@@ -468,7 +452,7 @@ static void r300_clear_depth_stencil(struct pipe_context *pipe,
         (struct pipe_framebuffer_state*)r300->fb_state.state;
 
     if (r300->zmask_in_use && !r300->locked_zbuffer) {
-        if (fb->zsbuf->texture == dst->texture) {
+        if (fb->zsbuf.texture == dst->texture) {
             r300_decompress_zmask(r300);
         }
     }
@@ -507,9 +491,8 @@ void r300_decompress_zmask_locked_unsafe(struct r300_context *r300)
     struct pipe_framebuffer_state fb;
 
     memset(&fb, 0, sizeof(fb));
-    fb.width = r300->locked_zbuffer->width;
-    fb.height = r300->locked_zbuffer->height;
-    fb.zsbuf = r300->locked_zbuffer;
+    pipe_surface_size(r300->locked_zbuffer, &fb.width, &fb.height);
+    fb.zsbuf = *r300->locked_zbuffer;
 
     r300->context.set_framebuffer_state(&r300->context, &fb);
     r300_decompress_zmask(r300);
@@ -669,8 +652,8 @@ static void r300_resource_copy_region(struct pipe_context *pipe,
 
     /* Decompress ZMASK. */
     if (r300->zmask_in_use && !r300->locked_zbuffer) {
-        if (fb->zsbuf->texture == src ||
-            fb->zsbuf->texture == dst) {
+        if (fb->zsbuf.texture == src ||
+            fb->zsbuf.texture == dst) {
             r300_decompress_zmask(r300);
         }
     }
@@ -685,7 +668,7 @@ static void r300_resource_copy_region(struct pipe_context *pipe,
     util_blitter_blit_generic(r300->blitter, dst_view, &dstbox,
                               src_view, src_box, src_width0, src_height0,
                               PIPE_MASK_RGBAZS, PIPE_TEX_FILTER_NEAREST, NULL,
-                              false, false, 0);
+                              false, false, 0, NULL);
     r300_blitter_end(r300);
 
     pipe_surface_reference(&dst_view, NULL);
@@ -703,6 +686,7 @@ static bool r300_is_simple_msaa_resolve(const struct pipe_blit_info *info)
            info->dst.resource->format == info->dst.format &&
            info->src.resource->format == info->src.format &&
            !info->scissor_enable &&
+           !info->swizzle_enable &&
            info->mask == PIPE_MASK_RGBA &&
            dst_width == info->src.resource->width0 &&
            dst_height == info->src.resource->height0 &&
@@ -735,9 +719,9 @@ static void r300_simple_msaa_resolve(struct pipe_context *pipe,
     srcsurf = r300_surface(pipe->create_surface(pipe, src, &surf_tmpl));
 
     surf_tmpl.format = format;
-    surf_tmpl.u.tex.level = dst_level;
-    surf_tmpl.u.tex.first_layer =
-    surf_tmpl.u.tex.last_layer = dst_layer;
+    surf_tmpl.level = dst_level;
+    surf_tmpl.first_layer =
+    surf_tmpl.last_layer = dst_layer;
     dstsurf = r300_surface(pipe->create_surface(pipe, dst, &surf_tmpl));
 
     /* COLORPITCH should contain the tiling info of the resolve buffer.
@@ -807,7 +791,7 @@ static void r300_msaa_resolve(struct pipe_context *pipe,
     blit.src.box.z = 0;
 
     r300_blitter_begin(r300, R300_BLIT | R300_IGNORE_RENDER_COND);
-    util_blitter_blit(r300->blitter, &blit);
+    util_blitter_blit(r300->blitter, &blit, NULL);
     r300_blitter_end(r300);
 
     pipe_resource_reference(&tmp, NULL);
@@ -867,15 +851,15 @@ static void r300_blit(struct pipe_context *pipe,
 
     /* Decompress ZMASK. */
     if (r300->zmask_in_use && !r300->locked_zbuffer) {
-        if (fb->zsbuf->texture == info.src.resource ||
-            fb->zsbuf->texture == info.dst.resource) {
+        if (fb->zsbuf.texture == info.src.resource ||
+            fb->zsbuf.texture == info.dst.resource) {
             r300_decompress_zmask(r300);
         }
     }
 
     r300_blitter_begin(r300, R300_BLIT |
 		       (info.render_condition_enable ? 0 : R300_IGNORE_RENDER_COND));
-    util_blitter_blit(r300->blitter, &info);
+    util_blitter_blit(r300->blitter, &info, NULL);
     r300_blitter_end(r300);
 }
 

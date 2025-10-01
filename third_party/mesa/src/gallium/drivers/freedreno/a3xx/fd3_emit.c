@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2013 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2013 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -61,7 +43,7 @@ fd3_emit_const_user(struct fd_ringbuffer *ring,
                     const struct ir3_shader_variant *v, uint32_t regid,
                     uint32_t sizedwords, const uint32_t *dwords)
 {
-   emit_const_asserts(ring, v, regid, sizedwords);
+   emit_const_asserts(v, regid, sizedwords);
 
    OUT_PKT3(ring, CP_LOAD_STATE, 2 + sizedwords);
    OUT_RING(ring, CP_LOAD_STATE_0_DST_OFF(regid / 2) |
@@ -88,7 +70,7 @@ fd3_emit_const_bo(struct fd_ringbuffer *ring,
    uint32_t num_unit = sizedwords / 2;
    assert(num_unit % 2 == 0);
 
-   emit_const_asserts(ring, v, regid, sizedwords);
+   emit_const_asserts(v, regid, sizedwords);
 
    OUT_PKT3(ring, CP_LOAD_STATE, 2);
    OUT_RING(ring, CP_LOAD_STATE_0_DST_OFF(dst_off) |
@@ -99,7 +81,7 @@ fd3_emit_const_bo(struct fd_ringbuffer *ring,
 }
 
 static void
-fd3_emit_const_ptrs(struct fd_ringbuffer *ring, gl_shader_stage type,
+fd3_emit_const_ptrs(struct fd_ringbuffer *ring, mesa_shader_stage type,
                     uint32_t regid, uint32_t num, struct fd_bo **bos,
                     uint32_t *offsets)
 {
@@ -253,7 +235,7 @@ emit_textures(struct fd_context *ctx, struct fd_ringbuffer *ring,
       unsigned off;
       void *ptr;
 
-      u_upload_alloc(fd3_ctx->border_color_uploader, 0,
+      u_upload_alloc_ref(fd3_ctx->border_color_uploader, 0,
                      BORDER_COLOR_UPLOAD_SIZE, BORDER_COLOR_UPLOAD_SIZE, &off,
                      &fd3_ctx->border_color_buf, &ptr);
 
@@ -275,7 +257,7 @@ emit_textures(struct fd_context *ctx, struct fd_ringbuffer *ring,
  */
 void
 fd3_emit_gmem_restore_tex(struct fd_ringbuffer *ring,
-                          struct pipe_surface **psurf, int bufs)
+                          struct pipe_surface *psurf, int bufs)
 {
    int i, j;
 
@@ -305,7 +287,7 @@ fd3_emit_gmem_restore_tex(struct fd_ringbuffer *ring,
    OUT_RING(ring, CP_LOAD_STATE_1_STATE_TYPE(ST_CONSTANTS) |
                      CP_LOAD_STATE_1_EXT_SRC_ADDR(0));
    for (i = 0; i < bufs; i++) {
-      if (!psurf[i]) {
+      if (!psurf[i].texture) {
          OUT_RING(ring, A3XX_TEX_CONST_0_TYPE(A3XX_TEX_2D) |
                            A3XX_TEX_CONST_0_SWIZ_X(A3XX_TEX_ONE) |
                            A3XX_TEX_CONST_0_SWIZ_Y(A3XX_TEX_ONE) |
@@ -317,8 +299,10 @@ fd3_emit_gmem_restore_tex(struct fd_ringbuffer *ring,
          continue;
       }
 
-      struct fd_resource *rsc = fd_resource(psurf[i]->texture);
-      enum pipe_format format = fd_gmem_restore_format(psurf[i]->format);
+      struct fd_resource *rsc = fd_resource(psurf[i].texture);
+      enum pipe_format format = fd_gmem_restore_format(psurf[i].format);
+      uint16_t width, height;
+      pipe_surface_size(&psurf[i], &width, &height);
       /* The restore blit_zs shader expects stencil in sampler 0, and depth
        * in sampler 1
        */
@@ -328,17 +312,17 @@ fd3_emit_gmem_restore_tex(struct fd_ringbuffer *ring,
       }
 
       /* note: PIPE_BUFFER disallowed for surfaces */
-      unsigned lvl = psurf[i]->u.tex.level;
+      unsigned lvl = psurf[i].level;
 
-      assert(psurf[i]->u.tex.first_layer == psurf[i]->u.tex.last_layer);
+      assert(psurf[i].first_layer == psurf[i].last_layer);
 
       OUT_RING(ring, A3XX_TEX_CONST_0_TILE_MODE(rsc->layout.tile_mode) |
                         A3XX_TEX_CONST_0_FMT(fd3_pipe2tex(format)) |
                         A3XX_TEX_CONST_0_TYPE(A3XX_TEX_2D) |
                         fd3_tex_swiz(format, PIPE_SWIZZLE_X, PIPE_SWIZZLE_Y,
                                      PIPE_SWIZZLE_Z, PIPE_SWIZZLE_W));
-      OUT_RING(ring, A3XX_TEX_CONST_1_WIDTH(psurf[i]->width) |
-                        A3XX_TEX_CONST_1_HEIGHT(psurf[i]->height));
+      OUT_RING(ring, A3XX_TEX_CONST_1_WIDTH(width) |
+                        A3XX_TEX_CONST_1_HEIGHT(height));
       OUT_RING(ring, A3XX_TEX_CONST_2_PITCH(fd_resource_pitch(rsc, lvl)) |
                         A3XX_TEX_CONST_2_INDX(BASETABLE_SZ * i));
       OUT_RING(ring, 0x00000000);
@@ -353,14 +337,14 @@ fd3_emit_gmem_restore_tex(struct fd_ringbuffer *ring,
    OUT_RING(ring, CP_LOAD_STATE_1_STATE_TYPE(ST_CONSTANTS) |
                      CP_LOAD_STATE_1_EXT_SRC_ADDR(0));
    for (i = 0; i < bufs; i++) {
-      if (psurf[i]) {
-         struct fd_resource *rsc = fd_resource(psurf[i]->texture);
+      if (psurf[i].texture) {
+         struct fd_resource *rsc = fd_resource(psurf[i].texture);
          /* Matches above logic for blit_zs shader */
          if (rsc->stencil && i == 0)
             rsc = rsc->stencil;
-         unsigned lvl = psurf[i]->u.tex.level;
+         unsigned lvl = psurf[i].level;
          uint32_t offset =
-            fd_resource_offset(rsc, lvl, psurf[i]->u.tex.first_layer);
+            fd_resource_offset(rsc, lvl, psurf[i].first_layer);
          OUT_RELOC(ring, rsc->bo, offset, 0, 0);
       } else {
          OUT_RING(ring, 0x00000000);
@@ -400,7 +384,7 @@ fd3_emit_vertex_bufs(struct fd_ringbuffer *ring, struct fd3_emit *emit)
             vtxcnt_regid = vp->inputs[i].regid;
             break;
          default:
-            unreachable("invalid system value");
+            UNREACHABLE("invalid system value");
             break;
          }
       } else if (i < vtx->vtx->num_elements) {
@@ -718,9 +702,9 @@ fd3_emit_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
        (FD_DIRTY_VIEWPORT | FD_DIRTY_RASTERIZER | FD_DIRTY_FRAMEBUFFER)) {
       float zmin, zmax;
       int depth = 24;
-      if (ctx->batch->framebuffer.zsbuf) {
+      if (ctx->batch->framebuffer.zsbuf.texture) {
          depth = util_format_get_component_bits(
-            pipe_surface_format(ctx->batch->framebuffer.zsbuf),
+            pipe_surface_format(&ctx->batch->framebuffer.zsbuf),
             UTIL_FORMAT_COLORSPACE_ZS, 0);
       }
       util_viewport_zmin_zmax(&ctx->viewport[0], ctx->rasterizer->clip_halfz,
@@ -765,7 +749,7 @@ fd3_emit_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
 
       for (i = 0; i < ARRAY_SIZE(blend->rb_mrt); i++) {
          enum pipe_format format =
-            pipe_surface_format(ctx->batch->framebuffer.cbufs[i]);
+            pipe_surface_format(&ctx->batch->framebuffer.cbufs[i]);
          const struct util_format_description *desc =
             util_format_description(format);
          bool is_float = util_format_is_float(format);
@@ -779,8 +763,10 @@ fd3_emit_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
             control |= A3XX_RB_MRT_CONTROL_ROP_CODE(ROP_COPY);
          }
 
-         if (format == PIPE_FORMAT_NONE)
-            control &= ~A3XX_RB_MRT_CONTROL_COMPONENT_ENABLE__MASK;
+         if (format == PIPE_FORMAT_NONE) {
+            control =
+               pkt_field_set(A3XX_RB_MRT_CONTROL_COMPONENT_ENABLE, control, 0);
+         }
 
          if (!has_alpha) {
             control &= ~A3XX_RB_MRT_CONTROL_BLEND2;
@@ -824,11 +810,11 @@ fd3_emit_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
    if (dirty & FD_DIRTY_TEX)
       fd_wfi(ctx->batch, ring);
 
-   if (ctx->dirty_shader[PIPE_SHADER_VERTEX] & FD_DIRTY_SHADER_TEX)
-      emit_textures(ctx, ring, SB_VERT_TEX, &ctx->tex[PIPE_SHADER_VERTEX]);
+   if (ctx->dirty_shader[MESA_SHADER_VERTEX] & FD_DIRTY_SHADER_TEX)
+      emit_textures(ctx, ring, SB_VERT_TEX, &ctx->tex[MESA_SHADER_VERTEX]);
 
-   if (ctx->dirty_shader[PIPE_SHADER_FRAGMENT] & FD_DIRTY_SHADER_TEX)
-      emit_textures(ctx, ring, SB_FRAG_TEX, &ctx->tex[PIPE_SHADER_FRAGMENT]);
+   if (ctx->dirty_shader[MESA_SHADER_FRAGMENT] & FD_DIRTY_SHADER_TEX)
+      emit_textures(ctx, ring, SB_FRAG_TEX, &ctx->tex[MESA_SHADER_FRAGMENT]);
 }
 
 /* emit setup at begin of new cmdstream buffer (don't rely on previous

@@ -66,6 +66,7 @@ nir_lower_fb_read_instr(nir_builder *b, nir_intrinsic_instr *intr,
    tex->coord_components = 3;
    tex->dest_type = nir_type_float32;
    tex->is_array = true;
+   tex->can_speculate = true;
    tex->src[0] = nir_tex_src_for_ssa(nir_tex_src_coord,
                                      nir_vec3(b, nir_channel(b, fragcoord, 0), nir_channel(b, fragcoord, 1), layer));
    tex->src[1] = nir_tex_src_for_ssa(nir_tex_src_ms_index, sampid);
@@ -87,7 +88,6 @@ nir_lower_fb_read(nir_shader *shader)
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
 
    return nir_shader_intrinsics_pass(shader, nir_lower_fb_read_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
-                                       NULL);
+                                     nir_metadata_control_flow,
+                                     NULL);
 }

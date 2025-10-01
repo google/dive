@@ -42,9 +42,9 @@ wrap_matrix(struct vtn_builder *b, struct vtn_ssa_value *val)
    if (glsl_type_is_matrix(val->type))
       return val;
 
-   struct vtn_ssa_value *dest = rzalloc(b, struct vtn_ssa_value);
+   struct vtn_ssa_value *dest = vtn_zalloc(b, struct vtn_ssa_value);
    dest->type = glsl_get_bare_type(val->type);
-   dest->elems = ralloc_array(b, struct vtn_ssa_value *, 1);
+   dest->elems = vtn_alloc_array(b, struct vtn_ssa_value *, 1);
    dest->elems[0] = val;
 
    return dest;
@@ -94,38 +94,16 @@ matrix_multiply(struct vtn_builder *b,
       transpose_result = true;
    }
 
-   if (src0_transpose && !src1_transpose &&
-       glsl_get_base_type(src0->type) == GLSL_TYPE_FLOAT) {
-      /* We already have the rows of src0 and the columns of src1 available,
-       * so we can just take the dot product of each row with each column to
-       * get the result.
-       */
-
-      for (unsigned i = 0; i < src1_columns; i++) {
-         nir_def *vec_src[4];
-         for (unsigned j = 0; j < src0_rows; j++) {
-            vec_src[j] = nir_fdot(&b->nb, src0_transpose->elems[j]->def,
-                                          src1->elems[i]->def);
-         }
-         dest->elems[i]->def = nir_vec(&b->nb, vec_src, src0_rows);
-      }
-   } else {
-      /* We don't handle the case where src1 is transposed but not src0, since
-       * the general case only uses individual components of src1 so the
-       * optimizer should chew through the transpose we emitted for src1.
-       */
-
-      for (unsigned i = 0; i < src1_columns; i++) {
-         /* dest[i] = sum(src0[j] * src1[i][j] for all j) */
+   for (unsigned i = 0; i < src1_columns; i++) {
+      /* dest[i] = sum(src0[j] * src1[i][j] for all j) */
+      dest->elems[i]->def =
+         nir_fmul(&b->nb, src0->elems[src0_columns - 1]->def,
+                  nir_channel(&b->nb, src1->elems[i]->def, src0_columns - 1));
+      for (int j = src0_columns - 2; j >= 0; j--) {
          dest->elems[i]->def =
-            nir_fmul(&b->nb, src0->elems[src0_columns - 1]->def,
-                     nir_channel(&b->nb, src1->elems[i]->def, src0_columns - 1));
-         for (int j = src0_columns - 2; j >= 0; j--) {
-            dest->elems[i]->def =
-               nir_ffma(&b->nb, src0->elems[j]->def,
-                                nir_channel(&b->nb, src1->elems[i]->def, j),
-                                dest->elems[i]->def);
-         }
+            nir_ffma(&b->nb, src0->elems[j]->def,
+                             nir_channel(&b->nb, src1->elems[i]->def, j),
+                             dest->elems[i]->def);
       }
    }
 
@@ -171,7 +149,7 @@ vtn_mediump_downconvert(struct vtn_builder *b, enum glsl_base_type base_type, ni
    case GLSL_TYPE_BOOL:
       return def;
    default:
-      unreachable("bad relaxed precision input type");
+      UNREACHABLE("bad relaxed precision input type");
    }
 }
 
@@ -257,8 +235,8 @@ vtn_handle_matrix_alu(struct vtn_builder *b, SpvOp opcode,
    }
 }
 
-static nir_alu_type
-convert_op_src_type(SpvOp opcode)
+nir_alu_type
+vtn_convert_op_src_type(SpvOp opcode)
 {
    switch (opcode) {
    case SpvOpFConvert:
@@ -274,12 +252,12 @@ convert_op_src_type(SpvOp opcode)
    case SpvOpSatConvertUToS:
       return nir_type_uint;
    default:
-      unreachable("Unhandled conversion op");
+      UNREACHABLE("Unhandled conversion op");
    }
 }
 
-static nir_alu_type
-convert_op_dst_type(SpvOp opcode)
+nir_alu_type
+vtn_convert_op_dst_type(SpvOp opcode)
 {
    switch (opcode) {
    case SpvOpFConvert:
@@ -295,15 +273,19 @@ convert_op_dst_type(SpvOp opcode)
    case SpvOpSatConvertSToU:
       return nir_type_uint;
    default:
-      unreachable("Unhandled conversion op");
+      UNREACHABLE("Unhandled conversion op");
    }
 }
 
 nir_op
 vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b,
                                 SpvOp opcode, bool *swap, bool *exact,
-                                unsigned src_bit_size, unsigned dst_bit_size)
+                                const glsl_type *src_type,
+                                const glsl_type *dst_type)
 {
+   const unsigned src_bit_size = glsl_get_bit_size(src_type);
+   const unsigned dst_bit_size = glsl_get_bit_size(dst_type);
+
    /* Indicates that the first two arguments should be swapped.  This is
     * used for implementing greater-than and less-than-or-equal.
     */
@@ -400,21 +382,13 @@ vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b,
    case SpvOpConvertUToF:
    case SpvOpSConvert:
    case SpvOpFConvert: {
-      nir_alu_type src_type = convert_op_src_type(opcode) | src_bit_size;
-      nir_alu_type dst_type = convert_op_dst_type(opcode) | dst_bit_size;
+      nir_alu_type src_type = vtn_convert_op_src_type(opcode) | src_bit_size;
+      nir_alu_type dst_type = vtn_convert_op_dst_type(opcode) | dst_bit_size;
       return nir_type_conversion_op(src_type, dst_type, nir_rounding_mode_undef);
    }
 
    case SpvOpPtrCastToGeneric:   return nir_op_mov;
    case SpvOpGenericCastToPtr:   return nir_op_mov;
-
-   /* Derivatives: */
-   case SpvOpDPdx:         return nir_op_fddx;
-   case SpvOpDPdy:         return nir_op_fddy;
-   case SpvOpDPdxFine:     return nir_op_fddx_fine;
-   case SpvOpDPdyFine:     return nir_op_fddy_fine;
-   case SpvOpDPdxCoarse:   return nir_op_fddx_coarse;
-   case SpvOpDPdyCoarse:   return nir_op_fddy_coarse;
 
    case SpvOpIsNormal:     return nir_op_fisnormal;
    case SpvOpIsFinite:     return nir_op_fisfinite;
@@ -425,21 +399,60 @@ vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b,
 }
 
 static void
-handle_no_contraction(struct vtn_builder *b, UNUSED struct vtn_value *val,
-                      UNUSED int member, const struct vtn_decoration *dec,
-                      UNUSED void *_void)
+handle_fp_fast_math(struct vtn_builder *b, UNUSED struct vtn_value *val,
+                 UNUSED int member, const struct vtn_decoration *dec,
+                 UNUSED void *_void)
 {
    vtn_assert(dec->scope == VTN_DEC_DECORATION);
-   if (dec->decoration != SpvDecorationNoContraction)
+   if (dec->decoration != SpvDecorationFPFastMathMode)
       return;
 
-   b->nb.exact = true;
+   SpvFPFastMathModeMask can_fast_math =
+      SpvFPFastMathModeAllowRecipMask |
+      SpvFPFastMathModeAllowContractMask |
+      SpvFPFastMathModeAllowReassocMask |
+      SpvFPFastMathModeAllowTransformMask;
+
+   if ((dec->operands[0] & can_fast_math) != can_fast_math)
+      b->nb.exact = true;
+
+   /* Decoration overrides defaults */
+   b->nb.fp_fast_math = 0;
+   if (!(dec->operands[0] & SpvFPFastMathModeNSZMask))
+      b->nb.fp_fast_math |=
+         FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP16 |
+         FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP32 |
+         FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP64;
+   if (!(dec->operands[0] & SpvFPFastMathModeNotNaNMask))
+      b->nb.fp_fast_math |=
+         FLOAT_CONTROLS_NAN_PRESERVE_FP16 |
+         FLOAT_CONTROLS_NAN_PRESERVE_FP32 |
+         FLOAT_CONTROLS_NAN_PRESERVE_FP64;
+   if (!(dec->operands[0] & SpvFPFastMathModeNotInfMask))
+      b->nb.fp_fast_math |=
+         FLOAT_CONTROLS_INF_PRESERVE_FP16 |
+         FLOAT_CONTROLS_INF_PRESERVE_FP32 |
+         FLOAT_CONTROLS_INF_PRESERVE_FP64;
 }
 
 void
-vtn_handle_no_contraction(struct vtn_builder *b, struct vtn_value *val)
+vtn_handle_fp_fast_math(struct vtn_builder *b, struct vtn_value *val)
 {
-   vtn_foreach_decoration(b, val, handle_no_contraction, NULL);
+   /* Take the NaN/Inf/SZ preserve bits from the execution mode and set them
+    * on the builder, so the generated instructions can take it from it.
+    * We only care about some of them, check nir_alu_instr for details.
+    * We also copy all bit widths, because we can't easily get the correct one
+    * here.
+    */
+#define FLOAT_CONTROLS2_BITS (FLOAT_CONTROLS_SIGNED_ZERO_INF_NAN_PRESERVE_FP16 | \
+                              FLOAT_CONTROLS_SIGNED_ZERO_INF_NAN_PRESERVE_FP32 | \
+                              FLOAT_CONTROLS_SIGNED_ZERO_INF_NAN_PRESERVE_FP64)
+   static_assert(FLOAT_CONTROLS2_BITS == BITSET_MASK(9),
+      "enum float_controls and fp_fast_math out of sync!");
+   b->nb.fp_fast_math = b->shader->info.float_controls_execution_mode &
+      FLOAT_CONTROLS2_BITS;
+   vtn_foreach_decoration(b, val, handle_fp_fast_math, NULL);
+#undef FLOAT_CONTROLS2_BITS
 }
 
 nir_rounding_mode
@@ -493,54 +506,11 @@ handle_conversion_opts(struct vtn_builder *b, UNUSED struct vtn_value *val,
    }
 }
 
-static void
-handle_no_wrap(UNUSED struct vtn_builder *b, UNUSED struct vtn_value *val,
-               UNUSED int member,
-               const struct vtn_decoration *dec, void *_alu)
-{
-   nir_alu_instr *alu = _alu;
-   switch (dec->decoration) {
-   case SpvDecorationNoSignedWrap:
-      alu->no_signed_wrap = true;
-      break;
-   case SpvDecorationNoUnsignedWrap:
-      alu->no_unsigned_wrap = true;
-      break;
-   default:
-      /* Do nothing. */
-      break;
-   }
-}
-
-static void
-vtn_value_is_relaxed_precision_cb(struct vtn_builder *b,
-                          struct vtn_value *val, int member,
-                          const struct vtn_decoration *dec, void *void_ctx)
-{
-   bool *relaxed_precision = void_ctx;
-   switch (dec->decoration) {
-   case SpvDecorationRelaxedPrecision:
-      *relaxed_precision = true;
-      break;
-
-   default:
-      break;
-   }
-}
-
-bool
-vtn_value_is_relaxed_precision(struct vtn_builder *b, struct vtn_value *val)
-{
-   bool result = false;
-   vtn_foreach_decoration(b, val,
-                          vtn_value_is_relaxed_precision_cb, &result);
-   return result;
-}
-
 static bool
 vtn_alu_op_mediump_16bit(struct vtn_builder *b, SpvOp opcode, struct vtn_value *dest_val)
 {
-   if (!b->options->mediump_16bit_alu || !vtn_value_is_relaxed_precision(b, dest_val))
+   if (!b->options->mediump_16bit_alu ||
+       !vtn_has_decoration(b, dest_val, SpvDecorationRelaxedPrecision))
       return false;
 
    switch (opcode) {
@@ -554,6 +524,10 @@ vtn_alu_op_mediump_16bit(struct vtn_builder *b, SpvOp opcode, struct vtn_value *
    case SpvOpFwidthFine:
    case SpvOpFwidthCoarse:
       return b->options->mediump_16bit_derivatives;
+   case SpvOpBitFieldInsert:
+   case SpvOpBitFieldSExtract:
+   case SpvOpBitFieldUExtract:
+      return false;
    default:
       return true;
    }
@@ -573,7 +547,7 @@ vtn_mediump_upconvert(struct vtn_builder *b, enum glsl_base_type base_type, nir_
    case GLSL_TYPE_UINT:
       return nir_u2u32(&b->nb, def);
    default:
-      unreachable("bad relaxed precision output type");
+      UNREACHABLE("bad relaxed precision output type");
    }
 }
 
@@ -590,6 +564,159 @@ vtn_mediump_upconvert_value(struct vtn_builder *b, struct vtn_ssa_value *value)
    }
 }
 
+static nir_def *
+vtn_handle_deriv(struct vtn_builder *b, SpvOp opcode, nir_def *src)
+{
+   /* SPV_NV_compute_shader_derivatives:
+    * In the GLCompute Execution Model:
+    * Selection of the four invocations is determined by the DerivativeGroup*NV
+    * execution mode that was specified for the entry point.
+    * If neither derivative group mode was specified, the derivatives return zero.
+    */
+   if (b->nb.shader->info.stage == MESA_SHADER_COMPUTE &&
+       b->nb.shader->info.derivative_group == DERIVATIVE_GROUP_NONE) {
+      return nir_imm_zero(&b->nb, src->num_components, src->bit_size);
+   }
+
+   switch (opcode) {
+   case SpvOpDPdx:
+      return nir_ddx(&b->nb, src);
+   case SpvOpDPdxFine:
+      return nir_ddx_fine(&b->nb, src);
+   case SpvOpDPdxCoarse:
+      return nir_ddx_coarse(&b->nb, src);
+   case SpvOpDPdy:
+      return nir_ddy(&b->nb, src);
+   case SpvOpDPdyFine:
+      return nir_ddy_fine(&b->nb, src);
+   case SpvOpDPdyCoarse:
+      return nir_ddy_coarse(&b->nb, src);
+   case SpvOpFwidth:
+      return nir_fadd(&b->nb,
+                      nir_fabs(&b->nb, nir_ddx(&b->nb, src)),
+                      nir_fabs(&b->nb, nir_ddy(&b->nb, src)));
+   case SpvOpFwidthFine:
+      return nir_fadd(&b->nb,
+                      nir_fabs(&b->nb, nir_ddx_fine(&b->nb, src)),
+                      nir_fabs(&b->nb, nir_ddy_fine(&b->nb, src)));
+   case SpvOpFwidthCoarse:
+      return nir_fadd(&b->nb,
+                      nir_fabs(&b->nb, nir_ddx_coarse(&b->nb, src)),
+                      nir_fabs(&b->nb, nir_ddy_coarse(&b->nb, src)));
+   default: UNREACHABLE("Not a derivative opcode");
+   }
+}
+
+static nir_def *
+vtn_handle_convert(struct vtn_builder *b, SpvOp opcode,
+                   struct vtn_value *dest_val,
+                   const struct glsl_type *glsl_dest_type,
+                   const struct glsl_type *glsl_src_type,
+                   nir_def *src)
+{
+   /* From SPV_KHR_bfloat16 extension:
+    *
+    *     Conversions to or from floating-point values with the `BFloat16KHR`
+    *     encoding first convert the source value to IEEE754 binary32, and then
+    *     from IEEE754 binary32 to the target format.
+    *
+    * For now we are limiting exposure of bfloat16 in NIR, so apply the
+    * extra conversions directly here.
+    * The same applies to E4M3 and E5M2.
+    */
+   if (glsl_type_is_bfloat_16(glsl_src_type)) {
+      nir_def *src_as_float = nir_bf2f(&b->nb, src);
+      if (glsl_type_is_float(glsl_dest_type))
+         return src_as_float;
+      return vtn_handle_convert(b, opcode, dest_val, glsl_dest_type,
+                                glsl_float_type(), src_as_float);
+
+   } else if (glsl_type_is_bfloat_16(glsl_dest_type)) {
+      nir_def *src_as_float;
+      if (glsl_type_is_float(glsl_src_type))
+         src_as_float = src;
+      else
+         src_as_float = vtn_handle_convert(b, opcode, dest_val, glsl_float_type(),
+                                           glsl_src_type, src);
+      return nir_f2bf(&b->nb, src_as_float);
+   } else if (glsl_type_is_e4m3fn(glsl_src_type)) {
+      nir_def *src_as_float = nir_e4m3fn2f(&b->nb, src);
+      if (glsl_type_is_float(glsl_dest_type))
+         return src_as_float;
+      return vtn_handle_convert(b, opcode, dest_val, glsl_dest_type,
+                                glsl_float_type(), src_as_float);
+
+   } else if (glsl_type_is_e4m3fn(glsl_dest_type)) {
+      nir_def *src_as_float;
+      if (glsl_type_is_float(glsl_src_type))
+         src_as_float = src;
+      else
+         src_as_float = vtn_handle_convert(b, opcode, dest_val, glsl_float_type(),
+                                           glsl_src_type, src);
+      if (vtn_has_decoration(b, dest_val, SpvDecorationSaturatedToLargestFloat8NormalConversionEXT))
+         return nir_f2e4m3fn_sat(&b->nb, src_as_float);
+      else
+         return nir_f2e4m3fn(&b->nb, src_as_float);
+   } else if (glsl_type_is_e5m2(glsl_src_type)) {
+      nir_def *src_as_float = nir_e5m22f(&b->nb, src);
+      if (glsl_type_is_float(glsl_dest_type))
+         return src_as_float;
+      return vtn_handle_convert(b, opcode, dest_val, glsl_dest_type,
+                                glsl_float_type(), src_as_float);
+
+   } else if (glsl_type_is_e5m2(glsl_dest_type)) {
+      nir_def *src_as_float;
+      if (glsl_type_is_float(glsl_src_type))
+         src_as_float = src;
+      else
+         src_as_float = vtn_handle_convert(b, opcode, dest_val, glsl_float_type(),
+                                           glsl_src_type, src);
+      if (vtn_has_decoration(b, dest_val, SpvDecorationSaturatedToLargestFloat8NormalConversionEXT))
+         return nir_f2e5m2_sat(&b->nb, src_as_float);
+      else
+         return nir_f2e5m2(&b->nb, src_as_float);
+   }
+
+   /* Use bit_size from NIR source instead of from the original src type,
+    * to account for mediump_16bit.  See vtn_handle_alu() for details.
+    */
+   unsigned src_bit_size = src->bit_size;
+   unsigned dst_bit_size = glsl_get_bit_size(glsl_dest_type);
+   nir_alu_type src_type = vtn_convert_op_src_type(opcode) | src_bit_size;
+   nir_alu_type dst_type = vtn_convert_op_dst_type(opcode) | dst_bit_size;
+
+   struct conversion_opts opts = {
+      .rounding_mode = nir_rounding_mode_undef,
+      .saturate = false,
+   };
+   vtn_foreach_decoration(b, dest_val, handle_conversion_opts, &opts);
+
+   if (opcode == SpvOpSatConvertSToU || opcode == SpvOpSatConvertUToS)
+      opts.saturate = true;
+
+   nir_def *result;
+
+   if (b->shader->info.stage == MESA_SHADER_KERNEL) {
+      if (opts.rounding_mode == nir_rounding_mode_undef && !opts.saturate) {
+         result = nir_type_convert(&b->nb, src, src_type, dst_type,
+                                   nir_rounding_mode_undef);
+      } else {
+         result = nir_convert_alu_types(&b->nb, dst_bit_size, src,
+                                        src_type, dst_type,
+                                        opts.rounding_mode, opts.saturate);
+      }
+   } else {
+      vtn_fail_if(opts.rounding_mode != nir_rounding_mode_undef &&
+                  dst_type != nir_type_float16,
+                  "Rounding modes are only allowed on conversions to "
+                  "16-bit float types");
+      result = nir_type_convert(&b->nb, src, src_type, dst_type,
+                                opts.rounding_mode);
+   }
+
+   return result;
+}
+
 void
 vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
                const uint32_t *w, unsigned count)
@@ -597,7 +724,13 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    struct vtn_value *dest_val = vtn_untyped_value(b, w[2]);
    const struct glsl_type *dest_type = vtn_get_type(b, w[1])->type;
 
-   vtn_handle_no_contraction(b, dest_val);
+   if (glsl_type_is_cmat(dest_type)) {
+      vtn_handle_cooperative_alu(b, dest_val, dest_type, opcode, w, count);
+      return;
+   }
+
+   b->nb.exact |= vtn_has_decoration(b, dest_val, SpvDecorationNoContraction);
+   vtn_handle_fp_fast_math(b, dest_val);
    bool mediump_16bit = vtn_alu_op_mediump_16bit(b, opcode, dest_val);
 
    /* Collect the various SSA sources */
@@ -646,7 +779,9 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    }
 
    case SpvOpDot:
-      dest->def = nir_fdot(&b->nb, src[0], src[1]);
+      dest->def = glsl_type_is_bfloat_16(dest_type) ?
+         nir_bfdot(&b->nb, src[0], src[1]) :
+         nir_fdot(&b->nb, src[0], src[1]);
       break;
 
    case SpvOpIAddCarry:
@@ -687,20 +822,16 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       break;
    }
 
+   case SpvOpDPdx:
+   case SpvOpDPdxFine:
+   case SpvOpDPdxCoarse:
+   case SpvOpDPdy:
+   case SpvOpDPdyFine:
+   case SpvOpDPdyCoarse:
    case SpvOpFwidth:
-      dest->def = nir_fadd(&b->nb,
-                               nir_fabs(&b->nb, nir_fddx(&b->nb, src[0])),
-                               nir_fabs(&b->nb, nir_fddy(&b->nb, src[0])));
-      break;
    case SpvOpFwidthFine:
-      dest->def = nir_fadd(&b->nb,
-                               nir_fabs(&b->nb, nir_fddx_fine(&b->nb, src[0])),
-                               nir_fabs(&b->nb, nir_fddy_fine(&b->nb, src[0])));
-      break;
    case SpvOpFwidthCoarse:
-      dest->def = nir_fadd(&b->nb,
-                               nir_fabs(&b->nb, nir_fddx_coarse(&b->nb, src[0])),
-                               nir_fabs(&b->nb, nir_fddy_coarse(&b->nb, src[0])));
+      dest->def = vtn_handle_deriv(b, opcode, src[0]);
       break;
 
    case SpvOpVectorTimesScalar:
@@ -738,8 +869,16 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    }
 
    case SpvOpIsInf: {
+      const bool save_exact = b->nb.exact;
+      const unsigned save_fast_math = b->nb.fp_fast_math;
+
+      b->nb.exact = true;
+      b->nb.fp_fast_math = 0;
       nir_def *inf = nir_imm_floatN_t(&b->nb, INFINITY, src[0]->bit_size);
-      dest->def = nir_ieq(&b->nb, nir_fabs(&b->nb, src[0]), inf);
+      dest->def = nir_feq(&b->nb, nir_fabs(&b->nb, src[0]), inf);
+
+      b->nb.exact = save_exact;
+      b->nb.fp_fast_math = save_fast_math;
       break;
    }
 
@@ -772,11 +911,9 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpFUnordGreaterThanEqual: {
       bool swap;
       bool unused_exact;
-      unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
-      unsigned dst_bit_size = glsl_get_bit_size(dest_type);
       nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap,
                                                   &unused_exact,
-                                                  src_bit_size, dst_bit_size);
+                                                  vtn_src[0]->type, dest_type);
 
       if (swap) {
          nir_def *tmp = src[0];
@@ -792,7 +929,7 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
       switch (op) {
       case nir_op_fge: op = nir_op_flt; break;
       case nir_op_flt: op = nir_op_fge; break;
-      default: unreachable("Impossible opcode.");
+      default: UNREACHABLE("Impossible opcode.");
       }
 
       dest->def =
@@ -839,40 +976,10 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpSConvert:
    case SpvOpFConvert:
    case SpvOpSatConvertSToU:
-   case SpvOpSatConvertUToS: {
-      unsigned src_bit_size = src[0]->bit_size;
-      unsigned dst_bit_size = glsl_get_bit_size(dest_type);
-      nir_alu_type src_type = convert_op_src_type(opcode) | src_bit_size;
-      nir_alu_type dst_type = convert_op_dst_type(opcode) | dst_bit_size;
-
-      struct conversion_opts opts = {
-         .rounding_mode = nir_rounding_mode_undef,
-         .saturate = false,
-      };
-      vtn_foreach_decoration(b, dest_val, handle_conversion_opts, &opts);
-
-      if (opcode == SpvOpSatConvertSToU || opcode == SpvOpSatConvertUToS)
-         opts.saturate = true;
-
-      if (b->shader->info.stage == MESA_SHADER_KERNEL) {
-         if (opts.rounding_mode == nir_rounding_mode_undef && !opts.saturate) {
-            dest->def = nir_type_convert(&b->nb, src[0], src_type, dst_type,
-                                         nir_rounding_mode_undef);
-         } else {
-            dest->def = nir_convert_alu_types(&b->nb, dst_bit_size, src[0],
-                                              src_type, dst_type,
-                                              opts.rounding_mode, opts.saturate);
-         }
-      } else {
-         vtn_fail_if(opts.rounding_mode != nir_rounding_mode_undef &&
-                     dst_type != nir_type_float16,
-                     "Rounding modes are only allowed on conversions to "
-                     "16-bit float types");
-         dest->def = nir_type_convert(&b->nb, src[0], src_type, dst_type,
-                                      opts.rounding_mode);
-      }
+   case SpvOpSatConvertUToS:
+      dest->def = vtn_handle_convert(b, opcode, dest_val, dest_type,
+                                     vtn_src[0]->type, src[0]);
       break;
-   }
 
    case SpvOpBitFieldInsert:
    case SpvOpBitFieldSExtract:
@@ -882,10 +989,8 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpShiftRightLogical: {
       bool swap;
       bool exact;
-      unsigned src0_bit_size = glsl_get_bit_size(vtn_src[0]->type);
-      unsigned dst_bit_size = glsl_get_bit_size(dest_type);
       nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap, &exact,
-                                                  src0_bit_size, dst_bit_size);
+                                                  vtn_src[0]->type, dest_type);
 
       assert(!exact);
 
@@ -937,16 +1042,14 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpSDotAccSatKHR:
    case SpvOpUDotAccSatKHR:
    case SpvOpSUDotAccSatKHR:
-      unreachable("Should have called vtn_handle_integer_dot instead.");
+      UNREACHABLE("Should have called vtn_handle_integer_dot instead.");
 
    default: {
       bool swap;
       bool exact;
-      unsigned src_bit_size = glsl_get_bit_size(vtn_src[0]->type);
-      unsigned dst_bit_size = glsl_get_bit_size(dest_type);
       nir_op op = vtn_nir_alu_op_for_spirv_opcode(b, opcode, &swap,
                                                   &exact,
-                                                  src_bit_size, dst_bit_size);
+                                                  vtn_src[0]->type, dest_type);
 
       if (swap) {
          nir_def *tmp = src[0];
@@ -983,8 +1086,9 @@ vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
    case SpvOpISub:
    case SpvOpShiftLeftLogical:
    case SpvOpSNegate: {
-      nir_alu_instr *alu = nir_instr_as_alu(dest->def->parent_instr);
-      vtn_foreach_decoration(b, dest_val, handle_no_wrap, alu);
+      nir_alu_instr *alu = nir_def_as_alu(dest->def);
+      alu->no_signed_wrap |= vtn_has_decoration(b, dest_val, SpvDecorationNoSignedWrap);
+      alu->no_unsigned_wrap |= vtn_has_decoration(b, dest_val, SpvDecorationNoUnsignedWrap);
       break;
    }
    default:
@@ -1007,7 +1111,7 @@ vtn_handle_integer_dot(struct vtn_builder *b, SpvOp opcode,
    const struct glsl_type *dest_type = vtn_get_type(b, w[1])->type;
    const unsigned dest_size = glsl_get_bit_size(dest_type);
 
-   vtn_handle_no_contraction(b, dest_val);
+   b->nb.exact |= vtn_has_decoration(b, dest_val, SpvDecorationNoContraction);
 
    /* Collect the various SSA sources.
     *
@@ -1125,7 +1229,7 @@ vtn_handle_integer_dot(struct vtn_builder *b, SpvOp opcode,
          break;
 
       default:
-         unreachable("Invalid opcode.");
+         UNREACHABLE("Invalid opcode.");
       }
 
       /* The SPV_KHR_integer_dot_product spec says:
@@ -1203,7 +1307,7 @@ vtn_handle_integer_dot(struct vtn_builder *b, SpvOp opcode,
                dest = nir_udot_2x16_uadd(&b->nb, src[0], src[1], zero);
             break;
          default:
-            unreachable("Invalid opcode.");
+            UNREACHABLE("Invalid opcode.");
          }
       } else {
          switch (opcode) {
@@ -1235,7 +1339,7 @@ vtn_handle_integer_dot(struct vtn_builder *b, SpvOp opcode,
                dest = nir_sudot_4x8_iadd(&b->nb, src[0], src[1], zero);
             break;
          default:
-            unreachable("Invalid opcode.");
+            UNREACHABLE("Invalid opcode.");
          }
       }
 
@@ -1297,6 +1401,11 @@ vtn_handle_bitcast(struct vtn_builder *b, const uint32_t *w, unsigned count)
     */
 
    struct vtn_type *type = vtn_get_type(b, w[1]);
+   if (type->base_type == vtn_base_type_cooperative_matrix) {
+      vtn_handle_cooperative_instruction(b, SpvOpBitcast, w, count);
+      return;
+   }
+
    struct nir_def *src = vtn_get_nir_ssa(b, w[3]);
 
    vtn_fail_if(src->num_components * src->bit_size !=

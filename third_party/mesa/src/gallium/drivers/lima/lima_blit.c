@@ -15,6 +15,7 @@
 
 #include "lima_context.h"
 #include "lima_gpu.h"
+#include "lima_pack.h"
 #include "lima_resource.h"
 #include "lima_texture.h"
 #include "lima_format.h"
@@ -44,10 +45,10 @@ lima_pack_blit_cmd(struct lima_job *job,
    #define lima_blit_buffer_size         0x0140
 
    struct lima_context *ctx = job->ctx;
-   struct lima_surface *surf = lima_surface(psurf);
-   int level = psurf->u.tex.level;
-   unsigned first_layer = psurf->u.tex.first_layer;
+   int level = psurf->level;
+   unsigned first_layer = psurf->first_layer;
    float fb_width = dst->width, fb_height = dst->height;
+   struct lima_resource *res = lima_resource(psurf->texture);
 
    uint32_t va;
    void *cpu = lima_job_create_stream_bo(
@@ -55,67 +56,88 @@ lima_pack_blit_cmd(struct lima_job *job,
 
    struct lima_screen *screen = lima_screen(ctx->base.screen);
 
-   uint32_t reload_shader_first_instr_size =
-      ((uint32_t *)(screen->pp_buffer->map + pp_reload_program_offset))[0] & 0x1f;
-   uint32_t reload_shader_va = screen->pp_buffer->va + pp_reload_program_offset;
+   lima_pack(cpu + lima_blit_render_state_offset, RENDER_STATE, state)
+   {
+      state.shader_address = screen->pp_buffer->va + pp_reload_program_offset;
+      state.fs_first_instr_length = ((uint32_t *)(screen->pp_buffer->map + pp_reload_program_offset))[0] & 0x1f;
 
-   struct lima_render_state reload_render_state = {
-      .alpha_blend = 0xf03b1ad2,
-      .depth_test = 0x0000000e,
-      .depth_range = 0xffff0000,
-      .stencil_front = 0x00000007,
-      .stencil_back = 0x00000007,
-      .multi_sample = 0x00000007,
-      .shader_address = reload_shader_va | reload_shader_first_instr_size,
-      .varying_types = 0x00000001,
-      .textures_address = va + lima_blit_tex_array_offset,
-      .aux0 = 0x00004021,
-      .varyings_address = va + lima_blit_varying_offset,
-   };
+      state.varying_type_0 = LIMA_VARYING_TYPE_VEC2_FP32;
 
-   reload_render_state.multi_sample |= (sample_mask << 12);
+      state.textures_address = va + lima_blit_tex_array_offset;
 
-   if (job->key.cbuf) {
-      fb_width = job->key.cbuf->width;
-      fb_height = job->key.cbuf->height;
-   } else {
-      fb_width = job->key.zsbuf->width;
-      fb_height = job->key.zsbuf->height;
-   }
+      state.varying_stride = 2 * sizeof(float);
+      state.has_samplers = true;
+      state.sampler_count = 1;
 
-   if (util_format_is_depth_or_stencil(psurf->format)) {
-      reload_render_state.alpha_blend &= 0x0fffffff;
-      if (psurf->format != PIPE_FORMAT_Z16_UNORM)
-         reload_render_state.depth_test |= 0x400;
-      if (surf->reload & PIPE_CLEAR_DEPTH)
-         reload_render_state.depth_test |= 0x801;
-      if (surf->reload & PIPE_CLEAR_STENCIL) {
-         reload_render_state.depth_test |= 0x1000;
-         reload_render_state.stencil_front = 0x0000024f;
-         reload_render_state.stencil_back = 0x0000024f;
-         reload_render_state.stencil_test = 0x0000ffff;
+      state.varyings_address = va + lima_blit_varying_offset;
+
+      state.sample_mask = sample_mask;
+
+      state.blend_func_rgb = LIMA_BLEND_FUNC_ADD;
+      state.blend_func_a = LIMA_BLEND_FUNC_ADD;
+      state.blend_factor_src_rgb = LIMA_BLEND_FACTOR_COLOR_ONE;
+      state.blend_factor_dst_rgb = LIMA_BLEND_FACTOR_COLOR_ZERO;
+      state.blend_factor_src_a = LIMA_BLEND_FACTOR_ALPHA_ONE;
+      state.blend_factor_dst_a = LIMA_BLEND_FACTOR_ALPHA_ZERO;
+
+      state.depth_compare_func = LIMA_COMPARE_FUNC_ALWAYS;
+
+      state.stencil_front.compare_function = LIMA_COMPARE_FUNC_ALWAYS;
+      state.stencil_back.compare_function = LIMA_COMPARE_FUNC_ALWAYS;
+
+      state.alpha_test_func = LIMA_COMPARE_FUNC_ALWAYS;
+      state.color_mask = 0xf;
+
+      state.viewport_near = 0.0f;
+      state.viewport_far = 1.0f;
+
+      if (util_format_is_depth_or_stencil(res->base.format)) {
+         state.color_mask = 0;
+         if (res->base.format != PIPE_FORMAT_Z16_UNORM)
+            state.shader_writes_depth_stencil = true;
+         if (res->reload & PIPE_CLEAR_DEPTH) {
+            state.depth_test = true;
+            state.shader_writes_depth = true;
+         }
+         if (res->reload & PIPE_CLEAR_STENCIL) {
+            state.shader_writes_stencil = true;
+            state.stencil_front.compare_function = LIMA_COMPARE_FUNC_ALWAYS;
+            state.stencil_front.stencil_fail = LIMA_STENCIL_OP_REPLACE;
+            state.stencil_front.depth_fail = LIMA_STENCIL_OP_REPLACE;
+            state.stencil_front.depth_pass = LIMA_STENCIL_OP_REPLACE;
+            state.stencil_back = state.stencil_front;
+
+            state.stencil_write_mask_front = 0xff;
+            state.stencil_write_mask_back = 0xff;
+         }
       }
    }
 
-   memcpy(cpu + lima_blit_render_state_offset, &reload_render_state,
-          sizeof(reload_render_state));
+   uint16_t width, height;
+   if (job->key.cbuf.texture)
+      pipe_surface_size(&job->key.cbuf, &width, &height);
+   else
+      pipe_surface_size(&job->key.zsbuf, &width, &height);
 
-   lima_tex_desc *td = cpu + lima_blit_tex_desc_offset;
-   memset(td, 0, lima_min_tex_desc_size);
-   lima_texture_desc_set_res(ctx, td, psurf->texture, level, level,
-                             first_layer, mrt_idx);
-   td->format = lima_format_get_texel_reload(psurf->format);
-   td->unnorm_coords = 1;
-   td->sampler_dim = LIMA_SAMPLER_DIM_2D;
-   td->min_img_filter_nearest = 1;
-   td->mag_img_filter_nearest = 1;
-   td->wrap_s = LIMA_TEX_WRAP_CLAMP_TO_EDGE;
-   td->wrap_t = LIMA_TEX_WRAP_CLAMP_TO_EDGE;
-   td->wrap_r = LIMA_TEX_WRAP_CLAMP_TO_EDGE;
+   fb_width = width;
+   fb_height = height;
 
-   if (filter != PIPE_TEX_FILTER_NEAREST) {
-      td->min_img_filter_nearest = 0;
-      td->mag_img_filter_nearest = 0;
+   lima_pack(cpu + lima_blit_tex_desc_offset, TEXTURE_DESCRIPTOR, desc) {
+      lima_texture_desc_set_res(ctx, &desc, &res->base, level, level,
+                                first_layer, mrt_idx);
+      desc.texel_format = lima_format_get_texel_reload(res->base.format);
+      desc.unnorm_coords = true;
+      desc.sampler_dim = LIMA_SAMPLER_DIMENSION_2D;
+      desc.min_img_filter_nearest = true;
+      desc.mag_img_filter_nearest = true;
+      desc.wrap_s = LIMA_TEX_WRAP_CLAMP_TO_EDGE;
+      desc.wrap_t = LIMA_TEX_WRAP_CLAMP_TO_EDGE;
+      desc.wrap_r = LIMA_TEX_WRAP_CLAMP_TO_EDGE;
+
+      if (filter != PIPE_TEX_FILTER_NEAREST) {
+         desc.min_img_filter_nearest = false;
+         desc.mag_img_filter_nearest = false;
+      }
    }
 
    uint32_t *ta = cpu + lima_blit_tex_array_offset;
@@ -173,20 +195,19 @@ lima_pack_blit_cmd(struct lima_job *job,
                                   false, "blit plbu cmd at va %x\n", va);
 }
 
-static struct pipe_surface *
-lima_get_blit_surface(struct pipe_context *pctx,
+static void
+lima_set_blit_surface(struct pipe_surface *psurf,
+                      struct pipe_context *pctx,
                       struct pipe_resource *prsc,
                       unsigned level)
 {
-   struct pipe_surface tmpl;
-
-   memset(&tmpl, 0, sizeof(tmpl));
-   tmpl.format = prsc->format;
-   tmpl.u.tex.level = level;
-   tmpl.u.tex.first_layer = 0;
-   tmpl.u.tex.last_layer = 0;
-
-   return pctx->create_surface(pctx, prsc, &tmpl);
+   memset(psurf, 0, sizeof(*psurf));
+   psurf->context = pctx;
+   psurf->format = prsc->format;
+   psurf->level = level;
+   psurf->first_layer = 0;
+   psurf->last_layer = 0;
+   pipe_resource_reference(&psurf->texture, prsc);
 }
 
 bool
@@ -202,6 +223,9 @@ lima_do_blit(struct pipe_context *pctx,
       return false;
 
    /* Blitting of swizzled formats (R and RG) isn't implemented yet */
+   if (info->swizzle_enable)
+      return false;
+
    if (memcmp(identity,
               lima_format_get_texel_swizzle(info->src.resource->format),
               sizeof(identity)))
@@ -253,22 +277,21 @@ lima_do_blit(struct pipe_context *pctx,
    if ((reload_flags & PIPE_CLEAR_STENCIL) && !(info->mask & PIPE_MASK_S))
       return false;
 
-   struct pipe_surface *dst_surf =
-         lima_get_blit_surface(pctx, info->dst.resource, info->dst.level);
-   struct lima_surface *lima_dst_surf = lima_surface(dst_surf);
+   struct pipe_surface dst_surf;
+   lima_set_blit_surface(&dst_surf, pctx, info->dst.resource, info->dst.level);
 
-   struct pipe_surface *src_surf =
-         lima_get_blit_surface(pctx, info->src.resource, info->src.level);
+   struct pipe_surface src_surf;
+   lima_set_blit_surface(&src_surf, pctx, info->src.resource, info->src.level);
 
    struct lima_job *job;
 
    if (util_format_is_depth_or_stencil(info->dst.resource->format))
-      job = lima_job_get_with_fb(ctx, NULL, dst_surf);
+      job = lima_job_get_with_fb(ctx, NULL, &dst_surf);
    else
-      job = lima_job_get_with_fb(ctx, dst_surf, NULL);
+      job = lima_job_get_with_fb(ctx, &dst_surf, NULL);
 
-   struct lima_resource *src_res = lima_resource(src_surf->texture);
-   struct lima_resource *dst_res = lima_resource(dst_surf->texture);
+   struct lima_resource *src_res = lima_resource(src_surf.texture);
+   struct lima_resource *dst_res = lima_resource(dst_surf.texture);
 
    lima_flush_job_accessing_bo(ctx, src_res->bo, true);
    lima_flush_job_accessing_bo(ctx, dst_res->bo, true);
@@ -280,22 +303,21 @@ lima_do_blit(struct pipe_context *pctx,
    if (info->src.resource->nr_samples > 1) {
       for (int i = 0; i < MIN2(info->src.resource->nr_samples, LIMA_MAX_SAMPLES); i++) {
          lima_pack_blit_cmd(job, &job->plbu_cmd_array,
-                            src_surf, &info->src.box,
+                            &src_surf, &info->src.box,
                             &info->dst.box, info->filter, true,
                             1 << i, i);
       }
    } else {
       lima_pack_blit_cmd(job, &job->plbu_cmd_array,
-                         src_surf, &info->src.box,
+                         &src_surf, &info->src.box,
                          &info->dst.box, info->filter, true,
                          0xf, 0);
    }
 
    bool tile_aligned = false;
-
    if (info->dst.box.x == 0 && info->dst.box.y == 0 &&
-       info->dst.box.width == lima_dst_surf->base.width &&
-       info->dst.box.height == lima_dst_surf->base.height)
+       info->dst.box.width == pipe_surface_width(&dst_surf) &&
+       info->dst.box.height == pipe_surface_height(&dst_surf))
       tile_aligned = true;
 
    if (info->dst.box.x % 16 == 0 && info->dst.box.y % 16 == 0 &&
@@ -304,16 +326,16 @@ lima_do_blit(struct pipe_context *pctx,
 
    /* Reload if dest is not aligned to tile boundaries */
    if (!tile_aligned)
-      lima_dst_surf->reload = reload_flags;
+      dst_res->reload = reload_flags;
    else
-      lima_dst_surf->reload = 0;
+      dst_res->reload = 0;
 
    job->resolve = reload_flags;
 
    lima_do_job(job);
 
-   pipe_surface_reference(&dst_surf, NULL);
-   pipe_surface_reference(&src_surf, NULL);
+   pipe_resource_reference(&dst_surf.texture, NULL);
+   pipe_resource_reference(&src_surf.texture, NULL);
 
    return true;
 }

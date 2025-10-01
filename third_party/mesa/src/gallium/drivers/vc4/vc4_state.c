@@ -68,15 +68,6 @@ vc4_set_stencil_ref(struct pipe_context *pctx,
 }
 
 static void
-vc4_set_clip_state(struct pipe_context *pctx,
-                   const struct pipe_clip_state *clip)
-{
-        struct vc4_context *vc4 = vc4_context(pctx);
-        vc4->clip = *clip;
-        vc4->dirty |= VC4_DIRTY_CLIP;
-}
-
-static void
 vc4_set_sample_mask(struct pipe_context *pctx, unsigned sample_mask)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
@@ -260,12 +251,12 @@ vc4_create_depth_stencil_alpha_state(struct pipe_context *pctx,
                         back_writemask_bits =
                                 tlb_stencil_setup_writemask(back->writemask);
 
-                        so->stencil_uniforms[0] |= (1 << 30);
+                        so->stencil_uniforms[0] |= (UINT32_C(1) << 30);
                         so->stencil_uniforms[1] =
                                 tlb_stencil_setup_bits(back, back_writemask_bits);
-                        so->stencil_uniforms[1] |= (2 << 30);
+                        so->stencil_uniforms[1] |= (UINT32_C(2) << 30);
                 } else {
-                        so->stencil_uniforms[0] |= (3 << 30);
+                        so->stencil_uniforms[0] |= (UINT32_C(3) << 30);
                 }
 
                 if (front_writemask_bits == 0xff ||
@@ -313,16 +304,13 @@ vc4_set_viewport_states(struct pipe_context *pctx,
 static void
 vc4_set_vertex_buffers(struct pipe_context *pctx,
                        unsigned count,
-                       unsigned unbind_num_trailing_slots,
-                       bool take_ownership,
                        const struct pipe_vertex_buffer *vb)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
         struct vc4_vertexbuf_stateobj *so = &vc4->vertexbuf;
 
         util_set_vertex_buffers_mask(so->vb, &so->enabled_mask, vb,
-                                     count, unbind_num_trailing_slots,
-                                     take_ownership);
+                                     count);
         so->count = util_last_bit(so->enabled_mask);
 
         vc4->dirty |= VC4_DIRTY_VTXBUF;
@@ -384,8 +372,7 @@ vc4_vertex_state_bind(struct pipe_context *pctx, void *hwcso)
 
 static void
 vc4_set_constant_buffer(struct pipe_context *pctx,
-                        enum pipe_shader_type shader, uint index,
-                        bool take_ownership,
+                        mesa_shader_stage shader, uint index,
                         const struct pipe_constant_buffer *cb)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
@@ -403,7 +390,7 @@ vc4_set_constant_buffer(struct pipe_context *pctx,
         if (index == 1 && so->cb[index].buffer_size != cb->buffer_size)
                 vc4->dirty |= VC4_DIRTY_UBO_1_SIZE;
 
-        util_copy_constant_buffer(&so->cb[index], cb, take_ownership);
+        util_copy_constant_buffer(&so->cb[index], cb);
 
         so->enabled_mask |= 1 << index;
         so->dirty_mask |= 1 << index;
@@ -427,17 +414,17 @@ vc4_set_framebuffer_state(struct pipe_context *pctx,
          * framebuffer.  Note that if the z/color buffers were mismatched
          * sizes, we wouldn't be able to do this.
          */
-        if (cso->cbufs[0] && cso->cbufs[0]->u.tex.level) {
+        if (cso->cbufs[0].texture && cso->cbufs[0].level) {
                 struct vc4_resource *rsc =
-                        vc4_resource(cso->cbufs[0]->texture);
+                        vc4_resource(cso->cbufs[0].texture);
                 cso->width =
-                        (rsc->slices[cso->cbufs[0]->u.tex.level].stride /
+                        (rsc->slices[cso->cbufs[0].level].stride /
                          rsc->cpp);
-        } else if (cso->zsbuf && cso->zsbuf->u.tex.level){
+        } else if (cso->zsbuf.texture && cso->zsbuf.level){
                 struct vc4_resource *rsc =
-                        vc4_resource(cso->zsbuf->texture);
+                        vc4_resource(cso->zsbuf.texture);
                 cso->width =
-                        (rsc->slices[cso->zsbuf->u.tex.level].stride /
+                        (rsc->slices[cso->zsbuf.level].stride /
                          rsc->cpp);
         }
 
@@ -445,14 +432,14 @@ vc4_set_framebuffer_state(struct pipe_context *pctx,
 }
 
 static struct vc4_texture_stateobj *
-vc4_get_stage_tex(struct vc4_context *vc4, enum pipe_shader_type shader)
+vc4_get_stage_tex(struct vc4_context *vc4, mesa_shader_stage shader)
 {
         switch (shader) {
-        case PIPE_SHADER_FRAGMENT:
+        case MESA_SHADER_FRAGMENT:
                 vc4->dirty |= VC4_DIRTY_FRAGTEX;
                 return &vc4->fragtex;
                 break;
-        case PIPE_SHADER_VERTEX:
+        case MESA_SHADER_VERTEX:
                 vc4->dirty |= VC4_DIRTY_VERTTEX;
                 return &vc4->verttex;
                 break;
@@ -524,7 +511,7 @@ vc4_create_sampler_state(struct pipe_context *pctx,
 
 static void
 vc4_sampler_states_bind(struct pipe_context *pctx,
-                        enum pipe_shader_type shader, unsigned start,
+                        mesa_shader_stage shader, unsigned start,
                         unsigned nr, void **hwcso)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
@@ -648,10 +635,9 @@ vc4_sampler_view_destroy(struct pipe_context *pctx,
 
 static void
 vc4_set_sampler_views(struct pipe_context *pctx,
-                      enum pipe_shader_type shader,
+                      mesa_shader_stage shader,
                       unsigned start, unsigned nr,
                       unsigned unbind_num_trailing_slots,
-                      bool take_ownership,
                       struct pipe_sampler_view **views)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
@@ -664,12 +650,7 @@ vc4_set_sampler_views(struct pipe_context *pctx,
         for (i = 0; i < nr; i++) {
                 if (views[i])
                         new_nr = i + 1;
-                if (take_ownership) {
-                        pipe_sampler_view_reference(&stage_tex->textures[i], NULL);
-                        stage_tex->textures[i] = views[i];
-                } else {
-                        pipe_sampler_view_reference(&stage_tex->textures[i], views[i]);
-                }
+                pipe_sampler_view_reference(&stage_tex->textures[i], views[i]);
         }
 
         for (; i < stage_tex->num_textures; i++) {
@@ -684,7 +665,6 @@ vc4_state_init(struct pipe_context *pctx)
 {
         pctx->set_blend_color = vc4_set_blend_color;
         pctx->set_stencil_ref = vc4_set_stencil_ref;
-        pctx->set_clip_state = vc4_set_clip_state;
         pctx->set_sample_mask = vc4_set_sample_mask;
         pctx->set_constant_buffer = vc4_set_constant_buffer;
         pctx->set_framebuffer_state = vc4_set_framebuffer_state;
@@ -716,5 +696,7 @@ vc4_state_init(struct pipe_context *pctx)
 
         pctx->create_sampler_view = vc4_create_sampler_view;
         pctx->sampler_view_destroy = vc4_sampler_view_destroy;
+        pctx->sampler_view_release = u_default_sampler_view_release;
+        pctx->resource_release = u_default_resource_release;
         pctx->set_sampler_views = vc4_set_sampler_views;
 }

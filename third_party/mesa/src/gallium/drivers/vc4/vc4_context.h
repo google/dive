@@ -29,6 +29,7 @@
 
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
+#include "util/u_framebuffer.h"
 #include "util/slab.h"
 #include "util/u_debug_cb.h"
 #include "xf86drm.h"
@@ -45,12 +46,6 @@
 #endif
 #ifndef DRM_VC4_PARAM_SUPPORTS_THREADED_FS
 #define DRM_VC4_PARAM_SUPPORTS_THREADED_FS	5
-#endif
-
-#ifdef USE_VC4_SIMULATOR
-#define using_vc4_simulator true
-#else
-#define using_vc4_simulator false
 #endif
 
 #define VC4_DIRTY_BLEND         (1 <<  0)
@@ -72,7 +67,7 @@
 #define VC4_DIRTY_SCISSOR       (1 << 17)
 #define VC4_DIRTY_FLAT_SHADE_FLAGS (1 << 18)
 #define VC4_DIRTY_PRIM_MODE     (1 << 19)
-#define VC4_DIRTY_CLIP          (1 << 20)
+
 #define VC4_DIRTY_UNCOMPILED_VS (1 << 21)
 #define VC4_DIRTY_UNCOMPILED_FS (1 << 22)
 #define VC4_DIRTY_COMPILED_CS   (1 << 23)
@@ -195,8 +190,8 @@ struct vc4_vertex_stateobj {
 
 /* Hash table key for vc4->jobs */
 struct vc4_job_key {
-        struct pipe_surface *cbuf;
-        struct pipe_surface *zsbuf;
+        struct pipe_surface cbuf;
+        struct pipe_surface zsbuf;
 };
 
 struct vc4_hwperfmon {
@@ -234,12 +229,12 @@ struct vc4_job {
         uint32_t last_gem_handle_hindex;
 
         /** @{ Surfaces to submit rendering for. */
-        struct pipe_surface *color_read;
-        struct pipe_surface *color_write;
-        struct pipe_surface *zs_read;
-        struct pipe_surface *zs_write;
-        struct pipe_surface *msaa_color_write;
-        struct pipe_surface *msaa_zs_write;
+        struct pipe_surface color_read;
+        struct pipe_surface color_write;
+        struct pipe_surface zs_read;
+        struct pipe_surface zs_write;
+        struct pipe_surface msaa_color_write;
+        struct pipe_surface msaa_zs_write;
         /** @} */
         /** @{
          * Bounding box of the scissor across all queued drawing.
@@ -378,9 +373,8 @@ struct vc4_context {
         unsigned sample_mask;
         struct pipe_framebuffer_state framebuffer;
         struct pipe_poly_stipple stipple;
-        struct pipe_clip_state clip;
         struct pipe_viewport_state viewport;
-        struct vc4_constbuf_stateobj constbuf[PIPE_SHADER_TYPES];
+        struct vc4_constbuf_stateobj constbuf[MESA_SHADER_STAGES];
         struct vc4_vertexbuf_stateobj vertexbuf;
 
         struct vc4_hwperfmon *perfmon;
@@ -463,18 +457,19 @@ void vc4_state_init(struct pipe_context *pctx);
 void vc4_program_init(struct pipe_context *pctx);
 void vc4_program_fini(struct pipe_context *pctx);
 void vc4_query_init(struct pipe_context *pctx);
-void vc4_simulator_init(struct vc4_screen *screen);
-void vc4_simulator_destroy(struct vc4_screen *screen);
+struct vc4_simulator_file *vc4_simulator_init(struct vc4_screen *screen);
+void vc4_simulator_destroy(struct vc4_simulator_file *sim_file);
 int vc4_simulator_ioctl(int fd, unsigned long request, void *arg);
 void vc4_simulator_open_from_handle(int fd, int handle, uint32_t size);
 
 static inline int
 vc4_ioctl(int fd, unsigned long request, void *arg)
 {
-        if (using_vc4_simulator)
-                return vc4_simulator_ioctl(fd, request, arg);
-        else
-                return drmIoctl(fd, request, arg);
+#ifdef USE_VC4_SIMULATOR
+        return vc4_simulator_ioctl(fd, request, arg);
+#else
+        return drmIoctl(fd, request, arg);
+#endif
 }
 
 void vc4_set_shader_uniform_dirty_flags(struct vc4_compiled_shader *shader);
@@ -491,6 +486,8 @@ struct vc4_job *vc4_get_job(struct vc4_context *vc4,
                             struct pipe_surface *zsbuf);
 struct vc4_job *vc4_get_job_for_fbo(struct vc4_context *vc4);
 
+void vc4_job_attach_surface(struct pipe_surface *job_psurf,
+                            struct pipe_surface *src_psurf);
 void vc4_job_submit(struct vc4_context *vc4, struct vc4_job *job);
 void vc4_flush_jobs_writing_resource(struct vc4_context *vc4,
                                      struct pipe_resource *prsc);

@@ -46,15 +46,12 @@ each directory.
       -  **vulkan** - Anvil is a Vulkan implementation for Intel gen 7
          (Ivy Bridge) and newer
 
-   -  **mapi** - Mesa APIs
+   -  **mesa** - Main Mesa sources
 
       -  **glapi** - OpenGL API dispatch layer. This is where all the GL
          entrypoints like glClear, glBegin, etc. are generated, as well as
          the GL dispatch table. All GL function calls jump through the
          dispatch table to functions found in main/.
-
-   -  **mesa** - Main Mesa sources
-
       -  **main** - The core Mesa code (mainly state management)
       -  **math** - vertex array translation and transformation code
          (not used with Gallium)
@@ -132,19 +129,13 @@ each directory.
       -  **frontends** - These implement various libraries using the
          device drivers
 
-         -  **clover** - OpenCL frontend
          -  **d3d10umd** - D3D10 frontend for Windows only. It's similar to Microsoft WARP, but using LLVMpipe/Softpipe.
          -  **dri** - Meta frontend for DRI drivers, see mesa/state_tracker
          -  **glx** - Meta frontend for GLX
          -  **hgl** - Haiku OpenGL
          -  **lavapipe** - Vulkan frontend, software Vulkan rasterizer using LLVMpipe.
-         -  **nine** - D3D9 frontend, see targets/d3dadapter9
-         -  **omx** - OpenMAX Bellagio frontend
-         -  **osmesa** - Off-screen OpenGL rendering library
          -  **va** - VA-API frontend
-         -  **vdpau** - VDPAU frontend
          -  **wgl** - Windows WGL frontend
-         -  **xa** - XA frontend
 
       -  **winsys** - The device drivers are platform-independent, the
          winsys connects them to various platforms. There is usually one winsys

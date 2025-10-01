@@ -22,7 +22,8 @@
  */
 
 #include "nir_phi_builder.h"
-#include "nir/nir_vla.h"
+#include "nir.h"
+#include "nir_vla.h"
 
 struct nir_phi_builder {
    nir_shader *shader;
@@ -43,7 +44,7 @@ struct nir_phi_builder {
    nir_block **W;
 };
 
-#define NEEDS_PHI ((nir_def *)(intptr_t)-1)
+#define NEEDS_PHI ((nir_def *)(intptr_t) - 1)
 
 struct nir_phi_builder_value {
    struct exec_node node;
@@ -100,7 +101,7 @@ nir_phi_builder_create(nir_function_impl *impl)
 
    pb->num_blocks = impl->num_blocks;
    pb->blocks = ralloc_array(pb, nir_block *, pb->num_blocks);
-   nir_foreach_block(block, impl) {
+   nir_foreach_block_unstructured(block, impl) {
       pb->blocks[block->index] = block;
    }
 
@@ -140,7 +141,7 @@ nir_phi_builder_add_value(struct nir_phi_builder *pb, unsigned num_components,
 
    while (w_start != w_end) {
       nir_block *cur = pb->W[w_start++];
-      set_foreach(cur->dom_frontier, dom_entry) {
+      set_foreach(&cur->dom_frontier, dom_entry) {
          nir_block *next = (nir_block *)dom_entry->key;
 
          /* If there's more than one return statement, then the end block
@@ -175,6 +176,10 @@ void
 nir_phi_builder_value_set_block_def(struct nir_phi_builder_value *val,
                                     nir_block *block, nir_def *def)
 {
+   if (def != NEEDS_PHI) {
+      assert(def->bit_size == val->bit_size);
+      assert(def->num_components == val->num_components);
+   }
    _mesa_hash_table_insert(&val->ht, INDEX_TO_KEY(block->index), def);
 }
 
@@ -286,7 +291,7 @@ nir_phi_builder_finish(struct nir_phi_builder *pb)
          /* XXX: Constructing the array this many times seems expensive. */
          nir_block **preds = nir_block_get_predecessors_sorted(phi->instr.block, pb);
 
-         for (unsigned i = 0; i < phi->instr.block->predecessors->entries; i++) {
+         for (unsigned i = 0; i < phi->instr.block->predecessors.entries; i++) {
             nir_phi_instr_add_src(phi, preds[i],
                                   nir_phi_builder_value_get_block_def(val, preds[i]));
          }

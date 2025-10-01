@@ -267,6 +267,7 @@ struct lp_build_tgsi_params {
    LLVMValueRef const_sizes_ptr;
    const struct lp_bld_tgsi_system_values *system_values;
    const LLVMValueRef (*inputs)[4];
+   int num_inputs;
    LLVMTypeRef context_type;
    LLVMValueRef context_ptr;
    LLVMTypeRef resources_type;
@@ -285,10 +286,8 @@ struct lp_build_tgsi_params {
    LLVMValueRef shared_ptr;
    LLVMValueRef payload_ptr;
    const struct lp_build_coro_suspend_info *coro;
-   LLVMValueRef kernel_args;
    const struct lp_build_fs_iface *fs_iface;
    unsigned gs_vertex_streams;
-   LLVMValueRef aniso_filter_table;
    LLVMValueRef current_func;
    struct hash_table *fns;
    LLVMValueRef scratch_ptr;

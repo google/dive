@@ -1,24 +1,6 @@
 /*
- * Copyright (c) 2012 Rob Clark <robdclark@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012 Rob Clark <robdclark@gmail.com>
+ * SPDX-License-Identifier: MIT
  */
 
 #include <fcntl.h>
@@ -105,7 +87,7 @@ print_dstreg(uint32_t num, uint32_t mask, uint32_t dst_exp)
 }
 
 static void
-print_export_comment(uint32_t num, gl_shader_stage type)
+print_export_comment(uint32_t num, mesa_shader_stage type)
 {
    const char *name = NULL;
    switch (type) {
@@ -228,7 +210,7 @@ struct {
 
 static int
 disasm_alu(uint32_t *dwords, uint32_t alu_off, int level, int sync,
-           gl_shader_stage type)
+           mesa_shader_stage type)
 {
    instr_alu_t *alu = (instr_alu_t *)dwords;
 
@@ -618,7 +600,7 @@ print_cf(instr_cf_t *cf, int level)
  */
 
 int
-disasm_a2xx(uint32_t *dwords, int sizedwords, int level, gl_shader_stage type)
+disasm_a2xx(uint32_t *dwords, int sizedwords, int level, mesa_shader_stage type)
 {
    instr_cf_t *cfs = (instr_cf_t *)dwords;
    int idx, max_idx;

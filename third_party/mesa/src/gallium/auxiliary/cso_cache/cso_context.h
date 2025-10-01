@@ -39,19 +39,11 @@
 extern "C" {
 #endif
 
-struct cso_context;
-struct u_vbuf;
-
-struct cso_context_base {
+struct cso_context {
    struct pipe_context *pipe;
 
    /* This is equal to either pipe_context::draw_vbo or u_vbuf_draw_vbo. */
-   void (*draw_vbo)(struct pipe_context *pipe,
-                    const struct pipe_draw_info *info,
-                    unsigned drawid_offset,
-                    const struct pipe_draw_indirect_info *indirect,
-                    const struct pipe_draw_start_count_bias *draws,
-                    unsigned num_draws);
+   pipe_draw_func draw_vbo;
 };
 
 #define CSO_NO_USER_VERTEX_BUFFERS (1 << 0)
@@ -80,7 +72,7 @@ cso_set_rasterizer(struct cso_context *cso,
 
 void
 cso_set_samplers(struct cso_context *cso,
-                 enum pipe_shader_type shader_stage,
+                 mesa_shader_stage shader_stage,
                  unsigned count,
                  const struct pipe_sampler_state **states);
 
@@ -89,13 +81,16 @@ cso_set_samplers(struct cso_context *cso,
  * samplers one at a time:
  */
 void
-cso_single_sampler(struct cso_context *cso, enum pipe_shader_type shader_stage,
+cso_single_sampler(struct cso_context *cso, mesa_shader_stage shader_stage,
                    unsigned idx, const struct pipe_sampler_state *states);
 
 void
 cso_single_sampler_done(struct cso_context *cso,
-                        enum pipe_shader_type shader_stage);
+                        mesa_shader_stage shader_stage);
 
+void *
+cso_get_vertex_elements_for_bind(struct cso_context *cso,
+                                 const struct cso_velems_state *velems);
 
 enum pipe_error
 cso_set_vertex_elements(struct cso_context *ctx,
@@ -103,14 +98,13 @@ cso_set_vertex_elements(struct cso_context *ctx,
 
 void cso_set_vertex_buffers(struct cso_context *ctx,
                             unsigned count,
-                            unsigned unbind_trailing_count,
-                            bool take_ownership,
                             const struct pipe_vertex_buffer *buffers);
 
 void cso_set_stream_outputs(struct cso_context *ctx,
                             unsigned num_targets,
                             struct pipe_stream_output_target **targets,
-                            const unsigned *offsets);
+                            const unsigned *offsets,
+                            enum mesa_prim output_prim);
 
 
 enum cso_unbind_flags {
@@ -119,7 +113,6 @@ enum cso_unbind_flags {
    CSO_UNBIND_FS_IMAGE0 = (1 << 2),
    CSO_UNBIND_VS_CONSTANTS = (1 << 3),
    CSO_UNBIND_FS_CONSTANTS = (1 << 4),
-   CSO_UNBIND_VERTEX_BUFFER0 = (1 << 5),
 };
 
 /*
@@ -135,6 +128,8 @@ void cso_set_geometry_shader_handle(struct cso_context *ctx, void *handle);
 void cso_set_tessctrl_shader_handle(struct cso_context *ctx, void *handle);
 void cso_set_tesseval_shader_handle(struct cso_context *ctx, void *handle);
 void cso_set_compute_shader_handle(struct cso_context *ctx, void *handle);
+void cso_set_task_shader_handle(struct cso_context *ctx, void *handle);
+void cso_set_mesh_shader_handle(struct cso_context *ctx, void *handle);
 
 
 void
@@ -185,12 +180,16 @@ cso_set_render_condition(struct cso_context *cso,
 #define CSO_BIT_VERTEX_SHADER         0x20000
 #define CSO_BIT_VIEWPORT              0x40000
 #define CSO_BIT_PAUSE_QUERIES         0x80000
+#define CSO_BIT_TASK_SHADER          0x100000
+#define CSO_BIT_MESH_SHADER          0x200000
 
 #define CSO_BITS_ALL_SHADERS (CSO_BIT_VERTEX_SHADER | \
                               CSO_BIT_FRAGMENT_SHADER | \
                               CSO_BIT_GEOMETRY_SHADER | \
                               CSO_BIT_TESSCTRL_SHADER | \
-                              CSO_BIT_TESSEVAL_SHADER)
+                              CSO_BIT_TESSEVAL_SHADER | \
+                              CSO_BIT_TASK_SHADER | \
+                              CSO_BIT_MESH_SHADER)
 
 #define CSO_BIT_COMPUTE_SHADER   (1<<0)
 #define CSO_BIT_COMPUTE_SAMPLERS (1<<1)
@@ -213,8 +212,6 @@ void
 cso_set_vertex_buffers_and_elements(struct cso_context *ctx,
                                     const struct cso_velems_state *velems,
                                     unsigned vb_count,
-                                    unsigned unbind_trailing_vb_count,
-                                    bool take_ownership,
                                     bool uses_user_vertex_buffers,
                                     const struct pipe_vertex_buffer *vbuffers);
 
@@ -228,17 +225,9 @@ cso_draw_arrays(struct cso_context *cso, unsigned mode, unsigned start, unsigned
 
 /* Inline functions. */
 
-static inline struct pipe_context *
-cso_get_pipe_context(struct cso_context *cso)
-{
-   struct cso_context_base *cso_base = (struct cso_context_base *)cso;
-
-   return cso_base->pipe;
-}
-
 static ALWAYS_INLINE void
 cso_draw_vbo(struct cso_context *cso,
-             struct pipe_draw_info *info,
+             const struct pipe_draw_info *info,
              unsigned drawid_offset,
              const struct pipe_draw_indirect_info *indirect,
              const struct pipe_draw_start_count_bias *draws,
@@ -257,10 +246,7 @@ cso_draw_vbo(struct cso_context *cso,
    /* Indirect only uses indirect->draw_count, not num_draws. */
    assert(!indirect || num_draws == 1);
 
-   struct cso_context_base *cso_base = (struct cso_context_base *)cso;
-
-   cso_base->draw_vbo(cso_base->pipe, info, drawid_offset, indirect, draws,
-                      num_draws);
+   cso->draw_vbo(cso->pipe, info, drawid_offset, indirect, draws, num_draws);
 }
 
 #ifdef __cplusplus

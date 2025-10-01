@@ -33,7 +33,6 @@ struct standalone_options {
    int dump_ast;
    int dump_hir;
    int dump_lir;
-   int dump_builder;
    int do_link;
    int just_log;
    int lower_precision;
@@ -46,7 +45,8 @@ struct gl_shader_program * standalone_compile_shader(
       unsigned num_files, char* const* files,
       struct gl_context *ctx);
 
-void standalone_compiler_cleanup(struct gl_shader_program *prog);
+void standalone_compiler_cleanup(struct gl_shader_program *prog,
+                                 struct gl_context *ctx);
 
 #ifdef __cplusplus
 }

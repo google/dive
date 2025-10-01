@@ -41,6 +41,7 @@ struct pipe_resource;
 struct pipe_surface;
 struct pipe_transfer;
 struct pipe_box;
+struct nir_shader;
 
 /*
  * Low level dumping controls.
@@ -104,10 +105,8 @@ void trace_dump_member_begin(const char *name);
 void trace_dump_member_end(void);
 void trace_dump_null(void);
 void trace_dump_ptr(const void *value);
-/* will turn a wrapped object into the real one and dump ptr */
-void trace_dump_surface_ptr(struct pipe_surface *_surface);
 void trace_dump_transfer_ptr(struct pipe_transfer *_transfer);
-void trace_dump_nir(void *nir);
+void trace_dump_nir(struct nir_shader *nir);
 
 void trace_dump_trigger_active(bool active);
 void trace_dump_check_trigger(void);
@@ -187,6 +186,13 @@ bool trace_dump_is_triggered(void);
    do { \
       trace_dump_member_begin(#_member); \
       trace_dump_##_type((_obj)->_member); \
+      trace_dump_member_end(); \
+   } while(0)
+
+#define trace_dump_member_val(_type, _obj, _member) \
+   do { \
+      trace_dump_member_begin(#_member); \
+      trace_dump_##_type(&(_obj)->_member); \
       trace_dump_member_end(); \
    } while(0)
 

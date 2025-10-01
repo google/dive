@@ -29,8 +29,9 @@ Write-Output builddir:$builddir
 Write-Output installdir:$installdir
 Write-Output sourcedir:$sourcedir
 
+$vcvars_ver_arg="$args"
 $MyPath = $MyInvocation.MyCommand.Path | Split-Path -Parent
-. "$MyPath\mesa_vs_init.ps1"
+. "$MyPath\mesa_init_msvc.ps1" "$vcvars_ver_arg"
 
 $depsInstallPath="C:\mesa-deps"
 
@@ -48,22 +49,24 @@ meson setup `
 -Dllvm=enabled `
 -Dshared-llvm=disabled `
 -Dvulkan-drivers="swrast,amd,microsoft-experimental" `
--Dgallium-drivers="swrast,d3d12,zink" `
+-Dgallium-drivers="llvmpipe,softpipe,d3d12,zink,virgl" `
 -Dgallium-va=enabled `
--Dvideo-codecs="h264dec,h264enc,h265dec,h265enc,vc1dec" `
--Dshared-glapi=enabled `
+-Dgallium-d3d10umd=true `
+-Dgallium-mediafoundation=enabled `
+-Dvideo-codecs="all" `
+-Dmediafoundation-codecs="all" `
+-Dmediafoundation-store-dll=false `
+-Dgallium-mediafoundation-test=false `
 -Dgles1=enabled `
 -Dgles2=enabled `
--Dgallium-opencl=icd `
 -Dgallium-rusticl=false `
--Dopencl-spirv=true `
 -Dmicrosoft-clc=enabled `
 -Dstatic-libclc=all `
--Dopencl-external-clang-headers=disabled `
 -Dspirv-to-dxil=true `
 -Dbuild-tests=true `
 -Dwerror=true `
 -Dwarning_level=2 `
+$env:EXTRA_MESON_ARGS `
 $sourcedir && `
 meson install && `
 meson test --num-processes 32 --print-errorlogs
@@ -84,5 +87,7 @@ Copy-Item ".\.gitlab-ci\windows\spirv2dxil_check.ps1" -Destination $installdir
 Copy-Item ".\.gitlab-ci\windows\spirv2dxil_run.ps1" -Destination $installdir
 
 Copy-Item ".\.gitlab-ci\windows\deqp_runner_run.ps1" -Destination $installdir
+
+Copy-Item ".\.gitlab-ci\windows\vainfo_run.ps1" -Destination $installdir
 
 Get-ChildItem -Recurse -Filter "ci" | Get-ChildItem -Include "*.txt","*.toml" | Copy-Item -Destination $installdir

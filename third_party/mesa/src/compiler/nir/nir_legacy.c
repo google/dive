@@ -18,10 +18,10 @@ nir_legacy_float_mod_folds(nir_alu_instr *mod)
       return false;
 
    nir_foreach_use_including_if(src, &mod->def) {
-      if (src->is_if)
+      if (nir_src_is_if(src))
          return false;
 
-      nir_instr *parent = src->parent_instr;
+      nir_instr *parent = nir_src_parent_instr(src);
       if (parent->type != nir_instr_type_alu)
          return false;
 
@@ -70,7 +70,7 @@ chase_source_mod(nir_def **ssa, nir_op op, uint8_t *swizzle)
    if ((*ssa)->parent_instr->type != nir_instr_type_alu)
       return false;
 
-   nir_alu_instr *alu = nir_instr_as_alu((*ssa)->parent_instr);
+   nir_alu_instr *alu = nir_def_as_alu((*ssa));
    if (alu->op != op)
       return false;
 
@@ -204,15 +204,15 @@ chase_fsat(nir_def **def)
       return false;
 
    nir_src *use = list_first_entry(&(*def)->uses, nir_src, use_link);
-   if (use->is_if || use->parent_instr->type != nir_instr_type_alu)
+   if (nir_src_is_if(use) || nir_src_parent_instr(use)->type != nir_instr_type_alu)
       return false;
 
-   nir_alu_instr *fsat = nir_instr_as_alu(use->parent_instr);
+   nir_alu_instr *fsat = nir_instr_as_alu(nir_src_parent_instr(use));
    if (fsat->op != nir_op_fsat || !nir_legacy_fsat_folds(fsat))
       return false;
 
    /* Otherwise, we're good */
-   nir_alu_instr *alu = nir_instr_as_alu(use->parent_instr);
+   nir_alu_instr *alu = nir_instr_as_alu(nir_src_parent_instr(use));
    *def = &alu->def;
    return true;
 }
@@ -290,8 +290,8 @@ fuse_mods_with_registers(nir_builder *b, nir_instr *instr, void *fuse_fabs_)
           * nir_legacy_float_mod_folds() returned true.
           */
          nir_foreach_use_including_if_safe(use, &alu->def) {
-            assert(!use->is_if);
-            assert(use->parent_instr->type == nir_instr_type_alu);
+            assert(!nir_src_is_if(use));
+            assert(nir_src_parent_instr(use)->type == nir_instr_type_alu);
             nir_alu_src *alu_use = list_entry(use, nir_alu_src, src);
             nir_src_rewrite(&alu_use->src, &load->def);
             for (unsigned i = 0; i < NIR_MAX_VEC_COMPONENTS; ++i)
@@ -321,20 +321,22 @@ fuse_mods_with_registers(nir_builder *b, nir_instr *instr, void *fuse_fabs_)
    return false;
 }
 
-void
+bool
 nir_legacy_trivialize(nir_shader *s, bool fuse_fabs)
 {
+   bool progress = false;
    /* First, fuse modifiers with registers. This ensures that the helpers do not
     * chase registers recursively, allowing registers to be trivialized easier.
     */
    if (nir_shader_instructions_pass(s, fuse_mods_with_registers,
-                                    nir_metadata_block_index |
-                                       nir_metadata_dominance,
+                                    nir_metadata_control_flow,
                                     &fuse_fabs)) {
       /* If we made progress, we likely left dead loads. Clean them up. */
-      NIR_PASS_V(s, nir_opt_dce);
+      NIR_PASS(_, s, nir_opt_dce);
+      progress = true;
    }
 
    /* Now that modifiers are dealt with, we can trivialize the regular way. */
-   NIR_PASS_V(s, nir_trivialize_registers);
+   NIR_PASS(progress, s, nir_trivialize_registers);
+   return progress;
 }

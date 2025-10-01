@@ -22,7 +22,7 @@
  */
 
 #include "isl_priv.h"
-#include "compiler/brw_compiler.h"
+#include "compiler/intel_shader_enums.h"
 
 bool
 isl_is_storage_image_format(const struct intel_device_info *devinfo,
@@ -224,9 +224,11 @@ isl_lower_storage_image_format(const struct intel_device_info *devinfo,
    case ISL_FORMAT_R8_SNORM:
       return (devinfo->ver >= 11 ? format : ISL_FORMAT_R8_UINT);
 
+   case ISL_FORMAT_R64_PASSTHRU:
+      return ISL_FORMAT_R32G32_UINT;
+
    default:
-      assert(!"Unknown image format");
-      return ISL_FORMAT_UNSUPPORTED;
+      UNREACHABLE("Unknown image format");
    }
 }
 
@@ -243,7 +245,7 @@ isl_has_matching_typed_storage_image_format(const struct intel_device_info *devi
    }
 }
 
-static const struct brw_image_param image_param_defaults = {
+static const struct isl_image_param image_param_defaults = {
    /* Set the swizzling shifts to all-ones to effectively disable
     * swizzling -- See emit_address_calculation() in
     * brw_fs_surface_builder.cpp for a more detailed explanation of
@@ -254,7 +256,7 @@ static const struct brw_image_param image_param_defaults = {
 
 void
 isl_surf_fill_image_param(const struct isl_device *dev,
-                          struct brw_image_param *param,
+                          struct isl_image_param *param,
                           const struct isl_surf *surf,
                           const struct isl_view *view)
 {
@@ -335,7 +337,7 @@ isl_surf_fill_image_param(const struct isl_device *dev,
       break;
 
    default:
-      assert(!"Unhandled storage image tiling");
+      UNREACHABLE("Unhandled storage image tiling");
    }
 
    /* 3D textures are arranged in 2D in memory with 2^lod slices per row.  The
@@ -349,7 +351,7 @@ isl_surf_fill_image_param(const struct isl_device *dev,
 
 void
 isl_buffer_fill_image_param(const struct isl_device *dev,
-                            struct brw_image_param *param,
+                            struct isl_image_param *param,
                             enum isl_format format,
                             uint64_t size)
 {

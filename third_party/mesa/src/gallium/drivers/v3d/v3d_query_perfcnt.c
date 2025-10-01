@@ -28,8 +28,7 @@
  */
 
 #include "v3d_query.h"
-
-#include "common/v3d_performance_counters.h"
+#include "v3d_screen.h"
 
 struct v3d_query_perfcnt
 {
@@ -49,49 +48,6 @@ kperfmon_destroy(struct v3d_context *v3d, struct v3d_perfmon_state *perfmon)
         if (ret != 0)
                 fprintf(stderr, "failed to destroy perfmon %d: %s\n",
                         perfmon->kperfmon_id, strerror(errno));
-}
-
-int
-v3d_get_driver_query_group_info_perfcnt(struct v3d_screen *screen, unsigned index,
-                                        struct pipe_driver_query_group_info *info)
-{
-        if (!screen->has_perfmon)
-                return 0;
-
-        if (!info)
-                return 1;
-
-        if (index > 0)
-                return 0;
-
-        info->name = "V3D counters";
-        info->max_active_queries = DRM_V3D_MAX_PERF_COUNTERS;
-        info->num_queries = ARRAY_SIZE(v3d_performance_counters);
-
-        return 1;
-}
-
-int
-v3d_get_driver_query_info_perfcnt(struct v3d_screen *screen, unsigned index,
-                                  struct pipe_driver_query_info *info)
-{
-        if (!screen->has_perfmon)
-                return 0;
-
-        if (!info)
-                return ARRAY_SIZE(v3d_performance_counters);
-
-        if (index >= ARRAY_SIZE(v3d_performance_counters))
-                return 0;
-
-        info->group_id = 0;
-        info->name = v3d_performance_counters[index][V3D_PERFCNT_NAME];
-        info->query_type = PIPE_QUERY_DRIVER_SPECIFIC + index;
-        info->result_type = PIPE_DRIVER_QUERY_RESULT_TYPE_CUMULATIVE;
-        info->type = PIPE_DRIVER_QUERY_TYPE_UINT64;
-        info->flags = PIPE_DRIVER_QUERY_FLAG_BATCH;
-
-        return 1;
 }
 
 static void
@@ -175,8 +131,17 @@ v3d_end_query_perfcnt(struct v3d_context *v3d, struct v3d_query *query)
         /* Get a copy of latest submitted job's fence to wait for its
          * completion
          */
-        if (v3d->active_perfmon->job_submitted)
-                v3d->active_perfmon->last_job_fence = v3d_fence_create(v3d);
+        if (v3d->active_perfmon->job_submitted) {
+                int fd = -1;
+                drmSyncobjExportSyncFile(v3d->fd, v3d->out_sync, &fd);
+                if (fd == -1) {
+                        fprintf(stderr, "export failed\n");
+                        v3d->active_perfmon->last_job_fence = NULL;
+                } else {
+                        v3d->active_perfmon->last_job_fence =
+                                v3d_fence_create(v3d, fd);
+                }
+        }
 
         v3d->active_perfmon = NULL;
 
@@ -222,19 +187,20 @@ static const struct v3d_query_funcs perfcnt_query_funcs = {
 };
 
 struct pipe_query *
-v3d_create_batch_query_perfcnt(struct v3d_context *v3d, unsigned num_queries,
-                               unsigned *query_types)
+v3d_create_batch_query_pipe(struct v3d_context *v3d, unsigned num_queries,
+                            unsigned *query_types)
 {
+        struct v3d_screen *screen = v3d->screen;
         struct v3d_query_perfcnt *pquery = NULL;
         struct v3d_query *query;
         struct v3d_perfmon_state *perfmon = NULL;
+        unsigned max_perfcnt = screen->perfcnt->max_perfcnt;
         int i;
 
         /* Validate queries */
         for (i = 0; i < num_queries; i++) {
                 if (query_types[i] < PIPE_QUERY_DRIVER_SPECIFIC ||
-                    query_types[i] >= PIPE_QUERY_DRIVER_SPECIFIC +
-                    ARRAY_SIZE(v3d_performance_counters)) {
+                    query_types[i] >= PIPE_QUERY_DRIVER_SPECIFIC + max_perfcnt) {
                         fprintf(stderr, "Invalid query type\n");
                         return NULL;
                 }

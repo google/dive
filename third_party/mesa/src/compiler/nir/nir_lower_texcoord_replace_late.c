@@ -13,15 +13,6 @@ struct opts {
    bool point_coord_is_sysval;
 };
 
-static nir_def *
-nir_channel_or_undef(nir_builder *b, nir_def *def, signed int channel)
-{
-   if (channel >= 0 && channel < def->num_components)
-      return nir_channel(b, def, channel);
-   else
-      return nir_undef(b, def->bit_size, 1);
-}
-
 static bool
 pass(nir_builder *b, nir_instr *instr, void *data)
 {
@@ -73,12 +64,11 @@ pass(nir_builder *b, nir_instr *instr, void *data)
    }
 
    nir_def *res = nir_vec(b, &channels[component], intr->num_components);
-   nir_def_rewrite_uses_after(&intr->def, res,
-                              res->parent_instr);
+   nir_def_rewrite_uses_after(&intr->def, res);
    return true;
 }
 
-void
+bool
 nir_lower_texcoord_replace_late(nir_shader *s, unsigned coord_replace,
                                 bool point_coord_is_sysval)
 {
@@ -89,18 +79,18 @@ nir_lower_texcoord_replace_late(nir_shader *s, unsigned coord_replace,
 
    /* If no relevant texcoords are read, there's nothing to do */
    if (!(s->info.inputs_read & replace_mask))
-      return;
+      return false;
 
    /* Otherwise, we're going to replace these texcoord reads with a PNTC read */
    s->info.inputs_read &= ~(((uint64_t)coord_replace) << VARYING_SLOT_TEX0);
 
    if (!point_coord_is_sysval)
-      s->info.inputs_read |= BITFIELD64_BIT(VARYING_SLOT_PNTC);
+      s->info.inputs_read |= VARYING_BIT_PNTC;
 
-   nir_shader_instructions_pass(s, pass,
-                                nir_metadata_block_index | nir_metadata_dominance,
-                                &(struct opts){
-                                   .coord_replace = coord_replace,
-                                   .point_coord_is_sysval = point_coord_is_sysval,
-                                });
+   return nir_shader_instructions_pass(s, pass,
+                                       nir_metadata_control_flow,
+                                       &(struct opts){
+                                          .coord_replace = coord_replace,
+                                          .point_coord_is_sysval = point_coord_is_sysval,
+                                       });
 }

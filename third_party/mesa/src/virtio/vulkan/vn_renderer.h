@@ -42,12 +42,7 @@ struct vn_renderer_sync {
 
 struct vn_renderer_info {
    struct {
-      bool has_primary;
-      int primary_major;
-      int primary_minor;
-      bool has_render;
-      int render_major;
-      int render_minor;
+      VkPhysicalDeviceDrmPropertiesEXT props;
    } drm;
 
    struct {
@@ -55,10 +50,7 @@ struct vn_renderer_info {
       uint16_t device_id;
 
       bool has_bus_info;
-      uint16_t domain;
-      uint8_t bus;
-      uint8_t device;
-      uint8_t function;
+      VkPhysicalDevicePCIBusInfoPropertiesEXT props;
    } pci;
 
    bool has_dma_buf_import;
@@ -73,11 +65,9 @@ struct vn_renderer_info {
    uint32_t vk_xml_version;
    uint32_t vk_ext_command_serialization_spec_version;
    uint32_t vk_mesa_venus_protocol_spec_version;
-   uint32_t supports_blob_id_0;
+
    /* combined mask for vk_extension_mask1, 2,..., N */
    uint32_t vk_extension_mask[32];
-   uint32_t allow_vk_wait_syncs;
-   uint32_t supports_multiple_timelines;
 };
 
 struct vn_renderer_submit_batch {
@@ -228,10 +218,12 @@ struct vn_renderer {
    struct vn_renderer_sync_ops sync_ops;
 };
 
+#ifdef HAVE_LIBDRM
 VkResult
 vn_renderer_create_virtgpu(struct vn_instance *instance,
                            const VkAllocationCallbacks *alloc,
                            struct vn_renderer **renderer);
+#endif
 
 VkResult
 vn_renderer_create_vtest(struct vn_instance *instance,
@@ -243,6 +235,7 @@ vn_renderer_create(struct vn_instance *instance,
                    const VkAllocationCallbacks *alloc,
                    struct vn_renderer **renderer)
 {
+#ifdef HAVE_LIBDRM
    if (VN_DEBUG(VTEST)) {
       VkResult result = vn_renderer_create_vtest(instance, alloc, renderer);
       if (result == VK_SUCCESS)
@@ -250,6 +243,9 @@ vn_renderer_create(struct vn_instance *instance,
    }
 
    return vn_renderer_create_virtgpu(instance, alloc, renderer);
+#else
+   return vn_renderer_create_vtest(instance, alloc, renderer);
+#endif
 }
 
 static inline void

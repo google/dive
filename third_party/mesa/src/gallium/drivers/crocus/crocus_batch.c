@@ -252,10 +252,10 @@ crocus_init_batch(struct crocus_context *ice,
       const unsigned decode_flags = INTEL_BATCH_DECODE_DEFAULT_FLAGS |
          (INTEL_DEBUG(DEBUG_COLOR) ? INTEL_BATCH_DECODE_IN_COLOR : 0);
 
-      intel_batch_decode_ctx_init(&batch->decoder, &screen->compiler->isa,
-                                  &screen->devinfo, stderr,
-                                  decode_flags, NULL, decode_get_bo,
-                                  decode_get_state_size, batch);
+      intel_batch_decode_ctx_init_elk(&batch->decoder, &screen->compiler->isa,
+                                      &screen->devinfo, stderr,
+                                      decode_flags, NULL, decode_get_bo,
+                                      decode_get_state_size, batch);
       batch->decoder.max_vbo_decoded_lines = 32;
    }
 
@@ -947,7 +947,9 @@ _crocus_batch_flush(struct crocus_batch *batch, const char *file, int line)
    finish_growing_bos(&batch->state);
    int ret = submit_batch(batch);
 
-   if (INTEL_DEBUG(DEBUG_BATCH | DEBUG_SUBMIT | DEBUG_PIPE_CONTROL)) {
+   if (INTEL_DEBUG(DEBUG_BATCH) ||
+       INTEL_DEBUG(DEBUG_SUBMIT) ||
+       INTEL_DEBUG(DEBUG_PIPE_CONTROL)) {
       int bytes_for_commands = crocus_batch_bytes_used(batch);
       int second_bytes = 0;
       if (batch->command.bo != batch->exec_bos[0]) {
@@ -965,7 +967,7 @@ _crocus_batch_flush(struct crocus_batch *batch, const char *file, int line)
               batch->command.relocs.reloc_count,
               batch->state.relocs.reloc_count);
 
-      if (INTEL_DEBUG(DEBUG_BATCH | DEBUG_SUBMIT)) {
+      if (INTEL_DEBUG(DEBUG_BATCH) || INTEL_DEBUG(DEBUG_SUBMIT)) {
          dump_fence_list(batch);
          dump_validation_list(batch);
       }
@@ -1014,7 +1016,7 @@ _crocus_batch_flush(struct crocus_batch *batch, const char *file, int line)
    }
 
    if (ret < 0) {
-#ifdef DEBUG
+#if MESA_DEBUG
       const bool color = INTEL_DEBUG(DEBUG_COLOR);
       fprintf(stderr, "%scrocus: Failed to submit batchbuffer: %-80s%s\n",
               color ? "\e[1;41m" : "", strerror(-ret), color ? "\e[0m" : "");

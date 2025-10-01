@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2013 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2013 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -103,7 +85,7 @@ static const enum pc_di_primtype primtypes[] = {
    [MESA_PRIM_TRIANGLES]      = DI_PT_TRILIST,
    [MESA_PRIM_TRIANGLE_STRIP] = DI_PT_TRISTRIP,
    [MESA_PRIM_TRIANGLE_FAN]   = DI_PT_TRIFAN,
-   [MESA_PRIM_COUNT]            = DI_PT_RECTLIST,  /* internal clear blits */
+   [MESA_PRIM_COUNT]          = DI_PT_RECTLIST,  /* internal clear blits */
 };
 /* clang-format on */
 
@@ -117,7 +99,7 @@ fd3_screen_init(struct pipe_screen *pscreen)
    fd3_emit_init_screen(pscreen);
    ir3_screen_init(pscreen);
 
-   screen->setup_slices = fd3_setup_slices;
+   screen->layout_resource = fd3_layout_resource;
    if (FD_DBG(TTILE))
       screen->tile_mode = fd3_tile_mode;
 

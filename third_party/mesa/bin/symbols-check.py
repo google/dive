@@ -7,12 +7,12 @@ import subprocess
 
 # This list contains symbols that _might_ be exported for some platforms
 PLATFORM_SYMBOLS = [
+    '_GLOBAL_OFFSET_TABLE_',
+    '_ITM_deregisterTMCloneTable',
+    '_ITM_registerTMCloneTable',
     '__bss_end__',
-    '__bss_start__',
     '__bss_start',
-    '__cxa_guard_abort',
-    '__cxa_guard_acquire',
-    '__cxa_guard_release',
+    '__bss_start__',
     '__cxa_allocate_dependent_exception',
     '__cxa_allocate_exception',
     '__cxa_begin_catch',
@@ -23,11 +23,15 @@ PLATFORM_SYMBOLS = [
     '__cxa_deleted_virtual',
     '__cxa_demangle',
     '__cxa_end_catch',
+    '__cxa_finalize',
     '__cxa_free_dependent_exception',
     '__cxa_free_exception',
     '__cxa_get_exception_ptr',
     '__cxa_get_globals',
     '__cxa_get_globals_fast',
+    '__cxa_guard_abort',
+    '__cxa_guard_acquire',
+    '__cxa_guard_release',
     '__cxa_increment_exception_refcount',
     '__cxa_new_handler',
     '__cxa_pure_virtual',
@@ -38,21 +42,30 @@ PLATFORM_SYMBOLS = [
     '__cxa_uncaught_exception',
     '__cxa_uncaught_exceptions',
     '__cxa_unexpected_handler',
+    '__deregister_frame_info',
+    '__deregister_frame_info_bases',
     '__dynamic_cast',
     '__emutls_get_address',
-    '__gxx_personality_v0',
     '__end__',
+    '__gmon_start__',
+    '__gxx_personality_v0',
     '__odr_asan._glapi_Context',
     '__odr_asan._glapi_Dispatch',
+    '__register_frame_info',
+    '__register_frame_info_bases',
     '_bss_end__',
     '_edata',
     '_end',
-    '_fini',
-    '_init',
     '_fbss',
     '_fdata',
+    '_fini',
     '_ftext',
+    '_init',
+    'pthread_mutexattr_destroy',
+    'pthread_mutexattr_init',
+    'pthread_mutexattr_settype',
 ]
+
 
 def get_symbols_nm(nm, lib):
     '''
@@ -64,12 +77,14 @@ def get_symbols_nm(nm, lib):
     output = subprocess.check_output([nm, '-gP', lib],
                                      stderr=open(os.devnull, 'w')).decode("ascii")
     for line in output.splitlines():
+        if line.startswith(' '):
+            continue
         fields = line.split()
-        if len(fields) == 2 or fields[1] == 'U':
+        if len(fields) == 2 and fields[1] == 'U':
             continue
         symbol_name = fields[0]
         if platform_name == 'Linux' or platform_name == 'GNU' or platform_name.startswith('GNU/'):
-            if symbol_name in PLATFORM_SYMBOLS:
+            if symbol_name.split('@')[0] in PLATFORM_SYMBOLS:
                 continue
         elif platform_name == 'Darwin':
             assert symbol_name[0] == '_'
@@ -106,6 +121,23 @@ def get_symbols_dumpbin(dumpbin, lib):
         symbols.append(symbol_name)
     return symbols
 
+def get_symbols_gendef(gendef, lib):
+    '''
+    List all the (non platform-specific) symbols exported by the library
+    using `gendef -`
+    '''
+    symbols = []
+    output = subprocess.check_output([gendef, '-', lib],
+                                     stderr=open(os.devnull, 'w')).decode("ascii")
+    ordinal_table_found = False
+    for line in output.splitlines():
+        if not ordinal_table_found:
+            if line.strip() == 'EXPORTS':
+                ordinal_table_found = True
+            continue
+
+        symbols.append(line.strip())
+    return symbols
 
 def main():
     parser = argparse.ArgumentParser()
@@ -123,24 +155,26 @@ def main():
     parser.add_argument('--dumpbin',
                         action='store',
                         help='path to binary (or name in $PATH)')
+    parser.add_argument('--gendef',
+                        action='store',
+                        help='path to binary (or name in $PATH)')
     parser.add_argument('--ignore-symbol',
                         action='append',
                         help='do not process this symbol')
     args = parser.parse_args()
 
-    try:
-        if platform.system() == 'Windows':
-            if not args.dumpbin:
-                parser.error('--dumpbin is mandatory')
+    if platform.system() == 'Windows':
+        if args.dumpbin:
             lib_symbols = get_symbols_dumpbin(args.dumpbin, args.lib)
+        elif args.gendef:
+            lib_symbols = get_symbols_gendef(args.gendef, args.lib)
         else:
-            if not args.nm:
-                parser.error('--nm is mandatory')
-            lib_symbols = get_symbols_nm(args.nm, args.lib)
-    except:
-        # We can't run this test, but we haven't technically failed it either
-        # Return the GNU "skip" error code
-        exit(77)
+            parser.error('--dumpbin is mandatory for msvc, --gendef is mandatory for mingw')
+    else:
+        if not args.nm:
+            parser.error('--nm is mandatory')
+        lib_symbols = get_symbols_nm(args.nm, args.lib)
+
     mandatory_symbols = []
     optional_symbols = []
     with open(args.symbols_file) as symbols_file:

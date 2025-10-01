@@ -153,13 +153,14 @@ struct nv50_surface *
 nv50_surface_from_miptree(struct nv50_miptree *mt,
                           const struct pipe_surface *templ);
 
-struct pipe_surface *
-nv50_surface_from_buffer(struct pipe_context *pipe,
-                         struct pipe_resource *pt,
-                         const struct pipe_surface *templ);
-
 void
 nv50_surface_destroy(struct pipe_context *, struct pipe_surface *);
+
+void
+nv50_framebuffer_init(struct pipe_context *pctx,
+                      const struct pipe_framebuffer_state *fb,
+                      struct pipe_surface **cbufs,
+                      struct pipe_surface **zsbuf);
 
 void
 nv50_invalidate_resource(struct pipe_context *, struct pipe_resource *);

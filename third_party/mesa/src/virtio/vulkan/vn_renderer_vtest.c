@@ -6,6 +6,7 @@
  * Copyright 2014, 2015 Red Hat.
  */
 
+#include "virtio/virtio-gpu/venus_hw.h"
 #include <errno.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -15,12 +16,11 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "drm-uapi/virtgpu_drm.h"
 #include "util/os_file.h"
 #include "util/os_misc.h"
 #include "util/sparse_array.h"
 #include "util/u_process.h"
-#define VIRGL_RENDERER_UNSTABLE_APIS
-#include "virtio-gpu/virglrenderer_hw.h"
 #include "vtest/vtest_protocol.h"
 
 #include "vn_renderer_internal.h"
@@ -58,7 +58,7 @@ struct vtest {
    uint32_t max_timeline_count;
 
    struct {
-      enum virgl_renderer_capset id;
+      uint32_t id;
       uint32_t version;
       struct virgl_renderer_capset_venus data;
    } capset;
@@ -256,7 +256,7 @@ vtest_vcmd_get_param(struct vtest *vtest, enum vcmd_param param)
 
 static bool
 vtest_vcmd_get_capset(struct vtest *vtest,
-                      enum virgl_renderer_capset id,
+                      uint32_t id,
                       uint32_t version,
                       void *capset,
                       size_t capset_size)
@@ -299,8 +299,7 @@ vtest_vcmd_get_capset(struct vtest *vtest,
 }
 
 static void
-vtest_vcmd_context_init(struct vtest *vtest,
-                        enum virgl_renderer_capset capset_id)
+vtest_vcmd_context_init(struct vtest *vtest, uint32_t capset_id)
 {
    uint32_t vtest_hdr[VTEST_HDR_SIZE];
    uint32_t vcmd_context_init[VCMD_CONTEXT_INIT_SIZE];
@@ -536,15 +535,13 @@ vtest_vcmd_submit_cmd2(struct vtest *vtest,
    for (uint32_t i = 0; i < submit->batch_count; i++) {
       const struct vn_renderer_submit_batch *batch = &submit->batches[i];
       struct vcmd_submit_cmd2_batch dst = {
+         .flags = VCMD_SUBMIT_CMD2_FLAG_RING_IDX,
          .cmd_offset = cs_offset / sizeof(uint32_t),
          .cmd_size = batch->cs_size / sizeof(uint32_t),
          .sync_offset = sync_offset / sizeof(uint32_t),
          .sync_count = batch->sync_count,
+         .ring_idx = batch->ring_idx,
       };
-      if (vtest->base.info.supports_multiple_timelines) {
-         dst.flags = VCMD_SUBMIT_CMD2_FLAG_RING_IDX;
-         dst.ring_idx = batch->ring_idx;
-      }
       vtest_write(vtest, &dst, sizeof(dst));
 
       cs_offset += batch->cs_size;
@@ -927,13 +924,6 @@ vtest_init_renderer_info(struct vtest *vtest)
 {
    struct vn_renderer_info *info = &vtest->base.info;
 
-   info->drm.has_primary = false;
-   info->drm.primary_major = 0;
-   info->drm.primary_minor = 0;
-   info->drm.has_render = false;
-   info->drm.render_major = 0;
-   info->drm.render_minor = 0;
-
    info->pci.vendor_id = VTEST_PCI_VENDOR_ID;
    info->pci.device_id = VTEST_PCI_DEVICE_ID;
 
@@ -948,7 +938,7 @@ vtest_init_renderer_info(struct vtest *vtest)
       capset->vk_ext_command_serialization_spec_version;
    info->vk_mesa_venus_protocol_spec_version =
       capset->vk_mesa_venus_protocol_spec_version;
-   info->supports_blob_id_0 = capset->supports_blob_id_0;
+   assert(capset->supports_blob_id_0);
 
    /* ensure vk_extension_mask is large enough to hold all capset masks */
    STATIC_ASSERT(sizeof(info->vk_extension_mask) >=
@@ -956,9 +946,9 @@ vtest_init_renderer_info(struct vtest *vtest)
    memcpy(info->vk_extension_mask, capset->vk_extension_mask1,
           sizeof(capset->vk_extension_mask1));
 
-   info->allow_vk_wait_syncs = capset->allow_vk_wait_syncs;
+   assert(capset->allow_vk_wait_syncs);
 
-   info->supports_multiple_timelines = capset->supports_multiple_timelines;
+   assert(capset->supports_multiple_timelines);
    info->max_timeline_count = vtest->max_timeline_count;
 }
 
@@ -985,7 +975,7 @@ vtest_destroy(struct vn_renderer *renderer,
 static VkResult
 vtest_init_capset(struct vtest *vtest)
 {
-   vtest->capset.id = VIRGL_RENDERER_CAPSET_VENUS;
+   vtest->capset.id = VIRTGPU_DRM_CAPSET_VENUS;
    vtest->capset.version = 0;
 
    if (!vtest_vcmd_get_capset(vtest, vtest->capset.id, vtest->capset.version,

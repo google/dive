@@ -23,7 +23,6 @@
 
 #include "nir.h"
 #include "gl_nir_linker.h"
-#include "compiler/glsl/ir_uniform.h" /* for gl_uniform_storage */
 #include "main/shader_types.h"
 #include "main/consts_exts.h"
 
@@ -61,7 +60,7 @@ set_opaque_binding(struct set_opaque_binding_closure *data,
    for (unsigned int i = 0; i < elements; i++)
       storage->storage[i].i = data->binding++;
 
-   for (int sh = 0; sh < MESA_SHADER_STAGES; sh++) {
+   for (int sh = 0; sh < MESA_SHADER_MESH_STAGES; sh++) {
       struct gl_linked_shader *shader = data->shader_prog->_LinkedShaders[sh];
 
       if (!shader)
@@ -164,11 +163,16 @@ copy_constant_to_storage(union gl_constant_value *storage,
          case GLSL_TYPE_UINT8:
          case GLSL_TYPE_INT8:
          case GLSL_TYPE_FLOAT16:
+         case GLSL_TYPE_BFLOAT16:
+         case GLSL_TYPE_FLOAT_E4M3FN:
+         case GLSL_TYPE_FLOAT_E5M2:
             /* All other types should have already been filtered by other
              * paths in the caller.
              */
             assert(!"Should not get here.");
             break;
+         case GLSL_TYPE_COOPERATIVE_MATRIX:
+            UNREACHABLE("unsupported base type cooperative matrix");
          }
          i += dmul;
       }
@@ -239,7 +243,7 @@ set_uniform_initializer(struct set_uniform_initializer_closure *data,
                                data->boolean_true);
 
       if (glsl_type_is_sampler(storage->type)) {
-         for (int sh = 0; sh < MESA_SHADER_STAGES; sh++) {
+         for (int sh = 0; sh < MESA_SHADER_MESH_STAGES; sh++) {
             struct gl_linked_shader *shader =
                data->shader_prog->_LinkedShaders[sh];
 
@@ -257,7 +261,7 @@ void
 gl_nir_set_uniform_initializers(const struct gl_constants *consts,
                                 struct gl_shader_program *prog)
 {
-   for (unsigned i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (unsigned i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       struct gl_linked_shader *sh = prog->_LinkedShaders[i];
       if (!sh)
          continue;

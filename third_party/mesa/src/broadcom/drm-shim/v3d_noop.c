@@ -131,6 +131,9 @@ v3d_ioctl_get_param(int fd, unsigned long request, void *arg)
         case DRM_V3D_PARAM_SUPPORTS_PERFMON:
                 gp->value = 1;
                 return 0;
+        case DRM_V3D_PARAM_SUPPORTS_MULTISYNC_EXT:
+                gp->value = 1;
+                return 0;
         default:
                 break;
         }
@@ -164,7 +167,7 @@ drm_shim_driver_init(void)
 
         drm_shim_override_file("OF_FULLNAME=/rdb/v3d\n"
                                "OF_COMPATIBLE_N=1\n"
-                               "OF_COMPATIBLE_0=brcm,7278-v3d\n",
+                               "OF_COMPATIBLE_0=brcm,2711-v3d\n",
                                "/sys/dev/char/%d:%d/device/uevent",
                                DRM_MAJOR, render_node_minor);
 }

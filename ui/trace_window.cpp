@@ -818,15 +818,23 @@ bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
                                                                     m_source_capture_dir,
                                                                     "/",
                                                                     m_file_list[1].data());
+    std::string get_third_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
+                                                                   m_source_capture_dir,
+                                                                   "/",
+                                                                   m_file_list[2].data());
     absl::StatusOr<std::string> first_current_timestamp = device->Adb().RunAndGetResult(
     get_first_current_timestamp_command);
     absl::StatusOr<std::string> second_current_timestamp = device->Adb().RunAndGetResult(
     get_second_current_timestamp_command);
+    absl::StatusOr<std::string> third_current_timestamp = device->Adb().RunAndGetResult(
+    get_third_current_timestamp_command);
 
     current_time_stamps.push_back(first_current_timestamp->data());
     current_time_stamps.push_back(second_current_timestamp->data());
+    current_time_stamps.push_back(third_current_timestamp->data());
     return (current_time_stamps[0] == previous_timestamps[0] &&
-            current_time_stamps[1] == previous_timestamps[1]);
+            current_time_stamps[1] == previous_timestamps[1] &&
+            current_time_stamps[2] == previous_timestamps[2]);
 }
 
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
@@ -854,7 +862,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         }
     }
 
-    // Ensure that the .gfxa and .gfxr file sizes are set and neither is being written to.
+    // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written to.
     int64_t                  size = 0;
     std::vector<std::string> current_timestamps;
 
@@ -952,9 +960,11 @@ void GfxrCaptureWorker::run()
     qDebug() << "Begin to download the trace file to "
              << m_target_capture_dir.generic_string().c_str();
 
-    int64_t size = 0;
+    int64_t     size = 0;
+    std::string gfxr_stem;
+    std::string original_screenshot_path;
 
-    std::string gfxr_capture_file;
+    std::string gfxr_capture_file_path;
     // Retrieve each file in the capture directory (capture file and asset file).
     for (std::string file : m_file_list)
     {
@@ -969,19 +979,44 @@ void GfxrCaptureWorker::run()
 
         if (!retrieve_file.ok())
         {
-            std::cout << "Failed to retrieve gfxr capture: " << ret.status().message() << std::endl;
+            std::cout << "Failed to retrieve gfxr capture: " << retrieve_file.message()
+                      << std::endl;
             qDebug() << retrieve_file.message().data();
             emit ErrorMessage(QString::fromStdString(retrieve_file.message().data()));
             return;
         }
 
-        if (filename.extension() == ".gfxr")
+        if (filename.extension() == Dive::kGfxrSuffix)
         {
-            gfxr_capture_file = target_path.string();
+            if (gfxr_stem.empty())
+            {
+                gfxr_stem = filename.stem().string();
+            }
+            gfxr_capture_file_path = target_path.string();
+        }
+        else if (filename.extension() == Dive::kPngSuffix)
+        {
+            original_screenshot_path = target_path.string();
         }
 
         size += static_cast<int64_t>(std::filesystem::file_size(target_path.string()));
         emit DownloadedSize(size);
+    }
+
+    if (!original_screenshot_path.empty() && !gfxr_stem.empty())
+    {
+        std::filesystem::path new_screenshot_filename = gfxr_stem + Dive::kPngSuffix;
+        std::filesystem::path png_new_path = m_target_capture_dir;
+        png_new_path /= new_screenshot_filename;
+
+        std::error_code error_code;
+        std::filesystem::rename(original_screenshot_path, png_new_path, error_code);
+
+        if (error_code)
+        {
+            qDebug() << "Failed to rename screenshot file from " << original_screenshot_path.c_str()
+                     << " to " << png_new_path.c_str() << ": " << error_code.message().c_str();
+        }
     }
 
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -990,7 +1025,7 @@ void GfxrCaptureWorker::run()
     qDebug() << "Time used to download the gfxr capture directory is "
              << (time_used_to_load_ms / 1000.0) << " seconds.";
 
-    QString capture_saved_path(gfxr_capture_file.c_str());
+    QString capture_saved_path(gfxr_capture_file_path.c_str());
 
     emit GfxrCaptureAvailable(capture_saved_path);
 }
@@ -1143,6 +1178,26 @@ void TraceDialog::OnGfxrCaptureClicked()
             ShowErrorMessage(QString::fromStdString(err_msg));
             return;
         }
+
+        std::string
+        on_device_capture_screen_shot = absl::StrCat(std::string(Dive::kDeviceCapturePath),
+                                                     "/",
+                                                     m_gfxr_capture_file_directory_input_box->text()
+                                                     .toStdString(),
+                                                     "/",
+                                                     "capture_screenshot.png");
+
+        ret = device->Adb().Run(
+        absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to create capture screenshot: ",
+                                               ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(QString::fromStdString(err_msg));
+            return;
+        }
+
         m_gfxr_capture_button->setText(kRetrieve_Gfxr_Runtime_Capture);
         m_run_button->setEnabled(false);
     }

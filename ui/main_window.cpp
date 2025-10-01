@@ -42,6 +42,7 @@
 
 #include "about_window.h"
 #include "buffer_view.h"
+#include "capture_service/constants.h"
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "command_model.h"
@@ -83,6 +84,7 @@
 #include "viewport_stats_model.h"
 #include "window_scissors_stats_model.h"
 #include "trace_stats/trace_stats.h"
+#include "frame_tab_view.h"
 
 static constexpr int         kViewModeStringCount = 2;
 static constexpr int         kEventViewModeStringCount = 1;
@@ -424,11 +426,14 @@ MainWindow::MainWindow()
                                                      m_data_core->GetCommandHierarchy(),
                                                      this);
 
+        m_frame_tab_view = new FrameTabView();
+
         m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
         m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
         m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
         m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
+        m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
         m_buffer_view = new BufferView(*m_data_core);
@@ -793,6 +798,7 @@ void MainWindow::ResetTabWidget()
     m_event_state_view_tab_index = -1;
     m_perf_counter_view_tab_index = -1;
     m_gpu_timing_view_tab_index = -1;
+    m_frame_view_tab_index = -1;
 
     // Reconnect OnTabViewChange.
     QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
@@ -832,6 +838,7 @@ void MainWindow::OnDiveFileLoaded()
     m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
     m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
     m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
+    m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
 #if defined(ENABLE_CAPTURE_BUFFERS)
     // If m_buffer_view is dynamically created/deleted, handle it here.
     // If it's a fixed member, ensure it's reset.
@@ -987,6 +994,7 @@ void MainWindow::OnGfxrFileLoaded()
     m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
     m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
     m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
+    m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
 
     // Ensure the All Event topology is displayed.
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
@@ -1186,7 +1194,7 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
     std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
 
     // Check if the file loaded is a .gfxr file.
-    m_gfxr_capture_loaded = (file_extension.compare(".gfxr") == 0);
+    m_gfxr_capture_loaded = (file_extension.compare(Dive::kGfxrSuffix) == 0);
 
     // Reset the correlated capture variable
     m_correlated_capture_loaded = false;
@@ -1235,6 +1243,9 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         std::filesystem::path gpu_time_file_path = capture_file_path.parent_path() /
                                                    (capture_file_path.stem().string() +
                                                     Dive::kGpuTimingCsvSuffix);
+        std::filesystem::path screenshot_file_path = capture_file_path.parent_path() /
+                                                     (capture_file_path.stem().string() +
+                                                      Dive::kPngSuffix);
 
         // Check if there is a corresponding .rd file
         if (std::filesystem::exists(rd_file_path))
@@ -1267,6 +1278,20 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         {
             PendingGpuTimingResults("");
             qDebug() << "Failed to find gpu timing data";
+        }
+
+        // Check if there is an existing screenshot
+        qDebug() << "Attempting to load screenshot from: " << screenshot_file_path.string().c_str();
+        if (std::filesystem::exists(screenshot_file_path))
+        {
+            m_frame_tab_view->OnCaptureScreenshotLoaded(
+            QString::fromStdWString(screenshot_file_path.wstring()));
+            qDebug() << "Loaded: " << screenshot_file_path.string().c_str();
+        }
+        else
+        {
+            m_frame_tab_view->OnCaptureScreenshotLoaded("");
+            qDebug() << "Failed to find gfxr capture screenshot";
         }
     }
 

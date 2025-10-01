@@ -182,7 +182,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 std::filesystem::path ResolveAndroidLibPath(const std::string &name,
                                             const std::string &device_architecture)
 {
-    LOGD("cwd: %s\n", std::filesystem::current_path().c_str());
+    LOGD("cwd: %s\n", std::filesystem::current_path().string().c_str());
     std::vector<std::filesystem::path> search_paths{ std::filesystem::path{ "./install" },
                                                      std::filesystem::path{
                                                      "../../build_android/Release/bin" },
@@ -257,6 +257,10 @@ absl::Status AndroidDevice::SetupDevice()
 absl::Status AndroidDevice::CleanupDevice()
 {
     LOGD("Cleanup device %s\n", m_serial.c_str());
+
+    UnpinGpuClock().IgnoreError();
+    Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
+
     if (m_original_state.m_root_access_requested)
     {
         const auto &enforce = m_original_state.m_enforce;
@@ -512,6 +516,25 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
 {
     LOGD("RunReplayApk(): starting\n");
 
+    bool trouble_pinning_clock = false;
+    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
+    if (!ret.ok())
+    {
+        LOGW("WARNING: Could not disable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
+        trouble_pinning_clock = true;
+    }
+
+    if (!trouble_pinning_clock)
+    {
+        ret = m_device->PinGpuClock(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
+            trouble_pinning_clock = true;
+        }
+    }
+
     std::string updated_replay_args = replay_args;
 
     // Enable pm4 capture
@@ -643,6 +666,28 @@ absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
         return res.status();
     }
 
+    if (!trouble_pinning_clock)
+    {
+        auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
+        }
+
+        ret = m_device->UnpinGpuClock();
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
+        }
+    }
+
+    ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
+    if (!ret.ok())
+    {
+        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
+    }
+
     LOGD("RunReplayApk(): completed\n");
     return absl::OkStatus();
 }
@@ -658,6 +703,25 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
     }
 
     LOGD("RunProfilingOnReplay(): starting\n");
+
+    bool trouble_pinning_clock = false;
+    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
+    if (!ret.ok())
+    {
+        LOGW("WARNING: Could not disable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
+        trouble_pinning_clock = true;
+    }
+
+    if (!trouble_pinning_clock)
+    {
+        ret = m_device->PinGpuClock(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
+            trouble_pinning_clock = true;
+        }
+    }
 
     // Deploy libraries and binaries
     std::string copy_cmd = absl::StrFormat("push %s %s",
@@ -718,6 +782,28 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
                                             kTargetPath,
                                             kProfilingPluginFolderName);
     RETURN_IF_ERROR(m_device->Adb().Run(clean_cmd));
+
+    if (!trouble_pinning_clock)
+    {
+        auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
+        }
+
+        ret = m_device->UnpinGpuClock();
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
+        }
+    }
+
+    ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
+    if (!ret.ok())
+    {
+        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
+             std::string(ret.message()).c_str());
+    }
 
     return absl::OkStatus();
 }
@@ -799,6 +885,66 @@ bool AndroidDevice::FileExists(const std::string &file_path)
     absl::StatusOr<std::string> result = Adb().Run(cmd);
 
     return result.ok();
+}
+
+absl::Status AndroidDevice::PinGpuClock(uint32_t freq_mhz) const
+{
+    std::string cmd = "shell surfaceflinger --enable-spf-gpu-lock";
+    RETURN_IF_ERROR(m_adb.Run(cmd));
+
+    cmd = absl::StrFormat("shell \"echo %d> %s\"", freq_mhz, kDeviceGpuMinClockPath);
+    RETURN_IF_ERROR(m_adb.Run(cmd));
+
+    cmd = absl::StrFormat("shell \"echo %d> %s\"", freq_mhz, kDeviceGpuMaxClockPath);
+    RETURN_IF_ERROR(m_adb.Run(cmd));
+
+    return absl::OkStatus();
+}
+
+absl::Status AndroidDevice::UnpinGpuClock() const
+{
+    std::string cmd = "shell surfaceflinger --disable-spf-gpu-lock";
+    RETURN_IF_ERROR(m_adb.Run(cmd));
+
+    return absl::OkStatus();
+}
+
+absl::StatusOr<uint32_t> AndroidDevice::GetGpuFrequency() const
+{
+    std::string cmd = absl::StrFormat("shell cat %s", kDeviceCurFreqPath);
+    auto        res = m_adb.RunAndGetResult(cmd);
+    if (!res.ok())
+    {
+        return res.status();
+    }
+
+    // Note: omitting some parsing checks here because this system file is expected to only contain
+    // digits
+    uint32_t freq = stoi(*res);
+
+    return freq;
+}
+
+absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
+{
+    auto res = GetGpuFrequency();
+    if (!res.ok())
+    {
+        std::string err_str = absl::StrFormat("Could not check GPU clock frequency: %s\n",
+                                              res.status().message());
+        return absl::InternalError(err_str);
+    }
+
+    uint32_t expected_freq_hz = expected_freq_mhz * 1000000;
+    if (*res != expected_freq_hz)
+    {
+        std::string err_str = absl::StrFormat("Expecting GPU clock frequency %d, got %d\n",
+                                              expected_freq_hz,
+                                              *res);
+        return absl::InternalError(err_str);
+    }
+
+    return absl::OkStatus();
 }
 
 }  // namespace Dive

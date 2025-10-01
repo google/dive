@@ -324,20 +324,7 @@ void rd_write_section(int device_fd, enum rd_sect_type type, const void *buf, in
 	} else if (type == RD_CHIP_ID) {
 		chip_id = *(uint64_t *)buf;
 	}
-	if (type == RD_CHIP_ID) {
-		chip_id = *(uint64_t *)buf;
-	}
 
-
-	if (df == NULL || df->log_fd == LOG_NULL_FILE) {
-		const char *name = getenv("TESTNAME");
-		if (!name)
-			name = "unknown";
-		rd_start(device_fd, name, "");
-		df = get_file(device_fd);
-		assert(df != NULL);
-		printf("opened rd, %"LOG_PRI_FILE"\n", df->log_fd);
-	}
 	// GOOGLE: Don't capture if not in capturing mode.
 	if(!IsCapturing()) {
 		return;
@@ -518,15 +505,8 @@ void * __rd_dlsym_helper(const char *name)
 }
 
 // GOOGLE: append src file to the end of the target file.
-int append_file(const char *target, const char *src)
+int append_file(int fd_target, const char *src)
 {
-	// If target does not exist, just rename instead of copy.
-	if(access(target, F_OK) != 0)
-	{
-		rename(src, target);
-		return 0;
-	}
-    int fd_target = open(target, O_CREAT | O_APPEND | O_WRONLY);
     if (fd_target < 0)
         return -1;
 
@@ -541,20 +521,23 @@ int append_file(const char *target, const char *src)
     }
 	LOGI("append file done\n");
     close(fd_src);
-    close(fd_target);
     return 0;
 }
 
 // GOOGLE: Close all opened trace fd
+// Concatenate all open log files to `capture_file_path`. Replace `capture_file_path` if it already exists.
+// In the process, all log files are closed and all inprogress files are deleted.
 void collect_trace_file(const char* capture_file_path)
 {
-	char full_path[PATH_MAX];
-#if defined (COMPRESS_TRACE)
-	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
-#else
-	snprintf(full_path, PATH_MAX, "%s", capture_file_path);
-#endif
-	LOGD("full_path is %s", full_path);
+	LOGD("capture_file_path is %s", capture_file_path);
+
+	// Could remove(capture_file_path). However, that is susceptible to TOCTOU problems.
+	// Prefer to open the target file once and keep it open for the duration of collection.
+	int concatenated_log_fd = creat(capture_file_path, 0644);
+	if (concatenated_log_fd == -1) {
+		LOGI("Failed to open `%s` to collect traces. Can't collect traces. Error: %s", capture_file_path, strerror(errno));
+		return;
+	}
 
 	for (int i = 0; i < MAX_DEVICE_FILES; i++)
 	{
@@ -562,22 +545,24 @@ void collect_trace_file(const char* capture_file_path)
 		int fd = 	df->device_fd ;
 		if(fd != -1)
 		{
-			struct device_file *df = get_file(fd);
-			if (df == NULL)
-					continue;
 			LOGD("device_fd %d, log_fd %"LOG_PRI_FILE", filename %s closed in collect_trace_file \n",
 				fd, df->log_fd, df->file_name);
 			pthread_mutex_lock(&write_lock);
 			LOG_CLOSE_FILE(df->log_fd);
 			df->log_fd = LOG_NULL_FILE;
 			pthread_mutex_unlock(&write_lock);
-			if(-1 == append_file(full_path, df->file_name))
+			if(-1 == append_file(concatenated_log_fd, df->file_name))
 			{
-				LOGI("Failed to append file %s to target file %s\n", df->file_name, full_path);
+				LOGI("Failed to append file %s to target file %s\n", df->file_name, capture_file_path);
 			}
 			// delete the file that has been concatenated. 
 			remove(df->file_name);
         }
+	}
+
+	if (close(concatenated_log_fd) == -1) {
+		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", capture_file_path, strerror(errno));
+			
 	}
 }
 void hexdump(const void *data, int size)

@@ -18,8 +18,6 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive)
 
-option(DIVE_UI_WIN32 "(Windows-only) Build Dive UI as WIN32 GUI application instead of a console application. This will supress logging to stdout." ON)
-
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 
@@ -70,9 +68,13 @@ if(GIT_FOUND)
     execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE REPO_SHA1)
-    string(STRIP "${REPO_SHA1}" REPO_SHA1)
-    add_definitions( -DREPO_SHA1="${REPO_SHA1}" )
+    string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
 endif()
+
+# Adds all the configure time information into dive_cmake_generated.h.in
+configure_file("${CMAKE_SOURCE_DIR}/common/dive_cmake_generated.h.in" "${CMAKE_BINARY_DIR}/generated_include/common/dive_cmake_generated.h")
+
+include_directories("${CMAKE_BINARY_DIR}/generated_include")
 
 option(DIVE_NO_DISASSEMBLY, "Include builtin shader disassembly.")
 if(DIVE_NO_DISASSEMBLY)
@@ -108,10 +110,10 @@ if(NOT ANDROID)
     add_subdirectory(plugins)
 else()
     if(NOT CMAKE_HOST_WIN32)
-        set(DIVE_GFXR_GRADLE_CONSOLE "verbose" CACHE LIST "Value of --console to use when building GFXR with Gradle")
+        set(DIVE_GFXR_GRADLE_CONSOLE "verbose" CACHE STRING "Value of --console to use when building GFXR with Gradle")
         message(CHECK_START "Build gfxr for android")
         execute_process(
-            COMMAND ./gradlew assemble${CMAKE_BUILD_TYPE} --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
+            COMMAND ./gradlew layer:assemble${CMAKE_BUILD_TYPE} replay:assemble${CMAKE_BUILD_TYPE} --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
             COMMAND_ERROR_IS_FATAL ANY
         )
@@ -124,7 +126,7 @@ else()
             DESTINATION "${CMAKE_INSTALL_PREFIX}/gfxr_layer"
         )
         install(
-            FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME} 
+            FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
             DESTINATION ${CMAKE_INSTALL_PREFIX}
             RENAME "gfxr-replay.apk")
         message(CHECK_PASS "successful")

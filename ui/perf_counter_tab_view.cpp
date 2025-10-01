@@ -27,6 +27,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_perf_counter_view = new QTableView();
     m_perf_counter_view->setModel(&m_perf_counter_model);
     m_perf_counter_view->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_perf_counter_view->setSelectionBehavior(QAbstractItemView::SelectRows);
 
     m_search_trigger_button = new QPushButton;
     m_search_trigger_button->setObjectName(kPerfCounterSearchButtonName);
@@ -53,15 +54,20 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
                      this,
                      SLOT(OnSearchBarVisibilityChange(bool)));
 
-    QObject::connect(parent,
-                     SIGNAL(CorrelateCounter(uint64_t)),
-                     this,
-                     SLOT(OnCorrelateCounter(uint64_t)));
-
     connect(m_perf_counter_view->selectionModel(),
             &QItemSelectionModel::currentChanged,
             this,
             &PerfCounterTabView::OnSelectionChanged);
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::ClearSelection()
+{
+    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    if (selection_model)
+    {
+        selection_model->clear();
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -78,6 +84,9 @@ void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
     {
         m_perf_counter_view->resizeColumnToContents(column);
     }
+    int selected_row = index.row();
+
+    emit CounterSelected(selected_row);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -217,7 +226,11 @@ void PerfCounterTabView::DisconnectSearchBar()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnCorrelateCounter(uint64_t index)
+void PerfCounterTabView::CorrelateCounter(uint64_t index)
 {
+    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QSignalBlocker       blocker(selection_model);
     m_perf_counter_view->selectRow(index);
+    m_perf_counter_view->update();
+    m_perf_counter_view->viewport()->update();
 }

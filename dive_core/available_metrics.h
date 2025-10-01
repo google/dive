@@ -18,10 +18,11 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
-#include <unordered_map>
 #include <optional>
 #include <memory>
+#include <vector>
 
 namespace Dive
 {
@@ -59,9 +60,12 @@ public:
     // Get the metric type for a given key, return kUnknown if not found.
     MetricType GetMetricType(const std::string& key) const;
 
+    // Get all available metric keys
+    std::vector<std::string> GetAllMetricKeys() const;
+
 private:
     AvailableMetrics() = default;
-    std::unordered_map<std::string, MetricInfo> m_metrics;
+    std::map<std::string, MetricInfo> m_metrics;
 };
 
 }  // namespace Dive

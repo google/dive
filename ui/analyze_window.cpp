@@ -32,7 +32,9 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 #include <filesystem>
+#include <optional>
 #include <qapplication.h>
+#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
@@ -42,29 +44,46 @@
 #include "settings.h"
 #include "common/macros.h"
 
+//--------------------------------------------------------------------------------------------------
+void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
+{
+    if (std::filesystem::remove(file_path))
+    {
+        qDebug() << "Successfully deleted: " << file_path.string().c_str();
+    }
+    else
+    {
+        qDebug() << "Was not present: " << file_path.string().c_str();
+    }
+}
+
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
-AnalyzeDialog::AnalyzeDialog(QWidget *parent)
+AnalyzeDialog::AnalyzeDialog(
+std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
+QWidget                                                            *parent) :
+    QDialog(parent),
+    m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
 
-    // Settings List
-    m_settings_list_label = new QLabel(tr("Available Settings:"));
-    m_settings_list = new QListWidget();
+    // Metrics List
+    m_metrics_list_label = new QLabel(tr("Available Metrics:"));
+    m_metrics_list = new QListWidget();
     m_csv_items = new QVector<CsvItem>();
-    m_enabled_settings_vector = new std::vector<std::string>();
-    PopulateSettings();
+    m_enabled_metrics_vector = new std::vector<std::string>();
+    PopulateMetrics();
 
-    // Settings Description
-    selected_setting_description_label = new QLabel(tr("Description:"));
-    selected_setting_description = new QTextEdit();
-    selected_setting_description->setReadOnly(true);
-    selected_setting_description->setPlaceholderText("Select a setting to see its description...");
+    // Metrics Description
+    m_selected_metrics_description_label = new QLabel(tr("Description:"));
+    m_selected_metrics_description = new QTextEdit();
+    m_selected_metrics_description->setReadOnly(true);
+    m_selected_metrics_description->setPlaceholderText("Select a metric to see its description...");
 
-    // Enabled Settings
-    m_enabled_settings_list_label = new QLabel(tr("Enabled Settings:"));
-    m_enabled_settings_list = new QListWidget();
+    // Enabled Metrics
+    m_enabled_metrics_list_label = new QLabel(tr("Enabled Metrics:"));
+    m_enabled_metrics_list = new QListWidget();
 
     // Replay Button
     m_button_layout = new QHBoxLayout();
@@ -142,22 +161,32 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
 
+    // Replay Warning
+    m_replay_warning_layout = new QHBoxLayout();
+    m_replay_warning_label = new QLabel(tr("⚠ Initiating replay will clear any temporary "
+                                           "artifacts produced by previous replays. Please save "
+                                           "them manually in a different folder before proceeding, "
+                                           "if those artifacts are desired."));
+    m_replay_warning_label->setWordWrap(true);
+    m_replay_warning_layout->addWidget(m_replay_warning_label);
+
     // Left Panel Layout
     m_left_panel_layout = new QVBoxLayout();
-    m_left_panel_layout->addWidget(m_settings_list_label);
-    m_left_panel_layout->addWidget(m_settings_list);
+    m_left_panel_layout->addWidget(m_metrics_list_label);
+    m_left_panel_layout->addWidget(m_metrics_list);
 
     // Right Panel Layout
     m_right_panel_layout = new QVBoxLayout();
-    m_right_panel_layout->addWidget(selected_setting_description_label);
-    m_right_panel_layout->addWidget(selected_setting_description);
-    m_right_panel_layout->addWidget(m_enabled_settings_list_label);
-    m_right_panel_layout->addWidget(m_enabled_settings_list);
+    m_right_panel_layout->addWidget(m_selected_metrics_description_label);
+    m_right_panel_layout->addWidget(m_selected_metrics_description);
+    m_right_panel_layout->addWidget(m_enabled_metrics_list_label);
+    m_right_panel_layout->addWidget(m_enabled_metrics_list);
     m_right_panel_layout->addLayout(m_device_layout);
     m_right_panel_layout->addLayout(m_selected_file_layout);
     m_right_panel_layout->addLayout(m_dump_pm4_layout);
     m_right_panel_layout->addLayout(m_gpu_time_layout);
     m_right_panel_layout->addLayout(m_frame_count_layout);
+    m_right_panel_layout->addLayout(m_replay_warning_layout);
     m_right_panel_layout->addLayout(m_button_layout);
 
     // Main Layout
@@ -168,24 +197,24 @@ AnalyzeDialog::AnalyzeDialog(QWidget *parent)
     setLayout(m_main_layout);
 
     // Connect the name list's selection change to a lambda
-    QObject::connect(m_settings_list,
+    QObject::connect(m_metrics_list,
                      &QListWidget::currentItemChanged,
                      [&](QListWidgetItem *current, QListWidgetItem *previous) {
                          if (current)
                          {
-                             int index = m_settings_list->row(current);
+                             int index = m_metrics_list->row(current);
                              if (index >= 0 && index < m_csv_items->size())
                              {
-                                 selected_setting_description->setText(
+                                 m_selected_metrics_description->setText(
                                  m_csv_items->at(index).description);
                              }
                          }
                      });
 
-    QObject::connect(m_settings_list, &QListWidget::itemChanged, [&](QListWidgetItem *item) {
+    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem *item) {
         // This code will execute whenever an item's state changes
         // It will refresh the second list of selected items
-        UpdateSelectedSettingsList();
+        UpdateSelectedMetricsList();
     });
 
     QObject::connect(m_device_box,
@@ -224,80 +253,62 @@ void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::PopulateSettings()
+void AnalyzeDialog::PopulateMetrics()
 {
-    QFile file(":/resources/available_settings.csv");
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    if (m_available_metrics.has_value())
     {
-        std::cout << "Could not open file:" << file.errorString().toStdString() << std::endl;
-        qDebug() << "Could not open file:" << file.errorString();
-        return;
-    }
+        // Get the list of all available metrics
+        std::vector<std::string> all_keys = m_available_metrics->get().GetAllMetricKeys();
 
-    QTextStream in(&file);
-
-    // Read and discard the first line (headers)
-    if (!in.atEnd())
-    {
-        in.readLine();
-    }
-
-    while (!in.atEnd())
-    {
-        QString     line = in.readLine();
-        QStringList fields = line.split(',');
-
-        if (fields.size() == 5)
+        for (const auto &key : all_keys)
         {
-            CsvItem item;
-            item.id = fields[0].replace('"', "");
-            ;
-            item.type = fields[1].replace('"', "");
-            ;
-            item.key = fields[2].replace('"', "");
-            ;
-            item.name = fields[3].replace('"', "");
-            ;
-            item.description = fields[4].replace('"', "");
-            ;
-            m_csv_items->append(item);
+            const Dive::MetricInfo *info = m_available_metrics->get().GetMetricInfo(key);
+            if (info)
+            {
+                CsvItem item;
+                item.id = info->m_metric_id;
+                item.type = info->m_metric_type;
+                item.key = QString::fromStdString(key);
+                item.name = QString::fromStdString(info->m_name);
+                item.description = QString::fromStdString(info->m_description);
+                m_csv_items->append(item);
+            }
         }
-    }
-    file.close();
 
-    // Populate the settings list
-    for (const auto &item : *m_csv_items)
-    {
-        QListWidgetItem *csv_item = new QListWidgetItem(item.name);
-        csv_item->setData(kDataRole, item.key);
-        csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
-        csv_item->setCheckState(Qt::Unchecked);
-        m_settings_list->addItem(csv_item);
-    }
+        // Populate the metrics list
+        for (const auto &item : *m_csv_items)
+        {
+            QListWidgetItem *csv_item = new QListWidgetItem(item.name);
+            csv_item->setData(kDataRole, item.key);
+            csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
+            csv_item->setCheckState(Qt::Unchecked);
+            m_metrics_list->addItem(csv_item);
+        }
 
-    // Add spacer so that all settings are visible at the end of the list.
-    QListWidgetItem *spacer = new QListWidgetItem();
-    spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
-    m_settings_list->addItem(spacer);
+        // Add spacer so that all metrics are visible at the end of the list.
+        QListWidgetItem *spacer = new QListWidgetItem();
+        spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
+        m_metrics_list->addItem(spacer);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdateSelectedSettingsList()
+void AnalyzeDialog::UpdateSelectedMetricsList()
 {
     // Clear the existing items in the target list
-    m_enabled_settings_list->clear();
-    m_enabled_settings_vector->clear();
+    m_enabled_metrics_list->clear();
+    m_enabled_metrics_vector->clear();
 
     // Iterate through the source list to find checked items
-    for (int i = 0; i < m_settings_list->count(); ++i)
+    for (int i = 0; i < m_metrics_list->count(); ++i)
     {
-        QListWidgetItem *item = m_settings_list->item(i);
+        QListWidgetItem *item = m_metrics_list->item(i);
 
         // If the item is checked, add it to the target list
         if (item->checkState() == Qt::Checked)
         {
-            m_enabled_settings_list->addItem(item->text());
-            m_enabled_settings_vector->push_back(item->data(kDataRole).toString().toStdString());
+            m_enabled_metrics_list->addItem(item->text());
+            m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
         }
     }
 }
@@ -550,34 +561,17 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
     QApplication::processEvents();
 }
 
-void AnalyzeDialog::UpdatePerfTabView(const std::string remote_file_name)
+//--------------------------------------------------------------------------------------------------
+std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_stem,
+                                                      const std::string &suffix) const
 {
-    QString directory = m_capture_file_directory.value().c_str();
+    if (m_local_capture_file_directory.empty())
+    {
+        return "";
+    }
 
-    // Get the original filename from the remote path
-    QFileInfo original_file_info(QString::fromStdString(remote_file_name));
-    QString   file_name = original_file_info.completeBaseName() + Dive::kProfilingMetricsCsvSuffix;
-
-    // Construct the new full path.
-    QString     full_path = QDir(directory).filePath(file_name);
-    std::string output_path = full_path.toStdString();
-
-    emit OnDisplayPerfCounterResults(output_path.c_str());
-}
-
-void AnalyzeDialog::UpdateGpuTimingTabView(const std::string remote_file_name)
-{
-    QString directory = m_capture_file_directory.value().c_str();
-
-    // Get the original filename from the original remote path
-    QFileInfo original_file_info(QString::fromStdString(remote_file_name));
-    QString   file_name = original_file_info.completeBaseName() + Dive::kGpuTimingCsvSuffix;
-
-    // Construct the new full path.
-    QString     full_path = QDir(directory).filePath(file_name);
-    std::string output_path = full_path.toStdString();
-
-    emit OnDisplayGpuTimingResults(output_path.c_str());
+    std::filesystem::path full_path = m_local_capture_file_directory / (gfxr_stem + suffix);
+    return full_path;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -599,7 +593,7 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        m_dump_pm4_enabled,
-                                       m_capture_file_directory.value());
+                                       m_local_capture_file_directory.string());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -609,8 +603,8 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     SetReplayButton("Replaying with perf counter settings...", false);
 
     return device_manager.RunProfilingOnReplay(remote_gfxr_file,
-                                               *m_enabled_settings_vector,
-                                               m_capture_file_directory.value());
+                                               *m_enabled_metrics_vector,
+                                               m_local_capture_file_directory.string());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -624,7 +618,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     return device_manager.RunReplayApk(remote_gfxr_file,
                                        replay_args,
                                        false,
-                                       m_capture_file_directory.value());
+                                       m_local_capture_file_directory.string());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -690,23 +684,37 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Set the download directory to the directory of the current capture file
-    m_capture_file_directory = GetCaptureFileDirectory();
-    if (!m_capture_file_directory.ok())
+    auto ret2 = GetCaptureFileDirectory();
+    if (!ret2.ok())
     {
         std::string err_msg = absl::StrCat("Failed to set download directory: ",
-                                           m_capture_file_directory.status().message());
+                                           ret2.status().message());
         qDebug() << err_msg.c_str();
         ShowErrorMessage(err_msg);
         SetReplayButton(kDefaultReplayButtonText, true);
         return;
     }
+    m_local_capture_file_directory = ret2.value();
+
+    // Delete any temporary artifacts from previous runs
+    std::filesystem::path gfxr_filename_stem = std::filesystem::path(remote_file.value()).stem();
+    std::filesystem::path perf_counter_csv = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                              Dive::kProfilingMetricsCsvSuffix);
+    std::filesystem::path gpu_timing_csv = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                            Dive::kGpuTimingCsvSuffix);
+    std::filesystem::path pm4_rd = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                    Dive::kPm4RdSuffix);
+    qDebug() << "Attempting to delete temporary artifacts from previous runs...";
+    AttemptDeletingTemporaryLocalFile(perf_counter_csv);
+    AttemptDeletingTemporaryLocalFile(gpu_timing_csv);
+    AttemptDeletingTemporaryLocalFile(pm4_rd);
 
     // Get the enabled settings
     m_dump_pm4_enabled = m_dump_pm4_box->currentIndex() == 0;
     m_gpu_time_enabled = m_gpu_time_box->currentIndex() == 0;
 
     // Run the pm4 replay
-    if (m_dump_pm4_enabled || (m_enabled_settings_vector->empty() && !m_gpu_time_enabled))
+    if (m_dump_pm4_enabled || (m_enabled_metrics_vector->empty() && !m_gpu_time_enabled))
     {
         ret = Pm4Replay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -717,18 +725,13 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-
-        // If dump pm4 is enabled, reload the capture so the combined view is displayed
-        if (m_dump_pm4_enabled)
-        {
-            emit ReloadCapture(m_selected_capture_file_string);
-        }
-
-        WaitForReplay(*device);
     }
+    // Reload the capture so the correct PM4 data (or absence thereof) is displayed
+    emit ReloadCapture(m_selected_capture_file_string);
+    WaitForReplay(*device);
 
     // Run the perf counter replay
-    if (!m_enabled_settings_vector->empty())
+    if (!m_enabled_metrics_vector->empty())
     {
         ret = PerfCounterReplay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -740,9 +743,15 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-
-        UpdatePerfTabView(remote_file.value());
         WaitForReplay(*device);
+        qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
+
+        emit OnDisplayPerfCounterResults(perf_counter_csv.string(), m_available_metrics);
+    }
+    else
+    {
+        qDebug() << "Cleared perf counter data";
+        emit OnDisplayPerfCounterResults("", std::nullopt);
     }
 
     // Run the gpu_time replay
@@ -757,8 +766,14 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-        UpdateGpuTimingTabView(remote_file.value());
         WaitForReplay(*device);
+        qDebug() << "Loading gpu timing data: " << gpu_timing_csv.string().c_str();
+        emit OnDisplayGpuTimingResults(QString::fromStdString(gpu_timing_csv.string()));
+    }
+    else
+    {
+        qDebug() << "Cleared gpu timing data";
+        emit OnDisplayGpuTimingResults("");
     }
 
     SetReplayButton(kDefaultReplayButtonText, true);

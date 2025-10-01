@@ -83,4 +83,6 @@ void GfxrVulkanCommandFilter::OnFilterGfxrVulkanCommandChange(const QString &fil
     m_command_hierarchy_view.scrollToTop();
 
     m_command_hierarchy_view.expandAll();
+
+    emit FilterChanged();
 }

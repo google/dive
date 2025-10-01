@@ -17,6 +17,7 @@
 #include <QDialog>
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
+#include "dive_core/available_metrics.h"
 
 #pragma once
 
@@ -35,7 +36,7 @@ class MainWindow;
 
 namespace Dive
 {
-class SelectedCaptureFiles;
+class AvailableMetrics;
 }  // namespace Dive
 
 class AnalyzeDialog : public QDialog
@@ -43,17 +44,19 @@ class AnalyzeDialog : public QDialog
     // Data structure to hold a single item from the CSV
     struct CsvItem
     {
-        QString id;
-        QString type;
-        QString key;
-        QString name;
-        QString description;
+        QString          id;
+        Dive::MetricType type;
+        QString          key;
+        QString          name;
+        QString          description;
     };
 
     Q_OBJECT
 
 public:
-    AnalyzeDialog(QWidget *parent = 0);
+    AnalyzeDialog(
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
+    QWidget                                                            *parent = nullptr);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
     void SetSelectedCaptureFile(const QString &filePath);
@@ -64,17 +67,19 @@ private slots:
     void OnReplay();
 signals:
     void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(const QString &file_path);
+    void OnDisplayPerfCounterResults(
+    const std::filesystem::path                                        &file_path,
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
     void OnDisplayGpuTimingResults(const QString &file_path);
     void ReloadCapture(const QString &file_path);
 
 private:
     void                        ShowErrorMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
-    void                        PopulateSettings();
-    void                        UpdateSelectedSettingsList();
-    void                        UpdatePerfTabView(const std::string remote_file_name);
-    void                        UpdateGpuTimingTabView(const std::string remote_file_name);
+    void                        PopulateMetrics();
+    void                        UpdateSelectedMetricsList();
+    std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
+                                                 const std::string &suffix) const;
     void                        WaitForReplay(Dive::AndroidDevice &device);
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
@@ -88,14 +93,14 @@ private:
     absl::Status                GpuTimeReplay(Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file);
 
-    QLabel      *m_settings_list_label;
-    QListWidget *m_settings_list;
+    QLabel      *m_metrics_list_label;
+    QListWidget *m_metrics_list;
 
-    QLabel    *selected_setting_description_label;
-    QTextEdit *selected_setting_description;
+    QLabel    *m_selected_metrics_description_label;
+    QTextEdit *m_selected_metrics_description;
 
-    QLabel      *m_enabled_settings_list_label;
-    QListWidget *m_enabled_settings_list;
+    QLabel      *m_enabled_metrics_list_label;
+    QListWidget *m_enabled_metrics_list;
 
     QHBoxLayout        *m_device_layout;
     QLabel             *m_device_label;
@@ -122,8 +127,10 @@ private:
     QLabel      *m_frame_count_label;
     QSpinBox    *m_frame_count_box;
 
+    QHBoxLayout *m_replay_warning_layout;
+    QLabel      *m_replay_warning_label;
+
     QHBoxLayout *m_button_layout;
-    QPushButton *m_load_settings_button;
     QPushButton *m_replay_button;
 
     QHBoxLayout                  *m_main_layout;
@@ -133,13 +140,13 @@ private:
     std::string                   m_cur_device;
     QString                       m_selected_capture_file_string;
     QVector<CsvItem>             *m_csv_items;
-    std::vector<std::string>     *m_enabled_settings_vector;
-
-    // Used to store a csv item's key in the enabled settings vector.
-    const int                   kDataRole = Qt::UserRole + 1;
-    const int                   kDefaultFrameCount = 3;
-    const std::string           kDefaultReplayButtonText = "Replay";
-    absl::StatusOr<std::string> m_capture_file_directory = "";
+    std::vector<std::string>     *m_enabled_metrics_vector;
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> m_available_metrics;
+    // Used to store a csv item's key in the enabled metrics vector.
+    const int             kDataRole = Qt::UserRole + 1;
+    const int             kDefaultFrameCount = 3;
+    const std::string     kDefaultReplayButtonText = "Replay";
+    std::filesystem::path m_local_capture_file_directory = "";
 
     bool m_dump_pm4_enabled;
     bool m_gpu_time_enabled;

@@ -68,24 +68,42 @@ SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
             {
                 RB_BLIT_INFO rb_blit_info;
                 rb_blit_info.u32All = state_tracker.GetRegValue(rb_blit_info_offset);
-                if (rb_blit_info.bitfields.CLEAR_MASK)
+
+                // TODO(wangra): update mesa code to handle this correctly
+                // We have encountered the case where rb_blit_info.bitfields.GMEM == 0 but
+                // rb_blit_info.bitfields.UNK0 == 1 The register 0x88e3 has been updated
+                // https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/src/freedreno/registers/adreno/a6xx.xml?ref_type=heads#L1712
+                // The 1st 2 bits are actually TYPE
+                // If rb_blit_info.bitfields.GMEM bit is set, it means either BLIT_EVENT_CLEAR
+                // or BLIT_EVENT_LOAD In my case, the value means BLIT_EVENT_STORE_AND_CLEAR
+
+                enum EBlitEventType : uint8_t
                 {
-                    // TODO(wangra): update mesa code to handle this correctly
-                    // We have encountered the case where rb_blit_info.bitfields.GMEM == 0 but
-                    // rb_blit_info.bitfields.UNK0 == 1 The register 0x88e3 has been updated
-                    // https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/src/freedreno/registers/adreno/a6xx.xml?ref_type=heads#L1712
-                    // The 1st 2 bits are actually TYPE
-                    // If rb_blit_info.bitfields.GMEM bit is set, it means either BLIT_EVENT_CLEAR
-                    // or BLIT_EVENT_LOAD In my case, the value means BLIT_EVENT_STORE_AND_CLEAR
-                    DIVE_ASSERT(rb_blit_info.bitfields.GMEM || rb_blit_info.bitfields.UNK0);
+                    BLIT_EVENT_STORE = 0x0,
+                    BLIT_EVENT_STORE_AND_CLEAR = 0x1,
+                    BLIT_EVENT_CLEAR = 0x2,
+                    BLIT_EVENT_LOAD = 0x3,
+                };
+
+                EBlitEventType event_type = static_cast<EBlitEventType>(
+                (rb_blit_info.bitfields.GMEM << 1) | (rb_blit_info.bitfields.UNK0));
+
+                switch (event_type)
+                {
+                case BLIT_EVENT_STORE:
+                    type = SyncType::kGmemToSysMemResolve;
+                    break;
+                case BLIT_EVENT_STORE_AND_CLEAR:
+                    type = SyncType::kGmemToSysMemResolveAndClearGmem;
+                    break;
+                case BLIT_EVENT_CLEAR:
                     type = SyncType::kClearGmem;
-                }
-                else
-                {
-                    if (rb_blit_info.bitfields.GMEM)
-                        type = SyncType::kSysMemToGmemResolve;
-                    else
-                        type = SyncType::kGmemToSysMemResolve;
+                    break;
+                case BLIT_EVENT_LOAD:
+                    type = SyncType::kSysMemToGmemResolve;
+                    break;
+                default:
+                    break;
                 }
             }
         }
@@ -311,19 +329,22 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
                                                va_addr,
                                                opcode,
                                                state_tracker);
-        if (sync_type == SyncType::kSysMemToGmemResolve)
+
+        switch (sync_type)
         {
-            string_stream << "Resolve(SysMem-To-Gmem)";
-        }
-        else if (sync_type == SyncType::kGmemToSysMemResolve)
-        {
+        case SyncType::kGmemToSysMemResolve:
             string_stream << "Resolve(GMem-To-Sysmem)";
-        }
-        else if (sync_type == SyncType::kClearGmem)
-        {
+            break;
+        case SyncType::kGmemToSysMemResolveAndClearGmem:
+            string_stream << "Resolve(GMem-To-Sysmem)AndClearGmem";
+            break;
+        case SyncType::kClearGmem:
             string_stream << "Resolve(ClearGmem)";
-        }
-        else
+            break;
+        case SyncType::kSysMemToGmemResolve:
+            string_stream << "Resolve(SysMem-To-Gmem)";
+            break;
+        default:
         {
             // Note: For CP_EVENT_WRITEs, sync_type maps to a vgt_event_type
             const PacketInfo *packet_info_ptr = GetPacketInfo(opcode);
@@ -333,6 +354,8 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
             const char *enum_str = GetEnumString(packet_info_ptr->m_fields[0].m_enum_handle,
                                                  (uint32_t)sync_type);
             string_stream << "CpEventWrite(type:" << enum_str << ")";
+        }
+        break;
         }
     }
     else if (opcode == CP_WAIT_MEM_WRITES)

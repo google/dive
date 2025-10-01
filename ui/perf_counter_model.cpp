@@ -21,7 +21,12 @@
 #include "dive_core/available_metrics.h"
 #include "dive_core/perf_metrics_data.h"
 
-static constexpr int kFixedHeaderCount = 2;
+enum class FixedHeader : uint8_t
+{
+    kDrawID,
+    kLRZState,
+    kFixedHeaderCount
+};
 
 PerfCounterModel::PerfCounterModel(QObject *parent) :
     QAbstractItemModel(parent)
@@ -134,20 +139,22 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
         return QVariant();
     }
 
-    if (col < static_cast<int>(kFixedHeaderCount))
+    int fixed_header_count = static_cast<int>(FixedHeader::kFixedHeaderCount);
+
+    if (col < fixed_header_count)
     {
         switch (col)
         {
-        case 0:  // DrawID
+        case static_cast<int>(FixedHeader::kDrawID):  // DrawID
             return record.m_draw_id;
-        case 1:  // LRZState
+        case static_cast<int>(FixedHeader::kLRZState):  // LRZState
             return record.m_lrz_state;
         default:
             return QVariant();
         }
     }
 
-    int metric_col_index = col - kFixedHeaderCount;
+    int metric_col_index = col - fixed_header_count;
     if (static_cast<size_t>(metric_col_index) < record.m_metric_values.size())
     {
         const auto &metric_value = record.m_metric_values.at(metric_col_index);

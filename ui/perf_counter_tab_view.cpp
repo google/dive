@@ -15,6 +15,7 @@
 #include "perf_counter_model.h"
 #include "search_bar.h"
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
@@ -248,7 +249,7 @@ void PerfCounterTabView::ResizeColumns()
     QHeaderView *header = m_perf_counter_view->horizontalHeader();
     header->setSectionResizeMode(QHeaderView::ResizeToContents);
 
-    uint32_t column_count = (uint32_t)m_perf_counter_model.columnCount(QModelIndex());
+    uint32_t column_count = static_cast<uint32_t>(m_perf_counter_model.columnCount(QModelIndex()));
     for (uint32_t column = 0; column < column_count; ++column)
     {
         m_perf_counter_view->resizeColumnToContents(column);

@@ -17,8 +17,6 @@
 #include <QStringList>
 #include <QDebug>
 
-#include "dive_core/common/gpudefs.h"
-
 constexpr std::array<Dive::Stats::Type, 28> kDrawDispatchStats = {
     Dive::Stats::kBinningDraws,
     Dive::Stats::kDirectDraws,

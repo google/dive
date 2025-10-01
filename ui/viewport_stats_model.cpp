@@ -17,8 +17,6 @@
 #include <QStringList>
 #include <QDebug>
 
-#include "dive_core/common/gpudefs.h"
-
 ViewportStatsModel::ViewportStatsModel(QObject *parent) :
     QAbstractItemModel(parent)
 {

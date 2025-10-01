@@ -16,9 +16,6 @@
 #include <QTextStream>
 #include <QStringList>
 #include <QDebug>
-#include <iostream>
-
-#include "dive_core/common/gpudefs.h"
 
 WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) :
     QAbstractItemModel(parent)

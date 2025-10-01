@@ -17,8 +17,6 @@
 #include <QStringList>
 #include <QDebug>
 
-#include "dive_core/common/gpudefs.h"
-
 constexpr std::array<Dive::Stats::Type, 10> kMiscStats = {
     Dive::Stats::kNumBinnigPasses,
     Dive::Stats::kNumTilingPasses,

@@ -77,5 +77,7 @@ void OverviewTabView::CopyStatistics()
     Dive::TraceStats   trace_stats;
     trace_stats.PrintTraceStats(m_stats, oss);
 
-    QApplication::clipboard()->setText(QString::fromStdString(oss.str()));
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->clear(QClipboard::Mode::Clipboard);
+    clipboard->setText(QString::fromStdString(oss.str()));
 }

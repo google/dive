@@ -13,7 +13,6 @@
 
 #include <QWidget>
 #include <QTableView>
-#include <QHeaderView>
 #include <QPushButton>
 #include <QMenu>
 #pragma once

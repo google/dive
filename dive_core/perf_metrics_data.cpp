@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <filesystem>
 #include <limits>
@@ -35,6 +36,88 @@
 
 namespace Dive
 {
+namespace
+{
+
+bool IsMetricsRecordDrawOrDispatch(const PerfMetricsRecord& record)
+{
+    return record.m_draw_type == 1 || record.m_draw_type == 3;
+}
+
+// A wrapper type for uint64_t / size_t to reduce the chance of using the wrong index.
+template<typename ValueT, typename TagT = void> class IndexWrapper
+{
+public:
+    using ValueType = ValueT;
+    using TagType = TagT;
+
+    struct Hash
+    {
+        std::hash<ValueType> m_impl;
+
+        auto operator()(const IndexWrapper& w) const { return m_impl(w.m_value); }
+    };
+
+    static constexpr ValueType kInvalid = std::numeric_limits<ValueType>::max();
+
+    IndexWrapper() = default;
+    explicit IndexWrapper(ValueType value) :
+        m_value(value)
+    {
+    }
+
+    std::optional<ValueT> AsOptional() const
+    {
+        if (has_value())
+        {
+            return value();
+        }
+        return std::nullopt;
+    }
+
+    // std::optional
+    bool      has_value() const { return m_value != kInvalid; };
+    ValueType value() const
+    {
+        assert(has_value());
+        return m_value;
+    }
+
+    ValueType operator*() const { return value(); }
+    explicit  operator bool() const { return has_value(); }
+
+    template<typename T, typename Tag>
+    auto Into(const std::vector<IndexWrapper<T, Tag>>& v) -> IndexWrapper<T, Tag>
+    {
+        if (has_value() && value() < v.size())
+        {
+            return v[value()];
+        }
+        return IndexWrapper<T, Tag>();
+    }
+
+    template<typename T, typename Tag>
+    auto Into(const std::unordered_map<IndexWrapper, IndexWrapper<T, Tag>, Hash>& m)
+    -> IndexWrapper<T, Tag>
+    {
+        if (!has_value())
+        {
+            return IndexWrapper<T, Tag>();
+        }
+        if (auto iter = m.find(*this); iter != m.end())
+        {
+            return iter->second;
+        }
+        return IndexWrapper<T, Tag>();
+    }
+
+    bool operator==(const IndexWrapper& other) const { return m_value == other.m_value; }
+
+private:
+    ValueType m_value = kInvalid;
+};
+
+}  // namespace
 
 namespace
 {
@@ -217,64 +300,65 @@ PerfMetricsData::PerfMetricsData(std::vector<std::string>       metric_names,
 
 class PerfMetricsDataProvider::Correlator
 {
+    struct NodeTag;
+    struct DrawTag;
+    struct MetricTag;
+    struct RecordTag;
+
 public:
-    using DrawRef = uint64_t;
-    using PatternIndex = size_t;
-    static constexpr PatternIndex kInvalidPatternIndex = std::numeric_limits<PatternIndex>::max();
+    // Mapping: NodeIndex <-> DrawIndex <-> MetricIndex
+    using NodeIndex = IndexWrapper<uint64_t, NodeTag>;
+    using DrawIndex = IndexWrapper<uint64_t, DrawTag>;
+    using MetricIndex = IndexWrapper<size_t, MetricTag>;
+
+    // RecordIndex is index into raw metric data.
+    using RecordIndex = IndexWrapper<size_t, RecordTag>;
 
     void Reset()
     {
-        m_draws.clear();
-        m_draw_to_index.clear();
+        m_draw_to_node.clear();
+        m_node_to_draw.clear();
 
-        m_pattern_size = 0;
-        m_record_to_index.clear();
+        m_draw_to_metric.clear();
+        m_metric_to_draw.clear();
+
+        m_record_to_metric.clear();
     }
 
     void AnalyzeCommands(const CommandHierarchy&);
 
     void AnalyzeRecords(const std::vector<PerfMetricsRecord>&);
 
-    std::optional<PatternIndex> MatchOf(size_t index) const
-    {
+    size_t GetPatternSize() const { return m_metric_to_draw.size(); }
 
-        if (index >= m_record_to_index.size())
-        {
-            return std::nullopt;
-        }
-        PatternIndex pattern_index = m_record_to_index[index];
-        if (pattern_index >= m_pattern_size)
-        {
-            return std::nullopt;
-        }
-        return pattern_index;
+    MetricIndex MatchOf(RecordIndex index) const { return index.Into(m_record_to_metric); }
+
+    NodeIndex GetNodeFromDraw(DrawIndex index) const { return index.Into(m_draw_to_node); }
+    DrawIndex GetDrawFromNode(NodeIndex index) const { return index.Into(m_node_to_draw); }
+    DrawIndex GetDrawFromMetric(MetricIndex index) const
+    {
+        return RequireCorrelationEnabled(index).Into(m_metric_to_draw);
     }
-
-    size_t GetPatternSize() const { return m_pattern_size; }
-
-    std::optional<DrawRef> GetDrawRef(PatternIndex offset) const
+    MetricIndex GetMetricFromDraw(DrawIndex index) const
     {
-        if (offset >= m_draws.size())
-        {
-            return std::nullopt;
-        }
-        return m_draws[offset];
+        return RequireCorrelationEnabled(index).Into(m_draw_to_metric);
     }
-
-    std::optional<PatternIndex> GetPatternIndex(DrawRef ref) const
+    NodeIndex GetNodeFromMetric(MetricIndex index) const
     {
-        auto iter = m_draw_to_index.find(ref);
-        if (iter == m_draw_to_index.end())
-        {
-            return std::nullopt;
-        }
-        return iter->second;
+        return GetNodeFromDraw(GetDrawFromMetric(index));
+    }
+    MetricIndex GetMetricFromNode(NodeIndex index) const
+    {
+        return GetMetricFromDraw(GetDrawFromNode(index));
     }
 
 private:
-    static void ExtractDraws(const CommandHierarchy&                 command_hierarchy,
-                             std::vector<uint64_t>&                  out_draws,
-                             std::unordered_map<uint64_t, uint64_t>& out_mapping);
+    template<typename, typename U> using ArrayMap = std::vector<U>;
+    template<typename T, typename U> using HashMap = std::unordered_map<T, U, typename T::Hash>;
+
+    static void ExtractDraws(const CommandHierarchy&         command_hierarchy,
+                             ArrayMap<DrawIndex, NodeIndex>& out_draw_to_node,
+                             HashMap<NodeIndex, DrawIndex>&  out_node_to_draw);
 
     struct DrawSignatures
     {
@@ -285,28 +369,41 @@ private:
                                     const PerfMetricsRecord* begin,
                                     const PerfMetricsRecord* end);
 
-    std::vector<DrawRef>                      m_draws;
-    std::unordered_map<DrawRef, PatternIndex> m_draw_to_index;
+    bool CorrelationEnabled() const
+    {
+        return m_draw_to_node.empty() || m_draw_to_metric.size() == m_draw_to_node.size();
+    }
+    template<typename IndexT> IndexT RequireCorrelationEnabled(IndexT index) const
+    {
+        return (CorrelationEnabled() ? index : IndexT());
+    }
 
-    size_t                    m_pattern_size;
-    std::vector<PatternIndex> m_record_to_index;
+    ArrayMap<DrawIndex, NodeIndex> m_draw_to_node;
+    HashMap<NodeIndex, DrawIndex>  m_node_to_draw;
+
+    ArrayMap<DrawIndex, MetricIndex> m_draw_to_metric;
+    ArrayMap<MetricIndex, DrawIndex> m_metric_to_draw;
+
+    ArrayMap<RecordIndex, MetricIndex> m_record_to_metric;
 };
 
 void PerfMetricsDataProvider::Correlator::ExtractDraws(
-const CommandHierarchy&                 command_hierarchy,
-std::vector<uint64_t>&                  out_draws,
-std::unordered_map<uint64_t, uint64_t>& out_mapping)
+const CommandHierarchy&         command_hierarchy,
+ArrayMap<DrawIndex, NodeIndex>& out_draw_to_node,
+HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
 {
     // TODO: extract the command buffer pattern.
+    HashMap<NodeIndex, DrawIndex> node_to_draw;
 
-    std::unordered_map<uint64_t, uint64_t> draw_to_index;
+    // Draw calls from gfxr command stream.
+    ArrayMap<DrawIndex, NodeIndex> gfxr_draws;
 
     // First instance of the draw call in the command stream (from binning pass).
-    std::vector<uint64_t> actual_draws;
+    ArrayMap<DrawIndex, NodeIndex> actual_draws;
     // Draw call that already being accounted for (tile pass).
-    std::vector<uint64_t> alias_draws;
+    ArrayMap<DrawIndex, NodeIndex> alias_draws;
 
-    std::vector<uint64_t>* draws = &actual_draws;
+    ArrayMap<DrawIndex, NodeIndex>* draws = &actual_draws;
 
     auto dedupe = [&]() {
         // We encountered either submit or render marker, unless it's
@@ -319,7 +416,7 @@ std::unordered_map<uint64_t, uint64_t>& out_mapping)
             size_t base = actual_draws.size() - alias_draws.size();
             for (size_t i = 0; i < alias_draws.size(); ++i)
             {
-                draw_to_index[alias_draws[i]] = base + i;
+                node_to_draw[alias_draws[i]] = DrawIndex(base + i);
             }
         }
         alias_draws.clear();
@@ -343,24 +440,43 @@ std::unordered_map<uint64_t, uint64_t>& out_mapping)
                 draws = &alias_draws;
             }
         }
-        if (!Dive::IsDrawDispatchNode(node_type))
+        if (node_type == Dive::NodeType::kGfxrVulkanDrawCommandNode)
         {
+            gfxr_draws.push_back(NodeIndex(i));
             continue;
         }
-        draws->push_back(i);
+
+        if (!Dive::IsDrawDispatchNode(node_type))
+        {
+            // Note: what if both pm4 node and vulkan draw command node exist?
+            continue;
+        }
+        draws->push_back(NodeIndex(i));
     }
     dedupe();
     for (size_t i = 0; i < actual_draws.size(); ++i)
     {
-        draw_to_index[actual_draws[i]] = i;
+        node_to_draw[actual_draws[i]] = DrawIndex(i);
     }
-    out_draws = std::move(actual_draws);
-    out_mapping = std::move(draw_to_index);
+    for (size_t i = 0; i < gfxr_draws.size(); ++i)
+    {
+        node_to_draw[gfxr_draws[i]] = DrawIndex(i);
+    }
+
+    if (!actual_draws.empty())
+    {
+        out_draw_to_node = std::move(actual_draws);
+    }
+    else
+    {
+        out_draw_to_node = std::move(gfxr_draws);
+    }
+    out_node_to_draw = std::move(node_to_draw);
 }
 
 void PerfMetricsDataProvider::Correlator::AnalyzeCommands(const CommandHierarchy& command_hierarchy)
 {
-    ExtractDraws(command_hierarchy, m_draws, m_draw_to_index);
+    ExtractDraws(command_hierarchy, m_draw_to_node, m_node_to_draw);
 }
 
 bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatures&    signatures,
@@ -392,8 +508,7 @@ bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatur
 void PerfMetricsDataProvider::Correlator::AnalyzeRecords(
 const std::vector<PerfMetricsRecord>& records)
 {
-    m_pattern_size = 0;
-    m_record_to_index.clear();
+    m_record_to_metric.clear();
 
     if (records.empty())
     {
@@ -423,10 +538,21 @@ const std::vector<PerfMetricsRecord>& records)
         emit_frame(frame_start, records.size());
     }
 
-    if (!m_draws.empty() && m_draws.size() != template_frame_size)
+    ArrayMap<DrawIndex, MetricIndex> draw_to_metric;
+    ArrayMap<MetricIndex, DrawIndex> metric_to_draw;
+    metric_to_draw.resize(template_frame_size);
+    for (size_t i = 0; i < template_frame_size; ++i)
     {
-        // Draw pattern is different between capture file and metric file.
-        return;
+        if (IsMetricsRecordDrawOrDispatch(records[template_frame_start + i]))
+        {
+            metric_to_draw[i] = DrawIndex(draw_to_metric.size());
+            draw_to_metric.push_back(MetricIndex(i));
+        }
+    }
+
+    if (!m_draw_to_node.empty() && m_draw_to_node.size() != draw_to_metric.size())
+    {
+        std::cerr << "Mismatch draw calls in performance counter data." << std::endl;
     }
 
     const DrawSignatures signature = {
@@ -434,7 +560,7 @@ const std::vector<PerfMetricsRecord>& records)
         records.data() + template_frame_start + template_frame_size,
     };
 
-    std::vector<PatternIndex> record_to_index(records.size(), kInvalidPatternIndex);
+    ArrayMap<RecordIndex, MetricIndex> record_to_metric(records.size());
     {
         size_t frame_start = 0;
         auto   emit_frame = [&](size_t start, size_t end) {
@@ -446,7 +572,7 @@ const std::vector<PerfMetricsRecord>& records)
             const size_t frame_size = end - start;
             for (int i = 0; i < frame_size; ++i)
             {
-                record_to_index[start + i] = i;
+                record_to_metric[start + i] = MetricIndex(i);
             }
         };
         for (size_t i = 0; i < records.size(); ++i)
@@ -460,8 +586,9 @@ const std::vector<PerfMetricsRecord>& records)
         emit_frame(frame_start, records.size());
     }
 
-    m_pattern_size = template_frame_size;
-    m_record_to_index = std::move(record_to_index);
+    m_record_to_metric = std::move(record_to_metric);
+    m_draw_to_metric = std::move(draw_to_metric);
+    m_metric_to_draw = std::move(metric_to_draw);
 }
 
 std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::Create(
@@ -532,7 +659,7 @@ void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
     size_t skipped = 0;
     for (size_t record_index = 0; record_index < records.size(); ++record_index)
     {
-        auto pattern_index = m_correlator->MatchOf(record_index);
+        auto pattern_index = m_correlator->MatchOf(Correlator::RecordIndex(record_index));
         if (!pattern_index)
         {
             ++skipped;
@@ -600,9 +727,21 @@ const std::vector<std::string> PerfMetricsDataProvider::GetRecordHeader() const
 }
 
 std::optional<uint64_t> PerfMetricsDataProvider::GetCorrelatedComputedRecordIndex(
-uint64_t draw_ref) const
+uint64_t node_index) const
 {
-    return m_correlator->GetPatternIndex(draw_ref);
+    return m_correlator->GetMetricFromNode(Correlator::NodeIndex(node_index)).AsOptional();
+}
+
+std::optional<uint64_t> PerfMetricsDataProvider::GetComputedRecordIndexFromDrawIndex(
+uint64_t draw_index) const
+{
+    return m_correlator->GetMetricFromDraw(Correlator::DrawIndex(draw_index)).AsOptional();
+}
+
+std::optional<uint64_t> PerfMetricsDataProvider::GetDrawIndexFromComputedRecordIndex(
+uint64_t index) const
+{
+    return m_correlator->GetDrawFromMetric(Correlator::MetricIndex(index)).AsOptional();
 }
 
 const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const

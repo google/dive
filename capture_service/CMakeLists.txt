@@ -28,11 +28,21 @@ else()
   set(COMMAND_UTILS_SRC "command_utils.cc")
 endif()
 
+# AndroidTraceManager can be compiled on the host. This allows us to unit test it.
+# Group both cc files in the same target since the public header trace_mgr.h declares both.
+add_library(trace_mgr
+  android_trace_mgr.cc
+  trace_mgr.cc
+)
+target_link_libraries(trace_mgr PUBLIC
+                      absl::core_headers
+                      absl::synchronization)
+# for #include "common/log.h"
+target_include_directories(trace_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 if(ANDROID)
   add_library(service
               service.cc
-              trace_mgr.cc
-              android_trace_mgr.cc
               ${COMMAND_UTILS_SRC})
 
   target_link_libraries(service PRIVATE  log)
@@ -48,7 +58,8 @@ target_include_directories(service PRIVATE
 target_link_libraries(service PRIVATE
                       network
                       absl::flags
-                      absl::flags_parse)
+                      absl::flags_parse
+                      trace_mgr)
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 add_executable(server server.cc
@@ -98,4 +109,12 @@ else()
     gtest_main
     )
   gtest_discover_tests(device_mgr_test)
+
+  add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
+  target_link_libraries(android_trace_mgr_test
+    trace_mgr
+    gtest
+    gtest_main
+  )
+  gtest_discover_tests(android_trace_mgr_test)
 endif()

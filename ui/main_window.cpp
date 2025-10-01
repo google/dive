@@ -3220,6 +3220,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
             QApplication::processEvents();
 
             CorrelateCounter(index, true);
+            emit EventSelected(corresponding_pm4_draw_call_index);
         }
     }
 

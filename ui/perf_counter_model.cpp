@@ -19,6 +19,9 @@
 #include <optional>
 
 #include "dive_core/available_metrics.h"
+#include "dive_core/perf_metrics_data.h"
+
+static constexpr int kFixedHeaderCount = 2;
 
 PerfCounterModel::PerfCounterModel(QObject *parent) :
     QAbstractItemModel(parent)
@@ -57,7 +60,10 @@ void PerfCounterModel::LoadData()
 {
     QStringList headers;
 
-    for (const auto &header_str : m_perf_metrics_data_provider->GetRecordHeader())
+    headers.append(QString::fromStdString(Dive::kHeaderMap.at(Dive::kDrawID).second));
+    headers.append(QString::fromStdString(Dive::kHeaderMap.at(Dive::kLRZState).second));
+
+    for (const auto &header_str : m_perf_metrics_data_provider->GetMetricsNames())
     {
         headers.append(QString::fromStdString(header_str));
     }
@@ -128,35 +134,20 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
         return QVariant();
     }
 
-    if (col < static_cast<int>(Dive::kFixedPerfMetricsDataHeaderCount))
+    if (col < static_cast<int>(kFixedHeaderCount))
     {
         switch (col)
         {
-        case Dive::kContextID:
-            return QVariant(QString::number(record.m_context_id));
-        case Dive::kProcessID:
-            return QVariant(QString::number(record.m_process_id));
-        case Dive::kFrameID:
-            return QVariant(QString::number(record.m_frame_id));
-        case Dive::kCmdBufferID:
-            return QVariant(QString::number(record.m_cmd_buffer_id));
-        case Dive::kDrawID:
+        case 0:  // DrawID
             return record.m_draw_id;
-        case Dive::kDrawLabel:
-            return record.m_draw_label;
-        case Dive::kProgramID:
-            return QVariant(QString::number(record.m_program_id));
-        case Dive::kDrawType:
-            return record.m_draw_type;
-        case Dive::kLRZState:
+        case 1:  // LRZState
             return record.m_lrz_state;
         default:
             return QVariant();
         }
     }
 
-    int metric_col_index = col - Dive::kFixedPerfMetricsDataHeaderCount;
-
+    int metric_col_index = col - kFixedHeaderCount;
     if (static_cast<size_t>(metric_col_index) < record.m_metric_values.size())
     {
         const auto &metric_value = record.m_metric_values.at(metric_col_index);

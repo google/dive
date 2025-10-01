@@ -18,7 +18,7 @@ limitations under the License.
 
 #include "gtest/gtest.h"
 
-// AndroidTraceManager uses these funtions to talk with libwrap. They must be defined at link time.
+// AndroidTraceManager uses these functions to talk with libwrap. They must be defined at link time.
 // In the future, we might be able to use them to assert state.
 extern "C"
 {

@@ -182,7 +182,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 std::filesystem::path ResolveAndroidLibPath(const std::string &name,
                                             const std::string &device_architecture)
 {
-    LOGD("cwd: %s\n", std::filesystem::current_path().c_str());
+    LOGD("cwd: %s\n", std::filesystem::current_path().string().c_str());
     std::vector<std::filesystem::path> search_paths{ std::filesystem::path{ "./install" },
                                                      std::filesystem::path{
                                                      "../../build_android/Release/bin" },

@@ -145,9 +145,9 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
     {
         switch (col)
         {
-        case static_cast<int>(FixedHeader::kDrawID):  // DrawID
+        case static_cast<int>(FixedHeader::kDrawID):
             return record.m_draw_id;
-        case static_cast<int>(FixedHeader::kLRZState):  // LRZState
+        case static_cast<int>(FixedHeader::kLRZState):
             return record.m_lrz_state;
         default:
             return QVariant();

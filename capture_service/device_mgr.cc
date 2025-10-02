@@ -73,19 +73,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     std::vector<std::string> split_args = absl::StrSplit(settings.replay_flags_str,
                                                          " ",
                                                          absl::SkipWhitespace());
-    auto it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame");
-    if (it != split_args.end())
-    {
-        if (settings.loop_single_frame)
-        {
-            return absl::InvalidArgumentError(
-            "Do not specify loop_single_frame in GfxrReplaySettings and also as flag "
-            "--loop-single-frame");
-        }
-        validated_settings.loop_single_frame = true;
-        split_args.erase(it);
-    }
-    it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame-count");
+    auto it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame-count");
     if (it != split_args.end())
     {
         if (settings.loop_single_frame_count > -1)
@@ -119,12 +107,16 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         {
             return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
         }
-        if ((validated_settings.loop_single_frame_count != 2) ||
-            (!validated_settings.loop_single_frame))
+        if (validated_settings.loop_single_frame_count > -1)
         {
             return absl::InvalidArgumentError(
-            "Looping replay is needed for kPm4Dump, ensure "
-            "loop_single_frame is set and loop_single_frame_count is 2");
+            "loop_single_frame_count is hardcoded for kPm4Dump, do not specify");
+        }
+        validated_settings.loop_single_frame_count = 2;
+        if (!validated_settings.metrics.empty())
+        {
+            return absl::InvalidArgumentError(
+            "Cannot use metrics except for kPerfCounters type run");
         }
         break;
     }
@@ -135,13 +127,12 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::UnimplementedError(
             "Perf counters feature is only implemented for Adreno GPU");
         }
-        if ((validated_settings.loop_single_frame_count >= 0) ||
-            (validated_settings.loop_single_frame))
+        if (validated_settings.loop_single_frame_count > -1)
         {
             return absl::InvalidArgumentError(
-            "Hardcoded looping is used for kPerfCounters, ensure "
-            "loop_single_frame and loop_single_frame_count are not set");
+            "loop_single_frame_count is hardcoded for kPerfCounters, do not specify");
         }
+        validated_settings.loop_single_frame_count = 0;
         if (validated_settings.metrics.size() == 0)
         {
             return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
@@ -151,27 +142,37 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     case GfxrReplayOptions::kGpuTiming:
     default:
     {
+        if (!validated_settings.metrics.empty())
+        {
+            return absl::InvalidArgumentError(
+            "Cannot use metrics except for kPerfCounters type run");
+        }
+        if (validated_settings.loop_single_frame_count == 0)
+        {
+            return absl::InvalidArgumentError(
+            "loop_single_frame_count cannot be set to 0 for kGpuTiming and kNormal runs");
+        }
+        else if (validated_settings.loop_single_frame_count == -1)
+        {
+            LOGD("Default loop_single_frame_count for kGpuTiming and kNormal runs is 1\n");
+            validated_settings.loop_single_frame_count = 1;
+        }
         break;
     }
     }
 
     // Re-concatenate flags to form a validated replay_flags_str
-    if (validated_settings.loop_single_frame)
-    {
-        split_args.push_back("--loop-single-frame");
-    }
-    if (validated_settings.loop_single_frame_count >= 0)
-    {
-        split_args.push_back("--loop-single-frame-count");
-        split_args.push_back(std::to_string(validated_settings.loop_single_frame_count));
-    }
+    assert(validated_settings.loop_single_frame_count != -1);
+    split_args.push_back("--loop-single-frame-count");
+    split_args.push_back(std::to_string(validated_settings.loop_single_frame_count));
+
     if (validated_settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
         split_args.push_back("--enable-gpu-time");
     }
     validated_settings.replay_flags_str = absl::StrJoin(split_args, " ");
 
-    LOGI("ValidateGfxrReplaySettings(): Validated replay_flags_str: %s",
+    LOGI("ValidateGfxrReplaySettings(): Validated replay_flags_str: %s\n",
          validated_settings.replay_flags_str.c_str());
 
     return validated_settings;

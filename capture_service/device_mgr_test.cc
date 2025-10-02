@@ -51,7 +51,7 @@ TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrEqualsSignFail)
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
-    rs.replay_flags_str = "--loop-single-frame-count=200 --loop-single-frame";
+    rs.replay_flags_str = "--loop-single-frame-count=200";
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
@@ -59,20 +59,20 @@ TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrEqualsSignFail)
     EXPECT_EQ(ret.status().message(), "replay_flags_str cannot contain '='");
 }
 
-TEST(ValidateGfxrReplaySettingsTest, DoubleLoopSingleFrameFail)
+TEST(ValidateGfxrReplaySettingsTest, DoubleLoopSingleFrameCountFail)
 {
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
-    rs.loop_single_frame = true;
-    rs.replay_flags_str = "--loop-single-frame";
+    rs.loop_single_frame_count = 200;
+    rs.replay_flags_str = "--loop-single-frame-count 200";
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_FALSE(ret.ok());
     EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
     EXPECT_EQ(ret.status().message(),
-              "Do not specify loop_single_frame in GfxrReplaySettings and also as flag "
-              "--loop-single-frame");
+              "Do not specify loop_single_frame_count in GfxrReplaySettings and also as flag "
+              "--loop-single-frame-count");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePM4DumpFail)
@@ -101,7 +101,7 @@ TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePerfCountersFail)
     EXPECT_EQ(ret.status().message(), "Perf counters feature is only implemented for Adreno GPU");
 }
 
-TEST(ValidateGfxrReplaySettingsTest, BasicPass)
+TEST(ValidateGfxrReplaySettingsTest, NormalDefaultPass)
 {
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
@@ -109,7 +109,61 @@ TEST(ValidateGfxrReplaySettingsTest, BasicPass)
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_EQ(ret->replay_flags_str, "");
+    EXPECT_EQ(ret->loop_single_frame_count, 1);
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 1");
+}
+
+TEST(ValidateGfxrReplaySettingsTest, Pm4DumpDefaultPass)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kPm4Dump;
+
+    auto ret = ValidateGfxrReplaySettings(rs, true);
+    ASSERT_TRUE(ret.ok()) << ret.status();
+    EXPECT_EQ(ret->loop_single_frame_count, 2);
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 2");
+}
+
+TEST(ValidateGfxrReplaySettingsTest, PerfCountersDefaultPass)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kPerfCounters;
+    rs.metrics = { "PLACEHOLDER_METRICS" };
+
+    auto ret = ValidateGfxrReplaySettings(rs, true);
+    ASSERT_TRUE(ret.ok()) << ret.status();
+    EXPECT_EQ(ret->loop_single_frame_count, 0);
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 0");
+}
+
+TEST(ValidateGfxrReplaySettingsTest, PerfCountersNoMetricsFail)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kPerfCounters;
+
+    auto ret = ValidateGfxrReplaySettings(rs, true);
+    ASSERT_FALSE(ret.ok());
+    EXPECT_EQ(ret.status().code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_EQ(ret.status().message(), "Must provide metrics for kPerfCounters type run");
+}
+
+TEST(ValidateGfxrReplaySettingsTest, GpuTimingDefaultPass)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kGpuTiming;
+
+    auto ret = ValidateGfxrReplaySettings(rs, true);
+    ASSERT_TRUE(ret.ok()) << ret.status();
+    EXPECT_EQ(ret->loop_single_frame_count, 1);
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 1 --enable-gpu-time");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrSpacesPass)
@@ -121,7 +175,8 @@ TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrSpacesPass)
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_EQ(ret->replay_flags_str, "");
+    EXPECT_EQ(ret->loop_single_frame_count, 1);
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 1");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, FlagToFlagPass)
@@ -129,15 +184,13 @@ TEST(ValidateGfxrReplaySettingsTest, FlagToFlagPass)
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
-    rs.replay_flags_str = "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time";
+    rs.replay_flags_str = "--loop-single-frame-count 3 --enable-gpu-time";
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_EQ(ret->loop_single_frame, true);
     EXPECT_EQ(ret->loop_single_frame_count, 3);
     EXPECT_EQ(ret->run_type, GfxrReplayOptions::kGpuTiming);
-    EXPECT_EQ(ret->replay_flags_str,
-              "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 3 --enable-gpu-time");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, SettingToFlagPass)
@@ -146,17 +199,14 @@ TEST(ValidateGfxrReplaySettingsTest, SettingToFlagPass)
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     rs.run_type = GfxrReplayOptions::kGpuTiming;
-    rs.loop_single_frame = true;
     rs.loop_single_frame_count = 3;
     rs.replay_flags_str = "";
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_EQ(ret->loop_single_frame, true);
     EXPECT_EQ(ret->loop_single_frame_count, 3);
     EXPECT_EQ(ret->run_type, GfxrReplayOptions::kGpuTiming);
-    EXPECT_EQ(ret->replay_flags_str,
-              "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 3 --enable-gpu-time");
 }
 
 TEST(ValidateGfxrReplaySettingsTest, MixFlagsSettingsPass)
@@ -164,17 +214,14 @@ TEST(ValidateGfxrReplaySettingsTest, MixFlagsSettingsPass)
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
-    rs.loop_single_frame = true;
     rs.loop_single_frame_count = 3;
     rs.replay_flags_str = "--enable-gpu-time";
 
     auto ret = ValidateGfxrReplaySettings(rs, true);
     ASSERT_TRUE(ret.ok()) << ret.status();
-    EXPECT_EQ(ret->loop_single_frame, true);
     EXPECT_EQ(ret->loop_single_frame_count, 3);
     EXPECT_EQ(ret->run_type, GfxrReplayOptions::kGpuTiming);
-    EXPECT_EQ(ret->replay_flags_str,
-              "--loop-single-frame --loop-single-frame-count 3 --enable-gpu-time");
+    EXPECT_EQ(ret->replay_flags_str, "--loop-single-frame-count 3 --enable-gpu-time");
 }
 
 TEST(DeviceManagerTest, EmptySerialIsInvalidForSelectDevice)

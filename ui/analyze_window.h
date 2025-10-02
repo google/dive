@@ -80,11 +80,12 @@ private:
     void                        UpdateSelectedMetricsList();
     std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
                                                  const std::string &suffix) const;
-    void                        WaitForReplay(Dive::AndroidDevice &device);
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
+    absl::Status                NormalReplay(Dive::DeviceManager &device_manager,
+                                             const std::string   &remote_gfxr_file);
     absl::Status                Pm4Replay(Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file);
     absl::Status                PerfCounterReplay(Dive::DeviceManager &device_manager,
@@ -146,7 +147,4 @@ private:
     const int             kDefaultFrameCount = 3;
     const std::string     kDefaultReplayButtonText = "Replay";
     std::filesystem::path m_local_capture_file_directory = "";
-
-    bool m_dump_pm4_enabled;
-    bool m_gpu_time_enabled;
 };

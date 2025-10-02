@@ -118,8 +118,7 @@ struct VulkanReplayOptions : public ReplayOptions
     bool        add_new_pipeline_caches;
 
     // GOOGLE: [single-frame-looping]
-    bool     loop_single_frame;
-    uint64_t loop_single_frame_count;
+    int loop_single_frame_count = -1;
 
     // GOOGLE: [enable-gpu-time]
     bool enable_gpu_time;

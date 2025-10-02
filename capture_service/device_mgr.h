@@ -26,6 +26,7 @@ limitations under the License.
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace Dive
@@ -69,8 +70,9 @@ enum class GfxrReplayOptions
 
 struct GfxrReplaySettings
 {
-    std::string remote_capture_path = "";
-    std::string local_download_dir = "";
+    std::string       remote_capture_path = "";
+    std::string       local_download_dir = "";
+    GfxrReplayOptions run_type = GfxrReplayOptions::kNormal;
 
     // ----------------------------------------------------------------------
     // NOTE: If conflicting flags/settings are provided, early termination occurs.
@@ -79,15 +81,13 @@ struct GfxrReplaySettings
     // Flags must be provided with a space (not '=') between flag and value
     std::string replay_flags_str = "";
 
-    // Loop settings for GFXR replay binary
-    bool loop_single_frame = false;
-    int  loop_single_frame_count = -1;
-
     // ----------------------------------------------------------------------
-    GfxrReplayOptions run_type = GfxrReplayOptions::kNormal;
+    // Additional runtype-specific settings
 
-    // Additional settings used only with kPerfCounters
+    // Metrics are collected only with kPerfCounters runs
     std::vector<std::string> metrics = {};
+    // Loop settings for GFXR replay binary are hardcoded except for kNormal and kGpuTiming runs
+    int loop_single_frame_count = -1;
 };
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates
@@ -189,9 +189,9 @@ public:
     absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;
 
 private:
-    // Initiates GFXR replay through the GFXR-provided python script
+    // Initiates GFXR replay through the GFXR-provided python script, blocking call
     absl::Status RunReplayGfxrScript(const GfxrReplaySettings &settings) const;
-    // Initiates GFXR replay through the profiling plugin
+    // Initiates GFXR replay through the profiling plugin, blocking call
     absl::Status RunReplayProfilingBinary(const GfxrReplaySettings &settings) const;
 
     std::unique_ptr<AndroidDevice> m_device{ nullptr };

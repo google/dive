@@ -133,7 +133,6 @@ QWidget                                                            *parent) :
     m_gpu_time_box->setModel(m_gpu_time_model);
     m_gpu_time_box->setCurrentIndex(1);
     m_gpu_time_layout->addWidget(m_gpu_time_box);
-    m_gpu_time_enabled = m_gpu_time_box->currentIndex() == 0;
 
     // Enable Dump Pm4
     m_dump_pm4_layout = new QHBoxLayout();
@@ -148,15 +147,13 @@ QWidget                                                            *parent) :
     m_dump_pm4_box->setModel(m_dump_pm4_model);
     m_dump_pm4_box->setCurrentIndex(1);
     m_dump_pm4_layout->addWidget(m_dump_pm4_box);
-    m_dump_pm4_enabled = m_dump_pm4_box->currentIndex() == 0;
 
     // Single Frame Loop Count
     m_frame_count_layout = new QHBoxLayout();
     m_frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
     m_frame_count_box = new QSpinBox(this);
-    m_frame_count_box->setRange(0, std::numeric_limits<int>::max());
-    m_frame_count_box->setSpecialValueText("Infinite");
-    m_frame_count_box->setMinimum(-1);
+    m_frame_count_box->setRange(1, std::numeric_limits<int>::max());
+    m_frame_count_box->setMinimum(0);
     m_frame_count_box->setValue(kDefaultFrameCount);
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
@@ -556,6 +553,23 @@ std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_st
 }
 
 //--------------------------------------------------------------------------------------------------
+absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
+                                         const std::string   &remote_gfxr_file)
+{
+    SetReplayButton("Replaying...", false);
+    Dive::GfxrReplaySettings replay_settings;
+    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.local_download_dir = m_local_capture_file_directory.string();
+    replay_settings.run_type = Dive::GfxrReplayOptions::kNormal;
+
+    // Variant-specific config
+    int frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame_count = frame_count;
+
+    return device_manager.RunReplayApk(replay_settings);
+}
+
+//--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
 {
@@ -563,11 +577,6 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
-
-    // Special override for PM4 dump
-    replay_settings.loop_single_frame = true;
-    replay_settings.loop_single_frame_count = 2;
-
     replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
 
     return device_manager.RunReplayApk(replay_settings);
@@ -581,8 +590,9 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
-
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
+
+    // Variant-specific config
     replay_settings.metrics = *m_enabled_metrics_vector;
 
     return device_manager.RunReplayApk(replay_settings);
@@ -593,27 +603,16 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file)
 {
     SetReplayButton("Replaying with GPU timing enabled...", false);
-
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
-
-    int frame_count = m_frame_count_box->value();
-    replay_settings.loop_single_frame = (frame_count == 1) ? false : true;
-    replay_settings.loop_single_frame_count = frame_count;
-
     replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
-    return device_manager.RunReplayApk(replay_settings);
-}
+    // Variant-specific config
+    int frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame_count = frame_count;
 
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::WaitForReplay(Dive::AndroidDevice &device)
-{
-    while (device.IsProcessRunning(Dive::kGfxrReplayAppName))
-    {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+    return device_manager.RunReplayApk(replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -695,12 +694,34 @@ void AnalyzeDialog::OnReplay()
     AttemptDeletingTemporaryLocalFile(gpu_timing_csv);
     AttemptDeletingTemporaryLocalFile(pm4_rd);
 
-    // Get the enabled settings
-    m_dump_pm4_enabled = m_dump_pm4_box->currentIndex() == 0;
-    m_gpu_time_enabled = m_gpu_time_box->currentIndex() == 0;
+    // Get info on which variants of replay to initiate runs for
+    bool dump_pm4_run_enabled = m_dump_pm4_box->currentIndex() == 0;
+    bool gpu_time_run_enabled = m_gpu_time_box->currentIndex() == 0;
+    bool perf_counter_run_enabled = !m_enabled_metrics_vector->empty();
+    bool normal_run_enabled = (!dump_pm4_run_enabled) && (!gpu_time_run_enabled) &&
+                              (!perf_counter_run_enabled);
+
+    // Run only replay with default settings
+    if (normal_run_enabled)
+    {
+        ret = NormalReplay(device_manager, remote_file.value());
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to run normal replay: ", ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            SetReplayButton(kDefaultReplayButtonText, true);
+            return;
+        }
+
+        SetReplayButton(kDefaultReplayButtonText, true);
+        // Reload the capture so the correct PM4 data (or absence thereof) is displayed
+        emit ReloadCapture(m_selected_capture_file_string);
+        return;
+    }
 
     // Run the pm4 replay
-    if (m_dump_pm4_enabled || (m_enabled_metrics_vector->empty() && !m_gpu_time_enabled))
+    if (dump_pm4_run_enabled)
     {
         ret = Pm4Replay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -714,10 +735,9 @@ void AnalyzeDialog::OnReplay()
     }
     // Reload the capture so the correct PM4 data (or absence thereof) is displayed
     emit ReloadCapture(m_selected_capture_file_string);
-    WaitForReplay(*device);
 
     // Run the perf counter replay
-    if (!m_enabled_metrics_vector->empty())
+    if (perf_counter_run_enabled)
     {
         ret = PerfCounterReplay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -729,7 +749,6 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-        WaitForReplay(*device);
         qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
 
         emit OnDisplayPerfCounterResults(perf_counter_csv.string(), m_available_metrics);
@@ -741,7 +760,7 @@ void AnalyzeDialog::OnReplay()
     }
 
     // Run the gpu_time replay
-    if (m_gpu_time_enabled)
+    if (gpu_time_run_enabled)
     {
         ret = GpuTimeReplay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -752,7 +771,6 @@ void AnalyzeDialog::OnReplay()
             SetReplayButton(kDefaultReplayButtonText, true);
             return;
         }
-        WaitForReplay(*device);
         qDebug() << "Loading gpu timing data: " << gpu_timing_csv.string().c_str();
         emit OnDisplayGpuTimingResults(QString::fromStdString(gpu_timing_csv.string()));
     }

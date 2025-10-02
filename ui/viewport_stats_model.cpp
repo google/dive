@@ -32,11 +32,12 @@ ViewportStatsModel::ViewportStatsModel(QObject *parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void ViewportStatsModel::LoadData(std::vector<Dive::Viewport> viewports)
+void ViewportStatsModel::LoadData(std::set<Dive::Viewport> viewports)
 {
     beginResetModel();
     // Clear existing data
-    m_viewports = viewports;
+    m_viewports.clear();
+    m_viewports.assign(viewports.begin(), viewports.end());
     endResetModel();
 }
 

@@ -23,7 +23,7 @@ class ViewportStatsModel : public QAbstractItemModel
 public:
     explicit ViewportStatsModel(QObject *parent = nullptr);
 
-    void LoadData(std::vector<Dive::Viewport> viewports);
+    void LoadData(std::set<Dive::Viewport> viewports);
 
     // QAbstractItemModel interface
     QModelIndex index(int                row,

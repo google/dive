@@ -226,7 +226,11 @@ absl::Status VulkanApplication::Setup()
 
 absl::Status VulkanApplication::Cleanup()
 {
-    AndroidApplication::Cleanup();
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
+    }
 
     LOGD("Cleanup Vulkan application %s\n", m_package.c_str());
     if (!m_gfxr_enabled)
@@ -359,7 +363,11 @@ absl::Status OpenXRApplication::Setup()
 
 absl::Status OpenXRApplication::Cleanup()
 {
-    AndroidApplication::Cleanup();
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
+    }
 
     LOGD("OpenXRApplication %s cleanup.\n", m_package.c_str());
     if (m_gfxr_enabled)
@@ -418,7 +426,11 @@ absl::Status VulkanCliApplication::Setup()
 
 absl::Status VulkanCliApplication::Cleanup()
 {
-    AndroidApplication::Cleanup();
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
+    }
 
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell rm -fr %s", kVulkanGlobalPath)));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));

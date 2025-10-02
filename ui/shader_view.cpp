@@ -215,7 +215,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
                     {
                         std::ostringstream ostr;
                         bool               empty = true;
-                        if (reference.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kBINNING)
+                        if (reference.m_enable_mask &
+                            static_cast<uint32_t>(Dive::ShaderEnableBitMask::kBINNING))
                         {
                             if (!empty)
                             {
@@ -224,7 +225,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
                             empty = false;
                             ostr << "BINNING";
                         }
-                        if (reference.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kGMEM)
+                        if (reference.m_enable_mask &
+                            static_cast<uint32_t>(Dive::ShaderEnableBitMask::kGMEM))
                         {
                             if (!empty)
                             {
@@ -233,7 +235,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
                             empty = false;
                             ostr << "GMEM";
                         }
-                        if (reference.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kSYSMEM)
+                        if (reference.m_enable_mask &
+                            static_cast<uint32_t>(Dive::ShaderEnableBitMask::kSYSMEM))
                         {
                             if (!empty)
                             {

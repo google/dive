@@ -40,6 +40,8 @@ set(A6XX_PY_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/a6xx.py")
 set(FREEDRENO_DEVICES_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/freedreno_devices.h")
 set(FREEDRENO_IR3_ISA_SRC_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/ir3-isa.c")
 set(FREEDRENO_IR3_ISA_HDR_FILE "${DIVE_CORE_GENERATED_FILE_DIR}/ir3-isa.h")
+set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp") 
+
 
 
 if(WIN32)
@@ -136,7 +138,7 @@ include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 add_definitions(-DLITTLEENDIAN_CPU)     # Required for some PAL files
 
 add_library(${PROJECT_NAME} STATIC ${HDR_FILES} ${SRC_FILES}
-  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES})
+  ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} ${PM4_GENERATED_SRC_FILE} ${NATVIS_FILES} ${FREEDRENO_SRC_FILES} ${TRACE_STATS_SRC_FILE})
 add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)

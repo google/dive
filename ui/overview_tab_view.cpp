@@ -17,52 +17,67 @@
 #include <QApplication>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include <qclipboard.h>
+#include <qobject.h>
 
 #include "dive_core/data_core.h"
-#include "event_selection_model.h"
+#include "trace_stats/trace_stats.h"
 #include "most_expensive_events_view.h"
 #include "overview_tab_view.h"
+#include "draw_dispatch_stats_tab_view.h"
 #include "problems_view.h"
+#include "tile_stats_tab_view.h"
+#include "misc_stats_tab_view.h"
 
 // =================================================================================================
 // OverviewTabView
 // =================================================================================================
 OverviewTabView::OverviewTabView(const Dive::CaptureMetadata &capture_metadata,
-                                 EventSelection              &event_selection)
+                                 const Dive::CaptureStats    &stats) :
+    m_stats(stats)
 {
-    m_problems_view = new ProblemsView(capture_metadata.m_command_hierarchy);
-    m_expensive_events_view = new MostExpensiveEventsView(capture_metadata);
+
+    m_clipboard_button = new QPushButton();
+    m_clipboard_button->setIcon(QIcon(":/images/copy.png"));
+    m_clipboard_button->setToolTip("Copy all trace stats to clipboard");
+
+    m_draw_dispatch_statistics_view = new DrawDispatchStatsTabView(stats);
+    m_tile_statistics_view = new TileStatsTabView(stats);
+    m_misc_statistics_view = new MiscStatsTabView(stats);
 
     m_tab_widget = new QTabWidget();
-    m_problems_view_tab_index = m_tab_widget->addTab(m_problems_view, "Problems");
-    m_expensive_events_view_tab_index = m_tab_widget->addTab(m_expensive_events_view,
-                                                             "Most Expensive Events");
+    m_tab_widget->setCornerWidget(m_clipboard_button, Qt::TopRightCorner);
+    m_draw_dispatch_statistics_view_index = m_tab_widget->addTab(m_draw_dispatch_statistics_view,
+                                                                 "Draw/Dispatch Stats");
+    m_tile_statistics_view_tab_index = m_tab_widget->addTab(m_tile_statistics_view, "Tile Stats");
+    m_misc_statistics_view_tab_index = m_tab_widget->addTab(m_misc_statistics_view, "Misc Stats");
 
     QVBoxLayout *main_layout = new QVBoxLayout();
     main_layout->addWidget(m_tab_widget);
     setLayout(main_layout);
+
+    QObject::connect(m_clipboard_button,
+                     &QPushButton::clicked,
+                     this,
+                     &OverviewTabView::CopyStatistics);
 }
 
-//--------------------------------------------------------------------------------------------------
-void OverviewTabView::Update(const Dive::LogRecord *log_ptr)
+// --------------------------------------------------------------------------------------------------
+void OverviewTabView::LoadStatistics()
 {
-    // Show warning icon if any entries detected
-    if (log_ptr->GetNumEntries() > 0)
-    {
-        QIcon warning_icon = qApp->style()->standardIcon(QStyle::SP_MessageBoxWarning);
-        m_tab_widget->setTabIcon(m_tab_widget->indexOf(m_problems_view), warning_icon);
-    }
-    else
-    {
-        m_tab_widget->setTabIcon(m_tab_widget->indexOf(m_problems_view), QIcon());
-    }
-
-    m_problems_view->Update(log_ptr);
-    m_expensive_events_view->Update();
+    m_tile_statistics_view->LoadStatistics();
+    m_draw_dispatch_statistics_view->LoadStatistics();
+    m_misc_statistics_view->LoadStatistics();
 }
 
-//--------------------------------------------------------------------------------------------------
-void OverviewTabView::UpdateTabAvailability()
+// --------------------------------------------------------------------------------------------------
+void OverviewTabView::CopyStatistics()
 {
-    SetTabAvailable(m_tab_widget, m_expensive_events_view_tab_index, true);
+    std::ostringstream oss;
+    Dive::TraceStats   trace_stats;
+    trace_stats.PrintTraceStats(m_stats, oss);
+
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->clear(QClipboard::Mode::Clipboard);
+    clipboard->setText(QString::fromStdString(oss.str()));
 }

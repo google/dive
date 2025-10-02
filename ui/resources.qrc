@@ -19,5 +19,6 @@
         <file>stylesheet.qss</file>
         <file>images/filter.png</file>
         <file>images/analyze.png</file>
+        <file>images/copy.png</file>
     </qresource>
 </RCC>

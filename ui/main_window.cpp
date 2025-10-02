@@ -78,6 +78,9 @@
 #include "text_file_view.h"
 #include "ui/dive_tree_view.h"
 #include "gfxr_vulkan_command_filter.h"
+#include "viewport_stats_model.h"
+#include "window_scissors_stats_model.h"
+#include "trace_stats/trace_stats.h"
 
 static constexpr int         kViewModeStringCount = 2;
 static constexpr int         kEventViewModeStringCount = 1;
@@ -403,8 +406,11 @@ MainWindow::MainWindow()
     {
         m_command_tab_view = new CommandTabView(m_data_core->GetCommandHierarchy());
         m_shader_view = new ShaderView(*m_data_core);
+
+        m_trace_stats = new Dive::TraceStats();
+        m_capture_stats = new Dive::CaptureStats();
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
-                                                  *m_event_selection);
+                                                  *m_capture_stats);
         m_event_state_view = new EventStateView(*m_data_core);
 
         m_perf_counter_tab_view = new PerfCounterTabView(*m_perf_counter_model, this);
@@ -893,6 +899,10 @@ bool MainWindow::LoadDiveFile(const std::string &file_name)
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
 
+    // Gather the trace stats and display in the overview tab
+    m_trace_stats->GatherTraceStats(m_data_core->GetCaptureMetadata(), *m_capture_stats);
+    m_overview_tab_view->LoadStatistics();
+
     return true;
 }
 
@@ -985,6 +995,9 @@ bool MainWindow::LoadAdrenoRdFile(const std::string &file_name)
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
 
+    // Gather the trace stats and display in the overview tab
+    m_trace_stats->GatherTraceStats(m_data_core->GetCaptureMetadata(), *m_capture_stats);
+    m_overview_tab_view->LoadStatistics();
     return true;
 }
 
@@ -1997,8 +2010,6 @@ QString MainWindow::StrippedName(const QString &fullFileName)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::UpdateTabAvailability()
 {
-    m_overview_tab_view->UpdateTabAvailability();
-
     bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
     SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, has_text);
 
@@ -2031,9 +2042,6 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
 void MainWindow::OnFileLoaded()
 {
     UpdateTabAvailability();
-
-    if (m_data_core->GetPm4CaptureData().HasPm4Data())
-        m_overview_tab_view->Update(&m_log_record);
 }
 
 //--------------------------------------------------------------------------------------------------

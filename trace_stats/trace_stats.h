@@ -15,6 +15,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <vector>

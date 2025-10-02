@@ -16,6 +16,7 @@
 #include <QTextStream>
 #include <QStringList>
 #include <QDebug>
+#include <optional>
 
 #include "dive_core/available_metrics.h"
 
@@ -311,4 +312,28 @@ void PerfCounterModel::SetIteratorToNearest(const QModelIndex &current_index)
     }
 
     m_search_iterator = m_search_results.cbegin() + nearest_index_in_list;
+}
+
+std::optional<uint64_t> PerfCounterModel::GetDrawIndexFromRow(int row) const
+{
+    if (!m_perf_metrics_data_provider)
+    {
+        return std::nullopt;
+    }
+    return m_perf_metrics_data_provider->GetDrawIndexFromComputedRecordIndex(
+    static_cast<uint64_t>(row));
+}
+
+std::optional<int> PerfCounterModel::GetRowFromDrawIndex(uint64_t draw_index) const
+{
+    if (!m_perf_metrics_data_provider)
+    {
+        return std::nullopt;
+    }
+    auto row = m_perf_metrics_data_provider->GetComputedRecordIndexFromDrawIndex(draw_index);
+    if (!row)
+    {
+        return std::nullopt;
+    }
+    return static_cast<int>(*row);
 }

@@ -15,6 +15,8 @@
 #include <QAbstractItemModel>
 #include <QVector>
 #include <QStringList>
+#include <optional>
+#include <cstdint>
 
 class PerfCounterModel : public QAbstractItemModel
 {
@@ -42,6 +44,9 @@ public:
     void        ClearSearchResults();
     void        ResetSearchIterator();
     void        SetIteratorToNearest(const QModelIndex &current_index);
+
+    std::optional<uint64_t> GetDrawIndexFromRow(int row) const;
+    std::optional<int>      GetRowFromDrawIndex(uint64_t draw_index) const;
 
 public slots:
     void OnPerfCounterResultsGenerated(

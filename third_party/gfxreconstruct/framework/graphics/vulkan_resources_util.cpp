@@ -1691,8 +1691,28 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
 
         GFXRECON_ASSERT(img.level_count <=
                         1 + floor(log2(std::max(std::max(img.extent.width, img.extent.height), img.extent.depth))));
+
+        // GOOGLE: Add VK_IMAGE_ASPECT_PLANE_0_BIT to the assertion for compositor capture
+        // Compositor has image for camera in format of VK_FORMAT_G8_B8R8_2PLANE_420_UNORM and aspect of
+        // VK_IMAGE_ASPECT_PLANE_0_BIT, this will cause the capture layer asserts.
+        if (img.aspect != VK_IMAGE_ASPECT_COLOR_BIT && img.aspect != VK_IMAGE_ASPECT_DEPTH_BIT &&
+            img.aspect != VK_IMAGE_ASPECT_STENCIL_BIT)
+        {
+            GFXRECON_LOG_WARNING("img.aspect %d, image %" PRIx64 ", format %s, type %s, extent %dx%dx%d, tiling %s, "
+                                 "sample_count %s, layout %s",
+                                 img.aspect,
+                                 img.image,
+                                 util::ToString(img.format).c_str(),
+                                 util::ToString(img.type).c_str(),
+                                 img.extent.width,
+                                 img.extent.height,
+                                 img.extent.depth,
+                                 util::ToString(img.tiling).c_str(),
+                                 util::ToString(img.sample_count).c_str(),
+                                 util::ToString(img.layout).c_str());
+        }
         GFXRECON_ASSERT((img.aspect == VK_IMAGE_ASPECT_COLOR_BIT) || (img.aspect == VK_IMAGE_ASPECT_DEPTH_BIT) ||
-                        (img.aspect == VK_IMAGE_ASPECT_STENCIL_BIT));
+                        (img.aspect == VK_IMAGE_ASPECT_STENCIL_BIT) || VK_IMAGE_ASPECT_PLANE_0_BIT);
 
         bool blit_supported = IsBlitSupported(img.format, img.tiling, dst_format);
         tmp_data[i].scaling_supported =

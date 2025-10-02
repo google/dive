@@ -699,5 +699,54 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
     }
 }
 
+void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
+const ApiCallInfo&                                 call_info,
+VkResult                                           returnValue,
+format::HandleId                                   device,
+StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
+PointerDecoder<int>*                               pFd)
+{
+    // For compositor captures, a fence may not have been created with the exportable flag,
+    // causing vkGetFenceFdKHR to fail on replay. Since the file descriptor is not used,
+    // we can ignore the error and allow replay to continue.
+}
+
+void DiveVulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
+format::HandleId                                    device_id,
+format::HandleId                                    memory_id,
+uint64_t                                            buffer_id,
+uint32_t                                            format,
+uint32_t                                            width,
+uint32_t                                            height,
+uint32_t                                            stride,
+uint64_t                                            usage,
+uint32_t                                            layers,
+const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
+{
+    // Workaround to replay compositor capture
+    if (format > AHARDWAREBUFFER_FORMAT_S8_UINT ||
+        (format == AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420 && usage == 0x30122))
+    {
+        GFXRECON_LOG_INFO("AHB format %d, height %d, width %d, layers %d, usage %d, ",
+                          format,
+                          height,
+                          width,
+                          layers,
+                          usage);
+        format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+    }
+
+    VulkanReplayConsumer::ProcessCreateHardwareBufferCommand(device_id,
+                                                             memory_id,
+                                                             buffer_id,
+                                                             format,
+                                                             width,
+                                                             height,
+                                                             stride,
+                                                             usage,
+                                                             layers,
+                                                             plane_info);
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

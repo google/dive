@@ -73,6 +73,8 @@ namespace Dive
 class DataCore;
 class PluginLoader;
 class AvailableMetrics;
+class TraceStats;
+struct CaptureStats;
 
 enum DrawCallContextMenuOption : uint32_t
 {
@@ -323,4 +325,6 @@ private:
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
+    Dive::TraceStats                           *m_trace_stats;
+    Dive::CaptureStats                         *m_capture_stats;
 };

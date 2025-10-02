@@ -84,9 +84,11 @@ void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
     {
         m_perf_counter_view->resizeColumnToContents(column);
     }
-    int selected_row = index.row();
-
-    emit CounterSelected(selected_row);
+    auto draw_index = m_perf_counter_model.GetDrawIndexFromRow(index.row());
+    if (draw_index)
+    {
+        emit CounterSelected(*draw_index);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -230,7 +232,10 @@ void PerfCounterTabView::CorrelateCounter(uint64_t index)
 {
     QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
     QSignalBlocker       blocker(selection_model);
-    m_perf_counter_view->selectRow(index);
+    if (auto row = m_perf_counter_model.GetRowFromDrawIndex(index))
+    {
+        m_perf_counter_view->selectRow(*row);
+    }
     m_perf_counter_view->update();
     m_perf_counter_view->viewport()->update();
 }

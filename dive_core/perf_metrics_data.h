@@ -162,6 +162,8 @@ public:
 
     // Return a row that is corrisponding to the node_index.
     std::optional<uint64_t> GetCorrelatedComputedRecordIndex(uint64_t node_index) const;
+    std::optional<uint64_t> GetComputedRecordIndexFromDrawIndex(uint64_t draw_index) const;
+    std::optional<uint64_t> GetDrawIndexFromComputedRecordIndex(uint64_t index) const;
 
     // Get the all of the metrics for a frame. The metrics are computed average of the input
     // dataset, ordered by command buffer appearance and then draw ID appearance order.

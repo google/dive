@@ -542,30 +542,27 @@ void collect_trace_file(const char* capture_file_path)
 	for (int i = 0; i < MAX_DEVICE_FILES; i++)
 	{
 		struct device_file* df = &device_files[i];
-		int fd = df->device_fd;
-		if(fd == -1 || df->log_fd == LOG_NULL_FILE)
+		int fd = 	df->device_fd ;
+		if(fd != -1)
 		{
-			continue;
-		}
-		LOGD("device_fd %d, log_fd %"LOG_PRI_FILE", filename %s closed in collect_trace_file \n",
-			fd, df->log_fd, df->file_name);
-		pthread_mutex_lock(&write_lock);
-		LOG_CLOSE_FILE(df->log_fd);
-		df->log_fd = LOG_NULL_FILE;
-		df->device_fd = -1;
-		pthread_mutex_unlock(&write_lock);
-		if(-1 == append_file(concatenated_log_fd, df->file_name))
-		{
-			LOGI("Failed to append file %s to target file %s\n", df->file_name, capture_file_path);
-		}
-		else
-		{
+			LOGD("device_fd %d, log_fd %"LOG_PRI_FILE", filename %s closed in collect_trace_file \n",
+				fd, df->log_fd, df->file_name);
+			pthread_mutex_lock(&write_lock);
+			LOG_CLOSE_FILE(df->log_fd);
+			df->log_fd = LOG_NULL_FILE;
+			pthread_mutex_unlock(&write_lock);
+			if(-1 == append_file(concatenated_log_fd, df->file_name))
+			{
+				LOGI("Failed to append file %s to target file %s\n", df->file_name, capture_file_path);
+			}
+			// delete the file that has been concatenated. 
 			remove(df->file_name);
-		}
+        }
 	}
 
 	if (close(concatenated_log_fd) == -1) {
 		LOGI("Failed to close concatenated trace file `%s`. There might be some traces missing. Error: %s", capture_file_path, strerror(errno));
+			
 	}
 }
 void hexdump(const void *data, int size)

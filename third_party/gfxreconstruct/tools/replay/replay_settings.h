@@ -40,7 +40,7 @@ const char kOptions[] =
     "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
     "separate-alpha,--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,"
     "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--dump-resources-dump-unused-vertex-bindings,--"
-    "deduplicate-device,--log-timestamps,--loop-single-frame,--enable-gpu-time";
+    "deduplicate-device,--log-timestamps,--enable-gpu-time";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
@@ -102,7 +102,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("\t\t\t[--debug-messenger-level <level>]");
 
     // GOOGLE: [single-frame-looping] Usage message
-    GFXRECON_WRITE_CONSOLE("\t\t\t[--loop-single-frame] [--loop-single-frame-count <n>]");
+    GFXRECON_WRITE_CONSOLE("\t\t\t[--loop-single-frame-count <n>]");
     // GOOGLE: [enable-gpu-time] Usage message
     GFXRECON_WRITE_CONSOLE("\t\t\t[--enable-gpu-time]");
 
@@ -211,13 +211,13 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
 
     // GOOGLE: [single-frame-looping] Usage message details
-    GFXRECON_WRITE_CONSOLE("  --loop-single-frame");
-    GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, replay will loop the first frame.");
-    GFXRECON_WRITE_CONSOLE("          \t\tShould only be used when the capture file is 1 frame long.");
     GFXRECON_WRITE_CONSOLE("  --loop-single-frame-count <n>");
-    GFXRECON_WRITE_CONSOLE("          \t\t(Only used with --loop-single-frame). Specifies the number of frames");
-    GFXRECON_WRITE_CONSOLE("          \t\tto loop, after which replay will be terminated.");
-    GFXRECON_WRITE_CONSOLE("          \t\tDefault is 0 (infinite looping).");
+    GFXRECON_WRITE_CONSOLE("          \t\tNon-negative integer used only for replaying a single frame GFXR ");
+    GFXRECON_WRITE_CONSOLE("          \t\tcapture. It specifies how many times the frame will be replayed before ");
+    GFXRECON_WRITE_CONSOLE("          \t\tthe application terminates. 1 indicates no looping behaviour ");
+    GFXRECON_WRITE_CONSOLE("          \t\t(replay a single frame), and 0 indicates looping infinitely ");
+    GFXRECON_WRITE_CONSOLE("          \t\tuntil the app is forced to stop.");
+
     // GOOGLE: [enable-gpu-time] Usage message details
     GFXRECON_WRITE_CONSOLE("  --enable-gpu-time");
     GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, gpu time measurement will be enabled for replay.");

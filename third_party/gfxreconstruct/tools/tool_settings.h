@@ -171,8 +171,7 @@ const char kDumpResourcesDumpSeparateAlpha[]        = "--dump-resources-dump-sep
 const char kDumpResourcesDumpUnusedVertexBindings[] = "--dump-resources-dump-unused-vertex-bindigs";
 
 // GOOGLE: [single-frame-looping]
-const char kLoopSingleFrame[]       = "--loop-single-frame";
-const char kLoopSingleFrameCount[]  = "--loop-single-frame-count";
+const char kLoopSingleFrameCount[] = "--loop-single-frame-count";
 
 // GOOGLE: [enable-gpu-time]
 const char kEnableGPUTime[] = "--enable-gpu-time";
@@ -936,11 +935,11 @@ static std::vector<int32_t> GetFilteredMsgs(const gfxrecon::util::ArgumentParser
 }
 
 // GOOGLE: [single-frame-looping] Parse value for flag "--loop-single-frame-count"
-static uint32_t GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_parser)
+static int GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_parser)
 {
     const auto& value = arg_parser.GetArgumentValue(kLoopSingleFrameCount);
 
-    uint32_t n = 0;
+    int n = -1;
 
     if (!value.empty())
     {
@@ -1294,29 +1293,19 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     replay_options.add_new_pipeline_caches      = arg_parser.IsOptionSet(kCreateNewPipelineCacheOption);
     replay_options.do_device_deduplication      = arg_parser.IsOptionSet(kDeduplicateDevice);
 
-    // GOOGLE: [single-frame-looping] Parse additional parameters
-    if (arg_parser.IsOptionSet(kLoopSingleFrame))
-    {
-        replay_options.loop_single_frame = true;
-    }
-
     // GOOGLE: [enable-gpu-time] Parse additional parameters
     if (arg_parser.IsOptionSet(kEnableGPUTime))
     {
         replay_options.enable_gpu_time = true;
     }
 
-    if ((replay_options.preload_measurement_range) && (replay_options.loop_single_frame))
+    // GOOGLE: [single-frame-looping] Parse additional parameters
+    int flag_loop_single_frame_count = GetLoopSingleFrameCount(arg_parser);
+    if ((replay_options.preload_measurement_range) && (flag_loop_single_frame_count >= 0))
     {
-        GFXRECON_LOG_FATAL("Flag '%s' cannot be used with '%s'. Closing the program.", kPreloadMeasurementRangeOption, kLoopSingleFrame);
-        abort();
-    }
-
-    replay_options.loop_single_frame_count = GetLoopSingleFrameCount(arg_parser);
-    
-    if ((replay_options.loop_single_frame_count > 0) && (!replay_options.loop_single_frame))
-    {
-        GFXRECON_LOG_FATAL("Flag '%s' must be used with '%s'. Closing the program.", kLoopSingleFrameCount, kLoopSingleFrame);
+        GFXRECON_LOG_FATAL("Flag '%s' cannot be used with '%s'. Closing the program.",
+                           kPreloadMeasurementRangeOption,
+                           kLoopSingleFrameCount);
         abort();
     }
 

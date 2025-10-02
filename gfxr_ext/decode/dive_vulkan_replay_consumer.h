@@ -162,6 +162,13 @@ public:
     format::HandleId                                     fence,
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
+    void Process_vkAllocateMemory(const ApiCallInfo&                                  call_info,
+                                  VkResult                                            returnValue,
+                                  format::HandleId                                    device,
+                                  StructPointerDecoder<Decoded_VkMemoryAllocateInfo>* pAllocateInfo,
+                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                  HandlePointerDecoder<VkDeviceMemory>* pMemory) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 

@@ -461,9 +461,11 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
 
         for (uint32_t enable_index = 0; enable_index < kShaderEnableBitCount; ++enable_index)
         {
-            uint32_t enable_mask = 1u << enable_index;
+            uint32_t        enable_mask = 1u << enable_index;
+            ShaderEnableBit shader_enable_bit = static_cast<ShaderEnableBit>(enable_index);
 
-            uint64_t addr = m_state_tracker.GetCurShaderAddr((ShaderStage)shader, enable_mask);
+            uint64_t addr = m_state_tracker.GetCurShaderAddr((ShaderStage)shader,
+                                                             shader_enable_bit);
 
             // TODO(wangra): need to investigate why `addr` could be 0 here
             if (is_valid_shader && (addr != UINT64_MAX) && (addr != 0))

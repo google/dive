@@ -227,7 +227,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
     {
         if (ref.m_stage == Dive::ShaderStage::kShaderStageVs)
         {
-            if (ref.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kBINNING)
+            if (ref.m_enable_mask & static_cast<uint32_t>(Dive::ShaderEnableBitMask::kBINNING))
                 stats_list[Dive::Stats::kBinningVS]++;
             else
                 stats_list[Dive::Stats::kNonBinningVS]++;

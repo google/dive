@@ -85,9 +85,16 @@ union Pm4Header
 //--------------------------------------------------------------------------------------------------
 enum class ShaderEnableBit : uint32_t
 {
-    kBINNING = 0x1,
-    kGMEM = 0x2,
-    kSYSMEM = 0x4,
+    kBINNING = 0x0,
+    kGMEM = 0x1,
+    kSYSMEM = 0x2,
+};
+
+enum class ShaderEnableBitMask : uint32_t
+{
+    kBINNING = 1 << static_cast<uint32_t>(ShaderEnableBit::kBINNING),
+    kGMEM = 1 << static_cast<uint32_t>(ShaderEnableBit::kGMEM),
+    kSYSMEM = 1 << static_cast<uint32_t>(ShaderEnableBit::kSYSMEM),
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -121,7 +128,7 @@ public:
     bool     IsUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t offset) const;
 
     // Returns UINT64_MAX if shader not set
-    uint64_t GetCurShaderAddr(ShaderStage stage, uint32_t enable_mask) const;
+    uint64_t GetCurShaderAddr(ShaderStage stage, ShaderEnableBit shader_enable_bit) const;
 
     // Get address/size of most recent PM4 buffer (eg. extended user data, sh load buffers, etc)
     uint64_t GetBufferAddr() const;
@@ -134,11 +141,11 @@ public:
 
     void PopEnableMask();
 
-    uint32_t GetRegValue(uint32_t offset, uint32_t enable_mask) const;
+    uint32_t GetRegValue(uint32_t offset, ShaderEnableBit shader_enable_bit) const;
 
     uint32_t GetRegValue(uint32_t offset) const;
 
-    uint64_t GetReg64Value(uint32_t offset, uint32_t enable_mask) const;
+    uint64_t GetReg64Value(uint32_t offset, ShaderEnableBit shader_enable_bit) const;
 
     uint64_t GetReg64Value(uint32_t offset) const;
 
@@ -146,7 +153,7 @@ public:
 
     bool IsRegSet(uint32_t offset) const;
 
-    bool IsRegSet(uint32_t offset, uint32_t enable_mask) const;
+    bool IsRegSet(uint32_t offset, ShaderEnableBit shader_enable_bit) const;
 
 private:
     static constexpr size_t kNumRegs = 0xffff + 1;
@@ -154,6 +161,8 @@ private:
     uint8_t                 m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1];
     uint32_t                m_enable_mask = (1u << kShaderEnableBitCount) - 1;
     DiveVector<uint32_t>    m_enable_mask_stack;
+    bool                    m_shader_enable_bit_valid = false;
+    ShaderEnableBit         m_shader_enable_bit = ShaderEnableBit::kBINNING;
 };
 
 //--------------------------------------------------------------------------------------------------

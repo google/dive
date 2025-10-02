@@ -19,6 +19,7 @@
 
 #include "vulkan/vulkan_core.h"
 #include <array>
+#include <set>
 #include <vector>
 #include "dive_core/capture_event_info.h"
 #include "dive_core/data_core.h"
@@ -215,9 +216,9 @@ struct CaptureStats
 
     std::vector<uint32_t> m_event_num_indices;
 
-    std::vector<Dive::ShaderReference> m_shader_ref_set;
-    std::vector<Viewport>              m_viewports;
-    std::vector<WindowScissor>         m_window_scissors;
+    std::set<Dive::ShaderReference> m_shader_ref_set;
+    std::set<Viewport>              m_viewports;
+    std::set<WindowScissor>         m_window_scissors;
 
     uint32_t m_num_binning_passes = 0;
     uint32_t m_num_tiling_passes = 0;

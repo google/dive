@@ -87,6 +87,18 @@ namespace Dive
         stats_list[Dive::Stats::k##type##Resolves]++; \
     } while (0)
 
+#define PRINT_FIELD(name, value, last_item)                                           \
+    {                                                                                 \
+        std::ostringstream string_stream;                                             \
+        string_stream << name << ": " << std::fixed << std::setprecision(1) << value; \
+        if (!last_item)                                                               \
+        {                                                                             \
+            string_stream << ",";                                                     \
+            ostream << std::setw(17);                                                 \
+        }                                                                             \
+        ostream << std::left << string_stream.str();                                  \
+    }
+
 //--------------------------------------------------------------------------------------------------
 void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                                   CaptureStats                &capture_stats)
@@ -188,7 +200,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                 {
                     Viewport viewport;
                     viewport.m_vk_viewport = event_state_it->Viewport(v);
-                    capture_stats.m_viewports.push_back(viewport);
+                    capture_stats.m_viewports.insert(viewport);
                 }
             }
 
@@ -201,13 +213,13 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                 window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
                 window_scissor.m_br_x = event_state_it->WindowScissorBRX();
                 window_scissor.m_br_y = event_state_it->WindowScissorBRY();
-                capture_stats.m_window_scissors.push_back(window_scissor);
+                capture_stats.m_window_scissors.insert(window_scissor);
             }
         }
 
         for (size_t ref = 0; ref < info.m_shader_references.size(); ++ref)
             if (info.m_shader_references[ref].m_shader_index != UINT32_MAX)
-                capture_stats.m_shader_ref_set.push_back(info.m_shader_references[ref]);
+                capture_stats.m_shader_ref_set.insert(info.m_shader_references[ref]);
     }
 
     stats_list[Dive::Stats::kNumBinnigPasses] = capture_stats.m_num_binning_passes;
@@ -271,36 +283,47 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
 
     for (uint32_t i = 0; i < Dive::Stats::kNumStats; ++i)
     {
-        ostream << kStatDescriptions[i] << ": " << stats_list[i] << "\n";
+        if (i != Stats::kNumBinnigPasses && i != Stats::kNumTilingPasses)
+        {
+            ostream << kStatDescriptions[i] << ": " << stats_list[i] << "\n";
+        }
     }
 
     ostream << viewport_stats_desc[kViewport] << ":\n";
 
     for (const Viewport &vp : capture_stats.m_viewports)
     {
-        ostream << "\t" << viewport_stats_desc[kViewport_x] << ": " << (int)vp.m_vk_viewport.x
-                << ", " << viewport_stats_desc[kViewport_y] << ": " << (int)vp.m_vk_viewport.y
-                << ", " << viewport_stats_desc[kViewport_width] << ": "
-                << (int)vp.m_vk_viewport.width << ", " << viewport_stats_desc[kViewport_height]
-                << ": " << (int)vp.m_vk_viewport.height << ", "
-                << viewport_stats_desc[kViewport_minDepth] << ": " << std::fixed
-                << std::setprecision(1) << vp.m_vk_viewport.minDepth << ", "
-                << viewport_stats_desc[kViewport_maxDepth] << ": " << std::fixed
-                << std::setprecision(1) << vp.m_vk_viewport.maxDepth << "\n";
+        ostream << "\t";
+        PRINT_FIELD(viewport_stats_desc[kViewport_x], vp.m_vk_viewport.x, false);
+        PRINT_FIELD(viewport_stats_desc[kViewport_y], vp.m_vk_viewport.y, false);
+        PRINT_FIELD(viewport_stats_desc[kViewport_width], vp.m_vk_viewport.width, false);
+        PRINT_FIELD(viewport_stats_desc[kViewport_height], vp.m_vk_viewport.height, false);
+        PRINT_FIELD(viewport_stats_desc[kViewport_minDepth], vp.m_vk_viewport.minDepth, false);
+        PRINT_FIELD(viewport_stats_desc[kViewport_maxDepth], vp.m_vk_viewport.maxDepth, true);
+        ostream << std::endl;
     }
 
     ostream << window_scissor_stats_desc[kWindowScissors] << ":\n";
+    ostream << "\t" << kStatDescriptions[Stats::kNumBinnigPasses] << ": "
+            << stats_list[Stats::kNumBinnigPasses] << "\n";
+    ostream << "\t" << kStatDescriptions[Stats::kNumTilingPasses] << ": "
+            << stats_list[Stats::kNumTilingPasses] << "\n";
 
+    uint32_t count = 0;
     for (const WindowScissor &ws : capture_stats.m_window_scissors)
     {
-        ostream << "\t" << window_scissor_stats_desc[kWindowScissors_tl_x] << ": " << ws.m_tl_x
-                << ", " << window_scissor_stats_desc[kWindowScissors_br_x] << ": " << ws.m_br_x
-                << ", " << window_scissor_stats_desc[kWindowScissors_tl_y] << ": " << ws.m_tl_y
-                << ", " << window_scissor_stats_desc[kWindowScissors_br_y] << ": " << ws.m_br_y
-                << ", " << window_scissor_stats_desc[kWindowScissors_Width] << ": "
-                << (ws.m_br_x - ws.m_tl_x + 1) << ", "
-                << window_scissor_stats_desc[kWindowScissors_Height] << ": "
-                << (ws.m_br_y - ws.m_tl_y + 1) << "\n";
+        ostream << "\t" << count++ << "\t";
+        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_tl_x], ws.m_tl_x, false);
+        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_br_x], ws.m_br_x, false);
+        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_tl_y], ws.m_tl_y, false);
+        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_br_y], ws.m_br_y, false);
+        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_Width],
+                    (ws.m_br_x - ws.m_tl_x + 1),
+                    false);
+        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_Height],
+                    (ws.m_br_y - ws.m_tl_y + 1),
+                    true);
+        ostream << std::endl;
     }
 }
 

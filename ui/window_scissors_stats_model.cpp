@@ -33,7 +33,7 @@ WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void WindowScissorsStatsModel::LoadData(std::set<Dive::WindowScissor> window_scissors)
+void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor> &window_scissors)
 {
     beginResetModel();
     // Clear existing data

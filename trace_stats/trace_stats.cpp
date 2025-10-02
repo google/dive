@@ -87,18 +87,6 @@ namespace Dive
         stats_list[Dive::Stats::k##type##Resolves]++; \
     } while (0)
 
-#define PRINT_FIELD(name, value, last_item)                                           \
-    {                                                                                 \
-        std::ostringstream string_stream;                                             \
-        string_stream << name << ": " << std::fixed << std::setprecision(1) << value; \
-        if (!last_item)                                                               \
-        {                                                                             \
-            string_stream << ",";                                                     \
-            ostream << std::setw(17);                                                 \
-        }                                                                             \
-        ostream << std::left << string_stream.str();                                  \
-    }
-
 //--------------------------------------------------------------------------------------------------
 void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                                   CaptureStats                &capture_stats)
@@ -291,15 +279,27 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
 
     ostream << viewport_stats_desc[kViewport] << ":\n";
 
+    auto print_field = [&ostream](std::string_view name, auto value, bool is_last_item) {
+        std::ostringstream string_stream;
+        string_stream << name << ": " << std::fixed << std::setprecision(1) << value;
+
+        if (!is_last_item)
+        {
+            string_stream << ",";
+            ostream << std::setw(17);
+        }
+        ostream << std::left << string_stream.str();
+    };
+
     for (const Viewport &vp : capture_stats.m_viewports)
     {
         ostream << "\t";
-        PRINT_FIELD(viewport_stats_desc[kViewport_x], vp.m_vk_viewport.x, false);
-        PRINT_FIELD(viewport_stats_desc[kViewport_y], vp.m_vk_viewport.y, false);
-        PRINT_FIELD(viewport_stats_desc[kViewport_width], vp.m_vk_viewport.width, false);
-        PRINT_FIELD(viewport_stats_desc[kViewport_height], vp.m_vk_viewport.height, false);
-        PRINT_FIELD(viewport_stats_desc[kViewport_minDepth], vp.m_vk_viewport.minDepth, false);
-        PRINT_FIELD(viewport_stats_desc[kViewport_maxDepth], vp.m_vk_viewport.maxDepth, true);
+        print_field(viewport_stats_desc[kViewport_x], vp.m_vk_viewport.x, false);
+        print_field(viewport_stats_desc[kViewport_y], vp.m_vk_viewport.y, false);
+        print_field(viewport_stats_desc[kViewport_width], vp.m_vk_viewport.width, false);
+        print_field(viewport_stats_desc[kViewport_height], vp.m_vk_viewport.height, false);
+        print_field(viewport_stats_desc[kViewport_minDepth], vp.m_vk_viewport.minDepth, false);
+        print_field(viewport_stats_desc[kViewport_maxDepth], vp.m_vk_viewport.maxDepth, true);
         ostream << std::endl;
     }
 
@@ -313,14 +313,14 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
     for (const WindowScissor &ws : capture_stats.m_window_scissors)
     {
         ostream << "\t" << count++ << "\t";
-        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_tl_x], ws.m_tl_x, false);
-        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_br_x], ws.m_br_x, false);
-        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_tl_y], ws.m_tl_y, false);
-        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_br_y], ws.m_br_y, false);
-        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_Width],
+        print_field(window_scissor_stats_desc[kWindowScissors_tl_x], ws.m_tl_x, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_br_x], ws.m_br_x, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_tl_y], ws.m_tl_y, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_br_y], ws.m_br_y, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_Width],
                     (ws.m_br_x - ws.m_tl_x + 1),
                     false);
-        PRINT_FIELD(window_scissor_stats_desc[kWindowScissors_Height],
+        print_field(window_scissor_stats_desc[kWindowScissors_Height],
                     (ws.m_br_y - ws.m_tl_y + 1),
                     true);
         ostream << std::endl;

@@ -125,7 +125,7 @@ ABSL_FLAG(Command,
           command,
           Command::kNone,
           "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay "
-          "\n\tprofile_replay \n\tlist_package \n\trun \n\tcapture \n\tcleanup");
+          "\n\tlist_package \n\trun \n\tcapture \n\tcleanup");
 ABSL_FLAG(
 std::string,
 device,
@@ -173,10 +173,11 @@ ABSL_FLAG(bool, dump_pm4, false, "dump pm4 for gfxr replay");
 
 ABSL_FLAG(bool, enable_perf_counters, false, "enable perf counters for gfxr replay.");
 
-ABSL_FLAG(std::vector<std::string>,
-          metrics,
-          {},
-          "comma-separated list of metrics to profile for profile_replay command.");
+ABSL_FLAG(
+std::vector<std::string>,
+metrics,
+{},
+"comma-separated list of metrics to profile for gfxr_replay command with --enable_perf_counters.");
 
 void PrintUsage()
 {
@@ -671,6 +672,10 @@ bool DeployAndRunGfxrReplay(Dive::DeviceManager&            mgr,
     }
 
     auto ret = mgr.RunReplayApk(replay_settings);
+    if (!ret.ok())
+    {
+        std::cout << "Failed to DeployAndRunGfxrReplay, error: " << ret.message() << std::endl;
+    }
     return ret.ok();
 }
 

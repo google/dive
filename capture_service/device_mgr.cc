@@ -73,20 +73,32 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     std::vector<std::string> split_args = absl::StrSplit(settings.replay_flags_str,
                                                          " ",
                                                          absl::SkipWhitespace());
-    auto it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame-count");
-    if (it != split_args.end())
+    if (auto it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame-count");
+        it != split_args.end())
     {
-        if (settings.loop_single_frame_count > -1)
+        if (settings.loop_single_frame_count.has_value())
         {
             return absl::InvalidArgumentError(
             "Do not specify loop_single_frame_count in GfxrReplaySettings and also as flag "
             "--loop-single-frame-count");
         }
-        validated_settings.loop_single_frame_count = stoi(*(it + 1));
+        int parsed_frame_count;
+        try
+        {
+            parsed_frame_count = std::stoi(*(it + 1));
+        }
+        catch (std::exception &e)
+        {
+            return absl::InvalidArgumentError(
+            absl::StrFormat("Value specified for --loop-single-frame-count can't be parsed as "
+                            "integer: %s",
+                            e.what()));
+        }
+        validated_settings.loop_single_frame_count = parsed_frame_count;
         split_args.erase(it, it + 2);
     }
-    it = std::find(split_args.begin(), split_args.end(), "--enable-gpu-time");
-    if (it != split_args.end())
+    if (auto it = std::find(split_args.begin(), split_args.end(), "--enable-gpu-time");
+        it != split_args.end())
     {
         if (settings.run_type != GfxrReplayOptions::kNormal)
         {
@@ -107,7 +119,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         {
             return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
         }
-        if (validated_settings.loop_single_frame_count > -1)
+        if (validated_settings.loop_single_frame_count.has_value())
         {
             return absl::InvalidArgumentError(
             "loop_single_frame_count is hardcoded for kPm4Dump, do not specify");
@@ -127,7 +139,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::UnimplementedError(
             "Perf counters feature is only implemented for Adreno GPU");
         }
-        if (validated_settings.loop_single_frame_count > -1)
+        if (validated_settings.loop_single_frame_count.has_value())
         {
             return absl::InvalidArgumentError(
             "loop_single_frame_count is hardcoded for kPerfCounters, do not specify");
@@ -147,25 +159,22 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
-        if (validated_settings.loop_single_frame_count == 0)
+        if (validated_settings.loop_single_frame_count.value_or(1) == 0)
         {
             return absl::InvalidArgumentError(
             "loop_single_frame_count cannot be set to 0 for kGpuTiming and kNormal runs");
-        }
-        else if (validated_settings.loop_single_frame_count == -1)
-        {
-            LOGD("Default loop_single_frame_count for kGpuTiming and kNormal runs is 1\n");
-            validated_settings.loop_single_frame_count = 1;
         }
         break;
     }
     }
 
     // Re-concatenate flags to form a validated replay_flags_str
-    assert(validated_settings.loop_single_frame_count != -1);
-    split_args.push_back("--loop-single-frame-count");
-    split_args.push_back(std::to_string(validated_settings.loop_single_frame_count));
-
+    if (validated_settings.loop_single_frame_count.has_value())
+    {
+        assert(validated_settings.loop_single_frame_count.value() >= 0);
+        split_args.push_back("--loop-single-frame-count");
+        split_args.push_back(std::to_string(validated_settings.loop_single_frame_count.value()));
+    }
     if (validated_settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
         split_args.push_back("--enable-gpu-time");
@@ -670,8 +679,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
                                       local_recon_py_path,
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);
-    absl::StatusOr<std::string> res = RunCommand(cmd);
-    if (!res.ok())
+    if (absl::StatusOr<std::string> res = RunCommand(cmd); !res.ok())
     {
         return res.status();
     }
@@ -690,11 +698,14 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } while (m_device->FileExists(remote_pm4_inprogress_path));
-        auto status = m_device->RetrieveFile(remote_pm4_path, settings.local_download_dir);
-        if (!status.ok())
+
+        if (absl::Status s = m_device->RetrieveFile(remote_pm4_path, settings.local_download_dir);
+            !s.ok())
         {
             return absl::InternalError(
-            absl::StrFormat("Failed to download the trace file %s\n", remote_pm4_path.c_str()));
+            absl::StrFormat("Failed to download the trace file (%s), error:%s\n",
+                            remote_pm4_path,
+                            s.message()));
         }
         LOGI("Trace file %s downloaded to %s\n",
              remote_pm4_path.c_str(),
@@ -709,11 +720,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         std::string gpu_time_csv_local_name = absl::StrFormat("%s%s",
                                                               parse_remote_capture.stem(),
                                                               kGpuTimingCsvSuffix);
-        auto        ret = m_device->RetrieveFile(remote_gpu_time_path,
-                                          settings.local_download_dir,
-                                          true,
-                                          gpu_time_csv_local_name);
-        if (!ret.ok())
+        if (absl::Status s = m_device->RetrieveFile(remote_gpu_time_path,
+                                                    settings.local_download_dir,
+                                                    true,
+                                                    gpu_time_csv_local_name);
+            !s.ok())
         {
             return absl::InternalError(
             absl::StrFormat("Failed to download the gpu time csv file: %s\n",
@@ -758,13 +769,15 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     std::string metrics_str = absl::StrJoin(settings.metrics, " ");
     std::string gfxr_replay_flag = settings.replay_flags_str.empty() ?
                                    "" :
-                                   absl::StrFormat("--gfxr_replay_flags \"%s\"",
+                                   absl::StrFormat("--gfxr_replay_flags \\\"%s\\\"",
                                                    settings.replay_flags_str);
     std::string cmd = absl::StrFormat("shell %s %s %s %s",
                                       binary_path_on_device,
                                       settings.remote_capture_path,
                                       gfxr_replay_flag,
                                       metrics_str);
+    // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
+    LOGD("Profiling binary cmd: %s\n", cmd.c_str());
     RETURN_IF_ERROR(m_device->Adb().Run(cmd));
 
     LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
@@ -773,15 +786,19 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
                                                  parse_remote_path.stem(),
                                                  kProfilingMetricsCsvSuffix);
     std::string csv_remote_file_path = parse_remote_path.replace_extension(".csv").string();
-    auto        status = m_device->RetrieveFile(csv_remote_file_path,
-                                         settings.local_download_dir,
-                                         true,
-                                         csv_local_name);
-    if (!status.ok())
+
+    if (absl::Status s = m_device->RetrieveFile(csv_remote_file_path,
+                                                settings.local_download_dir,
+                                                true,
+                                                csv_local_name);
+        !s.ok())
     {
-        return absl::NotFoundError("Failed to download the trace file: " + csv_remote_file_path);
+        return absl::InternalError(
+        absl::StrFormat("Failed to download the .csv file (%s), error:%s\n",
+                        csv_remote_file_path,
+                        s.message()));
     }
-    LOGI("RunReplayProfilingBinary(): Trace file %s downloaded to %s\n",
+    LOGI("RunReplayProfilingBinary(): .csv file %s downloaded to %s\n",
          csv_remote_file_path.c_str(),
          settings.local_download_dir.c_str());
 
@@ -795,12 +812,12 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) const
 {
     LOGD("RunReplayApk(): Check settings before run\n");
-    auto ret_settings = ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
-    if (!ret_settings.ok())
+    absl::StatusOr<Dive::GfxrReplaySettings>
+    validated_settings = ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
+    if (!validated_settings.ok())
     {
-        return ret_settings.status();
+        return validated_settings.status();
     }
-    GfxrReplaySettings valid_settings = *ret_settings;
 
     LOGD("RunReplayApk(): Attempt to pin GPU clock frequency\n");
     bool trouble_pinning_clock = false;
@@ -824,13 +841,13 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
 
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;
-    if (valid_settings.run_type == GfxrReplayOptions::kPerfCounters)
+    if (validated_settings->run_type == GfxrReplayOptions::kPerfCounters)
     {
-        ret_run = RunReplayProfilingBinary(valid_settings);
+        ret_run = RunReplayProfilingBinary(*validated_settings);
     }
     else
     {
-        ret_run = RunReplayGfxrScript(valid_settings);
+        ret_run = RunReplayGfxrScript(*validated_settings);
     }
     if (!ret_run.ok())
     {

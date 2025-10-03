@@ -935,11 +935,11 @@ static std::vector<int32_t> GetFilteredMsgs(const gfxrecon::util::ArgumentParser
 }
 
 // GOOGLE: [single-frame-looping] Parse value for flag "--loop-single-frame-count"
-static int GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_parser)
+static std::optional<uint64_t> GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_parser)
 {
     const auto& value = arg_parser.GetArgumentValue(kLoopSingleFrameCount);
 
-    int n = -1;
+    int n;
 
     if (!value.empty())
     {
@@ -947,10 +947,17 @@ static int GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_par
         {
             n = std::stoi(value);
         }
-        catch (std::exception&)
+        catch (std::exception& e)
         {
-            GFXRECON_LOG_WARNING("Ignoring invalid '%s' value: %s", kLoopSingleFrameCount, value.c_str());
+            GFXRECON_LOG_WARNING(
+                "Ignoring invalid '%s' value: '%s', error: %s", kLoopSingleFrameCount, value.c_str(), e.what());
+            return std::nullopt;
         }
+    }
+    if (n < 0)
+    {
+        GFXRECON_LOG_WARNING("Ignoring invalid '%s' negative value: '%s'", kLoopSingleFrameCount, value.c_str());
+        return std::nullopt;
     }
     return n;
 }
@@ -1300,8 +1307,8 @@ GetVulkanReplayOptions(const gfxrecon::util::ArgumentParser&           arg_parse
     }
 
     // GOOGLE: [single-frame-looping] Parse additional parameters
-    int flag_loop_single_frame_count = GetLoopSingleFrameCount(arg_parser);
-    if ((replay_options.preload_measurement_range) && (flag_loop_single_frame_count >= 0))
+    replay_options.loop_single_frame_count = GetLoopSingleFrameCount(arg_parser);
+    if ((replay_options.preload_measurement_range) && (replay_options.loop_single_frame_count.has_value()))
     {
         GFXRECON_LOG_FATAL("Flag '%s' cannot be used with '%s'. Closing the program.",
                            kPreloadMeasurementRangeOption,

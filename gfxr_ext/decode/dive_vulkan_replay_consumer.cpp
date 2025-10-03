@@ -699,5 +699,16 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
     }
 }
 
+void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
+const ApiCallInfo&                                 call_info,
+VkResult                                           returnValue,
+format::HandleId                                   device,
+StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
+PointerDecoder<int>*                               pFd)
+{
+    // Workaround to replay compositor captures.
+    return;
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

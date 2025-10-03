@@ -730,6 +730,14 @@ void VulkanReplayConsumerBase::ProcessCreateHardwareBufferCommand(
         stride = width;
     }
 
+    // GOOGLE: workaround to replay compositor capture
+    if (format > AHARDWAREBUFFER_FORMAT_S8_UINT || (format == AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420 && usage == 0x30122))
+    {
+        GFXRECON_LOG_INFO(
+            "AHB format %d, height %d, width %d, layers %d, usage %d, ", format, height, width, layers, usage);
+        format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+    }
+
     AHardwareBuffer_Desc desc = {};
     desc.format               = format;
     desc.height               = height;

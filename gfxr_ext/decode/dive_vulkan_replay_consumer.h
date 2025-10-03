@@ -156,6 +156,12 @@ public:
                                StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                HandlePointerDecoder<VkFence>* pFence) override;
 
+    void Process_vkGetFenceFdKHR(const ApiCallInfo&                                 call_info,
+                                 VkResult                                           returnValue,
+                                 format::HandleId                                   device,
+                                 StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
+                                 PointerDecoder<int>*                               pFd) override;
+
     void Process_vkDestroyFence(
     const ApiCallInfo&                                   call_info,
     format::HandleId                                     device,

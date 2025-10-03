@@ -32,9 +32,71 @@ limitations under the License.
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
+#include "remote_files.h"
 
 namespace Dive
 {
+
+namespace
+{
+
+// adb shell setprop `property` `value`
+absl::Status SetSystemProperty(const AdbSession &adb,
+                               std::string_view  property,
+                               std::string_view  value)
+{
+    return adb.Run(absl::StrFormat("shell setprop %s %s", property, value));
+}
+
+// Set the property to an empty string. The users of the Android API typically don't make a
+// distinction between "set and empty" or "unset".
+absl::Status UnsetSystemProperty(const AdbSession &adb, std::string_view property)
+{
+    // This command goes through 3 layers of interpretation:
+    // 1. Device shell. Requires explicit empty string "" to perform unset.
+    // 2. Host shell. Requires quotes to be escaped with backslash.
+    // 3. C++ string literals. Requires quotes and backslashes to be escaped with backslash.
+    return adb.Run(absl::StrFormat("shell setprop %s \\\"\\\"", property));
+}
+
+// Delete all persistent Android settings related to using Vulkan debug layers
+absl::Status DisableVulkanLayer(const AdbSession &adb)
+{
+    // See https://developer.android.com/ndk/guides/graphics/validation-layer
+    absl::Status status;
+    status.Update(adb.Run("shell settings delete global enable_gpu_debug_layers"));
+    status.Update(adb.Run("shell settings delete global gpu_debug_app"));
+    status.Update(adb.Run("shell settings delete global gpu_debug_layers"));
+    status.Update(adb.Run("shell settings delete global gpu_debug_layer_app"));
+    status.Update(adb.Run("shell settings delete global gpu_debug_layers_gles"));
+    return status;
+}
+
+// Set the required Android settings in order to implicitly load a `layer` when `app` is run.
+// `layer_app` is the package that Android will search to find `layer`.
+absl::Status EnableVulkanLayer(const AdbSession &adb,
+                               std::string_view  app,
+                               std::string_view  layer,
+                               std::string_view  layer_app)
+{
+    // Start with a clean slate
+    RETURN_IF_ERROR(DisableVulkanLayer(adb));
+    // See https://developer.android.com/ndk/guides/graphics/validation-layer
+    RETURN_IF_ERROR(adb.Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell settings put global gpu_debug_app %s", app)));
+    RETURN_IF_ERROR(
+    adb.Run(absl::StrFormat("shell settings put global gpu_debug_layers %s", layer)));
+    RETURN_IF_ERROR(
+    adb.Run(absl::StrFormat("shell settings put global gpu_debug_layer_app %s", layer_app)));
+    return absl::OkStatus();
+}
+
+absl::Status IsAppInstalled(const AdbSession &adb, std::string_view package)
+{
+    return adb.Run(absl::StrFormat("shell pm path %s", package));
+}
+
+}  // namespace
 
 DeviceManager &GetDeviceManager()
 {
@@ -474,6 +536,8 @@ absl::Status AndroidDevice::CleanupDevice()
     Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
     Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
 
+    UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
+
     LOGD("Cleanup device %s done\n", m_serial.c_str());
     return absl::OkStatus();
 }
@@ -682,6 +746,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 
 absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
 {
+    const AdbSession &adb = m_device->Adb();
+
     LOGD("RunReplayGfxrScript(): SETUP\n");
     std::filesystem::path parse_remote_capture = settings.remote_capture_path;
 
@@ -705,8 +771,20 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     }
     else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
     {
-        // TODO: b/448083729 - Implement. Here specifically, set up the capture layer.
-        return absl::UnimplementedError("RenderDoc capture not implemented");
+        if (absl::Status status = IsAppInstalled(adb, kRenderDocAppName); !status.ok())
+        {
+            return absl::FailedPreconditionError(
+            absl::StrFormat("Can't perform a RenderDoc capture since the RenderDoc app is not "
+                            "installed on the target device. Either install the RenderDoc app "
+                            "using the UI or by manually running adb install. The app is %s.apk "
+                            "and is provided in every RenderDoc release.",
+                            kRenderDocAppName));
+        }
+        RETURN_IF_ERROR(SetSystemProperty(adb, kReplayCreateRenderDocCapture, "1"));
+        RETURN_IF_ERROR(EnableVulkanLayer(adb,
+                                          /*app=*/kGfxrReplayAppName,
+                                          /*layer=*/kRenderDocCaptureLayerName,
+                                          /*layer_app=*/kRenderDocAppName));
     }
 
     LOGD("RunReplayGfxrScript(): RUN\n");
@@ -770,6 +848,22 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
              remote_gpu_time_path.c_str(),
              settings.local_download_dir.c_str());
     }
+    else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
+    {
+        std::string remote_renderdoc_capture = GetRenderDocCaptureFilePath(
+                                               settings.remote_capture_path)
+                                               .generic_string();
+        if (absl::Status status = m_device->RetrieveFile(remote_renderdoc_capture,
+                                                         settings.local_download_dir,
+                                                         /*delete_after_retrieve=*/true);
+            !status.ok())
+        {
+            return absl::InternalError(
+            absl::StrFormat("Failed to download the RenderDoc time rdc file (%s) error: %s",
+                            remote_renderdoc_capture,
+                            status.message()));
+        }
+    }
 
     LOGD("RunReplayGfxrScript(): CLEANUP\n");
     if (settings.run_type == GfxrReplayOptions::kPm4Dump)
@@ -778,6 +872,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         m_device->Adb().Run(cmd).IgnoreError();
         cmd = absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName);
         m_device->Adb().Run(cmd).IgnoreError();
+    }
+    else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
+    {
+        UnsetSystemProperty(adb, kReplayCreateRenderDocCapture).IgnoreError();
+        DisableVulkanLayer(adb).IgnoreError();
     }
 
     return absl::OkStatus();

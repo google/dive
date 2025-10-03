@@ -23,9 +23,9 @@ limitations under the License.
 #include <numeric>
 #include <limits>
 
+#include "dive_renderdoc.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
-#include "util/platform.h"
 #include "generated/generated_vulkan_struct_handle_mappers.h"
 #include "util/to_string.h"
 
@@ -604,8 +604,7 @@ StructPointerDecoder<Decoded_VkMemoryAllocateInfo>*  pAllocateInfo,
 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
 HandlePointerDecoder<VkDeviceMemory>*                pMemory)
 {
-    // TODO: b/448083729 - Use RenderDoc in-application API to detect if RenderDoc is capturing
-    if (util::platform::GetEnv("debug.gfxrecon.renderdoc_hack") == "1")
+    if (GetRenderDocApi() != nullptr)
     {
         // RenderDoc replaces external memory with non-external memory when replaying a .RDC file.
         // If the memory type for the external memory does not match the non-external memory then

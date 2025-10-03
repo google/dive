@@ -45,6 +45,7 @@ signals:
 private:
     void ConnectSearchBar();
     void DisconnectSearchBar();
+    void ResizeColumns();
 
     PerfCounterModel &m_perf_counter_model;
     QTableView       *m_perf_counter_view;

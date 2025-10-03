@@ -23,6 +23,10 @@ limitations under the License.
 #include <numeric>
 #include <limits>
 
+#include "graphics/vulkan_struct_get_pnext.h"
+#include "util/logging.h"
+#include "util/platform.h"
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
@@ -588,6 +592,50 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
     {
         VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
     }
+}
+
+void DiveVulkanReplayConsumer::Process_vkAllocateMemory(
+const ApiCallInfo&                                   call_info,
+VkResult                                             returnValue,
+format::HandleId                                     device,
+StructPointerDecoder<Decoded_VkMemoryAllocateInfo>*  pAllocateInfo,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+HandlePointerDecoder<VkDeviceMemory>*                pMemory)
+{
+    // TODO: b/448083729 - Use RenderDoc in-application API to detect if RenderDoc is capturing
+    if (util::platform::GetEnv("debug.gfxrecon.renderdoc_hack") == "1")
+    {
+        // RenderDoc replaces external memory with non-external memory when replaying a .RDC file.
+        // If the memory type for the external memory does not match the non-external memory then
+        // RenderDoc throws an error. To avoid this, if we detect external memory, allocate what we
+        // think RenderDoc wants instead of what's in the .GFXR file.
+        //
+        // Changing memoryTypeIndex here is brittle since the superclass implementation could
+        // overwrite memoryTypeIndex. However, it reduces the number of modifications made to GFXR;
+        // this should reduce the number of merge conflicts when we perform the next subtree pull.
+        VkMemoryAllocateInfo* allocate_info = pAllocateInfo->GetPointer();
+        bool is_importing_android_hardware_buffer = graphics::vulkan_struct_get_pnext<
+                                                    VkImportAndroidHardwareBufferInfoANDROID>(
+                                                    allocate_info) != nullptr;
+        if (is_importing_android_hardware_buffer)
+        {
+            // Based on testing, imported AHardwareBuffers use memoryTypeIndex 1 but RenderDoc wants
+            // it to be 0. We can't call vkGetImageMemoryRequirements since (apart from dedicated
+            // memory) we don't know which image this memory will be bound to.
+            GFXRECON_LOG_INFO("AHardwareBuffer detected during RenderDoc capture! Overriding "
+                              "memoryTypeIndex from %u to 0 for memory handle %lu",
+                              allocate_info->memoryTypeIndex,
+                              *pMemory->GetPointer());
+            allocate_info->memoryTypeIndex = 0;
+        }
+    }
+
+    VulkanReplayConsumer::Process_vkAllocateMemory(call_info,
+                                                   returnValue,
+                                                   device,
+                                                   pAllocateInfo,
+                                                   pAllocator,
+                                                   pMemory);
 }
 
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)

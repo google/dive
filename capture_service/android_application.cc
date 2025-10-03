@@ -135,6 +135,33 @@ absl::Status AndroidApplication::ParsePackage()
     return absl::OkStatus();
 }
 
+absl::Status AndroidApplication::Cleanup()
+{
+    LOGD("Cleanup application %s\n", m_package.c_str());
+    if (m_gfxr_enabled)
+    {
+        // Common GFXR cleanup for Vulkan and OpenXR APKs
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(
+        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
+
+        m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers").IgnoreError();
+        m_dev.Adb().Run("shell settings delete global gpu_debug_app").IgnoreError();
+        m_dev.Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
+        m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
+        m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
+    }
+
+    LOGD("Cleanup application %s done\n", m_package.c_str());
+    return absl::OkStatus();
+}
+
 absl::Status AndroidApplication::Start()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
@@ -199,20 +226,14 @@ absl::Status VulkanApplication::Setup()
 
 absl::Status VulkanApplication::Cleanup()
 {
-    LOGD("Cleanup Vulkan application %s\n", m_package.c_str());
-    if (m_gfxr_enabled)
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
     {
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
+        return status;
     }
-    else
+
+    LOGD("Cleanup Vulkan application %s\n", m_package.c_str());
+    if (!m_gfxr_enabled)
     {
         RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName)));
@@ -342,22 +363,19 @@ absl::Status OpenXRApplication::Setup()
 
 absl::Status OpenXRApplication::Cleanup()
 {
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
+    }
+
     LOGD("OpenXRApplication %s cleanup.\n", m_package.c_str());
     if (m_gfxr_enabled)
     {
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
         // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
         // `debug.openxr.enable_frame_delimiter`
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false"));
-        RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkGfxrLayerLibName)));
     }
     else
     {
@@ -408,6 +426,12 @@ absl::Status VulkanCliApplication::Setup()
 
 absl::Status VulkanCliApplication::Cleanup()
 {
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
+    }
+
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell rm -fr %s", kVulkanGlobalPath)));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));
 

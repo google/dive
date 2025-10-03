@@ -44,7 +44,7 @@ public:
     virtual ~AndroidApplication() = default;
 
     virtual absl::Status Setup() = 0;
-    virtual absl::Status Cleanup() = 0;
+    virtual absl::Status Cleanup();
     virtual absl::Status Start();
     virtual absl::Status Stop();
     const std::string   &GetMainActivity() const { return m_main_activity; };

@@ -25,8 +25,8 @@ limitations under the License.
 #include <cassert>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
-#include <variant>
 #include <vector>
 
 namespace Dive
@@ -87,7 +87,7 @@ struct GfxrReplaySettings
     // Metrics are collected only with kPerfCounters runs
     std::vector<std::string> metrics = {};
     // Loop settings for GFXR replay binary are hardcoded except for kNormal and kGpuTiming runs
-    int loop_single_frame_count = -1;
+    std::optional<int> loop_single_frame_count = std::nullopt;
 };
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates

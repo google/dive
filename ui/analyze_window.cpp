@@ -153,7 +153,6 @@ QWidget                                                            *parent) :
     m_frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
     m_frame_count_box = new QSpinBox(this);
     m_frame_count_box->setRange(1, std::numeric_limits<int>::max());
-    m_frame_count_box->setMinimum(0);
     m_frame_count_box->setValue(kDefaultFrameCount);
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
@@ -563,8 +562,7 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kNormal;
 
     // Variant-specific config
-    int frame_count = m_frame_count_box->value();
-    replay_settings.loop_single_frame_count = frame_count;
+    replay_settings.loop_single_frame_count = m_frame_count_box->value();
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -609,8 +607,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
     // Variant-specific config
-    int frame_count = m_frame_count_box->value();
-    replay_settings.loop_single_frame_count = frame_count;
+    replay_settings.loop_single_frame_count = m_frame_count_box->value();
 
     return device_manager.RunReplayApk(replay_settings);
 }

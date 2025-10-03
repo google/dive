@@ -47,7 +47,6 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
         return LoadResult::kFileIoError;
     }
 
-    file_processor.SetLoopSingleFrameCount(1);
     file_processor.SetDiveBlockData(m_gfxr_capture_block_data);
 
     gfxrecon::decode::VulkanExportDiveConsumer dive_consumer;

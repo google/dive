@@ -25,6 +25,7 @@ limitations under the License.
 #include <cassert>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -58,6 +59,41 @@ struct DeviceState
     bool        m_root_access_requested = false;
     bool        m_is_root_shell = false;
 };
+
+enum class GfxrReplayOptions
+{
+    kNormal,
+    kPm4Dump,       // PM4 data will be captured, producing .rd trace
+    kPerfCounters,  // Perf Counter data will be collected using a plugin, producing .csv artifact
+    kGpuTiming,     // GPU timing data will be collected, producing .csv artifact
+};
+
+struct GfxrReplaySettings
+{
+    std::string       remote_capture_path = "";
+    std::string       local_download_dir = "";
+    GfxrReplayOptions run_type = GfxrReplayOptions::kNormal;
+
+    // ----------------------------------------------------------------------
+    // NOTE: If conflicting flags/settings are provided, early termination occurs.
+
+    // Flags intended to be passed down to GFXR replay binary
+    // Flags must be provided with a space (not '=') between flag and value
+    std::string replay_flags_str = "";
+
+    // ----------------------------------------------------------------------
+    // Additional runtype-specific settings
+
+    // Metrics are collected only with kPerfCounters runs
+    std::vector<std::string> metrics = {};
+    // Loop settings for GFXR replay binary are hardcoded except for kNormal and kGpuTiming runs
+    std::optional<int> loop_single_frame_count = std::nullopt;
+};
+
+// Ensures that replay_flags_str is consistent with the other provided settings, and validates
+// the entire configuration
+absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings &settings,
+                                                              bool is_adreno_gpu);
 
 class AndroidDevice
 {
@@ -150,16 +186,14 @@ public:
     absl::Status                    Cleanup(const std::string &serial, const std::string &package);
 
     absl::Status DeployReplayApk(const std::string &serial);
-    absl::Status RunReplayApk(const std::string &capture_path,
-                              const std::string &replay_args,
-                              bool               dump_pm4,
-                              const std::string &local_download_dir);
-    absl::Status RunProfilingOnReplay(const std::string              &capture_path,
-                                      const std::vector<std::string> &metrics,
-                                      const std::string              &local_download_dir,
-                                      const std::string              &gfxr_replay_flags = "");
+    absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;
 
 private:
+    // Initiates GFXR replay through the GFXR-provided python script, blocking call
+    absl::Status RunReplayGfxrScript(const GfxrReplaySettings &settings) const;
+    // Initiates GFXR replay through the profiling plugin, blocking call
+    absl::Status RunReplayProfilingBinary(const GfxrReplaySettings &settings) const;
+
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
 

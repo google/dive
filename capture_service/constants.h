@@ -53,6 +53,8 @@ inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR re
 inline constexpr char kProfilingMetricsCsvSuffix[] = "_profiling_metrics.csv";
 inline constexpr char kGpuTimingCsvSuffix[] = "_gpu_time.csv";
 inline constexpr char kPm4RdSuffix[] = ".rd";
+inline constexpr char kGfxrSuffix[] = ".gfxr";
+inline constexpr char kPngSuffix[] = ".png";
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

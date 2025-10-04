@@ -65,6 +65,7 @@ class GfxrVulkanCommandFilter;
 class QGroupBox;
 class QSortFilterProxyModel;
 class QAbstractProxyModel;
+class FrameTabView;
 
 enum class EventMode;
 
@@ -285,6 +286,8 @@ private:
     int                                m_perf_counter_view_tab_index;
     GpuTimingTabView                  *m_gpu_timing_tab_view;
     int                                m_gpu_timing_view_tab_index;
+    FrameTabView                      *m_frame_tab_view;
+    int                                m_frame_view_tab_index;
 #if defined(ENABLE_CAPTURE_BUFFERS)
     BufferView *m_buffer_view;
 #endif

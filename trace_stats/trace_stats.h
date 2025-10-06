@@ -50,7 +50,7 @@ struct Stats
 {
     enum Type : uint32_t
     {
-        kNumBinnigPasses,
+        kNumBinningPasses,
         kNumTilingPasses,
         kBinningDraws,
         kDirectDraws,
@@ -93,7 +93,7 @@ struct Stats
 };
 
 constexpr std::array kStatMap = {
-    std::pair(Stats::kNumBinnigPasses, "Num Binning Passes"),
+    std::pair(Stats::kNumBinningPasses, "Num Binning Passes"),
     std::pair(Stats::kNumTilingPasses, "Num Tiling Passes"),
     std::pair(Stats::kBinningDraws, "Num Draws (BINNING)"),
     std::pair(Stats::kDirectDraws, "Num Draws (DIRECT)"),

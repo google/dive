@@ -210,7 +210,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                 capture_stats.m_shader_ref_set.insert(info.m_shader_references[ref]);
     }
 
-    stats_list[Dive::Stats::kNumBinnigPasses] = capture_stats.m_num_binning_passes;
+    stats_list[Dive::Stats::kNumBinningPasses] = capture_stats.m_num_binning_passes;
     stats_list[Dive::Stats::kNumTilingPasses] = capture_stats.m_num_tiling_passes;
 
     if (!capture_stats.m_event_num_indices.empty())
@@ -271,7 +271,7 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
 
     for (uint32_t i = 0; i < Dive::Stats::kNumStats; ++i)
     {
-        if (i != Stats::kNumBinnigPasses && i != Stats::kNumTilingPasses)
+        if (i != Stats::kNumBinningPasses && i != Stats::kNumTilingPasses)
         {
             ostream << kStatDescriptions[i] << ": " << stats_list[i] << "\n";
         }
@@ -304,8 +304,8 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
     }
 
     ostream << window_scissor_stats_desc[kWindowScissors] << ":\n";
-    ostream << "\t" << kStatDescriptions[Stats::kNumBinnigPasses] << ": "
-            << stats_list[Stats::kNumBinnigPasses] << "\n";
+    ostream << "\t" << kStatDescriptions[Stats::kNumBinningPasses] << ": "
+            << stats_list[Stats::kNumBinningPasses] << "\n";
     ostream << "\t" << kStatDescriptions[Stats::kNumTilingPasses] << ": "
             << stats_list[Stats::kNumTilingPasses] << "\n";
 

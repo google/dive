@@ -19,7 +19,9 @@
 
 const std::unordered_map<std::string, const char*>& GetVulkanCommandToolTipSummaries()
 {
-    // Brief descriptions of Vulkan API commands used for tooltips in the UI.
+    // Brief descriptions of Vulkan API commands used for tooltips in the UI. These current as of
+    // 10/6/2025 and are collected from https://github.com/KhronosGroup/Vulkan-Docs.git (Commit
+    // 7fe2b62)
     static const std::unordered_map<std::string, const char*> vulkan_command_tool_tip_summaries = {
         { "vkAcquireDrmDisplayEXT", "Acquire access to a VkDisplayKHR using DRM" },
         { "vkAcquireFullScreenExclusiveModeEXT",

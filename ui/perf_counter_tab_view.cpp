@@ -15,6 +15,7 @@
 #include "perf_counter_model.h"
 #include "search_bar.h"
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
@@ -28,6 +29,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_perf_counter_view->setModel(&m_perf_counter_model);
     m_perf_counter_view->setContextMenuPolicy(Qt::CustomContextMenu);
     m_perf_counter_view->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ResizeColumns();
 
     m_search_trigger_button = new QPushButton;
     m_search_trigger_button->setObjectName(kPerfCounterSearchButtonName);
@@ -238,4 +240,18 @@ void PerfCounterTabView::CorrelateCounter(uint64_t index)
     }
     m_perf_counter_view->update();
     m_perf_counter_view->viewport()->update();
+}
+
+//--------------------------------------------------------------------------------------------------
+
+void PerfCounterTabView::ResizeColumns()
+{
+    QHeaderView *header = m_perf_counter_view->horizontalHeader();
+    header->setSectionResizeMode(QHeaderView::ResizeToContents);
+
+    uint32_t column_count = static_cast<uint32_t>(m_perf_counter_model.columnCount(QModelIndex()));
+    for (uint32_t column = 0; column < column_count; ++column)
+    {
+        m_perf_counter_view->resizeColumnToContents(column);
+    }
 }

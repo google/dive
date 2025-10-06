@@ -728,8 +728,6 @@ PointerDecoder<int>*                               pFd)
         replay_result = VK_SUCCESS;
         return;
     }
-
-    VulkanReplayConsumer::Process_vkGetFenceFdKHR(call_info, returnValue, device, pGetFdInfo, pFd);
 }
 
 void DiveVulkanReplayConsumer::ProcessCreateHardwareBufferCommand(

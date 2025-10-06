@@ -1712,7 +1712,7 @@ VkResult VulkanResourcesUtil::ReadImageResources(const std::vector<ImageResource
                                  util::ToString(img.layout).c_str());
         }
         GFXRECON_ASSERT((img.aspect == VK_IMAGE_ASPECT_COLOR_BIT) || (img.aspect == VK_IMAGE_ASPECT_DEPTH_BIT) ||
-                        (img.aspect == VK_IMAGE_ASPECT_STENCIL_BIT) || VK_IMAGE_ASPECT_PLANE_0_BIT);
+                        (img.aspect == VK_IMAGE_ASPECT_STENCIL_BIT) || (img.aspect == VK_IMAGE_ASPECT_PLANE_0_BIT));
 
         bool blit_supported = IsBlitSupported(img.format, img.tiling, dst_format);
         tmp_data[i].scaling_supported =

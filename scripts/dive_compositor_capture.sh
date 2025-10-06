@@ -35,7 +35,7 @@ adb shell setprop compositor.lazy_depth_buffer false
 
 adb shell setprop cpm.gfxr_layer 1
 adb shell stop && adb shell start
-# TODO: find a better way to detect surfaceflinger done initialization.
+# TODO(b/449739284): find a better way to detect surfaceflinger done initialization.
 echo -n "Waiting for surfaceflinger to restart... "
 for i in $(seq ${TIME_TO_WAIT_FOR_RESTART} -1 1); do
     echo -n "$i, "

@@ -26,6 +26,8 @@ limitations under the License.
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
 #include "util/platform.h"
+#include "generated/generated_vulkan_struct_handle_mappers.h"
+#include "util/to_string.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -706,9 +708,28 @@ format::HandleId                                   device,
 StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
 PointerDecoder<int>*                               pFd)
 {
-    // For compositor captures, a fence may not have been created with the exportable flag,
-    // causing vkGetFenceFdKHR to fail on replay. Since the file descriptor is not used,
-    // we can ignore the error and allow replay to continue.
+    // Workaround for compositor captures. A fence may not have been created with the exportable
+    // flag, causing vkGetFenceFdKHR to fail on replay. Since the file descriptor is not used, we
+    // can ignore the error and allow replay to continue. The workaround tries with the call and if
+    // it failed, then ignore the error and continue the replay.
+    auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
+    MapStructHandles(pGetFdInfo->GetMetaStructPointer(), GetObjectInfoTable());
+    auto in_pGetFdInfo = pGetFdInfo->GetPointer();
+    int* out_pFd = pFd->IsNull() ? nullptr : pFd->AllocateOutputData(1, -1);
+
+    VkResult replay_result = GetDeviceTable(in_device->handle)
+                             ->GetFenceFdKHR(in_device->handle, in_pGetFdInfo, out_pFd);
+
+    if (replay_result != VK_SUCCESS)
+    {
+        GFXRECON_LOG_WARNING("vkGetFenceFdKHR failed with error %s. Ignoring error and continuing "
+                             "replay.",
+                             util::ToString(replay_result).c_str());
+        replay_result = VK_SUCCESS;
+        return;
+    }
+
+    VulkanReplayConsumer::Process_vkGetFenceFdKHR(call_info, returnValue, device, pGetFdInfo, pFd);
 }
 
 void DiveVulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
@@ -723,9 +744,9 @@ uint64_t                                            usage,
 uint32_t                                            layers,
 const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
 {
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
     // Workaround to replay compositor capture
-    if (format > AHARDWAREBUFFER_FORMAT_S8_UINT ||
-        (format == AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420 && usage == 0x30122))
+    if (format > AHARDWAREBUFFER_FORMAT_S8_UINT || (format == AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420))
     {
         GFXRECON_LOG_INFO("AHB format %d, height %d, width %d, layers %d, usage %d, ",
                           format,
@@ -735,7 +756,7 @@ const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
                           usage);
         format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
     }
-
+#endif
     VulkanReplayConsumer::ProcessCreateHardwareBufferCommand(device_id,
                                                              memory_id,
                                                              buffer_id,

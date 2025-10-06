@@ -23,7 +23,7 @@ class WindowScissorsStatsModel : public QAbstractItemModel
 public:
     explicit WindowScissorsStatsModel(QObject *parent = nullptr);
 
-    void LoadData(std::vector<Dive::WindowScissor> window_scissors);
+    void LoadData(const std::set<Dive::WindowScissor> &window_scissors);
 
     // QAbstractItemModel interface
     QModelIndex index(int                row,

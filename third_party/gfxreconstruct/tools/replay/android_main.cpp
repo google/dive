@@ -71,8 +71,8 @@ const char kLayerProperty[]      = "debug.vulkan.layers";
 
 const int32_t kSwipeDistance = 200;
 
-void        ProcessAppCmd(struct android_app* app, int32_t cmd);
-int32_t     ProcessInputEvent(struct android_app* app, AInputEvent* event);
+void    ProcessAppCmd(struct android_app* app, int32_t cmd);
+int32_t ProcessInputEvent(struct android_app* app, AInputEvent* event);
 
 static std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
 
@@ -162,7 +162,7 @@ void android_main(struct android_app* app)
                     GFXRECON_ASSERT(dive_file_processor)
                     if (replay_options.loop_single_frame_count.has_value())
                     {
-                        dive_file_processor->SetLoopSingleFrameCount(replay_options.loop_single_frame_count.value());
+                        dive_file_processor->SetLoopSingleFrameCount(*(replay_options.loop_single_frame_count));
                     }
                 }
 
@@ -172,8 +172,8 @@ void android_main(struct android_app* app)
 
                 // GOOGLE: replace VulkanReplayConsumer with dive specific DiveVulkanReplayConsumer
                 gfxrecon::decode::DiveVulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
-                gfxrecon::decode::VulkanDecoder vulkan_decoder;
-                
+                gfxrecon::decode::VulkanDecoder        vulkan_decoder;
+
                 // GOOGLE: Pass replay options to enable/disable gpu time
                 if (arg_parser.IsOptionSet(kEnableGPUTime))
                 {

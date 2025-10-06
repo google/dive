@@ -939,7 +939,7 @@ static std::optional<uint64_t> GetLoopSingleFrameCount(const gfxrecon::util::Arg
 {
     const auto& value = arg_parser.GetArgumentValue(kLoopSingleFrameCount);
 
-    int n;
+    int n = 0;
 
     if (!value.empty())
     {

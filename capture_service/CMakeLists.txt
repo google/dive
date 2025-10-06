@@ -104,7 +104,9 @@ else()
   include(GoogleTest)
   add_executable(device_mgr_test device_mgr_test.cc)
   target_link_libraries(device_mgr_test
+    absl::status_matchers
     device_mgr
+    gmock
     gtest
     gtest_main
     )

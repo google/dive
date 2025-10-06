@@ -82,10 +82,9 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             "Do not specify loop_single_frame_count in GfxrReplaySettings and also as flag "
             "--loop-single-frame-count");
         }
-        int parsed_frame_count;
         try
         {
-            parsed_frame_count = std::stoi(*(it + 1));
+            validated_settings.loop_single_frame_count = std::stoi(*(it + 1));
         }
         catch (std::exception &e)
         {
@@ -94,7 +93,6 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
                             "integer: %s",
                             e.what()));
         }
-        validated_settings.loop_single_frame_count = parsed_frame_count;
         split_args.erase(it, it + 2);
     }
     if (auto it = std::find(split_args.begin(), split_args.end(), "--enable-gpu-time");
@@ -171,9 +169,9 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     // Re-concatenate flags to form a validated replay_flags_str
     if (validated_settings.loop_single_frame_count.has_value())
     {
-        assert(validated_settings.loop_single_frame_count.value() >= 0);
+        assert(*(validated_settings.loop_single_frame_count) >= 0);
         split_args.push_back("--loop-single-frame-count");
-        split_args.push_back(std::to_string(validated_settings.loop_single_frame_count.value()));
+        split_args.push_back(std::to_string(*(validated_settings.loop_single_frame_count)));
     }
     if (validated_settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
@@ -722,7 +720,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
                                                               kGpuTimingCsvSuffix);
         if (absl::Status s = m_device->RetrieveFile(remote_gpu_time_path,
                                                     settings.local_download_dir,
-                                                    true,
+                                                    /*delete_after_retrieve=*/true,
                                                     gpu_time_csv_local_name);
             !s.ok())
         {
@@ -789,7 +787,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 
     if (absl::Status s = m_device->RetrieveFile(csv_remote_file_path,
                                                 settings.local_download_dir,
-                                                true,
+                                                /*delete_after_retrieve=*/true,
                                                 csv_local_name);
         !s.ok())
     {

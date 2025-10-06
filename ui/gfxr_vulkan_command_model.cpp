@@ -30,7 +30,8 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
 // =================================================================================================
 GfxrVulkanCommandModel::GfxrVulkanCommandModel(const Dive::CommandHierarchy &command_hierarchy) :
     m_command_hierarchy(command_hierarchy),
-    m_topology_ptr(nullptr)
+    m_topology_ptr(nullptr),
+    m_vulkan_command_tool_tip_summaries(GetVulkanCommandToolTipSummaries())
 {
 }
 
@@ -103,9 +104,9 @@ QVariant GfxrVulkanCommandModel::data(const QModelIndex &index, int role) const
     else if (role == Qt::ToolTipRole)
     {
         std::string command_key = command_name.toStdString();
-        auto        it = kVulkanCommandTooltipSummaries.find(command_key);
+        auto        it = m_vulkan_command_tool_tip_summaries.find(command_key);
 
-        if (it != kVulkanCommandTooltipSummaries.end())
+        if (it != m_vulkan_command_tool_tip_summaries.end())
         {
             return QString(it->second);
         }

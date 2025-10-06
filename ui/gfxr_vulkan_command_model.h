@@ -61,8 +61,9 @@ public:
 private:
     void BuildNodeLookup(const QModelIndex &parent = QModelIndex()) const;
 
-    const Dive::CommandHierarchy              &m_command_hierarchy;
-    const Dive::Topology                      *m_topology_ptr;
-    mutable std::vector<QPersistentModelIndex> m_node_lookup;
+    const Dive::CommandHierarchy                        &m_command_hierarchy;
+    const Dive::Topology                                *m_topology_ptr;
+    const std::unordered_map<std::string, const char *> &m_vulkan_command_tool_tip_summaries;
+    mutable std::vector<QPersistentModelIndex>           m_node_lookup;
 };
 #endif

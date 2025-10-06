@@ -19,7 +19,7 @@
 
 const std::unordered_map<std::string, const char*>& GetVulkanCommandToolTipSummaries()
 {
-    // Generated summaries for Vulkan API commands, used for tooltips in the UI.
+    // Brief descriptions of Vulkan API commands used for tooltips in the UI.
     static const std::unordered_map<std::string, const char*> vulkan_command_tool_tip_summaries = {
         { "vkAcquireDrmDisplayEXT", "Acquire access to a VkDisplayKHR using DRM" },
         { "vkAcquireFullScreenExclusiveModeEXT",

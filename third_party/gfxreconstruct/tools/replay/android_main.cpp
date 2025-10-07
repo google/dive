@@ -133,16 +133,12 @@ void android_main(struct android_app* app)
 
         try
         {
-            // GOOGLE: Initialize DiveFileProcessor instead of FileProcessor
-            // TODO(wangra): remove kLoopSingleFrame: b/444224938
-            const bool need_preload_processor = arg_parser.IsOptionSet(kPreloadMeasurementRangeOption);
-            const bool need_dive_processor =
-                arg_parser.IsOptionSet(kLoopSingleFrame) || arg_parser.IsOptionSet(kEnableGPUTime);
-            GFXRECON_ASSERT(!(need_preload_processor && need_dive_processor));
+            // GOOGLE: Initialize either DiveFileProcessor or PreloadFileProcessor, not FileProcessor
+            bool use_dive_file_processor = !arg_parser.IsOptionSet(kPreloadMeasurementRangeOption);
             file_processor =
-                arg_parser.IsOptionSet(kPreloadMeasurementRangeOption)
-                    ? std::unique_ptr<gfxrecon::decode::FileProcessor>(new gfxrecon::decode::PreloadFileProcessor)
-                    : std::make_unique<gfxrecon::decode::DiveFileProcessor>();
+                use_dive_file_processor
+                    ? std::make_unique<gfxrecon::decode::DiveFileProcessor>()
+                    : std::unique_ptr<gfxrecon::decode::FileProcessor>(new gfxrecon::decode::PreloadFileProcessor);
 
             if (!file_processor->Initialize(filename))
             {
@@ -158,15 +154,16 @@ void android_main(struct android_app* app)
                 gfxrecon::decode::VulkanReplayOptions          replay_options =
                     GetVulkanReplayOptions(arg_parser, filename, &tracked_object_info_table);
 
-                // GOOGLE: Pass replay options to DiveFileProcessor
-                if (arg_parser.IsOptionSet(kLoopSingleFrame) && arg_parser.IsArgumentSet(kLoopSingleFrameCount))
+                // GOOGLE: Pass replay options to DiveFileProcessor after initialization
+                if (use_dive_file_processor)
                 {
-                    const bool need_preload_processor = arg_parser.IsOptionSet(kPreloadMeasurementRangeOption);
-                    GFXRECON_ASSERT(!need_preload_processor)
                     auto* dive_file_processor =
                         dynamic_cast<gfxrecon::decode::DiveFileProcessor*>(file_processor.get());
                     GFXRECON_ASSERT(dive_file_processor)
-                    dive_file_processor->SetLoopSingleFrameCount(replay_options.loop_single_frame_count);
+                    if (replay_options.loop_single_frame_count.has_value())
+                    {
+                        dive_file_processor->SetLoopSingleFrameCount(*(replay_options.loop_single_frame_count));
+                    }
                 }
 
                 file_processor->SetPrintBlockInfoFlag(replay_options.enable_print_block_info,

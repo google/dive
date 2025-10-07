@@ -31,6 +31,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -118,8 +119,7 @@ struct VulkanReplayOptions : public ReplayOptions
     bool        add_new_pipeline_caches;
 
     // GOOGLE: [single-frame-looping]
-    bool     loop_single_frame;
-    uint64_t loop_single_frame_count;
+    std::optional<uint64_t> loop_single_frame_count = std::nullopt;
 
     // GOOGLE: [enable-gpu-time]
     bool enable_gpu_time;

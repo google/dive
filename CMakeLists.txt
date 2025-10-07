@@ -129,6 +129,10 @@ else()
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
             DESTINATION ${CMAKE_INSTALL_PREFIX}
             RENAME "gfxr-replay.apk")
+        install(
+            FILES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
+            DESTINATION ${CMAKE_INSTALL_PREFIX}
+        )
         message(CHECK_PASS "successful")
     endif()
 endif()

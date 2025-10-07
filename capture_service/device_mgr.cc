@@ -145,6 +145,9 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         validated_settings.loop_single_frame_count = 0;
         if (validated_settings.metrics.size() == 0)
         {
+            // Profiling binary will provide its own set of default metrics for debugging purposes,
+            // but when initiating profiling replay through Dive, user-specified metrics are
+            // required.
             return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
         }
         break;
@@ -157,10 +160,10 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
-        if (validated_settings.loop_single_frame_count.value_or(1) == 0)
+        if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
         {
             return absl::InvalidArgumentError(
-            "loop_single_frame_count cannot be set to 0 for kGpuTiming and kNormal runs");
+            "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
         }
         break;
     }
@@ -664,11 +667,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     {
         LOGD("RunReplayGfxrScript(): PM4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string cmd = absl::StrFormat("shell setprop %s 1", kEnableReplayPm4DumpPropertyName);
-        m_device->Adb().Run(cmd).IgnoreError();
+        RETURN_IF_ERROR(m_device->Adb().Run(cmd));
         cmd = absl::StrFormat("shell setprop %s \"%s\"",
                               kReplayPm4DumpFileNamePropertyName,
                               dump_pm4_file_name);
-        m_device->Adb().Run(cmd).IgnoreError();
+        RETURN_IF_ERROR(m_device->Adb().Run(cmd));
     }
 
     LOGD("RunReplayGfxrScript(): RUN\n");
@@ -750,8 +753,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
     std::string copy_cmd = absl::StrFormat("push %s %s",
-                                           ResolveAndroidLibPath(kProfilingPluginFolderName, "")
-                                           .string(),
+                                           ResolveAndroidLibPath(kProfilingPluginFolderName, ""),
                                            kTargetPath);
     RETURN_IF_ERROR(m_device->Adb().Run(copy_cmd));
     std::string remote_profiling_dir = absl::StrFormat("%s/%s",

@@ -332,7 +332,7 @@ TEST(ValidateGfxrReplaySettingsTest, LoopSingleFrameCountStringFail)
     EXPECT_THAT(ret,
                 StatusIs(absl::StatusCode::kInvalidArgument,
                          "Value specified for --loop-single-frame-count can't be parsed as "
-                         "integer: invalid stoi argument"))
+                         "integer: PLACEHOLDER"))
     << ret.status();
 }
 

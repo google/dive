@@ -88,10 +88,11 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         catch (std::exception &e)
         {
+            LOGD("Exception: %s", e.what());
             return absl::InvalidArgumentError(
             absl::StrFormat("Value specified for --loop-single-frame-count can't be parsed as "
                             "integer: %s",
-                            e.what()));
+                            *(it + 1)));
         }
         split_args.erase(it, it + 2);
     }

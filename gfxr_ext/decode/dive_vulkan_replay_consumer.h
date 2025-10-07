@@ -156,6 +156,12 @@ public:
                                StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                HandlePointerDecoder<VkFence>* pFence) override;
 
+    void Process_vkGetFenceFdKHR(const ApiCallInfo&                                 call_info,
+                                 VkResult                                           returnValue,
+                                 format::HandleId                                   device,
+                                 StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
+                                 PointerDecoder<int>*                               pFd) override;
+
     void Process_vkDestroyFence(
     const ApiCallInfo&                                   call_info,
     format::HandleId                                     device,
@@ -171,6 +177,18 @@ public:
 
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
+
+    void ProcessCreateHardwareBufferCommand(
+    format::HandleId                                    device_id,
+    format::HandleId                                    memory_id,
+    uint64_t                                            buffer_id,
+    uint32_t                                            format,
+    uint32_t                                            width,
+    uint32_t                                            height,
+    uint32_t                                            stride,
+    uint64_t                                            usage,
+    uint32_t                                            layers,
+    const std::vector<format::HardwareBufferPlaneInfo>& plane_info) override;
 
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
 

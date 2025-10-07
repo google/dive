@@ -16,6 +16,9 @@
 
 #pragma once
 #include <memory>
+#include <vector>
+#include <future>
+#include <functional>
 #include <QMainWindow>
 #include <optional>
 #include <qabstractitemmodel.h>
@@ -104,10 +107,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow();
     ~MainWindow();
-    bool LoadFile(const std::string &file_name, bool is_temp_file = false);
-    bool LoadDiveFile(const std::string &file_name);
-    bool LoadAdrenoRdFile(const std::string &file_name);
-    bool LoadGfxrFile(const std::string &file_name);
+    bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
 
 protected:
@@ -115,10 +115,13 @@ protected:
     virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
 
 signals:
+    void HideOverlay();
     void EventSelected(uint64_t node_index);
     void SetSaveMenuStatus(bool);
     void SetSaveAsMenuStatus(bool);
     void FileLoaded();
+    void PendingPerfCounterResults(const QString &file_name);
+    void PendingGpuTimingResults(const QString &file_name);
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
@@ -132,6 +135,8 @@ public slots:
     void OnCounterSelected(uint64_t);
     void OnGpuTimingDataSelected(uint64_t);
     void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
+    void OnPendingPerfCounterResults(const QString &file_name);
+    void OnPendingGpuTimingResults(const QString &file_name);
 
 private slots:
     void OnCommandViewModeChange(const QString &string);
@@ -151,6 +156,7 @@ private slots:
     void OnSearchTrigger();
     void OpenRecentFile();
     void UpdateOverlay(const QString &);
+    void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded();
     void OnTraceAvailable(const QString &);
@@ -166,11 +172,38 @@ private slots:
     void DisconnectAllTabs();
 
 private:
+    enum class LoadedFileType
+    {
+        kUnknown,  // Load failure
+        kDiveFile,
+        kRdFile,
+        kGfxrFile,
+    };
+
+    struct LoadFileResult
+    {
+        LoadedFileType file_type;
+        std::string    file_name;
+        bool           is_temp_file;
+    };
+
     enum class CorrelationTarget
     {
         kGfxrDrawCall,
         kPm4DrawCall
     };
+
+    LoadedFileType LoadFileImpl(const std::string &file_name, bool is_temp_file = false);
+
+    void OnDiveFileLoaded();
+    void OnAdrenoRdFileLoaded();
+    void OnGfxrFileLoaded();
+
+    void RunOnUIThread(std::function<void()> f);
+    // Dialogs for async loading:
+    void OnLoadFailure(Dive::CaptureData::LoadResult result, const std::string &file_name);
+    void OnParseFailure(const std::string &file_name);
+    void OnUnsupportedFile(const std::string &file_name);
 
     void    CreateActions();
     void    CreateMenus();
@@ -183,7 +216,6 @@ private:
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
     void    UpdateRecentFileActions(QStringList recent_files);
     QString StrippedName(const QString &fullFileName);
-    void    HideOverlay();
     void    UpdateTabAvailability();
     void    ResetTabWidget();
     QModelIndex             FindSourceIndexFromNode(QAbstractItemModel *model,
@@ -327,4 +359,7 @@ private:
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
     Dive::TraceStats                           *m_trace_stats;
     Dive::CaptureStats                         *m_capture_stats;
+
+    std::future<LoadFileResult>        m_loading_result;
+    std::vector<std::function<void()>> m_loading_pending_task;
 };

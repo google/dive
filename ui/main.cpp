@@ -29,7 +29,8 @@
 #    include <dlfcn.h>
 #endif
 
-#define kStartDelay 2000
+constexpr int kSplashScreenDuration = 2000;  // 2s
+constexpr int kStartDelay = 500;             // 0.5s
 
 //--------------------------------------------------------------------------------------------------
 bool SetApplicationStyle(QString style_key)
@@ -145,13 +146,13 @@ int main(int argc, char *argv[])
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
     }
 
-    if (argc == 2 && !main_window->LoadFile(argv[1]))
+    if (argc == 2)
     {
-        std::cerr << "Not able to open: " << argv[1] << std::endl;
-        return 0;
+        // This is executed async.
+        main_window->LoadFile(argv[1]);
     }
 
-    QTimer::singleShot(kStartDelay, splash_screen, SLOT(close()));
+    QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
     QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
 
     return app.exec();

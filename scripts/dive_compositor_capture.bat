@@ -36,7 +36,7 @@ adb shell setprop compositor.lazy_depth_buffer false
 adb shell setprop cpm.gfxr_layer 1
 adb shell stop && adb shell start
 
-REM TODO: find a better way to detect surfaceflinger done initialization.
+REM TODO(b/449739284): find a better way to detect surfaceflinger done initialization.
 echo Waiting for surfaceflinger to restart...
 timeout /t %TIME_TO_WAIT_FOR_RESTART% /nobreak
 

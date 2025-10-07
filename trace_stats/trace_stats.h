@@ -19,6 +19,7 @@
 
 #include "vulkan/vulkan_core.h"
 #include <array>
+#include <set>
 #include <vector>
 #include "dive_core/capture_event_info.h"
 #include "dive_core/data_core.h"
@@ -49,7 +50,7 @@ struct Stats
 {
     enum Type : uint32_t
     {
-        kNumBinnigPasses,
+        kNumBinningPasses,
         kNumTilingPasses,
         kBinningDraws,
         kDirectDraws,
@@ -92,7 +93,7 @@ struct Stats
 };
 
 constexpr std::array kStatMap = {
-    std::pair(Stats::kNumBinnigPasses, "Num Binning Passes"),
+    std::pair(Stats::kNumBinningPasses, "Num Binning Passes"),
     std::pair(Stats::kNumTilingPasses, "Num Tiling Passes"),
     std::pair(Stats::kBinningDraws, "Num Draws (BINNING)"),
     std::pair(Stats::kDirectDraws, "Num Draws (DIRECT)"),
@@ -215,9 +216,9 @@ struct CaptureStats
 
     std::vector<uint32_t> m_event_num_indices;
 
-    std::vector<Dive::ShaderReference> m_shader_ref_set;
-    std::vector<Viewport>              m_viewports;
-    std::vector<WindowScissor>         m_window_scissors;
+    std::set<Dive::ShaderReference> m_shader_ref_set;
+    std::set<Viewport>              m_viewports;
+    std::set<WindowScissor>         m_window_scissors;
 
     uint32_t m_num_binning_passes = 0;
     uint32_t m_num_tiling_passes = 0;

@@ -20,6 +20,7 @@
 #include <string>
 
 #include "dive_core/command_hierarchy.h"
+#include "tool_tip_summaries.h"
 
 static_assert(sizeof(void *) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
@@ -29,7 +30,8 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
 // =================================================================================================
 GfxrVulkanCommandModel::GfxrVulkanCommandModel(const Dive::CommandHierarchy &command_hierarchy) :
     m_command_hierarchy(command_hierarchy),
-    m_topology_ptr(nullptr)
+    m_topology_ptr(nullptr),
+    m_vulkan_command_tool_tip_summaries(GetVulkanCommandToolTipSummaries())
 {
 }
 
@@ -72,15 +74,50 @@ QVariant GfxrVulkanCommandModel::data(const QModelIndex &index, int role) const
         return QVariant();
 
     uint64_t node_index = (uint64_t)(index.internalPointer());
+    QString  full_node_desc = QString(m_command_hierarchy.GetNodeDesc(node_index));
+    QString  command_name = full_node_desc;
+
+    int pos_colon = full_node_desc.indexOf(':');
+    int pos_comma = full_node_desc.indexOf(',');
+    int end_index = full_node_desc.length();
+
+    if (pos_colon != -1 || pos_comma != -1)
+    {
+
+        if (pos_colon != -1)
+        {
+            end_index = pos_colon;
+        }
+
+        if (pos_comma != -1)
+        {
+            end_index = std::min(end_index, pos_comma);
+        }
+
+        command_name = full_node_desc.left(end_index);
+    }
+
     if (role == Qt::ForegroundRole)
     {
         return QVariant();
     }
+    else if (role == Qt::ToolTipRole)
+    {
+        std::string command_key = command_name.toStdString();
+        auto        it = m_vulkan_command_tool_tip_summaries.find(command_key);
+
+        if (it != m_vulkan_command_tool_tip_summaries.end())
+        {
+            return QString(it->second);
+        }
+        return QVariant();
+    }
+
     else if (role != Qt::DisplayRole)
         return QVariant();
 
     // 1st column
-    return QString(m_command_hierarchy.GetNodeDesc(node_index));
+    return QString(full_node_desc);
 }
 
 //--------------------------------------------------------------------------------------------------

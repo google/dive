@@ -188,7 +188,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                 {
                     Viewport viewport;
                     viewport.m_vk_viewport = event_state_it->Viewport(v);
-                    capture_stats.m_viewports.push_back(viewport);
+                    capture_stats.m_viewports.insert(viewport);
                 }
             }
 
@@ -201,16 +201,16 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
                 window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
                 window_scissor.m_br_x = event_state_it->WindowScissorBRX();
                 window_scissor.m_br_y = event_state_it->WindowScissorBRY();
-                capture_stats.m_window_scissors.push_back(window_scissor);
+                capture_stats.m_window_scissors.insert(window_scissor);
             }
         }
 
         for (size_t ref = 0; ref < info.m_shader_references.size(); ++ref)
             if (info.m_shader_references[ref].m_shader_index != UINT32_MAX)
-                capture_stats.m_shader_ref_set.push_back(info.m_shader_references[ref]);
+                capture_stats.m_shader_ref_set.insert(info.m_shader_references[ref]);
     }
 
-    stats_list[Dive::Stats::kNumBinnigPasses] = capture_stats.m_num_binning_passes;
+    stats_list[Dive::Stats::kNumBinningPasses] = capture_stats.m_num_binning_passes;
     stats_list[Dive::Stats::kNumTilingPasses] = capture_stats.m_num_tiling_passes;
 
     if (!capture_stats.m_event_num_indices.empty())
@@ -227,7 +227,7 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
     {
         if (ref.m_stage == Dive::ShaderStage::kShaderStageVs)
         {
-            if (ref.m_enable_mask & (uint32_t)Dive::ShaderEnableBit::kBINNING)
+            if (ref.m_enable_mask & static_cast<uint32_t>(Dive::ShaderEnableBitMask::kBINNING))
                 stats_list[Dive::Stats::kBinningVS]++;
             else
                 stats_list[Dive::Stats::kNonBinningVS]++;
@@ -271,36 +271,59 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
 
     for (uint32_t i = 0; i < Dive::Stats::kNumStats; ++i)
     {
-        ostream << kStatDescriptions[i] << ": " << stats_list[i] << "\n";
+        if (i != Stats::kNumBinningPasses && i != Stats::kNumTilingPasses)
+        {
+            ostream << kStatDescriptions[i] << ": " << stats_list[i] << "\n";
+        }
     }
 
     ostream << viewport_stats_desc[kViewport] << ":\n";
 
+    auto print_field = [&ostream](std::string_view name, auto value, bool is_last_item) {
+        std::ostringstream string_stream;
+        string_stream << name << ": " << std::fixed << std::setprecision(1) << value;
+
+        if (!is_last_item)
+        {
+            string_stream << ",";
+            ostream << std::setw(17);
+        }
+        ostream << std::left << string_stream.str();
+    };
+
     for (const Viewport &vp : capture_stats.m_viewports)
     {
-        ostream << "\t" << viewport_stats_desc[kViewport_x] << ": " << (int)vp.m_vk_viewport.x
-                << ", " << viewport_stats_desc[kViewport_y] << ": " << (int)vp.m_vk_viewport.y
-                << ", " << viewport_stats_desc[kViewport_width] << ": "
-                << (int)vp.m_vk_viewport.width << ", " << viewport_stats_desc[kViewport_height]
-                << ": " << (int)vp.m_vk_viewport.height << ", "
-                << viewport_stats_desc[kViewport_minDepth] << ": " << std::fixed
-                << std::setprecision(1) << vp.m_vk_viewport.minDepth << ", "
-                << viewport_stats_desc[kViewport_maxDepth] << ": " << std::fixed
-                << std::setprecision(1) << vp.m_vk_viewport.maxDepth << "\n";
+        ostream << "\t";
+        print_field(viewport_stats_desc[kViewport_x], vp.m_vk_viewport.x, false);
+        print_field(viewport_stats_desc[kViewport_y], vp.m_vk_viewport.y, false);
+        print_field(viewport_stats_desc[kViewport_width], vp.m_vk_viewport.width, false);
+        print_field(viewport_stats_desc[kViewport_height], vp.m_vk_viewport.height, false);
+        print_field(viewport_stats_desc[kViewport_minDepth], vp.m_vk_viewport.minDepth, false);
+        print_field(viewport_stats_desc[kViewport_maxDepth], vp.m_vk_viewport.maxDepth, true);
+        ostream << std::endl;
     }
 
     ostream << window_scissor_stats_desc[kWindowScissors] << ":\n";
+    ostream << "\t" << kStatDescriptions[Stats::kNumBinningPasses] << ": "
+            << stats_list[Stats::kNumBinningPasses] << "\n";
+    ostream << "\t" << kStatDescriptions[Stats::kNumTilingPasses] << ": "
+            << stats_list[Stats::kNumTilingPasses] << "\n";
 
+    uint32_t count = 0;
     for (const WindowScissor &ws : capture_stats.m_window_scissors)
     {
-        ostream << "\t" << window_scissor_stats_desc[kWindowScissors_tl_x] << ": " << ws.m_tl_x
-                << ", " << window_scissor_stats_desc[kWindowScissors_br_x] << ": " << ws.m_br_x
-                << ", " << window_scissor_stats_desc[kWindowScissors_tl_y] << ": " << ws.m_tl_y
-                << ", " << window_scissor_stats_desc[kWindowScissors_br_y] << ": " << ws.m_br_y
-                << ", " << window_scissor_stats_desc[kWindowScissors_Width] << ": "
-                << (ws.m_br_x - ws.m_tl_x + 1) << ", "
-                << window_scissor_stats_desc[kWindowScissors_Height] << ": "
-                << (ws.m_br_y - ws.m_tl_y + 1) << "\n";
+        ostream << "\t" << count++ << "\t";
+        print_field(window_scissor_stats_desc[kWindowScissors_tl_x], ws.m_tl_x, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_br_x], ws.m_br_x, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_tl_y], ws.m_tl_y, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_br_y], ws.m_br_y, false);
+        print_field(window_scissor_stats_desc[kWindowScissors_Width],
+                    (ws.m_br_x - ws.m_tl_x + 1),
+                    false);
+        print_field(window_scissor_stats_desc[kWindowScissors_Height],
+                    (ws.m_br_y - ws.m_tl_y + 1),
+                    true);
+        ostream << std::endl;
     }
 }
 

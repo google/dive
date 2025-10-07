@@ -18,7 +18,7 @@
 #include <QDebug>
 
 constexpr std::array<Dive::Stats::Type, 10> kMiscStats = {
-    Dive::Stats::kNumBinnigPasses,
+    Dive::Stats::kNumBinningPasses,
     Dive::Stats::kNumTilingPasses,
     Dive::Stats::kWaitMemWrites,
     Dive::Stats::kWaitForIdle,

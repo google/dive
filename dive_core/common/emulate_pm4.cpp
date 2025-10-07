@@ -48,6 +48,55 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
                                    uint64_t              va_addr,
                                    Pm4Header             header)
 {
+    if (header.type == 7 && header.type7.opcode == CP_SET_MARKER)
+    {
+        PM4_CP_SET_MARKER packet;
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
+        // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
+        DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
+        a6xx_marker marker = static_cast<a6xx_marker>(packet.u32All0 & 0xf);
+        switch (marker)
+        {
+            // This is emitted at the beginning of the render pass if tiled rendering mode is
+            // disabled
+        case RM6_BYPASS:
+            m_shader_enable_bit = ShaderEnableBit::kSYSMEM;
+            break;
+            // This is emitted at the beginning of the binning pass, although the binning pass
+            // could be missing even in tiled rendering mode
+        case RM6_BINNING:
+            m_shader_enable_bit = ShaderEnableBit::kBINNING;
+            break;
+            // This is emitted at the beginning of the tiled rendering pass
+        case RM6_GMEM:
+            m_shader_enable_bit = ShaderEnableBit::kGMEM;
+            break;
+            // This is emitted at the end of the tiled rendering pass
+        case RM6_ENDVIS:
+            // should be paired with RM6_BIN_RENDER_START only if RM6_BIN_VISIBILITY exist, end of
+            // tiled mode
+            m_shader_enable_bit = std::nullopt;
+            break;
+            // This is emitted at the beginning of the resolve pass
+        case RM6_RESOLVE:
+            m_shader_enable_bit = ShaderEnableBit::kGMEM;
+            break;
+            // This is emitted for each dispatch
+        case RM6_COMPUTE:
+            break;
+            // This seems to be the end of Resolve Pass
+        case RM6_YIELD:
+            // should be paired with RM6_BIN_RESOLVE, end of resolve pass
+            m_shader_enable_bit = std::nullopt;
+            break;
+        case RM6_BLIT2DSCALE:
+        case RM6_IB1LIST_START:
+        case RM6_IB1LIST_END:
+        default:
+            break;
+        }
+    }
+
     if (header.type == 7 && header.type7.opcode == CP_CONTEXT_REG_BUNCH)
     {
         uint32_t dword = 0;
@@ -123,49 +172,8 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsUConfigStateSet(uint16_t reg) const
-{
-    return false;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetUConfigRegData(uint16_t reg) const
-{
-    return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsShStateSet(uint16_t reg) const
-{
-    return false;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetShRegData(uint16_t reg) const
-{
-    return UINT32_MAX;
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetNumberOfUserDataRegsSetSinceLastEvent(ShaderStage stage) const
-{
-    // return m_num_user_data_regs_set_last_event[(uint32_t)stage];
-    return 0;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t offset) const
-{
-    // Note: Gfx User_data 0, 1, 29, 30, 31 reserved for system
-    //       Compute User_data 0, 1, 13, 14, 15 reserved for system
-    //       Do not track these!
-    // DIVE_ASSERT(offset >= 2);
-
-    // return ((m_user_data_regs_set_last_event[(uint32_t)stage] & (1 << offset)) != 0);
-    return false;
-}
-//--------------------------------------------------------------------------------------------------
-uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage stage, uint32_t enable_mask) const
+uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage     stage,
+                                               ShaderEnableBit shader_enable_bit) const
 {
     uint32_t offset = UINT32_MAX;
     switch (stage)
@@ -188,11 +196,11 @@ uint64_t EmulateStateTracker::GetCurShaderAddr(ShaderStage stage, uint32_t enabl
     default:
         return UINT64_MAX;
     }
-    if (!IsRegSet(offset, enable_mask))
+    if (!IsRegSet(offset, shader_enable_bit))
     {
         return UINT64_MAX;
     }
-    return GetReg64Value(offset, enable_mask);
+    return GetReg64Value(offset, shader_enable_bit);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -214,6 +222,7 @@ void EmulateStateTracker::Reset()
 {
     memset(m_reg, 0, sizeof(m_reg));
     memset(m_reg_is_set, 0, sizeof(m_reg_is_set));
+    m_shader_enable_bit = std::nullopt;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -231,41 +240,33 @@ void EmulateStateTracker::PopEnableMask()
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t EmulateStateTracker::GetRegValue(uint32_t offset, uint32_t enable_mask) const
+uint32_t EmulateStateTracker::GetRegValue(uint32_t offset, ShaderEnableBit shader_enable_bit) const
 {
-    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
-    {
-        if (enable_mask & (1u << i))
-        {
-            return m_reg[i][offset];
-        }
-    }
-    return 0;
+    uint32_t i = static_cast<uint32_t>(shader_enable_bit);
+    return m_reg[i][offset];
 }
 
 //--------------------------------------------------------------------------------------------------
 uint32_t EmulateStateTracker::GetRegValue(uint32_t offset) const
 {
-    return GetRegValue(offset, m_enable_mask);
+    DIVE_ASSERT(m_shader_enable_bit.has_value());
+    return GetRegValue(offset, *m_shader_enable_bit);
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t EmulateStateTracker::GetReg64Value(uint32_t offset, uint32_t enable_mask) const
+uint64_t EmulateStateTracker::GetReg64Value(uint32_t        offset,
+                                            ShaderEnableBit shader_enable_bit) const
 {
-    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
-    {
-        if (enable_mask & (1u << i))
-        {
-            return ((uint64_t)m_reg[i][offset]) | (((uint64_t)m_reg[i][offset + 1]) << 32);
-        }
-    }
-    return 0;
+    uint32_t i = static_cast<uint32_t>(shader_enable_bit);
+    return (static_cast<uint64_t>(m_reg[i][offset])) |
+           ((static_cast<uint64_t>(m_reg[i][offset + 1])) << 32);
 }
 
 //--------------------------------------------------------------------------------------------------
 uint64_t EmulateStateTracker::GetReg64Value(uint32_t offset) const
 {
-    return GetRegValue(offset, m_enable_mask);
+    DIVE_ASSERT(m_shader_enable_bit.has_value());
+    return GetRegValue(offset, *m_shader_enable_bit);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -284,38 +285,18 @@ void EmulateStateTracker::SetReg(uint32_t offset, uint32_t value)
 //--------------------------------------------------------------------------------------------------
 bool EmulateStateTracker::IsRegSet(uint32_t offset) const
 {
-    return IsRegSet(offset, m_enable_mask);
+    DIVE_ASSERT(m_shader_enable_bit.has_value());
+    return IsRegSet(offset, *m_shader_enable_bit);
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::IsRegSet(uint32_t offset, uint32_t enable_mask) const
+bool EmulateStateTracker::IsRegSet(uint32_t offset, ShaderEnableBit shader_enable_bit) const
 {
-    for (unsigned int i = 0; i < kShaderEnableBitCount; ++i)
-    {
-        if (enable_mask & (1u << i))
-        {
-            return !!(m_reg_is_set[i][offset / 8] & (1 << (offset % 8)));
-        }
-    }
-    return false;
+    uint32_t index = static_cast<uint32_t>(shader_enable_bit);
+    uint8_t  is_reg_set = (m_reg_is_set[index][offset / 8] & (1 << (offset % 8)));
+    return static_cast<bool>(is_reg_set);
 }
 
-/*
-//--------------------------------------------------------------------------------------------------
-void EmulateStateTracker::UpdateUserDataRegsSetSinceLastEvent(ShaderStage stage,
-                                                              uint8_t     user_data_reg)
-{
-    // Range sanity check
-    DIVE_ASSERT(
-    (stage == ShaderStage::kShaderStageCs && user_data_reg < m_num_user_data_regs_compute) ||
-    (stage != ShaderStage::kShaderStageCs && user_data_reg < m_num_user_data_regs_gfx));
-    DIVE_ASSERT(m_num_user_data_regs_compute <= 32 && m_num_user_data_regs_gfx <= 32);
-    uint32_t prev = m_user_data_regs_set_last_event[(uint32_t)stage];
-    m_user_data_regs_set_last_event[(uint32_t)stage] |= 1 << user_data_reg;
-    if (m_user_data_regs_set_last_event[(uint32_t)stage] != prev)
-        m_num_user_data_regs_set_last_event[(uint32_t)stage]++;
-}
-*/
 // =================================================================================================
 // EmulatePM4
 // =================================================================================================

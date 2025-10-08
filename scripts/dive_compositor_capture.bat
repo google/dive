@@ -80,9 +80,9 @@ GOTO :eof
 adb shell rm -rf %COMPOSITOR_CAPTURE_DIR%
 adb shell rm /data/local/debug/vulkan/libVkLayer_gfxreconstruct.so
 adb shell setprop cpm.gfxr_layer 0
-adb shell setprop persist.compositor.protected_context "\"\""
-adb shell setprop persist.compositor.tiled_rendering "\"\""
-adb shell setprop compositor.lazy_depth_buffer "\"\""
+adb shell setprop persist.compositor.protected_context '""'
+adb shell setprop persist.compositor.tiled_rendering '""'
+adb shell setprop compositor.lazy_depth_buffer '""'
 adb shell stop && adb shell start
 GOTO :eof
 

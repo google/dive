@@ -42,7 +42,6 @@ enum class Command
     kNone,
     kGfxrCapture,
     kGfxrReplay,
-    kProfileReplay,
     kListDevice,
     kListPackage,
     kRunPackage,
@@ -87,11 +86,6 @@ bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
         *command = Command::kGfxrReplay;
         return true;
     }
-    if (text == "profile_replay")
-    {
-        *command = Command::kProfileReplay;
-        return true;
-    }
     if (text.empty())
     {
         *command = Command::kNone;
@@ -113,8 +107,6 @@ std::string AbslUnparseFlag(Command command)
         return "gfxr_capture";
     case Command::kGfxrReplay:
         return "gfxr_replay";
-    case Command::kProfileReplay:
-        return "profile_replay";
     case Command::kListPackage:
         return "list_package";
     case Command::kRunPackage:
@@ -133,7 +125,7 @@ ABSL_FLAG(Command,
           command,
           Command::kNone,
           "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay "
-          "\n\tprofile_replay \n\tlist_package \n\trun \n\tcapture \n\tcleanup");
+          "\n\tlist_package \n\trun \n\tcapture \n\tcleanup");
 ABSL_FLAG(
 std::string,
 device,
@@ -179,10 +171,13 @@ ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr rep
 
 ABSL_FLAG(bool, dump_pm4, false, "dump pm4 for gfxr replay");
 
-ABSL_FLAG(std::vector<std::string>,
-          metrics,
-          {},
-          "comma-separated list of metrics to profile for profile_replay command.");
+ABSL_FLAG(bool, enable_perf_counters, false, "enable perf counters for gfxr replay.");
+
+ABSL_FLAG(
+std::vector<std::string>,
+metrics,
+{},
+"comma-separated list of metrics to profile for gfxr_replay command with --enable_perf_counters.");
 
 void PrintUsage()
 {
@@ -667,43 +662,20 @@ bool DeployGfxrReplay(Dive::DeviceManager& mgr, const std::string& device_serial
     return true;
 }
 
-bool DeployAndRunGfxrReplay(Dive::DeviceManager& mgr,
-                            const std::string&   device_serial,
-                            const std::string    gfxr_replay_capture,
-                            const std::string    gfxr_replay_flags)
+bool DeployAndRunGfxrReplay(Dive::DeviceManager&            mgr,
+                            const std::string&              device_serial,
+                            const Dive::GfxrReplaySettings& replay_settings)
 {
-    bool        dump_pm4 = absl::GetFlag(FLAGS_dump_pm4);
-    std::string capture_download_dir = absl::GetFlag(FLAGS_download_dir);
-
     if (!DeployGfxrReplay(mgr, device_serial))
     {
         return false;
     }
-    // Running replay for on-device capture
-    auto ret = mgr.RunReplayApk(gfxr_replay_capture,
-                                gfxr_replay_flags,
-                                dump_pm4,
-                                capture_download_dir);
-    return ret.ok();
-}
 
-bool DeployAndProfilingGfxrReplay(Dive::DeviceManager& mgr,
-                                  const std::string&   device_serial,
-                                  const std::string    gfxr_replay_capture,
-                                  const std::string&   gfxr_replay_flags)
-{
-    std::string capture_download_dir = absl::GetFlag(FLAGS_download_dir);
-
-    if (!DeployGfxrReplay(mgr, device_serial))
+    auto ret = mgr.RunReplayApk(replay_settings);
+    if (!ret.ok())
     {
-        return false;
+        std::cout << "Failed to DeployAndRunGfxrReplay, error: " << ret.message() << std::endl;
     }
-    std::vector<std::string> metrics = absl::GetFlag(FLAGS_metrics);
-
-    auto ret = mgr.RunProfilingOnReplay(gfxr_replay_capture,
-                                        metrics,
-                                        capture_download_dir,
-                                        gfxr_replay_flags);
     return ret.ok();
 }
 
@@ -719,8 +691,26 @@ int main(int argc, char** argv)
     std::string app_type = absl::GetFlag(FLAGS_type);
     std::string device_architecture = absl::GetFlag(FLAGS_device_architecture);
     std::string gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir);
-    std::string gfxr_replay_file_path = absl::GetFlag(FLAGS_gfxr_replay_file_path);
-    std::string gfxr_replay_flags = absl::GetFlag(FLAGS_gfxr_replay_flags);
+
+    Dive::GfxrReplaySettings replay_settings;
+    replay_settings.remote_capture_path = absl::GetFlag(FLAGS_gfxr_replay_file_path);
+    replay_settings.local_download_dir = absl::GetFlag(FLAGS_download_dir);
+    replay_settings.replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags);
+    replay_settings.metrics = absl::GetFlag(FLAGS_metrics);
+
+    if (absl::GetFlag(FLAGS_dump_pm4))
+    {
+        replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
+    }
+    if (absl::GetFlag(FLAGS_enable_perf_counters))
+    {
+        if (replay_settings.run_type != Dive::GfxrReplayOptions::kNormal)
+        {
+            std::cout << "Cannot use --dump_pm4 and --enable_perf_counters both" << std::endl;
+            return 1;
+        }
+        replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
+    }
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
@@ -755,22 +745,7 @@ int main(int argc, char** argv)
     }
     case Command::kGfxrReplay:
     {
-        if (gfxr_replay_file_path == "")
-        {
-            std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
-            break;
-        }
-        res = DeployAndRunGfxrReplay(mgr, serial, gfxr_replay_file_path, gfxr_replay_flags);
-        break;
-    }
-    case Command::kProfileReplay:
-    {
-        if (gfxr_replay_file_path == "")
-        {
-            std::cout << "Invalid flags: Must specify --gfxr_replay_file_path" << std::endl;
-            break;
-        }
-        res = DeployAndProfilingGfxrReplay(mgr, serial, gfxr_replay_file_path, gfxr_replay_flags);
+        res = DeployAndRunGfxrReplay(mgr, serial, replay_settings);
         break;
     }
     case Command::kListDevice:

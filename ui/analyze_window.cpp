@@ -123,31 +123,21 @@ QWidget                                                            *parent) :
 
     // Enable GPU Time
     m_gpu_time_layout = new QHBoxLayout();
-    m_gpu_time_label = new QLabel(tr("GPU Time:"));
+    m_gpu_time_label = new QLabel(tr("Enable GPU Time:"));
     m_gpu_time_layout->addWidget(m_gpu_time_label);
-    m_gpu_time_box = new QComboBox();
-    m_gpu_time_model = new QStandardItemModel();
-    QStandardItem *enable_gpu_time = new QStandardItem("Enabled");
-    QStandardItem *disable_gpu_time = new QStandardItem("Disabled");
-    m_gpu_time_model->appendRow(enable_gpu_time);
-    m_gpu_time_model->appendRow(disable_gpu_time);
-    m_gpu_time_box->setModel(m_gpu_time_model);
-    m_gpu_time_box->setCurrentIndex(1);
+    m_gpu_time_box = new QCheckBox();
+    m_gpu_time_box->setCheckState(Qt::Unchecked);
     m_gpu_time_layout->addWidget(m_gpu_time_box);
+    m_gpu_time_layout->addStretch();
 
     // Enable Dump Pm4
     m_dump_pm4_layout = new QHBoxLayout();
-    m_dump_pm4_label = new QLabel(tr("Dump Pm4:"));
+    m_dump_pm4_label = new QLabel(tr("Enable Dump Pm4:"));
     m_dump_pm4_layout->addWidget(m_dump_pm4_label);
-    m_dump_pm4_box = new QComboBox();
-    m_dump_pm4_model = new QStandardItemModel();
-    QStandardItem *enable_dump_pm4 = new QStandardItem("Enabled");
-    QStandardItem *disable_dump_pm4 = new QStandardItem("Disabled");
-    m_dump_pm4_model->appendRow(enable_dump_pm4);
-    m_dump_pm4_model->appendRow(disable_dump_pm4);
-    m_dump_pm4_box->setModel(m_dump_pm4_model);
-    m_dump_pm4_box->setCurrentIndex(1);
+    m_dump_pm4_box = new QCheckBox();
+    m_dump_pm4_box->setCheckState(Qt::Unchecked);
     m_dump_pm4_layout->addWidget(m_dump_pm4_box);
+    m_dump_pm4_layout->addStretch();
 
     // Enable RenderDoc capture
     m_renderdoc_capture_layout = new QHBoxLayout();
@@ -722,8 +712,8 @@ void AnalyzeDialog::OnReplay()
     // Keep RenderDoc file since it's not part of the "Dive file"
 
     // Get info on which variants of replay to initiate runs for
-    bool dump_pm4_run_enabled = m_dump_pm4_box->currentIndex() == 0;
-    bool gpu_time_run_enabled = m_gpu_time_box->currentIndex() == 0;
+    bool dump_pm4_run_enabled = m_dump_pm4_box->isChecked();
+    bool gpu_time_run_enabled = m_gpu_time_box->isChecked();
     bool renderdoc_run_enabled = m_renderdoc_capture_box->isChecked();
     bool perf_counter_run_enabled = !m_enabled_metrics_vector->empty();
     bool normal_run_enabled = (!dump_pm4_run_enabled) && (!gpu_time_run_enabled) &&

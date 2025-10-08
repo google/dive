@@ -47,6 +47,148 @@ std::string DeviceInfo::GetDisplayName() const
     return absl::StrCat(m_manufacturer, " ", m_model, " (", m_serial, ")");
 }
 
+absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings &settings,
+                                                              bool is_adreno_gpu)
+{
+    // Early return if basic info not provided
+    if (settings.remote_capture_path.empty())
+    {
+        return absl::InvalidArgumentError("Must provide remote_capture_path");
+    }
+    if (settings.local_download_dir.empty())
+    {
+        return absl::InvalidArgumentError("Must provide local_download_dir");
+    }
+
+    // Early return if replay_flags_str contains invalid characters
+    if (absl::StrContains(settings.replay_flags_str, '='))
+    {
+        return absl::InvalidArgumentError("replay_flags_str cannot contain '='");
+    }
+
+    GfxrReplaySettings validated_settings = settings;
+    validated_settings.replay_flags_str = "";
+
+    // Parse relevant GFXR replay flags
+    std::vector<std::string> split_args = absl::StrSplit(settings.replay_flags_str,
+                                                         " ",
+                                                         absl::SkipWhitespace());
+    if (auto it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame-count");
+        it != split_args.end())
+    {
+        if (settings.loop_single_frame_count.has_value())
+        {
+            return absl::InvalidArgumentError(
+            "Do not specify loop_single_frame_count in GfxrReplaySettings and also as flag "
+            "--loop-single-frame-count");
+        }
+        try
+        {
+            validated_settings.loop_single_frame_count = std::stoi(*(it + 1));
+        }
+        catch (std::exception &e)
+        {
+            LOGD("Exception: %s", e.what());
+            return absl::InvalidArgumentError(
+            absl::StrFormat("Value specified for --loop-single-frame-count can't be parsed as "
+                            "integer: %s",
+                            *(it + 1)));
+        }
+        split_args.erase(it, it + 2);
+    }
+    if (auto it = std::find(split_args.begin(), split_args.end(), "--enable-gpu-time");
+        it != split_args.end())
+    {
+        if (settings.run_type != GfxrReplayOptions::kNormal)
+        {
+            return absl::InvalidArgumentError(
+            "Do not specify run_type = kGpuTiming in GfxrReplaySettings and also as flag "
+            "--enable-gpu-time");
+        }
+        validated_settings.run_type = GfxrReplayOptions::kGpuTiming;
+        split_args.erase(it);
+    }
+
+    // Check for run_type-specific settings
+    switch (validated_settings.run_type)
+    {
+    case GfxrReplayOptions::kPm4Dump:
+    {
+        if (!is_adreno_gpu)
+        {
+            return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
+        }
+        if (validated_settings.loop_single_frame_count.has_value())
+        {
+            return absl::InvalidArgumentError(
+            "loop_single_frame_count is hardcoded for kPm4Dump, do not specify");
+        }
+        validated_settings.loop_single_frame_count = 2;
+        if (!validated_settings.metrics.empty())
+        {
+            return absl::InvalidArgumentError(
+            "Cannot use metrics except for kPerfCounters type run");
+        }
+        break;
+    }
+    case GfxrReplayOptions::kPerfCounters:
+    {
+        if (!is_adreno_gpu)
+        {
+            return absl::UnimplementedError(
+            "Perf counters feature is only implemented for Adreno GPU");
+        }
+        if (validated_settings.loop_single_frame_count.has_value())
+        {
+            return absl::InvalidArgumentError(
+            "loop_single_frame_count is hardcoded for kPerfCounters, do not specify");
+        }
+        validated_settings.loop_single_frame_count = 0;
+        if (validated_settings.metrics.size() == 0)
+        {
+            // Profiling binary will provide its own set of default metrics for debugging purposes,
+            // but when initiating profiling replay through Dive, user-specified metrics are
+            // required.
+            return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
+        }
+        break;
+    }
+    case GfxrReplayOptions::kGpuTiming:
+    default:
+    {
+        if (!validated_settings.metrics.empty())
+        {
+            return absl::InvalidArgumentError(
+            "Cannot use metrics except for kPerfCounters type run");
+        }
+        if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
+        {
+            return absl::InvalidArgumentError(
+            "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
+        }
+        break;
+    }
+    }
+
+    // Re-concatenate flags to form a validated replay_flags_str
+    if (validated_settings.loop_single_frame_count.has_value())
+    {
+        assert(*(validated_settings.loop_single_frame_count) >= 0);
+        split_args.push_back("--loop-single-frame-count");
+        split_args.push_back(std::to_string(*(validated_settings.loop_single_frame_count)));
+    }
+    if (validated_settings.run_type == GfxrReplayOptions::kGpuTiming)
+    {
+        split_args.push_back("--enable-gpu-time");
+    }
+    validated_settings.replay_flags_str = absl::StrJoin(split_args, " ");
+
+    LOGI("ValidateGfxrReplaySettings(): Validated replay_flags_str: %s\n",
+         validated_settings.replay_flags_str.c_str());
+
+    return validated_settings;
+}
+
 AndroidDevice::AndroidDevice(const std::string &serial) :
     m_serial(serial),
     m_adb(serial),
@@ -509,201 +651,176 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayApk(const std::string &capture_path,
-                                         const std::string &replay_args,
-                                         bool               dump_pm4,
-                                         const std::string &local_download_dir)
+absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
 {
-    LOGD("RunReplayApk(): starting\n");
+    LOGD("RunReplayGfxrScript(): SETUP\n");
+    std::filesystem::path parse_remote_capture = settings.remote_capture_path;
 
-    bool trouble_pinning_clock = false;
-    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
-    if (!ret.ok())
+    // These are only used if kPm4Dump
+    std::string dump_pm4_file_name = parse_remote_capture.stem().string() + ".rd";
+    std::string remote_pm4_path = absl::StrFormat("%s/%s",
+                                                  kDeviceCapturePath,
+                                                  dump_pm4_file_name.c_str());
+    std::string remote_pm4_inprogress_path = absl::StrFormat("%s.inprogress",
+                                                             remote_pm4_path.c_str());
+
+    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
-        LOGW("WARNING: Could not disable the compositor preemption: %s\n",
-             std::string(ret.message()).c_str());
-        trouble_pinning_clock = true;
+        LOGD("RunReplayGfxrScript(): PM4 capture file name is %s\n", dump_pm4_file_name.c_str());
+        std::string cmd = absl::StrFormat("shell setprop %s 1", kEnableReplayPm4DumpPropertyName);
+        RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+        cmd = absl::StrFormat("shell setprop %s \"%s\"",
+                              kReplayPm4DumpFileNamePropertyName,
+                              dump_pm4_file_name);
+        RETURN_IF_ERROR(m_device->Adb().Run(cmd));
     }
 
-    if (!trouble_pinning_clock)
-    {
-        ret = m_device->PinGpuClock(kPinGpuClockMHz);
-        if (!ret.ok())
-        {
-            LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
-            trouble_pinning_clock = true;
-        }
-    }
-
-    std::string updated_replay_args = replay_args;
-
-    // Enable pm4 capture
-    if (dump_pm4)
-    {
-        if (!m_device->IsAdrenoGpu())
-        {
-            return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
-        }
-        if (absl::StrContains(replay_args, "--loop-single-frame") ||
-            absl::StrContains(replay_args, "--loop-single-frame-count"))
-        {
-            return absl::InvalidArgumentError("PM4 capture doesn't support replay arguments "
-                                              "--loop-single-frame or --loop-single-frame-count");
-        }
-        std::string enable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 1",
-                                                          kEnableReplayPm4DumpPropertyName);
-        m_device->Adb().Run(enable_pm4_dump_cmd).IgnoreError();
-
-        std::string
-        dump_pm4_file_name = std::filesystem::path(capture_path).filename().stem().string() + ".rd";
-        LOGD("Enable pm4 capture file name is %s\n", dump_pm4_file_name.c_str());
-        std::string set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \"%s\"",
-                                                                 kReplayPm4DumpFileNamePropertyName,
-                                                                 dump_pm4_file_name);
-
-        m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
-
-        // Loop is needed in the replay to be able to start/stop PM4 capture.
-        updated_replay_args += " --loop-single-frame --loop-single-frame-count 2";
-    }
-
-    std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
+    LOGD("RunReplayGfxrScript(): RUN\n");
+    std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("python %s replay %s %s",
-                                      recon_py_path,
-                                      capture_path,
-                                      updated_replay_args);
-    absl::StatusOr<std::string> res = RunCommand(cmd);
-    // Cleanup PM4 capture
-    if (dump_pm4)
+                                      local_recon_py_path,
+                                      settings.remote_capture_path,
+                                      settings.replay_flags_str);
+    if (absl::StatusOr<std::string> res = RunCommand(cmd); !res.ok())
     {
-        // Wait application to exit before trying to retrieve the trace file.
-        do
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        } while (m_device->IsProcessRunning(kGfxrReplayAppName));
-
-        std::string disable_pm4_dump_cmd = absl::StrFormat("shell setprop %s 0",
-                                                           kEnableReplayPm4DumpPropertyName);
-        m_device->Adb().Run(disable_pm4_dump_cmd).IgnoreError();
-
-        std::string
-        set_pm4_dump_file_name_cmd = absl::StrFormat("shell setprop %s \\\"\\\"",
-                                                     kReplayPm4DumpFileNamePropertyName);
-        m_device->Adb().Run(set_pm4_dump_file_name_cmd).IgnoreError();
-
-        std::string on_device_trace_path = absl::StrFormat("%s/%s.rd",
-                                                           kDeviceCapturePath,
-                                                           std::filesystem::path(capture_path)
-                                                           .filename()
-                                                           .stem()
-                                                           .string()
-                                                           .c_str());
-
-        std::string on_device_trace_path_in_progress = absl::StrFormat("%s.inprogress",
-                                                                       on_device_trace_path
-                                                                       .c_str());
-
-        // Wait for trace file to be written to.
-        do
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        } while (m_device->FileExists(on_device_trace_path_in_progress));
-
-        auto status = m_device->RetrieveFile(on_device_trace_path, local_download_dir);
-        if (status.ok())
-        {
-            LOGI("Trace file %s downloaded to %s\n",
-                 on_device_trace_path.c_str(),
-                 local_download_dir.c_str());
-        }
-        else
-        {
-            LOGI("Failed to download the trace file %s\n", on_device_trace_path.c_str());
-        }
-    }
-
-    if (absl::StrContains(replay_args, "--enable-gpu-time"))
-    {
-        // Wait application to exit before trying to retrieve the gpu time file.
-        do
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        } while (m_device->IsProcessRunning(kGfxrReplayAppName));
-
-        std::filesystem::path remote_gfxr_path = capture_path;
-        std::string
-        on_device_file_path = absl::StrFormat("%s/%s",
-                                              remote_gfxr_path.parent_path().string().c_str(),
-                                              kGpuTimingFile);
-
-        // Get the local name for the file
-        std::string csv_local_name = absl::StrFormat("%s%s",
-                                                     remote_gfxr_path.stem(),
-                                                     kGpuTimingCsvSuffix);
-
-        // Get the profiling CSV file.
-        auto ret = m_device->RetrieveFile(on_device_file_path,
-                                          local_download_dir,
-                                          true,
-                                          csv_local_name);
-
-        if (!ret.ok())
-        {
-            LOGE("Failed to download the trace file %s\n", on_device_file_path.c_str());
-            return ret;
-        }
-        LOGI("Gpu time file %s downloaded to %s\n",
-             on_device_file_path.c_str(),
-             local_download_dir.c_str());
-    }
-
-    if (!res.ok())
-    {
-        LOGD("ERROR: RunReplayApk(): running replay and args: %s %s\n",
-             capture_path.c_str(),
-             replay_args.c_str());
-
         return res.status();
     }
 
-    if (!trouble_pinning_clock)
+    LOGD("RunReplayGfxrScript(): RETRIEVE ARTIFACTS\n");
+    // Wait for application to exit
+    do
     {
-        auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
-        if (!ret.ok())
-        {
-            LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
-        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    } while (m_device->IsProcessRunning(kGfxrReplayAppName));
 
-        ret = m_device->UnpinGpuClock();
-        if (!ret.ok())
+    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
+    {
+        // Wait for PM4 trace file to be written to.
+        do
         {
-            LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        } while (m_device->FileExists(remote_pm4_inprogress_path));
+
+        if (absl::Status s = m_device->RetrieveFile(remote_pm4_path, settings.local_download_dir);
+            !s.ok())
+        {
+            return absl::InternalError(
+            absl::StrFormat("Failed to download the trace file (%s), error:%s\n",
+                            remote_pm4_path,
+                            s.message()));
         }
+        LOGI("Trace file %s downloaded to %s\n",
+             remote_pm4_path.c_str(),
+             settings.local_download_dir.c_str());
+    }
+    else if (settings.run_type == GfxrReplayOptions::kGpuTiming)
+    {
+        std::string
+                    remote_gpu_time_path = absl::StrFormat("%s/%s",
+                                               parse_remote_capture.parent_path().string().c_str(),
+                                               kGpuTimingFile);
+        std::string gpu_time_csv_local_name = absl::StrFormat("%s%s",
+                                                              parse_remote_capture.stem(),
+                                                              kGpuTimingCsvSuffix);
+        if (absl::Status s = m_device->RetrieveFile(remote_gpu_time_path,
+                                                    settings.local_download_dir,
+                                                    /*delete_after_retrieve=*/true,
+                                                    gpu_time_csv_local_name);
+            !s.ok())
+        {
+            return absl::InternalError(
+            absl::StrFormat("Failed to download the gpu time csv file: %s\n",
+                            remote_gpu_time_path.c_str()));
+        }
+        LOGI("Gpu time file %s downloaded to %s\n",
+             remote_gpu_time_path.c_str(),
+             settings.local_download_dir.c_str());
     }
 
-    ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
-    if (!ret.ok())
+    LOGD("RunReplayGfxrScript(): CLEANUP\n");
+    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
-        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
-             std::string(ret.message()).c_str());
+        std::string cmd = absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName);
+        m_device->Adb().Run(cmd).IgnoreError();
+        cmd = absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName);
+        m_device->Adb().Run(cmd).IgnoreError();
     }
 
-    LOGD("RunReplayApk(): completed\n");
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunProfilingOnReplay(const std::string              &capture_path,
-                                                 const std::vector<std::string> &metrics,
-                                                 const std::string              &local_download_dir,
-                                                 const std::string              &gfxr_replay_flags)
+absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &settings) const
 {
-    if (!m_device->IsAdrenoGpu())
+    LOGD("RunReplayProfilingBinary(): SETUP\n");
+    LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
+    std::string copy_cmd = absl::StrFormat("push %s %s",
+                                           ResolveAndroidLibPath(kProfilingPluginFolderName, ""),
+                                           kTargetPath);
+    RETURN_IF_ERROR(m_device->Adb().Run(copy_cmd));
+    std::string remote_profiling_dir = absl::StrFormat("%s/%s",
+                                                       kTargetPath,
+                                                       kProfilingPluginFolderName);
+
+    std::string binary_path_on_device = absl::StrFormat("%s/%s",
+                                                        remote_profiling_dir,
+                                                        kProfilingPluginName);
+    RETURN_IF_ERROR(m_device->Adb().Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
+
+    LOGD("RunReplayProfilingBinary(): RUN\n");
+    std::string metrics_str = absl::StrJoin(settings.metrics, " ");
+    std::string gfxr_replay_flag = settings.replay_flags_str.empty() ?
+                                   "" :
+                                   absl::StrFormat("--gfxr_replay_flags \\\"%s\\\"",
+                                                   settings.replay_flags_str);
+    std::string cmd = absl::StrFormat("shell %s %s %s %s",
+                                      binary_path_on_device,
+                                      settings.remote_capture_path,
+                                      gfxr_replay_flag,
+                                      metrics_str);
+    // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
+    LOGD("Profiling binary cmd: %s\n", cmd.c_str());
+    RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+
+    LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
+    std::filesystem::path parse_remote_path = settings.remote_capture_path;
+    std::string           csv_local_name = absl::StrFormat("%s%s",
+                                                 parse_remote_path.stem(),
+                                                 kProfilingMetricsCsvSuffix);
+    std::string csv_remote_file_path = parse_remote_path.replace_extension(".csv").string();
+
+    if (absl::Status s = m_device->RetrieveFile(csv_remote_file_path,
+                                                settings.local_download_dir,
+                                                /*delete_after_retrieve=*/true,
+                                                csv_local_name);
+        !s.ok())
     {
-        return absl::UnimplementedError("Dump perf counter is only implemented for Adreno GPU");
+        return absl::InternalError(
+        absl::StrFormat("Failed to download the .csv file (%s), error:%s\n",
+                        csv_remote_file_path,
+                        s.message()));
+    }
+    LOGI("RunReplayProfilingBinary(): .csv file %s downloaded to %s\n",
+         csv_remote_file_path.c_str(),
+         settings.local_download_dir.c_str());
+
+    LOGD("RunReplayProfilingBinary(): CLEANUP\n");
+    std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
+    RETURN_IF_ERROR(m_device->Adb().Run(clean_cmd));
+
+    return absl::OkStatus();
+}
+
+absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) const
+{
+    LOGD("RunReplayApk(): Check settings before run\n");
+    absl::StatusOr<Dive::GfxrReplaySettings>
+    validated_settings = ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
+    if (!validated_settings.ok())
+    {
+        return validated_settings.status();
     }
 
-    LOGD("RunProfilingOnReplay(): starting\n");
-
+    LOGD("RunReplayApk(): Attempt to pin GPU clock frequency\n");
     bool trouble_pinning_clock = false;
     auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
     if (!ret.ok())
@@ -723,66 +840,22 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
         }
     }
 
-    // Deploy libraries and binaries
-    std::string copy_cmd = absl::StrFormat("push %s %s",
-                                           ResolveAndroidLibPath(kProfilingPluginFolderName, "")
-                                           .generic_string(),
-                                           kTargetPath);
-    RETURN_IF_ERROR(m_device->Adb().Run(copy_cmd));
-
-    // Construct replay arguments for profiling
-    // Start the profiling binary
-    std::string binary_path_on_device = absl::StrCat(kTargetPath,
-                                                     "/",
-                                                     kProfilingPluginFolderName,
-                                                     "/",
-                                                     kProfilingPluginName);
-    RETURN_IF_ERROR(m_device->Adb().Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
-    // Run replay with profiling arguments
-    std::string metrics_str = absl::StrJoin(metrics, " ");
-    std::string gfxr_replay_flag = gfxr_replay_flags.empty() ?
-                                   "" :
-                                   absl::StrFormat("--gfxr_replay_flags \"%s\"", gfxr_replay_flags);
-    std::string cmd = absl::StrFormat("shell %s %s %s %s",
-                                      binary_path_on_device,
-                                      capture_path,
-                                      gfxr_replay_flag,
-                                      metrics_str);
-    RETURN_IF_ERROR(m_device->Adb().Run(cmd));
-
-    // Get the results file path
-    std::string output_path = capture_path;
-    size_t      dot_pos = output_path.rfind('.');
-    if (dot_pos != std::string::npos)
+    LOGD("RunReplayApk(): Starting replay\n");
+    absl::Status ret_run;
+    if (validated_settings->run_type == GfxrReplayOptions::kPerfCounters)
     {
-        output_path.replace(dot_pos, std::string::npos, ".csv");
+        ret_run = RunReplayProfilingBinary(*validated_settings);
     }
     else
     {
-        output_path += ".csv";
+        ret_run = RunReplayGfxrScript(*validated_settings);
     }
-    LOGD("Result is at %s \n", output_path.c_str());
-
-    // Get the local name for the file
-    std::filesystem::path parse_remote_path = capture_path;
-    std::string           csv_local_name = absl::StrFormat("%s%s",
-                                                 parse_remote_path.stem(),
-                                                 kProfilingMetricsCsvSuffix);
-
-    // Get the profiling CSV file.
-    auto status = m_device->RetrieveFile(output_path, local_download_dir, true, csv_local_name);
-    if (!status.ok())
+    if (!ret_run.ok())
     {
-        return absl::NotFoundError("Failed to download the trace file: " + output_path);
+        return ret_run;
     }
-    LOGI("Trace file %s downloaded to %s\n", output_path.c_str(), local_download_dir.c_str());
 
-    // cleanup the library and binary
-    std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s/%s",
-                                            kTargetPath,
-                                            kProfilingPluginFolderName);
-    RETURN_IF_ERROR(m_device->Adb().Run(clean_cmd));
-
+    LOGD("RunReplayApk(): Attempt to unpin GPU clock frequency\n");
     if (!trouble_pinning_clock)
     {
         auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
@@ -805,6 +878,7 @@ absl::Status DeviceManager::RunProfilingOnReplay(const std::string              
              std::string(ret.message()).c_str());
     }
 
+    LOGD("RunReplayApk(): Completed successfully\n");
     return absl::OkStatus();
 }
 
@@ -918,8 +992,8 @@ absl::StatusOr<uint32_t> AndroidDevice::GetGpuFrequency() const
         return res.status();
     }
 
-    // Note: omitting some parsing checks here because this system file is expected to only contain
-    // digits
+    // Note: omitting some parsing checks here because this system file is expected to only
+    // contain digits
     uint32_t freq = stoi(*res);
 
     return freq;

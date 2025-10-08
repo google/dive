@@ -37,6 +37,8 @@ const uint32_t kFirstFrame = 0;
 void DiveFileProcessor::SetLoopSingleFrameCount(uint64_t loop_single_frame_count)
 {
     loop_single_frame_count_ = loop_single_frame_count;
+    GFXRECON_LOG_INFO("Setting DiveFileProcessor::loop_single_frame_count_: %d",
+                      loop_single_frame_count);
 }
 
 void DiveFileProcessor::SetDiveBlockData(std::shared_ptr<DiveBlockData> p_block_data)

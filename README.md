@@ -178,11 +178,11 @@ Example:
 ./dive_client_cli --device 9A221FFAZ004TL --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr
 ```
 
-For a capture that is a single frame, it can be replayed in a loop. Omit the `--loop-single-frame-count` flag for infinite looping.
+For a capture that is a single frame, it can be replayed in a loop.
 
 Example:
 ```
-./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_flags "--loop-single-frame --loop-single-frame-count 300"
+./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_flags "--loop-single-frame-count 300"
 ```
 
 #### Cleanup

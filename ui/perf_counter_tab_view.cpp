@@ -19,14 +19,21 @@
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
+#include <qabstractitemmodel.h>
+#include <qpushbutton.h>
 #include "object_names.h"
 
 PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWidget *parent) :
     QWidget(parent),
     m_perf_counter_model(perf_counter_model)
 {
+    m_proxy_model = new QSortFilterProxyModel(this);
+    m_proxy_model->setSourceModel(&m_perf_counter_model);
+
     m_perf_counter_view = new QTableView();
-    m_perf_counter_view->setModel(&m_perf_counter_model);
+    m_perf_counter_view->setSortingEnabled(true);
+
+    m_perf_counter_view->setModel(m_proxy_model);
     m_perf_counter_view->setContextMenuPolicy(Qt::CustomContextMenu);
     m_perf_counter_view->setSelectionBehavior(QAbstractItemView::SelectRows);
     ResizeColumns();
@@ -44,6 +51,13 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_search_bar->hide();
     m_search_bar->setView(m_perf_counter_view);
 
+    m_reset_sorting_button = new QPushButton("Reset Sorting");
+    options_layout->addWidget(m_reset_sorting_button);
+
+    m_horizontal_header = m_perf_counter_view->horizontalHeader();
+    m_horizontal_header->setSectionResizeMode(QHeaderView::ResizeToContents);
+    m_horizontal_header->setSortIndicator(-1, Qt::AscendingOrder);
+
     QVBoxLayout *main_layout = new QVBoxLayout(this);
     main_layout->addLayout(options_layout);
     main_layout->addWidget(m_search_bar);
@@ -60,6 +74,13 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
             &QItemSelectionModel::currentChanged,
             this,
             &PerfCounterTabView::OnSelectionChanged);
+
+    QObject::connect(m_horizontal_header,
+                     &QHeaderView::sectionClicked,
+                     this,
+                     &PerfCounterTabView::OnSortApplied);
+
+    QObject::connect(m_reset_sorting_button, SIGNAL(clicked()), this, SLOT(OnResetSorting()));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -80,13 +101,18 @@ void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
         return;
     }
 
+    m_perf_counter_view->scrollTo(index, QAbstractItemView::EnsureVisible);
+
+    QModelIndex source_index = m_proxy_model->mapToSource(index);
+    int         source_row = source_index.row();
+
     // Resize columns to fit the content
     uint32_t column_count = (uint32_t)m_perf_counter_model.columnCount(QModelIndex());
     for (uint32_t column = 0; column < column_count; ++column)
     {
         m_perf_counter_view->resizeColumnToContents(column);
     }
-    auto draw_index = m_perf_counter_model.GetDrawIndexFromRow(index.row());
+    auto draw_index = m_perf_counter_model.GetDrawIndexFromRow(source_row);
     if (draw_index)
     {
         emit CounterSelected(*draw_index);
@@ -236,14 +262,20 @@ void PerfCounterTabView::CorrelateCounter(uint64_t index)
     QSignalBlocker       blocker(selection_model);
     if (auto row = m_perf_counter_model.GetRowFromDrawIndex(index))
     {
-        m_perf_counter_view->selectRow(*row);
+        QModelIndex source_index = m_perf_counter_model.index(*row, 0);
+
+        QModelIndex proxy_index = m_proxy_model->mapFromSource(source_index);
+
+        selection_model->select(proxy_index,
+                                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+        m_perf_counter_view->scrollTo(proxy_index, QAbstractItemView::EnsureVisible);
     }
     m_perf_counter_view->update();
     m_perf_counter_view->viewport()->update();
 }
 
 //--------------------------------------------------------------------------------------------------
-
 void PerfCounterTabView::ResizeColumns()
 {
     QHeaderView *header = m_perf_counter_view->horizontalHeader();
@@ -253,5 +285,91 @@ void PerfCounterTabView::ResizeColumns()
     for (uint32_t column = 0; column < column_count; ++column)
     {
         m_perf_counter_view->resizeColumnToContents(column);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::OnSortApplied(int column_index)
+{
+    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    if (!selection_model)
+    {
+        return;
+    }
+
+    QModelIndexList selected_indexes = selection_model->selectedIndexes();
+
+    if (!selected_indexes.isEmpty())
+    {
+        QModelIndex proxy_index_to_preserve = selected_indexes.first();
+
+        QModelIndex source_index = m_proxy_model->mapToSource(proxy_index_to_preserve);
+
+        if (source_index.isValid())
+        {
+            QMetaObject::invokeMethod(this,
+                                      "OnSortingCompletedAndScroll",
+                                      Qt::QueuedConnection,
+                                      Q_ARG(QModelIndex, source_index));
+            return;
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::OnResetSorting()
+{
+    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    if (!selection_model)
+    {
+        return;
+    }
+
+    QModelIndex source_index;
+
+    QModelIndexList selected_indexes = selection_model->selectedIndexes();
+
+    if (!selected_indexes.isEmpty())
+    {
+        QModelIndex proxy_index_to_preserve = selected_indexes.first();
+        source_index = m_proxy_model->mapToSource(proxy_index_to_preserve);
+    }
+
+    m_proxy_model->sort(-1, Qt::AscendingOrder);
+    m_horizontal_header->setSortIndicator(-1, Qt::AscendingOrder);
+
+    if (source_index.isValid())
+    {
+        QMetaObject::invokeMethod(this,
+                                  "OnSortingCompletedAndScroll",
+                                  Qt::QueuedConnection,
+                                  Q_ARG(QModelIndex, source_index));
+    }
+
+    if (m_search_bar->isVisible())
+    {
+        m_search_bar->clearSearch();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void PerfCounterTabView::OnSortingCompletedAndScroll(const QModelIndex &index_to_map)
+{
+    QItemSelectionModel   *selection_model = m_perf_counter_view->selectionModel();
+    QSortFilterProxyModel *proxy_model = qobject_cast<QSortFilterProxyModel *>(
+    m_perf_counter_view->model());
+
+    if (!index_to_map.isValid() || !selection_model || !proxy_model)
+    {
+        return;
+    }
+
+    QModelIndex new_proxy_index = proxy_model->mapFromSource(index_to_map);
+
+    if (new_proxy_index.isValid())
+    {
+        selection_model->select(new_proxy_index,
+                                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        m_perf_counter_view->scrollTo(new_proxy_index, QAbstractItemView::EnsureVisible);
     }
 }

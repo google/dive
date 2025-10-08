@@ -20,6 +20,7 @@
 // Forward declaration
 class PerfCounterModel;
 class SearchBar;
+class QSortFilterProxyModel;
 
 class PerfCounterTabView : public QWidget
 {
@@ -36,6 +37,9 @@ public slots:
     void OnSearch(const QString &text);
     void OnNextMatch();
     void OnPrevMatch();
+    void OnSortApplied(int column_index);
+    void OnResetSorting();
+    void OnSortingCompletedAndScroll(const QModelIndex &index_to_map);
 
 signals:
     void UpdateSearchInfo(uint64_t curr_item_pos, uint64_t total_search_results);
@@ -47,8 +51,11 @@ private:
     void DisconnectSearchBar();
     void ResizeColumns();
 
-    PerfCounterModel &m_perf_counter_model;
-    QTableView       *m_perf_counter_view;
-    QPushButton      *m_search_trigger_button;
-    SearchBar        *m_search_bar;
+    QSortFilterProxyModel *m_proxy_model;
+    PerfCounterModel      &m_perf_counter_model;
+    QTableView            *m_perf_counter_view;
+    QPushButton           *m_search_trigger_button;
+    SearchBar             *m_search_bar;
+    QPushButton           *m_reset_sorting_button;
+    QHeaderView           *m_horizontal_header;
 };

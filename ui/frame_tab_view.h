@@ -12,11 +12,14 @@
 */
 
 #include <QWidget>
+#include <qscrollarea.h>
 #pragma once
 
 // Forward declaration
 class QLabel;
 class QPixmap;
+class QPushButton;
+class QScrollArea;
 
 class FrameTabView : public QWidget
 {
@@ -28,10 +31,20 @@ public:
 public slots:
     void OnCaptureScreenshotLoaded(const QString &file_path);
 
-protected:
-    void resizeEvent(QResizeEvent *event) override;
+private slots:
+    void OnZoomIn();
+    void OnZoomOut();
+    void OnCalculateInitialScale();
 
 private:
-    QLabel  *m_image_label;
-    QPixmap *m_image;
+    void ScaleAndDisplayImage();
+
+    QLabel      *m_image_label;
+    QScrollArea *m_scroll_area;
+    QPixmap     *m_image;
+    QPushButton *m_zoom_in_button;
+    QPushButton *m_zoom_out_button;
+    qreal        m_scale_factor = 1.0;
+    qreal        m_initial_scale_factor = 1.0;
+    bool         m_initial_scale_needed = false;
 };

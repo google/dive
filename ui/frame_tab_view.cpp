@@ -15,23 +15,45 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <qobject.h>
 #include <qpixmap.h>
 #include <QPoint>
+#include <QPushButton>
+#include <QScrollArea>
 #include "object_names.h"
+#include <iostream>
+#include <qtimer.h>
 
 FrameTabView::FrameTabView(QWidget *parent) :
     QWidget(parent)
 {
     m_image_label = new QLabel(this);
     m_image_label->setAlignment(Qt::AlignCenter);
-    m_image_label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    m_image_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     m_image_label->setScaledContents(true);
-
     m_image = new QPixmap();
     m_image_label->setPixmap(*m_image);
 
+    m_scroll_area = new QScrollArea(this);
+    m_scroll_area->setBackgroundRole(QPalette::Dark);
+    m_scroll_area->setWidget(m_image_label);
+    m_scroll_area->setWidgetResizable(true);
+    m_scroll_area->setAlignment(Qt::AlignCenter);
+
+    m_zoom_in_button = new QPushButton("Zoom In (+)", this);
+    m_zoom_out_button = new QPushButton("Zoom Out (-)", this);
+
+    QHBoxLayout *controls_layout = new QHBoxLayout();
+    controls_layout->addWidget(m_zoom_in_button);
+    controls_layout->addWidget(m_zoom_out_button);
+    controls_layout->addStretch();
+
     QVBoxLayout *main_layout = new QVBoxLayout(this);
-    main_layout->addWidget(m_image_label);
+    main_layout->addLayout(controls_layout);
+    main_layout->addWidget(m_scroll_area);
+
+    QObject::connect(m_zoom_in_button, &QPushButton::clicked, this, &FrameTabView::OnZoomIn);
+    QObject::connect(m_zoom_out_button, &QPushButton::clicked, this, &FrameTabView::OnZoomOut);
 }
 
 // QPixmap does not derive from QObject, so it needs to be manually deleted.
@@ -40,12 +62,37 @@ FrameTabView::~FrameTabView()
     delete m_image;
 }
 
+void FrameTabView::OnCalculateInitialScale()
+{
+    if (!m_image->isNull() && m_initial_scale_needed)
+    {
+        QSize viewport_size = m_scroll_area->viewport()->size();
+        QSize image_size = m_image->size();
+
+        double width_ratio = (double)viewport_size.width() / image_size.width();
+        double height_ratio = (double)viewport_size.height() / image_size.height();
+
+        // Use the smaller ratio to guarantee the whole image fits.
+        m_scale_factor = qMin(width_ratio, height_ratio);
+
+        ScaleAndDisplayImage();
+
+        // Mark the initial scaling as complete.
+        m_initial_scale_needed = false;
+        m_initial_scale_factor = m_scale_factor;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
 {
     if (m_image->load(file_path))
     {
-        m_image_label->setPixmap(*m_image);
-        m_image_label->update();
+        m_scale_factor = 1.0;
+        m_initial_scale_needed = true;
+
+        // Defer the scaling calculation until the event queue has processed
+        QTimer::singleShot(10, this, &FrameTabView::OnCalculateInitialScale);
     }
     else
     {
@@ -54,18 +101,32 @@ void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
     }
 }
 
-void FrameTabView::resizeEvent(QResizeEvent *event)
+void FrameTabView::ScaleAndDisplayImage()
 {
-    QWidget::resizeEvent(event);
+    if (m_image->isNull())
+        return;
 
-    if (!m_image->isNull())
+    QSize new_size = m_image->size() * m_scale_factor;
+
+    QPixmap scaled_image = m_image->scaled(new_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+    m_image_label->setPixmap(scaled_image);
+    m_image_label->resize(scaled_image.size());
+}
+
+//--------------------------------------------------------------------------------------------------
+void FrameTabView::OnZoomIn()
+{
+    m_scale_factor *= 1.25;
+    ScaleAndDisplayImage();
+}
+
+//--------------------------------------------------------------------------------------------------
+void FrameTabView::OnZoomOut()
+{
+    if (m_scale_factor / 1.25 > m_initial_scale_factor)
     {
-        QSize label_size = m_image_label->size();
-
-        QPixmap scaled_image = m_image->scaled(label_size,
-                                               Qt::KeepAspectRatio,
-                                               Qt::SmoothTransformation);
-
-        m_image_label->setPixmap(scaled_image);
+        m_scale_factor /= 1.25;
+        ScaleAndDisplayImage();
     }
 }

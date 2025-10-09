@@ -426,7 +426,7 @@ MainWindow::MainWindow()
                                                      m_data_core->GetCommandHierarchy(),
                                                      this);
 
-        m_frame_tab_view = new FrameTabView();
+        m_frame_tab_view = new FrameTabView(this);
 
         m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 

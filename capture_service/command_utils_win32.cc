@@ -172,4 +172,15 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
     return LogCommand(command, output, ret);
 }
 
+absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
+{
+    wchar_t buffer[4096];
+    DWORD   length = GetModuleFileNameW(nullptr, buffer, sizeof(buffer));
+    if (length > 0)
+    {
+        return std::filesystem::path(buffer).parent_path();
+    }
+    return absl::InternalError("Failed to get executable directory.");
+}
+
 }  // namespace Dive

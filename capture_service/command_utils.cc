@@ -72,4 +72,15 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
     return LogCommand(command, output, ret);
 }
 
+absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
+{
+    char    buffer[PATH_MAX];
+    ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
+    if (length > 0)
+    {
+        return std::filesystem::path(buffer).parent_path();
+    }
+    return absl::InternalError("Failed to get executable directory.");
+}
+
 }  // namespace Dive

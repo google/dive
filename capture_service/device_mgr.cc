@@ -324,35 +324,46 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 std::filesystem::path ResolveAndroidLibPath(const std::string &name,
                                             const std::string &device_architecture)
 {
-    LOGD("cwd: %s\n", std::filesystem::current_path().string().c_str());
-    std::vector<std::filesystem::path> search_paths{ std::filesystem::path{ "./install" },
-                                                     std::filesystem::path{
-                                                     "../../build_android/Release/bin" },
-                                                     std::filesystem::path{ "../../install" },
-                                                     std::filesystem::path{ "./" } };
-
-    if (device_architecture != "")
+    std::filesystem::path                 exe_dir;
+    absl::StatusOr<std::filesystem::path> ret = GetExecutableDirectory();
+    if (ret.ok())
     {
-        const std::string gfxr_layer_path = "/gfxr_layer/jni/" + device_architecture;
-        search_paths.push_back(std::filesystem::path{ "./install" + gfxr_layer_path });
-        search_paths.push_back(std::filesystem::path{ "../../install" + gfxr_layer_path });
-        search_paths.push_back(std::filesystem::path{ "." + gfxr_layer_path });
+        exe_dir = *ret;
+    }
+    else
+    {
+        LOGW("Could not determine executable directory: %s. Search will not include "
+             "executable-relative paths.",
+             ret.status().message().data());
     }
 
-    std::filesystem::path lib_path{ name };
+    std::vector<std::filesystem::path> search_paths{
+        exe_dir / "install", "./install", "../../build_android/Release/bin", "../../install", "./"
+    };
+
+    if (!device_architecture.empty())
+    {
+        const std::filesystem::path gfxr_sub_path = std::filesystem::path("gfxr_layer") / "jni" /
+                                                    device_architecture;
+
+        search_paths.push_back(exe_dir / "install" / gfxr_sub_path);
+        search_paths.push_back("./install" / gfxr_sub_path);
+        search_paths.push_back("../../install" / gfxr_sub_path);
+        search_paths.push_back("." / gfxr_sub_path);
+    }
 
     for (const auto &p : search_paths)
     {
-        lib_path = p / name;
-        if (std::filesystem::exists(lib_path))
+        const auto potential_path = p / name;
+        if (std::filesystem::exists(potential_path))
         {
-            lib_path = std::filesystem::canonical(lib_path);
-            break;
+            auto canonical_path = std::filesystem::canonical(potential_path);
+            LOGD("Found %s at %s \n", name.c_str(), canonical_path.generic_string().c_str());
+            return canonical_path;
         }
     }
-
-    LOGD("%s is at %s \n", name.c_str(), lib_path.generic_string().c_str());
-    return lib_path;
+    LOGE("Could not find '%s' in any of the search paths. \n", name.c_str());
+    return {};
 }
 
 absl::Status AndroidDevice::ForwardFirstAvailablePort()

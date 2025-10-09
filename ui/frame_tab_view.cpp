@@ -22,7 +22,7 @@
 FrameTabView::FrameTabView(QWidget *parent) :
     QWidget(parent)
 {
-    m_image_label = new QLabel();
+    m_image_label = new QLabel(this);
     m_image_label->setAlignment(Qt::AlignCenter);
     m_image_label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     m_image_label->setScaledContents(true);
@@ -32,6 +32,12 @@ FrameTabView::FrameTabView(QWidget *parent) :
 
     QVBoxLayout *main_layout = new QVBoxLayout(this);
     main_layout->addWidget(m_image_label);
+}
+
+// QPixmap does not derive from QObject, so it needs to be manually deleted.
+FrameTabView::~FrameTabView()
+{
+    delete m_image;
 }
 
 void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)

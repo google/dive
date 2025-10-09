@@ -23,6 +23,7 @@ class FrameTabView : public QWidget
     Q_OBJECT
 public:
     explicit FrameTabView(QWidget *parent = nullptr);
+    ~FrameTabView() override;
 
 public slots:
     void OnCaptureScreenshotLoaded(const QString &file_path);

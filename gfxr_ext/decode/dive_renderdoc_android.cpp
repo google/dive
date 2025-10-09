@@ -60,7 +60,11 @@ RENDERDOC_API_1_0_0* LoadRenderDocApi()
         return nullptr;
     }
 
-    GFXRECON_LOG_INFO("Loaded RenderDoc In-Application API v1.0.0");
+    int major = 0;
+    int minor = 0;
+    int patch = 0;
+    renderdoc_api->GetAPIVersion(&major, &minor, &patch);
+    GFXRECON_LOG_INFO("Loaded RenderDoc In-Application API v%d.%d.%d", major, minor, patch);
     return renderdoc_api;
 }
 

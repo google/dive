@@ -24,7 +24,8 @@ GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 // Find and load the RenderDoc In-Application API. Returns nullptr on failure. The program or app
-// must be launched with the RenderDoc capture layer.
+// must be launched with the RenderDoc capture layer. It is unclear how thread safe the API is so
+// assume that it is thread-unsafe.
 const RENDERDOC_API_1_0_0* GetRenderDocApi();
 
 GFXRECON_END_NAMESPACE(decode)

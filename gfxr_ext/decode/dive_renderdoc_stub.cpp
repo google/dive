@@ -19,7 +19,7 @@ limitations under the License.
 // Fix warning 4003. util/platform.h (included by util/logging.h) includes windows.h (which defines
 // max as a macro) but calls std::numeric_limits::max() (which the proprocessor substitutes
 // incorrectly for the macro). Any file including platform.h directly or transitively (i.e. via
-// util/logging.g) will have this problem when compiled on Windows (i.e. for unit tests)
+// util/logging.h) will have this problem when compiled on Windows (i.e. for unit tests)
 #define NOMINMAX
 
 #include "util/defines.h"

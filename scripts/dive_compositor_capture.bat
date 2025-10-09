@@ -15,12 +15,25 @@
 @echo off
 setlocal enabledelayedexpansion
 
+CALL :setup
+CALL :is_passthrough
+if %ERRORLEVEL% equ 0 (
+    echo "Warning: Capturing in passthrough mode is not supported."
+    CALL :cleanup
+    exit /b 0
+)
+CALL :trigger_capture
+CALL :cleanup
+
+endlocal
+GOTO :eof
+
+:setup
 set COMPOSITOR_CAPTURE_DIR=/data/local/tmp/gfxr_capture/compositor
 set TIME_TO_WAIT_FOR_RESTART=30
 
 adb root
 adb shell setenforce 0
-
 adb shell mkdir -p /data/local/debug/vulkan/
 adb push install/gfxr_layer/jni/arm64-v8a/libVkLayer_gfxreconstruct.so /data/local/debug/vulkan
 adb shell mkdir -p %COMPOSITOR_CAPTURE_DIR%
@@ -35,12 +48,12 @@ adb shell setprop compositor.lazy_depth_buffer false
 
 adb shell setprop cpm.gfxr_layer 1
 adb shell stop && adb shell start
-
 REM TODO(b/449739284): find a better way to detect surfaceflinger done initialization.
 echo Waiting for surfaceflinger to restart...
 timeout /t %TIME_TO_WAIT_FOR_RESTART% /nobreak
+GOTO :eof
 
-GOTO :while_loop
+:trigger_capture
 :while_loop
     echo Press key g+enter to trigger a capture and g+enter to retrieve the capture.
     echo Press any other key+enter to stop the application.
@@ -56,19 +69,28 @@ GOTO :while_loop
     adb shell setprop debug.gfxrecon.capture_android_trigger false
     adb pull %COMPOSITOR_CAPTURE_DIR% ./captures
 
-    for /f %%f in ('adb shell ls %COMPOSITOR_CAPTURE_DIR%') do (
+    for /f "delims=" %%f in ('adb shell ls %COMPOSITOR_CAPTURE_DIR%') do (
         adb shell rm "%COMPOSITOR_CAPTURE_DIR%/%%f"
     )
     GOTO :while_loop
 :end_while
+GOTO :eof
 
-REM clean up
+:cleanup
 adb shell rm -rf %COMPOSITOR_CAPTURE_DIR%
 adb shell rm /data/local/debug/vulkan/libVkLayer_gfxreconstruct.so
 adb shell setprop cpm.gfxr_layer 0
-adb shell setprop persist.compositor.protected_context "\"\""
-adb shell setprop persist.compositor.tiled_rendering "\"\""
-adb shell setprop compositor.lazy_depth_buffer "\"\""
+adb shell setprop persist.compositor.protected_context '""'
+adb shell setprop persist.compositor.tiled_rendering '""'
+adb shell setprop compositor.lazy_depth_buffer '""'
 adb shell stop && adb shell start
+GOTO :eof
 
-endlocal
+:is_passthrough
+for /f "tokens=2 delims=: " %%a in ('adb shell "dumpsys cpm | grep -A 2 ''XrPassthroughController:'' | awk ''/running:/ {print $2}'''"') do (
+    if "%%a"=="true" (
+        exit /b 0
+    )
+)
+exit /b 1
+GOTO :eof

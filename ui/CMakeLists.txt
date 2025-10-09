@@ -97,6 +97,7 @@ endif()
 # Collect 3rd party licenses
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
+file(COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/renderdoc/)
 
 # Generate license NOTICE file
 include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")
@@ -108,4 +109,5 @@ if (MSVC)
 endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" DESTINATION "${CMAKE_INSTALL_PREFIX}")
 add_dependencies(${PROJECT_NAME} notice_file)

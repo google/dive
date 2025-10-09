@@ -161,7 +161,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
-        // value_or(1) since the default used by DiveFileConsumer is 1
+        // value_or(1) since the default used by DiveFileProcessor is 1
         if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
         {
             return absl::InvalidArgumentError(

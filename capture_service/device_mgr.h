@@ -86,7 +86,9 @@ struct GfxrReplaySettings
 
     // Metrics are collected only with kPerfCounters runs
     std::vector<std::string> metrics = {};
-    // Loop settings for GFXR replay binary are hardcoded except for kNormal and kGpuTiming runs
+    // Loop settings for GFXR replay binary are hardcoded except for kNormal and kGpuTiming runs.
+    // Can also be set by providing --loop-single-frame-count in replay_flags_str and calling
+    // ValidateGfxrReplaySettings.
     std::optional<int> loop_single_frame_count = std::nullopt;
 };
 

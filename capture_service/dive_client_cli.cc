@@ -121,6 +121,57 @@ std::string AbslUnparseFlag(Command command)
     }
 }
 
+// Abseil flags parsing uses ADL. GfxrReplayOptions is in the Dive namespace so AbslParseFlag
+// and AbslUnparseFlag need to be as well.
+namespace Dive
+{
+
+bool AbslParseFlag(absl::string_view text, GfxrReplayOptions* run_type, std::string* error)
+{
+    if (text == "normal")
+    {
+        *run_type = GfxrReplayOptions::kNormal;
+        return true;
+    }
+    if (text == "pm4_dump")
+    {
+        *run_type = GfxrReplayOptions::kPm4Dump;
+        return true;
+    }
+    if (text == "perf_counters")
+    {
+        *run_type = GfxrReplayOptions::kPerfCounters;
+        return true;
+    }
+    if (text == "gpu_timing")
+    {
+        *run_type = GfxrReplayOptions::kGpuTiming;
+        return true;
+    }
+    *error = "unknown value for enumeration";
+    return false;
+}
+
+std::string AbslUnparseFlag(GfxrReplayOptions run_type)
+{
+    switch (run_type)
+    {
+    case GfxrReplayOptions::kNormal:
+        return "normal";
+    case GfxrReplayOptions::kPm4Dump:
+        return "pm4_dump";
+    case GfxrReplayOptions::kPerfCounters:
+        return "perf_counters";
+    case GfxrReplayOptions::kGpuTiming:
+        return "gpu_timing";
+
+    default:
+        return absl::StrCat(run_type);
+    }
+}
+
+}  // namespace Dive
+
 ABSL_FLAG(Command,
           command,
           Command::kNone,
@@ -169,15 +220,18 @@ ABSL_FLAG(std::string,
           "specify the on-device path of the gfxr capture to replay.");
 ABSL_FLAG(std::string, gfxr_replay_flags, "", "specify flags to pass to gfxr replay.");
 
-ABSL_FLAG(bool, dump_pm4, false, "dump pm4 for gfxr replay");
-
-ABSL_FLAG(bool, enable_perf_counters, false, "enable perf counters for gfxr replay.");
-
-ABSL_FLAG(
-std::vector<std::string>,
-metrics,
-{},
-"comma-separated list of metrics to profile for gfxr_replay command with --enable_perf_counters.");
+ABSL_FLAG(std::vector<std::string>,
+          metrics,
+          {},
+          "comma-separated list of metrics to profile for gfxr_replay command with "
+          "`--gfxr_replay_run_type perf_counters`.");
+ABSL_FLAG(Dive::GfxrReplayOptions,
+          gfxr_replay_run_type,
+          Dive::GfxrReplayOptions::kNormal,
+          "Kind of analysis to perform during replay. Possible values:\n\tnormal: No "
+          "analysis\n\tpm4_dump: Capture all PM4 packets"
+          "\n\tperf_counters: Collect metrics\n\tgpu_timing: Collect GPU timing\n\trenderdoc: "
+          "Create a RenderDoc capture");
 
 void PrintUsage()
 {
@@ -695,22 +749,10 @@ int main(int argc, char** argv)
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = absl::GetFlag(FLAGS_gfxr_replay_file_path);
     replay_settings.local_download_dir = absl::GetFlag(FLAGS_download_dir);
+    replay_settings.run_type = absl::GetFlag(FLAGS_gfxr_replay_run_type);
     replay_settings.replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags);
     replay_settings.metrics = absl::GetFlag(FLAGS_metrics);
-
-    if (absl::GetFlag(FLAGS_dump_pm4))
-    {
-        replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
-    }
-    if (absl::GetFlag(FLAGS_enable_perf_counters))
-    {
-        if (replay_settings.run_type != Dive::GfxrReplayOptions::kNormal)
-        {
-            std::cout << "Cannot use --dump_pm4 and --enable_perf_counters both" << std::endl;
-            return 1;
-        }
-        replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
-    }
+    // loop_single_frame_count is parsed from --gfxr_replay_flags
 
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();

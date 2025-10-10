@@ -185,6 +185,12 @@ Example:
 ./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_flags "--loop-single-frame-count 300"
 ```
 
+To trigger analysis during replay, specify `--gfxr_replay_run_type`. See `--help` for all options.
+
+```
+./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_run_type pm4_dump
+```
+
 #### Cleanup
 
 The command line tool will clean up the device and application automatically at exit. If somehow it crashed and left the device in a uncleaned state, you can run following command to clean it up

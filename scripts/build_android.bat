@@ -99,6 +99,11 @@ popd
     ren replay-*.apk gfxr-replay.apk
     popd
     if not !ERRORLEVEL!==0 exit /b 1
+
+    echo Copying gfxrecon.py into the dive install directory
+    set GFXRECON_PY=!GFXR_ROOT_DIR!\\scripts\\gfxrecon.py
+    xcopy /i !GFXRECON_PY! !DIVE_INSTALL_DIR!
+    if not !ERRORLEVEL!==0 exit /b 1
 ))
 
 echo Start Time: %startTime%

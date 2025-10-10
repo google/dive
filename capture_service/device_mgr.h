@@ -66,6 +66,7 @@ enum class GfxrReplayOptions
     kPm4Dump,       // PM4 data will be captured, producing .rd trace
     kPerfCounters,  // Perf Counter data will be collected using a plugin, producing .csv artifact
     kGpuTiming,     // GPU timing data will be collected, producing .csv artifact
+    kRenderDoc,     // RenderDoc capture will be collected, producing .rdc file
 };
 
 struct GfxrReplaySettings

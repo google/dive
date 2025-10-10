@@ -314,6 +314,50 @@ TEST(ValidateGfxrReplaySettingsTest, LoopSingleFrameCountStringFail)
                          "integer: PLACEHOLDER"));
 }
 
+TEST(ValidateGfxrReplaySettingsTest, RenderDocDefaultsLoopCountToOne)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kRenderDoc;
+
+    GfxrReplaySettings expected_rs = {};
+    expected_rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    expected_rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    expected_rs.run_type = GfxrReplayOptions::kRenderDoc;
+    expected_rs.loop_single_frame_count = 1;
+    expected_rs.replay_flags_str = "--loop-single-frame-count 1";
+
+    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true),
+                IsOkAndHolds(GfxrReplaySettingsEq(expected_rs)));
+}
+
+TEST(ValidateGfxrReplaySettingsTest, RenderDocFailsValidationWithMetrics)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kRenderDoc;
+    rs.metrics = { "PLACEHOLDER_METRICS" };
+
+    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         "Cannot use metrics except for kPerfCounters type run"));
+}
+
+TEST(ValidateGfxrReplaySettingsTest, RenderDocFailsValidationWithExplicitLoopCount)
+{
+    GfxrReplaySettings rs = {};
+    rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    rs.run_type = GfxrReplayOptions::kRenderDoc;
+    rs.loop_single_frame_count = 0;
+
+    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
+                StatusIs(absl::StatusCode::kInvalidArgument,
+                         "loop_single_frame_count is hardcoded for kRenderDoc, do not specify"));
+}
+
 TEST(DeviceManagerTest, EmptySerialIsInvalidForSelectDevice)
 {
     ASSERT_EQ(DeviceManager().SelectDevice("").status().code(), absl::StatusCode::kInvalidArgument);

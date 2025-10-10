@@ -24,6 +24,8 @@
 #include <iostream>
 #include <qtimer.h>
 
+static constexpr double kZoomStepFactor = 1.25;
+
 FrameTabView::FrameTabView(QWidget *parent) :
     QWidget(parent)
 {
@@ -69,8 +71,10 @@ void FrameTabView::OnCalculateInitialScale()
         QSize viewport_size = m_scroll_area->viewport()->size();
         QSize image_size = m_image->size();
 
-        double width_ratio = (double)viewport_size.width() / image_size.width();
-        double height_ratio = (double)viewport_size.height() / image_size.height();
+        double width_ratio = static_cast<double>(viewport_size.width()) /
+                             static_cast<double>(image_size.width());
+        double height_ratio = static_cast<double>(viewport_size.height()) /
+                              static_cast<double>(image_size.height());
 
         // Use the smaller ratio to guarantee the whole image fits.
         m_scale_factor = qMin(width_ratio, height_ratio);
@@ -117,16 +121,16 @@ void FrameTabView::ScaleAndDisplayImage()
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnZoomIn()
 {
-    m_scale_factor *= 1.25;
+    m_scale_factor *= kZoomStepFactor;
     ScaleAndDisplayImage();
 }
 
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnZoomOut()
 {
-    if (m_scale_factor / 1.25 > m_initial_scale_factor)
+    if (m_scale_factor / kZoomStepFactor > m_initial_scale_factor)
     {
-        m_scale_factor /= 1.25;
+        m_scale_factor /= kZoomStepFactor;
         ScaleAndDisplayImage();
     }
 }

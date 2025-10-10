@@ -25,11 +25,26 @@ limitations under the License.
 
 #include "dive_block_data.h"
 #include "dive_pm4_capture.h"
+#include "dive_renderdoc.h"
 
 #include "capture_service/constants.h"
+#include "capture_service/remote_files.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
+
+namespace
+{
+
+bool ShouldCreateRenderDocCapture()
+{
+    std::string property = util::platform::GetEnv(Dive::kReplayCreateRenderDocCapture);
+    // Be a little more generous with the values accepted to avoid frustrating or confusing the
+    // user.
+    return property == "true" || property == "1";
+}
+
+}  // namespace
 
 // TODO GH #1195: frame numbering should be 1-based.
 const uint32_t kFirstFrame = 0;
@@ -140,6 +155,27 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
         // marker, or terminate replay if the loop count has been reached
         if ((loop_single_frame_count_ > 0) && (current_frame_number_ >= loop_single_frame_count_))
         {
+            if (ShouldCreateRenderDocCapture())
+            {
+                // Finalize the RenderDoc capture after all loops have completed. While the intended
+                // use case is to capture only 1 frame (which can be accomplished by setting
+                // loop_single_frame_count_), I don't see any reason to prevent the user from
+                // capturing all loops if they really want to.
+                if (const RENDERDOC_API_1_0_0* renderdoc = GetRenderDocApi(); renderdoc != nullptr)
+                {
+                    if (renderdoc->EndFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr) != 1)
+                    {
+                        GFXRECON_LOG_WARNING(
+                        "EndFrameCapture failed, RenderDoc .rdc capture likely not created!");
+                    }
+                }
+                else
+                {
+                    GFXRECON_LOG_WARNING(
+                    "GetRenderDocApi failed. Could not end RenderDoc capture!");
+                }
+            }
+
             GFXRECON_LOG_INFO("Looped %d frames, terminating replay asap", current_frame_number_);
             return success;
         }
@@ -177,6 +213,22 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
                               "complete. This will impact our ability to gather metrics.");
         }
 #endif
+        // Don't bother trying to start a capture for infinite replay since it will never finish!
+        if (loop_single_frame_count_ > 0 && ShouldCreateRenderDocCapture())
+        {
+            if (const RENDERDOC_API_1_0_0* renderdoc = GetRenderDocApi(); renderdoc != nullptr)
+            {
+                renderdoc->SetCaptureFilePathTemplate(
+                Dive::GetRenderDocCaptureFilePathTemplate(gfxr_file_name_).string().c_str());
+                // Let RenderDoc choose the Vulkan context and window handle since we typically only
+                // expect one of each.
+                renderdoc->StartFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr);
+            }
+            else
+            {
+                GFXRECON_LOG_DEBUG("GetRenderDocApi failed! Could not start RenderDoc capture.");
+            }
+        }
     }
 
     return success;

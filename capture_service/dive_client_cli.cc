@@ -148,6 +148,11 @@ bool AbslParseFlag(absl::string_view text, GfxrReplayOptions* run_type, std::str
         *run_type = GfxrReplayOptions::kGpuTiming;
         return true;
     }
+    if (text == "renderdoc")
+    {
+        *run_type = GfxrReplayOptions::kRenderDoc;
+        return true;
+    }
     *error = "unknown value for enumeration";
     return false;
 }
@@ -164,6 +169,8 @@ std::string AbslUnparseFlag(GfxrReplayOptions run_type)
         return "perf_counters";
     case GfxrReplayOptions::kGpuTiming:
         return "gpu_timing";
+    case GfxrReplayOptions::kRenderDoc:
+        return "renderdoc";
 
     default:
         return absl::StrCat(run_type);

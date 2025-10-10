@@ -153,6 +153,23 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         break;
     }
+    case GfxrReplayOptions::kRenderDoc:
+    {
+        if (validated_settings.loop_single_frame_count.has_value())
+        {
+            return absl::InvalidArgumentError(
+            "loop_single_frame_count is hardcoded for kRenderDoc, do not specify");
+        }
+        // Since RenderDoc is a debugging tool, not a profiling tool, we only need one copy of all
+        // draw calls. Having multiple copies just bloats the file size.
+        validated_settings.loop_single_frame_count = 1;
+        if (!validated_settings.metrics.empty())
+        {
+            return absl::InvalidArgumentError(
+            "Cannot use metrics except for kPerfCounters type run");
+        }
+        break;
+    }
     case GfxrReplayOptions::kGpuTiming:
     default:
     {
@@ -685,6 +702,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
                               kReplayPm4DumpFileNamePropertyName,
                               dump_pm4_file_name);
         RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+    }
+    else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
+    {
+        // TODO: b/448083729 - Implement. Here specifically, set up the capture layer.
+        return absl::UnimplementedError("RenderDoc capture not implemented");
     }
 
     LOGD("RunReplayGfxrScript(): RUN\n");

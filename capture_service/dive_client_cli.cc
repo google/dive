@@ -438,6 +438,60 @@ absl::Status IsCaptureDirectoryBusy(Dive::DeviceManager& mgr,
                              absl::InternalError("Capture file operation in progress.");
 }
 
+void RenameScreenshotFile(std::filesystem::path full_target_download_dir)
+{
+    std::filesystem::path gfxr_file_path;
+    std::filesystem::path screenshot_file_path;
+
+    // Iterate over all items in the newly downloaded directory
+    for (const auto& entry : std::filesystem::directory_iterator(full_target_download_dir))
+    {
+        if (entry.is_regular_file())
+        {
+            if (entry.path().extension() == ".gfxr")
+            {
+                gfxr_file_path = entry.path();
+            }
+            else if (entry.path().extension() == ".png")
+            {
+                screenshot_file_path = entry.path();
+            }
+        }
+    }
+
+    // Perform the rename if both files were successfully located
+    if (!gfxr_file_path.empty() && !screenshot_file_path.empty())
+    {
+
+        std::string           base_name = gfxr_file_path.stem().string();
+        std::filesystem::path new_screenshot_file_path = full_target_download_dir /
+                                                         absl::StrCat(base_name, ".png");
+
+        try
+        {
+            if (screenshot_file_path != new_screenshot_file_path)
+            {
+                std::filesystem::rename(screenshot_file_path, new_screenshot_file_path);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Warning: Failed to rename screenshot file locally: " << e.what()
+                      << std::endl;
+        }
+    }
+    else if (gfxr_file_path.empty())
+    {
+        std::cout << "Warning: Could not find .gfxr file in downloaded directory to perform rename."
+                  << std::endl;
+    }
+    else if (screenshot_file_path.empty())
+    {
+        std::cout << "Warning: Could not find screenshot file in downloaded directory."
+                  << std::endl;
+    }
+}
+
 bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
     std::filesystem::path download_dir = absl::GetFlag(FLAGS_download_dir);
@@ -492,56 +546,7 @@ bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_captu
         return false;
     }
 
-    std::filesystem::path gfxr_file_path;
-    std::filesystem::path screenshot_file_path;
-
-    // Iterate over all items in the newly downloaded directory
-    for (const auto& entry : std::filesystem::directory_iterator(full_target_download_dir))
-    {
-        if (entry.is_regular_file())
-        {
-            if (entry.path().extension() == ".gfxr")
-            {
-                gfxr_file_path = entry.path();
-            }
-            else if (entry.path().extension() == ".png")
-            {
-                screenshot_file_path = entry.path();
-            }
-        }
-    }
-
-    // Perform the rename if both files were successfully located
-    if (!gfxr_file_path.empty() && !screenshot_file_path.empty())
-    {
-
-        std::string           base_name = gfxr_file_path.stem().string();
-        std::filesystem::path new_screenshot_file_path = full_target_download_dir /
-                                                         absl::StrCat(base_name, ".png");
-
-        try
-        {
-            if (screenshot_file_path != new_screenshot_file_path)
-            {
-                std::filesystem::rename(screenshot_file_path, new_screenshot_file_path);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "Warning: Failed to rename screenshot file locally: " << e.what()
-                      << std::endl;
-        }
-    }
-    else if (gfxr_file_path.empty())
-    {
-        std::cout << "Warning: Could not find .gfxr file in downloaded directory to perform rename."
-                  << std::endl;
-    }
-    else if (screenshot_file_path.empty())
-    {
-        std::cout << "Warning: Could not find screenshot file in downloaded directory."
-                  << std::endl;
-    }
+    RenameScreenshotFile(full_target_download_dir);
 
     std::cout << "Capture sucessfully saved at " << full_target_download_dir << std::endl;
     return true;

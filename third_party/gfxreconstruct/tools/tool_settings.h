@@ -938,21 +938,21 @@ static std::vector<int32_t> GetFilteredMsgs(const gfxrecon::util::ArgumentParser
 static std::optional<uint64_t> GetLoopSingleFrameCount(const gfxrecon::util::ArgumentParser& arg_parser)
 {
     const auto& value = arg_parser.GetArgumentValue(kLoopSingleFrameCount);
+    if (value.empty())
+    {
+        return std::nullopt;
+    }
 
     int n = 0;
-
-    if (!value.empty())
+    try
     {
-        try
-        {
-            n = std::stoi(value);
-        }
-        catch (std::exception& e)
-        {
-            GFXRECON_LOG_WARNING(
-                "Ignoring invalid '%s' value: '%s', error: %s", kLoopSingleFrameCount, value.c_str(), e.what());
-            return std::nullopt;
-        }
+        n = std::stoi(value);
+    }
+    catch (std::exception& e)
+    {
+        GFXRECON_LOG_WARNING(
+            "Ignoring invalid '%s' value: '%s', error: %s", kLoopSingleFrameCount, value.c_str(), e.what());
+        return std::nullopt;
     }
     if (n < 0)
     {

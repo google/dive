@@ -33,6 +33,7 @@ class QListWidget;
 class QSpinBox;
 class QTextEdit;
 class MainWindow;
+class QCheckBox;
 
 namespace Dive
 {
@@ -92,6 +93,8 @@ private:
                                                   const std::string   &remote_gfxr_file);
     absl::Status                GpuTimeReplay(Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file);
+    absl::Status                RenderDocReplay(Dive::DeviceManager &device_manager,
+                                                const std::string   &remote_gfxr_file);
 
     QLabel      *m_metrics_list_label;
     QListWidget *m_metrics_list;
@@ -122,6 +125,10 @@ private:
     QLabel             *m_gpu_time_label;
     QStandardItemModel *m_gpu_time_model;
     QComboBox          *m_gpu_time_box;
+
+    QHBoxLayout *m_renderdoc_capture_layout = nullptr;
+    QLabel      *m_renderdoc_capture_label = nullptr;
+    QCheckBox   *m_renderdoc_capture_box = nullptr;
 
     QHBoxLayout *m_frame_count_layout;
     QLabel      *m_frame_count_label;

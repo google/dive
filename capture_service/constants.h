@@ -53,6 +53,7 @@ inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR re
 inline constexpr char kProfilingMetricsCsvSuffix[] = "_profiling_metrics.csv";
 inline constexpr char kGpuTimingCsvSuffix[] = "_gpu_time.csv";
 inline constexpr char kPm4RdSuffix[] = ".rd";
+inline constexpr char kRenderDocRdcSuffix[] = "_capture.rdc";
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)
@@ -64,5 +65,17 @@ inline constexpr uint32_t kPinGpuClockMHz = 545;
 inline constexpr char     kDeviceGpuMinClockPath[] = "/sys/kernel/gpu/gpu_min_clock";
 inline constexpr char     kDeviceGpuMaxClockPath[] = "/sys/kernel/gpu/gpu_max_clock";
 inline constexpr char     kDeviceCurFreqPath[] = "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq";
+
+// If set then try to use the In-Application API to create a RenderDoc capture of all loops of
+// replay. Assume that only 1 capture is made: it starts after state end marker, and ends after all
+// loops.
+//
+// Hide this functionality behind a property since there may be cases where the user wants to launch
+// replay from the RenderDoc UI instead (mostly for debug).
+//
+// A hard-coded prop is used instead of a command-line arg to avoid having to modify GFXR.
+inline constexpr char kReplayCreateRenderDocCapture[] = "debug.gfxrecon.replay.renderdoc_capture";
+inline constexpr char kRenderDocCaptureLayerName[] = "VK_LAYER_RENDERDOC_Capture";
+inline constexpr char kRenderDocAppName[] = "org.renderdoc.renderdoccmd.arm64";
 
 }  // namespace Dive

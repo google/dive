@@ -17,6 +17,7 @@
 #include "analyze_window.h"
 
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDebug>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -148,6 +149,15 @@ QWidget                                                            *parent) :
     m_dump_pm4_box->setCurrentIndex(1);
     m_dump_pm4_layout->addWidget(m_dump_pm4_box);
 
+    // Enable RenderDoc capture
+    m_renderdoc_capture_layout = new QHBoxLayout();
+    m_renderdoc_capture_label = new QLabel(tr("Enable RenderDoc capture:"));
+    m_renderdoc_capture_layout->addWidget(m_renderdoc_capture_label);
+    m_renderdoc_capture_box = new QCheckBox();
+    m_renderdoc_capture_box->setCheckState(Qt::Unchecked);
+    m_renderdoc_capture_layout->addWidget(m_renderdoc_capture_box);
+    m_renderdoc_capture_layout->addStretch();
+
     // Single Frame Loop Count
     m_frame_count_layout = new QHBoxLayout();
     m_frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
@@ -180,6 +190,7 @@ QWidget                                                            *parent) :
     m_right_panel_layout->addLayout(m_device_layout);
     m_right_panel_layout->addLayout(m_selected_file_layout);
     m_right_panel_layout->addLayout(m_dump_pm4_layout);
+    m_right_panel_layout->addLayout(m_renderdoc_capture_layout);
     m_right_panel_layout->addLayout(m_gpu_time_layout);
     m_right_panel_layout->addLayout(m_frame_count_layout);
     m_right_panel_layout->addLayout(m_replay_warning_layout);
@@ -613,6 +624,22 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
+absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
+                                            const std::string   &remote_gfxr_file)
+{
+    SetReplayButton("Replaying with RenderDoc...", false);
+    Dive::GfxrReplaySettings replay_settings;
+    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.local_download_dir = m_local_capture_file_directory.string();
+    replay_settings.run_type = Dive::GfxrReplayOptions::kRenderDoc;
+
+    // Variant-specific config
+    // loop count will be set appropriately by ValidateGfxrReplaySettings
+
+    return device_manager.RunReplayApk(replay_settings);
+}
+
+//--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnReplay()
 {
     Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
@@ -686,17 +713,21 @@ void AnalyzeDialog::OnReplay()
                                                             Dive::kGpuTimingCsvSuffix);
     std::filesystem::path pm4_rd = GetFullLocalPath(gfxr_filename_stem.string(),
                                                     Dive::kPm4RdSuffix);
+    std::filesystem::path renderdoc_rdc = GetFullLocalPath(gfxr_filename_stem.string(),
+                                                           Dive::kRenderDocRdcSuffix);
     qDebug() << "Attempting to delete temporary artifacts from previous runs...";
     AttemptDeletingTemporaryLocalFile(perf_counter_csv);
     AttemptDeletingTemporaryLocalFile(gpu_timing_csv);
     AttemptDeletingTemporaryLocalFile(pm4_rd);
+    // Keep RenderDoc file since it's not part of the "Dive file"
 
     // Get info on which variants of replay to initiate runs for
     bool dump_pm4_run_enabled = m_dump_pm4_box->currentIndex() == 0;
     bool gpu_time_run_enabled = m_gpu_time_box->currentIndex() == 0;
+    bool renderdoc_run_enabled = m_renderdoc_capture_box->isChecked();
     bool perf_counter_run_enabled = !m_enabled_metrics_vector->empty();
     bool normal_run_enabled = (!dump_pm4_run_enabled) && (!gpu_time_run_enabled) &&
-                              (!perf_counter_run_enabled);
+                              (!perf_counter_run_enabled) && (!renderdoc_run_enabled);
 
     // Run only replay with default settings
     if (normal_run_enabled)
@@ -775,6 +806,21 @@ void AnalyzeDialog::OnReplay()
     {
         qDebug() << "Cleared gpu timing data";
         emit OnDisplayGpuTimingResults("");
+    }
+
+    if (renderdoc_run_enabled)
+    {
+        ret = RenderDocReplay(device_manager, remote_file.value());
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to run replay with RenderDoc Capture: ",
+                                               ret.message());
+            qDebug() << err_msg.c_str();
+            ShowErrorMessage(err_msg);
+            SetReplayButton(kDefaultReplayButtonText, true);
+            return;
+        }
+        qDebug() << "RenderDoc capture saved to: " << renderdoc_rdc.string().c_str();
     }
 
     SetReplayButton(kDefaultReplayButtonText, true);

@@ -459,36 +459,36 @@ void RenameScreenshotFile(std::filesystem::path full_target_download_dir)
         }
     }
 
-    // Perform the rename if both files were successfully located
-    if (!gfxr_file_path.empty() && !screenshot_file_path.empty())
-    {
-
-        std::string           base_name = gfxr_file_path.stem().string();
-        std::filesystem::path new_screenshot_file_path = full_target_download_dir /
-                                                         absl::StrCat(base_name, ".png");
-
-        try
-        {
-            if (screenshot_file_path != new_screenshot_file_path)
-            {
-                std::filesystem::rename(screenshot_file_path, new_screenshot_file_path);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "Warning: Failed to rename screenshot file locally: " << e.what()
-                      << std::endl;
-        }
-    }
-    else if (gfxr_file_path.empty())
+    // Check if both files were successfully located
+    if (gfxr_file_path.empty())
     {
         std::cout << "Warning: Could not find .gfxr file in downloaded directory to perform rename."
                   << std::endl;
+        return;
     }
-    else if (screenshot_file_path.empty())
+
+    if (screenshot_file_path.empty())
     {
         std::cout << "Warning: Could not find screenshot file in downloaded directory."
                   << std::endl;
+        return;
+    }
+
+    // Perform the rename if both files were successfully located
+    std::string           base_name = gfxr_file_path.stem().string();
+    std::filesystem::path new_screenshot_file_path = full_target_download_dir /
+                                                     absl::StrCat(base_name, ".png");
+
+    try
+    {
+        if (screenshot_file_path != new_screenshot_file_path)
+        {
+            std::filesystem::rename(screenshot_file_path, new_screenshot_file_path);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << "Warning: Failed to rename screenshot file locally: " << e.what() << std::endl;
     }
 }
 

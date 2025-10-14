@@ -33,6 +33,7 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 #include <filesystem>
+#include <future>
 #include <optional>
 #include <qapplication.h>
 #include <qtemporarydir.h>
@@ -43,6 +44,7 @@
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
 #include "settings.h"
+#include "overlay.h"
 #include "common/macros.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -68,6 +70,8 @@ QWidget                                                            *parent) :
     m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
+
+    m_overlay = new Overlay(this);
 
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
@@ -224,6 +228,14 @@ QWidget                                                            *parent) :
                      &AnalyzeDialog::OnDeviceListRefresh);
     QObject::connect(m_open_files_button, &QPushButton::clicked, this, &AnalyzeDialog::OnOpenFile);
     QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
+
+    QObject::connect(this,
+                     &AnalyzeDialog::ReplayStatusUpdated,
+                     this,
+                     &AnalyzeDialog::OnReplayStatusUpdate);
+
+    QObject::connect(this, &AnalyzeDialog::DisableOverlay, this, &AnalyzeDialog::OnDisableOverlay);
+    QObject::connect(this, &AnalyzeDialog::OverlayMessage, this, &AnalyzeDialog::OnOverlayMessage);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -231,6 +243,29 @@ AnalyzeDialog::~AnalyzeDialog()
 {
     qDebug() << "AnalyzeDialog destroyed.";
     Dive::GetDeviceManager().RemoveDevice();
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::resizeEvent(QResizeEvent *event)
+{
+    QDialog::resizeEvent(event);
+    m_overlay->UpdateSize(rect());
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::OnOverlayMessage(const QString &message)
+{
+    setDisabled(true);
+    m_overlay->SetMessage(message, /*timed*/ true);
+    if (m_overlay->isHidden())
+        m_overlay->show();
+}
+
+void AnalyzeDialog::OnDisableOverlay()
+{
+    setDisabled(false);
+    m_overlay->SetMessage(QString());
+    m_overlay->hide();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -556,7 +591,7 @@ std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_st
 absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
                                          const std::string   &remote_gfxr_file)
 {
-    SetReplayButton("Replaying...", false);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kStartNormalReplay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
@@ -572,7 +607,7 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
 absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
 {
-    SetReplayButton("Replaying with PM4 dump enabled...", false);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kStartPm4Replay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
@@ -585,7 +620,7 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
 absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file)
 {
-    SetReplayButton("Replaying with perf counter settings...", false);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kStartPerfCounterReplay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
@@ -601,7 +636,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
 absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file)
 {
-    SetReplayButton("Replaying with GPU timing enabled...", false);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kStartGpuTimeReplay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
@@ -632,20 +667,109 @@ absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnReplay()
 {
+    if (m_replay_active.valid())
+    {
+        return;
+    }
+
+    OverlayMessage("Replaying...");
+
+    m_replay_active = std::async([=]() {
+        ReplayImpl();
+        UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
+    });
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString &error_message)
+{
+    // Cast from qt known type.
+    auto status_code = static_cast<ReplayStatusUpdateCode>(status_code_int);
+    bool execute_update = m_status_update_queue.empty();
+    m_status_update_queue.push_back({ status_code, error_message });
+    if (!execute_update)
+    {
+        // Only execute update if it's first call on the stack.
+        // Qt does recursive signal processing sometime.
+        return;
+    }
+    ExecuteStatusUpdate();
+}
+void AnalyzeDialog::ExecuteStatusUpdate()
+{
+    for (size_t index = 0; index < m_status_update_queue.size(); ++index)
+    {
+        // Note: copy the item to prevent iterator invalidation.
+        StatusUpdateQueueItem item = m_status_update_queue[index];
+        switch (item.status)
+        {
+        case ReplayStatusUpdateCode::kDone:
+            if (m_replay_active.valid())
+            {
+                m_replay_active.get();
+            }
+            DisableOverlay();
+            break;
+        case ReplayStatusUpdateCode::kSuccess:
+            SetReplayButton(kDefaultReplayButtonText, true);
+            OverlayMessage("Replay done.");
+            break;
+        case ReplayStatusUpdateCode::kFailure:
+            ShowErrorMessage(item.error_message.toStdString());
+            SetReplayButton(kDefaultReplayButtonText, true);
+            OverlayMessage("Replay failed.");
+            break;
+        case ReplayStatusUpdateCode::kSetup:
+            SetReplayButton("Setting up replay...", false);
+            OverlayMessage("Setting up replay...");
+            break;
+        case ReplayStatusUpdateCode::kSetupDeviceFailure:
+            ShowErrorMessage(item.error_message.toStdString());
+            SetReplayButton(kDefaultReplayButtonText, false);
+            OnDeviceListRefresh();
+            break;
+        case ReplayStatusUpdateCode::kStartNormalReplay:
+            SetReplayButton("Replaying...", false);
+            OverlayMessage("Replaying...");
+            break;
+        case ReplayStatusUpdateCode::kStartPm4Replay:
+            SetReplayButton("Replaying with PM4 dump enabled...", false);
+            OverlayMessage("Replaying with PM4 dump enabled...");
+            break;
+        case ReplayStatusUpdateCode::kStartGpuTimeReplay:
+            SetReplayButton("Replaying with GPU timing enabled...", false);
+            OverlayMessage("Replaying with GPU timing enabled...");
+            break;
+        case ReplayStatusUpdateCode::kStartPerfCounterReplay:
+            SetReplayButton("Replaying with perf counter settings...", false);
+            OverlayMessage("Replaying with perf counter settings...");
+            break;
+        }
+    }
+    m_status_update_queue.clear();
+}
+
+void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status,
+                                       const std::string     &error_message)
+{
+    qDebug() << error_message.c_str();
+    ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(error_message));
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::ReplayImpl()
+{
     Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
     auto                 device = device_manager.GetDevice();
 
-    SetReplayButton("Setting up replay...", false);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kSetup);
 
     // Setup the device
     absl::Status ret = device->SetupDevice();
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Fail to setup device: ", ret.message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        SetReplayButton(kDefaultReplayButtonText, false);
-        OnDeviceListRefresh();
+        UpdateReplayStatus(ReplayStatusUpdateCode::kSetupDeviceFailure, err_msg);
         return;
     }
 
@@ -654,9 +778,7 @@ void AnalyzeDialog::OnReplay()
     if (!asset_file.ok())
     {
         std::string err_msg = absl::StrCat(asset_file.status().message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        SetReplayButton(kDefaultReplayButtonText, true);
+        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
         return;
     }
 
@@ -665,9 +787,7 @@ void AnalyzeDialog::OnReplay()
     {
         std::string err_msg = absl::StrCat("Failed to deploy replay apk: ",
                                            remote_file.status().message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        SetReplayButton(kDefaultReplayButtonText, true);
+        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
         return;
     }
 
@@ -676,9 +796,7 @@ void AnalyzeDialog::OnReplay()
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to push files to device: ", ret.message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        SetReplayButton(kDefaultReplayButtonText, true);
+        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
         return;
     }
 
@@ -688,9 +806,7 @@ void AnalyzeDialog::OnReplay()
     {
         std::string err_msg = absl::StrCat("Failed to set download directory: ",
                                            ret2.status().message());
-        qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
-        SetReplayButton(kDefaultReplayButtonText, true);
+        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
         return;
     }
     m_local_capture_file_directory = ret2.value();
@@ -726,13 +842,11 @@ void AnalyzeDialog::OnReplay()
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run normal replay: ", ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            SetReplayButton(kDefaultReplayButtonText, true);
+            UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
 
-        SetReplayButton(kDefaultReplayButtonText, true);
+        UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
         // Reload the capture so the correct PM4 data (or absence thereof) is displayed
         emit ReloadCapture(m_selected_capture_file_string);
         return;
@@ -745,14 +859,12 @@ void AnalyzeDialog::OnReplay()
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run pm4 replay: ", ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            SetReplayButton(kDefaultReplayButtonText, true);
+            UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
+        // Reload the capture so the correct PM4 data (or absence thereof) is displayed
+        emit ReloadCapture(m_selected_capture_file_string);
     }
-    // Reload the capture so the correct PM4 data (or absence thereof) is displayed
-    emit ReloadCapture(m_selected_capture_file_string);
 
     // Run the perf counter replay
     if (perf_counter_run_enabled)
@@ -762,19 +874,17 @@ void AnalyzeDialog::OnReplay()
         {
             std::string err_msg = absl::StrCat("Failed to run perf counter replay: ",
                                                ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            SetReplayButton(kDefaultReplayButtonText, true);
+            UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
         qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
 
-        emit OnDisplayPerfCounterResults(perf_counter_csv.string(), m_available_metrics);
+        emit OnDisplayPerfCounterResults(QString::fromStdString(perf_counter_csv.string()));
     }
     else
     {
         qDebug() << "Cleared perf counter data";
-        emit OnDisplayPerfCounterResults("", std::nullopt);
+        emit OnDisplayPerfCounterResults("");
     }
 
     // Run the gpu_time replay
@@ -784,9 +894,7 @@ void AnalyzeDialog::OnReplay()
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run gpu_time replay: ", ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            SetReplayButton(kDefaultReplayButtonText, true);
+            UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
         qDebug() << "Loading gpu timing data: " << gpu_timing_csv.string().c_str();
@@ -805,13 +913,11 @@ void AnalyzeDialog::OnReplay()
         {
             std::string err_msg = absl::StrCat("Failed to run replay with RenderDoc Capture: ",
                                                ret.message());
-            qDebug() << err_msg.c_str();
-            ShowErrorMessage(err_msg);
-            SetReplayButton(kDefaultReplayButtonText, true);
+            UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
         qDebug() << "RenderDoc capture saved to: " << renderdoc_rdc.string().c_str();
     }
 
-    SetReplayButton(kDefaultReplayButtonText, true);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
 }

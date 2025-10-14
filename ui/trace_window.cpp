@@ -1185,7 +1185,7 @@ void TraceDialog::OnGfxrCaptureClicked()
                                                      m_gfxr_capture_file_directory_input_box->text()
                                                      .toStdString(),
                                                      "/",
-                                                     "capture_screenshot.png");
+                                                     Dive::kCaptureScreenshotFile);
 
         ret = device->Adb().Run(
         absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));

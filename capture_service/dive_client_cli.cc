@@ -612,12 +612,12 @@ void TriggerGfxrCapture(Dive::DeviceManager& mgr,
                     return;
                 }
 
-                std::string on_device_capture_screen_shot = absl::StrCat(std::string(
-                                                                         Dive::kDeviceCapturePath),
-                                                                         "/",
-                                                                         gfxr_capture_directory,
-                                                                         "/",
-                                                                         "capture_screenshot.png");
+                std::string
+                on_device_capture_screen_shot = absl::StrCat(std::string(Dive::kDeviceCapturePath),
+                                                             "/",
+                                                             gfxr_capture_directory,
+                                                             "/",
+                                                             Dive::kCaptureScreenshotFile);
                 ret = mgr.GetDevice()->Adb().Run(
                 absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
                 if (!ret.ok())

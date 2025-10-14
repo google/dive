@@ -47,6 +47,8 @@ inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 // is the base path since GFXR can reliably write there.
 inline constexpr char kReplayStateLoadedSignalFile[] = "/sdcard/Download/replay_state_loaded";
 inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR replay
+inline constexpr char
+kCaptureScreenshotFile[] = "capture_screenshot.png";  // produced during GFXR capture
 
 // On host side, files associated with the same GFXR capture will be named with the same prefix as
 // it, but a unique suffix to indicate its type

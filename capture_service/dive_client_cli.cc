@@ -438,7 +438,7 @@ absl::Status IsCaptureDirectoryBusy(Dive::DeviceManager& mgr,
                              absl::InternalError("Capture file operation in progress.");
 }
 
-void RenameScreenshotFile(std::filesystem::path full_target_download_dir)
+absl::Status RenameScreenshotFile(std::filesystem::path full_target_download_dir)
 {
     std::filesystem::path gfxr_file_path;
     std::filesystem::path screenshot_file_path;
@@ -462,16 +462,13 @@ void RenameScreenshotFile(std::filesystem::path full_target_download_dir)
     // Check if both files were successfully located
     if (gfxr_file_path.empty())
     {
-        std::cout << "Warning: Could not find .gfxr file in downloaded directory to perform rename."
-                  << std::endl;
-        return;
+        return absl::InternalError(
+        "Could not find .gfxr file in downloaded directory to perform rename.");
     }
 
     if (screenshot_file_path.empty())
     {
-        std::cout << "Warning: Could not find screenshot file in downloaded directory."
-                  << std::endl;
-        return;
+        return absl::InternalError("Could not find screenshot file in downloaded directory.");
     }
 
     // Perform the rename if both files were successfully located
@@ -488,8 +485,11 @@ void RenameScreenshotFile(std::filesystem::path full_target_download_dir)
     }
     catch (const std::exception& e)
     {
-        std::cout << "Warning: Failed to rename screenshot file locally: " << e.what() << std::endl;
+        return absl::InternalError("Failed to rename screenshot file locally: " +
+                                   std::string(e.what()));
     }
+
+    return absl::OkStatus();
 }
 
 bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
@@ -546,7 +546,12 @@ bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_captu
         return false;
     }
 
-    RenameScreenshotFile(full_target_download_dir);
+    absl::Status ret = RenameScreenshotFile(full_target_download_dir);
+
+    if (!ret.ok())
+    {
+        std::cout << "Error renaming screenshot: " << ret.message() << std::endl;
+    }
 
     std::cout << "Capture sucessfully saved at " << full_target_download_dir << std::endl;
     return true;

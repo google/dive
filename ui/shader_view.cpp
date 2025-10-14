@@ -132,6 +132,10 @@ void ShaderView::OnShaderSelectionChanged()
     m_shader_code_text->EnableHoverEvent(false);
     const ShaderWidgetItem *item_ptr = (const ShaderWidgetItem *)m_shader_list->currentItem();
     m_shader_code_text->clear();
+    if (item_ptr == nullptr)
+    {
+        return;
+    }
 
     // Determine shader type by matching column 0 string
     uint32_t shader_index = item_ptr->GetShaderIndex();

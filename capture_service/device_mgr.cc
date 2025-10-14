@@ -776,8 +776,8 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
             return absl::FailedPreconditionError(
             absl::StrFormat("Can't perform a RenderDoc capture since the RenderDoc app is not "
                             "installed on the target device. Either install the RenderDoc app "
-                            "using the UI or by manually running adb install. The app is %s.apk "
-                            "and is provided in every RenderDoc release.",
+                            "using the UI or by manually running adb install --force-queryable "
+                            "%s.apk. The APK is provided in every RenderDoc release.",
                             kRenderDocAppName));
         }
         RETURN_IF_ERROR(SetSystemProperty(adb, kReplayCreateRenderDocCapture, "1"));

@@ -116,15 +116,13 @@ private:
     QLineEdit   *m_selected_file_input_box;
     QPushButton *m_open_files_button;
 
-    QHBoxLayout        *m_dump_pm4_layout;
-    QLabel             *m_dump_pm4_label;
-    QStandardItemModel *m_dump_pm4_model;
-    QComboBox          *m_dump_pm4_box;
+    QHBoxLayout *m_dump_pm4_layout;
+    QLabel      *m_dump_pm4_label;
+    QCheckBox   *m_dump_pm4_box;
 
-    QHBoxLayout        *m_gpu_time_layout;
-    QLabel             *m_gpu_time_label;
-    QStandardItemModel *m_gpu_time_model;
-    QComboBox          *m_gpu_time_box;
+    QHBoxLayout *m_gpu_time_layout;
+    QLabel      *m_gpu_time_label;
+    QCheckBox   *m_gpu_time_box;
 
     QHBoxLayout *m_renderdoc_capture_layout = nullptr;
     QLabel      *m_renderdoc_capture_label = nullptr;

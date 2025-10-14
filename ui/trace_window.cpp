@@ -1179,16 +1179,8 @@ void TraceDialog::OnGfxrCaptureClicked()
             return;
         }
 
-        std::string
-        on_device_capture_screen_shot = absl::StrCat(std::string(Dive::kDeviceCapturePath),
-                                                     "/",
-                                                     m_gfxr_capture_file_directory_input_box->text()
-                                                     .toStdString(),
-                                                     "/",
-                                                     Dive::kCaptureScreenshotFile);
-
-        ret = device->Adb().Run(
-        absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+        ret = device->TriggerScreenCapture(
+        m_gfxr_capture_file_directory_input_box->text().toStdString());
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to create capture screenshot: ",

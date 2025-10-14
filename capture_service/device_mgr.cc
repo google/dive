@@ -1154,4 +1154,16 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
     return absl::OkStatus();
 }
 
+absl::Status AndroidDevice::TriggerScreenCapture(std::string on_device_screenshot_path)
+{
+    std::string  on_device_capture_screen_shot = absl::StrCat(std::string(Dive::kDeviceCapturePath),
+                                                             "/",
+                                                             on_device_screenshot_path,
+                                                             "/",
+                                                             Dive::kCaptureScreenshotFile);
+    absl::Status ret = m_adb.Run(
+    absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+    return ret;
+}
+
 }  // namespace Dive

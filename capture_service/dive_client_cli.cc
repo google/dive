@@ -612,21 +612,16 @@ void TriggerGfxrCapture(Dive::DeviceManager& mgr,
                     return;
                 }
 
-                std::string
-                on_device_capture_screen_shot = absl::StrCat(std::string(Dive::kDeviceCapturePath),
-                                                             "/",
-                                                             gfxr_capture_directory,
-                                                             "/",
-                                                             Dive::kCaptureScreenshotFile);
-                ret = mgr.GetDevice()->Adb().Run(
-                absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+                ret = mgr.GetDevice()->TriggerScreenCapture(gfxr_capture_directory);
+
                 if (!ret.ok())
                 {
-                    std::string err_msg = absl::StrCat("Failed to create capture screenshot: ",
-                                                       ret.message());
-                    std::cout << err_msg.c_str() << std::endl;
+                    std::cout << "Failed to create capture screenshot: " +
+                                 std::string(ret.message())
+                              << std::endl;
                     return;
                 }
+
                 is_capturing = true;
                 std::cout << "Capture started. Press g+enter to retrieve the capture." << std::endl;
             }

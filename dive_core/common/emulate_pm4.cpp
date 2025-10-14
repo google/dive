@@ -59,33 +59,34 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager,
         {
             // This is emitted at the beginning of the render pass if tiled rendering mode is
             // disabled
-        case RM6_BYPASS:
+        case RM6_DIRECT_RENDER:
             m_shader_enable_bit = ShaderEnableBit::kSYSMEM;
             break;
             // This is emitted at the beginning of the binning pass, although the binning pass
             // could be missing even in tiled rendering mode
-        case RM6_BINNING:
+        case RM6_BIN_VISIBILITY:
+        case RM6_BIN_DIRECT:
             m_shader_enable_bit = ShaderEnableBit::kBINNING;
             break;
             // This is emitted at the beginning of the tiled rendering pass
-        case RM6_GMEM:
+        case RM6_BIN_RENDER_START:
             m_shader_enable_bit = ShaderEnableBit::kGMEM;
             break;
             // This is emitted at the end of the tiled rendering pass
-        case RM6_ENDVIS:
+        case RM6_BIN_END_OF_DRAWS:
             // should be paired with RM6_BIN_RENDER_START only if RM6_BIN_VISIBILITY exist, end of
             // tiled mode
             m_shader_enable_bit = std::nullopt;
             break;
             // This is emitted at the beginning of the resolve pass
-        case RM6_RESOLVE:
+        case RM6_BIN_RESOLVE:
             m_shader_enable_bit = ShaderEnableBit::kGMEM;
             break;
             // This is emitted for each dispatch
         case RM6_COMPUTE:
             break;
             // This seems to be the end of Resolve Pass
-        case RM6_YIELD:
+        case RM6_BIN_RENDER_END:
             // should be paired with RM6_BIN_RESOLVE, end of resolve pass
             m_shader_enable_bit = std::nullopt;
             break;
@@ -389,12 +390,6 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                            EmulateCallbacksBase &callbacks,
                            Pm4Header             header) const
 {
-    // Note: CP_COND_INDIRECT_BUFFER_PFE is not parsed here because it isn't used by Turnip.
-    // When it shows up in production driver captures, the IB addr and size values are all
-    // garbage. Not sure what it's used for at this point.
-    if (header.type7.opcode == CP_COND_INDIRECT_BUFFER_PFE)
-        DIVE_DEBUG_LOG("Packet ignored: CP_COND_INDIRECT_BUFFER_PFE\n");
-
     // Deal with calls and chains
     if (header.type == 7 && (header.type7.opcode == CP_INDIRECT_BUFFER_PFE ||
                              header.type7.opcode == CP_INDIRECT_BUFFER_PFD ||
@@ -406,12 +401,15 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                                                    emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
                                                    sizeof(PM4_CP_INDIRECT_BUFFER)));
-        uint64_t ib_addr = ((uint64_t)ib_packet.ADDR_HI << 32) | (uint64_t)ib_packet.ADDR_LO;
-        IbType   ib_type = (header.type7.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
-                                                                               IbType::kCall;
+        IbType ib_type = (header.type7.opcode == CP_INDIRECT_BUFFER_CHAIN) ? IbType::kChain :
+                                                                             IbType::kCall;
         emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
         emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
-        if (!QueueIB(ib_addr, ib_packet.SIZE, false, ib_type, emu_state_ptr))
+        if (!QueueIB(ib_packet.IB_BASE,
+                     ib_packet.bitfields1.IB_SIZE,
+                     false,
+                     ib_type,
+                     emu_state_ptr))
         {
             return false;
         }
@@ -419,13 +417,13 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks))
             return false;
     }
-    // Parse CP_SET_CTXSWITCH_IB, since it references implicit IBs
-    else if (header.type == 7 && header.type7.opcode == CP_SET_CTXSWITCH_IB)
+    // Parse CP_SET_AMBLE (previously CP_SET_CTXSWITCH_IB), since it references implicit IBs
+    else if (header.type == 7 && header.type7.opcode == CP_SET_AMBLE)
     {
-        // For simplicity sake, treat CP_SET_CTXSWITCH_IB essentially as a
+        // For simplicity sake, treat CP_SET_AMBLE essentially as a
         // CALL (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
-        PM4_CP_SET_CTXSWITCH_IB packet;
+        PM4_CP_SET_AMBLE packet;
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
                                                    emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
@@ -434,14 +432,12 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
         // Sometimes this packet is used for purposes other than to jump to an IB. Check size.
         // Example: When TYPE is SAVE_IB
         AdvancePacket(emu_state_ptr, header);
-        if (packet.bitfields2.DWORDS != 0)
+        if (packet.bitfields1.DWORDS != 0)
         {
-            uint64_t ib_addr = ((uint64_t)packet.bitfields1.ADDR_HI << 32) |
-                               (uint64_t)packet.bitfields0.ADDR_LO;
             emu_state_ptr->GetCurIb()->m_ib_queue_index = 0;
             emu_state_ptr->GetCurIb()->m_ib_queue_size = 0;
-            if (!QueueIB(ib_addr,
-                         packet.bitfields2.DWORDS,
+            if (!QueueIB(packet.ADDR,
+                         packet.bitfields1.DWORDS,
                          false,
                          IbType::kContextSwitchIb,
                          emu_state_ptr))
@@ -481,9 +477,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager,
                                    (packet.ARRAY[i].bitfields0.SYSMEM << 2);
 
             ib_queued = true;
-            uint64_t ib_addr = ((uint64_t)packet.ARRAY[i].bitfields2.ADDR_HI << 32) |
-                               (uint64_t)packet.ARRAY[i].bitfields1.ADDR_LO;
-            if (!QueueIB(ib_addr,
+            if (!QueueIB(packet.ARRAY[i].ADDR,
                          packet.ARRAY[i].bitfields0.COUNT,
                          false,
                          IbType::kDrawState,

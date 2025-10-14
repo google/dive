@@ -49,8 +49,9 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
         const Dive::EventInfo &info = meta_data.m_event_info[i];
         // We only output the drawcalls in direct/binning mode
         if ((info.m_type == Dive::EventInfo::EventType::kDraw) &&
-            ((info.m_render_mode == Dive::RenderModeType::kDirect) ||
-             (info.m_render_mode == Dive::RenderModeType::kBinning)))
+            (info.m_render_mode == Dive::RenderModeType::kDirect ||
+             info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+             info.m_render_mode == Dive::RenderModeType::kBinningDirect))
         {
             // This is just to align the strings so that they are easier to read
             auto AppendSpace = [](std::string &str, uint32_t desired_len) {

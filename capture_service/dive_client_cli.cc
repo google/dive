@@ -476,6 +476,9 @@ absl::Status RenameScreenshotFile(std::filesystem::path full_target_download_dir
     std::filesystem::path new_screenshot_file_path = full_target_download_dir /
                                                      absl::StrCat(base_name, ".png");
 
+    std::cout << "Renaming screenshot from " << screenshot_file_path << " to "
+              << new_screenshot_file_path << std::endl;
+
     try
     {
         if (screenshot_file_path != new_screenshot_file_path)

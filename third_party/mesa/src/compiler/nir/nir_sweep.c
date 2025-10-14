@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  */
 
+#include "util/u_printf.h"
 #include "nir.h"
 
 /**
@@ -35,10 +36,42 @@
  * earlier, and even many times, trading CPU cycles for memory savings.
  */
 
-#define steal_list(mem_ctx, type, list)        \
-   foreach_list_typed(type, obj, node, list) { \
-      ralloc_steal(mem_ctx, obj);              \
+static void
+sweep_constant(nir_shader *nir, nir_constant *c)
+{
+   ralloc_steal(nir, c);
+
+   if (c->num_elements) {
+      assert(c->elements);
+      ralloc_steal(nir, c->elements);
+      for (unsigned i = 0; i < c->num_elements; i++)
+         sweep_constant(nir, c->elements[i]);
+   } else {
+      assert(!c->elements);
    }
+}
+
+static void
+sweep_variable(nir_shader *nir, nir_variable *var)
+{
+   gc_mark_live(nir->gctx, var);
+   nir_variable_steal_name(nir, var, var);
+   ralloc_steal(nir, var->max_ifc_array_access);
+   ralloc_steal(nir, var->state_slots);
+   if (var->constant_initializer)
+      sweep_constant(nir, var->constant_initializer);
+   if (var->pointer_initializer)
+      sweep_variable(nir, var->pointer_initializer);
+   ralloc_steal(nir, var->members);
+}
+
+static void
+sweep_var_list(nir_shader *nir, struct exec_list *list)
+{
+   foreach_list_typed(nir_variable, var, node, list) {
+      sweep_variable(nir, var);
+   }
+}
 
 static void sweep_cf_node(nir_shader *nir, nir_cf_node *cf_node);
 
@@ -47,17 +80,14 @@ sweep_block(nir_shader *nir, nir_block *block)
 {
    ralloc_steal(nir, block);
 
-   /* sweep_impl will mark all metadata invalid.  We can safely release all of
-    * this here.
-    */
-   ralloc_free(block->live_in);
-   block->live_in = NULL;
-
-   ralloc_free(block->live_out);
-   block->live_out = NULL;
-
    nir_foreach_instr(instr, block) {
-      gc_mark_live(nir->gctx, instr);
+      gc_mark_live(nir->gctx, nir_instr_get_gc_pointer(instr));
+
+      if (instr->has_debug_info) {
+         nir_instr_debug_info *debug_info = nir_instr_get_debug_info(instr);
+         ralloc_steal(nir, debug_info->filename);
+         ralloc_steal(nir, debug_info->variable_name);
+      }
 
       switch (instr->type) {
       case nir_instr_type_tex:
@@ -66,6 +96,9 @@ sweep_block(nir_shader *nir, nir_block *block)
       case nir_instr_type_phi:
          nir_foreach_phi_src(src, nir_instr_as_phi(instr))
             gc_mark_live(nir->gctx, src);
+         break;
+      case nir_instr_type_intrinsic:
+         ralloc_steal(nir, (void *)nir_instr_as_intrinsic(instr)->name);
          break;
       default:
          break;
@@ -112,7 +145,7 @@ sweep_cf_node(nir_shader *nir, nir_cf_node *cf_node)
       sweep_loop(nir, nir_cf_node_as_loop(cf_node));
       break;
    default:
-      unreachable("Invalid CF node type");
+      UNREACHABLE("Invalid CF node type");
    }
 }
 
@@ -121,7 +154,7 @@ sweep_impl(nir_shader *nir, nir_function_impl *impl)
 {
    ralloc_steal(nir, impl);
 
-   steal_list(nir, nir_variable, &impl->locals);
+   sweep_var_list(nir, &impl->locals);
 
    foreach_list_typed(nir_cf_node, cf_node, node, &impl->body) {
       sweep_cf_node(nir, cf_node);
@@ -130,7 +163,7 @@ sweep_impl(nir_shader *nir, nir_function_impl *impl)
    sweep_block(nir, impl->end_block);
 
    /* Wipe out all the metadata, if any. */
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_progress(true, impl, nir_metadata_none);
 }
 
 static void
@@ -138,6 +171,9 @@ sweep_function(nir_shader *nir, nir_function *f)
 {
    ralloc_steal(nir, f);
    ralloc_steal(nir, f->params);
+
+   for (unsigned i = 0; i < f->num_params; i++)
+      ralloc_steal(nir, (char *)f->params[i].name);
 
    if (f->impl)
       sweep_impl(nir, f->impl);
@@ -163,7 +199,7 @@ nir_sweep(nir_shader *nir)
       ralloc_steal(nir, (char *)nir->info.label);
 
    /* Variables are not dead.  Steal them back. */
-   steal_list(nir, nir_variable, &nir->variables);
+   sweep_var_list(nir, &nir->variables);
 
    /* Recurse into functions, stealing their contents back. */
    foreach_list_typed(nir_function, func, node, &nir->functions) {

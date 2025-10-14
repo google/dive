@@ -267,7 +267,7 @@ struct pvr_winsys_transfer_cmd {
    /* Firmware stream buffer. This is the maximum possible size taking into
     * consideration all HW features, quirks and enhancements.
     */
-   uint8_t fw_stream[172];
+   uint8_t fw_stream[176];
    uint32_t fw_stream_len;
 
    struct pvr_winsys_transfer_cmd_flags {
@@ -341,6 +341,7 @@ struct pvr_winsys_render_submit_info {
          bool use_single_core : 1;
          bool get_vis_results : 1;
          bool has_spm_scratch_buffer : 1;
+         bool disable_pixel_merging : 1;
       } flags;
 
       struct vk_sync *wait;
@@ -368,8 +369,8 @@ struct pvr_winsys_ops {
 
    VkResult (*buffer_get_fd)(struct pvr_winsys_bo *bo, int *const fd_out);
 
-   VkResult (*buffer_map)(struct pvr_winsys_bo *bo);
-   void (*buffer_unmap)(struct pvr_winsys_bo *bo);
+   VkResult (*buffer_map)(struct pvr_winsys_bo *bo, void *addr);
+   VkResult (*buffer_unmap)(struct pvr_winsys_bo *bo, bool reserve);
 
    VkResult (*heap_alloc)(struct pvr_winsys_heap *heap,
                           uint64_t size,

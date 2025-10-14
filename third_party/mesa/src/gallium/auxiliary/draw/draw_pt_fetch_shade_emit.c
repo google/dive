@@ -242,6 +242,7 @@ fail:
 
 static void
 fse_run(struct draw_pt_middle_end *middle,
+        unsigned start,
         const unsigned *fetch_elts,
         unsigned fetch_count,
         const uint16_t *draw_elts,
@@ -296,8 +297,8 @@ fse_run_linear_elts(struct draw_pt_middle_end *middle,
                     unsigned start,
                     unsigned count,
                     const uint16_t *draw_elts,
-                    unsigned draw_count,
-                    unsigned prim_flags)
+                    unsigned draw_start,
+                    unsigned draw_count)
 {
    struct fetch_shade_emit *fse = (struct fetch_shade_emit *)middle;
    struct draw_context *draw = fse->draw;

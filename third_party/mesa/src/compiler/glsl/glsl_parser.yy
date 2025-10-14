@@ -82,8 +82,8 @@ static bool match_layout_qualifier(const char *s1, const char *s2,
 
 %expect 0
 
-%pure-parser
-%error-verbose
+%define api.pure
+%define parse.error verbose
 
 %locations
 %initial-action {
@@ -147,11 +147,12 @@ static bool match_layout_qualifier(const char *s1, const char *s2,
 %token IMAGE1DSHADOW IMAGE2DSHADOW IMAGE1DARRAYSHADOW IMAGE2DARRAYSHADOW
 %token COHERENT VOLATILE RESTRICT READONLY WRITEONLY
 %token SHARED
+%token TASKPAYLOAD PERPRIMITIVE
 %token STRUCT VOID_TOK WHILE
 %token <identifier> IDENTIFIER TYPE_IDENTIFIER NEW_IDENTIFIER
 %type <identifier> any_identifier
 %type <interface_block> instance_name_opt
-%token <real> FLOATCONSTANT
+%token <real> FLOATCONSTANT FLOAT16CONSTANT
 %token <dreal> DOUBLECONSTANT
 %token <n> INTCONSTANT UINTCONSTANT BOOLCONSTANT
 %token <n64> INT64CONSTANT UINT64CONSTANT
@@ -461,6 +462,13 @@ primary_expression:
       $$ = new(ctx) ast_expression(ast_uint64_constant, NULL, NULL, NULL);
       $$->set_location(@1);
       $$->primary_expression.uint64_constant = $1;
+   }
+   | FLOAT16CONSTANT
+   {
+      linear_ctx *ctx = state->linalloc;
+      $$ = new(ctx) ast_expression(ast_float16_constant, NULL, NULL, NULL);
+      $$->set_location(@1);
+      $$->primary_expression.float16_constant = $1;
    }
    | FLOATCONSTANT
    {
@@ -896,9 +904,9 @@ function_header:
 
       if ($1->qualifier.is_subroutine_decl()) {
          /* add type for IDENTIFIER search */
-         state->symbols->add_type($2, glsl_type::get_subroutine_instance($2));
+         state->symbols->add_type($2, glsl_subroutine_type($2));
       } else
-         state->symbols->add_function(new(state) ir_function($2));
+         state->symbols->add_function(new(ctx) ir_function($2));
       state->symbols->push_scope();
    }
    ;
@@ -913,7 +921,7 @@ parameter_declarator:
       $$->type->set_location(@1);
       $$->type->specifier = $1;
       $$->identifier = $2;
-      state->symbols->add_variable(new(state) ir_variable(NULL, $2, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $2, ir_var_auto));
    }
    | layout_qualifier type_specifier any_identifier
    {
@@ -930,7 +938,7 @@ parameter_declarator:
       $$->type->specifier = $1;
       $$->identifier = $2;
       $$->array_specifier = $3;
-      state->symbols->add_variable(new(state) ir_variable(NULL, $2, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $2, ir_var_auto));
    }
    ;
 
@@ -1042,7 +1050,7 @@ init_declarator_list:
 
       $$ = $1;
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $3, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $3, ir_var_auto));
    }
    | init_declarator_list ',' any_identifier array_specifier
    {
@@ -1052,7 +1060,7 @@ init_declarator_list:
 
       $$ = $1;
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $3, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $3, ir_var_auto));
    }
    | init_declarator_list ',' any_identifier array_specifier '=' initializer
    {
@@ -1062,7 +1070,7 @@ init_declarator_list:
 
       $$ = $1;
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $3, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $3, ir_var_auto));
    }
    | init_declarator_list ',' any_identifier '=' initializer
    {
@@ -1072,7 +1080,7 @@ init_declarator_list:
 
       $$ = $1;
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $3, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $3, ir_var_auto));
    }
    ;
 
@@ -1094,7 +1102,7 @@ single_declaration:
       $$ = new(ctx) ast_declarator_list($1);
       $$->set_location_range(@1, @2);
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $2, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $2, ir_var_auto));
    }
    | fully_specified_type any_identifier array_specifier
    {
@@ -1105,7 +1113,7 @@ single_declaration:
       $$ = new(ctx) ast_declarator_list($1);
       $$->set_location_range(@1, @3);
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $2, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $2, ir_var_auto));
    }
    | fully_specified_type any_identifier array_specifier '=' initializer
    {
@@ -1116,7 +1124,7 @@ single_declaration:
       $$ = new(ctx) ast_declarator_list($1);
       $$->set_location_range(@1, @3);
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $2, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $2, ir_var_auto));
    }
    | fully_specified_type any_identifier '=' initializer
    {
@@ -1127,7 +1135,7 @@ single_declaration:
       $$ = new(ctx) ast_declarator_list($1);
       $$->set_location_range(@1, @2);
       $$->declarations.push_tail(&decl->link);
-      state->symbols->add_variable(new(state) ir_variable(NULL, $2, ir_var_auto));
+      state->symbols->add_variable(new(ctx) ir_variable(NULL, $2, ir_var_auto));
    }
    | INVARIANT variable_identifier
    {
@@ -1224,6 +1232,7 @@ layout_qualifier_id:
       if (!$$.flags.i &&
           (state->AMD_conservative_depth_enable ||
            state->ARB_conservative_depth_enable ||
+           state->EXT_conservative_depth_enable ||
            state->is_version(420, 0))) {
          if (match_layout_qualifier($1, "depth_any", state) == 0) {
             $$.flags.q.depth_type = 1;
@@ -1248,6 +1257,11 @@ layout_qualifier_id:
          if ($$.flags.i && state->ARB_conservative_depth_warn) {
             _mesa_glsl_warning(& @1, state,
                                "GL_ARB_conservative_depth "
+                               "layout qualifier `%s' is used", $1);
+         }
+         if ($$.flags.i && state->EXT_conservative_depth_warn) {
+            _mesa_glsl_warning(& @1, state,
+                               "GL_EXT_conservative_depth "
                                "layout qualifier `%s' is used", $1);
          }
       }
@@ -1314,7 +1328,7 @@ layout_qualifier_id:
          }
 
          if ($$.flags.i && !state->has_geometry_shader() &&
-             !state->has_tessellation_shader()) {
+             !state->has_tessellation_shader() && !state->EXT_mesh_shader_enable) {
             _mesa_glsl_error(& @1, state, "#version 150 layout "
                              "qualifier `%s' used", $1);
          }
@@ -1758,6 +1772,11 @@ layout_qualifier_id:
          $$.location = $3;
       }
 
+      if (match_layout_qualifier("num_views", $1, state) == 0) {
+         $$.flags.q.explicit_numviews = 1;
+         $$.num_views = $3;
+      }
+
       if (match_layout_qualifier("component", $1, state) == 0) {
          if (!state->has_enhanced_layouts()) {
             _mesa_glsl_error(& @1, state,
@@ -1797,10 +1816,18 @@ layout_qualifier_id:
       if (match_layout_qualifier("max_vertices", $1, state) == 0) {
          $$.flags.q.max_vertices = 1;
          $$.max_vertices = new(ctx) ast_layout_expression(@1, $3);
-         if (!state->has_geometry_shader()) {
+         if (!state->has_geometry_shader() && !state->EXT_mesh_shader_enable) {
             _mesa_glsl_error(& @3, state,
-                             "#version 150 max_vertices qualifier "
-                             "specified");
+                             "max_vertices qualifier specified");
+         }
+      }
+
+      if (match_layout_qualifier("max_primitives", $1, state) == 0) {
+         $$.flags.q.max_primitives = 1;
+         $$.max_primitives = new(ctx) ast_layout_expression(@1, $3);
+         if (!state->EXT_mesh_shader_enable) {
+            _mesa_glsl_error(& @3, state,
+                             "max_primitives qualifier specified");
          }
       }
 
@@ -1840,10 +1867,10 @@ layout_qualifier_id:
       for (int i = 0; i < 3; i++) {
          if (match_layout_qualifier(local_size_qualifiers[i], $1,
                                     state) == 0) {
-            if (!state->has_compute_shader()) {
+            if (!state->has_compute_shader() && !state->EXT_mesh_shader_enable) {
                _mesa_glsl_error(& @3, state,
                                 "%s qualifier requires GLSL 4.30 or "
-                                "GLSL ES 3.10 or ARB_compute_shader",
+                                "GLSL ES 3.10 or ARB_compute_shader or EXT_mesh_shader",
                                 local_size_qualifiers[i]);
                YYERROR;
             } else {
@@ -2171,6 +2198,11 @@ auxiliary_storage_qualifier:
       memset(& $$, 0, sizeof($$));
       $$.flags.q.patch = 1;
    }
+   | PERPRIMITIVE
+   {
+      memset(& $$, 0, sizeof($$));
+      $$.flags.q.per_primitive = 1;
+   }
 
 storage_qualifier:
    CONST_TOK
@@ -2244,6 +2276,11 @@ storage_qualifier:
    {
       memset(& $$, 0, sizeof($$));
       $$.flags.q.shared_storage = 1;
+   }
+   | TASKPAYLOAD
+   {
+      memset(& $$, 0, sizeof($$));
+      $$.flags.q.task_payload = 1;
    }
    ;
 
@@ -2342,12 +2379,12 @@ type_specifier_nonarray:
    ;
 
 basic_type_specifier_nonarray:
-   VOID_TOK                 { $$ = glsl_type::void_type; }
+   VOID_TOK                 { $$ = &glsl_type_builtin_void; }
    | BASIC_TYPE_TOK         { $$ = $1; }
    | UNSIGNED BASIC_TYPE_TOK
    {
-      if ($2 == glsl_type::int_type) {
-         $$ = glsl_type::uint_type;
+      if ($2 == &glsl_type_builtin_int) {
+         $$ = &glsl_type_builtin_uint;
       } else {
          _mesa_glsl_error(&@1, state,
                           "\"unsigned\" is only allowed before \"int\"");
@@ -2379,7 +2416,7 @@ struct_specifier:
       linear_ctx *ctx = state->linalloc;
       $$ = new(ctx) ast_struct_specifier($2, $4);
       $$->set_location_range(@2, @5);
-      state->symbols->add_type($2, glsl_type::void_type);
+      state->symbols->add_type($2, &glsl_type_builtin_void);
    }
    | STRUCT '{' struct_declaration_list '}'
    {
@@ -2927,14 +2964,15 @@ interface_qualifier:
    }
    | auxiliary_storage_qualifier interface_qualifier
    {
-      if (!$1.flags.q.patch) {
+      if (!$1.flags.q.patch && !$1.flags.q.per_primitive) {
          _mesa_glsl_error(&@1, state, "invalid interface qualifier");
       }
       if ($2.has_auxiliary_storage()) {
-         _mesa_glsl_error(&@1, state, "duplicate patch qualifier");
+         _mesa_glsl_error(&@1, state, "duplicate auxiliary storage qualifier");
       }
       $$ = $2;
-      $$.flags.q.patch = 1;
+      $$.flags.q.patch = $1.flags.q.patch;
+      $$.flags.q.per_primitive = $1.flags.q.per_primitive;
    }
    ;
 

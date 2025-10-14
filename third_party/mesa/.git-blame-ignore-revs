@@ -65,3 +65,15 @@ c7bf3b69ebc8f2252dbf724a4de638e6bb2ac402
 
 # ir3: Reformat source with clang-format
 177138d8cb0b4f6a42ef0a1f8593e14d79f17c54
+
+# ir3: reformat after refactoring in previous commit
+8ae5b27ee0331a739d14b42e67586784d6840388
+
+# ir3: don't use deprecated NIR_PASS_V anymore
+2fedc82c0cc9d3fb2e54707b57941b79553b640c
+
+# ir3: reformat after previous commit
+7210054db8cfb445a8ccdeacfdcfecccf44fa266
+
+# freedreno/a6xx: The great register renaming
+7fd99c88b9cd5c0c8c1cb3e92383acac5cb8220b

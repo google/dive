@@ -1,24 +1,6 @@
 /*
- * Copyright (c) 2013 Rob Clark <robdclark@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2013 Rob Clark <robdclark@gmail.com>
+ * SPDX-License-Identifier: MIT
  */
 
 #include <assert.h>
@@ -31,10 +13,11 @@
 #include <util/log.h>
 #include <util/u_debug.h>
 
-#include "isa/isa.h"
+#include "freedreno/isa/ir3-isa.h"
 
 #include "disasm.h"
 #include "instr-a3xx.h"
+#include "ir3.h"
 
 static enum debug_t debug;
 
@@ -56,6 +39,8 @@ static const char *levels[] = {
    "x",
    "x",
 };
+
+typedef BITSET_DECLARE(gpr_bitset, GPR_REG_SIZE);
 
 struct disasm_ctx {
    FILE *out;
@@ -84,6 +69,9 @@ struct disasm_ctx {
       bool ss;
       uint8_t nop;
       uint8_t repeat;
+      bool alias;
+      ir3_alias_scope alias_scope;
+      bool alias_full;
    } last;
 
    /**
@@ -95,9 +83,16 @@ struct disasm_ctx {
       enum {
          FILE_GPR = 1,
          FILE_CONST = 2,
+         FILE_RT = 3,
       } file;
       unsigned num;
    } reg;
+
+   /* Track which registers are currently aliases because they shouldn't be
+    * included in the GPR footprint.
+    */
+   gpr_bitset full_aliases;
+   gpr_bitset half_aliases;
 
    struct shader_stats *stats;
 };
@@ -153,7 +148,12 @@ static const struct opc_info {
    /* clang-format off */
    /* category 0: */
    OPC(0, OPC_NOP,          nop),
-   OPC(0, OPC_B,            b),
+   OPC(0, OPC_BR,           br),
+   OPC(0, OPC_BRAC,         brac),
+   OPC(0, OPC_BRAA,         braa),
+   OPC(0, OPC_BRAO,         brao),
+   OPC(0, OPC_BALL,         ball),
+   OPC(0, OPC_BANY,         bany),
    OPC(0, OPC_JUMP,         jump),
    OPC(0, OPC_CALL,         call),
    OPC(0, OPC_RET,          ret),
@@ -185,15 +185,17 @@ static const struct opc_info {
    OPC(1, OPC_SWZ,          swz),
    OPC(1, OPC_SCT,          sct),
    OPC(1, OPC_GAT,          gat),
+   OPC(1, OPC_MOVS,         movs),
    OPC(1, OPC_BALLOT_MACRO, ballot.macro),
    OPC(1, OPC_ANY_MACRO,    any.macro),
    OPC(1, OPC_ALL_MACRO,    all.macro),
    OPC(1, OPC_ELECT_MACRO,  elect.macro),
    OPC(1, OPC_READ_COND_MACRO, read_cond.macro),
    OPC(1, OPC_READ_FIRST_MACRO, read_first.macro),
-   OPC(1, OPC_SWZ_SHARED_MACRO, swz_shared.macro),
    OPC(1, OPC_SCAN_MACRO, scan.macro),
+   OPC(1, OPC_SCAN_CLUSTERS_MACRO, scan_clusters.macro),
    OPC(1, OPC_SHPS_MACRO, shps.macro),
+   OPC(1, OPC_PUSH_CONSTS_LOAD_MACRO, push_consts_load.macro),
 
    /* category 2: */
    OPC(2, OPC_ADD_F,        add.f),
@@ -242,6 +244,7 @@ static const struct opc_info {
    OPC(2, OPC_CBITS_B,      cbits.b),
    OPC(2, OPC_SHB,          shb),
    OPC(2, OPC_MSAD,         msad),
+   OPC(2, OPC_FLAT_B,       flat.b),
 
    /* category 3: */
    OPC(3, OPC_MAD_U16,      mad.u16),
@@ -339,6 +342,7 @@ static const struct opc_info {
    OPC(6, OPC_STLW,         stlw),
    OPC(6, OPC_RESFMT,       resfmt),
    OPC(6, OPC_RESINFO,      resinfo),
+   OPC(6, OPC_RESBASE,      resbase),
    OPC(6, OPC_ATOMIC_ADD,     atomic.add),
    OPC(6, OPC_ATOMIC_SUB,     atomic.sub),
    OPC(6, OPC_ATOMIC_XCHG,    atomic.xchg),
@@ -398,6 +402,9 @@ static const struct opc_info {
    OPC(6, OPC_STC,          stc),
    OPC(6, OPC_STSC,         stsc),
    OPC(6, OPC_LDC_K,        ldc.k),
+   OPC(6, OPC_LDG_K,        ldg.k),
+   OPC(6, OPC_SHFL,         shfl),
+   OPC(6, OPC_RAY_INTERSECTION,  ray_intersection),
 
    OPC(6, OPC_SPILL_MACRO,  spill.macro),
    OPC(6, OPC_RELOAD_MACRO, reload.macro),
@@ -406,6 +413,7 @@ static const struct opc_info {
    OPC(7, OPC_FENCE,        fence),
    OPC(7, OPC_LOCK,         lock),
    OPC(7, OPC_UNLOCK,       unlock),
+   OPC(7, OPC_ALIAS,        alias),
 /* clang-format on */
 #undef OPC
 };
@@ -443,6 +451,8 @@ disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
          ctx->options->stop = true;
       } else if (!strcmp("bary.f", val->str)) {
          ctx->stats->last_baryf = ctx->cur_n;
+      } else if (!strcmp("alias", val->str)) {
+         ctx->last.alias = true;
       }
    } else if (!strcmp(field_name, "REPEAT")) {
       ctx->extra_cycles += val->num;
@@ -467,6 +477,8 @@ disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
          ctx->reg.num = val->num;
          ctx->reg.file = FILE_GPR;
       }
+   } else if (!strcmp(field_name, "RT")) {
+      ctx->reg.file = FILE_RT;
    } else if (!strcmp(field_name, "SRC_R") || !strcmp(field_name, "SRC1_R") ||
               !strcmp(field_name, "SRC2_R") || !strcmp(field_name, "SRC3_R")) {
       ctx->reg.r = val->num;
@@ -478,8 +490,20 @@ disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
        * that case either.
        */
       ctx->reg.r = true;
+
+      if (ctx->last.alias && ctx->last.alias_scope == ALIAS_TEX) {
+         if (ctx->last.alias_full) {
+            BITSET_SET(ctx->full_aliases, val->num);
+         } else {
+            BITSET_SET(ctx->half_aliases, val->num);
+         }
+      }
    } else if (strstr(field_name, "HALF")) {
       ctx->reg.half = val->num;
+   } else if (strstr(field_name, "TYPE_SIZE")) {
+      if (ctx->last.alias && ctx->last.alias_scope == ALIAS_TEX) {
+         ctx->last.alias_full = val->num == 1;
+      }
    } else if (!strcmp(field_name, "SWIZ")) {
       unsigned num = (ctx->reg.num << 2) | val->num;
       if (ctx->reg.r)
@@ -488,14 +512,16 @@ disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
       if (ctx->reg.file == FILE_CONST) {
          ctx->stats->constlen = MAX2(ctx->stats->constlen, num);
       } else if (ctx->reg.file == FILE_GPR) {
-         if (ctx->reg.half) {
+         if (ctx->reg.half && !BITSET_TEST(ctx->half_aliases, num)) {
             ctx->stats->halfreg = MAX2(ctx->stats->halfreg, num);
-         } else {
+         } else if (!BITSET_TEST(ctx->full_aliases, num)){
             ctx->stats->fullreg = MAX2(ctx->stats->fullreg, num);
          }
       }
 
       memset(&ctx->reg, 0, sizeof(ctx->reg));
+   } else if (!strcmp(field_name, "SCOPE")) {
+      ctx->last.alias_scope = val->num;
    }
 }
 
@@ -516,6 +542,12 @@ disasm_handle_last(struct disasm_ctx *ctx)
    } else {
       int n = MIN2(ctx->sfu_delay, 1 + ctx->last.repeat + ctx->last.nop);
       ctx->sfu_delay -= n;
+   }
+
+   if (ctx->cur_opc_cat == 5) {
+      /* tex instruction clear the alias table. */
+      memset(&ctx->full_aliases, 0, sizeof(ctx->full_aliases));
+      memset(&ctx->half_aliases, 0, sizeof(ctx->half_aliases));
    }
 
    memset(&ctx->last, 0, sizeof(ctx->last));
@@ -592,11 +624,13 @@ disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
       .cur_n = -1,
    };
 
+   memset(&ctx.full_aliases, 0, sizeof(ctx.full_aliases));
+   memset(&ctx.half_aliases, 0, sizeof(ctx.half_aliases));
    memset(stats, 0, sizeof(*stats));
 
    decode_options.cbdata = &ctx;
 
-   isa_disasm(dwords, sizedwords * 4, out, &decode_options);
+   ir3_isa_disasm(dwords, sizedwords * 4, out, &decode_options);
 
    disasm_handle_last(&ctx);
 

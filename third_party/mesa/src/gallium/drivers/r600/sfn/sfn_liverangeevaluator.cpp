@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_liverangeevaluator.h"
@@ -385,7 +365,7 @@ LiveRangeInstrVisitor::visit(ControlFlowInstr *instr)
    case ControlFlowInstr::cf_wait_ack:
       break;
    default:
-      unreachable("Flow control unreachanble");
+      UNREACHABLE("Flow control unreachanble");
    }
 }
 
@@ -394,7 +374,6 @@ LiveRangeInstrVisitor::visit(IfInstr *instr)
 {
    int b = m_block;
    m_block = -1;
-   instr->predicate()->accept(*this);
    scope_if();
    m_block = b;
 }
@@ -431,14 +410,14 @@ LiveRangeInstrVisitor::visit(WriteTFInstr *instr)
 void
 LiveRangeInstrVisitor::visit(UNUSED LDSAtomicInstr *instr)
 {
-   unreachable("LDSAtomicInstr must be lowered before scheduling and live "
+   UNREACHABLE("LDSAtomicInstr must be lowered before scheduling and live "
                "range evaluation");
 }
 
 void
 LiveRangeInstrVisitor::visit(UNUSED LDSReadInstr *instr)
 {
-   unreachable("LDSReadInstr must be lowered before scheduling and live "
+   UNREACHABLE("LDSReadInstr must be lowered before scheduling and live "
                "range evaluation");
 }
 

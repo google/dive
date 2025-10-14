@@ -19,13 +19,10 @@ KHR-GLES31.core.shader_atomic_counters.advanced-usage-many-dispatches,Fail
 KHR-GLES31.core.shader_atomic_counters.advanced-usage-many-draw-calls2,Fail
 KHR-GLES31.core.shader_atomic_counters.advanced-usage-multi-stage,Fail
 
-KHR-GLES31.core.shader_image_load_store.basic-allFormats-loadStoreComputeStage,Fail
-KHR-GLES31.core.shader_image_load_store.basic-allTargets-loadStoreCS,Fail
-
 KHR-GLES31.core.shader_storage_buffer_object.advanced-readWrite-case1-cs,Fail
 
 # r600_shader.c:10547: fc_pushlevel: Assertion `ctx->bc->fc_sp < ARRAY_SIZE(ctx->bc->fc_stack)' failed.
-# Yeah, that's some deep flow control there.  Previously PIPE_SHADER_CAP_MAX_CONTROL_FLOW_DEPTH would
+# Yeah, that's some deep flow control there.  Previously pipe_shader_caps.max_control_flow_depth would
 # do GLSL lower_if_to_cond_assign (which is incorrect for instructions with side effects) after 32
 # ifs deep, but we don't have the equivalent for NIR.
 KHR-GLES31.core.tessellation_shader.single.max_patch_vertices,Crash
@@ -49,14 +46,6 @@ KHR-GLES31.core.texture_cube_map_array.texture_size_tesselation_ev_sh,Fail
 
 KHR-GLES31.core.vertex_attrib_binding.basic-input-case5,Fail
 KHR-GLES31.core.vertex_attrib_binding.basic-input-case6,Fail
-
-# Wide line near the edge is fully missing instead of partially clipped.  Do we
-# need guardband?
-dEQP-GLES2.functional.clipping.line.wide_line_clip_viewport_center,Fail
-dEQP-GLES2.functional.clipping.line.wide_line_clip_viewport_corner,Fail
-dEQP-GLES2.functional.clipping.point.wide_point_clip,Fail
-dEQP-GLES2.functional.clipping.point.wide_point_clip_viewport_center,Fail
-dEQP-GLES2.functional.clipping.point.wide_point_clip_viewport_corner,Fail
 
 # Looks like sub-pixel sampling errors or something.
 dEQP-GLES2.functional.texture.filtering.2d.linear_nearest_clamp_etc1,Fail
@@ -146,14 +135,6 @@ dEQP-GLES2.functional.texture.vertex.cube.filtering.nearest_linear_repeat,Fail
 
 dEQP-GLES2.functional.vertex_arrays.single_attribute.strides.buffer_0_32_short3_vec4_dynamic_draw_quads_1,Fail
 dEQP-GLES2.functional.vertex_arrays.single_attribute.strides.buffer_0_32_short3_vec4_dynamic_draw_quads_256,Fail
-
-# Wide line near the edge is fully missing instead of partially clipped.  Do we
-# need guardband?
-dEQP-GLES3.functional.clipping.line.wide_line_clip_viewport_center,Fail
-dEQP-GLES3.functional.clipping.line.wide_line_clip_viewport_corner,Fail
-dEQP-GLES3.functional.clipping.point.wide_point_clip,Fail
-dEQP-GLES3.functional.clipping.point.wide_point_clip_viewport_center,Fail
-dEQP-GLES3.functional.clipping.point.wide_point_clip_viewport_corner,Fail
 
 # "Attribute 0: position Storage in buffer stride 16 input datatype unsigned_short input component count 3 normalized used as vec3 instance divisor 0 drawElementsInstanced() index type short index storage in buffer index offset 0 instance count 1 1 lines (loop) "
 dEQP-GLES3.functional.draw.random.117,Fail
@@ -278,11 +259,6 @@ dEQP-GLES3.functional.texture.filtering.cube.combinations.nearest_linear_repeat_
 dEQP-GLES3.functional.texture.filtering.cube.combinations.nearest_linear_repeat_mirror,Fail
 dEQP-GLES3.functional.texture.filtering.cube.combinations.nearest_linear_repeat_repeat,Fail
 
-# Weird vertical stripes instead of smooth gradient.
-dEQP-GLES3.functional.texture.specification.teximage2d_pbo.rgb16f_cube,Fail
-dEQP-GLES3.functional.texture.specification.teximage2d_pbo.rgb16i_cube,Fail
-dEQP-GLES3.functional.texture.specification.teximage2d_pbo.rgb16ui_cube,Fail
-
 # Looks like sub-pixel sampling errors or something.
 dEQP-GLES3.functional.texture.vertex.2d.filtering.linear_nearest_clamp,Fail
 dEQP-GLES3.functional.texture.vertex.2d.filtering.linear_nearest_mirror,Fail
@@ -336,88 +312,6 @@ dEQP-GLES31.functional.compute.shared_var.work_group_size.vec4_128_1_1,Fail
 dEQP-GLES31.functional.compute.shared_var.work_group_size.vec4_13_2_4,Fail
 dEQP-GLES31.functional.compute.shared_var.work_group_size.vec4_1_128_1,Fail
 
-# Just a few pixels wrong in each.
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16i.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16i.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16i.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16i.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16ui.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16ui.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16ui.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16ui.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32i.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32i.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32i.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32i.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32ui.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32ui.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32ui.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_r32ui.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16i.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16i.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16i.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16i.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16ui.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16ui.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16ui.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rg16ui.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.cubemap_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.cubemap_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.cubemap_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.cubemap_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_array_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_array_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_array_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_array_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture2d_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture3d_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture3d_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture3d_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2.texture3d_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.cubemap_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.cubemap_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.cubemap_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.cubemap_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.cubemap_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_array_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_array_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_array_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_array_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_array_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture2d_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture3d_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture3d_to_renderbuffer,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture3d_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture3d_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2ui.texture3d_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.cubemap_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.cubemap_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.cubemap_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.cubemap_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_array_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_array_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_array_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_array_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture2d_to_texture3d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture3d_to_cubemap,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture3d_to_texture2d,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture3d_to_texture2d_array,Fail
-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb9_e5.texture3d_to_texture3d,Fail
-
 dEQP-GLES31.functional.draw_buffers_indexed.random.max_implementation_draw_buffers.0,Fail
 dEQP-GLES31.functional.draw_buffers_indexed.random.max_implementation_draw_buffers.1,Fail
 dEQP-GLES31.functional.draw_buffers_indexed.random.max_implementation_draw_buffers.10,Fail
@@ -439,25 +333,8 @@ dEQP-GLES31.functional.draw_buffers_indexed.random.max_implementation_draw_buffe
 dEQP-GLES31.functional.draw_buffers_indexed.random.max_implementation_draw_buffers.8,Fail
 dEQP-GLES31.functional.draw_buffers_indexed.random.max_implementation_draw_buffers.9,Fail
 
-# One triangle missing
-dEQP-GLES31.functional.draw_indirect.draw_elements_indirect.indices.index_byte,Fail
-
-# Line is entirely missing
-dEQP-GLES31.functional.draw_indirect.random.35,Fail
-dEQP-GLES31.functional.draw_indirect.random.45,Fail
-
-dEQP-GLES31.functional.image_load_store.2d.format_reinterpret.r32f_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.2d.format_reinterpret.rgba8_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.2d_array.format_reinterpret.r32f_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.2d_array.format_reinterpret.rgba8_rgba8_snorm,Fail
 dEQP-GLES31.functional.image_load_store.2d_array.image_size.readonly_writeonly_12x34x56,Fail
-dEQP-GLES31.functional.image_load_store.3d.format_reinterpret.r32f_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.3d.format_reinterpret.rgba8_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.buffer.format_reinterpret.r32f_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.buffer.format_reinterpret.rgba8_rgba8_snorm,Fail
 dEQP-GLES31.functional.image_load_store.buffer.image_size.readonly_1,Fail
-dEQP-GLES31.functional.image_load_store.cube.format_reinterpret.r32f_rgba8_snorm,Fail
-dEQP-GLES31.functional.image_load_store.cube.format_reinterpret.rgba8_rgba8_snorm,Fail
 
 # Same gray result in each attempted image sampling.
 dEQP-GLES31.functional.layout_binding.image.image2d.fragment_binding_max_array,Fail
@@ -753,20 +630,12 @@ dEQP-GLES31.functional.texture.gather.offsets.implementation_offset.2d_array.rgb
 dEQP-GLES31.functional.texture.gather.offsets.implementation_offset.2d_array.rgba8ui.texture_swizzle.one_red_green_blue,Fail
 dEQP-GLES31.functional.texture.gather.offsets.implementation_offset.2d_array.rgba8ui.texture_swizzle.zero_one_red_green,Fail
 
-# Sampled wrong, see other rgb16 failures.
-dEQP-GLES31.functional.texture.specification.teximage3d_pbo.rgb16f_cube_array,Fail
-dEQP-GLES31.functional.texture.specification.teximage3d_pbo.rgb16i_cube_array,Fail
-dEQP-GLES31.functional.texture.specification.teximage3d_pbo.rgb16ui_cube_array,Fail
-
 shaders@glsl-bug-110796,Fail
 
 spec@arb_compute_shader@local-id-explosion,Fail
 
 spec@arb_depth_buffer_float@fbo-clear-formats stencil,Fail
 spec@arb_depth_buffer_float@fbo-clear-formats stencil@GL_DEPTH32F_STENCIL8,Fail
-
-spec@arb_draw_indirect@gl_vertexid used with gldrawarraysindirect,Fail
-spec@arb_draw_indirect@gl_vertexid used with gldrawelementsindirect,Fail
 
 # "Testing level 3
 # Probe at (0,8)
@@ -782,7 +651,6 @@ spec@arb_gpu_shader5@execution@built-in-functions@fs-interpolateatsample-array-o
 spec@arb_gpu_shader5@execution@built-in-functions@fs-interpolateatsample-block-array,Fail
 
 spec@arb_multi_draw_indirect@arb_draw_elements_base_vertex-multidrawelements -indirect,Fail
-spec@arb_multi_draw_indirect@gl-3.0-multidrawarrays-vertexid -indirect,Fail
 
 spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex,Fail
 spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex@'vs_input2[1][0]' on GL_PROGRAM_INPUT,Fail
@@ -890,69 +758,13 @@ spec@arb_shader_image_load_store@indexing,Fail
 spec@arb_shader_image_load_store@indexing@Compute shader/dynamically uniform indexing test,Fail
 spec@arb_shader_image_load_store@invalid,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicAdd/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAdd/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicAnd/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicAnd/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicCompSwap/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicExchange/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicExchange/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicMax/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMax/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicMin/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicMin/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicOr/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicOr/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageAtomicXor/address bounds test/imageBuffer/r32ui,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageAtomicXor/unbound image test,Fail
 spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/image2D/r16_snorm,Fail
 spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/image2D/r8_snorm,Fail
 spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/image2D/rg16_snorm,Fail
@@ -960,13 +772,6 @@ spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/image2D/r
 spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/image2D/rgba16_snorm,Fail
 spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/image2D/rgba8_snorm,Fail
 spec@arb_shader_image_load_store@invalid@imageLoad/address bounds test/imageBuffer/rgba32f,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/incompatible format test,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/incompatible format test/imageBuffer,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/incomplete image test,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/invalid format test,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/layer bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/level bounds test,Fail
-spec@arb_shader_image_load_store@invalid@imageLoad/unbound image test,Fail
 
 spec@arb_shader_storage_buffer_object@array-ssbo-auto-binding,Fail
 spec@arb_shader_storage_buffer_object@compiler@atomicmin-swizzle.vert,Fail
@@ -1236,30 +1041,12 @@ spec@arb_texture_gather@texturegatheroffset@vs-rgba-zero-uint-2d,Fail
 spec@arb_texture_gather@texturegatheroffset@vs-rgba-zero-uint-2darray,Fail
 spec@arb_texture_gather@texturegatheroffset@vs-rgba-zero-unorm-2d,Fail
 spec@arb_texture_gather@texturegatheroffset@vs-rgba-zero-unorm-2darray,Fail
-spec@arb_texture_rg@texwrap formats bordercolor-swizzled,Fail
-spec@arb_texture_rg@texwrap formats bordercolor-swizzled@GL_R16- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats bordercolor-swizzled@GL_R8- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats bordercolor-swizzled@GL_RG16- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats bordercolor-swizzled@GL_RG8- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-float bordercolor-swizzled,Fail
-spec@arb_texture_rg@texwrap formats-float bordercolor-swizzled@GL_R16F- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-float bordercolor-swizzled@GL_R32F- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-float bordercolor-swizzled@GL_RG16F- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-float bordercolor-swizzled@GL_RG32F- swizzled- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_R16I- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_R16UI- swizzled- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_R32I- swizzled- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_R32UI- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_R8I- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_R8UI- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_RG16I- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_RG16UI- swizzled- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_RG32I- swizzled- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_RG32UI- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_RG8I- swizzled- border color only,Fail
-spec@arb_texture_rg@texwrap formats-int bordercolor-swizzled@GL_RG8UI- swizzled- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor@GL_R32I- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor@GL_R32UI- border color only,Fail
 spec@arb_texture_rg@texwrap formats-int bordercolor@GL_RG32I- border color only,Fail
@@ -1283,14 +1070,6 @@ spec@ext_framebuffer_blit@fbo-blit-check-limits,Fail
 spec@ext_framebuffer_multisample@accuracy all_samples stencil_resolve small depthstencil,Fail
 
 spec@ext_framebuffer_multisample@blit-mismatched-formats,Fail
-
-spec@ext_framebuffer_multisample@interpolation 6 centroid-edges,Fail
-spec@ext_framebuffer_multisample@interpolation 8 centroid-edges,Fail
-
-spec@ext_framebuffer_multisample@turn-on-off 2,Fail
-spec@ext_framebuffer_multisample@turn-on-off 4,Fail
-spec@ext_framebuffer_multisample@turn-on-off 6,Fail
-spec@ext_framebuffer_multisample@turn-on-off 8,Fail
 
 spec@ext_framebuffer_object@fbo-blending-formats,Fail
 spec@ext_framebuffer_object@fbo-blending-formats@3,Fail
@@ -1339,11 +1118,6 @@ spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats@GL_COMPRESSED_RED N
 spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats@GL_COMPRESSED_RED_RGTC1 NPOT,Fail
 spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats@GL_COMPRESSED_RG NPOT,Fail
 spec@ext_texture_compression_rgtc@fbo-generatemipmap-formats@GL_COMPRESSED_RG_RGTC2 NPOT,Fail
-spec@ext_texture_compression_rgtc@texwrap formats bordercolor-swizzled,Fail
-spec@ext_texture_compression_rgtc@texwrap formats bordercolor-swizzled@GL_COMPRESSED_RED_RGTC1- swizzled- border color only,Fail
-spec@ext_texture_compression_rgtc@texwrap formats bordercolor-swizzled@GL_COMPRESSED_RG_RGTC2- swizzled- border color only,Fail
-spec@ext_texture_compression_rgtc@texwrap formats bordercolor-swizzled@GL_COMPRESSED_SIGNED_RED_RGTC1- swizzled- border color only,Fail
-spec@ext_texture_compression_rgtc@texwrap formats bordercolor-swizzled@GL_COMPRESSED_SIGNED_RG_RGTC2- swizzled- border color only,Fail
 spec@ext_texture_compression_s3tc@fbo-generatemipmap-formats,Fail
 spec@ext_texture_compression_s3tc@fbo-generatemipmap-formats@GL_COMPRESSED_RGBA_S3TC_DXT1_EXT NPOT,Fail
 spec@ext_texture_compression_s3tc@fbo-generatemipmap-formats@GL_COMPRESSED_RGBA_S3TC_DXT3_EXT NPOT,Fail
@@ -1413,16 +1187,6 @@ spec@ext_texture_snorm@fbo-blending-formats@GL_RGB16_SNORM,Fail
 spec@ext_texture_snorm@fbo-blending-formats@GL_RGB8_SNORM,Fail
 spec@ext_texture_snorm@fbo-blending-formats@GL_RGB_SNORM,Fail
 
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_R16_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_R8_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_RG16_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_RG8_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_RGB16_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_RGB8_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_RGBA16_SNORM- swizzled- border color only,Fail
-spec@ext_texture_snorm@texwrap formats bordercolor-swizzled@GL_RGBA8_SNORM- swizzled- border color only,Fail
-
 spec@ext_texture_srgb@fbo-generatemipmap-formats-s3tc,Fail
 spec@ext_texture_srgb@fbo-generatemipmap-formats-s3tc@GL_COMPRESSED_SRGB NPOT,Fail
 spec@ext_texture_srgb@fbo-generatemipmap-formats-s3tc@GL_COMPRESSED_SRGB_ALPHA NPOT,Fail
@@ -1441,8 +1205,6 @@ spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SR
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_S3TC_DXT1_EXT- swizzled- border color only,Fail
-
-spec@glsl-1.20@compiler@invalid-vec4-array-to-vec3-array-conversion.vert,Fail
 
 spec@glsl-1.20@execution@clipping@vs-clip-vertex-primitives,Fail
 

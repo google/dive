@@ -23,16 +23,22 @@
  */
 
 #include "nir_builder.h"
+#include "list.h"
+#include "util/list.h"
+#include "util/ralloc.h"
+#include "glsl_types.h"
+#include "nir.h"
+#include "nir_serialize.h"
 
 nir_builder MUST_CHECK PRINTFLIKE(3, 4)
-   nir_builder_init_simple_shader(gl_shader_stage stage,
+   nir_builder_init_simple_shader(mesa_shader_stage stage,
                                   const nir_shader_compiler_options *options,
                                   const char *name, ...)
 {
    nir_builder b;
 
    memset(&b, 0, sizeof(b));
-   b.shader = nir_shader_create(NULL, stage, options, NULL);
+   b.shader = nir_shader_create(NULL, stage, options);
 
    if (name) {
       va_list args;
@@ -66,6 +72,7 @@ nir_builder_alu_instr_finish_and_insert(nir_builder *build, nir_alu_instr *instr
    const nir_op_info *op_info = &nir_op_infos[instr->op];
 
    instr->exact = build->exact;
+   instr->fp_fast_math = build->fp_fast_math;
 
    /* Guess the number of components the destination temporary should have
     * based on our input sizes, if it's not fixed for the op.
@@ -212,25 +219,72 @@ nir_build_alu_src_arr(nir_builder *build, nir_op op, nir_def **srcs)
    return nir_builder_alu_instr_finish_and_insert(build, instr);
 }
 
-nir_def *
-nir_build_tex_deref_instr(nir_builder *build, nir_texop op,
-                          nir_deref_instr *texture,
-                          nir_deref_instr *sampler,
-                          unsigned num_extra_srcs,
-                          const nir_tex_src *extra_srcs)
+static inline bool
+nir_dim_has_lod(enum glsl_sampler_dim dim)
 {
-   assert(texture != NULL);
-   assert(glsl_type_is_image(texture->type) ||
-          glsl_type_is_texture(texture->type) ||
-          glsl_type_is_sampler(texture->type));
+   switch (dim) {
+   case GLSL_SAMPLER_DIM_1D:
+   case GLSL_SAMPLER_DIM_2D:
+   case GLSL_SAMPLER_DIM_3D:
+   case GLSL_SAMPLER_DIM_CUBE:
+      return true;
+   default:
+      return false;
+   }
+}
 
-   const unsigned num_srcs = 1 + (sampler != NULL) + num_extra_srcs;
+nir_def *
+nir_build_tex_struct(nir_builder *build, nir_texop op, struct nir_tex_builder f)
+{
+   assert(((f.texture_index || f.texture_offset != NULL) +
+           (f.texture_handle != NULL) + (f.texture_deref != NULL)) <= 1 &&
+          "one type of texture");
+
+   assert(((f.sampler_index || f.sampler_offset != NULL) +
+           (f.sampler_handle != NULL) + (f.sampler_deref != NULL)) <= 1 &&
+          "one type of sampler");
+
+   bool has_texture_src =
+      f.texture_offset || f.texture_handle || f.texture_deref;
+
+   bool has_sampler_src =
+      f.sampler_offset || f.sampler_handle || f.sampler_deref;
+
+   nir_def *lod = f.lod;
+   enum glsl_sampler_dim dim = f.dim;
+   nir_alu_type dest_type = f.dest_type;
+   bool is_array = f.is_array;
+
+   if (f.texture_deref) {
+      const glsl_type *type = f.texture_deref->type;
+      assert(glsl_type_is_image(type) || glsl_type_is_texture(type) ||
+             glsl_type_is_sampler(type));
+
+      dim = glsl_get_sampler_dim(type);
+      is_array = glsl_sampler_type_is_array(type);
+
+      dest_type = nir_get_nir_type_for_glsl_base_type(
+         glsl_get_sampler_result_type(type));
+   }
+
+   if (lod == NULL && nir_dim_has_lod(dim) &&
+       (op == nir_texop_txs || op == nir_texop_txf)) {
+
+      lod = nir_imm_int(build, 0);
+   }
+
+   const unsigned num_srcs = has_texture_src + has_sampler_src + !!f.coord +
+                             !!f.ms_index + !!lod + !!f.bias + !!f.comparator;
 
    nir_tex_instr *tex = nir_tex_instr_create(build->shader, num_srcs);
    tex->op = op;
-   tex->sampler_dim = glsl_get_sampler_dim(texture->type);
-   tex->is_array = glsl_sampler_type_is_array(texture->type);
+   tex->sampler_dim = dim;
+   tex->is_array = is_array;
    tex->is_shadow = false;
+   tex->backend_flags = f.backend_flags;
+   tex->texture_index = f.texture_index;
+   tex->sampler_index = f.sampler_index;
+   tex->can_speculate = f.can_speculate;
 
    switch (op) {
    case nir_texop_txs:
@@ -249,60 +303,62 @@ nir_build_tex_deref_instr(nir_builder *build, nir_texop op,
       break;
    default:
       assert(!nir_tex_instr_is_query(tex));
-      tex->dest_type = nir_get_nir_type_for_glsl_base_type(
-         glsl_get_sampler_result_type(texture->type));
+      tex->dest_type = dest_type;
       break;
    }
 
-   unsigned src_idx = 0;
-   tex->src[src_idx++] = nir_tex_src_for_ssa(nir_tex_src_texture_deref,
-                                             &texture->def);
-   if (sampler != NULL) {
-      assert(glsl_type_is_sampler(sampler->type));
-      tex->src[src_idx++] = nir_tex_src_for_ssa(nir_tex_src_sampler_deref,
-                                                &sampler->def);
+   unsigned i = 0;
+
+   if (f.texture_deref) {
+      tex->src[i++] =
+         nir_tex_src_for_ssa(nir_tex_src_texture_deref, &f.texture_deref->def);
+   } else if (f.texture_handle) {
+      tex->src[i++] =
+         nir_tex_src_for_ssa(nir_tex_src_texture_handle, f.texture_handle);
+   } else if (f.texture_offset) {
+      tex->src[i++] =
+         nir_tex_src_for_ssa(nir_tex_src_texture_offset, f.texture_offset);
    }
-   for (unsigned i = 0; i < num_extra_srcs; i++) {
-      switch (extra_srcs[i].src_type) {
-      case nir_tex_src_coord:
-         tex->coord_components = nir_src_num_components(extra_srcs[i].src);
-         assert(tex->coord_components == tex->is_array +
-                                            glsl_get_sampler_dim_coordinate_components(tex->sampler_dim));
-         break;
 
-      case nir_tex_src_lod:
-         assert(tex->sampler_dim == GLSL_SAMPLER_DIM_1D ||
-                tex->sampler_dim == GLSL_SAMPLER_DIM_2D ||
-                tex->sampler_dim == GLSL_SAMPLER_DIM_3D ||
-                tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE);
-         break;
-
-      case nir_tex_src_ms_index:
-         assert(tex->sampler_dim == GLSL_SAMPLER_DIM_MS);
-         break;
-
-      case nir_tex_src_comparator:
-         /* Assume 1-component shadow for the builder helper */
-         tex->is_shadow = true;
-         tex->is_new_style_shadow = true;
-         break;
-
-      case nir_tex_src_texture_deref:
-      case nir_tex_src_sampler_deref:
-      case nir_tex_src_texture_offset:
-      case nir_tex_src_sampler_offset:
-      case nir_tex_src_texture_handle:
-      case nir_tex_src_sampler_handle:
-         unreachable("Texture and sampler must be provided directly as derefs");
-         break;
-
-      default:
-         break;
-      }
-
-      tex->src[src_idx++] = extra_srcs[i];
+   if (f.sampler_deref) {
+      assert(glsl_type_is_sampler(f.sampler_deref->type));
+      tex->src[i++] =
+         nir_tex_src_for_ssa(nir_tex_src_sampler_deref, &f.sampler_deref->def);
+   } else if (f.sampler_handle) {
+      tex->src[i++] =
+         nir_tex_src_for_ssa(nir_tex_src_sampler_handle, f.sampler_handle);
+   } else if (f.sampler_offset) {
+      tex->src[i++] =
+         nir_tex_src_for_ssa(nir_tex_src_sampler_offset, f.sampler_offset);
    }
-   assert(src_idx == num_srcs);
+
+   if (f.coord) {
+      tex->coord_components = f.coord->num_components;
+
+      assert(tex->coord_components ==
+             tex->is_array +
+                glsl_get_sampler_dim_coordinate_components(tex->sampler_dim));
+
+      tex->src[i++] = nir_tex_src_for_ssa(nir_tex_src_coord, f.coord);
+   }
+
+   if (lod) {
+      tex->src[i++] = nir_tex_src_for_ssa(nir_tex_src_lod, lod);
+   }
+
+   if (f.ms_index) {
+      assert(tex->sampler_dim == GLSL_SAMPLER_DIM_MS);
+      tex->src[i++] = nir_tex_src_for_ssa(nir_tex_src_ms_index, f.ms_index);
+   }
+
+   if (f.comparator) {
+      /* Assume 1-component shadow for the builder helper */
+      tex->is_shadow = true;
+      tex->is_new_style_shadow = true;
+      tex->src[i++] = nir_tex_src_for_ssa(nir_tex_src_comparator, f.comparator);
+   }
+
+   assert(i == num_srcs);
 
    nir_def_init(&tex->instr, &tex->def, nir_tex_instr_dest_size(tex),
                 nir_alu_type_get_type_size(tex->dest_type));
@@ -324,6 +380,7 @@ nir_vec_scalars(nir_builder *build, nir_scalar *comp, unsigned num_components)
       instr->src[i].swizzle[0] = comp[i].comp;
    }
    instr->exact = build->exact;
+   instr->fp_fast_math = build->fp_fast_math;
 
    /* Note: not reusing nir_builder_alu_instr_finish_and_insert() because it
     * can't re-guess the num_components when num_components == 1 (nir_op_mov).
@@ -372,11 +429,37 @@ nir_builder_instr_insert(nir_builder *build, nir_instr *instr)
 {
    nir_instr_insert(build->cursor, instr);
 
-   if (build->update_divergence)
-      nir_update_instr_divergence(build->shader, instr);
+   if (unlikely(build->shader->has_debug_info &&
+                (build->cursor.option == nir_cursor_before_instr ||
+                 build->cursor.option == nir_cursor_after_instr))) {
+      nir_instr_debug_info *cursor_info = nir_instr_get_debug_info(build->cursor.instr);
+      nir_instr_debug_info *instr_info = nir_instr_get_debug_info(instr);
+
+      if (!instr_info->line)
+         instr_info->line = cursor_info->line;
+      if (!instr_info->column)
+         instr_info->column = cursor_info->column;
+      if (!instr_info->spirv_offset)
+         instr_info->spirv_offset = cursor_info->spirv_offset;
+      if (!instr_info->filename)
+         instr_info->filename = cursor_info->filename;
+   }
 
    /* Move the cursor forward. */
    build->cursor = nir_after_instr(instr);
+}
+
+void
+nir_builder_instr_insert_at_top(nir_builder *build, nir_instr *instr)
+{
+   nir_cursor top = nir_before_impl(build->impl);
+   const bool at_top = build->cursor.block != NULL &&
+                       nir_cursors_equal(build->cursor, top);
+
+   nir_instr_insert(top, instr);
+
+   if (at_top)
+      build->cursor = nir_after_instr(instr);
 }
 
 void
@@ -510,7 +593,7 @@ nir_compare_func(nir_builder *b, enum compare_func func,
    case COMPARE_FUNC_LEQUAL:
       return nir_fge(b, src1, src0);
    }
-   unreachable("bad compare func");
+   UNREACHABLE("bad compare func");
 }
 
 nir_def *
@@ -552,7 +635,7 @@ nir_type_convert(nir_builder *b,
             opcode = nir_op_fneu32;
             break;
          default:
-            unreachable("Invalid Boolean size.");
+            UNREACHABLE("Invalid Boolean size.");
          }
       } else {
          assert(src_base == nir_type_int || src_base == nir_type_uint);
@@ -571,7 +654,7 @@ nir_type_convert(nir_builder *b,
             opcode = nir_op_ine32;
             break;
          default:
-            unreachable("Invalid Boolean size.");
+            UNREACHABLE("Invalid Boolean size.");
          }
       }
 
@@ -625,4 +708,31 @@ nir_gen_rect_vertices(nir_builder *b, nir_def *z, nir_def *w)
    comp[3] = w;
 
    return nir_vec(b, comp, 4);
+}
+
+nir_def *
+nir_call_serialized(nir_builder *b, const uint32_t *serialized,
+                    size_t serialized_size_B, nir_def **args)
+{
+   /* Deserialize the NIR. */
+   void *memctx = ralloc_context(NULL);
+   struct blob_reader blob;
+   blob_reader_init(&blob, (const void *)serialized, serialized_size_B);
+   nir_function *func = nir_deserialize_function(memctx, b->shader->options,
+                                                 &blob);
+
+   /* Validate the arguments, since this won't happen anywhere else */
+   for (unsigned i = 0; i < func->num_params; ++i) {
+      assert(func->params[i].num_components == args[i]->num_components);
+      assert(func->params[i].bit_size == args[i]->bit_size);
+   }
+
+   /* Insert the function at the cursor position */
+   nir_def *ret = nir_inline_function_impl(b, func->impl, args, NULL);
+
+   /* Indices & metadata are completely messed up now */
+   nir_index_ssa_defs(b->impl);
+   nir_progress(true, b->impl, nir_metadata_none);
+   ralloc_free(memctx);
+   return ret;
 }

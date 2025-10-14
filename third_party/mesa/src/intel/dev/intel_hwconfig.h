@@ -38,7 +38,12 @@ bool
 intel_hwconfig_process_table(struct intel_device_info *devinfo, void *data,
                              int32_t len);
 void
+intel_check_hwconfig_items(int fd, struct intel_device_info *devinfo);
+void
 intel_get_and_print_hwconfig_table(int fd, struct intel_device_info *devinfo);
+
+bool
+intel_hwconfig_is_required(const struct intel_device_info *devinfo);
 
 #ifdef __cplusplus
 }

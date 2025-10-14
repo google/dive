@@ -211,6 +211,13 @@ util_dump_ptr(FILE *stream, const void *value)
       util_dump_member_end(_stream); \
    } while(0)
 
+#define util_dump_member_val(_stream, _type, _obj, _member) \
+   do { \
+      util_dump_member_begin(_stream, #_member); \
+      util_dump_##_type(_stream, &(_obj)->_member); \
+      util_dump_member_end(_stream); \
+   } while(0)
+
 #define util_dump_arg_array(_stream, _type, _arg, _size) \
    do { \
       util_dump_arg_begin(_stream, #_arg); \
@@ -222,6 +229,13 @@ util_dump_ptr(FILE *stream, const void *value)
    do { \
       util_dump_member_begin(_stream, #_member); \
       util_dump_array(_stream, _type, (_obj)->_member, sizeof((_obj)->_member)/sizeof((_obj)->_member[0])); \
+      util_dump_member_end(_stream); \
+   } while(0)
+
+#define util_dump_member_array_val(_stream, _type, _obj, _member) \
+   do { \
+      util_dump_member_begin(_stream, #_member); \
+      util_dump_struct_array(_stream, _type, (_obj)->_member, sizeof((_obj)->_member)/sizeof((_obj)->_member[0])); \
       util_dump_member_end(_stream); \
    } while(0)
 
@@ -664,8 +678,8 @@ util_dump_framebuffer_state(FILE *stream, const struct pipe_framebuffer_state *s
    util_dump_member(stream, uint, state, samples);
    util_dump_member(stream, uint, state, layers);
    util_dump_member(stream, uint, state, nr_cbufs);
-   util_dump_member_array(stream, ptr, state, cbufs);
-   util_dump_member(stream, ptr, state, zsbuf);
+   util_dump_member_array_val(stream, surface, state, cbufs);
+   util_dump_member_val(stream, ptr, state, zsbuf);
 
    util_dump_struct_end(stream);
 }
@@ -712,13 +726,11 @@ util_dump_surface(FILE *stream, const struct pipe_surface *state)
    util_dump_struct_begin(stream, "pipe_surface");
 
    util_dump_member(stream, format, state, format);
-   util_dump_member(stream, uint, state, width);
-   util_dump_member(stream, uint, state, height);
 
    util_dump_member(stream, ptr, state, texture);
-   util_dump_member(stream, uint, state, u.tex.level);
-   util_dump_member(stream, uint, state, u.tex.first_layer);
-   util_dump_member(stream, uint, state, u.tex.last_layer);
+   util_dump_member(stream, uint, state, level);
+   util_dump_member(stream, uint, state, first_layer);
+   util_dump_member(stream, uint, state, last_layer);
 
    util_dump_struct_end(stream);
 }
@@ -978,8 +990,6 @@ void util_dump_grid_info(FILE *stream, const struct pipe_grid_info *state)
 
    util_dump_struct_begin(stream, "pipe_grid_info");
 
-   util_dump_member(stream, uint, state, pc);
-   util_dump_member(stream, ptr, state, input);
    util_dump_member(stream, uint, state, work_dim);
 
    util_dump_member_begin(stream, "block");
@@ -1018,6 +1028,8 @@ void util_dump_box(FILE *stream, const struct pipe_box *box)
 void util_dump_blit_info(FILE *stream, const struct pipe_blit_info *info)
 {
    char mask[7];
+   unsigned s;
+   static const char *swiz = "RGBA01";
 
    if (!info) {
       util_dump_null(stream);
@@ -1064,6 +1076,16 @@ void util_dump_blit_info(FILE *stream, const struct pipe_blit_info *info)
    util_dump_member(stream, bool, info, scissor_enable);
    util_dump_member_begin(stream, "scissor");
    util_dump_scissor_state(stream, &info->scissor);
+   util_dump_member_end(stream);
+
+   util_dump_member(stream, bool, info, swizzle_enable);
+
+   for (unsigned i = 0; i < 4; i++) {
+      s = (unsigned)info->swizzle[i];
+      mask[i] = s < 6 ? swiz[s] : '?';
+   }
+   util_dump_member_begin(stream, "swizzle");
+   util_dump_string(stream, mask);
    util_dump_member_end(stream);
 
    util_dump_member(stream, bool, info, render_condition_enable);

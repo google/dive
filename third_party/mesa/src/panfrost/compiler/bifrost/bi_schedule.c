@@ -148,10 +148,13 @@ struct bi_clause_state {
 static enum bifrost_message_type
 bi_message_type_for_instr(bi_instr *ins)
 {
-   enum bifrost_message_type msg = bi_opcode_props[ins->op].message;
+   enum bifrost_message_type msg = bi_get_opcode_props(ins)->message;
    bool ld_var_special = (ins->op == BI_OPCODE_LD_VAR_SPECIAL);
 
    if (ld_var_special && ins->varying_name == BI_VARYING_NAME_FRAG_Z)
+      return BIFROST_MESSAGE_Z_STENCIL;
+
+   if (ins->op == BI_OPCODE_LD_TILE && ins->z_stencil)
       return BIFROST_MESSAGE_Z_STENCIL;
 
    if (msg == BIFROST_MESSAGE_LOAD && ins->seg == BI_SEG_UBO)
@@ -228,7 +231,7 @@ bi_create_dependency_graph(struct bi_worklist st, bool inorder, bool is_blend)
 
    /* Initialize dependency graph */
    for (unsigned i = 0; i < st.count; ++i) {
-      st.dependents[i] = calloc(BITSET_WORDS(st.count), sizeof(BITSET_WORD));
+      st.dependents[i] = BITSET_CALLOC(st.count);
 
       st.dep_counts[i] = 0;
    }
@@ -337,7 +340,7 @@ bi_lower_cubeface(bi_context *ctx, struct bi_clause_state *clause,
    bi_instr *cubeface1 = bi_cubeface1_to(&b, pinstr->dest[0], pinstr->src[0],
                                          pinstr->src[1], pinstr->src[2]);
 
-   pinstr->op = BI_OPCODE_CUBEFACE2;
+   bi_set_opcode(pinstr, BI_OPCODE_CUBEFACE2);
    pinstr->dest[0] = pinstr->dest[1];
    bi_drop_dests(pinstr, 1);
 
@@ -361,7 +364,7 @@ bi_lower_atom_c(bi_context *ctx, struct bi_clause_state *clause,
                                            pinstr->src[0], pinstr->atom_opc);
 
    if (bi_is_null(pinstr->dest[0]))
-      atom_c->op = BI_OPCODE_ATOM_C_I32;
+      bi_set_opcode(atom_c, BI_OPCODE_ATOM_C_I32);
 
    bi_instr *atom_cx =
       bi_atom_cx_to(&b, pinstr->dest[0], pinstr->src[0], pinstr->src[1],
@@ -382,7 +385,49 @@ bi_lower_atom_c1(bi_context *ctx, struct bi_clause_state *clause,
                                             pinstr->atom_opc);
 
    if (bi_is_null(pinstr->dest[0]))
-      atom_c->op = BI_OPCODE_ATOM_C1_I32;
+      bi_set_opcode(atom_c, BI_OPCODE_ATOM_C1_I32);
+
+   bi_instr *atom_cx =
+      bi_atom_cx_to(&b, pinstr->dest[0], bi_null(), pinstr->src[0],
+                    pinstr->src[1], bi_dontcare(&b), pinstr->sr_count);
+   tuple->add = atom_cx;
+   bi_remove_instruction(pinstr);
+
+   return atom_c;
+}
+
+static bi_instr *
+bi_lower_atom_c_64(bi_context *ctx, struct bi_clause_state *clause,
+                struct bi_tuple_state *tuple)
+{
+   bi_instr *pinstr = tuple->add;
+   bi_builder b = bi_init_builder(ctx, bi_before_instr(pinstr));
+   bi_instr *atom_c = bi_atom_c_return_i64(&b, pinstr->src[1], pinstr->src[2],
+                                           pinstr->src[0], pinstr->atom_opc);
+
+   if (bi_is_null(pinstr->dest[0]))
+      bi_set_opcode(atom_c, BI_OPCODE_ATOM_C_I64);
+
+   bi_instr *atom_cx =
+      bi_atom_cx_to(&b, pinstr->dest[0], pinstr->src[0], pinstr->src[1],
+                    pinstr->src[2], pinstr->src[0], pinstr->sr_count);
+   tuple->add = atom_cx;
+   bi_remove_instruction(pinstr);
+
+   return atom_c;
+}
+
+static bi_instr *
+bi_lower_atom_c1_64(bi_context *ctx, struct bi_clause_state *clause,
+                 struct bi_tuple_state *tuple)
+{
+   bi_instr *pinstr = tuple->add;
+   bi_builder b = bi_init_builder(ctx, bi_before_instr(pinstr));
+   bi_instr *atom_c = bi_atom_c1_return_i64(&b, pinstr->src[0], pinstr->src[1],
+                                            pinstr->atom_opc);
+
+   if (bi_is_null(pinstr->dest[0]))
+      bi_set_opcode(atom_c, BI_OPCODE_ATOM_C1_I64);
 
    bi_instr *atom_cx =
       bi_atom_cx_to(&b, pinstr->dest[0], bi_null(), pinstr->src[0],
@@ -403,7 +448,7 @@ bi_lower_seg_add(bi_context *ctx, struct bi_clause_state *clause,
    bi_instr *fma = bi_seg_add_to(&b, pinstr->dest[0], pinstr->src[0],
                                  pinstr->preserve_null, pinstr->seg);
 
-   pinstr->op = BI_OPCODE_SEG_ADD;
+   bi_set_opcode(pinstr, BI_OPCODE_SEG_ADD);
    pinstr->src[0] = pinstr->src[1];
    bi_drop_srcs(pinstr, 1);
 
@@ -465,7 +510,7 @@ bi_initialize_worklist(bi_block *block, bool inorder, bool is_blend)
    st.dep_counts = calloc(st.count, sizeof(st.dep_counts[0]));
 
    bi_create_dependency_graph(st, inorder, is_blend);
-   st.worklist = calloc(BITSET_WORDS(st.count), sizeof(BITSET_WORD));
+   st.worklist = BITSET_CALLOC(st.count);
 
    for (unsigned i = 0; i < st.count; ++i) {
       if (st.dep_counts[i] == 0)
@@ -546,7 +591,7 @@ bi_can_fma(bi_instr *ins)
       return false;
 
    /* TODO: some additional fp16 constraints */
-   return bi_opcode_props[ins->op].fma;
+   return bi_get_opcode_props(ins)->fma;
 }
 
 static bool
@@ -576,7 +621,7 @@ bi_can_add(bi_instr *ins)
       return false;
 
    /* TODO: some additional fp16 constraints */
-   return bi_opcode_props[ins->op].add;
+   return bi_get_opcode_props(ins)->add;
 }
 
 /* Architecturally, no single instruction has a "not last" constraint. However,
@@ -604,7 +649,7 @@ bi_must_not_last(bi_instr *ins)
 bool
 bi_must_message(bi_instr *ins)
 {
-   return (bi_opcode_props[ins->op].message != BIFROST_MESSAGE_NONE) ||
+   return (bi_get_opcode_props(ins)->message != BIFROST_MESSAGE_NONE) ||
           (ins->op == BI_OPCODE_DISCARD_F32);
 }
 
@@ -700,7 +745,7 @@ bi_impacted_t_modifiers(bi_instr *I, unsigned src)
    case BI_OPCODE_S8_TO_S32:
    case BI_OPCODE_U8_TO_F32:
    case BI_OPCODE_U8_TO_U32:
-      return (swizzle != BI_SWIZZLE_B0000);
+      return (swizzle != BI_SWIZZLE_B0);
 
    case BI_OPCODE_V2S8_TO_V2F16:
    case BI_OPCODE_V2S8_TO_V2S16:
@@ -730,11 +775,11 @@ bool
 bi_reads_t(bi_instr *ins, unsigned src)
 {
    /* Branch offset cannot come from passthrough */
-   if (bi_opcode_props[ins->op].branch)
+   if (bi_get_opcode_props(ins)->branch)
       return src != 2;
 
    /* Table can never read passthrough */
-   if (bi_opcode_props[ins->op].table)
+   if (bi_get_opcode_props(ins)->table)
       return false;
 
    /* Staging register reads may happen before the succeeding register
@@ -1005,7 +1050,7 @@ bi_write_count(bi_instr *instr, uint64_t live_after_temp)
    unsigned count = 0;
 
    bi_foreach_dest(instr, d) {
-      if (d == 0 && bi_opcode_props[instr->op].sr_write)
+      if (d == 0 && bi_get_opcode_props(instr)->sr_write)
          continue;
 
       assert(instr->dest[0].type == BI_INDEX_REGISTER);
@@ -1016,16 +1061,35 @@ bi_write_count(bi_instr *instr, uint64_t live_after_temp)
    return count;
 }
 
-/*
- * Test if an instruction required flush-to-zero mode. Currently only supported
- * for f16<-->f32 conversions to implement fquantize16
- */
-static bool
-bi_needs_ftz(bi_instr *I)
+/* Test if an instruction requires a specific flush-to-zero mode. */
+static enum bi_ftz_state
+bi_instr_ftz(bi_context *ctx, bi_instr *I)
 {
-   return (I->op == BI_OPCODE_F16_TO_F32 ||
-           I->op == BI_OPCODE_V2F32_TO_V2F16) &&
-          I->ftz;
+   /* f16<->f32 conversions have a ftz override flag to implement fquantize16 */
+   if ((I->op == BI_OPCODE_F16_TO_F32 || I->op == BI_OPCODE_V2F32_TO_V2F16) &&
+       I->ftz)
+      return BI_FTZ_STATE_ENABLE;
+
+   struct bi_op_props props = bi_opcode_props[I->op];
+   if (!props.is_float)
+      return BI_FTZ_STATE_NONE;
+
+   enum bi_size size = bi_opcode_props[I->op].size;
+   unsigned bitsize;
+   if (size == BI_SIZE_16)
+      bitsize = 16;
+   else if (size == BI_SIZE_32)
+      bitsize = 32;
+   else
+      return BI_FTZ_STATE_NONE;
+
+   unsigned execution_mode = ctx->nir->info.float_controls_execution_mode;
+   if (nir_is_denorm_flush_to_zero(execution_mode, bitsize))
+      return BI_FTZ_STATE_ENABLE;
+   else if (nir_is_denorm_preserve(execution_mode, bitsize))
+      return BI_FTZ_STATE_DISABLE;
+   else
+      return BI_FTZ_STATE_NONE;
 }
 
 /*
@@ -1033,10 +1097,13 @@ bi_needs_ftz(bi_instr *I)
  * present we only consider flush-to-zero modes.
  */
 static bool
-bi_numerically_incompatible(struct bi_clause_state *clause, bi_instr *instr)
+bi_numerically_incompatible(bi_context *ctx, struct bi_clause_state *clause,
+                            bi_instr *instr)
 {
+   enum bi_ftz_state instr_ftz = bi_instr_ftz(ctx, instr);
    return (clause->ftz != BI_FTZ_STATE_NONE) &&
-          ((clause->ftz == BI_FTZ_STATE_ENABLE) != bi_needs_ftz(instr));
+          (instr_ftz != BI_FTZ_STATE_NONE) &&
+          (clause->ftz != instr_ftz);
 }
 
 /* Instruction placement entails two questions: what subset of instructions in
@@ -1047,7 +1114,8 @@ bi_numerically_incompatible(struct bi_clause_state *clause, bi_instr *instr)
  * whitepaper. The cost function is a heuristic. */
 
 static bool
-bi_instr_schedulable(bi_instr *instr, struct bi_clause_state *clause,
+bi_instr_schedulable(bi_context *ctx, bi_instr *instr,
+                     struct bi_clause_state *clause,
                      struct bi_tuple_state *tuple, uint64_t live_after_temp,
                      bool fma)
 {
@@ -1060,21 +1128,21 @@ bi_instr_schedulable(bi_instr *instr, struct bi_clause_state *clause,
       return false;
 
    /* Some instructions have placement requirements */
-   if (bi_opcode_props[instr->op].last && !tuple->last)
+   if (bi_get_opcode_props(instr)->last && !tuple->last)
       return false;
 
    if (bi_must_not_last(instr) && tuple->last)
       return false;
 
    /* Numerical properties must be compatible with the clause */
-   if (bi_numerically_incompatible(clause, instr))
+   if (bi_numerically_incompatible(ctx, clause, instr))
       return false;
 
    /* Message-passing instructions are not guaranteed write within the
     * same clause (most likely they will not), so if a later instruction
     * in the clause accesses the destination, the message-passing
     * instruction can't be scheduled */
-   if (bi_opcode_props[instr->op].sr_write) {
+   if (bi_get_opcode_props(instr)->sr_write) {
       bi_foreach_dest(instr, d) {
          unsigned nr = bi_count_write_registers(instr, d);
          assert(instr->dest[d].type == BI_INDEX_REGISTER);
@@ -1090,7 +1158,7 @@ bi_instr_schedulable(bi_instr *instr, struct bi_clause_state *clause,
       }
    }
 
-   if (bi_opcode_props[instr->op].sr_read && !bi_is_null(instr->src[0])) {
+   if (bi_get_opcode_props(instr)->sr_read && !bi_is_null(instr->src[0])) {
       unsigned nr = bi_count_read_registers(instr, 0);
       assert(instr->src[0].type == BI_INDEX_REGISTER);
       unsigned reg = instr->src[0].value;
@@ -1183,16 +1251,16 @@ bi_instr_cost(bi_instr *instr, struct bi_tuple_state *tuple)
       cost--;
 
    /* Last instructions are big constraints (XXX: no effect on shader-db) */
-   if (bi_opcode_props[instr->op].last)
+   if (bi_get_opcode_props(instr)->last)
       cost -= 2;
 
    return cost;
 }
 
 static unsigned
-bi_choose_index(struct bi_worklist st, struct bi_clause_state *clause,
-                struct bi_tuple_state *tuple, uint64_t live_after_temp,
-                bool fma)
+bi_choose_index(bi_context *ctx, struct bi_worklist st,
+                struct bi_clause_state *clause, struct bi_tuple_state *tuple,
+                uint64_t live_after_temp, bool fma)
 {
    unsigned i, best_idx = ~0;
    signed best_cost = INT_MAX;
@@ -1200,7 +1268,7 @@ bi_choose_index(struct bi_worklist st, struct bi_clause_state *clause,
    BITSET_FOREACH_SET(i, st.worklist, st.count) {
       bi_instr *instr = st.instructions[i];
 
-      if (!bi_instr_schedulable(instr, clause, tuple, live_after_temp, fma))
+      if (!bi_instr_schedulable(ctx, instr, clause, tuple, live_after_temp, fma))
          continue;
 
       signed cost = bi_instr_cost(instr, tuple);
@@ -1220,8 +1288,9 @@ bi_choose_index(struct bi_worklist st, struct bi_clause_state *clause,
 }
 
 static void
-bi_pop_instr(struct bi_clause_state *clause, struct bi_tuple_state *tuple,
-             bi_instr *instr, uint64_t live_after_temp, bool fma)
+bi_pop_instr(bi_context *ctx, struct bi_clause_state *clause,
+             struct bi_tuple_state *tuple, bi_instr *instr,
+             uint64_t live_after_temp, bool fma)
 {
    bi_update_fau(clause, tuple, instr, fma, true);
 
@@ -1243,12 +1312,9 @@ bi_pop_instr(struct bi_clause_state *clause, struct bi_tuple_state *tuple,
          tuple->reg.reads[tuple->reg.nr_reads++] = instr->src[s];
    }
 
-   /* This could be optimized to allow pairing integer instructions with
-    * special flush-to-zero instructions, but punting on this until we have
-    * a workload that cares.
-    */
-   clause->ftz =
-      bi_needs_ftz(instr) ? BI_FTZ_STATE_ENABLE : BI_FTZ_STATE_DISABLE;
+   enum bi_ftz_state ftz = bi_instr_ftz(ctx, instr);
+   if (ftz != BI_FTZ_STATE_NONE)
+      clause->ftz = ftz;
 }
 
 /* Choose the best instruction and pop it off the worklist. Returns NULL if no
@@ -1265,6 +1331,10 @@ bi_take_instr(bi_context *ctx, struct bi_worklist st,
       return bi_lower_atom_c(ctx, clause, tuple);
    else if (tuple->add && tuple->add->op == BI_OPCODE_ATOM1_RETURN_I32)
       return bi_lower_atom_c1(ctx, clause, tuple);
+   else if (tuple->add && tuple->add->op == BI_OPCODE_ATOM_RETURN_I64)
+      return bi_lower_atom_c_64(ctx, clause, tuple);
+   else if (tuple->add && tuple->add->op == BI_OPCODE_ATOM1_RETURN_I64)
+      return bi_lower_atom_c1_64(ctx, clause, tuple);
    else if (tuple->add && tuple->add->op == BI_OPCODE_SEG_ADD_I64)
       return bi_lower_seg_add(ctx, clause, tuple);
    else if (tuple->add && tuple->add->table)
@@ -1281,7 +1351,7 @@ bi_take_instr(bi_context *ctx, struct bi_worklist st,
       /* Schedule the spill */
       bi_builder b = bi_init_builder(ctx, bi_before_tuple(tuple->prev));
       bi_instr *mov = bi_mov_i32_to(&b, src, src);
-      bi_pop_instr(clause, tuple, mov, live_after_temp, fma);
+      bi_pop_instr(ctx, clause, tuple, mov, live_after_temp, fma);
       return mov;
    }
 
@@ -1291,7 +1361,7 @@ bi_take_instr(bi_context *ctx, struct bi_worklist st,
       return NULL;
 #endif
 
-   unsigned idx = bi_choose_index(st, clause, tuple, live_after_temp, fma);
+   unsigned idx = bi_choose_index(ctx, st, clause, tuple, live_after_temp, fma);
 
    if (idx >= st.count)
       return NULL;
@@ -1301,7 +1371,7 @@ bi_take_instr(bi_context *ctx, struct bi_worklist st,
 
    BITSET_CLEAR(st.worklist, idx);
    bi_update_worklist(st, idx);
-   bi_pop_instr(clause, tuple, instr, live_after_temp, fma);
+   bi_pop_instr(ctx, clause, tuple, instr, live_after_temp, fma);
 
    /* Fixups */
    bi_builder b = bi_init_builder(ctx, bi_before_instr(instr));
@@ -1342,6 +1412,10 @@ bi_use_passthrough(bi_instr *ins, bi_index old, enum bifrost_packed_src new,
       if ((i == 0 || i == 4) && except_sr)
          continue;
 
+      if ((new == BIFROST_SRC_PASS_FMA || new == BIFROST_SRC_PASS_ADD) &&
+          !bi_reads_temps(ins, i))
+         continue;
+
       if (bi_is_word_equiv(ins->src[i], old)) {
          ins->src[i].type = BI_INDEX_PASS;
          ins->src[i].value = new;
@@ -1361,7 +1435,7 @@ bi_use_passthrough(bi_instr *ins, bi_index old, enum bifrost_packed_src new,
 static void
 bi_rewrite_passthrough(bi_tuple prec, bi_tuple succ)
 {
-   bool sr_read = succ.add ? bi_opcode_props[succ.add->op].sr_read : false;
+   bool sr_read = succ.add ? bi_get_opcode_props(succ.add)->sr_read : false;
 
    if (prec.add && prec.add->nr_dests) {
       bi_use_passthrough(succ.fma, prec.add->dest[0], BIFROST_SRC_PASS_ADD,
@@ -1738,7 +1812,7 @@ bi_schedule_clause(bi_context *ctx, bi_block *block, struct bi_worklist st,
 
       tuple = &clause->tuples[idx];
 
-      if (clause->message && bi_opcode_props[clause->message->op].sr_read &&
+      if (clause->message && bi_get_opcode_props(clause->message)->sr_read &&
           !bi_is_null(clause->message->src[0])) {
          unsigned nr = bi_count_read_registers(clause->message, 0);
          live_after_temp |=
@@ -1780,6 +1854,11 @@ bi_schedule_clause(bi_context *ctx, bi_block *block, struct bi_worklist st,
                clause->dependencies |= (1 << BIFROST_SLOT_ELDEST_DEPTH);
                break;
             case BI_OPCODE_LD_TILE:
+               if (clause->message_type == BIFROST_MESSAGE_Z_STENCIL)
+                  clause->dependencies |= (1 << BIFROST_SLOT_ELDEST_DEPTH);
+               else
+                  clause->dependencies |= (1 << BIFROST_SLOT_ELDEST_COLOUR);
+               break;
             case BI_OPCODE_ST_TILE:
                clause->dependencies |= (1 << BIFROST_SLOT_ELDEST_COLOUR);
                break;
@@ -1989,7 +2068,7 @@ bi_schedule_block(bi_context *ctx, bi_block *block)
    }
 
    if (incomplete)
-      unreachable("The above instructions failed to schedule.");
+      UNREACHABLE("The above instructions failed to schedule.");
 #endif
 
    bi_free_worklist(st);
@@ -2002,13 +2081,18 @@ bi_check_fau_src(bi_instr *ins, unsigned s, uint32_t *constants,
    assert(s < ins->nr_srcs);
    bi_index src = ins->src[s];
 
+   /* CLPER only support registers on source 0 */
+   if (s == 0 &&
+       (ins->op == BI_OPCODE_CLPER_OLD_I32 || ins->op == BI_OPCODE_CLPER_I32))
+      return false;
+
    /* Staging registers can't have FAU accesses */
    if (bi_is_staging_src(ins, s))
       return (src.type != BI_INDEX_CONSTANT) && (src.type != BI_INDEX_FAU);
 
    if (src.type == BI_INDEX_CONSTANT) {
       /* Allow fast zero */
-      if (src.value == 0 && bi_opcode_props[ins->op].fma && bi_reads_zero(ins))
+      if (src.value == 0 && bi_get_opcode_props(ins)->fma && bi_reads_zero(ins))
          return true;
 
       if (!bi_is_null(*fau))
@@ -2104,7 +2188,7 @@ bi_add_nop_for_atest(bi_context *ctx)
     * clause */
 
    bi_instr *I = rzalloc(ctx, bi_instr);
-   I->op = BI_OPCODE_NOP;
+   bi_set_opcode(I, BI_OPCODE_NOP);
 
    bi_clause *new_clause = ralloc(ctx, bi_clause);
    *new_clause = (bi_clause){

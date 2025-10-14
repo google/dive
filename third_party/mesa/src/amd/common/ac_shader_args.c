@@ -5,13 +5,14 @@
  */
 
 #include "ac_shader_args.h"
-
-#include "nir/nir_builder.h"
+#include "nir/nir_defines.h"
+#include <assert.h>
 
 void ac_add_arg(struct ac_shader_args *info, enum ac_arg_regfile regfile, unsigned size,
                 enum ac_arg_type type, struct ac_arg *arg)
 {
    assert(info->arg_count < AC_MAX_ARGS);
+   assert(nir_num_components_valid(size));
 
    unsigned offset;
    if (regfile == AC_ARG_SGPR) {

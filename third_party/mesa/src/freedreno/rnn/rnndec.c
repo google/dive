@@ -1,26 +1,8 @@
 /*
- * Copyright (C) 2010-2011 Marcin Kościelnicki <koriakin@0x04.net>
- * Copyright (C) 2010 Francisco Jerez <currojerez@riseup.net>
+ * Copyright © 2010-2011 Marcin Kościelnicki <koriakin@0x04.net>
+ * Copyright © 2010 Francisco Jerez <currojerez@riseup.net>
  * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "rnndec.h"
@@ -141,6 +123,18 @@ const char *rnndec_decode_enum(struct rnndeccontext *ctx, const char *enumname, 
 		return rnndec_decode_enum_val(ctx, en->vals, en->valsnum, enumval);
 	}
 	return NULL;
+}
+
+int rnndec_decode_enum_value(struct rnndeccontext *ctx, const char *enumname, const char *enumval)
+{
+	struct rnnenum *en = rnn_findenum (ctx->db, enumname);
+	if (en) {
+      for (int i = 0; i < en->valsnum; i++)
+         if (rnndec_varmatch(ctx, &en->vals[i]->varinfo) &&
+               en->vals[i]->valvalid && !strcmp(en->vals[i]->name, enumval))
+            return en->vals[i]->value;
+	}
+	return -1;
 }
 
 /* The name UNK%u is used as a placeholder for bitfields that exist but
@@ -532,6 +526,8 @@ static unsigned tryreg(struct rnndeccontext *ctx, struct rnndelem **elems, int e
 					assert(suffix);
 					ret = tryreg(ctx, elem->subelems, elem->subelemsnum, dwidth, child, offset);
 					if (ret) {
+						if (idx >= elem->length)
+							return 0;
 						*offset += elem->offset + (idx * elem->stride);
 						return 1;
 					}

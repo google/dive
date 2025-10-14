@@ -22,7 +22,10 @@
  */
 
 #include "bi_builder.h"
+#include "bi_swizzles.h"
 #include "compiler.h"
+#include "valhall.h"
+#include "panfrost/lib/pan_props.h"
 
 /* Not all 8-bit and 16-bit instructions support all swizzles on all sources.
  * These passes, intended to run after NIR->BIR but before scheduling/RA, lower
@@ -30,105 +33,90 @@
  * recombine swizzles where we can as an optimization.
  */
 
-static bool
-bi_swizzle_replicates_8(enum bi_swizzle swz)
+static uint32_t
+va_op_swizzles(enum bi_opcode op, unsigned src)
 {
-   switch (swz) {
-   case BI_SWIZZLE_B0000:
-   case BI_SWIZZLE_B1111:
-   case BI_SWIZZLE_B2222:
-   case BI_SWIZZLE_B3333:
-      return true;
-   default:
-      return false;
+   /* This is a bifrost-only instruction that is lowered on valhall */
+   if (!valhall_opcodes[op].exact)
+      return bi_op_swizzles[op][src];
+
+   uint32_t swizzles = 0;
+   struct va_src_info info = va_src_info(op, src);
+
+   if (info.swizzle) {
+      assert(info.size == VA_SIZE_16 || info.size == VA_SIZE_32);
+      if (info.size == VA_SIZE_16)
+         swizzles |= (1 << BI_SWIZZLE_H00) | (1 << BI_SWIZZLE_H10) |
+                     (1 << BI_SWIZZLE_H01) | (1 << BI_SWIZZLE_H11);
+      else if (info.size == VA_SIZE_32)
+         swizzles |= (1 << BI_SWIZZLE_H01) | (1 << BI_SWIZZLE_H0) |
+                     (1 << BI_SWIZZLE_H1);
    }
+
+   if (info.lane) {
+      if (info.size == VA_SIZE_8)
+         swizzles |= (1 << BI_SWIZZLE_B0) | (1 << BI_SWIZZLE_B1) |
+                     (1 << BI_SWIZZLE_B2) | (1 << BI_SWIZZLE_B3);
+      if (info.size == VA_SIZE_16)
+         swizzles |= (1 << BI_SWIZZLE_H0) | (1 << BI_SWIZZLE_H1);
+   }
+
+   if (info.lanes) {
+      assert(info.size == VA_SIZE_8);
+      swizzles |= (1 << BI_SWIZZLE_B00) | (1 << BI_SWIZZLE_B11) |
+                  (1 << BI_SWIZZLE_B22) | (1 << BI_SWIZZLE_B33);
+   }
+
+   if (info.halfswizzle) {
+      assert(info.size == VA_SIZE_8);
+      swizzles |= (1 << BI_SWIZZLE_B00) | (1 << BI_SWIZZLE_B10) |
+                  (1 << BI_SWIZZLE_B20) | (1 << BI_SWIZZLE_B30) |
+                  (1 << BI_SWIZZLE_B01) | (1 << BI_SWIZZLE_B11) |
+                  (1 << BI_SWIZZLE_B21) | (1 << BI_SWIZZLE_B31) |
+                  (1 << BI_SWIZZLE_B02) | (1 << BI_SWIZZLE_B12) |
+                  (1 << BI_SWIZZLE_B22) | (1 << BI_SWIZZLE_B32) |
+                  (1 << BI_SWIZZLE_B03) | (1 << BI_SWIZZLE_B13) |
+                  (1 << BI_SWIZZLE_B23) | (1 << BI_SWIZZLE_B33);
+   }
+
+   if (info.widen) {
+      if (info.size == VA_SIZE_8)
+         swizzles |= (1 << BI_SWIZZLE_B0123) | (1 << BI_SWIZZLE_B0101) |
+                     (1 << BI_SWIZZLE_B2323) | (1 << BI_SWIZZLE_B0000) |
+                     (1 << BI_SWIZZLE_B1111) | (1 << BI_SWIZZLE_B2222) |
+                     (1 << BI_SWIZZLE_B3333);
+      else if (info.size == VA_SIZE_16)
+         swizzles |= (1 << BI_SWIZZLE_H00) | (1 << BI_SWIZZLE_H10) |
+                     (1 << BI_SWIZZLE_H01) | (1 << BI_SWIZZLE_H11) |
+                     (1 << BI_SWIZZLE_B00) | (1 << BI_SWIZZLE_B11) |
+                     (1 << BI_SWIZZLE_B22) | (1 << BI_SWIZZLE_B33) |
+                     (1 << BI_SWIZZLE_B01) | (1 << BI_SWIZZLE_B20) |
+                     (1 << BI_SWIZZLE_B02) | (1 << BI_SWIZZLE_B31) |
+                     (1 << BI_SWIZZLE_B13) | (1 << BI_SWIZZLE_B23);
+      else if (info.size == VA_SIZE_32)
+         swizzles |= (1 << BI_SWIZZLE_H01) | (1 << BI_SWIZZLE_H0) |
+                     (1 << BI_SWIZZLE_H1) | (1 << BI_SWIZZLE_B0) |
+                     (1 << BI_SWIZZLE_B1) | (1 << BI_SWIZZLE_B2) |
+                     (1 << BI_SWIZZLE_B3);
+   }
+
+   if (info.combine) {
+      assert(info.size == VA_SIZE_32);
+      swizzles |= (1 << BI_SWIZZLE_H01) | (1 << BI_SWIZZLE_H0) | (1 << BI_SWIZZLE_H1);
+   }
+
+   if (swizzles == 0)
+      swizzles = 1 << BI_SWIZZLE_H01;
+
+   return swizzles;
 }
 
 static void
 lower_swizzle(bi_context *ctx, bi_instr *ins, unsigned src)
 {
-   /* TODO: Use the opcode table and be a lot more methodical about this... */
-   switch (ins->op) {
-   /* Some instructions used with 16-bit data never have swizzles */
-   case BI_OPCODE_CSEL_V2F16:
-   case BI_OPCODE_CSEL_V2I16:
-   case BI_OPCODE_CSEL_V2S16:
-   case BI_OPCODE_CSEL_V2U16:
-
-   /* Despite ostensibly being 32-bit instructions, CLPER does not
-    * inherently interpret the data, so it can be used for v2f16
-    * derivatives, which might require swizzle lowering */
-   case BI_OPCODE_CLPER_I32:
-   case BI_OPCODE_CLPER_OLD_I32:
-
-   /* Similarly, CSEL.i32 consumes a boolean as a 32-bit argument. If the
-    * boolean is implemented as a 16-bit integer, the swizzle is needed
-    * for correct operation if the instruction producing the 16-bit
-    * boolean does not replicate to both halves of the containing 32-bit
-    * register. As such, we may need to lower a swizzle.
-    *
-    * This is a silly hack. Ideally, code gen would be smart enough to
-    * avoid this case (by replicating). In practice, silly hardware design
-    * decisions force our hand here.
-    */
-   case BI_OPCODE_MUX_I32:
-   case BI_OPCODE_CSEL_I32:
-      break;
-
-   case BI_OPCODE_IADD_V2S16:
-   case BI_OPCODE_IADD_V2U16:
-   case BI_OPCODE_ISUB_V2S16:
-   case BI_OPCODE_ISUB_V2U16:
-      if (src == 0 && ins->src[src].swizzle != BI_SWIZZLE_H10)
-         break;
-      else
-         return;
-   case BI_OPCODE_LSHIFT_AND_V2I16:
-   case BI_OPCODE_LSHIFT_OR_V2I16:
-   case BI_OPCODE_LSHIFT_XOR_V2I16:
-   case BI_OPCODE_RSHIFT_AND_V2I16:
-   case BI_OPCODE_RSHIFT_OR_V2I16:
-   case BI_OPCODE_RSHIFT_XOR_V2I16:
-      if (src == 2)
-         return;
-      else
-         break;
-
-   /* For some reason MUX.v2i16 allows swaps but not replication */
-   case BI_OPCODE_MUX_V2I16:
-      if (ins->src[src].swizzle == BI_SWIZZLE_H10)
-         return;
-      else
-         break;
-
-   /* No swizzles supported */
-   case BI_OPCODE_HADD_V4U8:
-   case BI_OPCODE_HADD_V4S8:
-   case BI_OPCODE_CLZ_V4U8:
-   case BI_OPCODE_IDP_V4I8:
-   case BI_OPCODE_IABS_V4S8:
-   case BI_OPCODE_ICMP_V4I8:
-   case BI_OPCODE_ICMP_V4U8:
-   case BI_OPCODE_MUX_V4I8:
-   case BI_OPCODE_IADD_IMM_V4I8:
-      break;
-
-   case BI_OPCODE_LSHIFT_AND_V4I8:
-   case BI_OPCODE_LSHIFT_OR_V4I8:
-   case BI_OPCODE_LSHIFT_XOR_V4I8:
-   case BI_OPCODE_RSHIFT_AND_V4I8:
-   case BI_OPCODE_RSHIFT_OR_V4I8:
-   case BI_OPCODE_RSHIFT_XOR_V4I8:
-      /* Last source allows identity or replication */
-      if (src == 2 && bi_swizzle_replicates_8(ins->src[src].swizzle))
-         return;
-
-      /* Others do not allow swizzles */
-      break;
-
    /* We don't want to deal with reswizzling logic in modifier prop. Move
     * the swizzle outside, it's easier for clamp propagation. */
-   case BI_OPCODE_FCLAMP_V2F16: {
+   if (ins->op == BI_OPCODE_FCLAMP_V2F16) {
       bi_builder b = bi_init_builder(ctx, bi_after_instr(ins));
       bi_index dest = ins->dest[0];
       bi_index tmp = bi_temp(ctx);
@@ -140,9 +128,10 @@ lower_swizzle(bi_context *ctx, bi_instr *ins, unsigned src)
       return;
    }
 
-   default:
+   uint32_t supported_swizzles = pan_arch(ctx->inputs->gpu_id) >= 9 ?
+      va_op_swizzles(ins->op, src) : bi_op_swizzles[ins->op][src];
+   if (supported_swizzles & (1 << ins->src[src].swizzle))
       return;
-   }
 
    /* First, try to apply a given swizzle to a constant to clear the
     * runtime swizzle. This is less heavy-handed than ignoring the
@@ -168,8 +157,8 @@ lower_swizzle(bi_context *ctx, bi_instr *ins, unsigned src)
    /* Lower it away */
    bi_builder b = bi_init_builder(ctx, bi_before_instr(ins));
 
-   bool is_8 = (bi_opcode_props[ins->op].size == BI_SIZE_8) ||
-               (bi_opcode_props[ins->op].size == BI_SIZE_32 &&
+   bool is_8 = (bi_get_opcode_props(ins)->size == BI_SIZE_8) ||
+               (bi_get_opcode_props(ins)->size == BI_SIZE_32 &&
                 ins->src[src].swizzle >= BI_SWIZZLE_B0000);
 
    bi_index orig = ins->src[src];
@@ -183,21 +172,6 @@ lower_swizzle(bi_context *ctx, bi_instr *ins, unsigned src)
 }
 
 static bool
-bi_swizzle_replicates_16(enum bi_swizzle swz)
-{
-   switch (swz) {
-   case BI_SWIZZLE_H00:
-   case BI_SWIZZLE_H11:
-      return true;
-   default:
-      /* If a swizzle replicates every 8-bits, it also replicates
-       * every 16-bits, so allow 8-bit replicating swizzles.
-       */
-      return bi_swizzle_replicates_8(swz);
-   }
-}
-
-static bool
 bi_instr_replicates(bi_instr *I, BITSET_WORD *replicates_16)
 {
    switch (I->op) {
@@ -206,16 +180,18 @@ bi_instr_replicates(bi_instr *I, BITSET_WORD *replicates_16)
     * sources are identical. Check this case first.
     */
    case BI_OPCODE_MKVEC_V2I16:
+   case BI_OPCODE_V2F32_TO_V2F16:
+      return bi_is_value_equiv(I->src[0], I->src[1]);
+
    case BI_OPCODE_V2F16_TO_V2S16:
    case BI_OPCODE_V2F16_TO_V2U16:
-   case BI_OPCODE_V2F32_TO_V2F16:
    case BI_OPCODE_V2S16_TO_V2F16:
    case BI_OPCODE_V2S8_TO_V2F16:
    case BI_OPCODE_V2S8_TO_V2S16:
    case BI_OPCODE_V2U16_TO_V2F16:
    case BI_OPCODE_V2U8_TO_V2F16:
    case BI_OPCODE_V2U8_TO_V2U16:
-      return bi_is_value_equiv(I->src[0], I->src[1]);
+      return true;
 
    /* 16-bit transcendentals are defined to output zero in their
     * upper half, so they do not replicate
@@ -235,13 +211,13 @@ bi_instr_replicates(bi_instr *I, BITSET_WORD *replicates_16)
    }
 
    /* Replication analysis only makes sense for ALU instructions */
-   if (bi_opcode_props[I->op].message != BIFROST_MESSAGE_NONE)
+   if (bi_get_opcode_props(I)->message != BIFROST_MESSAGE_NONE)
       return false;
 
    /* We only analyze 16-bit instructions for 16-bit replication. We could
     * maybe do better.
     */
-   if (bi_opcode_props[I->op].size != BI_SIZE_16)
+   if (bi_get_opcode_props(I)->size != BI_SIZE_16)
       return false;
 
    bi_foreach_src(I, s) {
@@ -290,9 +266,14 @@ bi_lower_swizzle(bi_context *ctx)
 
       if (ins->op == BI_OPCODE_SWZ_V2I16 && bi_is_ssa(ins->src[0]) &&
           BITSET_TEST(replicates_16, ins->src[0].value)) {
-         ins->op = BI_OPCODE_MOV_I32;
+         bi_set_opcode(ins, BI_OPCODE_MOV_I32);
          ins->src[0].swizzle = BI_SWIZZLE_H01;
       }
+
+      /* On Valhall, if the instruction does some conversion depending on
+       * swizzle, we should not touch it. */
+      if (ctx->arch >= 9 && va_op_dest_modifier_does_convert(ins->op))
+         continue;
 
       /* The above passes rely on replicating destinations.  For
        * Valhall, we will want to optimize this. For now, default

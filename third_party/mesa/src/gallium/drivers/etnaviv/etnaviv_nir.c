@@ -26,14 +26,29 @@
 
 #include "etnaviv_nir.h"
 
+static inline int
+color_index_for_location(unsigned location)
+{
+   assert(location != FRAG_RESULT_COLOR &&
+          "gl_FragColor must be lowered before nir_lower_blend");
+
+   if (location < FRAG_RESULT_DATA0)
+      return -1;
+   else
+      return location - FRAG_RESULT_DATA0;
+}
+
 /* io related lowering
  * run after lower_int_to_float because it adds i2f/f2i ops
  */
-void
+bool
 etna_lower_io(nir_shader *shader, struct etna_shader_variant *v)
 {
+   bool progress = false;
+
    nir_foreach_function_impl(impl, shader) {
       nir_builder b = nir_builder_create(impl);
+      bool func_progress = false;
 
       nir_foreach_block(block, impl) {
          nir_foreach_instr_safe(instr, block) {
@@ -51,11 +66,11 @@ etna_lower_io(nir_shader *shader, struct etna_shader_variant *v)
 
                   nir_def *ssa = nir_ine_imm(&b, &intr->def, 0);
                   if (v->key.front_ccw)
-                     nir_instr_as_alu(ssa->parent_instr)->op = nir_op_ieq;
+                     nir_def_as_alu(ssa)->op = nir_op_ieq;
 
-                  nir_def_rewrite_uses_after(&intr->def,
-                                                 ssa,
-                                                 ssa->parent_instr);
+                  nir_def_rewrite_uses_after(&intr->def, ssa);
+
+                  func_progress = true;
                } break;
                case nir_intrinsic_store_deref: {
                   nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
@@ -64,17 +79,22 @@ etna_lower_io(nir_shader *shader, struct etna_shader_variant *v)
 
                   assert(deref->deref_type == nir_deref_type_var);
 
-                  if (deref->var->data.location != FRAG_RESULT_COLOR &&
-                      deref->var->data.location != FRAG_RESULT_DATA0)
-                      break;
+                  int rt = color_index_for_location(deref->var->data.location);
+                  if (rt == -1)
+                     break;
+
+                  if (!(v->key.frag_rb_swap & (1 << rt)))
+                     break;
 
                   b.cursor = nir_before_instr(instr);
 
                   nir_def *ssa = nir_mov(&b, intr->src[1].ssa);
-                  nir_alu_instr *alu = nir_instr_as_alu(ssa->parent_instr);
+                  nir_alu_instr *alu = nir_def_as_alu(ssa);
                   alu->src[0].swizzle[0] = 2;
                   alu->src[0].swizzle[2] = 0;
                   nir_src_rewrite(&intr->src[1], ssa);
+
+                  func_progress = true;
                } break;
                case nir_intrinsic_load_vertex_id:
                case nir_intrinsic_load_instance_id:
@@ -85,69 +105,22 @@ etna_lower_io(nir_shader *shader, struct etna_shader_variant *v)
                   break;
                }
             }
-
-            if (instr->type != nir_instr_type_tex)
-               continue;
-
-            nir_tex_instr *tex = nir_instr_as_tex(instr);
-            nir_src *coord = NULL;
-            nir_src *src1 = NULL;
-            unsigned src1_idx;
-
-            assert(tex->sampler_index == tex->texture_index);
-
-            for (unsigned i = 0; i < tex->num_srcs; i++) {
-               switch (tex->src[i].src_type) {
-               case nir_tex_src_coord:
-                  coord = &tex->src[i].src;
-                  break;
-               case nir_tex_src_bias:
-               case nir_tex_src_lod:
-                  assert(!src1);
-                  src1 = &tex->src[i].src;
-                  src1_idx = i;
-                  break;
-               case nir_tex_src_ddx:
-               case nir_tex_src_ddy:
-               case nir_tex_src_comparator:
-                  break;
-               default:
-                  assert(0);
-                  break;
-               }
-            }
-
-            /* pre HALTI5 needs texture sources in a single source */
-
-            if (!src1 || v->shader->specs->halti >= 5)
-               continue;
-
-            assert(coord && src1 && tex->coord_components < 4);
-
-            nir_alu_instr *vec = nir_alu_instr_create(shader, nir_op_vec4);
-            for (unsigned i = 0; i < tex->coord_components; i++) {
-               vec->src[i].src = nir_src_for_ssa(coord->ssa);
-               vec->src[i].swizzle[0] = i;
-            }
-            for (unsigned i = tex->coord_components; i < 4; i++)
-               vec->src[i].src = nir_src_for_ssa(src1->ssa);
-
-            nir_def_init(&vec->instr, &vec->def, 4, 32);
-
-            nir_tex_instr_remove_src(tex, src1_idx);
-            nir_src_rewrite(coord, &vec->def);
-            tex->coord_components = 4;
-
-            nir_instr_insert_before(&tex->instr, &vec->instr);
          }
       }
+
+      nir_progress(func_progress, impl, nir_metadata_none);
+
+      progress |= func_progress;
    }
+
+   return progress;
 }
 
-static void
+static bool
 etna_lower_alu_impl(nir_function_impl *impl, bool has_new_transcendentals)
 {
    nir_shader *shader = impl->function->shader;
+   bool progress = false;
 
    nir_builder b = nir_builder_create(impl);
 
@@ -170,6 +143,8 @@ etna_lower_alu_impl(nir_function_impl *impl, bool has_new_transcendentals)
 
             nir_src_rewrite(&alu->src[0].src,
                             nir_fmul(&b, alu->src[0].src.ssa, imm));
+
+            progress = true;
          }
 
          /* change transcendental ops to vec2 and insert vec1 mul for the result
@@ -193,17 +168,23 @@ etna_lower_alu_impl(nir_function_impl *impl, bool has_new_transcendentals)
 
             nir_instr_insert_after(instr, &mul->instr);
 
-            nir_def_rewrite_uses_after(ssa, &mul->def,
-                                           &mul->instr);
+            nir_def_rewrite_uses_after(ssa, &mul->def);
+            progress = true;
          }
       }
    }
+
+   return nir_progress(progress, impl, nir_metadata_none);
 }
 
-void
+bool
 etna_lower_alu(nir_shader *shader, bool has_new_transcendentals)
 {
+   bool progress = false;
+
    nir_foreach_function_impl(impl, shader) {
-      etna_lower_alu_impl(impl, has_new_transcendentals);
+      progress |= etna_lower_alu_impl(impl, has_new_transcendentals);
    }
+
+   return progress;
 }

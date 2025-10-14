@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2022 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2022-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "pipe/p_defines.h"
 #include "util/u_bitmask.h"
@@ -353,7 +335,7 @@ svga_create_uav_list(struct svga_context *svga,
                      SVGA3dUAViewId *uaViewIds,
                      struct svga_winsys_surface **uaViews)
 {
-   enum pipe_shader_type first_shader, last_shader;
+   mesa_shader_stage first_shader, last_shader;
    struct svga_uav *uav;
    int uav_index = -1;
 
@@ -361,14 +343,14 @@ svga_create_uav_list(struct svga_context *svga,
    svga->state.uav_timestamp[pipe_type]++;
 
    if (pipe_type == SVGA_PIPE_GRAPHICS) {
-      first_shader = PIPE_SHADER_VERTEX;
-      last_shader = PIPE_SHADER_COMPUTE;
+      first_shader = MESA_SHADER_VERTEX;
+      last_shader = MESA_SHADER_COMPUTE;
    } else {
-      first_shader = PIPE_SHADER_COMPUTE;
+      first_shader = MESA_SHADER_COMPUTE;
       last_shader = first_shader + 1;
    }
 
-   for (enum pipe_shader_type shader = first_shader;
+   for (mesa_shader_stage shader = first_shader;
         shader < last_shader; shader++) {
 
       unsigned num_image_views = svga->curr.num_image_views[shader];
@@ -447,6 +429,19 @@ svga_create_uav_list(struct svga_context *svga,
                 &svga->curr.shader_buffers[shader][i];
             struct pipe_resource *res = cur_sbuf->resource;
             SVGA3dUAViewId uaViewId;
+            enum pipe_error ret;
+
+            /* Use srv rawbuffer to access readonly shader buffer */
+            if (svga_shader_buffer_can_use_srv(svga, shader, i, cur_sbuf)) {
+               ret = svga_shader_buffer_bind_srv(svga, shader, i, cur_sbuf);
+               if (ret != PIPE_OK)
+                  return ret;
+               continue;
+            } else {
+               ret = svga_shader_buffer_unbind_srv(svga, shader, i, cur_sbuf);
+               if (ret != PIPE_OK)
+                  return ret;
+            }
 
             if (res) {
                /* Get the buffer handle that can be bound as uav. */
@@ -594,18 +589,18 @@ svga_save_uav_state(struct svga_context *svga,
                     SVGA3dUAViewId *uaViewIds,
                     struct svga_winsys_surface **uaViews)
 {
-   enum pipe_shader_type first_shader, last_shader;
+   mesa_shader_stage first_shader, last_shader;
    unsigned i;
 
    if (pipe_type == SVGA_PIPE_GRAPHICS) {
-      first_shader = PIPE_SHADER_VERTEX;
-      last_shader = PIPE_SHADER_COMPUTE;
+      first_shader = MESA_SHADER_VERTEX;
+      last_shader = MESA_SHADER_COMPUTE;
    } else {
-      first_shader = PIPE_SHADER_COMPUTE;
+      first_shader = MESA_SHADER_COMPUTE;
       last_shader = first_shader + 1;
    }
 
-   for (enum pipe_shader_type shader = first_shader;
+   for (mesa_shader_stage shader = first_shader;
         shader < last_shader; shader++) {
 
       /**
@@ -707,8 +702,8 @@ need_to_set_uav(struct svga_context *svga,
       return true;
 
    /* If image views are different */
-   for (enum pipe_shader_type shader = PIPE_SHADER_VERTEX;
-        shader < PIPE_SHADER_COMPUTE; shader++) {
+   for (mesa_shader_stage shader = MESA_SHADER_VERTEX;
+        shader < MESA_SHADER_COMPUTE; shader++) {
       unsigned num_image_views = svga->curr.num_image_views[shader];
       if ((num_image_views != svga->state.hw_draw.num_image_views[shader]) ||
           memcmp(svga->state.hw_draw.image_views[shader],
@@ -772,7 +767,7 @@ update_uav(struct svga_context *svga, uint64_t dirty)
    SVGA_DBG(DEBUG_UAV, "%s: SetUAViews uavSpliceIndex=%d", __func__,
             uavSpliceIndex);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    for (unsigned i = 0; i < ARRAY_SIZE(uaViewIds); i++) {
       SVGA_DBG(DEBUG_UAV, " %d ", uaViewIds[i]);
    }
@@ -816,7 +811,7 @@ need_to_set_cs_uav(struct svga_context *svga,
                    SVGA3dUAViewId *uaViewIds,
                    struct svga_winsys_surface **uaViews)
 {
-   enum pipe_shader_type shader = PIPE_SHADER_COMPUTE;
+   mesa_shader_stage shader = MESA_SHADER_COMPUTE;
 
    if (svga->state.hw_draw.num_cs_uavs != num_uavs)
       return true;
@@ -878,7 +873,7 @@ update_cs_uav(struct svga_context *svga, uint64_t dirty)
 
    SVGA_DBG(DEBUG_UAV, "%s: SetCSUAViews", __func__);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    for (unsigned i = 0; i < ARRAY_SIZE(uaViewIds); i++) {
       SVGA_DBG(DEBUG_UAV, " %d ", uaViewIds[i]);
    }

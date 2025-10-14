@@ -89,16 +89,16 @@
 #define HASH_ALLOC malloc
 #define HASH_FREE  free
 #ifndef HAVE_RANDOM_R
-#define HASH_RANDOM_DECL	char *ps, rs[256]
-#define HASH_RANDOM_INIT(seed)	ps = initstate(seed, rs, sizeof(rs))
-#define HASH_RANDOM		random()
-#define HASH_RANDOM_DESTROY	setstate(ps)
+#define HASH_RANDOM_DECL   char *ps, rs[256]
+#define HASH_RANDOM_INIT(seed)   ps = initstate(seed, rs, sizeof(rs))
+#define HASH_RANDOM      random()
+#define HASH_RANDOM_DESTROY   setstate(ps)
 #else
-#define HASH_RANDOM_DECL	struct random_data rd; int32_t rv; char rs[256]
-#define HASH_RANDOM_INIT(seed)					\
-   do {								\
-      (void) memset(&rd, 0, sizeof(rd));			\
-      (void) initstate_r(seed, rs, sizeof(rs), &rd);		\
+#define HASH_RANDOM_DECL   struct random_data rd; int32_t rv; char rs[256]
+#define HASH_RANDOM_INIT(seed)               \
+   do {                        \
+      (void) memset(&rd, 0, sizeof(rd));         \
+      (void) initstate_r(seed, rs, sizeof(rs), &rd);      \
    } while(0)
 #define HASH_RANDOM             ((void) random_r(&rd, &rv), rv)
 #define HASH_RANDOM_DESTROY
@@ -153,7 +153,7 @@ HashHash(unsigned long key)
    return hash;
 }
 
-_X_HIDDEN __glxHashTable *
+__glxHashTable *
 __glxHashCreate(void)
 {
    __glxHashTablePtr table;
@@ -172,7 +172,7 @@ __glxHashCreate(void)
    return table;
 }
 
-_X_HIDDEN int
+int
 __glxHashDestroy(__glxHashTable * t)
 {
    __glxHashTablePtr table = (__glxHashTablePtr) t;
@@ -227,7 +227,7 @@ HashFind(__glxHashTablePtr table, unsigned long key, unsigned long *h)
    return NULL;
 }
 
-_X_HIDDEN int
+int
 __glxHashLookup(__glxHashTable * t, unsigned long key, void **value)
 {
    __glxHashTablePtr table = (__glxHashTablePtr) t;
@@ -243,7 +243,7 @@ __glxHashLookup(__glxHashTable * t, unsigned long key, void **value)
    return 0;                    /* Found */
 }
 
-_X_HIDDEN int
+int
 __glxHashInsert(__glxHashTable * t, unsigned long key, void *value)
 {
    __glxHashTablePtr table = (__glxHashTablePtr) t;
@@ -269,7 +269,7 @@ __glxHashInsert(__glxHashTable * t, unsigned long key, void *value)
    return 0;                    /* Added to table */
 }
 
-_X_HIDDEN int
+int
 __glxHashDelete(__glxHashTable * t, unsigned long key)
 {
    __glxHashTablePtr table = (__glxHashTablePtr) t;
@@ -289,7 +289,7 @@ __glxHashDelete(__glxHashTable * t, unsigned long key)
    return 0;
 }
 
-_X_HIDDEN int
+int
 __glxHashNext(__glxHashTable * t, unsigned long *key, void **value)
 {
    __glxHashTablePtr table = (__glxHashTablePtr) t;
@@ -307,7 +307,7 @@ __glxHashNext(__glxHashTable * t, unsigned long *key, void **value)
    return 0;
 }
 
-_X_HIDDEN int
+int
 __glxHashFirst(__glxHashTable * t, unsigned long *key, void **value)
 {
    __glxHashTablePtr table = (__glxHashTablePtr) t;

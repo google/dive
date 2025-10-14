@@ -34,10 +34,6 @@
 
 #include "util/u_math.h"
 
-#ifndef ALIGN
-#define ALIGN(x, y) (((x) + (y)-1) & ~((y)-1))
-#endif
-
 #define MI_BATCH_NON_SECURE_I965 (1 << 8)
 
 #define min(a, b) ({                            \
@@ -451,7 +447,7 @@ engine_from_engine_class(enum intel_engine_class engine_class)
    case INTEL_ENGINE_CLASS_VIDEO:
       return &engines[engine_class];
    default:
-      unreachable("unknown ring");
+      UNREACHABLE("unknown ring");
    }
 }
 
@@ -503,7 +499,7 @@ write_hwsp(struct aub_file *aub,
    case INTEL_ENGINE_CLASS_COPY:    reg = BCSUNIT0(HWS_PGA); break;
    case INTEL_ENGINE_CLASS_VIDEO:   reg = VCSUNIT0(HWS_PGA); break;
    default:
-      unreachable("unknown ring");
+      UNREACHABLE("unknown ring");
    }
 
    register_write_out(aub, reg, aub->engine_setup[engine_class].hwsp_addr);

@@ -40,7 +40,7 @@
 #include "util/detect.h"
 
 
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX
 #  include <signal.h> /* for kill() */
 #  include <unistd.h> /* getpid() */
 #endif
@@ -58,7 +58,7 @@ extern "C" {
 #  define os_break() __asm("int3")
 #elif DETECT_CC_MSVC
 #  define os_break()  __debugbreak()
-#elif DETECT_OS_UNIX
+#elif DETECT_OS_POSIX
 #  define os_break() kill(getpid(), SIGTRAP)
 #else
 #  define os_break() abort()
@@ -68,7 +68,7 @@ extern "C" {
 /*
  * Abort the program.
  */
-#if defined(DEBUG)
+#if MESA_DEBUG
 #  define os_abort() do { os_break(); abort(); } while(0)
 #else
 #  define os_abort() abort()
@@ -89,6 +89,13 @@ os_log_message(const char *message);
  */
 const char *
 os_get_option(const char *name);
+
+/*
+ * Get an option. Should return NULL if specified option is not set.
+ * Same as `os_get_option()` but uses `secure_getenv()` instead of `getenv()`
+ */
+const char *
+os_get_option_secure(const char *name);
 
 /*
  * Get an option. Should return NULL if specified option is not set.

@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  */
 
+#include "util/u_printf.h"
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_control_flow.h"
@@ -37,6 +38,16 @@ nir_function_can_inline(nir_function *function)
    bool can_inline = true;
    if (!function->should_inline) {
       if (function->impl) {
+         nir_foreach_block(block, function->impl) {
+            nir_foreach_instr(instr, block) {
+               if (instr->type != nir_instr_type_intrinsic)
+                  continue;
+               nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+               if (intr->intrinsic == nir_intrinsic_barrier)
+                  return true;
+            }
+         }
+
          if (function->impl->num_blocks > 2)
             can_inline = false;
          if (function->impl->ssa_alloc > 45)
@@ -53,7 +64,40 @@ function_ends_in_jump(nir_function_impl *impl)
    return nir_block_ends_in_jump(last_block);
 }
 
-void
+/* A cast is used to deref function in/out params. However the bindless
+ * textures spec allows both uniforms and functions temps to be passed to a
+ * function param defined the same way. To deal with this we need to update
+ * this when we inline and know what variable mode we are dealing with.
+ */
+static void
+fixup_cast_deref_mode(nir_deref_instr *deref)
+{
+   nir_deref_instr *parent = nir_src_as_deref(deref->parent);
+   if (parent && deref->modes & nir_var_function_temp) {
+      if (parent->modes & nir_var_uniform) {
+         deref->modes |= nir_var_uniform;
+      } else if (parent->modes & nir_var_image) {
+         deref->modes |= nir_var_image;
+      } else if (parent->modes & nir_var_mem_ubo) {
+         deref->modes |= nir_var_mem_ubo;
+      } else if (parent->modes & nir_var_mem_ssbo) {
+         deref->modes |= nir_var_mem_ssbo;
+      } else
+         return;
+
+      deref->modes ^= nir_var_function_temp;
+
+      nir_foreach_use(use, &deref->def) {
+         if (nir_src_parent_instr(use)->type != nir_instr_type_deref)
+            continue;
+
+         /* Recurse into children */
+         fixup_cast_deref_mode(nir_instr_as_deref(nir_src_parent_instr(use)));
+      }
+   }
+}
+
+nir_def *
 nir_inline_function_impl(struct nir_builder *b,
                          const nir_function_impl *impl,
                          nir_def **params,
@@ -63,11 +107,27 @@ nir_inline_function_impl(struct nir_builder *b,
 
    exec_list_append(&b->impl->locals, &copy->locals);
 
+   /* Normally, NIR function returns are deref based, but for bindgen, we use a
+    * sideband here to let us lower derefs ahead-of-time.
+    */
+   nir_def *ret_val = NULL;
+
    nir_foreach_block(block, copy) {
       nir_foreach_instr_safe(instr, block) {
          switch (instr->type) {
          case nir_instr_type_deref: {
             nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+            /* Note: This shouldn't change the mode of anything but the
+             * replaced nir_intrinsic_load_param intrinsics handled later in
+             * this switch table. Any incorrect modes should have already been
+             * detected by previous nir_vaidate calls.
+             */
+            if (deref->deref_type == nir_deref_type_cast) {
+               fixup_cast_deref_mode(deref);
+               break;
+            }
+
             if (deref->deref_type != nir_deref_type_var)
                break;
 
@@ -98,19 +158,16 @@ nir_inline_function_impl(struct nir_builder *b,
          }
 
          case nir_instr_type_intrinsic: {
-            nir_intrinsic_instr *load = nir_instr_as_intrinsic(instr);
-            if (load->intrinsic != nir_intrinsic_load_param)
-               break;
-
-            unsigned param_idx = nir_intrinsic_param_idx(load);
-            assert(param_idx < impl->function->num_params);
-            nir_def_rewrite_uses(&load->def,
-                                 params[param_idx]);
-
-            /* Remove any left-over load_param intrinsics because they're soon
-             * to be in another function and therefore no longer valid.
-             */
-            nir_instr_remove(&load->instr);
+            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+            if (intr->intrinsic == nir_intrinsic_bindgen_return) {
+               assert(ret_val == NULL && "expected exactly one return write");
+               ret_val = intr->src[0].ssa;
+               nir_instr_remove(&intr->instr);
+            } else if (intr->intrinsic == nir_intrinsic_load_param) {
+               unsigned param_idx = nir_intrinsic_param_idx(intr);
+               assert(param_idx < impl->function->num_params);
+               nir_def_replace(&intr->def, params[param_idx]);
+            }
             break;
          }
 
@@ -143,20 +200,26 @@ nir_inline_function_impl(struct nir_builder *b,
       nir_cf_reinsert(&body, nir_before_instr(&nop->instr));
       b->cursor = nir_instr_remove(&nop->instr);
    }
+
+   return ret_val;
 }
 
 static bool inline_function_impl(nir_function_impl *impl, struct set *inlined);
 
-static bool inline_functions_pass(nir_builder *b,
-                                  nir_instr *instr,
-                                  void *cb_data)
+static bool
+inline_functions_pass(nir_builder *b,
+                      nir_instr *instr,
+                      void *cb_data)
 {
    struct set *inlined = cb_data;
    if (instr->type != nir_instr_type_call)
       return false;
 
    nir_call_instr *call = nir_instr_as_call(instr);
-   assert(call->callee->impl);
+   if (!call->callee->impl)
+      return false;
+
+   assert(!call->indirect_callee.ssa);
 
    if (b->shader->options->driver_functions &&
        b->shader->info.stage == MESA_SHADER_KERNEL) {
@@ -289,6 +352,7 @@ nir_inline_functions(nir_shader *shader)
 struct lower_link_state {
    struct hash_table *shader_var_remap;
    const nir_shader *link_shader;
+   unsigned printf_index_offset;
 };
 
 static bool
@@ -333,6 +397,20 @@ lower_calls_vars_instr(struct nir_builder *b,
       new_func = nir_shader_get_function_for_name(state->link_shader, ncall->callee->name);
       if (new_func)
          ncall->callee = nir_function_clone(b->shader, new_func);
+      break;
+   }
+   case nir_instr_type_intrinsic: {
+      /* Reindex the offset of the printf intrinsic by the number of already
+       * present printfs in the shader where functions are linked into.
+       */
+      if (state->printf_index_offset == 0)
+         return false;
+
+      nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+      if (intrin->intrinsic != nir_intrinsic_printf)
+         return false;
+
+      nir_intrinsic_set_fmt_idx(intrin, nir_intrinsic_fmt_idx(intrin) + state->printf_index_offset);
       break;
    }
    default:
@@ -396,6 +474,7 @@ nir_link_shader_functions(nir_shader *shader,
    struct lower_link_state state = {
       .shader_var_remap = copy_vars,
       .link_shader = link_shader,
+      .printf_index_offset = shader->printf_info_count,
    };
    /* do progress passes inside the pass */
    do {
@@ -412,6 +491,27 @@ nir_link_shader_functions(nir_shader *shader,
       overall_progress |= progress;
    } while (progress);
 
+   if (overall_progress && link_shader->printf_info_count > 0) {
+      shader->printf_info = reralloc(shader, shader->printf_info,
+                                     u_printf_info,
+                                     shader->printf_info_count +
+                                        link_shader->printf_info_count);
+
+      for (unsigned i = 0; i < link_shader->printf_info_count; i++) {
+         const u_printf_info *src_info = &link_shader->printf_info[i];
+         u_printf_info *dst_info = &shader->printf_info[shader->printf_info_count++];
+
+         dst_info->num_args = src_info->num_args;
+         dst_info->arg_sizes = ralloc_array(shader, unsigned, dst_info->num_args);
+         memcpy(dst_info->arg_sizes, src_info->arg_sizes,
+                sizeof(dst_info->arg_sizes[0]) * dst_info->num_args);
+
+         dst_info->string_size = src_info->string_size;
+         dst_info->strings = ralloc_memdup(shader, src_info->strings,
+                                           dst_info->string_size);
+      }
+   }
+
    ralloc_free(ra_ctx);
 
    return overall_progress;
@@ -420,8 +520,9 @@ nir_link_shader_functions(nir_shader *shader,
 static void
 nir_mark_used_functions(struct nir_function *func, struct set *used_funcs);
 
-static bool mark_used_pass_cb(struct nir_builder *b,
-                              nir_instr *instr, void *data)
+static bool
+mark_used_pass_cb(struct nir_builder *b,
+                  nir_instr *instr, void *data)
 {
    struct set *used_funcs = data;
    if (instr->type != nir_instr_type_call)

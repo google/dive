@@ -35,6 +35,7 @@
 #include "util/u_video.h"
 #include "util/format/u_format.h"
 #include "util/u_sampler.h"
+#include "util/u_surface.h"
 
 static void
 nouveau_vp3_video_buffer_resources(struct pipe_video_buffer *buffer,
@@ -64,7 +65,7 @@ nouveau_vp3_video_buffer_sampler_view_components(struct pipe_video_buffer *buffe
    return buf->sampler_view_components;
 }
 
-static struct pipe_surface **
+static struct pipe_surface *
 nouveau_vp3_video_buffer_surfaces(struct pipe_video_buffer *buffer)
 {
    struct nouveau_vp3_video_buffer *buf = (struct nouveau_vp3_video_buffer *)buffer;
@@ -83,8 +84,6 @@ nouveau_vp3_video_buffer_destroy(struct pipe_video_buffer *buffer)
       pipe_resource_reference(&buf->resources[i], NULL);
       pipe_sampler_view_reference(&buf->sampler_view_planes[i], NULL);
       pipe_sampler_view_reference(&buf->sampler_view_components[i], NULL);
-      pipe_surface_reference(&buf->surfaces[i * 2], NULL);
-      pipe_surface_reference(&buf->surfaces[i * 2 + 1], NULL);
    }
    FREE(buffer);
 }
@@ -167,16 +166,12 @@ nouveau_vp3_video_buffer_create(struct pipe_context *pipe,
 
    memset(&surf_templ, 0, sizeof(surf_templ));
    for (j = 0; j < buffer->num_planes; ++j) {
-      surf_templ.format = buffer->resources[j]->format;
-      surf_templ.u.tex.first_layer = surf_templ.u.tex.last_layer = 0;
-      buffer->surfaces[j * 2] = pipe->create_surface(pipe, buffer->resources[j], &surf_templ);
-      if (!buffer->surfaces[j * 2])
-         goto error;
+      u_surface_default_template(&surf_templ, buffer->resources[j]);
+      surf_templ.first_layer = surf_templ.last_layer = 0;
+      buffer->surfaces[j * 2] = surf_templ;
 
-      surf_templ.u.tex.first_layer = surf_templ.u.tex.last_layer = 1;
-      buffer->surfaces[j * 2 + 1] = pipe->create_surface(pipe, buffer->resources[j], &surf_templ);
-      if (!buffer->surfaces[j * 2 + 1])
-         goto error;
+      surf_templ.first_layer = surf_templ.last_layer = 1;
+      buffer->surfaces[j * 2 + 1] = surf_templ;
    }
 
    return &buffer->base;
@@ -198,11 +193,12 @@ nouveau_vp3_decoder_begin_frame(struct pipe_video_codec *decoder,
 {
 }
 
-static void
+static int
 nouveau_vp3_decoder_end_frame(struct pipe_video_codec *decoder,
                               struct pipe_video_buffer *target,
                               struct pipe_picture_desc *picture)
 {
+   return 0;
 }
 
 static void
@@ -394,7 +390,7 @@ firmware_present(struct pipe_screen *pscreen, enum pipe_video_profile profile)
       struct nouveau_object *channel = NULL, *bsp = NULL;
       struct nv04_fifo nv04_data = {.vram = 0xbeef0201, .gart = 0xbeef0202};
       struct nvc0_fifo nvc0_args = {};
-      struct nve0_fifo nve0_args = {.engine = NVE0_FIFO_ENGINE_BSP};
+      struct nve0_fifo nve0_args = {.engine = NOUVEAU_FIFO_ENGINE_BSP};
       void *data = NULL;
       int size;
 
@@ -508,11 +504,8 @@ nouveau_vp3_screen_get_video_param(struct pipe_screen *pscreen,
          debug_printf("unknown video codec: %d\n", codec);
          return 0;
       }
-   case PIPE_VIDEO_CAP_PREFERED_FORMAT:
+   case PIPE_VIDEO_CAP_PREFERRED_FORMAT:
       return PIPE_FORMAT_NV12;
-   case PIPE_VIDEO_CAP_SUPPORTS_INTERLACED:
-   case PIPE_VIDEO_CAP_PREFERS_INTERLACED:
-      return true;
    case PIPE_VIDEO_CAP_SUPPORTS_PROGRESSIVE:
       return false;
    case PIPE_VIDEO_CAP_MAX_LEVEL:

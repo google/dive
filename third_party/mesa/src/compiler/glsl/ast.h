@@ -25,7 +25,7 @@
 #ifndef AST_H
 #define AST_H
 
-#include "list.h"
+#include "ir_list.h"
 #include "glsl_parser_extras.h"
 #include "compiler/glsl_types.h"
 #include "util/bitset.h"
@@ -50,7 +50,7 @@ struct YYLTYPE;
  */
 class ast_node {
 public:
-   DECLARE_LINEAR_ZALLOC_CXX_OPERATORS(ast_node);
+   DECLARE_LINEAR_ZALLOC_CXX_OPERATORS(ast_node,,);
 
    /**
     * Print an AST node in something approximating the original GLSL code
@@ -60,7 +60,7 @@ public:
    /**
     * Convert the AST node to the high-level intermediate representation
     */
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    virtual bool has_sequence_subexpression() const;
@@ -129,7 +129,7 @@ public:
       unsigned last_column;     /**< Last column in the last line. */
    } location;
 
-   exec_node link;
+   ir_exec_node link;
 
    virtual void set_is_lhs(bool);
 
@@ -197,6 +197,7 @@ enum ast_operators {
    ast_identifier,
    ast_int_constant,
    ast_uint_constant,
+   ast_float16_constant,
    ast_float_constant,
    ast_bool_constant,
    ast_double_constant,
@@ -237,15 +238,15 @@ public:
 
    static const char *operator_string(enum ast_operators op);
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
-   virtual void hir_no_rvalue(exec_list *instructions,
+   virtual void hir_no_rvalue(ir_exec_list *instructions,
                               struct _mesa_glsl_parse_state *state);
 
    virtual bool has_sequence_subexpression() const;
 
-   ir_rvalue *do_hir(exec_list *instructions,
+   ir_rvalue *do_hir(ir_exec_list *instructions,
                      struct _mesa_glsl_parse_state *state,
                      bool needs_rvalue);
 
@@ -258,6 +259,7 @@ public:
    union {
       const char *identifier;
       int int_constant;
+      float float16_constant;
       float float_constant;
       unsigned uint_constant;
       int bool_constant;
@@ -271,7 +273,7 @@ public:
     * List of expressions for an \c ast_sequence or parameters for an
     * \c ast_function_call
     */
-   exec_list expressions;
+   ir_exec_list expressions;
 
    /**
     * For things that can't be l-values, this describes what it is.
@@ -324,10 +326,10 @@ public:
       return cons;
    }
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
-   virtual void hir_no_rvalue(exec_list *instructions,
+   virtual void hir_no_rvalue(ir_exec_list *instructions,
                               struct _mesa_glsl_parse_state *state);
 
    virtual bool has_sequence_subexpression() const;
@@ -338,7 +340,7 @@ private:
     */
    bool cons;
    ir_rvalue *
-   handle_method(exec_list *instructions,
+   handle_method(ir_exec_list *instructions,
                  struct _mesa_glsl_parse_state *state);
 };
 
@@ -346,7 +348,7 @@ class ast_subroutine_list : public ast_node
 {
 public:
    virtual void print(void) const;
-   exec_list declarations;
+   ir_exec_list declarations;
 };
 
 class ast_array_specifier : public ast_node {
@@ -373,7 +375,7 @@ public:
    /* This list contains objects of type ast_node containing the
     * array dimensions in outermost-to-innermost order.
     */
-   exec_list array_dimensions;
+   ir_exec_list array_dimensions;
 };
 
 class ast_layout_expression : public ast_node {
@@ -393,7 +395,7 @@ public:
       layout_const_expressions.append_list(&l_expr->layout_const_expressions);
    }
 
-   exec_list layout_const_expressions;
+   ir_exec_list layout_const_expressions;
 };
 
 /**
@@ -426,10 +428,10 @@ public:
     */
    const glsl_type *constructor_type;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
                           struct _mesa_glsl_parse_state *state);
 
-   virtual void hir_no_rvalue(exec_list *instructions,
+   virtual void hir_no_rvalue(ir_exec_list *instructions,
                               struct _mesa_glsl_parse_state *state);
 };
 
@@ -439,11 +441,11 @@ public:
    ast_compound_statement(int new_scope, ast_node *statements);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    int new_scope;
-   exec_list statements;
+   ir_exec_list statements;
 };
 
 class ast_declaration : public ast_node {
@@ -605,6 +607,12 @@ struct ast_type_qualifier {
          unsigned explicit_xfb_stride:1; /**< xfb_stride value assigned explicitly by shader code */
          /** \} */
 
+         /**
+          * Flag set if GL_OVR_multiview num_views_relative layout
+          * qualifier is used.
+          */
+         unsigned explicit_numviews:1;
+
 	 /** \name Layout qualifiers for GL_ARB_tessellation_shader */
 	 /** \{ */
 	 /* tess eval input layout */
@@ -669,6 +677,11 @@ struct ast_type_qualifier {
           * qualifier is used.
           */
          unsigned viewport_relative:1;
+
+         /** GL_EXT_mesh_shader */
+         unsigned task_payload:1;
+         unsigned per_primitive:1;
+         unsigned max_primitives:1;
       }
       /** \brief Set of flags, accessed by name. */
       q;
@@ -717,6 +730,9 @@ struct ast_type_qualifier {
    /** Maximum output vertices in GLSL 1.50 geometry shaders. */
    ast_layout_expression *max_vertices;
 
+   /** Maximum output primitives in mesh shader. */
+   ast_layout_expression *max_primitives;
+
    /** Stream in GLSL 1.50 geometry shaders. */
    ast_expression *stream;
 
@@ -742,6 +758,14 @@ struct ast_type_qualifier {
     * This field is only valid if \c explicit_binding is set.
     */
    ast_expression *binding;
+
+   /**
+    * Binding specified via GL_OVR_multiview's "num_views" keyword.
+    *
+    * \note
+    * This field is only valid if \c explicit_numviews is set.
+    */
+   ast_expression *num_views;
 
    /**
     * Offset specified via GL_ARB_shader_atomic_counter's or
@@ -881,13 +905,13 @@ public:
                         ast_declarator_list *declarator_list);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    const char *name;
    ast_type_qualifier *layout;
    /* List of ast_declarator_list * */
-   exec_list declarations;
+   ir_exec_list declarations;
    bool is_declaration;
    const glsl_type *type;
 };
@@ -925,7 +949,7 @@ public:
 
    virtual void print(void) const;
 
-   ir_rvalue *hir(exec_list *, struct _mesa_glsl_parse_state *);
+   ir_rvalue *hir(ir_exec_list *, struct _mesa_glsl_parse_state *);
 
    const struct glsl_type *type;
    const char *type_name;
@@ -961,12 +985,12 @@ public:
    ast_declarator_list(ast_fully_specified_type *);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_fully_specified_type *type;
    /** List of 'ast_declaration *' */
-   exec_list declarations;
+   ir_exec_list declarations;
 
    /**
     * Flags for redeclarations. In these cases, no type is specified, to
@@ -991,15 +1015,15 @@ public:
 
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_fully_specified_type *type;
    const char *identifier;
    ast_array_specifier *array_specifier;
 
-   static void parameters_to_hir(exec_list *ast_parameters,
-				 bool formal, exec_list *ir_parameters,
+   static void parameters_to_hir(ir_exec_list *ast_parameters,
+				 bool formal, ir_exec_list *ir_parameters,
 				 struct _mesa_glsl_parse_state *state);
 
 private:
@@ -1021,13 +1045,13 @@ public:
 
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_fully_specified_type *return_type;
    const char *identifier;
 
-   exec_list parameters;
+   ir_exec_list parameters;
 
 private:
    /**
@@ -1059,7 +1083,7 @@ public:
    ast_expression_statement(ast_expression *);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_expression *expression;
@@ -1071,7 +1095,7 @@ public:
    ast_case_label(ast_expression *test_value);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    /**
@@ -1086,13 +1110,13 @@ public:
    ast_case_label_list(void);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    /**
     * A list of case labels.
     */
-   exec_list labels;
+   ir_exec_list labels;
 };
 
 
@@ -1101,7 +1125,7 @@ public:
    ast_case_statement(ast_case_label_list *labels);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_case_label_list *labels;
@@ -1109,7 +1133,7 @@ public:
    /**
     * A list of statements.
     */
-   exec_list stmts;
+   ir_exec_list stmts;
 };
 
 
@@ -1118,13 +1142,13 @@ public:
    ast_case_statement_list(void);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    /**
     * A list of cases.
     */
-   exec_list cases;
+   ir_exec_list cases;
 };
 
 
@@ -1133,7 +1157,7 @@ public:
    ast_switch_body(ast_case_statement_list *stmts);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_case_statement_list *stmts;
@@ -1147,7 +1171,7 @@ public:
 			   ast_node *else_statement);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_expression *condition;
@@ -1162,15 +1186,15 @@ public:
 			ast_node *body);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_expression *test_expression;
    ast_node *body;
 
 protected:
-   void test_to_hir(exec_list *, struct _mesa_glsl_parse_state *);
-   void eval_test_expression(exec_list *instructions,
+   void test_to_hir(ir_exec_list *, struct _mesa_glsl_parse_state *);
+   void eval_test_expression(ir_exec_list *instructions,
                              struct _mesa_glsl_parse_state *state);
    ir_rvalue *test_val;
 };
@@ -1182,7 +1206,7 @@ public:
 
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *, struct _mesa_glsl_parse_state *);
+   virtual ir_rvalue *hir(ir_exec_list *, struct _mesa_glsl_parse_state *);
 
    enum ast_iteration_modes {
       ast_for,
@@ -1195,7 +1219,7 @@ public:
    ast_node *condition;
    ast_expression *rest_expression;
 
-   exec_list rest_instructions;
+   ir_exec_list rest_instructions;
 
    ast_node *body;
 
@@ -1205,7 +1229,7 @@ public:
     * This is factored out of ::hir because some loops have the condition
     * test at the top (for and while), and others have it at the end (do-while).
     */
-   void condition_to_hir(exec_list *, struct _mesa_glsl_parse_state *);
+   void condition_to_hir(ir_exec_list *, struct _mesa_glsl_parse_state *);
 };
 
 
@@ -1214,7 +1238,7 @@ public:
    ast_jump_statement(int mode, ast_expression *return_value);
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    enum ast_jump_modes {
@@ -1233,7 +1257,7 @@ public:
    ast_demote_statement(void) {}
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
                           struct _mesa_glsl_parse_state *state);
 };
 
@@ -1246,7 +1270,7 @@ public:
 
    virtual void print(void) const;
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_function *prototype;
@@ -1262,7 +1286,7 @@ public:
    {
    }
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
 			  struct _mesa_glsl_parse_state *state);
 
    ast_type_qualifier default_layout;
@@ -1278,7 +1302,7 @@ public:
    const char *instance_name;
 
    /** List of ast_declarator_list * */
-   exec_list declarations;
+   ir_exec_list declarations;
 
    /**
     * Declared array size of the block instance
@@ -1302,7 +1326,23 @@ public:
       set_location(locp);
    }
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
+                          struct _mesa_glsl_parse_state *state);
+};
+
+
+/**
+ * AST node representing a declaration of the output layout for mesh shaders.
+ */
+class ast_ms_output_layout : public ast_node
+{
+public:
+   ast_ms_output_layout(const struct YYLTYPE &locp)
+   {
+      set_location(locp);
+   }
+
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
                           struct _mesa_glsl_parse_state *state);
 };
 
@@ -1320,7 +1360,7 @@ public:
       set_location(locp);
    }
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
                           struct _mesa_glsl_parse_state *state);
 
 private:
@@ -1329,14 +1369,14 @@ private:
 
 
 /**
- * AST node representing a decalaration of the input layout for compute
- * shaders.
+ * AST node representing a decalaration of the input layout for compute,
+ * task and mesh shaders.
  */
-class ast_cs_input_layout : public ast_node
+class ast_cs_ms_input_layout : public ast_node
 {
 public:
-   ast_cs_input_layout(const struct YYLTYPE &locp,
-                       ast_layout_expression *const *local_size)
+   ast_cs_ms_input_layout(const struct YYLTYPE &locp,
+                          ast_layout_expression *const *local_size)
    {
       for (int i = 0; i < 3; i++) {
          this->local_size[i] = local_size[i];
@@ -1344,7 +1384,7 @@ public:
       set_location(locp);
    }
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
                           struct _mesa_glsl_parse_state *state);
 
 private:
@@ -1359,7 +1399,7 @@ public:
       /* empty */
    }
 
-   virtual ir_rvalue *hir(exec_list *instructions,
+   virtual ir_rvalue *hir(ir_exec_list *instructions,
                           struct _mesa_glsl_parse_state *state);
 
 private:
@@ -1368,16 +1408,15 @@ private:
 /*@}*/
 
 extern void
-_mesa_ast_to_hir(exec_list *instructions, struct _mesa_glsl_parse_state *state);
+_mesa_ast_to_hir(ir_exec_list *instructions, struct _mesa_glsl_parse_state *state);
 
 extern ir_rvalue *
 _mesa_ast_field_selection_to_hir(const ast_expression *expr,
-				 exec_list *instructions,
+				 ir_exec_list *instructions,
 				 struct _mesa_glsl_parse_state *state);
 
 extern ir_rvalue *
-_mesa_ast_array_index_to_hir(void *mem_ctx,
-			     struct _mesa_glsl_parse_state *state,
+_mesa_ast_array_index_to_hir(struct _mesa_glsl_parse_state *state,
 			     ir_rvalue *array, ir_rvalue *idx,
 			     YYLTYPE &loc, YYLTYPE &idx_loc);
 

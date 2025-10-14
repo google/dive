@@ -39,8 +39,9 @@
 #include "hwdef/rogue_hw_utils.h"
 #include "pvr_bo.h"
 #include "pvr_debug.h"
+#include "pvr_device.h"
 #include "pvr_dump.h"
-#include "pvr_private.h"
+#include "pvr_macros.h"
 #include "pvr_types.h"
 #include "pvr_util.h"
 #include "pvr_winsys.h"
@@ -364,7 +365,7 @@ VkResult pvr_bo_alloc(struct pvr_device *device,
       goto err_free_bo;
 
    if (flags & PVR_BO_ALLOC_FLAG_CPU_MAPPED) {
-      result = device->ws->ops->buffer_map(pvr_bo->bo);
+      result = device->ws->ops->buffer_map(pvr_bo->bo, NULL);
       if (result != VK_SUCCESS)
          goto err_buffer_destroy;
 
@@ -389,7 +390,7 @@ err_heap_free:
 
 err_buffer_unmap:
    if (flags & PVR_BO_ALLOC_FLAG_CPU_MAPPED)
-      device->ws->ops->buffer_unmap(pvr_bo->bo);
+      device->ws->ops->buffer_unmap(pvr_bo->bo, false);
 
 err_buffer_destroy:
    device->ws->ops->buffer_destroy(pvr_bo->bo);
@@ -418,7 +419,7 @@ VkResult pvr_bo_cpu_map(struct pvr_device *device, struct pvr_bo *pvr_bo)
 {
    assert(!pvr_bo->bo->map);
 
-   return device->ws->ops->buffer_map(pvr_bo->bo);
+   return device->ws->ops->buffer_map(pvr_bo->bo, NULL);
 }
 
 /**
@@ -454,7 +455,7 @@ void pvr_bo_cpu_unmap(struct pvr_device *device, struct pvr_bo *pvr_bo)
    }
 #endif /* defined(HAVE_VALGRIND) */
 
-   device->ws->ops->buffer_unmap(bo);
+   device->ws->ops->buffer_unmap(bo, false);
 }
 
 /**
@@ -483,7 +484,7 @@ void pvr_bo_free(struct pvr_device *device, struct pvr_bo *pvr_bo)
    device->ws->ops->heap_free(pvr_bo->vma);
 
    if (pvr_bo->bo->map)
-      device->ws->ops->buffer_unmap(pvr_bo->bo);
+      device->ws->ops->buffer_unmap(pvr_bo->bo, false);
 
    device->ws->ops->buffer_destroy(pvr_bo->bo);
 

@@ -1,6 +1,10 @@
+// Copyright 2022 Red Hat.
+// SPDX-License-Identifier: MIT
+
+use libc_rust_gen::free;
 use mesa_rust_gen::*;
 
-use std::ffi::{c_void, CString};
+use std::ffi::{c_void, CStr};
 use std::ops::Deref;
 use std::ptr;
 use std::ptr::NonNull;
@@ -34,7 +38,7 @@ impl DiskCacheBorrowed {
         }
     }
 
-    pub fn get(&self, key: &mut cache_key) -> Option<DiskCacheEntry> {
+    pub fn get(&self, key: &mut cache_key) -> Option<DiskCacheEntry<'_>> {
         let mut size = 0;
 
         unsafe {
@@ -74,8 +78,7 @@ impl DiskCacheBorrowed {
 }
 
 impl DiskCache {
-    pub fn new(name: &str, func_ptrs: &[*mut c_void], flags: u64) -> Option<Self> {
-        let c_name = CString::new(name).unwrap();
+    pub fn new(name: &CStr, func_ptrs: &[*mut c_void], flags: u64) -> Option<Self> {
         let mut sha_ctx = SHA1_CTX::default();
         let mut sha = [0; SHA1_DIGEST_LENGTH as usize];
         let mut cache_id = [0; SHA1_DIGEST_STRING_LENGTH as usize];
@@ -90,7 +93,7 @@ impl DiskCache {
             }
             SHA1Final(&mut sha, &mut sha_ctx);
             mesa_bytes_to_hex(cache_id.as_mut_ptr(), sha.as_ptr(), sha.len() as u32);
-            disk_cache_create(c_name.as_ptr(), cache_id.as_ptr(), flags)
+            disk_cache_create(name.as_ptr(), cache_id.as_ptr(), flags)
         };
 
         DiskCacheBorrowed::from_ptr(cache).map(|c| Self { inner: c })
@@ -117,7 +120,7 @@ pub struct DiskCacheEntry<'a> {
     data: &'a mut [u8],
 }
 
-impl<'a> Deref for DiskCacheEntry<'a> {
+impl Deref for DiskCacheEntry<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -125,7 +128,7 @@ impl<'a> Deref for DiskCacheEntry<'a> {
     }
 }
 
-impl<'a> Drop for DiskCacheEntry<'a> {
+impl Drop for DiskCacheEntry<'_> {
     fn drop(&mut self) {
         unsafe {
             free(self.data.as_mut_ptr().cast());

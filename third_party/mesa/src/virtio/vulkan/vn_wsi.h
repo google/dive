@@ -30,13 +30,10 @@ vn_wsi_create_image(struct vn_device *dev,
                     const VkAllocationCallbacks *alloc,
                     struct vn_image **out_img);
 
-VkResult
-vn_wsi_create_image_from_swapchain(
-   struct vn_device *dev,
-   const VkImageCreateInfo *create_info,
-   const VkImageSwapchainCreateInfoKHR *swapchain_info,
-   const VkAllocationCallbacks *alloc,
-   struct vn_image **out_img);
+bool
+vn_wsi_validate_image_format_info(
+   struct vn_physical_device *physical_dev,
+   const VkPhysicalDeviceImageFormatInfo2 *info);
 
 #else
 
@@ -61,15 +58,11 @@ vn_wsi_create_image(struct vn_device *dev,
    return VK_ERROR_OUT_OF_HOST_MEMORY;
 }
 
-static inline VkResult
-vn_wsi_create_image_from_swapchain(
-   struct vn_device *dev,
-   const VkImageCreateInfo *create_info,
-   const VkImageSwapchainCreateInfoKHR *swapchain_info,
-   const VkAllocationCallbacks *alloc,
-   struct vn_image **out_img)
+static inline bool
+vn_wsi_validate_image_format_info(struct vn_physical_device *physical_dev,
+                                  const VkPhysicalDeviceImageFormatInfo2 *info)
 {
-   return VK_ERROR_OUT_OF_HOST_MEMORY;
+   return true;
 }
 
 #endif /* VN_USE_WSI_PLATFORM */

@@ -947,6 +947,22 @@ static struct ac_pc_block_base gfx11_SQ_WGP = {
    .spm_block_select = AC_SPM_SE_BLOCK_SQC,
 };
 
+/* gfx12_GRBMSE */
+static unsigned gfx12_GRBMSE_select0[] = {
+   R_0363E0_GRBMH_PERFCOUNTER0_SELECT,
+   R_0363E4_GRBMH_PERFCOUNTER1_SELECT,
+};
+
+static struct ac_pc_block_base gfx12_GRBMSE = {
+   .gpu_block = GRBMSE,
+   .name = "GRBMSE",
+   .num_counters = 2,
+   .flags = AC_PC_BLOCK_SE | AC_PC_BLOCK_SHADER,
+
+   .select0 = gfx12_GRBMSE_select0,
+   .counter0_lo = R_0343E8_GRBMH_PERFCOUNTER0_LO,
+};
+
 /* Both the number of instances and selectors varies between chips of the same
  * class. We only differentiate by class here and simply expose the maximum
  * number over all chips in a class.
@@ -1046,6 +1062,35 @@ static struct ac_pc_block_gfxdescr groups_gfx11[] = {
    {&gfx11_SQ_WGP, 511, 4},
 };
 
+static struct ac_pc_block_gfxdescr groups_gfx12[] = {
+   {&cik_CB, 315},
+   {&gfx10_CHA, 25},
+   {&gfx10_CHC, 94},
+   {&cik_CPC, 55},
+   {&cik_CPF, 43},
+   {&cik_CPG, 95},
+   {&gfx10_DB, 441},
+   {&gfx10_GCR, 151},
+   {&gfx10_GE, 54},
+   {&gfx10_GL1A, 21},
+   {&gfx10_GL1C, 121, 4},
+   {&gfx10_GL2A, 114},
+   {&gfx10_GL2C, 249},
+   {&cik_GRBM, 51},
+   {&gfx12_GRBMSE, 20},
+   {&cik_PA_SC, 821},
+   {&gfx10_PA_SU, 828},
+   {&gfx10_RLC, 6},
+   {&cik_SPI, 318},
+   {&gfx10_SQ, 45},
+   {&cik_SX, 81},
+   {&cik_TA, 254},
+   {&gfx10_TCP, 99},
+   {&cik_TD, 271},
+   {&gfx10_UTCL1, 71},
+   {&gfx11_SQ_WGP, 511, 4},
+};
+
 struct ac_pc_block *ac_lookup_counter(const struct ac_perfcounters *pc,
                                       unsigned index, unsigned *base_gid,
                                       unsigned *sub_index)
@@ -1119,7 +1164,7 @@ bool ac_init_block_names(const struct radeon_info *info,
       block->group_name_stride += 2;
    }
 
-   block->group_names = MALLOC(block->num_groups * block->group_name_stride);
+   block->group_names = MALLOC((size_t)block->num_groups * block->group_name_stride);
    if (!block->group_names)
       return false;
 
@@ -1151,10 +1196,9 @@ bool ac_init_block_names(const struct radeon_info *info,
       }
    }
 
-   assert(block->b->selectors <= 1000);
-   block->selector_name_stride = block->group_name_stride + 4;
+   block->selector_name_stride = block->group_name_stride + 5;
    block->selector_names =
-      MALLOC(block->num_groups * block->b->selectors * block->selector_name_stride);
+      MALLOC((size_t)block->num_groups * block->b->selectors * block->selector_name_stride);
    if (!block->selector_names)
       return false;
 
@@ -1162,7 +1206,7 @@ bool ac_init_block_names(const struct radeon_info *info,
    p = block->selector_names;
    for (i = 0; i < block->num_groups; ++i) {
       for (j = 0; j < block->b->selectors; ++j) {
-         sprintf(p, "%s_%03d", groupname, j);
+         sprintf(p, "%s_%04d", groupname, j);
          p += block->selector_name_stride;
       }
       groupname += block->group_name_stride;
@@ -1200,6 +1244,10 @@ bool ac_init_perfcounters(const struct radeon_info *info,
    case GFX11:
       blocks = groups_gfx11;
       num_blocks = ARRAY_SIZE(groups_gfx11);
+      break;
+   case GFX12:
+      blocks = groups_gfx12;
+      num_blocks = ARRAY_SIZE(groups_gfx12);
       break;
    case GFX6:
    default:

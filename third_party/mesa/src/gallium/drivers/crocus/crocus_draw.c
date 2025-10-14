@@ -36,8 +36,8 @@
 #include "util/u_inlines.h"
 #include "util/u_transfer.h"
 #include "util/u_upload_mgr.h"
-#include "intel/compiler/brw_compiler.h"
-#include "intel/compiler/brw_eu_defines.h"
+#include "intel/compiler/elk/elk_compiler.h"
+#include "intel/compiler/elk/elk_eu_defines.h"
 #include "compiler/shader_info.h"
 #include "crocus_context.h"
 #include "crocus_defines.h"
@@ -68,7 +68,7 @@ can_cut_index_handle_restart_index(struct crocus_context *ice,
    case 4:
       return draw->restart_index == 0xffffffff;
    default:
-      unreachable("illegal index size\n");
+      UNREACHABLE("illegal index size\n");
    }
 
    return false;
@@ -229,7 +229,7 @@ crocus_update_draw_parameters(struct crocus_context *ice,
             ice->draw.params.baseinstance = info->start_instance;
             ice->draw.params_valid = true;
 
-            u_upload_data(ice->ctx.stream_uploader, 0,
+            u_upload_data_ref(ice->ctx.stream_uploader, 0,
                           sizeof(ice->draw.params), 4, &ice->draw.params,
                           &draw_params->offset, &draw_params->res);
          }
@@ -247,7 +247,7 @@ crocus_update_draw_parameters(struct crocus_context *ice,
          ice->draw.derived_params.drawid = drawid_offset;
          ice->draw.derived_params.is_indexed_draw = is_indexed_draw;
 
-         u_upload_data(ice->ctx.stream_uploader, 0,
+         u_upload_data_ref(ice->ctx.stream_uploader, 0,
                        sizeof(ice->draw.derived_params), 4,
                        &ice->draw.derived_params, &derived_params->offset,
                        &derived_params->res);
@@ -421,8 +421,8 @@ crocus_draw_vbo(struct pipe_context *ctx,
       return;
 
    if (ice->state.dirty & CROCUS_DIRTY_RENDER_RESOLVES_AND_FLUSHES) {
-      bool draw_aux_buffer_disabled[BRW_MAX_DRAW_BUFFERS] = { };
-      for (gl_shader_stage stage = 0; stage < MESA_SHADER_COMPUTE; stage++) {
+      bool draw_aux_buffer_disabled[ELK_MAX_DRAW_BUFFERS] = { };
+      for (mesa_shader_stage stage = 0; stage < MESA_SHADER_COMPUTE; stage++) {
          if (ice->shaders.prog[stage])
             crocus_predraw_resolve_inputs(ice, batch, draw_aux_buffer_disabled,
                                           stage, true);
@@ -463,7 +463,7 @@ crocus_update_grid_size_resource(struct crocus_context *ice,
       memset(ice->state.last_grid, 0, sizeof(ice->state.last_grid));
    } else if (memcmp(ice->state.last_grid, grid->grid, sizeof(grid->grid)) != 0) {
       memcpy(ice->state.last_grid, grid->grid, sizeof(grid->grid));
-      u_upload_data(ice->ctx.const_uploader, 0, sizeof(grid->grid), 4,
+      u_upload_data_ref(ice->ctx.const_uploader, 0, sizeof(grid->grid), 4,
                     grid->grid, &grid_ref->offset, &grid_ref->res);
    }
 

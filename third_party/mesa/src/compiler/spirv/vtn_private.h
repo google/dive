@@ -31,17 +31,17 @@
 #include "util/u_dynarray.h"
 #include "nir_spirv.h"
 #include "spirv.h"
+#include "spirv_info.h"
 #include "vtn_generator_ids.h"
 
 extern uint32_t mesa_spirv_debug;
 
-#ifndef NDEBUG
 #define MESA_SPIRV_DEBUG(flag) unlikely(mesa_spirv_debug & (MESA_SPIRV_DEBUG_ ## flag))
-#else
-#define MESA_SPIRV_DEBUG(flag) false
-#endif
 
 #define MESA_SPIRV_DEBUG_STRUCTURED     (1u << 0)
+#define MESA_SPIRV_DEBUG_VALUES         (1u << 1)
+#define MESA_SPIRV_DEBUG_ASM            (1u << 2)
+#define MESA_SPIRV_DEBUG_COLOR          (1u << 3)
 
 struct vtn_builder;
 struct vtn_decoration;
@@ -120,6 +120,17 @@ _vtn_fail(struct vtn_builder *b, const char *file, unsigned line,
       if (!likely(expr)) \
          vtn_fail("%s", #expr); \
    } while (0)
+
+/* These are used to allocate data that can be dropped at the end of
+ * the parsing.  Any NIR data structure should keep using the ralloc,
+ * since they will outlive the parsing.
+ */
+#define vtn_alloc(B, TYPE)               linear_alloc(B->lin_ctx, TYPE)
+#define vtn_zalloc(B, TYPE)              linear_zalloc(B->lin_ctx, TYPE)
+#define vtn_alloc_array(B, TYPE, ELEMS)  linear_alloc_array(B->lin_ctx, TYPE, ELEMS)
+#define vtn_zalloc_array(B, TYPE, ELEMS) linear_zalloc_array(B->lin_ctx, TYPE, ELEMS)
+#define vtn_alloc_size(B, SIZE)          linear_alloc_child(B->lin_ctx, SIZE)
+#define vtn_zalloc_size(B, SIZE)         linear_zalloc_child(B->lin_ctx, SIZE)
 
 enum vtn_value_type {
    vtn_value_type_invalid = 0,
@@ -251,8 +262,11 @@ vtn_foreach_instruction(struct vtn_builder *b, const uint32_t *start,
                         const uint32_t *end, vtn_instruction_handler handler);
 
 struct vtn_ssa_value {
+   bool is_variable;
+
    union {
       nir_def *def;
+      nir_variable *var;
       struct vtn_ssa_value **elems;
    };
 
@@ -280,6 +294,7 @@ enum vtn_base_type {
    vtn_base_type_ray_query,
    vtn_base_type_function,
    vtn_base_type_event,
+   vtn_base_type_cooperative_matrix,
 };
 
 struct vtn_type {
@@ -349,8 +364,10 @@ struct vtn_type {
 
       /* Members for pointer types */
       struct {
-         /* For pointers, the vtn_type for dereferenced type */
-         struct vtn_type *deref;
+         /* For regular pointers, the vtn_type of the object pointed to;
+          * for untyped pointers it must be NULL.
+          */
+         struct vtn_type *pointed;
 
          /* Storage class for pointers */
          SpvStorageClass storage_class;
@@ -388,10 +405,17 @@ struct vtn_type {
          /* Return type for functions */
          struct vtn_type *return_type;
       };
+
+      /* Members for cooperative matrix types. */
+      struct {
+         struct glsl_cmat_description desc;
+         struct vtn_type *component_type;
+      };
    };
 };
 
 bool vtn_type_contains_block(struct vtn_builder *b, struct vtn_type *type);
+bool vtn_type_is_block_array(struct vtn_builder *b, struct vtn_type *type);
 
 bool vtn_types_compatible(struct vtn_builder *b,
                           struct vtn_type *t1, struct vtn_type *t2);
@@ -462,30 +486,28 @@ struct vtn_pointer {
    /** The variable mode for the referenced data */
    enum vtn_variable_mode mode;
 
-   /** The dereferenced type of this pointer */
+   /** The pointer type of this pointer */
    struct vtn_type *type;
-
-   /** The pointer type of this pointer
-    *
-    * This may be NULL for some temporary pointers constructed as part of a
-    * large load, store, or copy.  It MUST be valid for all pointers which are
-    * stored as SPIR-V SSA values.
-    */
-   struct vtn_type *ptr_type;
 
    /** The referenced variable, if known
     *
-    * This field may be NULL if the pointer uses a (block_index, offset) pair
-    * instead of an access chain or if the access chain starts at a deref.
+    * This field may be NULL if the access chain starts at a deref.
     */
    struct vtn_variable *var;
 
-   /** The NIR deref corresponding to this pointer */
-   nir_deref_instr *deref;
+   /* The descriptor "index"
+    *
+    * The stores the logical descriptor index (if any) and the result of a
+    * vulkan_resource_index or vulkan_resource_reindex intrinsic.
+    */
+   struct nir_def *desc_index;
 
-   /** A (block_index, offset) pair representing a UBO or SSBO position. */
-   struct nir_def *block_index;
-   struct nir_def *offset;
+   /** The NIR deref corresponding to this pointer
+    *
+    * This may be NULL if it's a pointer to a block or acceleration structure,
+    * in which case desc_index is used instead.
+    **/
+   nir_deref_instr *deref;
 
    /* Access qualifiers */
    enum gl_access_qualifier access;
@@ -556,6 +578,9 @@ struct vtn_value {
    /* Valid when all the members of the value are undef. */
    bool is_undef_constant:1;
 
+   /* Marked as OpEntryPoint */
+   bool is_entrypoint:1;
+
    const char *name;
    struct vtn_decoration *decoration;
    struct vtn_type *type;
@@ -607,6 +632,8 @@ struct vtn_decoration {
 struct vtn_builder {
    nir_builder nb;
 
+   linear_ctx *lin_ctx;
+
    /* Used by vtn_fail to jump back to the beginning of SPIR-V compilation */
    jmp_buf fail_jump;
 
@@ -648,6 +675,9 @@ struct vtn_builder {
    enum vtn_generator generator_id;
    SpvSourceLanguage source_lang;
 
+   struct spirv_capabilities supported_capabilities;
+   struct spirv_capabilities enabled_capabilities;
+
    /* True if we need to fix up CS OpControlBarrier */
    bool wa_glslang_cs_barrier;
 
@@ -658,21 +688,20 @@ struct vtn_builder {
    bool wa_ignore_return_after_emit_mesh_tasks;
 
    /* Workaround discard bugs in HLSL -> SPIR-V compilers */
-   bool uses_demote_to_helper_invocation;
    bool convert_discard_to_demote;
 
-   gl_shader_stage entry_point_stage;
+   mesa_shader_stage entry_point_stage;
    const char *entry_point_name;
    struct vtn_value *entry_point;
    struct vtn_value *workgroup_size_builtin;
-   bool variable_pointers;
-   bool image_gather_bias_lod;
 
    uint32_t *interface_ids;
    size_t interface_ids_count;
 
    struct vtn_function *func;
    struct list_head functions;
+
+   struct hash_table *strings;
 
    /* Current function parameter index */
    unsigned func_param_idx;
@@ -708,6 +737,9 @@ vtn_untyped_value(struct vtn_builder *b, uint32_t value_id)
                "SPIR-V id %u is out-of-bounds", value_id);
    return &b->values[value_id];
 }
+
+void vtn_print_value(struct vtn_builder *b, struct vtn_value *val, FILE *f);
+void vtn_dump_values(struct vtn_builder *b, FILE *f);
 
 static inline uint32_t
 vtn_id_for_value(struct vtn_builder *b, struct vtn_value *value)
@@ -807,7 +839,7 @@ vtn_constant_uint(struct vtn_builder *b, uint32_t value_id)
    case 16: return val->constant->values[0].u16;
    case 32: return val->constant->values[0].u32;
    case 64: return val->constant->values[0].u64;
-   default: unreachable("Invalid bit size");
+   default: UNREACHABLE("Invalid bit size");
    }
 }
 
@@ -825,7 +857,7 @@ vtn_constant_int(struct vtn_builder *b, uint32_t value_id)
    case 16: return val->constant->values[0].i16;
    case 32: return val->constant->values[0].i32;
    case 64: return val->constant->values[0].i64;
-   default: unreachable("Invalid bit size");
+   default: UNREACHABLE("Invalid bit size");
    }
 }
 
@@ -856,6 +888,10 @@ struct vtn_value *vtn_push_ssa_value(struct vtn_builder *b, uint32_t value_id,
 nir_def *vtn_get_nir_ssa(struct vtn_builder *b, uint32_t value_id);
 struct vtn_value *vtn_push_nir_ssa(struct vtn_builder *b, uint32_t value_id,
                                    nir_def *def);
+nir_deref_instr *vtn_get_deref_for_id(struct vtn_builder *b, uint32_t value_id);
+nir_deref_instr *vtn_get_deref_for_ssa_value(struct vtn_builder *b, struct vtn_ssa_value *ssa);
+struct vtn_value *vtn_push_var_ssa(struct vtn_builder *b, uint32_t value_id,
+                                   nir_variable *var);
 
 struct vtn_value *vtn_push_pointer(struct vtn_builder *b,
                                    uint32_t value_id,
@@ -875,6 +911,7 @@ vtn_copy_value(struct vtn_builder *b, uint32_t src_value_id,
 
 struct vtn_ssa_value *vtn_create_ssa_value(struct vtn_builder *b,
                                            const struct glsl_type *type);
+void vtn_set_ssa_value_var(struct vtn_builder *b, struct vtn_ssa_value *ssa, nir_variable *var);
 
 struct vtn_ssa_value *vtn_ssa_transpose(struct vtn_builder *b,
                                         struct vtn_ssa_value *src);
@@ -886,6 +923,10 @@ nir_deref_instr *vtn_pointer_to_deref(struct vtn_builder *b,
 nir_def *
 vtn_pointer_to_offset(struct vtn_builder *b, struct vtn_pointer *ptr,
                       nir_def **index_out);
+
+struct vtn_pointer *
+vtn_cast_pointer(struct vtn_builder *b, struct vtn_pointer *p,
+                 struct vtn_type *pointed);
 
 nir_deref_instr *
 vtn_get_call_payload_for_location(struct vtn_builder *b, uint32_t location_id);
@@ -918,6 +959,9 @@ typedef void (*vtn_decoration_foreach_cb)(struct vtn_builder *,
 void vtn_foreach_decoration(struct vtn_builder *b, struct vtn_value *value,
                             vtn_decoration_foreach_cb cb, void *data);
 
+bool vtn_has_decoration(struct vtn_builder *b, struct vtn_value *value,
+                        SpvDecoration decoration);
+
 typedef void (*vtn_execution_mode_foreach_cb)(struct vtn_builder *,
                                               struct vtn_value *,
                                               const struct vtn_decoration *,
@@ -926,9 +970,13 @@ typedef void (*vtn_execution_mode_foreach_cb)(struct vtn_builder *,
 void vtn_foreach_execution_mode(struct vtn_builder *b, struct vtn_value *value,
                                 vtn_execution_mode_foreach_cb cb, void *data);
 
+nir_alu_type vtn_convert_op_src_type(SpvOp opcode);
+nir_alu_type vtn_convert_op_dst_type(SpvOp opcode);
+
 nir_op vtn_nir_alu_op_for_spirv_opcode(struct vtn_builder *b,
                                        SpvOp opcode, bool *swap, bool *exact,
-                                       unsigned src_bit_size, unsigned dst_bit_size);
+                                       const glsl_type *src_type,
+                                       const glsl_type *dst_type);
 
 void vtn_handle_alu(struct vtn_builder *b, SpvOp opcode,
                     const uint32_t *w, unsigned count);
@@ -939,7 +987,7 @@ void vtn_handle_integer_dot(struct vtn_builder *b, SpvOp opcode,
 void vtn_handle_bitcast(struct vtn_builder *b, const uint32_t *w,
                         unsigned count);
 
-void vtn_handle_no_contraction(struct vtn_builder *b, struct vtn_value *val);
+void vtn_handle_fp_fast_math(struct vtn_builder *b, struct vtn_value *val);
 
 void vtn_handle_subgroup(struct vtn_builder *b, SpvOp opcode,
                          const uint32_t *w, unsigned count);
@@ -953,7 +1001,7 @@ bool vtn_handle_opencl_core_instruction(struct vtn_builder *b, SpvOp opcode,
                                         const uint32_t *w, unsigned count);
 
 struct vtn_builder* vtn_create_builder(const uint32_t *words, size_t word_count,
-                                       gl_shader_stage stage, const char *entry_point_name,
+                                       mesa_shader_stage stage, const char *entry_point_name,
                                        const struct spirv_to_nir_options *options);
 
 void vtn_handle_entry_point(struct vtn_builder *b, const uint32_t *w,
@@ -1008,7 +1056,6 @@ SpvMemorySemanticsMask vtn_mode_to_memory_semantics(enum vtn_variable_mode mode)
 void vtn_emit_memory_barrier(struct vtn_builder *b, SpvScope scope,
                              SpvMemorySemanticsMask semantics);
 
-bool vtn_value_is_relaxed_precision(struct vtn_builder *b, struct vtn_value *val);
 nir_def *
 vtn_mediump_downconvert(struct vtn_builder *b, enum glsl_base_type base_type, nir_def *def);
 struct vtn_ssa_value *
@@ -1032,5 +1079,30 @@ vtn_parse_switch(struct vtn_builder *b,
                  const uint32_t *branch,
                  struct list_head *case_list);
 
+bool vtn_get_mem_operands(struct vtn_builder *b, const uint32_t *w, unsigned count,
+                          unsigned *idx, SpvMemoryAccessMask *access, unsigned *alignment,
+                          SpvScope *dest_scope, SpvScope *src_scope);
+void vtn_emit_make_visible_barrier(struct vtn_builder *b, SpvMemoryAccessMask access,
+                                   SpvScope scope, enum vtn_variable_mode mode);
+void vtn_emit_make_available_barrier(struct vtn_builder *b, SpvMemoryAccessMask access,
+                                     SpvScope scope, enum vtn_variable_mode mode);
+
+
+void vtn_handle_cooperative_type(struct vtn_builder *b, struct vtn_value *val,
+                                 SpvOp opcode, const uint32_t *w, unsigned count);
+void vtn_handle_cooperative_instruction(struct vtn_builder *b, SpvOp opcode,
+                                        const uint32_t *w, unsigned count);
+void vtn_handle_cooperative_alu(struct vtn_builder *b, struct vtn_value *dest_val,
+                                const struct glsl_type *dest_type, SpvOp opcode,
+                                const uint32_t *w, unsigned count);
+struct vtn_ssa_value *vtn_cooperative_matrix_extract(struct vtn_builder *b, struct vtn_ssa_value *mat,
+                                                     const uint32_t *indices, unsigned num_indices);
+struct vtn_ssa_value *vtn_cooperative_matrix_insert(struct vtn_builder *b, struct vtn_ssa_value *mat,
+                                                    struct vtn_ssa_value *insert,
+                                                    const uint32_t *indices, unsigned num_indices);
+nir_deref_instr *vtn_create_cmat_temporary(struct vtn_builder *b,
+                                           const struct glsl_type *t, const char *name);
+
+mesa_shader_stage vtn_stage_for_execution_model(SpvExecutionModel model);
 
 #endif /* _VTN_PRIVATE_H_ */

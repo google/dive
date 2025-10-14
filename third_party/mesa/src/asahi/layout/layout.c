@@ -4,6 +4,8 @@
  */
 
 #include "layout.h"
+#include "util/format/u_format.h"
+#include "util/u_math.h"
 
 static void
 ail_initialize_linear(struct ail_layout *layout)
@@ -19,34 +21,17 @@ ail_initialize_linear(struct ail_layout *layout)
    assert((layout->linear_stride_B % 16) == 0 && "Strides must be aligned");
 
    /* Layer stride must be cache line aligned to pack linear 2D arrays */
-   layout->layer_stride_B =
-      ALIGN_POT(layout->linear_stride_B * layout->height_px, AIL_CACHELINE);
+   layout->layer_stride_B = align64(
+      (uint64_t)layout->linear_stride_B * layout->height_px, AIL_CACHELINE);
 
    layout->size_B = layout->layer_stride_B * layout->depth_px;
-}
-
-/*
- * Calculate the minimum integer l such that x 2^-l < y, where x is an integer
- * and y is a power-of-two.
- */
-static unsigned
-ail_min_mip_below(unsigned x, unsigned y)
-{
-   assert(util_is_power_of_two_nonzero(y));
-
-   if (x < y)
-      return 0;
-   else if (util_is_power_of_two_or_zero(x))
-      return util_logbase2(x) - util_logbase2(y) + 1;
-   else
-      return util_logbase2_ceil(x) - util_logbase2(y);
 }
 
 /*
  * Get the maximum tile size possible for a given block size. This satisfy
  * width * height * blocksize = 16384 = page size, so each tile is one page.
  */
-static inline struct ail_tile
+struct ail_tile
 ail_get_max_tile_size(unsigned blocksize_B)
 {
    /* clang-format off */
@@ -58,7 +43,7 @@ ail_get_max_tile_size(unsigned blocksize_B)
    case 16: return (struct ail_tile) {  32,  32 };
    case 32: return (struct ail_tile) {  32,  16 };
    case 64: return (struct ail_tile) {  16,  16 };
-   default: unreachable("Invalid blocksize");
+   default: UNREACHABLE("Invalid blocksize");
    }
    /* clang-format on */
 }
@@ -81,12 +66,15 @@ ail_get_block_size_B(struct ail_layout *layout)
 }
 
 static void
-ail_initialize_twiddled(struct ail_layout *layout)
+ail_initialize_gpu_tiled(struct ail_layout *layout)
 {
    unsigned offset_B = 0;
    unsigned blocksize_B = ail_get_block_size_B(layout);
    unsigned w_el = util_format_get_nblocksx(layout->format, layout->width_px);
    unsigned h_el = util_format_get_nblocksy(layout->format, layout->height_px);
+   unsigned bw_px = util_format_get_blockwidth(layout->format);
+   unsigned bh_px = util_format_get_blockheight(layout->format);
+   bool compressed = util_format_is_compressed(layout->format);
 
    /* Calculate the tile size used for the large miptree, and the dimensions of
     * level 0 given that tile size.
@@ -100,8 +88,18 @@ ail_initialize_twiddled(struct ail_layout *layout)
     * power-of-two miptree is used when either the width or the height is
     * smaller than a single large tile.
     */
-   unsigned pot_level = MIN2(ail_min_mip_below(w_el, tilesize_el.width_el),
-                             ail_min_mip_below(h_el, tilesize_el.height_el));
+   unsigned pot_level = 0;
+   unsigned pot_w_px = bw_px * w_el;
+   unsigned pot_h_px = bh_px * h_el;
+   do {
+      unsigned pot_w_el = util_format_get_nblocksx(layout->format, pot_w_px);
+      unsigned pot_h_el = util_format_get_nblocksy(layout->format, pot_h_px);
+      if (pot_w_el < tilesize_el.width_el || pot_h_el < tilesize_el.height_el)
+         break;
+      pot_w_px = u_minify(pot_w_px, 1);
+      pot_h_px = u_minify(pot_h_px, 1);
+      pot_level++;
+   } while (1);
 
    /* First allocate the large miptree. All tiles in the large miptree are of
     * size tilesize_el and have their dimensions given by stx/sty/sarea.
@@ -126,6 +124,13 @@ ail_initialize_twiddled(struct ail_layout *layout)
       layout->level_offsets_B[l] = offset_B;
       offset_B = ALIGN_POT(offset_B + (blocksize_B * size_el), AIL_CACHELINE);
 
+      layout->stride_el[l] = util_format_get_nblocksx(
+         layout->format, u_minify(layout->width_px, l));
+
+      /* Compressed textures pad the stride in this case */
+      if (compressed && pad_left)
+         layout->stride_el[l]++;
+
       layout->tilesize_el[l] = tilesize_el;
    }
 
@@ -134,8 +139,16 @@ ail_initialize_twiddled(struct ail_layout *layout)
     * images, where the round-down error of right-shifting could cause incorrect
     * tile size calculations.
     */
-   unsigned potw_el = util_next_power_of_two(u_minify(w_el, pot_level));
-   unsigned poth_el = util_next_power_of_two(u_minify(h_el, pot_level));
+   unsigned potw_el, poth_el;
+   if (compressed) {
+      /* Compressed formats round then minify instead of minifying then rounding
+       */
+      potw_el = u_minify(util_next_power_of_two(w_el), pot_level);
+      poth_el = u_minify(util_next_power_of_two(h_el), pot_level);
+   } else {
+      potw_el = util_next_power_of_two(u_minify(w_el, pot_level));
+      poth_el = util_next_power_of_two(u_minify(h_el, pot_level));
+   }
 
    /* Finally we allocate the POT miptree, starting at level pot_level. Each
     * level uses the largest power-of-two tile that fits the level.
@@ -146,14 +159,34 @@ ail_initialize_twiddled(struct ail_layout *layout)
       offset_B = ALIGN_POT(offset_B + (blocksize_B * size_el), AIL_CACHELINE);
 
       /* The tilesize is based on the true mipmap level size, not the POT
-       * rounded size */
-      unsigned tilesize_el =
-         util_next_power_of_two(u_minify(MIN2(w_el, h_el), l));
+       * rounded size, except for compressed textures */
+      unsigned tilesize_el;
+      if (compressed)
+         tilesize_el = util_next_power_of_two(MIN2(potw_el, poth_el));
+      else
+         tilesize_el = util_next_power_of_two(u_minify(MIN2(w_el, h_el), l));
       layout->tilesize_el[l] = (struct ail_tile){tilesize_el, tilesize_el};
+      layout->stride_el[l] = util_format_get_nblocksx(
+         layout->format, u_minify(layout->width_px, l));
 
       potw_el = u_minify(potw_el, 1);
       poth_el = u_minify(poth_el, 1);
    }
+
+   /* Add the end offset so we can easily recover the size of a level */
+   assert(layout->levels < ARRAY_SIZE(layout->level_offsets_B));
+   layout->level_offsets_B[layout->levels] = offset_B;
+
+   /* Determine the start of the miptail. From that level on, we can no longer
+    * precisely bind at page granularity.
+    */
+   layout->mip_tail_first_lod = MIN2(pot_level, layout->levels);
+
+   /* Determine the stride of the miptail. Sparse arrayed images inherently
+    * require page-aligned layers to be able to bind individual layers.
+    */
+   unsigned tail_offset_B = layout->level_offsets_B[layout->mip_tail_first_lod];
+   layout->mip_tail_stride = align(offset_B - tail_offset_B, AIL_PAGESIZE);
 
    /* Align layer size if we have mipmaps and one miptree is larger than one
     * page */
@@ -177,7 +210,58 @@ ail_initialize_twiddled(struct ail_layout *layout)
    else
       layout->layer_stride_B = offset_B;
 
-   layout->size_B = layout->layer_stride_B * layout->depth_px;
+   layout->size_B = (uint64_t)layout->layer_stride_B * layout->depth_px;
+}
+
+static void
+ail_initialize_twiddled(struct ail_layout *layout)
+{
+   unsigned offset_B = 0;
+   unsigned blocksize_B = ail_get_block_size_B(layout);
+   unsigned w_el = util_format_get_nblocksx(layout->format, layout->width_px);
+   unsigned h_el = util_format_get_nblocksy(layout->format, layout->height_px);
+   bool compressed = util_format_is_compressed(layout->format);
+
+   for (unsigned l = 0; l < layout->levels; ++l) {
+      unsigned alloc_w_el = u_minify(util_next_power_of_two(w_el), l);
+      unsigned alloc_h_el = u_minify(util_next_power_of_two(h_el), l);
+      unsigned logical_w_el = util_next_power_of_two(u_minify(w_el, l));
+      unsigned logical_h_el = util_next_power_of_two(u_minify(h_el, l));
+
+      /* AGX: Even the exceptions have exceptions */
+      if (compressed) {
+         logical_w_el = alloc_w_el;
+         logical_h_el = alloc_h_el;
+      }
+
+      unsigned size_el = alloc_w_el * alloc_h_el;
+      layout->level_offsets_B[l] = offset_B;
+      offset_B = ALIGN_POT(offset_B + (blocksize_B * size_el), AIL_CACHELINE);
+
+      unsigned minor_el = MIN2(logical_w_el, logical_h_el);
+      layout->stride_el[l] = logical_w_el;
+      layout->tilesize_el[l] = (struct ail_tile){minor_el, minor_el};
+   }
+
+   /* Add the end offset so we can easily recover the size of a level */
+   assert(layout->levels < ARRAY_SIZE(layout->level_offsets_B));
+   layout->level_offsets_B[layout->levels] = offset_B;
+
+   /* Determine the start of the miptail. From that level on, we can no longer
+    * precisely bind at page granularity.
+    */
+   /* XXX TODO */
+   layout->mip_tail_first_lod = 0;
+
+   /* Determine the stride of the miptail. Sparse arrayed images inherently
+    * require page-aligned layers to be able to bind individual layers.
+    */
+   unsigned tail_offset_B = layout->level_offsets_B[layout->mip_tail_first_lod];
+   layout->mip_tail_stride = align(offset_B - tail_offset_B, AIL_PAGESIZE);
+
+   layout->page_aligned_layers = true;
+   layout->layer_stride_B = ALIGN_POT(offset_B, AIL_PAGESIZE);
+   layout->size_B = (uint64_t)layout->layer_stride_B * layout->depth_px;
 }
 
 static void
@@ -203,23 +287,39 @@ ail_initialize_compression(struct ail_layout *layout)
 
    unsigned compbuf_B = 0;
 
-   for (unsigned l = 0; l < layout->levels; ++l) {
-      if (width_sa < 16 && height_sa < 16)
-         break;
+   for (unsigned l = 0;
+        l < layout->levels && ail_is_level_allocated_compressed(layout, l);
+        ++l) {
 
       layout->level_offsets_compressed_B[l] = compbuf_B;
 
-      /* The compression buffer seems to have 8 bytes per 16 x 16 sample block. */
-      unsigned cmpw_el = DIV_ROUND_UP(util_next_power_of_two(width_sa), 16);
-      unsigned cmph_el = DIV_ROUND_UP(util_next_power_of_two(height_sa), 16);
-      compbuf_B += ALIGN_POT(cmpw_el * cmph_el * 8, AIL_CACHELINE);
+      /* The metadata buffer contains 8 bytes per 16x16 compression tile.
+       * Addressing is fully twiddled, so both width and height are padded to
+       * powers-of-two.
+       */
+      unsigned w_tl = DIV_ROUND_UP(util_next_power_of_two(width_sa), 16);
+      unsigned h_tl = DIV_ROUND_UP(util_next_power_of_two(height_sa), 16);
+      unsigned B_per_tl_2 = 8;
+
+      compbuf_B += ALIGN_POT(w_tl * h_tl * B_per_tl_2, AIL_CACHELINE);
 
       width_sa = DIV_ROUND_UP(width_sa, 2);
       height_sa = DIV_ROUND_UP(height_sa, 2);
    }
 
    layout->compression_layer_stride_B = compbuf_B;
-   layout->size_B += layout->compression_layer_stride_B * layout->depth_px;
+   layout->size_B +=
+      (uint64_t)(layout->compression_layer_stride_B * layout->depth_px);
+}
+
+static void
+ail_initialize_sparse_table(struct ail_layout *layout)
+{
+   layout->sparse_folios_per_layer =
+      DIV_ROUND_UP(layout->layer_stride_B, AIL_IMAGE_SIZE_PER_FOLIO_B);
+
+   unsigned folios = layout->sparse_folios_per_layer * layout->depth_px;
+   layout->sparse_table_size_B = folios * AIL_FOLIO_SIZE_B;
 }
 
 void
@@ -243,8 +343,7 @@ ail_make_miptree(struct ail_layout *layout)
       assert(layout->sample_count_sa >= 1 && "Invalid sample count");
    }
 
-   assert(!(layout->writeable_image &&
-            layout->tiling == AIL_TILING_TWIDDLED_COMPRESSED) &&
+   assert(!(layout->writeable_image && layout->compressed) &&
           "Writeable images must not be compressed");
 
    /* Hardware strides are based on the maximum number of levels, so always
@@ -266,16 +365,21 @@ ail_make_miptree(struct ail_layout *layout)
    case AIL_TILING_LINEAR:
       ail_initialize_linear(layout);
       break;
+   case AIL_TILING_GPU:
+      ail_initialize_gpu_tiled(layout);
+      break;
    case AIL_TILING_TWIDDLED:
       ail_initialize_twiddled(layout);
       break;
-   case AIL_TILING_TWIDDLED_COMPRESSED:
-      ail_initialize_twiddled(layout);
-      ail_initialize_compression(layout);
-      break;
    default:
-      unreachable("Unsupported tiling");
+      UNREACHABLE("Unsupported tiling");
    }
+
+   if (layout->compressed) {
+      ail_initialize_compression(layout);
+   }
+
+   ail_initialize_sparse_table(layout);
 
    layout->size_B = ALIGN_POT(layout->size_B, AIL_CACHELINE);
    assert(layout->size_B > 0 && "Invalid dimensions");

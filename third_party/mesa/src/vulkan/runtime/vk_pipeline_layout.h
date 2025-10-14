@@ -23,6 +23,7 @@
 #ifndef VK_PIPELINE_LAYOUT_H
 #define VK_PIPELINE_LAYOUT_H
 
+#include "vk_limits.h"
 #include "vk_object.h"
 
 #include "util/u_atomic.h"
@@ -32,8 +33,6 @@ extern "C" {
 #endif
 
 struct vk_descriptor_set_layout;
-
-#define VK_MESA_PIPELINE_LAYOUT_MAX_SETS 32
 
 struct vk_pipeline_layout {
    struct vk_object_base base;
@@ -60,8 +59,24 @@ struct vk_pipeline_layout {
    /** Number of descriptor set layouts in this pipeline layout */
    uint32_t set_count;
 
+   /** Push descriptor index or UINT32_MAX if not present */
+   uint32_t push_descriptor_idx;
+
    /** Array of pointers to descriptor set layouts, indexed by set index */
-   struct vk_descriptor_set_layout *set_layouts[VK_MESA_PIPELINE_LAYOUT_MAX_SETS];
+   struct vk_descriptor_set_layout *set_layouts[MESA_VK_MAX_DESCRIPTOR_SETS];
+
+   /** Dynamic descriptors offset
+    *
+    * For each descriptor set layout, this is the sum of dynamic buffers in
+    * each preceding descriptor set.
+    */
+   uint32_t dynamic_descriptor_offset[MESA_VK_MAX_DESCRIPTOR_SETS];
+
+   /** Number of push constant ranges in this pipeline layout */
+   uint32_t push_range_count;
+
+   /** Array of push constant ranges */
+   VkPushConstantRange push_ranges[MESA_VK_MAX_PUSH_CONSTANT_RANGES];
 
    /** Destroy callback
     *

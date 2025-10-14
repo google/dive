@@ -28,13 +28,24 @@
 #include "glxextensions.h"
 
 #include "util/u_debug.h"
-#ifndef GLX_USE_APPLEGL
+
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
 #include "dri_common.h"
+#endif
+
+#include "x11_dri3.h"
+#ifdef HAVE_LIBDRM
+#include "loader_dri3_helper.h"
 #endif
 
 #include <X11/Xlib-xcb.h>
 #include <xcb/xcb.h>
 #include <xcb/glx.h>
+#include "dri_util.h"
+#include "pipe/p_screen.h"
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
+#include <dlfcn.h>
+#endif
 
 #define __GLX_MIN_CONFIG_PROPS	18
 #define __GLX_EXT_CONFIG_PROPS	32
@@ -49,7 +60,7 @@
 #define __GLX_TOTAL_CONFIG \
    (__GLX_MIN_CONFIG_PROPS + 2 * __GLX_EXT_CONFIG_PROPS)
 
-_X_HIDDEN void
+void
 glx_message(int level, const char *f, ...)
 {
    va_list args;
@@ -76,7 +87,7 @@ glx_message(int level, const char *f, ...)
 ** You can set this cell to 1 to force the gl drawing stuff to be
 ** one command per packet
 */
-_X_HIDDEN int __glXDebug = 0;
+int __glXDebug = 0;
 
 /* Extension required boiler plate */
 
@@ -131,9 +142,8 @@ __glXWireToEvent(Display *dpy, XEvent *event, xEvent *wire)
    {
       GLXPbufferClobberEvent *aevent = (GLXPbufferClobberEvent *)event;
       xGLXPbufferClobberEvent *awire = (xGLXPbufferClobberEvent *)wire;
-      aevent->event_type = awire->type;
-      aevent->serial = awire->sequenceNumber;
       aevent->event_type = awire->event_type;
+      aevent->serial = awire->sequenceNumber;
       aevent->draw_type = awire->draw_type;
       aevent->drawable = awire->drawable;
       aevent->buffer_mask = awire->buffer_mask;
@@ -231,14 +241,12 @@ FreeScreenConfigs(struct glx_display * priv)
       glx_screen_cleanup(psc);
 
 #if defined(GLX_DIRECT_RENDERING) && !defined(GLX_USE_APPLEGL)
-      if (psc->driScreen) {
-         psc->driScreen->destroyScreen(psc);
-      } else {
-	 free(psc);
-      }
-#else
-      free(psc);
+      if (psc->driScreen.deinitScreen)
+         psc->driScreen.deinitScreen(psc);
+      /* Free the direct rendering per screen data */
+      driDestroyScreen(psc->frontend_screen);
 #endif
+      free(psc);
    }
    free((char *) priv->screens);
    priv->screens = NULL;
@@ -279,27 +287,8 @@ glx_display_free(struct glx_display *priv)
 
 #if defined(GLX_DIRECT_RENDERING) && !defined(GLX_USE_APPLEGL)
    __glxHashDestroy(priv->drawHash);
-
-   /* Free the direct rendering per display data */
-   if (priv->driswDisplay)
-      priv->driswDisplay->destroyDisplay(priv->driswDisplay);
-   priv->driswDisplay = NULL;
-
-#if defined (GLX_USE_DRM)
-   if (priv->dri2Display)
-      priv->dri2Display->destroyDisplay(priv->dri2Display);
-   priv->dri2Display = NULL;
-
-   if (priv->dri3Display)
-      priv->dri3Display->destroyDisplay(priv->dri3Display);
-   priv->dri3Display = NULL;
-#endif /* GLX_USE_DRM */
-
-#if defined(GLX_USE_WINDOWSGL)
-   if (priv->windowsdriDisplay)
-      priv->windowsdriDisplay->destroyDisplay(priv->windowsdriDisplay);
-   priv->windowsdriDisplay = NULL;
-#endif /* GLX_USE_WINDOWSGL */
+   if (priv->dri2Hash)
+      __glxHashDestroy(priv->dri2Hash);
 
 #endif /* GLX_DIRECT_RENDERING && !GLX_USE_APPLEGL */
 
@@ -387,7 +376,7 @@ convert_from_x_visual_type(int visualType)
  * getVisualConfigs uses the !tagged_only path.
  * getFBConfigs uses the tagged_only path.
  */
-_X_HIDDEN void
+void
 __glXInitializeVisualConfigFromTags(struct glx_config * config, int count,
                                     const INT32 * bp, Bool tagged_only,
                                     Bool fbconfig_style_tags)
@@ -556,19 +545,6 @@ __glXInitializeVisualConfigFromTags(struct glx_config * config, int count,
       case GLX_VISUAL_SELECT_GROUP_SGIX:
          config->visualSelectGroup = *bp++;
          break;
-      case GLX_SWAP_METHOD_OML:
-         if (*bp == GLX_SWAP_UNDEFINED_OML ||
-             *bp == GLX_SWAP_COPY_OML ||
-             *bp == GLX_SWAP_EXCHANGE_OML) {
-            config->swapMethod = *bp++;
-         } else {
-            /* X servers with old HW drivers may return any value here, so
-             * assume GLX_SWAP_METHOD_UNDEFINED.
-             */
-            config->swapMethod = GLX_SWAP_UNDEFINED_OML;
-            bp++;
-         }
-         break;
 #endif
       case GLX_SAMPLE_BUFFERS_SGIS:
          config->sampleBuffers = *bp++;
@@ -576,12 +552,11 @@ __glXInitializeVisualConfigFromTags(struct glx_config * config, int count,
       case GLX_SAMPLES_SGIS:
          config->samples = *bp++;
          break;
-#ifdef GLX_USE_APPLEGL
       case IGNORE_GLX_SWAP_METHOD_OML:
          /* We ignore this tag.  See the comment above this function. */
          ++bp;
          break;
-#else
+#ifndef GLX_USE_APPLEGL
       case GLX_BIND_TO_TEXTURE_RGB_EXT:
          config->bindToTextureRgb = *bp++;
          break;
@@ -736,7 +711,7 @@ getFBConfigs(struct glx_screen *psc, struct glx_display *priv, int screen)
    return psc->configs != NULL;
 }
 
-_X_HIDDEN Bool
+Bool
 glx_screen_init(struct glx_screen *psc,
 		 int screen, struct glx_display * priv)
 {
@@ -755,7 +730,7 @@ glx_screen_init(struct glx_screen *psc,
    return GL_TRUE;
 }
 
-_X_HIDDEN void
+void
 glx_screen_cleanup(struct glx_screen *psc)
 {
    if (psc->configs) {
@@ -767,20 +742,128 @@ glx_screen_cleanup(struct glx_screen *psc)
       glx_config_destroy_list(psc->visuals);
       psc->visuals = NULL;   /* NOTE: just for paranoia */
    }
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
+   if (psc->driver_configs) {
+      driDestroyConfigs(psc->driver_configs);
+      psc->driver_configs = NULL;
+   }
+#endif
    free((char *) psc->serverGLXexts);
    free((char *) psc->serverGLXvendor);
    free((char *) psc->serverGLXversion);
+   free(psc->driverName);
 }
+
+static void
+bind_extensions(struct glx_screen *psc, const char *driverName)
+{
+   unsigned mask;
+
+   if (psc->display->driver != GLX_DRIVER_SW) {
+      __glXEnableDirectExtension(psc, "GLX_EXT_buffer_age");
+      __glXEnableDirectExtension(psc, "GLX_EXT_swap_control");
+      __glXEnableDirectExtension(psc, "GLX_SGI_swap_control");
+      __glXEnableDirectExtension(psc, "GLX_MESA_swap_control");
+      __glXEnableDirectExtension(psc, "GLX_OML_sync_control");
+      __glXEnableDirectExtension(psc, "GLX_SGI_video_sync");
+      // for zink this needs to check whether RELAXED is available
+      if (psc->display->driver == GLX_DRIVER_DRI3)
+         __glXEnableDirectExtension(psc, "GLX_EXT_swap_control_tear");
+   }
+   if (psc->display->driver != GLX_DRIVER_ZINK_YES)
+      __glXEnableDirectExtension(psc, "GLX_MESA_copy_sub_buffer");
+   __glXEnableDirectExtension(psc, "GLX_SGI_make_current_read");
+
+   if (psc->can_EXT_texture_from_pixmap)
+      __glXEnableDirectExtension(psc, "GLX_EXT_texture_from_pixmap");
+
+   /*
+    * GLX_INTEL_swap_event is broken on the server side, where it's
+    * currently unconditionally enabled. This completely breaks
+    * systems running on drivers which don't support that extension.
+    * There's no way to test for its presence on this side, so instead
+    * of disabling it unconditionally, just disable it for drivers
+    * which are known to not support it.
+    *
+    * This was fixed in xserver 1.15.0 (190b03215), so now we only
+    * disable the broken driver.
+    */
+   if (!driverName || strcmp(driverName, "vmwgfx") != 0) {
+      __glXEnableDirectExtension(psc, "GLX_INTEL_swap_event");
+   }
+
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
+   mask = driGetAPIMask(psc->frontend_screen);
+
+   __glXEnableDirectExtension(psc, "GLX_ARB_create_context");
+   __glXEnableDirectExtension(psc, "GLX_ARB_create_context_profile");
+   __glXEnableDirectExtension(psc, "GLX_ARB_create_context_no_error");
+   __glXEnableDirectExtension(psc, "GLX_EXT_no_config_context");
+
+   if ((mask & ((1 << __DRI_API_GLES) |
+                (1 << __DRI_API_GLES2) |
+                (1 << __DRI_API_GLES3))) != 0) {
+      __glXEnableDirectExtension(psc,
+                                 "GLX_EXT_create_context_es_profile");
+      __glXEnableDirectExtension(psc,
+                                 "GLX_EXT_create_context_es2_profile");
+   }
+
+   if (dri_get_pipe_screen(psc->frontend_screen)->caps.device_reset_status_query)
+      __glXEnableDirectExtension(psc,
+                                 "GLX_ARB_create_context_robustness");
+
+   __glXEnableDirectExtension(psc, "GLX_ARB_context_flush_control");
+   __glXEnableDirectExtension(psc, "GLX_MESA_query_renderer");
+
+   __glXEnableDirectExtension(psc, "GLX_MESA_gl_interop");
+
+   char *tmp;
+   if (dri2GalliumConfigQuerys(psc->frontend_screen, "glx_extension_override",
+                                    &tmp) == 0)
+      __glXParseExtensionOverride(psc, tmp);
+
+   if (dri2GalliumConfigQuerys(psc->frontend_screen,
+                                    "indirect_gl_extension_override",
+                                    &tmp) == 0)
+      __IndirectGlParseExtensionOverride(psc, tmp);
+
+   {
+      uint8_t force = false;
+      if (dri2GalliumConfigQueryb(psc->frontend_screen, "force_direct_glx_context",
+                                    &force) == 0) {
+         psc->force_direct_context = force;
+      }
+
+      uint8_t invalid_glx_destroy_window = false;
+      if (dri2GalliumConfigQueryb(psc->frontend_screen,
+                                    "allow_invalid_glx_destroy_window",
+                                    &invalid_glx_destroy_window) == 0) {
+         psc->allow_invalid_glx_destroy_window = invalid_glx_destroy_window;
+      }
+
+      uint8_t keep_native_window_glx_drawable = false;
+      if (dri2GalliumConfigQueryb(psc->frontend_screen,
+                                    "keep_native_window_glx_drawable",
+                                    &keep_native_window_glx_drawable) == 0) {
+         psc->keep_native_window_glx_drawable = keep_native_window_glx_drawable;
+      }
+   }
+#endif
+}
+
 
 /*
 ** Allocate the memory for the per screen configs for each screen.
 ** If that works then fetch the per screen configs data.
 */
 static Bool
-AllocAndFetchScreenConfigs(Display * dpy, struct glx_display * priv)
+AllocAndFetchScreenConfigs(Display * dpy, struct glx_display * priv, enum glx_driver glx_driver, Bool driver_name_is_inferred)
 {
    struct glx_screen *psc;
    GLint i, screens;
+   unsigned screen_count = 0;
+   bool zink = (glx_driver & (GLX_DRIVER_ZINK_INFER | GLX_DRIVER_ZINK_YES)) > 0;
 
    /*
     ** First allocate memory for the array of per screen configs.
@@ -794,40 +877,56 @@ AllocAndFetchScreenConfigs(Display * dpy, struct glx_display * priv)
       psc = NULL;
 #if defined(GLX_DIRECT_RENDERING) && !defined(GLX_USE_APPLEGL)
 #if defined(GLX_USE_DRM)
-#if defined(HAVE_DRI3)
-      if (priv->dri3Display)
-         psc = priv->dri3Display->createScreen(i, priv);
-#endif /* HAVE_DRI3 */
-      if (psc == NULL && priv->dri2Display)
-	 psc = priv->dri2Display->createScreen(i, priv);
+      if (glx_driver & GLX_DRIVER_DRI3) {
+         bool use_zink;
+         psc = dri3_create_screen(i, priv, driver_name_is_inferred, &use_zink);
+         if (use_zink) {
+            glx_driver |= GLX_DRIVER_ZINK_YES;
+            zink = true;
+            driver_name_is_inferred = false;
+         }
+      }
 #endif /* GLX_USE_DRM */
 
 #ifdef GLX_USE_WINDOWSGL
-      if (psc == NULL && priv->windowsdriDisplay)
-	 psc = priv->windowsdriDisplay->createScreen(i, priv);
+      if (psc == NULL && glx_driver & GLX_DRIVER_WINDOWS) {
+	      psc = driwindowsCreateScreen(i, priv, driver_name_is_inferred);
+      }
 #endif
 
-      if (psc == NULL && priv->driswDisplay)
-	 psc = priv->driswDisplay->createScreen(i, priv);
 #endif /* GLX_DIRECT_RENDERING && !GLX_USE_APPLEGL */
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
+      if (psc == NULL &&
+          (glx_driver & GLX_DRIVER_SW || zink)) {
+	      psc = driswCreateScreen(i, priv, glx_driver, driver_name_is_inferred);
+      }
+#endif
 
       bool indirect = false;
 
-#if defined(GLX_USE_APPLEGL)
+#if defined(GLX_USE_APPLEGL) && !defined(GLX_USE_APPLE)
       if (psc == NULL)
          psc = applegl_create_screen(i, priv);
 #else
-      if (psc == NULL)
+      if (psc == NULL && !zink)
       {
+#ifdef GLX_INDIRECT_RENDERING
          psc = indirect_create_screen(i, priv);
+#endif
          indirect = true;
       }
 #endif
       priv->screens[i] = psc;
+      if (psc)
+         screen_count++;
 
       if(indirect) /* Load extensions required only for indirect glx */
          glxSendClientInfo(priv, i);
+      else if (psc && priv->driver != GLX_DRIVER_WINDOWS)
+         bind_extensions(psc, psc->driverName);
    }
+   if (zink && !screen_count)
+      return GL_FALSE;
    SyncHandle();
    return GL_TRUE;
 }
@@ -835,7 +934,7 @@ AllocAndFetchScreenConfigs(Display * dpy, struct glx_display * priv)
 /*
 ** Initialize the client side extension code.
 */
- _X_HIDDEN struct glx_display *
+struct glx_display *
 __glXInitialize(Display * dpy)
 {
    XExtCodes *codes;
@@ -886,12 +985,16 @@ __glXInitialize(Display * dpy)
 
    dpyPriv->glXDrawHash = __glxHashCreate();
 
-#if defined(GLX_DIRECT_RENDERING) && !defined(GLX_USE_APPLEGL)
+   enum glx_driver glx_driver = 0;
+   const char *env = getenv("MESA_LOADER_DRIVER_OVERRIDE");
+
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
    Bool glx_direct = !debug_get_bool_option("LIBGL_ALWAYS_INDIRECT", false);
    Bool glx_accel = !debug_get_bool_option("LIBGL_ALWAYS_SOFTWARE", false);
-   Bool zink;
-   const char *env = getenv("MESA_LOADER_DRIVER_OVERRIDE");
-   zink = env && !strcmp(env, "zink");
+   Bool kopper = !debug_get_bool_option("LIBGL_KOPPER_DISABLE", false);
+
+   if (env && !strcmp(env, "zink"))
+      glx_driver |= GLX_DRIVER_ZINK_YES;
 
    dpyPriv->drawHash = __glxHashCreate();
 
@@ -906,34 +1009,61 @@ __glXInitialize(Display * dpy)
     ** (e.g., those called in AllocAndFetchScreenConfigs).
     */
 #if defined(GLX_USE_DRM)
-   if (glx_direct && glx_accel && !zink) {
-#if defined(HAVE_DRI3)
-      if (!debug_get_bool_option("LIBGL_DRI3_DISABLE", false))
-         dpyPriv->dri3Display = dri3_create_display(dpy);
-#endif /* HAVE_DRI3 */
-      if (!debug_get_bool_option("LIBGL_DRI2_DISABLE", false))
-         dpyPriv->dri2Display = dri2CreateDisplay(dpy);
+   if (glx_direct && glx_accel)
+      dpyPriv->has_multibuffer = x11_dri3_has_multibuffer(XGetXCBConnection(dpy));
+   if (glx_direct && glx_accel &&
+       (!(glx_driver & GLX_DRIVER_ZINK_YES) || !kopper)) {
+      /* dri3 is tried as long as this doesn't error; whether modifiers work is not relevant */
+      glx_driver |= GLX_DRIVER_DRI3;
+      /* nouveau wants to fallback to zink so if we get a screen enable try_zink */
+      if (!debug_get_bool_option("LIBGL_KOPPER_DISABLE", false))
+         glx_driver |= GLX_DRIVER_ZINK_INFER;
+#if defined(HAVE_ZINK)
+      if (!(glx_driver & GLX_DRIVER_DRI3))
+         if (kopper && !getenv("GALLIUM_DRIVER"))
+            glx_driver |= GLX_DRIVER_ZINK_INFER;
+#endif /* HAVE_ZINK */
    }
 #endif /* GLX_USE_DRM */
    if (glx_direct)
-      dpyPriv->driswDisplay = driswCreateDisplay(dpy, zink);
+      glx_driver |= GLX_DRIVER_SW;
 
-#ifdef GLX_USE_WINDOWSGL
-   if (glx_direct && glx_accel)
-      dpyPriv->windowsdriDisplay = driwindowsCreateDisplay(dpy);
-#endif
-#endif /* GLX_DIRECT_RENDERING && !GLX_USE_APPLEGL */
-
-#ifdef GLX_USE_APPLEGL
-   if (!applegl_create_display(dpyPriv)) {
-      free(dpyPriv);
-      return NULL;
+#if !defined(GLX_USE_APPLE)
+   if (!dpyPriv->has_multibuffer && glx_accel && !debug_get_bool_option("LIBGL_KOPPER_DRI2", false)) {
+      if (glx_driver & GLX_DRIVER_ZINK_YES) {
+         /* only print error if zink was explicitly requested */
+         CriticalErrorMessageF("DRI3 not available\n");
+         goto init_fail;
+      }
+      /* if no dri3 and not using dri2, disable zink */
+      glx_driver &= ~GLX_DRIVER_ZINK_INFER;
    }
 #endif
 
-   if (!AllocAndFetchScreenConfigs(dpy, dpyPriv)) {
-      free(dpyPriv);
-      return NULL;
+#ifdef GLX_USE_WINDOWSGL
+   if (glx_direct && glx_accel)
+      glx_driver |= GLX_DRIVER_WINDOWS;
+#endif
+#endif /* GLX_DIRECT_RENDERING && !GLX_USE_APPLEGL */
+
+#if defined(GLX_USE_APPLEGL) && !defined(GLX_USE_APPLE)
+   glx_driver |= GLX_DRIVER_SW;
+#endif
+
+#if defined(GLX_USE_APPLEGL) && !defined(GLX_USE_APPLE)
+   if (!applegl_create_display(dpyPriv))
+      goto init_fail;
+#endif
+
+   if (!AllocAndFetchScreenConfigs(dpy, dpyPriv, glx_driver, !env)) {
+      Bool fail = True;
+#if defined(GLX_DIRECT_RENDERING) && (!defined(GLX_USE_APPLEGL) || defined(GLX_USE_APPLE))
+      if (glx_driver & GLX_DRIVER_ZINK_INFER) {
+         fail = !AllocAndFetchScreenConfigs(dpy, dpyPriv, GLX_DRIVER_SW, true);
+      }
+#endif
+      if (fail)
+         goto init_fail;
    }
 
    glxSendClientInfo(dpyPriv, -1);
@@ -956,13 +1086,21 @@ __glXInitialize(Display * dpy)
    _XUnlockMutex(_Xglobal_lock);
 
    return dpyPriv;
+init_fail:
+#if defined(GLX_DIRECT_RENDERING) && !defined(GLX_USE_APPLEGL)
+   _mesa_set_destroy(dpyPriv->zombieGLXDrawable, free_zombie_glx_drawable);
+   __glxHashDestroy(dpyPriv->drawHash);
+#endif
+   __glxHashDestroy(dpyPriv->glXDrawHash);
+   free(dpyPriv);
+   return NULL;
 }
 
 /*
 ** Setup for sending a GLX command on dpy.  Make sure the extension is
 ** initialized.  Try to avoid calling __glXInitialize as its kinda slow.
 */
-_X_HIDDEN CARD8
+CARD8
 __glXSetupForCommand(Display * dpy)
 {
     struct glx_context *gc;
@@ -1004,7 +1142,7 @@ __glXSetupForCommand(Display * dpy)
  * Modify this function to use \c ctx->pc instead of the explicit
  * \c pc parameter.
  */
-_X_HIDDEN GLubyte *
+GLubyte *
 __glXFlushRenderBuffer(struct glx_context * ctx, GLubyte * pc)
 {
    Display *const dpy = ctx->currentDpy;
@@ -1038,7 +1176,7 @@ __glXFlushRenderBuffer(struct glx_context * ctx, GLubyte * pc)
  * \param data           Command data.
  * \param dataLen        Size, in bytes, of the command data.
  */
-_X_HIDDEN void
+void
 __glXSendLargeChunk(struct glx_context * gc, GLint requestNumber,
                     GLint totalRequests, const GLvoid * data, GLint dataLen)
 {
@@ -1064,7 +1202,7 @@ __glXSendLargeChunk(struct glx_context * gc, GLint requestNumber,
  * \param data       Command data.
  * \param dataLen    Size, in bytes, of the command data.
  */
-_X_HIDDEN void
+void
 __glXSendLargeCommand(struct glx_context * ctx,
                       const GLvoid * header, GLint headerLen,
                       const GLvoid * data, GLint dataLen)

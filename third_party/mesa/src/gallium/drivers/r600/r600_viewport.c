@@ -1,29 +1,12 @@
 /*
  * Copyright 2012 Advanced Micro Devices, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "r600_cs.h"
 #include "util/u_viewport.h"
 #include "tgsi/tgsi_scan.h"
+#include "r600d.h"
 
 #define R600_R_028C0C_PA_CL_GB_VERT_CLIP_ADJ         0x028C0C
 #define CM_R_028BE8_PA_CL_GB_VERT_CLIP_ADJ           0x28be8
@@ -221,6 +204,18 @@ static void r600_emit_guardband(struct r600_common_context *rctx,
 	guardband_x = MIN2(-left, right);
 	guardband_y = MIN2(-top, bottom);
 
+	float discard_x = 1.0;
+	float discard_y = 1.0;
+	float distance = rctx->current_clip_discard_distance;
+
+	/* Add half the point size / line width */
+	discard_x += distance / (2.0 * vp.scale[0]);
+	discard_y += distance / (2.0 * vp.scale[1]);
+
+	/* Discard primitives that would lie entirely outside the viewport area. */
+	discard_x = MIN2(discard_x, guardband_x);
+	discard_y = MIN2(discard_y, guardband_y);
+
 	/* If any of the GB registers is updated, all of them must be updated. */
 	if (rctx->gfx_level >= CAYMAN)
 		radeon_set_context_reg_seq(cs, CM_R_028BE8_PA_CL_GB_VERT_CLIP_ADJ, 4);
@@ -228,9 +223,9 @@ static void r600_emit_guardband(struct r600_common_context *rctx,
 		radeon_set_context_reg_seq(cs, R600_R_028C0C_PA_CL_GB_VERT_CLIP_ADJ, 4);
 
 	radeon_emit(cs, fui(guardband_y)); /* R_028BE8_PA_CL_GB_VERT_CLIP_ADJ */
-	radeon_emit(cs, fui(1.0));         /* R_028BEC_PA_CL_GB_VERT_DISC_ADJ */
+	radeon_emit(cs, fui(discard_y)); /* R_028BEC_PA_CL_GB_VERT_DISC_ADJ */
 	radeon_emit(cs, fui(guardband_x)); /* R_028BF0_PA_CL_GB_HORZ_CLIP_ADJ */
-	radeon_emit(cs, fui(1.0));         /* R_028BF4_PA_CL_GB_HORZ_DISC_ADJ */
+	radeon_emit(cs, fui(discard_x)); /* R_028BF4_PA_CL_GB_HORZ_DISC_ADJ */
 }
 
 static void r600_emit_scissors(struct r600_common_context *rctx, struct r600_atom *atom)
@@ -390,22 +385,6 @@ static void r600_emit_viewport_states(struct r600_common_context *rctx,
 	r600_emit_depth_ranges(rctx);
 }
 
-/* Set viewport dependencies on pipe_rasterizer_state. */
-void r600_viewport_set_rast_deps(struct r600_common_context *rctx,
-				 bool scissor_enable, bool clip_halfz)
-{
-	if (rctx->scissor_enabled != scissor_enable) {
-		rctx->scissor_enabled = scissor_enable;
-		rctx->scissors.dirty_mask = (1 << R600_MAX_VIEWPORTS) - 1;
-		rctx->set_atom_dirty(rctx, &rctx->scissors.atom, true);
-	}
-	if (rctx->clip_halfz != clip_halfz) {
-		rctx->clip_halfz = clip_halfz;
-		rctx->viewports.depth_range_dirty_mask = (1 << R600_MAX_VIEWPORTS) - 1;
-		rctx->set_atom_dirty(rctx, &rctx->viewports.atom, true);
-	}
-}
-
 /**
  * Normally, we only emit 1 viewport and 1 scissor if no shader is using
  * the VIEWPORT_INDEX output, and emitting the other viewports and scissors
@@ -443,14 +422,96 @@ void r600_update_vs_writes_viewport_index(struct r600_common_context *rctx,
 	    rctx->set_atom_dirty(rctx, &rctx->viewports.atom, true);
 }
 
+static void r600_emit_window_rectangles(struct r600_common_context *rctx,
+					struct r600_atom *atom)
+{
+	/* There are four clipping rectangles. Their corner coordinates are inclusive.
+	 * Every pixel is assigned a number from 0 and 15 by setting bits 0-3 depending
+	 * on whether the pixel is inside cliprects 0-3, respectively. For example,
+	 * if a pixel is inside cliprects 0 and 1, but outside 2 and 3, it is assigned
+	 * the number 3 (binary 0011).
+	 *
+	 * If CLIPRECT_RULE & (1 << number), the pixel is rasterized.
+	 */
+        struct radeon_cmdbuf *cs = &rctx->gfx.cs;
+	static const unsigned outside[4] = {
+		/* outside rectangle 0 */
+		V_02820C_OUT |
+		V_02820C_IN_1 |
+		V_02820C_IN_2 |
+		V_02820C_IN_21 |
+		V_02820C_IN_3 |
+		V_02820C_IN_31 |
+		V_02820C_IN_32 |
+		V_02820C_IN_321,
+		/* outside rectangles 0, 1 */
+		V_02820C_OUT |
+		V_02820C_IN_2 |
+		V_02820C_IN_3 |
+		V_02820C_IN_32,
+		/* outside rectangles 0, 1, 2 */
+		V_02820C_OUT |
+		V_02820C_IN_3,
+		/* outside rectangles 0, 1, 2, 3 */
+		V_02820C_OUT,
+	};
+	const unsigned disabled = 0xffff; /* all inside and outside cases */
+	unsigned num_rectangles = rctx->window_rectangles.number;
+	struct pipe_scissor_state *rects = rctx->window_rectangles.states;
+	unsigned rule;
+
+	assert(num_rectangles <= R600_MAX_WINDOW_RECTANGLES);
+
+	if (num_rectangles == 0)
+		rule = disabled;
+	else if (rctx->window_rectangles.include)
+		rule = ~outside[num_rectangles - 1];
+	else
+		rule = outside[num_rectangles - 1];
+
+	radeon_set_context_reg_seq(cs, R_02820C_PA_SC_CLIPRECT_RULE, 1);
+	radeon_emit(cs, rule);
+
+	if (num_rectangles == 0)
+		return;
+
+	radeon_set_context_reg_seq(cs, R_028210_PA_SC_CLIPRECT_0_TL,
+				   num_rectangles * 2);
+	for (unsigned i = 0; i < num_rectangles; i++) {
+		radeon_emit(cs, S_028210_TL_X(rects[i].minx) |
+			    S_028210_TL_Y(rects[i].miny));
+		radeon_emit(cs, S_028214_BR_X(rects[i].maxx) |
+			    S_028214_BR_Y(rects[i].maxy));
+	}
+}
+
+static void r600_set_window_rectangles(struct pipe_context *ctx,
+				       bool include,
+				       unsigned num_rectangles,
+				       const struct pipe_scissor_state *rects)
+{
+	struct r600_common_context *rctx = (struct r600_common_context *)ctx;
+
+	rctx->window_rectangles.number = num_rectangles;
+	rctx->window_rectangles.include = include;
+
+	if (num_rectangles)
+		memcpy(rctx->window_rectangles.states, rects,
+		       sizeof(*rects) * num_rectangles);
+
+	rctx->set_atom_dirty(rctx, &rctx->window_rectangles.atom, true);
+}
+
 void r600_init_viewport_functions(struct r600_common_context *rctx)
 {
 	rctx->scissors.atom.emit = r600_emit_scissors;
 	rctx->viewports.atom.emit = r600_emit_viewport_states;
+	rctx->window_rectangles.atom.emit = r600_emit_window_rectangles;
 
 	rctx->scissors.atom.num_dw = (2 + 16 * 2) + 6;
 	rctx->viewports.atom.num_dw = 2 + 16 * 6;
 
 	rctx->b.set_scissor_states = r600_set_scissor_states;
 	rctx->b.set_viewport_states = r600_set_viewport_states;
+	rctx->b.set_window_rectangles = r600_set_window_rectangles;
 }

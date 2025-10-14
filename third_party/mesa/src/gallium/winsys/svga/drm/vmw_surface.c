@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2009-2015 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2009-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 
 #include "svga_cmd.h"
@@ -54,7 +36,7 @@ vmw_svga_winsys_surface_init(struct svga_winsys_screen *sws,
    if (data)
       goto out_mapped;
 
-   provider = vws->pools.mob_fenced;
+   provider = vws->pools.dma_fenced;
    memset(&desc, 0, sizeof(desc));
    desc.alignment = 4096;
    pb_buf = provider->create_buffer(provider, vsrf->size, &desc);
@@ -97,8 +79,7 @@ out_unlock:
    mtx_unlock(&vsrf->mutex);
 }
 
- 
- 
+
 void *
 vmw_svga_winsys_surface_map(struct svga_winsys_context *swc,
                             struct svga_winsys_surface *srf,
@@ -127,7 +108,7 @@ vmw_svga_winsys_surface_map(struct svga_winsys_context *swc,
     * If we intend to read, there's no point discarding the
     * data if busy.
     */
-   if (flags & PIPE_MAP_READ || vsrf->shared)
+   if (flags & PIPE_MAP_READ || vsrf->nodiscard)
       flags &= ~PIPE_MAP_DISCARD_WHOLE_RESOURCE;
 
    /*
@@ -163,12 +144,12 @@ vmw_svga_winsys_surface_map(struct svga_winsys_context *swc,
                                            PIPE_MAP_DONTBLOCK | pb_flags);
          if (data)
             goto out_mapped;
-      } 
+      }
 
       /*
        * Attempt to get a new buffer.
        */
-      provider = vws->pools.mob_fenced;
+      provider = vws->pools.dma_fenced;
       memset(&desc, 0, sizeof(desc));
       desc.alignment = 4096;
       pb_buf = provider->create_buffer(provider, vsrf->size, &desc);
@@ -203,7 +184,7 @@ vmw_svga_winsys_surface_map(struct svga_winsys_context *swc,
        * But tell pipe driver to flush now if already on validate list,
        * Otherwise we'll overwrite previous contents.
        */
-      if (!(flags & PIPE_MAP_UNSYNCHRONIZED) && 
+      if (!(flags & PIPE_MAP_UNSYNCHRONIZED) &&
           p_atomic_read(&vsrf->validated)) {
          *retry = true;
          goto out_unlock;
@@ -243,6 +224,15 @@ vmw_svga_winsys_surface_unmap(struct svga_winsys_context *swc,
 }
 
 void
+vmw_svga_winsys_userspace_surface_destroy(struct svga_winsys_context *swc,
+                                          uint32 sid)
+{
+   SVGA3D_DestroyGBSurface(swc, sid);
+   swc->flush(swc, NULL);
+   vmw_swc_surface_clear_userspace_id(swc, sid);
+}
+
+void
 vmw_svga_winsys_surface_reference(struct vmw_svga_winsys_surface **pdst,
                                   struct vmw_svga_winsys_surface *src)
 {
@@ -250,7 +240,7 @@ vmw_svga_winsys_surface_reference(struct vmw_svga_winsys_surface **pdst,
    struct pipe_reference *dst_ref;
    struct vmw_svga_winsys_surface *dst;
 
-   if(pdst == NULL || *pdst == src)
+   if (pdst == NULL || *pdst == src)
       return;
 
    dst = *pdst;
@@ -261,8 +251,11 @@ vmw_svga_winsys_surface_reference(struct vmw_svga_winsys_surface **pdst,
    if (pipe_reference(dst_ref, src_ref)) {
       if (dst->buf)
          vmw_svga_winsys_buffer_destroy(&dst->screen->base, dst->buf);
-      vmw_ioctl_surface_destroy(dst->screen, dst->sid);
-#ifdef DEBUG
+      if (vmw_has_userspace_surface(dst->screen))
+         vmw_svga_winsys_userspace_surface_destroy(dst->screen->swc, dst->sid);
+      else
+         vmw_ioctl_surface_destroy(dst->screen, dst->sid);
+#if MESA_DEBUG
       /* to detect dangling pointers */
       assert(p_atomic_read(&dst->validated) == 0);
       dst->sid = SVGA3D_INVALID_ID;

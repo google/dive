@@ -68,7 +68,8 @@ static void si_update_mmio_counters(struct si_screen *sscreen, union si_mmio_cou
    sscreen->ws->read_registers(sscreen->ws, GRBM_STATUS, 1, &value);
 
    UPDATE_COUNTER(ta, TA_BUSY);
-   UPDATE_COUNTER(gds, GDS_BUSY);
+   if (sscreen->info.gfx_level < GFX12)
+      UPDATE_COUNTER(gds, GDS_BUSY);
    UPDATE_COUNTER(vgt, VGT_BUSY);
    UPDATE_COUNTER(ia, IA_BUSY);
    UPDATE_COUNTER(sx, SX_BUSY);
@@ -241,7 +242,7 @@ static unsigned busy_index_from_type(struct si_screen *sscreen, unsigned type)
    case SI_QUERY_GPU_SCRATCH_RAM_BUSY:
       return BUSY_INDEX(sscreen, scratch_ram);
    default:
-      unreachable("invalid query type");
+      UNREACHABLE("invalid query type");
    }
 }
 

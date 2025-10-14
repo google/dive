@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: MIT
 #ifndef R600_FORMATS_H
 #define R600_FORMATS_H
 
 #include "util/format/u_format.h"
-#include "r600_pipe.h"
+#include "util/u_endian.h"
 
 /* list of formats from R700 ISA document - apply across GPUs in different registers */
 #define     FMT_INVALID                     0x00000000
@@ -40,6 +41,7 @@
 #define     FMT_32_32_32_32                 0x00000022
 #define     FMT_32_32_32_32_FLOAT           0x00000023
 #define     FMT_1                           0x00000025
+#define     FMT_1_REVERSED                  0x00000026
 #define     FMT_GB_GR                       0x00000027
 #define     FMT_BG_RG                       0x00000028
 #define     FMT_32_AS_8                     0x00000029
@@ -66,7 +68,7 @@
 
 static inline unsigned r600_endian_swap(unsigned size)
 {
-	if (R600_BIG_ENDIAN) {
+	if (UTIL_ARCH_BIG_ENDIAN) {
 		switch (size) {
 		case 64:
 			return ENDIAN_8IN64;
@@ -82,15 +84,24 @@ static inline unsigned r600_endian_swap(unsigned size)
 	}
 }
 
-static inline bool r600_is_buffer_format_supported(enum pipe_format format, bool for_vbo)
+enum r600_pbo_workaround {
+	R600_PBO_NO_WORKAROUND_NEEDED,
+	R600_PBO_WORKAROUND_CEDAR_TO_HEMLOCK,
+	R600_PBO_WORKAROUND_PALM_TO_ARUBA,
+};
+
+static inline bool
+r600_is_buffer_format_supported(const enum pipe_format format,
+				const bool for_vbo,
+				const enum r600_pbo_workaround pbo_workaround)
 {
 	const struct util_format_description *desc = util_format_description(format);
-	unsigned i;
 
 	if (format == PIPE_FORMAT_R11G11B10_FLOAT)
 		return true;
 
-	i = util_format_get_first_non_void_channel(format);
+	const int i = util_format_get_first_non_void_channel(format);
+
 	if (i == -1)
 		return false;
 
@@ -108,9 +119,26 @@ static inline bool r600_is_buffer_format_supported(enum pipe_format format, bool
 	     desc->channel[i].type == UTIL_FORMAT_TYPE_UNSIGNED))
 		return false;
 
-    /* No 8 bit 3 channel formats for TBOs */
-	if (desc->channel[i].size == 8 && desc->nr_channels == 3)
-		return for_vbo;
+	if (!for_vbo) {
+		/* No 8 bit 3 channel formats for TBOs */
+		if (desc->channel[i].size == 8 && desc->nr_channels == 3)
+			return false;
+
+		switch (pbo_workaround) {
+		case R600_PBO_WORKAROUND_PALM_TO_ARUBA:
+			if (desc->channel[i].size == 16 && desc->nr_channels == 3)
+				return false;
+			break;
+		case R600_PBO_WORKAROUND_CEDAR_TO_HEMLOCK:
+			if (format == PIPE_FORMAT_B5G6R5_UNORM ||
+			    format == PIPE_FORMAT_A1B5G5R5_UNORM ||
+			    format == PIPE_FORMAT_A4B4G4R4_UNORM)
+				return false;
+			break;
+		default:
+			break;
+		}
+	}
 
 	return true;
 }

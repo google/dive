@@ -199,18 +199,18 @@ static void
 check_linear_rasterizer(struct llvmpipe_context *lp)
 {
    const bool valid_cb_format =
-      (lp->framebuffer.nr_cbufs == 1 && lp->framebuffer.cbufs[0] &&
-       util_res_sample_count(lp->framebuffer.cbufs[0]->texture) == 1 &&
-       lp->framebuffer.cbufs[0]->texture->target == PIPE_TEXTURE_2D &&
-       (lp->framebuffer.cbufs[0]->format == PIPE_FORMAT_B8G8R8A8_UNORM ||
-        lp->framebuffer.cbufs[0]->format == PIPE_FORMAT_B8G8R8X8_UNORM ||
-        lp->framebuffer.cbufs[0]->format == PIPE_FORMAT_R8G8B8A8_UNORM ||
-        lp->framebuffer.cbufs[0]->format == PIPE_FORMAT_R8G8B8X8_UNORM));
+      (lp->framebuffer.nr_cbufs == 1 && lp->framebuffer.cbufs[0].texture &&
+       util_res_sample_count(lp->framebuffer.cbufs[0].texture) == 1 &&
+       lp->framebuffer.cbufs[0].texture->target == PIPE_TEXTURE_2D &&
+       (lp->framebuffer.cbufs[0].format == PIPE_FORMAT_B8G8R8A8_UNORM ||
+        lp->framebuffer.cbufs[0].format == PIPE_FORMAT_B8G8R8X8_UNORM ||
+        lp->framebuffer.cbufs[0].format == PIPE_FORMAT_R8G8B8A8_UNORM ||
+        lp->framebuffer.cbufs[0].format == PIPE_FORMAT_R8G8B8X8_UNORM));
 
    /* permit_linear means guardband, hence fake scissor, which we can only
     * handle if there's just one vp. */
    const bool single_vp = lp->viewport_index_slot < 0;
-   const bool permit_linear = (!lp->framebuffer.zsbuf &&
+   const bool permit_linear = (!lp->framebuffer.zsbuf.texture &&
                                valid_cb_format &&
                                single_vp);
 
@@ -306,7 +306,8 @@ llvmpipe_update_derived(struct llvmpipe_context *llvmpipe)
                           LP_NEW_RASTERIZER |
                           LP_NEW_SAMPLER |
                           LP_NEW_SAMPLER_VIEW |
-                          LP_NEW_OCCLUSION_QUERY))
+                          LP_NEW_OCCLUSION_QUERY |
+                          LP_NEW_SAMPLE_LOCATIONS))
       llvmpipe_update_fs(llvmpipe);
 
    if (llvmpipe->dirty & (LP_NEW_FS |
@@ -331,6 +332,11 @@ llvmpipe_update_derived(struct llvmpipe_context *llvmpipe)
       lp_setup_set_blend_color(llvmpipe->setup,
                                &llvmpipe->blend_color);
 
+   if (llvmpipe->dirty & LP_NEW_SAMPLE_LOCATIONS)
+      lp_setup_set_sample_locations(llvmpipe->setup,
+                                    llvmpipe->sample_locations_enabled,
+                                    llvmpipe->sample_locations);
+
    if (llvmpipe->dirty & LP_NEW_SCISSOR)
       lp_setup_set_scissors(llvmpipe->setup, llvmpipe->scissors);
 
@@ -343,28 +349,28 @@ llvmpipe_update_derived(struct llvmpipe_context *llvmpipe)
 
    if (llvmpipe->dirty & LP_NEW_FS_CONSTANTS)
       lp_setup_set_fs_constants(llvmpipe->setup,
-                                ARRAY_SIZE(llvmpipe->constants[PIPE_SHADER_FRAGMENT]),
-                                llvmpipe->constants[PIPE_SHADER_FRAGMENT]);
+                                ARRAY_SIZE(llvmpipe->constants[MESA_SHADER_FRAGMENT]),
+                                llvmpipe->constants[MESA_SHADER_FRAGMENT]);
 
    if (llvmpipe->dirty & LP_NEW_FS_SSBOS)
       lp_setup_set_fs_ssbos(llvmpipe->setup,
-                            ARRAY_SIZE(llvmpipe->ssbos[PIPE_SHADER_FRAGMENT]),
-                            llvmpipe->ssbos[PIPE_SHADER_FRAGMENT], llvmpipe->fs_ssbo_write_mask);
+                            ARRAY_SIZE(llvmpipe->ssbos[MESA_SHADER_FRAGMENT]),
+                            llvmpipe->ssbos[MESA_SHADER_FRAGMENT], llvmpipe->fs_ssbo_write_mask);
 
    if (llvmpipe->dirty & LP_NEW_FS_IMAGES)
       lp_setup_set_fs_images(llvmpipe->setup,
-                             ARRAY_SIZE(llvmpipe->images[PIPE_SHADER_FRAGMENT]),
-                             llvmpipe->images[PIPE_SHADER_FRAGMENT]);
+                             ARRAY_SIZE(llvmpipe->images[MESA_SHADER_FRAGMENT]),
+                             llvmpipe->images[MESA_SHADER_FRAGMENT]);
 
    if (llvmpipe->dirty & (LP_NEW_SAMPLER_VIEW))
       lp_setup_set_fragment_sampler_views(llvmpipe->setup,
-                                          llvmpipe->num_sampler_views[PIPE_SHADER_FRAGMENT],
-                                          llvmpipe->sampler_views[PIPE_SHADER_FRAGMENT]);
+                                          llvmpipe->num_sampler_views[MESA_SHADER_FRAGMENT],
+                                          llvmpipe->sampler_views[MESA_SHADER_FRAGMENT]);
 
    if (llvmpipe->dirty & (LP_NEW_SAMPLER))
       lp_setup_set_fragment_sampler_state(llvmpipe->setup,
-                                          llvmpipe->num_samplers[PIPE_SHADER_FRAGMENT],
-                                          llvmpipe->samplers[PIPE_SHADER_FRAGMENT]);
+                                          llvmpipe->num_samplers[MESA_SHADER_FRAGMENT],
+                                          llvmpipe->samplers[MESA_SHADER_FRAGMENT]);
 
    if (llvmpipe->dirty & LP_NEW_VIEWPORT) {
       /*

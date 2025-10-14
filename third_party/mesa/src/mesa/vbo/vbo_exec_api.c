@@ -40,7 +40,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "main/light.h"
 #include "main/api_arrayelt.h"
 #include "main/draw_validate.h"
-#include "main/dispatch.h"
+#include "dispatch.h"
 #include "util/bitscan.h"
 #include "util/u_memory.h"
 #include "api_exec_decl.h"
@@ -49,10 +49,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /** ID/name for immediate-mode VBO */
 #define IMM_BUFFER_NAME 0xaabbccdd
-
-
-static void
-vbo_reset_all_attr(struct vbo_exec_context *exec);
 
 
 /**
@@ -294,7 +290,7 @@ vbo_exec_wrap_upgrade_vertex(struct vbo_exec_context *exec,
    if (!_mesa_inside_begin_end(ctx) &&
        !oldSize && lastcount > 8 && exec->vtx.vertex_size) {
       vbo_exec_copy_to_current(exec);
-      vbo_reset_all_attr(exec);
+      vbo_reset_all_attr(ctx);
    }
 
    /* Fix up sizes:
@@ -695,7 +691,7 @@ vbo_exec_FlushVertices_internal(struct vbo_exec_context *exec, unsigned flags)
 
       if (exec->vtx.vertex_size) {
          vbo_exec_copy_to_current(exec);
-         vbo_reset_all_attr(exec);
+         vbo_reset_all_attr(ctx);
       }
 
       /* All done. */
@@ -867,7 +863,7 @@ _mesa_Begin(GLenum mode)
          ctx->Dispatch.Current = ctx->Dispatch.Exec;
    } else if (ctx->GLApi == ctx->Dispatch.OutsideBeginEnd) {
       ctx->GLApi = ctx->Dispatch.Current = ctx->Dispatch.Exec;
-      _glapi_set_dispatch(ctx->GLApi);
+      _mesa_glapi_set_dispatch(ctx->GLApi);
    } else {
       assert(ctx->GLApi == ctx->Dispatch.Save);
    }
@@ -930,7 +926,7 @@ _mesa_End(void)
    } else if (ctx->GLApi == ctx->Dispatch.BeginEnd ||
               ctx->GLApi == ctx->Dispatch.HWSelectModeBeginEnd) {
       ctx->GLApi = ctx->Dispatch.Current = ctx->Dispatch.Exec;
-      _glapi_set_dispatch(ctx->GLApi);
+      _mesa_glapi_set_dispatch(ctx->GLApi);
    }
 
    if (exec->vtx.prim_count > 0) {
@@ -951,8 +947,10 @@ _mesa_End(void)
       }
 
       /* Special handling for GL_LINE_LOOP */
+      bool driver_supports_lineloop =
+         ctx->Const.DriverSupportedPrimMask & BITFIELD_BIT(MESA_PRIM_LINE_LOOP);
       if (exec->vtx.mode[last] == GL_LINE_LOOP &&
-          exec->vtx.markers[last].begin == 0) {
+          (exec->vtx.markers[last].begin == 0 || !driver_supports_lineloop)) {
          /* We're finishing drawing a line loop.  Append 0th vertex onto
           * end of vertex buffer so we can draw it as a line strip.
           */
@@ -964,7 +962,9 @@ _mesa_End(void)
          /* copy 0th vertex to end of buffer */
          memcpy(dst, src, exec->vtx.vertex_size * sizeof(fi_type));
 
-         last_draw->start++;  /* skip vertex0 */
+         if (exec->vtx.markers[last].begin == 0)
+            last_draw->start++; /* skip vertex0 */
+
          /* note that the count stays unchanged */
          exec->vtx.mode[last] = GL_LINE_STRIP;
 
@@ -973,6 +973,9 @@ _mesa_End(void)
           */
          exec->vtx.vert_count++;
          exec->vtx.buffer_ptr += exec->vtx.vertex_size;
+
+         if (!driver_supports_lineloop)
+            last_draw->count++;
       }
 
       try_vbo_merge(exec);
@@ -1098,9 +1101,11 @@ vbo_init_dispatch_begin_end(struct gl_context *ctx)
 }
 
 
-static void
-vbo_reset_all_attr(struct vbo_exec_context *exec)
+void
+vbo_reset_all_attr(struct gl_context *ctx)
 {
+   struct vbo_exec_context *exec = &vbo_context(ctx)->exec;
+
    while (exec->vtx.enabled) {
       const int i = u_bit_scan64(&exec->vtx.enabled);
 
@@ -1122,8 +1127,8 @@ vbo_exec_vtx_init(struct vbo_exec_context *exec)
 
    exec->vtx.bufferobj = _mesa_bufferobj_alloc(ctx, IMM_BUFFER_NAME);
 
-   exec->vtx.enabled = u_bit_consecutive64(0, VBO_ATTRIB_MAX); /* reset all */
-   vbo_reset_all_attr(exec);
+   exec->vtx.enabled = BITFIELD64_MASK(VBO_ATTRIB_MAX); /* reset all */
+   vbo_reset_all_attr(ctx);
 
    exec->vtx.info.instance_count = 1;
    exec->vtx.info.max_index = ~0;
@@ -1257,7 +1262,7 @@ _es_Materialf(GLenum face, GLenum pname, GLfloat param)
 void
 vbo_init_dispatch_hw_select_begin_end(struct gl_context *ctx)
 {
-   int numEntries = MAX2(_gloffset_COUNT, _glapi_get_dispatch_table_size());
+   int numEntries = MAX2(_gloffset_COUNT, _mesa_glapi_get_dispatch_table_size());
    memcpy(ctx->Dispatch.HWSelectModeBeginEnd, ctx->Dispatch.BeginEnd, numEntries * sizeof(_glapi_proc));
 
 #undef NAME

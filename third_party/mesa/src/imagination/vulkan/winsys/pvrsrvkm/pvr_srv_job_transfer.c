@@ -31,8 +31,8 @@
 
 #include "fw-api/pvr_rogue_fwif.h"
 #include "fw-api/pvr_rogue_fwif_rf.h"
+#include "pvr_csb.h"
 #include "pvr_device_info.h"
-#include "pvr_private.h"
 #include "pvr_srv.h"
 #include "pvr_srv_bridge.h"
 #include "pvr_srv_job_common.h"
@@ -40,6 +40,7 @@
 #include "pvr_srv_sync.h"
 #include "pvr_winsys.h"
 #include "util/macros.h"
+#include "util/os_file.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
 #include "vk_util.h"
@@ -145,16 +146,18 @@ pvr_srv_transfer_cmd_stream_load(struct rogue_fwif_cmd_transfer *const cmd,
 
    stream_ptr += pvr_cmd_length(KMD_STREAM_HDR);
 
-   regs->pds_bgnd0_base = *(uint64_t *)stream_ptr;
+   memcpy(&regs->pds_bgnd0_base, stream_ptr, sizeof(regs->pds_bgnd0_base));
    stream_ptr += pvr_cmd_length(CR_PDS_BGRND0_BASE);
 
-   regs->pds_bgnd1_base = *(uint64_t *)stream_ptr;
+   memcpy(&regs->pds_bgnd1_base, stream_ptr, sizeof(regs->pds_bgnd1_base));
    stream_ptr += pvr_cmd_length(CR_PDS_BGRND1_BASE);
 
-   regs->pds_bgnd3_sizeinfo = *(uint64_t *)stream_ptr;
+   memcpy(&regs->pds_bgnd3_sizeinfo,
+          stream_ptr,
+          sizeof(regs->pds_bgnd3_sizeinfo));
    stream_ptr += pvr_cmd_length(CR_PDS_BGRND3_SIZEINFO);
 
-   regs->isp_mtile_base = *(uint64_t *)stream_ptr;
+   memcpy(&regs->isp_mtile_base, stream_ptr, sizeof(regs->isp_mtile_base));
    stream_ptr += pvr_cmd_length(CR_ISP_MTILE_BASE);
 
    STATIC_ASSERT(ARRAY_SIZE(regs->pbe_wordx_mrty) == 9U);
@@ -285,7 +288,7 @@ VkResult pvr_srv_winsys_transfer_submit(
       struct pvr_srv_sync *srv_wait_sync = to_srv_sync(submit_info->wait);
 
       if (srv_wait_sync->fd >= 0) {
-         in_fd = dup(srv_wait_sync->fd);
+         in_fd = os_dupfd_cloexec(srv_wait_sync->fd);
          if (in_fd == -1) {
             return vk_errorf(NULL,
                              VK_ERROR_OUT_OF_HOST_MEMORY,

@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 
 #include "util/u_draw.h"
@@ -143,7 +125,7 @@ retry_draw_indirect(struct svga_context *svga,
 
    if (info->mode == MESA_PRIM_LINE_LOOP) {
       /* need to do a fallback */
-      util_draw_indirect(&svga->pipe, info, indirect);
+      util_draw_indirect(&svga->pipe, info, 0, indirect);
       return PIPE_OK;
    }
    else {
@@ -244,15 +226,6 @@ svga_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
    if (u_reduced_prim(info->mode) == MESA_PRIM_TRIANGLES &&
        svga->curr.rast->templ.cull_face == PIPE_FACE_FRONT_AND_BACK)
       goto done;
-
-   /*
-    * Mark currently bound target surfaces as dirty
-    * doesn't really matter if it is done before drawing.
-    *
-    * TODO If we ever normaly return something other then
-    * true we should not mark it as dirty then.
-    */
-   svga_mark_surfaces_dirty(svga_context(pipe));
 
    if (svga->curr.reduced_prim != reduced_prim) {
       svga->curr.reduced_prim = reduced_prim;
@@ -372,6 +345,11 @@ svga_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
                                  svga->patch_vertices);
       }
    }
+
+   /*
+    * Mark currently bound target surfaces as dirty after draw is completed.
+    */
+   svga_mark_surfaces_dirty(svga_context(pipe));
 
    /* XXX: Silence warnings, do something sensible here? */
    (void)ret;

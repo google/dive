@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2014 Valve Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2014 Valve Corporation
+ * SPDX-License-Identifier: MIT
  */
 
 #include "ir3.h"
@@ -42,6 +24,7 @@ hash_instr(const void *data)
 
    hash = HASH(hash, instr->opc);
    hash = HASH(hash, instr->dsts[0]->flags);
+   hash = HASH(hash, instr->dsts[0]->num);
    foreach_src (src, (struct ir3_instruction *)instr) {
       if (src->flags & IR3_REG_CONST) {
          if (src->flags & IR3_REG_RELATIV)
@@ -79,6 +62,9 @@ instrs_equal(const struct ir3_instruction *i1, const struct ir3_instruction *i2)
       return false;
 
    if (i1->dsts[0]->flags != i2->dsts[0]->flags)
+      return false;
+
+   if (i1->dsts[0]->num != i2->dsts[0]->num)
       return false;
 
    for (unsigned i = 0; i < i1->srcs_count; i++) {
@@ -123,6 +109,9 @@ instr_can_cse(const struct ir3_instruction *instr)
 {
    if (instr->opc != OPC_META_COLLECT && instr->opc != OPC_MOV)
       return false;
+
+   if (reg_num(instr->dsts[0]) == REG_A0)
+      return true;
 
    if (!is_dest_gpr(instr->dsts[0]) || (instr->dsts[0]->flags & IR3_REG_ARRAY))
       return false;

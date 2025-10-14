@@ -295,7 +295,7 @@ vc4_generate_code_block(struct vc4_compile *c,
                 };
 
                 uint64_t unpack = 0;
-                struct qpu_reg src[ARRAY_SIZE(qinst->src)];
+                struct qpu_reg src[ARRAY_SIZE(qinst->src)] = { 0 };
                 for (int i = 0; i < qir_get_nsrc(qinst); i++) {
                         int index = qinst->src[i].index;
                         switch (qinst->src[i].file) {
@@ -359,7 +359,7 @@ vc4_generate_code_block(struct vc4_compile *c,
                         case QFILE_TEX_T:
                         case QFILE_TEX_R:
                         case QFILE_TEX_B:
-                                unreachable("bad qir src file");
+                                UNREACHABLE("bad qir src file");
                         }
                 }
 

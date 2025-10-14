@@ -32,6 +32,7 @@
 #include "pipe/p_defines.h"
 #include "pipe/p_state.h"
 
+#include "draw/draw_private.h"
 #include "draw/draw_vertex.h"
 
 #include "tgsi/tgsi_scan.h"
@@ -39,6 +40,7 @@
 #include "util/log.h"
 #include "util/slab.h"
 #include "util/u_blitter.h"
+#include "util/u_framebuffer.h"
 #include "i915_reg.h"
 
 struct i915_winsys;
@@ -132,6 +134,12 @@ struct i915_fragment_shader {
    } texcoords[I915_TEX_UNITS];
 
    bool reads_pntc;
+
+   /* Set if the shader is an internal (blit, etc.) shader that shouldn't debug
+    * log by default. */
+   bool internal;
+
+   char *error; /* Any error message from compiling this shader (or NULL) */
 };
 
 struct i915_cache_context;
@@ -144,7 +152,7 @@ struct i915_state {
    unsigned dynamic[I915_MAX_DYNAMIC];
 
    /** number of constants passed in through a constant buffer */
-   uint32_t num_user_constants[PIPE_SHADER_TYPES];
+   uint32_t num_user_constants[MESA_SHADER_STAGES];
 
    /* texture sampler state */
    unsigned sampler[I915_TEX_UNITS][3];
@@ -168,6 +176,7 @@ struct i915_state {
    unsigned dst_buf_vars;
    uint32_t draw_offset;
    uint32_t draw_size;
+   unsigned cbuf_offset;
 
    /* Reswizzle for OC writes in PIXEL_SHADER_PROGRAM, or 0 if unnecessary. */
    uint32_t fixup_swizzle;
@@ -265,13 +274,12 @@ struct i915_context {
    void *vs;
 
    struct i915_velems_state *velems;
-   unsigned nr_vertex_buffers;
-   struct pipe_vertex_buffer vertex_buffers[PIPE_MAX_ATTRIBS];
 
    struct pipe_blend_color blend_color;
    struct pipe_stencil_ref stencil_ref;
    struct pipe_clip_state clip;
-   struct pipe_resource *constants[PIPE_SHADER_TYPES];
+   struct pipe_resource *constants[MESA_SHADER_STAGES];
+   PIPE_FB_SURFACES; //STOP USING THIS
    struct pipe_framebuffer_state framebuffer;
    struct pipe_poly_stipple poly_stipple;
    struct pipe_scissor_state scissor;
@@ -423,6 +431,8 @@ void i915_init_string_functions(struct i915_context *i915);
 struct pipe_context *i915_create_context(struct pipe_screen *screen, void *priv,
                                          unsigned flags);
 
+void
+i915_framebuffer_init(struct pipe_context *pctx, const struct pipe_framebuffer_state *fb, struct pipe_surface **cbufs, struct pipe_surface **zsbuf);
 /***********************************************************************
  * Inline conversion functions.  These are better-typed than the
  * macros used previously:

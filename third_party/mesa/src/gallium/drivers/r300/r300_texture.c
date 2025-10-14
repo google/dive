@@ -1,25 +1,8 @@
 /*
  * Copyright 2008 Corbin Simpson <MostAwesomeDude@gmail.com>
  * Copyright 2010 Marek Olšák <maraeo@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE. */
+ * SPDX-License-Identifier: MIT
+ */
 
 /* Always include headers in the reverse order!! ~ M. */
 #include "r300_texture.h"
@@ -977,7 +960,7 @@ void r300_texture_setup_format_state(struct r300_screen *screen,
 static void r300_texture_setup_fb_state(struct r300_surface *surf)
 {
     struct r300_resource *tex = r300_resource(surf->base.texture);
-    unsigned level = surf->base.u.tex.level;
+    unsigned level = surf->base.level;
     unsigned stride =
       r300_stride_to_width(surf->base.format, tex->tex.stride_in_bytes[level]);
 
@@ -1033,7 +1016,7 @@ r300_texture_create_object(struct r300_screen *rscreen,
                            enum radeon_bo_layout microtile,
                            enum radeon_bo_layout macrotile,
                            unsigned stride_in_bytes_override,
-                           struct pb_buffer *buffer)
+                           struct pb_buffer_lean *buffer)
 {
     struct radeon_winsys *rws = rscreen->rws;
     struct r300_resource *tex = NULL;
@@ -1109,7 +1092,7 @@ r300_texture_create_object(struct r300_screen *rscreen,
 fail:
     FREE(tex);
     if (buffer)
-        pb_reference(&buffer, NULL);
+        radeon_bo_reference(rscreen->rws, &buffer, NULL);
     return NULL;
 }
 
@@ -1120,8 +1103,8 @@ struct pipe_resource *r300_texture_create(struct pipe_screen *screen,
     struct r300_screen *rscreen = r300_screen(screen);
     enum radeon_bo_layout microtile, macrotile;
 
-    if ((base->flags & R300_RESOURCE_FLAG_TRANSFER) ||
-        (base->bind & (PIPE_BIND_SCANOUT | PIPE_BIND_LINEAR))) {
+    if (base->flags & R300_RESOURCE_FLAG_TRANSFER ||
+        base->bind & PIPE_BIND_LINEAR) {
         microtile = RADEON_LAYOUT_LINEAR;
         macrotile = RADEON_LAYOUT_LINEAR;
     } else {
@@ -1142,7 +1125,7 @@ struct pipe_resource *r300_texture_from_handle(struct pipe_screen *screen,
 {
     struct r300_screen *rscreen = r300_screen(screen);
     struct radeon_winsys *rws = rscreen->rws;
-    struct pb_buffer *buffer;
+    struct pb_buffer_lean *buffer;
     struct radeon_bo_metadata tiling = {};
 
     /* Support only 2D textures without mipmaps */
@@ -1186,9 +1169,9 @@ struct pipe_surface* r300_create_surface_custom(struct pipe_context * ctx,
 {
     struct r300_resource* tex = r300_resource(texture);
     struct r300_surface* surface = CALLOC_STRUCT(r300_surface);
-    unsigned level = surf_tmpl->u.tex.level;
+    unsigned level = surf_tmpl->level;
 
-    assert(surf_tmpl->u.tex.first_layer == surf_tmpl->u.tex.last_layer);
+    assert(surf_tmpl->first_layer == surf_tmpl->last_layer);
 
     if (surface) {
         uint32_t offset, tile_height;
@@ -1197,11 +1180,9 @@ struct pipe_surface* r300_create_surface_custom(struct pipe_context * ctx,
         pipe_resource_reference(&surface->base.texture, texture);
         surface->base.context = ctx;
         surface->base.format = surf_tmpl->format;
-        surface->base.width = u_minify(width0_override, level);
-        surface->base.height = u_minify(height0_override, level);
-        surface->base.u.tex.level = level;
-        surface->base.u.tex.first_layer = surf_tmpl->u.tex.first_layer;
-        surface->base.u.tex.last_layer = surf_tmpl->u.tex.last_layer;
+        surface->base.level = level;
+        surface->base.first_layer = surf_tmpl->first_layer;
+        surface->base.last_layer = surf_tmpl->last_layer;
 
         surface->buf = tex->buf;
 
@@ -1211,21 +1192,22 @@ struct pipe_surface* r300_create_surface_custom(struct pipe_context * ctx,
             surface->domain &= ~RADEON_DOMAIN_GTT;
 
         surface->offset = r300_texture_get_offset(tex, level,
-                                                  surf_tmpl->u.tex.first_layer);
+                                                  surf_tmpl->first_layer);
         r300_texture_setup_fb_state(surface);
 
         /* Parameters for the CBZB clear. */
         surface->cbzb_allowed = tex->tex.cbzb_allowed[level];
-        surface->cbzb_width = align(surface->base.width, 64);
+        surface->cbzb_width = align(u_minify(width0_override, level), 64);
 
         /* Height must be aligned to the size of a tile. */
         tile_height = r300_get_pixel_alignment(surface->base.format,
                                                tex->b.nr_samples,
                                                tex->tex.microtile,
                                                tex->tex.macrotile[level],
-                                               DIM_HEIGHT, 0);
+                                               DIM_HEIGHT, 0,
+                                               tex->b.bind & PIPE_BIND_SCANOUT);
 
-        surface->cbzb_height = align((surface->base.height + 1) / 2,
+        surface->cbzb_height = align((u_minify(height0_override, level) + 1) / 2,
                                      tile_height);
 
         /* Offset must be aligned to 2K and must point at the beginning

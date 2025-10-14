@@ -1,10 +1,6 @@
 Notes for macOS
 ================
 
-.. image:: https://github.com/mesa3d/mesa/actions/workflows/macos.yml/badge.svg
-    :target: https://github.com/mesa3d/mesa/actions/workflows/macos.yml
-    :alt: macOS CI
-
 Mesa builds on macOS without modifications. However, there are some details to
 be aware of.
 
@@ -19,6 +15,4 @@ Mesa's default builds with the Apple GLX uses Mesa as a front for the
 hardware-accelerated system OpenGL framework, to provide hardware acceleration
 to X11 applications on macOS running via XQuartz.
 
-Mesa's software rasterizers also work on macOS. To build, set the build options
-``-Dosmesa=true -Dglx=xlib`` and select an appropriate Gallium software
-rasterizer.
+Mesa's Gallium drivers can be used on macOS by using the ``-Dgallium-drivers=<drivers>`` build option. Do not use with the previous software rasterizers options, instead add ``llvmpipe`` to the ``<drivers>`` list. Only software renderers and drivers that forward to other APIs can work, any linux hardware drivers will not work. For details on each driver's macOS support see their specific documentation.

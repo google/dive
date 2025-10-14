@@ -91,8 +91,8 @@ split_var_copies_instr(nir_builder *b, nir_intrinsic_instr *copy,
 
    b->cursor = nir_instr_remove(&copy->instr);
 
-   nir_deref_instr *dst = nir_instr_as_deref(copy->src[0].ssa->parent_instr);
-   nir_deref_instr *src = nir_instr_as_deref(copy->src[1].ssa->parent_instr);
+   nir_deref_instr *dst = nir_def_as_deref(copy->src[0].ssa);
+   nir_deref_instr *src = nir_def_as_deref(copy->src[1].ssa);
    split_deref_copy_instr(b, dst, src,
                           nir_intrinsic_dst_access(copy),
                           nir_intrinsic_src_access(copy));
@@ -104,7 +104,6 @@ bool
 nir_split_var_copies(nir_shader *shader)
 {
    return nir_shader_intrinsics_pass(shader, split_var_copies_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
-                                       NULL);
+                                     nir_metadata_control_flow,
+                                     NULL);
 }

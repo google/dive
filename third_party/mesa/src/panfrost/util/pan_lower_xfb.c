@@ -40,7 +40,7 @@ lower_xfb_output(nir_builder *b, nir_intrinsic_instr *intr,
 
    nir_def *index = nir_iadd(
       b, nir_imul(b, nir_load_instance_id(b), nir_load_num_vertices(b)),
-      nir_load_vertex_id_zero_base(b));
+      nir_load_raw_vertex_id_pan(b));
 
    BITSET_SET(b->shader->info.system_values_read,
               SYSTEM_VALUE_VERTEX_ID_ZERO_BASE);
@@ -52,9 +52,9 @@ lower_xfb_output(nir_builder *b, nir_intrinsic_instr *intr,
       nir_u2u64(b, nir_iadd_imm(b, nir_imul_imm(b, index, stride), offset)));
 
    nir_def *src = intr->src[0].ssa;
-   nir_def *value =
-      nir_channels(b, src, BITFIELD_MASK(num_components) << start_component);
-   nir_store_global(b, addr, 4, value, BITFIELD_MASK(num_components));
+   nir_component_mask_t mask = nir_component_mask(num_components);
+   nir_def *value = nir_channels(b, src, mask << start_component);
+   nir_store_global(b, addr, 4, value, mask);
 }
 
 static bool
@@ -66,8 +66,8 @@ lower_xfb(nir_builder *b, nir_intrinsic_instr *intr, UNUSED void *data)
    if (intr->intrinsic == nir_intrinsic_load_vertex_id) {
       b->cursor = nir_instr_remove(&intr->instr);
 
-      nir_def *repl =
-         nir_iadd(b, nir_load_vertex_id_zero_base(b), nir_load_first_vertex(b));
+      nir_def *repl = nir_iadd(b, nir_load_raw_vertex_id_pan(b),
+                               nir_load_raw_vertex_offset_pan(b));
 
       nir_def_rewrite_uses(&intr->def, repl);
       return true;
@@ -101,5 +101,5 @@ bool
 pan_lower_xfb(nir_shader *nir)
 {
    return nir_shader_intrinsics_pass(
-      nir, lower_xfb, nir_metadata_block_index | nir_metadata_dominance, NULL);
+      nir, lower_xfb, nir_metadata_control_flow, NULL);
 }

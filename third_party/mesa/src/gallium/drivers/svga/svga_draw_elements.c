@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "indices/u_indices.h"
 #include "util/u_inlines.h"
@@ -129,7 +111,7 @@ translate_indices(struct svga_hwtnl *hwtnl,
          goto fail;
    } else {
       /* Allocate upload buffer space. Align to the index size. */
-      u_upload_alloc(pipe->stream_uploader, 0, size, gen_size,
+      u_upload_alloc_ref(pipe->stream_uploader, 0, size, gen_size,
                      out_offset, &dst, &dst_map);
       if (!dst)
          goto fail;
@@ -264,7 +246,7 @@ svga_hwtnl_draw_range_elements(struct svga_hwtnl *hwtnl,
       unsigned index_offset;
 
       if (info->has_user_indices) {
-         u_upload_data(pipe->stream_uploader, 0, count * info->index_size,
+         u_upload_data_ref(pipe->stream_uploader, 0, count * info->index_size,
                        info->index_size, (char *) info->index.user + start_offset,
                        &index_offset, &index_buffer);
          u_upload_unmap(pipe->stream_uploader);

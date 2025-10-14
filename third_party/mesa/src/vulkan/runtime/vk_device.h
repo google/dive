@@ -32,20 +32,24 @@
 #include "util/list.h"
 #include "util/simple_mtx.h"
 #include "util/u_atomic.h"
+#include "util/u_sync_provider.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+struct vk_acceleration_structure_build_ops;
 struct vk_command_buffer_ops;
-struct vk_sync;
+struct vk_device_shader_ops;
+struct vk_sync_signal;
+struct vk_sync_wait;
 
 enum vk_queue_submit_mode {
    /** Submits happen immediately
     *
     * `vkQueueSubmit()` and `vkQueueBindSparse()` call
-    * `vk_queue::driver_submit` directly for all submits and the last call to
-    * `vk_queue::driver_submit` will have completed by the time
+    * ``vk_queue::driver_submit`` directly for all submits and the last call to
+    * ``vk_queue::driver_submit`` will have completed by the time
     * `vkQueueSubmit()` or `vkQueueBindSparse()` return.
     */
    VK_QUEUE_SUBMIT_MODE_IMMEDIATE,
@@ -73,7 +77,7 @@ enum vk_queue_submit_mode {
     *       semaphores after waiting on them.
     *
     *    3. All vk_sync types used as permanent payloads of semaphores support
-    *       `vk_sync_type::move` so that it can move the pending signal into a
+    *       ``vk_sync_type::move`` so that it can move the pending signal into a
     *       temporary vk_sync and reset the semaphore.
     *
     * This is requied for shared timeline semaphores where we need to handle
@@ -88,6 +92,11 @@ enum vk_queue_submit_mode {
     * `VK_QUEUE_SUBMIT_MODE_THREADED`.
     */
    VK_QUEUE_SUBMIT_MODE_THREADED_ON_DEMAND,
+};
+
+struct vk_device_memory_report {
+   PFN_vkDeviceMemoryReportCallbackEXT callback;
+   void *data;
 };
 
 /** Base struct for VkDevice */
@@ -130,6 +139,43 @@ struct vk_device {
    /** Command buffer vtable when using the common command pool */
    const struct vk_command_buffer_ops *command_buffer_ops;
 
+   /** Shader vtable for VK_EXT_shader_object and common pipelines */
+   const struct vk_device_shader_ops *shader_ops;
+
+   /** Acceleration structure build vtable for common BVH building. */
+   const struct vk_acceleration_structure_build_ops *as_build_ops;
+
+   /**
+    * Write data to a buffer from the command processor. This is simpler than
+    * setting up a staging buffer and faster for small writes, but is not
+    * meant for larger amounts of data. \p data is owned by the caller and the
+    * driver is expected to write it out directly to the command stream as
+    * part of an immediate write packet.
+    */
+   void (*write_buffer_cp)(VkCommandBuffer cmdbuf, VkDeviceAddress addr,
+                           void *data, uint32_t size);
+
+   /* Flush data written via write_buffer_cp. Users must use a normal pipeline
+    * barrier in order to read this data, with the appropriate destination
+    * access, but this replaces the source access mask.
+    */
+   void (*flush_buffer_write_cp)(VkCommandBuffer cmdbuf);
+
+   /* An unaligned dispatch function. This launches a number of threads that
+    * may not be a multiple of the workgroup size, which may result in partial
+    * workgroups.
+    */
+   void (*cmd_dispatch_unaligned)(VkCommandBuffer cmdbuf,
+                                  uint32_t invocations_x,
+                                  uint32_t invocations_y,
+                                  uint32_t invocations_z);
+
+   /* vkCmdFillBuffer but with a device address. */
+   void (*cmd_fill_buffer_addr)(VkCommandBuffer cmdbuf,
+                                VkDeviceAddress devAddr,
+                                VkDeviceSize size,
+                                uint32_t data);
+
    /** Driver provided callback for capturing traces
     * 
     * Triggers for this callback are:
@@ -156,7 +202,7 @@ struct vk_device {
    /** Checks the status of this device
     *
     * This is expected to return either VK_SUCCESS or VK_ERROR_DEVICE_LOST.
-    * It is called before vk_queue::driver_submit and after every non-trivial
+    * It is called before ``vk_queue::driver_submit`` and after every non-trivial
     * wait operation to ensure the device is still around.  This gives the
     * driver a hook to ask the kernel if its device is still valid.  If the
     * kernel says the device has been lost, it MUST call vk_device_set_lost().
@@ -165,31 +211,34 @@ struct vk_device {
     */
    VkResult (*check_status)(struct vk_device *device);
 
-   /** Creates a vk_sync that wraps a memory object
+   /* Get the device timestamp in the VK_TIME_DOMAIN_DEVICE_KHR domain */
+   VkResult (*get_timestamp)(struct vk_device *device, uint64_t *timestamp);
+
+   /** Host time domain used for timestamp calibration */
+   VkTimeDomainKHR calibrate_time_domain;
+   /** Period of VK_TIME_DOMAIN_DEVICE_KHR */
+   uint64_t device_time_domain_period;
+
+   /** Copies the sync payloads from the set of waits to the set of signals
     *
-    * This is always a one-shot object so it need not track any additional
-    * state.  Since it's intended for synchronizing between processes using
-    * implicit synchronization mechanisms, no such tracking would be valid
-    * anyway.
-    *
-    * If `signal_memory` is set, the resulting vk_sync will be used to signal
-    * the memory object from a queue via vk_queue_submit::signals.  The common
-    * code guarantees that, by the time vkQueueSubmit() returns, the signal
-    * operation has been submitted to the kernel via the driver's
-    * vk_queue::driver_submit hook.  This means that any vkQueueSubmit() call
-    * which needs implicit synchronization may block.
-    *
-    * If `signal_memory` is not set, it can be assumed that memory object
-    * already has a signal operation pending from some other process and we
-    * need only wait on it.
+    * This effectively does the same as a vk_queue::driver_submit() with the
+    * given set of waits and signals and no command buffers, only without the
+    * queue.  Instead, the driver is expected to simply copy the sync payloads
+    * from the wait set, merge them together into one, and apply that to the
+    * signals.  After this function returns, all of the signals are now
+    * equivalent to the union all of the waits.
     */
-   VkResult (*create_sync_for_memory)(struct vk_device *device,
-                                      VkDeviceMemory memory,
-                                      bool signal_memory,
-                                      struct vk_sync **sync_out);
+   VkResult (*copy_sync_payloads)(struct vk_device *device,
+                                  uint32_t wait_count,
+                                  const struct vk_sync_wait *waits,
+                                  uint32_t signal_count,
+                                  const struct vk_sync_signal *signals);
 
    /* Set by vk_device_set_drm_fd() */
-   int drm_fd;
+   struct util_sync_provider *sync;
+
+   /** Implicit pipeline cache, or NULL */
+   struct vk_pipeline_cache *mem_cache;
 
    /** An enum describing how timeline semaphores work */
    enum vk_device_timeline_mode {
@@ -256,10 +305,16 @@ struct vk_device {
 
    struct vk_memory_trace_data memory_trace_data;
 
-#ifdef ANDROID
    mtx_t swapchain_private_mtx;
    struct hash_table *swapchain_private;
-#endif
+   mtx_t swapchain_name_mtx;
+   struct hash_table *swapchain_name;
+
+   /* For VK_KHR_pipeline_binary */
+   bool disable_internal_cache;
+
+   struct vk_device_memory_report *memory_reports;
+   uint32_t memory_report_count;
 };
 
 VK_DEFINE_HANDLE_CASTS(vk_device, base, VkDevice,
@@ -269,20 +324,20 @@ VK_DEFINE_HANDLE_CASTS(vk_device, base, VkDevice,
  *
  * Along with initializing the data structures in `vk_device`, this function
  * checks that every extension specified by
- * `VkInstanceCreateInfo::ppEnabledExtensionNames` is actually supported by
+ * ``VkInstanceCreateInfo::ppEnabledExtensionNames`` is actually supported by
  * the physical device and returns `VK_ERROR_EXTENSION_NOT_PRESENT` if an
  * unsupported extension is requested.  It also checks all the feature struct
  * chained into the `pCreateInfo->pNext` chain against the features returned
  * by `vkGetPhysicalDeviceFeatures2` and returns
  * `VK_ERROR_FEATURE_NOT_PRESENT` if an unsupported feature is requested.
  *
- * @param[out] device               The device to initialize
- * @param[in]  physical_device      The physical device
- * @param[in]  dispatch_table       Device-level dispatch table
- * @param[in]  pCreateInfo          VkDeviceCreateInfo pointer passed to
- *                                  `vkCreateDevice()`
- * @param[in]  alloc                Allocation callbacks passed to
- *                                  `vkCreateDevice()`
+ * :param device:               |out| The device to initialize
+ * :param physical_device:      |in|  The physical device
+ * :param dispatch_table:       |in|  Device-level dispatch table
+ * :param pCreateInfo:          |in|  VkDeviceCreateInfo pointer passed to
+ *                                    `vkCreateDevice()`
+ * :param alloc:                |in|  Allocation callbacks passed to
+ *                                    `vkCreateDevice()`
  */
 VkResult MUST_CHECK
 vk_device_init(struct vk_device *device,
@@ -294,12 +349,12 @@ vk_device_init(struct vk_device *device,
 static inline void
 vk_device_set_drm_fd(struct vk_device *device, int drm_fd)
 {
-   device->drm_fd = drm_fd;
+   device->sync = util_sync_provider_drm(drm_fd);
 }
 
 /** Tears down a vk_device
  *
- * @param[out] device               The device to tear down
+ * :param device:       |out| The device to tear down
  */
 void
 vk_device_finish(struct vk_device *device);
@@ -367,10 +422,30 @@ vk_device_check_status(struct vk_device *device)
    return result;
 }
 
+/** Copy semaphore payloads to other semaphores/fences
+ *
+ * This is equivalent to doing VkQueueSubmit without any command buffers or
+ * sparse bind operations and without implicitly synchronizing on any queue.
+ */
+VkResult
+vk_device_copy_semaphore_payloads(struct vk_device *device,
+                                  uint32_t wait_semaphore_count,
+                                  const VkSemaphoreSubmitInfo *wait_semaphores,
+                                  uint32_t signal_semaphore_count,
+                                  const VkSemaphoreSubmitInfo *signal_semaphores,
+                                  uint32_t fence_count,
+                                  const VkFence *fences);
+
+VkResult
+vk_device_get_timestamp(struct vk_device *device, VkTimeDomainKHR domain,
+                        uint64_t *timestamp);
+
 #ifndef _WIN32
 
 uint64_t
 vk_clock_gettime(clockid_t clock_id);
+
+#endif //!_WIN32
 
 static inline uint64_t
 vk_time_max_deviation(uint64_t begin, uint64_t end, uint64_t max_clock_period)
@@ -387,24 +462,24 @@ vk_time_max_deviation(uint64_t begin, uint64_t end, uint64_t max_clock_period)
      * period and that the application is sampling GPU and monotonic:
      *
      *                               s                 e
-     *			 w x y z 0 1 2 3 4 5 6 7 8 9 a b c d e f
-     *	Raw              -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
+     *                  w x y z 0 1 2 3 4 5 6 7 8 9 a b c d e f
+     * Raw              -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
      *
      *                               g
-     *		  0         1         2         3
-     *	GPU       -----_____-----_____-----_____-----_____
+     *           0         1         2         3
+     * GPU       -----_____-----_____-----_____-----_____
      *
      *                                                m
-     *					    x y z 0 1 2 3 4 5 6 7 8 9 a b c
-     *	Monotonic                           -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
+     *                                     x y z 0 1 2 3 4 5 6 7 8 9 a b c
+     * Monotonic                           -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
      *
-     *	Interval                     <----------------->
-     *	Deviation           <-------------------------->
+     * Interval                     <----------------->
+     * Deviation           <-------------------------->
      *
-     *		s  = read(raw)       2
-     *		g  = read(GPU)       1
-     *		m  = read(monotonic) 2
-     *		e  = read(raw)       b
+     *         s  = read(raw)       2
+     *         g  = read(GPU)       1
+     *         m  = read(monotonic) 2
+     *         e  = read(raw)       b
      *
      * We round the sample interval up by one tick to cover sampling error
      * in the interval clock
@@ -415,25 +490,9 @@ vk_time_max_deviation(uint64_t begin, uint64_t end, uint64_t max_clock_period)
    return sample_interval + max_clock_period;
 }
 
-#endif //!_WIN32
-
 PFN_vkVoidFunction
 vk_device_get_proc_addr(const struct vk_device *device,
                         const char *name);
-
-bool vk_get_physical_device_core_1_1_feature_ext(struct VkBaseOutStructure *ext,
-                                                 const VkPhysicalDeviceVulkan11Features *core);
-bool vk_get_physical_device_core_1_2_feature_ext(struct VkBaseOutStructure *ext,
-                                                 const VkPhysicalDeviceVulkan12Features *core);
-bool vk_get_physical_device_core_1_3_feature_ext(struct VkBaseOutStructure *ext,
-                                                 const VkPhysicalDeviceVulkan13Features *core);
-
-bool vk_get_physical_device_core_1_1_property_ext(struct VkBaseOutStructure *ext,
-                                                     const VkPhysicalDeviceVulkan11Properties *core);
-bool vk_get_physical_device_core_1_2_property_ext(struct VkBaseOutStructure *ext,
-                                                     const VkPhysicalDeviceVulkan12Properties *core);
-bool vk_get_physical_device_core_1_3_property_ext(struct VkBaseOutStructure *ext,
-                                                     const VkPhysicalDeviceVulkan13Properties *core);
 
 #ifdef __cplusplus
 }

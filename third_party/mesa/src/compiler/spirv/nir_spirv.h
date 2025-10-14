@@ -25,12 +25,14 @@
 #define _NIR_SPIRV_H_
 
 #include "util/disk_cache.h"
-#include "compiler/nir/nir.h"
+#include "compiler/nir/nir_defines.h"
 #include "compiler/shader_info.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct spirv_capabilities;
 
 struct nir_spirv_specialization {
    uint32_t id;
@@ -64,22 +66,31 @@ struct spirv_to_nir_options {
    /* Initial value for shader_info::float_controls_execution_mode,
     * indicates hardware requirements rather than shader author intent
     */
-   uint16_t float_controls_execution_mode;
-
-   /* Initial subgroup size.  This may be overwritten for CL kernels */
-   enum gl_subgroup_size subgroup_size;
+   uint32_t float_controls_execution_mode;
 
    /* True if RelaxedPrecision-decorated ALU result values should be performed
     * with 16-bit math.
     */
    bool mediump_16bit_alu;
 
-   /* When mediump_16bit_alu is set, determines whether nir_op_fddx/fddy can be
+   /* When mediump_16bit_alu is set, determines whether ddx/ddy can be
     * performed in 16-bit math.
     */
    bool mediump_16bit_derivatives;
 
-   struct spirv_supported_capabilities caps;
+   /* These really early AMD extensions don't have capabilities */
+   bool amd_gcn_shader;
+   bool amd_shader_ballot;
+   bool amd_trinary_minmax;
+   bool amd_shader_explicit_vertex_parameter;
+
+   /* Whether or not printf is supported */
+   bool printf;
+
+   /* Whether or not the driver wants consume debug information (Debugging purposes). */
+   bool debug_info;
+
+   const struct spirv_capabilities *capabilities;
 
    /* Address format for various kinds of pointers. */
    nir_address_format ubo_addr_format;
@@ -114,8 +125,20 @@ struct spirv_to_nir_options {
       void *private_data;
    } debug;
 
-   /* Force texture sampling to be non-uniform. */
-   bool force_tex_non_uniform;
+   /* Whether debug_break instructions should be emitted. */
+   bool emit_debug_break;
+
+   struct {
+      /* Force texture sampling to be non-uniform. */
+      bool force_tex_non_uniform;
+      /* Force SSBO accesses to be non-uniform. */
+      bool force_ssbo_non_uniform;
+
+      /* Whether OpTerminateInvocation should be lowered to OpKill to workaround
+       * game bugs.
+       */
+      bool lower_terminate_to_discard;
+   } workarounds;
 
    /* In Debug Builds, instead of emitting an OS break on failure, just return NULL from
     * spirv_to_nir().  This is useful for the unit tests that want to report a test failed
@@ -125,6 +148,9 @@ struct spirv_to_nir_options {
 
    /* Shader index provided by VkPipelineShaderStageNodeCreateInfoAMDX */
    uint32_t shader_index;
+
+   /* If GroupNonUniform capability is used, set this api subgroup size. */
+   uint8_t group_non_uniform_subgroup_size;
 };
 
 enum spirv_verify_result {
@@ -137,14 +163,16 @@ enum spirv_verify_result {
 enum spirv_verify_result spirv_verify_gl_specialization_constants(
    const uint32_t *words, size_t word_count,
    struct nir_spirv_specialization *spec, unsigned num_spec,
-   gl_shader_stage stage, const char *entry_point_name);
+   mesa_shader_stage stage, const char *entry_point_name);
 
 nir_shader *spirv_to_nir(const uint32_t *words, size_t word_count,
                          struct nir_spirv_specialization *specializations,
                          unsigned num_specializations,
-                         gl_shader_stage stage, const char *entry_point_name,
+                         mesa_shader_stage stage, const char *entry_point_name,
                          const struct spirv_to_nir_options *options,
                          const nir_shader_compiler_options *nir_options);
+
+void spirv_print_asm(FILE *fp, const uint32_t *words, size_t word_count);
 
 #ifdef __cplusplus
 }

@@ -34,12 +34,7 @@ zink_clear(struct pipe_context *pctx,
            const struct pipe_scissor_state *scissor_state,
            const union pipe_color_union *pcolor,
            double depth, unsigned stencil);
-void
-zink_clear_texture(struct pipe_context *ctx,
-                   struct pipe_resource *p_res,
-                   unsigned level,
-                   const struct pipe_box *box,
-                   const void *data);
+
 void
 zink_clear_texture_dynamic(struct pipe_context *ctx,
                            struct pipe_resource *p_res,
@@ -107,16 +102,16 @@ void
 zink_clear_apply_conditionals(struct zink_context *ctx);
 
 void
-zink_fb_clears_apply(struct zink_context *ctx, struct pipe_resource *pres);
+zink_fb_clears_apply(struct zink_context *ctx, struct pipe_resource *pres, int z, int depth);
 
 void
 zink_fb_clears_discard(struct zink_context *ctx, struct pipe_resource *pres);
 
 void
-zink_fb_clears_apply_or_discard(struct zink_context *ctx, struct pipe_resource *pres, struct u_rect region, bool discard_only);
+zink_fb_clears_apply_or_discard(struct zink_context *ctx, struct pipe_resource *pres, struct u_rect region, int z, int depth, bool discard_only);
 
 void
-zink_fb_clears_apply_region(struct zink_context *ctx, struct pipe_resource *pres, struct u_rect region);
+zink_fb_clears_apply_region(struct zink_context *ctx, struct pipe_resource *pres, struct u_rect region, int z, int depth);
 
 void
 zink_fb_clear_rewrite(struct zink_context *ctx, unsigned idx, enum pipe_format before, enum pipe_format after);

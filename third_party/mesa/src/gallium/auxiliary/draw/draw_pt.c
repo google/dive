@@ -205,7 +205,7 @@ draw_pt_init(struct draw_context *draw)
    if (!draw->pt.middle.general)
       return false;
 
-#ifdef DRAW_LLVM_AVAILABLE
+#if DRAW_LLVM_AVAILABLE
    if (draw->llvm) {
       draw->pt.middle.llvm = draw_pt_fetch_pipeline_or_emit_llvm(draw);
       draw->pt.middle.mesh = draw_pt_mesh_pipeline_or_emit(draw);
@@ -512,7 +512,6 @@ draw_vbo(struct draw_context *draw,
          unsigned num_draws,
          uint8_t patch_vertices)
 {
-   unsigned fpstate = util_fpstate_get();
    struct pipe_draw_info resolved_info;
    struct pipe_draw_start_count_bias resolved_draw;
    const struct pipe_draw_info *use_info;
@@ -524,7 +523,8 @@ draw_vbo(struct draw_context *draw,
    /* Make sure that denorms are treated like zeros. This is
     * the behavior required by D3D10. OpenGL doesn't care.
     */
-   util_fpstate_set_denorms_to_zero(fpstate);
+   draw->fpstate = util_fpstate_get();
+   util_fpstate_set_denorms_to_zero(draw->fpstate);
 
    if (indirect && indirect->count_from_stream_output) {
       resolve_draw_info(info, indirect, &draws[0], &resolved_info,
@@ -595,14 +595,14 @@ draw_vbo(struct draw_context *draw,
                                               draw->pt.vertex_element,
                                               draw->pt.nr_vertex_elements,
                                               use_info);
-#ifdef DRAW_LLVM_AVAILABLE
+#if DRAW_LLVM_AVAILABLE
    if (!draw->llvm)
 #endif
    {
       if (index_limit == 0) {
          /* one of the buffers is too small to do any valid drawing */
          debug_warning("draw: VBO too small to draw anything\n");
-         util_fpstate_set(fpstate);
+         util_fpstate_set(draw->fpstate);
          return;
       }
    }
@@ -619,8 +619,8 @@ draw_vbo(struct draw_context *draw,
     * the min_index/max_index hints given by gallium frontends.
     */
 
-   if (use_info->view_mask) {
-      u_foreach_bit(i, use_info->view_mask) {
+   if (draw->viewmask) {
+      u_foreach_bit(i, draw->viewmask) {
          draw->pt.user.viewid = i;
          draw_instances(draw, drawid_offset, use_info, use_draws, num_draws);
       }
@@ -632,7 +632,7 @@ draw_vbo(struct draw_context *draw,
    if (draw->collect_statistics) {
       draw->render->pipeline_statistics(draw->render, &draw->statistics);
    }
-   util_fpstate_set(fpstate);
+   util_fpstate_set(draw->fpstate);
 }
 
 /* to be called after a mesh shader is run */
@@ -642,6 +642,12 @@ draw_mesh(struct draw_context *draw,
           struct draw_prim_info *prim_info)
 {
    struct draw_pt_middle_end *middle = draw->pt.middle.mesh;
+
+   draw->pt.user.eltSize = 0;
+   draw->pt.user.viewid = 0;
+   draw->pt.user.drawid = 0;
+   draw->pt.user.increment_draw_id = false;
+   draw->pt.vertices_per_patch = 0;
 
    middle->prepare(middle, 0, 0, NULL);
 

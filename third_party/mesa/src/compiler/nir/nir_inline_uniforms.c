@@ -40,6 +40,7 @@
  * (uniforms must be lowered to load_ubo before calling this)
  */
 
+#include "util/hash_table.h"
 #include "nir_builder.h"
 #include "nir_loop_analyze.h"
 
@@ -182,42 +183,40 @@ is_induction_variable(const nir_src *src, int component, nir_loop_info *info,
    assert(component < src->ssa->num_components);
 
    /* Return true for induction variable (ie. i in for loop) */
-   for (int i = 0; i < info->num_induction_vars; i++) {
-      nir_loop_induction_variable *var = info->induction_vars + i;
-      if (var->def == src->ssa) {
-         /* Induction variable should have constant initial value (ie. i = 0),
-          * constant update value (ie. i++) and constant end condition
-          * (ie. i < 10), so that we know the exact loop count for unrolling
-          * the loop.
-          *
-          * Add uniforms need to be inlined for this induction variable's
-          * initial and update value to be constant, for example:
-          *
-          *     for (i = init; i < count; i += step)
-          *
-          * We collect uniform "init" and "step" here.
-          */
-         if (var->init_src) {
-            if (!nir_collect_src_uniforms(var->init_src, component,
-                                          uni_offsets, num_offsets,
-                                          max_num_bo, max_offset))
-               return false;
-         }
+   struct hash_entry *entry = _mesa_hash_table_search(info->induction_vars, src->ssa);
+   if (!entry)
+      return false;
 
-         if (var->update_src) {
-            nir_alu_src *alu_src = var->update_src;
-            if (!nir_collect_src_uniforms(&alu_src->src,
-                                          alu_src->swizzle[component],
-                                          uni_offsets, num_offsets,
-                                          max_num_bo, max_offset))
-               return false;
-         }
-
-         return true;
-      }
+   nir_loop_induction_variable *var = entry->data;
+   /* Induction variable should have constant initial value (ie. i = 0),
+    * constant update value (ie. i++) and constant end condition
+    * (ie. i < 10), so that we know the exact loop count for unrolling
+    * the loop.
+    *
+    * Add uniforms need to be inlined for this induction variable's
+    * initial and update value to be constant, for example:
+    *
+    *     for (i = init; i < count; i += step)
+    *
+    * We collect uniform "init" and "step" here.
+    */
+   if (var->init_src) {
+      if (!nir_collect_src_uniforms(var->init_src, component,
+                                    uni_offsets, num_offsets,
+                                    max_num_bo, max_offset))
+         return false;
    }
 
-   return false;
+   if (var->update_src) {
+      nir_alu_src *alu_src = var->update_src;
+      if (!nir_collect_src_uniforms(&alu_src->src,
+                                    alu_src->swizzle[component],
+                                    uni_offsets, num_offsets,
+                                    max_num_bo, max_offset))
+         return false;
+   }
+
+   return true;
 }
 
 void
@@ -242,7 +241,7 @@ nir_add_inlinable_uniforms(const nir_src *cond, nir_loop_info *info,
          if (nir_scalar_alu_op(cond_scalar) == nir_op_inot)
             cond_scalar = nir_scalar_chase_alu_src(cond_scalar, 0);
 
-         nir_alu_instr *alu = nir_instr_as_alu(cond_scalar.def->parent_instr);
+         nir_alu_instr *alu = nir_def_as_alu(cond_scalar.def);
 
          /* One side of comparison is induction variable, the other side is
           * only uniform.
@@ -366,7 +365,7 @@ void
 nir_find_inlinable_uniforms(nir_shader *shader)
 {
    uint32_t uni_offsets[MAX_INLINABLE_UNIFORMS];
-   uint8_t num_offsets[MAX_NUM_BO] = {0};
+   uint8_t num_offsets[MAX_NUM_BO] = { 0 };
 
    nir_foreach_function_impl(impl, shader) {
       nir_metadata_require(impl, nir_metadata_loop_analysis,
@@ -381,92 +380,100 @@ nir_find_inlinable_uniforms(nir_shader *shader)
    shader->info.num_inlinable_uniforms = num_offsets[0];
 }
 
-void
+typedef struct {
+   unsigned num_uniforms;
+   const uint32_t *uniform_values;
+   const uint16_t *uniform_dw_offsets;
+} nir_inline_uniforms_state;
+
+static bool
+nir_inline_uniforms_impl(nir_builder *b, nir_intrinsic_instr *intr, void *state)
+{
+   const nir_inline_uniforms_state *s = state;
+
+   /* Only replace UBO 0 with constant offsets. */
+   if (intr->intrinsic == nir_intrinsic_load_ubo &&
+       nir_src_is_const(intr->src[0]) &&
+       nir_src_as_uint(intr->src[0]) == 0 &&
+       nir_src_is_const(intr->src[1]) &&
+       /* TODO: Can't handle other bit sizes for now. */
+       intr->def.bit_size == 32) {
+      int num_components = intr->def.num_components;
+      uint32_t offset = nir_src_as_uint(intr->src[1]) / 4;
+
+      if (num_components == 1) {
+         /* Just replace the uniform load to constant load. */
+         for (unsigned i = 0; i < s->num_uniforms; i++) {
+            if (offset == s->uniform_dw_offsets[i]) {
+               b->cursor = nir_before_instr(&intr->instr);
+               nir_def *def = nir_imm_int(b, s->uniform_values[i]);
+               nir_def_replace(&intr->def, def);
+               return true;
+            }
+         }
+      } else {
+         /* Lower vector uniform load to scalar and replace each
+          * found component load with constant load.
+          */
+         uint32_t max_offset = offset + num_components;
+         nir_def *components[NIR_MAX_VEC_COMPONENTS] = { 0 };
+         bool found = false;
+
+         b->cursor = nir_before_instr(&intr->instr);
+
+         /* Find component to replace. */
+         for (unsigned i = 0; i < s->num_uniforms; i++) {
+            uint32_t uni_offset = s->uniform_dw_offsets[i];
+            if (uni_offset >= offset && uni_offset < max_offset) {
+               int index = uni_offset - offset;
+               components[index] = nir_imm_int(b, s->uniform_values[i]);
+               found = true;
+            }
+         }
+
+         if (!found)
+            return false;
+
+         /* Create per-component uniform load. */
+         for (unsigned i = 0; i < num_components; i++) {
+            if (!components[i]) {
+               uint32_t scalar_offset = (offset + i) * 4;
+               components[i] = nir_load_ubo(b, 1, intr->def.bit_size,
+                                            intr->src[0].ssa,
+                                            nir_imm_int(b, scalar_offset));
+               nir_intrinsic_instr *load =
+                  nir_def_as_intrinsic(components[i]);
+               nir_intrinsic_set_align(load, NIR_ALIGN_MUL_MAX, scalar_offset);
+               nir_intrinsic_set_range_base(load, scalar_offset);
+               nir_intrinsic_set_range(load, 4);
+            }
+         }
+
+         /* Replace the original uniform load. */
+         nir_def_replace(&intr->def,
+                         nir_vec(b, components, num_components));
+
+         return true;
+      }
+   }
+
+   return false;
+}
+
+bool
 nir_inline_uniforms(nir_shader *shader, unsigned num_uniforms,
                     const uint32_t *uniform_values,
                     const uint16_t *uniform_dw_offsets)
 {
    if (!num_uniforms)
-      return;
+      return false;
 
-   nir_foreach_function_impl(impl, shader) {
-      nir_builder b = nir_builder_create(impl);
-      nir_foreach_block(block, impl) {
-         nir_foreach_instr_safe(instr, block) {
-            if (instr->type != nir_instr_type_intrinsic)
-               continue;
+   nir_inline_uniforms_state state = {
+      .num_uniforms = num_uniforms,
+      .uniform_values = uniform_values,
+      .uniform_dw_offsets = uniform_dw_offsets,
+   };
 
-            nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-
-            /* Only replace UBO 0 with constant offsets. */
-            if (intr->intrinsic == nir_intrinsic_load_ubo &&
-                nir_src_is_const(intr->src[0]) &&
-                nir_src_as_uint(intr->src[0]) == 0 &&
-                nir_src_is_const(intr->src[1]) &&
-                /* TODO: Can't handle other bit sizes for now. */
-                intr->def.bit_size == 32) {
-               int num_components = intr->def.num_components;
-               uint32_t offset = nir_src_as_uint(intr->src[1]) / 4;
-
-               if (num_components == 1) {
-                  /* Just replace the uniform load to constant load. */
-                  for (unsigned i = 0; i < num_uniforms; i++) {
-                     if (offset == uniform_dw_offsets[i]) {
-                        b.cursor = nir_before_instr(&intr->instr);
-                        nir_def *def = nir_imm_int(&b, uniform_values[i]);
-                        nir_def_rewrite_uses(&intr->def, def);
-                        nir_instr_remove(&intr->instr);
-                        break;
-                     }
-                  }
-               } else {
-                  /* Lower vector uniform load to scalar and replace each
-                   * found component load with constant load.
-                   */
-                  uint32_t max_offset = offset + num_components;
-                  nir_def *components[NIR_MAX_VEC_COMPONENTS] = { 0 };
-                  bool found = false;
-
-                  b.cursor = nir_before_instr(&intr->instr);
-
-                  /* Find component to replace. */
-                  for (unsigned i = 0; i < num_uniforms; i++) {
-                     uint32_t uni_offset = uniform_dw_offsets[i];
-                     if (uni_offset >= offset && uni_offset < max_offset) {
-                        int index = uni_offset - offset;
-                        components[index] = nir_imm_int(&b, uniform_values[i]);
-                        found = true;
-                     }
-                  }
-
-                  if (!found)
-                     continue;
-
-                  /* Create per-component uniform load. */
-                  for (unsigned i = 0; i < num_components; i++) {
-                     if (!components[i]) {
-                        uint32_t scalar_offset = (offset + i) * 4;
-                        components[i] = nir_load_ubo(&b, 1, intr->def.bit_size,
-                                                     intr->src[0].ssa,
-                                                     nir_imm_int(&b, scalar_offset));
-                        nir_intrinsic_instr *load =
-                           nir_instr_as_intrinsic(components[i]->parent_instr);
-                        nir_intrinsic_set_align(load, NIR_ALIGN_MUL_MAX, scalar_offset);
-                        nir_intrinsic_set_range_base(load, scalar_offset);
-                        nir_intrinsic_set_range(load, 4);
-                     }
-                  }
-
-                  /* Replace the original uniform load. */
-                  nir_def_rewrite_uses(&intr->def,
-                                       nir_vec(&b, components, num_components));
-                  nir_instr_remove(&intr->instr);
-               }
-            }
-         }
-
-         nir_metadata_preserve(impl, nir_metadata_block_index |
-                                        nir_metadata_dominance);
-      }
-   }
+   return nir_shader_intrinsics_pass(shader, nir_inline_uniforms_impl,
+                                     nir_metadata_control_flow, &state);
 }

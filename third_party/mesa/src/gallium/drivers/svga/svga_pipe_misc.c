@@ -1,29 +1,10 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
-#include "util/u_framebuffer.h"
 #include "util/u_inlines.h"
 #include "util/u_pstipple.h"
 
@@ -88,14 +69,17 @@ svga_set_polygon_stipple(struct pipe_context *pipe,
 }
 
 
+/**
+ * Release all the context's framebuffer surfaces.
+ */
 void
 svga_cleanup_framebuffer(struct svga_context *svga)
 {
-   struct pipe_framebuffer_state *curr = &svga->curr.framebuffer;
-   struct pipe_framebuffer_state *hw = &svga->state.hw_clear.framebuffer;
-
-   util_unreference_framebuffer_state(curr);
-   util_unreference_framebuffer_state(hw);
+   struct svga_framebuffer_state *fb = &svga->curr.framebuffer;
+   for (unsigned i = 0; i < fb->base.nr_cbufs; i++) {
+      svga_surface_unref(&svga->pipe, &fb->cbufs[i]);
+   }
+   svga_surface_unref(&svga->pipe, &fb->zsbuf);
 }
 
 
@@ -104,54 +88,103 @@ svga_cleanup_framebuffer(struct svga_context *svga)
 #define DEPTH_BIAS_SCALE_FACTOR_D32    ((float)(1<<31))
 
 
+/*
+ * Copy pipe_framebuffer_state to svga_framebuffer_state while
+ * creating svga_surface objects as needed.
+ */
+static void
+svga_copy_framebuffer_state(struct svga_context *svga,
+                            struct svga_framebuffer_state *dst,
+                            const struct pipe_framebuffer_state *src)
+{
+   struct pipe_context *pctx = &svga->pipe;
+   const unsigned prev_nr_cbufs = dst->base.nr_cbufs;
+
+   dst->base = *src; // struct copy
+
+   // Create svga_surfaces for each color buffer
+   for (unsigned i = 0; i < src->nr_cbufs; i++) {
+      if (dst->cbufs[i] &&
+          pipe_surface_equal(&src->cbufs[i], &dst->cbufs[i]->base)) {
+         continue;
+      }
+
+      struct pipe_surface *psurf = src->cbufs[i].texture
+         ? svga_create_surface(pctx, src->cbufs[i].texture, &src->cbufs[i])
+         : NULL;
+      if (dst->cbufs[i]) {
+         svga_surface_unref(pctx, &dst->cbufs[i]);
+      }
+      dst->cbufs[i] = svga_surface(psurf);
+   }
+
+   // unref any remaining surfaces
+   for (unsigned i = src->nr_cbufs; i < prev_nr_cbufs; i++) {
+      if (dst->cbufs[i]) {
+         svga_surface_unref(pctx, &dst->cbufs[i]);
+      }
+   }
+
+   dst->base.nr_cbufs = src->nr_cbufs;
+
+   // depth/stencil surface
+   if (dst->zsbuf &&
+       pipe_surface_equal(&src->zsbuf, &dst->zsbuf->base)) {
+      return;
+   }
+
+   struct pipe_surface *psurf = src->zsbuf.texture
+      ? svga_create_surface(pctx, src->zsbuf.texture, &src->zsbuf)
+      : NULL;
+   if (dst->zsbuf) {
+      svga_surface_unref(pctx, &dst->zsbuf);
+   }
+   dst->zsbuf = svga_surface(psurf);
+}
+
+
 static void
 svga_set_framebuffer_state(struct pipe_context *pipe,
                            const struct pipe_framebuffer_state *fb)
 {
    struct svga_context *svga = svga_context(pipe);
-   struct pipe_framebuffer_state *dst = &svga->curr.framebuffer;
-   unsigned i;
 
    /* make sure any pending drawing calls are flushed before changing
     * the framebuffer state
     */
    svga_hwtnl_flush_retry(svga);
 
-   dst->width = fb->width;
-   dst->height = fb->height;
-   dst->nr_cbufs = fb->nr_cbufs;
-
    /* Check that all surfaces are the same size.
     * Actually, the virtual hardware may support rendertargets with
     * different size, depending on the host API and driver,
     */
    {
-      int width = 0, height = 0;
-      if (fb->zsbuf) {
-         width = fb->zsbuf->width;
-         height = fb->zsbuf->height;
+      uint16_t width = 0, height = 0;
+      if (fb->zsbuf.texture) {
+         pipe_surface_size(&fb->zsbuf, &width, &height);
       }
-      for (i = 0; i < fb->nr_cbufs; ++i) {
-         if (fb->cbufs[i]) {
+      for (unsigned i = 0; i < fb->nr_cbufs; ++i) {
+         if (fb->cbufs[i].texture) {
             if (width && height) {
-               if (fb->cbufs[i]->width != width ||
-                   fb->cbufs[i]->height != height) {
+               uint16_t cwidth, cheight;
+               pipe_surface_size(&fb->cbufs[i], &cwidth, &cheight);
+               if (cwidth != width ||
+                   cheight != height) {
                   debug_warning("Mixed-size color and depth/stencil surfaces "
                                 "may not work properly");
                }
             }
             else {
-               width = fb->cbufs[i]->width;
-               height = fb->cbufs[i]->height;
+               pipe_surface_size(&fb->cbufs[i], &width, &height);
             }
          }
       }
    }
 
-   util_copy_framebuffer_state(dst, fb);
+   svga_copy_framebuffer_state(svga, &svga->curr.framebuffer, fb);
 
    if (svga->curr.framebuffer.zsbuf) {
-      switch (svga->curr.framebuffer.zsbuf->format) {
+      switch (svga->curr.framebuffer.zsbuf->base.texture->format) {
       case PIPE_FORMAT_Z16_UNORM:
          svga->curr.depthscale = 1.0f / DEPTH_BIAS_SCALE_FACTOR_D16;
          break;

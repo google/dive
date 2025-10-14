@@ -24,11 +24,7 @@
 
 #include "util/u_math.h"
 
-#include "adreno_common.xml.h"
-#include "adreno_pm4.xml.h"
-#include "freedreno_pm4.h"
-
-#include "a6xx.xml.h"
+#include "fd6_hw.h"
 #include "common/freedreno_dev_info.h"
 
 #include "util/hash_table.h"
@@ -82,7 +78,7 @@ print_usage(const char *name)
 {
    /* clang-format off */
    fprintf(stderr, "Usage:\n\n"
-           "\t%s [OPTSIONS]... FILE...\n\n"
+           "\t%s [OPTIONS]... FILE...\n\n"
            "Options:\n"
            "\t-s, --submit=№   - № of the submit to decompile\n"
            "\t--no-reg-bunch   - Use pkt4 for each reg in CP_CONTEXT_REG_BUNCH\n"
@@ -189,7 +185,7 @@ decompile_shader(const char *name, uint32_t regbase, uint32_t *dwords, int level
       size_t stream_size = 0;
       FILE *stream = open_memstream(&stream_data, &stream_size);
 
-      try_disasm_a3xx(buf, sizedwords, 0, stream, dev_id.gpu_id);
+      try_disasm_a3xx(buf, sizedwords, 0, stream, fd_dev_gen(&dev_id) * 100);
       fclose(stream);
 
       printlvl(level, "{\n");
@@ -209,12 +205,12 @@ static struct {
    uint32_t regbase;
    uint32_t (*fxn)(const char *name, uint32_t regbase, uint32_t *dwords, int level);
 } reg_a6xx[] = {
-   {REG_A6XX_SP_VS_OBJ_START, decompile_shader},
-   {REG_A6XX_SP_HS_OBJ_START, decompile_shader},
-   {REG_A6XX_SP_DS_OBJ_START, decompile_shader},
-   {REG_A6XX_SP_GS_OBJ_START, decompile_shader},
-   {REG_A6XX_SP_FS_OBJ_START, decompile_shader},
-   {REG_A6XX_SP_CS_OBJ_START, decompile_shader},
+   {REG_A6XX_SP_VS_BASE, decompile_shader},
+   {REG_A6XX_SP_HS_BASE, decompile_shader},
+   {REG_A6XX_SP_DS_BASE, decompile_shader},
+   {REG_A6XX_SP_GS_BASE, decompile_shader},
+   {REG_A6XX_SP_PS_BASE, decompile_shader},
+   {REG_A6XX_SP_CS_BASE, decompile_shader},
 
    {0, NULL},
 }, *type0_reg;
@@ -237,7 +233,7 @@ decompile_register(uint32_t regbase, uint32_t *dwords, uint16_t cnt, int level)
       printlvl(level, "/* pkt4: %s = %s */\n", info->name, decoded);
 
       if (cnt == 0) {
-         printlvl(level, "pkt(cs, %u);\n", dword);
+         printlvl(level, "pkt(cs, 0x%x);\n", dword);
       } else {
 #if 0
          char reg_name[33];
@@ -260,12 +256,12 @@ decompile_register(uint32_t regbase, uint32_t *dwords, uint16_t cnt, int level)
          /* TODO: We don't have easy way to get chip generation prefix,
           * so just emit raw packet offset as a workaround.
           */
-         printlvl(level, "pkt4(cs, 0x%04x, (%u), %u);\n", regbase, cnt, dword);
+         printlvl(level, "pkt4(cs, 0x%04x, (%u), 0x%x);\n", regbase, cnt, dword);
 #endif
       }
    } else {
       printlvl(level, "/* unknown pkt4 */\n");
-      printlvl(level, "pkt4(cs, 0x%04x, (%u), %u);\n", regbase, 1, dword);
+      printlvl(level, "pkt4(cs, 0x%04x, (%u), 0x%x);\n", regbase, 1, dword);
    }
 
    rnn_reginfo_free(info);
@@ -287,7 +283,7 @@ decompile_register_reg_bunch(uint32_t regbase, uint32_t *dwords, uint16_t cnt, i
    }
 
    printlvl(level, "pkt(cs, 0x%04x);\n", regbase);
-   printlvl(level, "pkt(cs, %u);\n", dword);
+   printlvl(level, "pkt(cs, 0x%x);\n", dword);
 
    rnn_reginfo_free(info);
 
@@ -323,15 +319,13 @@ decompile_domain(uint32_t pkt, uint32_t *dwords, uint32_t sizedwords,
 
    if (pkt == CP_LOAD_STATE6_FRAG || pkt == CP_LOAD_STATE6_GEOM) {
       enum a6xx_state_type state_type =
-         (dwords[0] & CP_LOAD_STATE6_0_STATE_TYPE__MASK) >>
-         CP_LOAD_STATE6_0_STATE_TYPE__SHIFT;
+         pkt_field_get(CP_LOAD_STATE6_0_STATE_TYPE, dwords[0]);
       enum a6xx_state_src state_src =
-         (dwords[0] & CP_LOAD_STATE6_0_STATE_SRC__MASK) >>
-         CP_LOAD_STATE6_0_STATE_SRC__SHIFT;
+         pkt_field_get(CP_LOAD_STATE6_0_STATE_SRC, dwords[0]);
 
       /* TODO: decompile all other state */
       if (state_type == ST6_SHADER && state_src == SS6_INDIRECT) {
-         printlvl(level, "pkt(cs, %u);\n", dwords[0]);
+         printlvl(level, "pkt(cs, 0x%x);\n", dwords[0]);
          decompile_shader(NULL, 0, dwords + 1, level);
          return;
       }
@@ -345,7 +339,7 @@ decompile_domain(uint32_t pkt, uint32_t *dwords, uint32_t sizedwords,
 
       char *decoded;
       if (!(info && info->typeinfo)) {
-         printlvl(level, "pkt(cs, %u);\n", dwords[i]);
+         printlvl(level, "pkt(cs, 0x%x);\n", dwords[i]);
          continue;
       }
       uint64_t value = dwords[i];
@@ -356,9 +350,9 @@ decompile_domain(uint32_t pkt, uint32_t *dwords, uint32_t sizedwords,
       decoded = rnndec_decodeval(rnn->vc, info->typeinfo, value);
 
       printlvl(level, "/* %s */\n", decoded);
-      printlvl(level, "pkt(cs, %u);\n", dwords[i]);
+      printlvl(level, "pkt(cs, 0x%x);\n", dwords[i]);
       if (reg64) {
-         printlvl(level, "pkt(cs, %u);\n", dwords[i + 1]);
+         printlvl(level, "pkt(cs, 0x%x);\n", dwords[i + 1]);
          i++;
       }
 
@@ -369,7 +363,7 @@ decompile_domain(uint32_t pkt, uint32_t *dwords, uint32_t sizedwords,
 }
 
 static void
-decompile_commands(uint32_t *dwords, uint32_t sizedwords, int level)
+decompile_commands(uint32_t *dwords, uint32_t sizedwords, int level, uint32_t *cond_count)
 {
    int dwords_left = sizedwords;
    uint32_t count = 0; /* dword count including packet header */
@@ -395,10 +389,8 @@ decompile_commands(uint32_t *dwords, uint32_t sizedwords, int level)
             printlvl(level, "{\n");
             printlvl(level + 1, "begin_ib();\n");
 
-            if (!has_dumped(ibaddr, 0x7)) {
-               uint32_t *ptr = hostptr(ibaddr);
-               decompile_commands(ptr, ibsize, level + 1);
-            }
+            uint32_t *ptr = hostptr(ibaddr);
+            decompile_commands(ptr, ibsize, level + 1, NULL);
 
             printlvl(level + 1, "end_ib();\n");
             printlvl(level, "}\n");
@@ -414,7 +406,7 @@ decompile_commands(uint32_t *dwords, uint32_t sizedwords, int level)
                   printlvl(level + 1, "begin_draw_state();\n");
 
                   uint32_t *ptr = hostptr(ibaddr);
-                  decompile_commands(ptr, state_count, level + 1);
+                  decompile_commands(ptr, state_count, level + 1, NULL);
 
                   printlvl(level + 1, "end_draw_state(%u);\n", unchanged);
                   printlvl(level, "}\n");
@@ -423,19 +415,19 @@ decompile_commands(uint32_t *dwords, uint32_t sizedwords, int level)
                                    "CP_SET_DRAW_STATE", level);
                }
             }
-         } else if (val == CP_CONTEXT_REG_BUNCH || val == CP_CONTEXT_REG_BUNCH2) {
+         } else if (val == CP_CONTEXT_REG_BUNCH || val == CP_NON_CONTEXT_REG_BUNCH) {
             uint32_t *dw = dwords + 1;
             uint32_t cnt = count - 1;
 
-            if (val == CP_CONTEXT_REG_BUNCH2) {
+            if (val == CP_NON_CONTEXT_REG_BUNCH) {
                if (options.no_reg_bunch) {
-                  printlvl(level, "// CP_CONTEXT_REG_BUNCH2\n");
+                  printlvl(level, "// CP_NON_CONTEXT_REG_BUNCH\n");
                   printlvl(level, "{\n");
                } else {
-                  printlvl(level, "pkt7(cs, %s, %u);\n", "CP_CONTEXT_REG_BUNCH2", cnt);
+                  printlvl(level, "pkt7(cs, %s, %u);\n", "CP_NON_CONTEXT_REG_BUNCH", cnt);
                   printlvl(level, "{\n");
-                  printlvl(level + 1, "pkt(cs, %u);\n", dw[0]);
-                  printlvl(level + 1, "pkt(cs, %u);\n", dw[1]);
+                  printlvl(level + 1, "pkt(cs, 0x%x);\n", dw[0]);
+                  printlvl(level + 1, "pkt(cs, 0x%x);\n", dw[1]);
                }
 
                dw += 2;
@@ -458,6 +450,51 @@ decompile_commands(uint32_t *dwords, uint32_t sizedwords, int level)
                }
             }
             printlvl(level, "}\n");
+         } else if (val == CP_COND_REG_EXEC) {
+            const char *packet_name = pktname(val);
+            const char *dom_name = packet_name;
+            uint32_t cond_count = dwords[count - 1];
+
+            decompile_domain(val, dwords + 1, count - 1, dom_name, packet_name, level);
+
+            printlvl(level, "{\n");
+            printlvl(level + 1, "/* BEGIN COND (%d DWORDS) */\n", cond_count);
+
+            decompile_commands(dwords + count, cond_count, level + 1, &cond_count);
+            count += cond_count;
+
+            printlvl(level + 1, "/* END COND */\n");
+            printlvl(level, "}\n");
+         } else if (val == CP_NOP) {
+            /* Prop will often use NOP past the end of cond execs
+             * which basically create an else path for the cond exec
+             */
+            const char *packet_name = pktname(val);
+            const char *dom_name = packet_name;
+
+            if (count > dwords_left) {
+               int else_cond_count = count - dwords_left;
+
+               assert(cond_count);
+               *cond_count += else_cond_count;
+
+               printlvl(level, "pkt7(cs, %s, %u);\n", packet_name, count - 1);
+               for (int i = 1; i < dwords_left; i++) {
+                  printlvl(level, "pkt(cs, 0x%x);\n", dwords[i]);
+               }
+
+               printlvl(level, "/* TO ELSE COND */\n");
+               printlvl(level - 1, "}\n");
+
+               printlvl(level - 1, "{\n");
+               printlvl(level, "/* ELSE COND (%d DWORDS) */\n", else_cond_count);
+               decompile_commands(dwords + dwords_left, else_cond_count, level, NULL);
+
+               return;
+            } else {
+               decompile_domain(val, dwords + 1, count - 1, dom_name, packet_name,
+                                level);
+            }
          } else {
             const char *packet_name = pktname(val);
             const char *dom_name = packet_name;
@@ -512,22 +549,10 @@ emit_header()
           "int main(int argc, char **argv)\n"
           "{\n"
           "\tstruct replay_context ctx;\n"
-          "\tstruct fd_dev_id dev_id = {%u, %" PRIu64 "};\n"
+          "\tstruct fd_dev_id dev_id = {%u, 0x%" PRIx64 "};\n"
           "\treplay_context_init(&ctx, &dev_id, argc, argv);\n"
           "\tstruct cmdstream *cs = ctx.submit_cs;\n\n",
           dev_id.gpu_id, dev_id.chip_id);
-}
-
-static inline uint32_t
-u64_hash(const void *key)
-{
-   return _mesa_hash_data(key, sizeof(uint64_t));
-}
-
-static inline bool
-u64_compare(const void *key1, const void *key2)
-{
-   return memcmp(key1, key2, sizeof(uint64_t)) == 0;
 }
 
 static int
@@ -550,7 +575,7 @@ handle_file(const char *filename, uint32_t submit_to_decompile)
 
    type0_reg = reg_a6xx;
    mem_ctx = ralloc_context(NULL);
-   _mesa_set_init(&decompiled_shaders, mem_ctx, u64_hash, u64_compare);
+   _mesa_set_init(&decompiled_shaders, mem_ctx, _mesa_hash_u64, _mesa_key_u64_equal);
 
    struct {
       unsigned int len;
@@ -583,21 +608,22 @@ handle_file(const char *filename, uint32_t submit_to_decompile)
          parse_addr(ps.buf, ps.sz, &sizedwords, &gpuaddr);
 
          if (submit == submit_to_decompile) {
-            decompile_commands(hostptr(gpuaddr), sizedwords, 0);
+            decompile_commands(hostptr(gpuaddr), sizedwords, 0, NULL);
          }
 
+         needs_reset = true;
          submit++;
          break;
       }
       case RD_GPU_ID: {
          dev_id.gpu_id = parse_gpu_id(ps.buf);
-         if (fd_dev_info(&dev_id))
+         if (fd_dev_info_raw(&dev_id))
             emit_header();
          break;
       }
       case RD_CHIP_ID: {
          dev_id.chip_id = parse_chip_id(ps.buf);
-         if (fd_dev_info(&dev_id))
+         if (fd_dev_info_raw(&dev_id))
             emit_header();
          break;
       }

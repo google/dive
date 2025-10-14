@@ -1,11 +1,14 @@
+// Copyright 2022 Red Hat.
+// SPDX-License-Identifier: MIT
+
 use mesa_rust_gen::*;
 use mesa_rust_util::bitset;
-use mesa_rust_util::offset_of;
 
 use std::convert::TryInto;
-use std::ffi::c_void;
-use std::ffi::CString;
+use std::ffi::CStr;
 use std::marker::PhantomData;
+use std::mem::offset_of;
+use std::ops::Not;
 use std::ptr;
 use std::ptr::NonNull;
 use std::slice;
@@ -34,8 +37,8 @@ impl<'a, T: 'a> Iterator for ExecListIter<'a, T> {
         if self.n.next.is_null() {
             None
         } else {
-            let t: *mut c_void = (self.n as *mut exec_node).cast();
-            Some(unsafe { &mut *(t.sub(self.offset).cast()) })
+            let t: *mut _ = self.n;
+            Some(unsafe { &mut *(t.byte_sub(self.offset).cast()) })
         }
     }
 }
@@ -45,35 +48,47 @@ impl<'a, T: 'a> Iterator for ExecListIter<'a, T> {
 macro_rules! nir_pass_impl {
     ($nir:ident, $pass:ident, $func:ident $(,$arg:expr)* $(,)?) => {
         {
+            // SAFETY: mutable static can't be read safely, but this value isn't going to change
+            let debug_opts = unsafe { nir_debug };
+
             let func_str = ::std::stringify!($func);
             let func_cstr = ::std::ffi::CString::new(func_str).unwrap();
             let res = if unsafe { should_skip_nir(func_cstr.as_ptr()) } {
                 println!("skipping {}", func_str);
                 false
             } else {
+                if debug_opts & NIR_DEBUG_INVALIDATE_METADATA != 0 {
+                    $nir.metadata_invalidate();
+                } else if debug_opts & NIR_DEBUG_EXTENDED_VALIDATION != 0 {
+                    $nir.metadata_require_most();
+                }
                 $nir.metadata_set_validation_flag();
                 if $nir.should_print() {
                     println!("{}", func_str);
                 }
-                if $nir.$pass($func $(,$arg)*) {
-                    $nir.validate(&format!("after {} in {}:{}", func_str, file!(), line!()));
+                let when = format!("after {} in {}:{}", func_str, file!(), line!());
+                let blob_before = $nir.validate_progress_setup();
+                let progress = $nir.$pass($func $(,$arg)*);
+                if progress {
+                    $nir.validate(&when);
                     if $nir.should_print() {
                         $nir.print();
                     }
                     $nir.metadata_check_validation_flag();
-                    true
                 } else {
-                    false
+                    if debug_opts & NIR_DEBUG_EXTENDED_VALIDATION != 0 {
+                        $nir.validate(&when);
+                    }
                 }
+                $nir.validate_progress_finish(blob_before, progress, &when);
+                progress
             };
 
-            // SAFETY: mutable static can't be read safely, but this value isn't going to change
-            let ndebug = unsafe { nir_debug };
-            if ndebug & NIR_DEBUG_CLONE != 0 {
+            if debug_opts & NIR_DEBUG_CLONE != 0 {
                 $nir.validate_clone();
             }
 
-            if ndebug & NIR_DEBUG_SERIALIZE != 0 {
+            if debug_opts & NIR_DEBUG_SERIALIZE != 0 {
                 $nir.validate_serialize_deserialize();
             }
 
@@ -114,6 +129,10 @@ pub struct NirPrintfInfo {
     printf_info: *mut u_printf_info,
 }
 
+// SAFETY: `u_printf_info` is considered immutable
+unsafe impl Send for NirPrintfInfo {}
+unsafe impl Sync for NirPrintfInfo {}
+
 impl NirPrintfInfo {
     pub fn u_printf(&self, buf: &[u8]) {
         unsafe {
@@ -140,35 +159,29 @@ pub struct NirShader {
     nir: NonNull<nir_shader>,
 }
 
+// SAFETY: It's safe to share a nir_shader between threads.
+unsafe impl Send for NirShader {}
+
+// SAFETY: We do not allow interior mutability with &NirShader
+unsafe impl Sync for NirShader {}
+
 impl NirShader {
     pub fn new(nir: *mut nir_shader) -> Option<Self> {
         NonNull::new(nir).map(|nir| Self { nir: nir })
     }
 
     pub fn deserialize(
-        input: &mut &[u8],
-        len: usize,
+        blob: &mut blob_reader,
         options: *const nir_shader_compiler_options,
     ) -> Option<Self> {
-        let mut reader = blob_reader::default();
-
-        let (bin, rest) = input.split_at(len);
-        *input = rest;
-
-        unsafe {
-            blob_reader_init(&mut reader, bin.as_ptr().cast(), len);
-            Self::new(nir_deserialize(ptr::null_mut(), options, &mut reader))
-        }
+        // we already create the NirShader here so it gets automatically deallocated on overrun.
+        let nir = Self::new(unsafe { nir_deserialize(ptr::null_mut(), options, blob) })?;
+        blob.overrun.not().then_some(nir)
     }
 
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut blob = blob::default();
+    pub fn serialize(&self, blob: &mut blob) {
         unsafe {
-            blob_init(&mut blob);
-            nir_serialize(&mut blob, self.nir.as_ptr(), false);
-            let res = slice::from_raw_parts(blob.data, blob.size).to_vec();
-            blob_finish(&mut blob);
-            res
+            nir_serialize(blob, self.nir.as_ptr(), false);
         }
     }
 
@@ -184,7 +197,7 @@ impl NirShader {
         unsafe { nir_shader_clone(ptr::null_mut(), self.nir.as_ptr()) }
     }
 
-    pub fn sweep_mem(&self) {
+    pub fn sweep_mem(&mut self) {
         unsafe { nir_sweep(self.nir.as_ptr()) }
     }
 
@@ -230,16 +243,44 @@ impl NirShader {
     }
 
     #[cfg(debug_assertions)]
+    pub fn metadata_invalidate(&self) {
+        unsafe { nir_metadata_invalidate(self.nir.as_ptr()) }
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn metadata_require_most(&self) {
+        unsafe { nir_metadata_require_most(self.nir.as_ptr()) }
+    }
+
+    #[cfg(debug_assertions)]
     pub fn validate(&self, when: &str) {
-        let cstr = CString::new(when).unwrap();
+        let cstr = std::ffi::CString::new(when).unwrap();
         unsafe { nir_validate_shader(self.nir.as_ptr(), cstr.as_ptr()) }
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn validate_progress_setup(&self) -> blob {
+        unsafe { nir_validate_progress_setup(self.nir.as_ptr()) }
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn validate_progress_finish(&self, mut setup_blob: blob, progress: bool, when: &str) {
+        let cstr = std::ffi::CString::new(when).unwrap();
+        unsafe {
+            nir_validate_progress_finish(
+                self.nir.as_ptr(),
+                &mut setup_blob,
+                progress,
+                cstr.as_ptr(),
+            )
+        };
     }
 
     pub fn should_print(&self) -> bool {
         unsafe { should_print_nir(self.nir.as_ptr()) }
     }
 
-    pub fn validate_serialize_deserialize(&self) {
+    pub fn validate_serialize_deserialize(&mut self) {
         unsafe { nir_shader_serialize_deserialize(self.nir.as_ptr()) }
     }
 
@@ -261,11 +302,6 @@ impl NirShader {
     }
 
     pub fn inline(&mut self, libclc: &NirShader) {
-        nir_pass!(
-            self,
-            nir_lower_variable_initializers,
-            nir_variable_mode::nir_var_function_temp,
-        );
         nir_pass!(self, nir_lower_returns);
         nir_pass!(self, nir_link_shader_functions, libclc.nir.as_ptr());
         nir_pass!(self, nir_inline_functions);
@@ -283,7 +319,7 @@ impl NirShader {
         unsafe { nir_cleanup_functions(self.nir.as_ptr()) };
     }
 
-    pub fn variables(&mut self) -> ExecListIter<nir_variable> {
+    pub fn variables(&mut self) -> ExecListIter<'_, nir_variable> {
         ExecListIter::new(
             &mut unsafe { self.nir.as_mut() }.variables,
             offset_of!(nir_variable, node),
@@ -298,7 +334,7 @@ impl NirShader {
         unsafe { (*self.nir.as_ptr()).info.num_textures }
     }
 
-    pub fn reset_scratch_size(&self) {
+    pub fn reset_scratch_size(&mut self) {
         unsafe {
             (*self.nir.as_ptr()).scratch_size = 0;
         }
@@ -308,8 +344,17 @@ impl NirShader {
         unsafe { (*self.nir.as_ptr()).scratch_size }
     }
 
+    pub fn reset_shared_size(&mut self) {
+        unsafe {
+            (*self.nir.as_ptr()).info.shared_size = 0;
+        }
+    }
     pub fn shared_size(&self) -> u32 {
         unsafe { (*self.nir.as_ptr()).info.shared_size }
+    }
+
+    pub fn uniform_size(&self) -> u32 {
+        unsafe { (*self.nir.as_ptr()).num_uniforms }
     }
 
     pub fn workgroup_size(&self) -> [u16; 3] {
@@ -317,33 +362,34 @@ impl NirShader {
     }
 
     pub fn subgroup_size(&self) -> u8 {
-        let subgroup_size = unsafe { (*self.nir.as_ptr()).info.subgroup_size };
-        let valid_subgroup_sizes = [
-            gl_subgroup_size::SUBGROUP_SIZE_REQUIRE_8,
-            gl_subgroup_size::SUBGROUP_SIZE_REQUIRE_16,
-            gl_subgroup_size::SUBGROUP_SIZE_REQUIRE_32,
-            gl_subgroup_size::SUBGROUP_SIZE_REQUIRE_64,
-            gl_subgroup_size::SUBGROUP_SIZE_REQUIRE_128,
-        ];
-
-        if valid_subgroup_sizes.contains(&subgroup_size) {
-            subgroup_size as u8
-        } else {
-            0
-        }
+        unsafe { (*self.nir.as_ptr()).info.api_subgroup_size }
     }
 
     pub fn num_subgroups(&self) -> u8 {
         unsafe { (*self.nir.as_ptr()).info.num_subgroups }
     }
 
-    pub fn set_workgroup_size_variable_if_zero(&self) {
+    pub fn set_workgroup_size_variable_if_zero(&mut self) {
         let nir = self.nir.as_ptr();
         unsafe {
             (*nir)
                 .info
                 .set_workgroup_size_variable((*nir).info.workgroup_size[0] == 0);
         }
+    }
+
+    pub fn set_workgroup_size(&mut self, size: [u16; 3]) {
+        let nir = unsafe { self.nir.as_mut() };
+        nir.info.set_workgroup_size_variable(false);
+        nir.info.workgroup_size = size;
+    }
+
+    pub fn workgroup_size_variable(&self) -> bool {
+        unsafe { self.nir.as_ref() }.info.workgroup_size_variable()
+    }
+
+    pub fn workgroup_size_hint(&self) -> [u16; 3] {
+        unsafe { self.nir.as_ref().info.anon_1.cs.workgroup_size_hint }
     }
 
     pub fn set_has_variable_shared_mem(&mut self, val: bool) {
@@ -365,7 +411,7 @@ impl NirShader {
             .filter(move |v| v.data.mode() & mode.0 != 0)
     }
 
-    pub fn extract_constant_initializers(&self) {
+    pub fn extract_constant_initializers(&mut self) {
         let nir = self.nir.as_ptr();
         unsafe {
             if (*nir).constant_data_size > 0 {
@@ -425,14 +471,28 @@ impl NirShader {
     pub fn get_constant_buffer(&self) -> &[u8] {
         unsafe {
             let nir = self.nir.as_ref();
-            slice::from_raw_parts(nir.constant_data.cast(), nir.constant_data_size as usize)
+            // Sometimes, constant_data can be a null pointer if the size is 0
+            if nir.constant_data_size == 0 {
+                &[]
+            } else {
+                slice::from_raw_parts(nir.constant_data.cast(), nir.constant_data_size as usize)
+            }
         }
     }
 
     pub fn preserve_fp16_denorms(&mut self) {
         unsafe {
             self.nir.as_mut().info.float_controls_execution_mode |=
-                float_controls::FLOAT_CONTROLS_DENORM_PRESERVE_FP16 as u16;
+                float_controls::FLOAT_CONTROLS_DENORM_PRESERVE_FP16 as u32;
+        }
+    }
+
+    pub fn set_fp_rounding_mode_rtne(&mut self) {
+        unsafe {
+            self.nir.as_mut().info.float_controls_execution_mode |=
+                float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP16 as u32
+                    | float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP32 as u32
+                    | float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP64 as u32;
         }
     }
 
@@ -442,16 +502,23 @@ impl NirShader {
     }
 
     pub fn add_var(
-        &self,
+        &mut self,
         mode: nir_variable_mode,
         glsl_type: *const glsl_type,
         loc: usize,
-        name: &str,
+        name: &CStr,
     ) {
-        let name = CString::new(name).unwrap();
         unsafe {
             let var = nir_variable_create(self.nir.as_ptr(), mode, glsl_type, name.as_ptr());
             (*var).data.location = loc.try_into().unwrap();
+        }
+    }
+}
+
+impl Clone for NirShader {
+    fn clone(&self) -> Self {
+        Self {
+            nir: unsafe { NonNull::new_unchecked(self.dup_for_driver()) },
         }
     }
 }

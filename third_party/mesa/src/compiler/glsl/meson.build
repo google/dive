@@ -1,28 +1,11 @@
 # Copyright © 2017 Intel Corporation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 libglsl_util = static_library(
   'glsl_util',
   glsl_util_files,
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux],
-  dependencies : dep_valgrind,
+  include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux],
+  dependencies : [dep_valgrind, idep_mesautil],
   gnu_symbol_visibility : 'hidden',
   build_by_default : false,
 )
@@ -123,19 +106,22 @@ files_libglsl = files(
   'ast_type.cpp',
   'builtin_functions.cpp',
   'builtin_functions.h',
-  'builtin_int64.h',
   'builtin_types.cpp',
   'builtin_variables.cpp',
-  'generate_ir.cpp',
+  'gl_nir_detect_function_recursion.c',
   'gl_nir_lower_atomics.c',
   'gl_nir_lower_images.c',
   'gl_nir_lower_blend_equation_advanced.c',
   'gl_nir_lower_buffers.c',
+  'gl_nir_lower_discard_flow.c',
+  'gl_nir_lower_named_interface_blocks.c',
   'gl_nir_lower_packed_varyings.c',
   'gl_nir_lower_samplers.c',
   'gl_nir_lower_samplers_as_deref.c',
   'gl_nir_lower_xfb_varying.c',
   'gl_nir_link_atomics.c',
+  'gl_nir_link_functions.c',
+  'gl_nir_link_interface_blocks.c',
   'gl_nir_link_uniform_blocks.c',
   'gl_nir_link_uniform_initializers.c',
   'gl_nir_link_uniforms.c',
@@ -144,7 +130,6 @@ files_libglsl = files(
   'gl_nir_link_xfb.c',
   'gl_nir_linker.c',
   'gl_nir_linker.h',
-  'gl_nir_opt_dead_builtin_varyings.c',
   'gl_nir.h',
   'glsl_parser_extras.cpp',
   'glsl_parser_extras.h',
@@ -153,8 +138,6 @@ files_libglsl = files(
   'glsl_to_nir.cpp',
   'glsl_to_nir.h',
   'hir_field_selection.cpp',
-  'ir_array_refcount.cpp',
-  'ir_array_refcount.h',
   'ir_basic_block.cpp',
   'ir_basic_block.h',
   'ir_builder.cpp',
@@ -163,50 +146,29 @@ files_libglsl = files(
   'ir_constant_expression.cpp',
   'ir.cpp',
   'ir.h',
-  'ir_equals.cpp',
   'ir_expression_flattening.cpp',
   'ir_expression_flattening.h',
-  'ir_function_can_inline.cpp',
   'ir_function_detect_recursion.cpp',
-  'ir_function_inlining.h',
   'ir_function.cpp',
   'ir_hierarchical_visitor.cpp',
   'ir_hierarchical_visitor.h',
   'ir_hv_accept.cpp',
+  'ir_list.h',
   'ir_optimization.h',
   'ir_print_visitor.cpp',
   'ir_print_visitor.h',
-  'ir_reader.cpp',
-  'ir_reader.h',
   'ir_rvalue_visitor.cpp',
   'ir_rvalue_visitor.h',
-  'ir_uniform.h',
   'ir_validate.cpp',
   'ir_variable_refcount.cpp',
   'ir_variable_refcount.h',
   'ir_visitor.h',
-  'linker.cpp',
-  'linker.h',
   'linker_util.h',
   'linker_util.cpp',
-  'link_functions.cpp',
-  'link_interface_blocks.cpp',
-  'link_uniforms.cpp',
-  'link_uniform_block_active_visitor.cpp',
-  'link_uniform_block_active_visitor.h',
-  'link_uniform_blocks.cpp',
-  'link_varyings.cpp',
-  'link_varyings.h',
-  'list.h',
   'lower_builtins.cpp',
-  'lower_discard.cpp',
-  'lower_discard_flow.cpp',
-  'lower_distance.cpp',
   'lower_instructions.cpp',
-  'lower_int64.cpp',
   'lower_jumps.cpp',
   'lower_mat_op_to_vec.cpp',
-  'lower_named_interface_blocks.cpp',
   'lower_packing_builtins.cpp',
   'lower_precision.cpp',
   'lower_subroutine.cpp',
@@ -215,19 +177,13 @@ files_libglsl = files(
   'opt_algebraic.cpp',
   'opt_dead_builtin_variables.cpp',
   'opt_dead_code.cpp',
-  'opt_dead_code_local.cpp',
-  'opt_dead_functions.cpp',
   'opt_flatten_nested_if_blocks.cpp',
-  'opt_flip_matrices.cpp',
   'opt_function_inlining.cpp',
   'opt_if_simplification.cpp',
   'opt_minmax.cpp',
   'opt_rebalance_tree.cpp',
   'opt_tree_grafting.cpp',
-  'program.h',
   'propagate_invariance.cpp',
-  's_expression.cpp',
-  's_expression.h',
   'string_to_uint_map.cpp',
   'string_to_uint_map.h',
   'serialize.cpp',
@@ -237,28 +193,34 @@ files_libglsl = files(
 )
 
 files_libglsl_standalone = files(
-  'ir_builder_print_visitor.cpp',
-  'ir_builder_print_visitor.h',
-  'opt_add_neg_to_sub.h',
   'standalone_scaffolding.cpp',
   'standalone_scaffolding.h',
   'standalone.cpp',
   'standalone.h',
 )
 
+libglsl_headers = [
+  ir_expression_operation_h, cross_platform_settings_piece_all_h, bc1_glsl_h,
+  bc4_glsl_h, etc2_rgba_stitch_glsl_h, astc_glsl_h
+]
+
 libglsl = static_library(
   'glsl',
-  [files_libglsl, glsl_parser, glsl_lexer_cpp, ir_expression_operation_h,
+  [files_libglsl, glsl_parser, glsl_lexer_cpp, libglsl_headers,
    ir_expression_operation_strings_h, ir_expression_operation_constant_h,
-   float64_glsl_h, cross_platform_settings_piece_all_h, bc1_glsl_h, bc4_glsl_h,
-   etc2_rgba_stitch_glsl_h, astc_glsl_h],
+   float64_glsl_h],
   c_args : [c_msvc_compat_args, no_override_init_args],
   cpp_args : [cpp_msvc_compat_args],
   gnu_symbol_visibility : 'hidden',
   link_with : libglcpp,
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux],
-  dependencies : idep_nir,
+  include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux],
+  dependencies : [idep_nir, idep_mesautil],
   build_by_default : false,
+)
+
+idep_libglsl = declare_dependency(
+  sources: libglsl_headers,
+  link_with: libglsl,
 )
 
 libglsl_standalone = static_library(
@@ -267,9 +229,9 @@ libglsl_standalone = static_library(
   c_args : [c_msvc_compat_args, no_override_init_args],
   cpp_args : [cpp_msvc_compat_args],
   gnu_symbol_visibility : 'hidden',
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux],
+  include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux],
   link_with : [libglsl, libglsl_util, libglcpp_standalone],
-  dependencies : [idep_mesautil, idep_getopt, idep_compiler],
+  dependencies : [idep_mesautil, idep_getopt, idep_compiler, idep_nir],
   build_by_default : false,
 )
 
@@ -280,22 +242,8 @@ glsl_compiler = executable(
   cpp_args : [cpp_msvc_compat_args],
   gnu_symbol_visibility : 'hidden',
   dependencies : [dep_clock, dep_thread, idep_getopt, idep_mesautil],
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux],
+  include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux],
   link_with : [libglsl_standalone],
-  build_by_default : with_tools.contains('glsl'),
-  install : with_tools.contains('glsl'),
-)
-
-glsl_test = executable(
-  'glsl_test',
-  ['test.cpp', 'test_optpass.cpp', 'test_optpass.h',
-   ir_expression_operation_h],
-  c_args : [c_msvc_compat_args, no_override_init_args],
-  cpp_args : [cpp_msvc_compat_args],
-  gnu_symbol_visibility : 'hidden',
-  include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux],
-  dependencies : [dep_clock, dep_thread, idep_getopt, idep_mesautil, idep_compiler],
-  link_with : [libglsl, libglsl_standalone, libglsl_util],
   build_by_default : with_tools.contains('glsl'),
   install : with_tools.contains('glsl'),
 )

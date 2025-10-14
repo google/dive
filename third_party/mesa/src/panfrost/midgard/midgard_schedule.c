@@ -113,8 +113,7 @@ mir_create_dependency_graph(midgard_instruction **instructions, unsigned count,
 
    /* Initialize dependency graph */
    for (unsigned i = 0; i < count; ++i) {
-      instructions[i]->dependents =
-         calloc(BITSET_WORDS(count), sizeof(BITSET_WORD));
+      instructions[i]->dependents = BITSET_CALLOC(count);
 
       instructions[i]->nr_dependencies = 0;
    }
@@ -285,7 +284,7 @@ bytes_for_instruction(midgard_instruction *ains)
 static midgard_instruction **
 flatten_mir(midgard_block *block, unsigned *len)
 {
-   *len = list_length(&block->base.instructions);
+   *len = list_length(&block->instructions);
 
    if (!(*len))
       return NULL;
@@ -982,7 +981,7 @@ mir_schedule_comparison(compiler_context *ctx,
    mov.mask = vector ? 0xF : 0x1;
    memcpy(mov.swizzle[1], swizzle, sizeof(mov.swizzle[1]));
 
-   return mir_insert_instruction_before(ctx, user, mov);
+   return mir_insert_instruction_before(ctx, user, &mov);
 }
 
 /* Most generally, we need instructions writing to r31 in the appropriate
@@ -1172,7 +1171,7 @@ mir_schedule_zs_write(compiler_context *ctx,
       }
    }
 
-   unreachable("Could not schedule Z/S move to any unit");
+   UNREACHABLE("Could not schedule Z/S move to any unit");
 }
 
 static midgard_bundle
@@ -1211,7 +1210,7 @@ mir_schedule_alu(compiler_context *ctx, midgard_instruction **instructions,
       else if (cond->unit == UNIT_SMUL)
          smul = cond;
       else
-         unreachable("Bad condition");
+         UNREACHABLE("Bad condition");
    }
 
    /* If we have a render target reference, schedule a move for it. Since
@@ -1312,7 +1311,7 @@ mir_schedule_alu(compiler_context *ctx, midgard_instruction **instructions,
       else if (cond->unit == UNIT_SADD)
          sadd = cond;
       else
-         unreachable("Bad condition");
+         UNREACHABLE("Bad condition");
    }
 
    /* Stage 2, let's schedule sadd before vmul for writeout */
@@ -1524,7 +1523,7 @@ schedule_block(compiler_context *ctx, midgard_block *block)
    }
 
    mir_foreach_instr_in_block_scheduled_rev(block, ins) {
-      list_add(&ins->link, &block->base.instructions);
+      list_add(&ins->link, &block->instructions);
    }
 
    free(instructions); /* Allocated by flatten_mir() */
@@ -1555,7 +1554,7 @@ mir_lower_ldst(compiler_context *ctx)
          for (unsigned c = 0; c < NIR_MAX_VEC_COMPONENTS; ++c)
             mov.swizzle[1][c] = I->swizzle[s][0];
 
-         mir_insert_instruction_before(ctx, I, mov);
+         mir_insert_instruction_before(ctx, I, &mov);
          I->src[s] = mov.dest;
          I->swizzle[s][0] = 0;
       }
@@ -1569,7 +1568,7 @@ mir_lower_blend_input(compiler_context *ctx)
    mir_foreach_block(ctx, _blk) {
       midgard_block *blk = (midgard_block *)_blk;
 
-      if (list_is_empty(&blk->base.instructions))
+      if (list_is_empty(&blk->instructions))
          continue;
 
       midgard_instruction *I = mir_last_in_block(blk);
@@ -1590,7 +1589,7 @@ mir_lower_blend_input(compiler_context *ctx)
          midgard_instruction mov = v_mov(src, temp);
          mov.mask = 0xF;
          mov.dest_type = nir_type_uint32;
-         mir_insert_instruction_before(ctx, I, mov);
+         mir_insert_instruction_before(ctx, I, &mov);
          I->src[s] = mov.dest;
       }
    }

@@ -10,4 +10,6 @@ multisample-dEQP-GLES3.functional.shaders.builtin_variable.fragcoord_xyz,Fail
 # https://gitlab.khronos.org/Tracker/vk-gl-cts/-/issues/4292
 # https://bugs.chromium.org/p/angleproject/issues/detail?id=7877
 KHR-GLES31.core.texture_border_clamp.Texture2DDC16Linear,Fail
-KHR-GLES31.core.texture_border_clamp.Texture2DDC32FLinear,Fail
+
+# new with ANGLE 2024-10-17
+KHR-GLES31.core.blend_equation_advanced.test_coherency.multiplySequence,Fail

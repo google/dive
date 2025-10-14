@@ -78,9 +78,10 @@ translate_depth_format(enum pipe_format zformat)
 static void
 update_framebuffer(struct i915_context *i915)
 {
-   struct pipe_surface *cbuf_surface = i915->framebuffer.cbufs[0];
-   struct pipe_surface *depth_surface = i915->framebuffer.zsbuf;
+   struct pipe_surface *cbuf_surface = i915->fb_cbufs[0];
+   struct pipe_surface *depth_surface = i915->fb_zsbuf;
    unsigned x, y;
+   unsigned y1;
    int layer;
    uint32_t draw_offset, draw_size;
 
@@ -91,11 +92,19 @@ update_framebuffer(struct i915_context *i915)
 
       i915->current.cbuf_bo = tex->buffer;
       i915->current.cbuf_flags = surf->buf_info;
+      i915->current.cbuf_offset = 0;
 
-      layer = cbuf_surface->u.tex.first_layer;
+      layer = cbuf_surface->first_layer;
 
-      x = tex->image_offset[cbuf_surface->u.tex.level][layer].nblocksx;
-      y = tex->image_offset[cbuf_surface->u.tex.level][layer].nblocksy;
+      x = tex->image_offset[cbuf_surface->level][layer].nblocksx;
+      y = tex->image_offset[cbuf_surface->level][layer].nblocksy;
+      // Use offset if buffer not within max texture size 2048
+      if (y + i915->framebuffer.height >= (1 << (I915_MAX_TEXTURE_2D_LEVELS - 1))) {
+         // offset should be multiple of 8 to support TILE_X 
+         y1 = (y / 8) * 8;
+         y -= y1;
+         i915->current.cbuf_offset = y1 * tex->stride;
+      }
    } else {
       i915->current.cbuf_bo = NULL;
       x = y = 0;
@@ -107,8 +116,8 @@ update_framebuffer(struct i915_context *i915)
    if (depth_surface) {
       struct i915_surface *surf = i915_surface(depth_surface);
       struct i915_texture *tex = i915_texture(depth_surface->texture);
-      unsigned offset = i915_texture_offset(tex, depth_surface->u.tex.level,
-                                            depth_surface->u.tex.first_layer);
+      unsigned offset = i915_texture_offset(tex, depth_surface->level,
+                                            depth_surface->first_layer);
       assert(tex);
       if (offset != 0)
          debug_printf("Depth offset is %d\n", offset);
@@ -145,8 +154,8 @@ struct i915_tracked_state i915_hw_framebuffer = {
 static void
 update_dst_buf_vars(struct i915_context *i915)
 {
-   struct pipe_surface *cbuf_surface = i915->framebuffer.cbufs[0];
-   struct pipe_surface *depth_surface = i915->framebuffer.zsbuf;
+   struct pipe_surface *cbuf_surface = i915->fb_cbufs[0];
+   struct pipe_surface *depth_surface = i915->fb_zsbuf;
    uint32_t dst_buf_vars, cformat, zformat;
    uint32_t early_z = 0;
 

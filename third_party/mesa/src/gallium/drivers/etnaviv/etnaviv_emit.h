@@ -28,6 +28,7 @@
 #define H_ETNA_EMIT
 
 #include "etnaviv_screen.h"
+#include "etnaviv_resource.h"
 #include "etnaviv_util.h"
 #include "hw/cmdstream.xml.h"
 
@@ -48,8 +49,7 @@ etna_emit_load_state(struct etna_cmd_stream *stream, const uint16_t offset,
    v = VIV_FE_LOAD_STATE_HEADER_OP_LOAD_STATE |
        COND(fixp, VIV_FE_LOAD_STATE_HEADER_FIXP) |
        VIV_FE_LOAD_STATE_HEADER_OFFSET(offset) |
-       (VIV_FE_LOAD_STATE_HEADER_COUNT(count) &
-        VIV_FE_LOAD_STATE_HEADER_COUNT__MASK);
+       VIV_FE_LOAD_STATE_HEADER_COUNT(count);
 
    etna_cmd_stream_emit(stream, v);
 }
@@ -73,20 +73,28 @@ etna_set_state_reloc(struct etna_cmd_stream *stream, uint32_t address,
 
 static inline void
 etna_set_state_multi(struct etna_cmd_stream *stream, uint32_t base,
-                     uint32_t num, const uint32_t *values)
+                     int num, const uint32_t *values)
 {
    if (num == 0)
       return;
 
-   etna_cmd_stream_reserve(stream, 1 + num + 1); /* 1 extra for potential alignment */
-   etna_emit_load_state(stream, base >> 2, num, 0);
+   /* A single LOAD_STATE can update at most 1023 states due to the count being
+    * 10 bits wide in HW. Split larger updates into batches. Reserve one header
+    * word per batch, num words of data and one word for potential alignment */
+   etna_cmd_stream_reserve(stream, DIV_ROUND_UP(num, 1023) + num + 1);
 
-   for (uint32_t i = 0; i < num; i++)
-      etna_cmd_stream_emit(stream, values[i]);
+   for (; num > 0; num -= 1023, base += 4092, values += 1023) {
+      int batch_words = MIN2(num, 1023);
 
-   /* add potential padding */
-   if ((num % 2) == 0)
-      etna_cmd_stream_emit(stream, 0);
+      etna_emit_load_state(stream, base >> 2, batch_words, 0);
+
+      for (uint32_t i = 0; i < batch_words; i++)
+         etna_cmd_stream_emit(stream, values[i]);
+
+      /* add potential padding */
+      if ((batch_words % 2) == 0)
+         etna_cmd_stream_emit(stream, 0);
+   }
 }
 
 void
@@ -138,6 +146,25 @@ etna_draw_instanced(struct etna_cmd_stream *stream,
    etna_cmd_stream_emit(stream,
       VIV_FE_DRAW_INSTANCED_START_INDEX(offset));
    etna_cmd_stream_emit(stream, 0);
+}
+
+static inline void
+etna_draw_indirect(struct etna_cmd_stream *stream,
+                   uint32_t primitive_type,
+                   struct pipe_resource *buffer,
+                   unsigned offset,
+                   bool indexed)
+{
+   etna_cmd_stream_reserve(stream, 2);
+   etna_cmd_stream_emit(stream,
+      VIV_FE_DRAW_INDIRECT_HEADER_OP_DRAW_INDIRECT |
+      VIV_FE_DRAW_INDIRECT_HEADER_TYPE(primitive_type) |
+      COND(indexed, VIV_FE_DRAW_INDIRECT_HEADER_INDEXED));
+   etna_cmd_stream_reloc(stream, &(struct etna_reloc) {
+      .bo = etna_resource(buffer)->bo,
+      .flags = ETNA_RELOC_READ,
+      .offset = offset,
+   });
 }
 
 static inline void

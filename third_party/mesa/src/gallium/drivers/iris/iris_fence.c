@@ -155,7 +155,7 @@ clear_stale_syncobjs(struct iris_batch *batch)
                                struct iris_batch_fence, i);
       assert(fence->flags & IRIS_BATCH_FENCE_WAIT);
 
-      if (iris_wait_syncobj(bufmgr, *syncobj, 0))
+      if (iris_wait_syncobj(bufmgr, *syncobj, 0) == false)
          continue;
 
       /* This sync object has already passed, there's no need to continue
@@ -225,7 +225,7 @@ iris_wait_syncobj(struct iris_bufmgr *bufmgr,
       .count_handles = 1,
       .timeout_nsec = timeout_nsec,
    };
-   return intel_ioctl(fd, DRM_IOCTL_SYNCOBJ_WAIT, &args);
+   return intel_ioctl(fd, DRM_IOCTL_SYNCOBJ_WAIT, &args) == 0;
 }
 
 #define CSI "\e["
@@ -288,8 +288,7 @@ iris_fence_flush(struct pipe_context *ctx,
       unsigned b = batch->name;
 
       if (deferred && iris_batch_bytes_used(batch) > 0) {
-         struct iris_fine_fence *fine =
-            iris_fine_fence_new(batch, IRIS_FENCE_BOTTOM_OF_PIPE);
+         struct iris_fine_fence *fine = iris_fine_fence_new(batch);
          iris_fine_fence_reference(screen, &fence->fine[b], fine);
          iris_fine_fence_reference(screen, &fine, NULL);
       } else {
@@ -308,11 +307,27 @@ iris_fence_flush(struct pipe_context *ctx,
    *out_fence = fence;
 }
 
+static int
+syncobj_wait_available(int drm_fd, uint32_t handle)
+{
+   struct drm_syncobj_timeline_wait wait_args = {
+      .handles = (uintptr_t) &handle,
+      .timeout_nsec = INT64_MAX,
+      .count_handles = 1,
+      /* Wait for fence to materialize. */
+      .flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_AVAILABLE,
+   };
+
+   return intel_ioctl(drm_fd, DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT, &wait_args);
+}
+
 static void
 iris_fence_await(struct pipe_context *ctx,
-                 struct pipe_fence_handle *fence)
+                 struct pipe_fence_handle *fence,
+                 uint64_t value)
 {
    struct iris_context *ice = (struct iris_context *)ctx;
+   assert(!value);
 
    /* Unflushed fences from the same context are no-ops. */
    if (ctx && ctx == fence->unflushed_ctx)
@@ -336,6 +351,19 @@ iris_fence_await(struct pipe_context *ctx,
 
       if (iris_fine_fence_signaled(fine))
          continue;
+
+      /* For imported fence, wait for fence to be available to make
+       * sure we can safely submit a batch with it.
+       */
+      if (fine->seqno == UINT32_MAX) {
+         const struct iris_screen *screen =
+            (struct iris_screen *)ice->ctx.screen;
+         struct iris_bufmgr *bufmgr = screen->bufmgr;
+         if (syncobj_wait_available(iris_bufmgr_get_fd(bufmgr),
+                                    fine->syncobj->handle)) {
+            fprintf(stderr, "error waiting for syncobj: %s\n", strerror(errno));
+         }
+      }
 
       iris_foreach_batch(ice, batch) {
          /* We're going to make any future work in this batch wait for our
@@ -566,7 +594,6 @@ iris_fence_create_fd(struct pipe_context *ctx,
    fine->seqno = UINT32_MAX;
    fine->map = &zero;
    fine->syncobj = syncobj;
-   fine->flags = IRIS_FENCE_END;
    pipe_reference_init(&fine->reference, 1);
 
    struct pipe_fence_handle *fence = calloc(1, sizeof(*fence));
@@ -584,9 +611,11 @@ iris_fence_create_fd(struct pipe_context *ctx,
 
 static void
 iris_fence_signal(struct pipe_context *ctx,
-                  struct pipe_fence_handle *fence)
+                  struct pipe_fence_handle *fence,
+                  uint64_t value)
 {
    struct iris_context *ice = (struct iris_context *)ctx;
+   assert(!value);
 
    if (ctx == fence->unflushed_ctx)
       return;

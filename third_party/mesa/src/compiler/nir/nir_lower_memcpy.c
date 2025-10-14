@@ -45,7 +45,7 @@ copy_type_for_byte_size(unsigned size)
    case 16:
       return glsl_vector_type(GLSL_TYPE_UINT, 4);
    default:
-      unreachable("Unsupported size");
+      UNREACHABLE("Unsupported size");
    }
 }
 
@@ -159,11 +159,7 @@ lower_memcpy_impl(nir_function_impl *impl)
             nir_push_loop(&b);
             {
                nir_def *index = nir_load_var(&b, i);
-               nir_push_if(&b, nir_uge(&b, index, size));
-               {
-                  nir_jump(&b, nir_jump_break);
-               }
-               nir_pop_if(&b, NULL);
+               nir_break_if(&b, nir_uge(&b, index, size));
 
                nir_def *value =
                   memcpy_load_deref_elem(&b, copy_src, index);
@@ -176,13 +172,9 @@ lower_memcpy_impl(nir_function_impl *impl)
    }
 
    if (found_non_const_memcpy) {
-      nir_metadata_preserve(impl, nir_metadata_none);
-   } else if (found_const_memcpy) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
+      nir_progress(true, impl, nir_metadata_none);
+   } else
+      nir_progress(found_const_memcpy, impl, nir_metadata_control_flow);
 
    return found_const_memcpy || found_non_const_memcpy;
 }

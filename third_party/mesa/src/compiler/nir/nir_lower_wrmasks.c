@@ -64,6 +64,7 @@ value_src(nir_intrinsic_op intrinsic)
    switch (intrinsic) {
    case nir_intrinsic_store_output:
    case nir_intrinsic_store_per_vertex_output:
+   case nir_intrinsic_store_per_view_output:
    case nir_intrinsic_store_ssbo:
    case nir_intrinsic_store_shared:
    case nir_intrinsic_store_global:
@@ -84,6 +85,7 @@ offset_src(nir_intrinsic_op intrinsic)
    case nir_intrinsic_store_scratch:
       return 1;
    case nir_intrinsic_store_per_vertex_output:
+   case nir_intrinsic_store_per_view_output:
    case nir_intrinsic_store_ssbo:
       return 2;
    default:
@@ -102,7 +104,6 @@ split_wrmask(nir_builder *b, nir_intrinsic_instr *intr)
 
    unsigned num_srcs = info->num_srcs;
    unsigned value_idx = value_src(intr->intrinsic);
-   unsigned offset_idx = offset_src(intr->intrinsic);
 
    unsigned wrmask = nir_intrinsic_write_mask(intr);
    while (wrmask) {
@@ -110,7 +111,6 @@ split_wrmask(nir_builder *b, nir_intrinsic_instr *intr)
       unsigned length = ffs(~(wrmask >> first_component)) - 1;
 
       nir_def *value = intr->src[value_idx].ssa;
-      nir_def *offset = intr->src[offset_idx].ssa;
 
       /* swizzle out the consecutive components that we'll store
        * in this iteration:
@@ -138,35 +138,28 @@ split_wrmask(nir_builder *b, nir_intrinsic_instr *intr)
          nir_intrinsic_set_align(new_intr, align_mul, align_off);
       }
 
-      /* if the instruction has a BASE, fold the offset adjustment
-       * into that instead of adding alu instructions, otherwise add
-       * instructions
-       */
-      unsigned offset_adj = offset_units * first_component;
-      if (nir_intrinsic_has_base(intr)) {
-         nir_intrinsic_set_base(new_intr,
-                                nir_intrinsic_base(intr) + offset_adj);
-      } else {
-         offset = nir_iadd(b, offset,
-                           nir_imm_intN_t(b, offset_adj, offset->bit_size));
-      }
-
       new_intr->num_components = length;
 
-      /* Copy the sources, replacing value/offset, and passing everything
+      /* Copy the sources, replacing value, and passing everything
        * else through to the new instrution:
        */
       for (unsigned i = 0; i < num_srcs; i++) {
          if (i == value_idx) {
             new_intr->src[i] = nir_src_for_ssa(value);
-         } else if (i == offset_idx) {
-            new_intr->src[i] = nir_src_for_ssa(offset);
          } else {
             new_intr->src[i] = intr->src[i];
          }
       }
 
       nir_builder_instr_insert(b, &new_intr->instr);
+
+      /* Adjust the offset. This has to be done after the new instruction has
+       * been fully created and inserted, as nir_add_io_offset needs to be
+       * able to inspect and rewrite sources.
+       */
+      unsigned offset_adj = offset_units * first_component;
+      b->cursor = nir_before_instr(&new_intr->instr);
+      nir_add_io_offset(b, new_intr, offset_adj);
 
       /* Clear the bits in the writemask that we just wrote, then try
        * again to see if more channels are left.
@@ -226,7 +219,6 @@ nir_lower_wrmasks(nir_shader *shader, nir_instr_filter_cb cb, const void *data)
 
    return nir_shader_instructions_pass(shader,
                                        nir_lower_wrmasks_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
+                                       nir_metadata_control_flow,
                                        &state);
 }

@@ -57,8 +57,8 @@ blend_depends_on_dst_color(struct vc4_compile *c)
 static nir_def *
 vc4_nir_get_dst_color(nir_builder *b, int sample)
 {
-        return nir_load_input(b, 1, 32, nir_imm_int(b, 0),
-                              .base = VC4_NIR_TLB_COLOR_READ_INPUT + sample);
+        return nir_load_tlb_color_brcm(b, 1, 32, nir_imm_int(b, 0),
+                                       .base = sample);
 }
 
 static nir_def *
@@ -130,7 +130,7 @@ static nir_def *
 vc4_nir_set_packed_chan(nir_builder *b, nir_def *src0, nir_def *src1,
                         int chan)
 {
-        unsigned chan_mask = 0xff << (chan * 8);
+        unsigned chan_mask = 0xffu << (chan * 8);
         return nir_ior(b,
                        nir_iand_imm(b, src0, ~chan_mask),
                        nir_iand_imm(b, src1, chan_mask));
@@ -443,7 +443,7 @@ vc4_nir_blend_pipeline(struct vc4_compile *c, nir_builder *b, nir_def *src,
         nir_def *dst_vec4 = nir_unpack_unorm_4x8(b, packed_dst_color);
         nir_def *src_color[4], *unpacked_dst_color[4];
         for (unsigned i = 0; i < 4; i++) {
-                src_color[i] = nir_channel(b, src, i);
+                src_color[i] = nir_channel_or_undef(b, src, i);
                 unpacked_dst_color[i] = nir_channel(b, dst_vec4, i);
         }
 
@@ -492,7 +492,7 @@ vc4_nir_blend_pipeline(struct vc4_compile *c, nir_builder *b, nir_def *src,
         for (int i = 0; i < 4; i++) {
                 if (format_swiz[i] < 4 &&
                     !(c->fs_key->blend.colormask & (1 << format_swiz[i]))) {
-                        colormask &= ~(0xff << (i * 8));
+                        colormask &= ~(0xffu << (i * 8));
                 }
         }
 
@@ -512,7 +512,8 @@ vc4_nir_store_sample_mask(struct vc4_compile *c, nir_builder *b,
         sample_mask->data.location = FRAG_RESULT_SAMPLE_MASK;
 
         nir_store_output(b, val, nir_imm_int(b, 0),
-                         .base = sample_mask->data.driver_location);
+                         .base = sample_mask->data.driver_location,
+                         .src_type = nir_type_uint | val->bit_size);
 }
 
 static void
@@ -564,48 +565,33 @@ vc4_nir_lower_blend_instr(struct vc4_compile *c, nir_builder *b,
 }
 
 static bool
-vc4_nir_lower_blend_block(nir_block *block, struct vc4_compile *c)
+vc4_nir_lower_blend_impl(nir_builder *b, nir_intrinsic_instr *intr, void *data)
 {
-        nir_foreach_instr_safe(instr, block) {
-                if (instr->type != nir_instr_type_intrinsic)
-                        continue;
-                nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-                if (intr->intrinsic != nir_intrinsic_store_output)
-                        continue;
+        struct vc4_compile *c = data;
 
-                nir_variable *output_var = NULL;
-                nir_foreach_shader_out_variable(var, c->s) {
-                        if (var->data.driver_location ==
-                            nir_intrinsic_base(intr)) {
-                                output_var = var;
-                                break;
-                        }
-                }
-                assert(output_var);
+        if (intr->intrinsic != nir_intrinsic_store_output)
+                return false;
 
-                if (output_var->data.location != FRAG_RESULT_COLOR &&
-                    output_var->data.location != FRAG_RESULT_DATA0) {
-                        continue;
-                }
+        unsigned loc = nir_intrinsic_io_semantics(intr).location;
 
-                nir_builder b = nir_builder_at(nir_before_instr(&intr->instr));
-                vc4_nir_lower_blend_instr(c, &b, intr);
+        if (loc != FRAG_RESULT_COLOR &&
+            loc != FRAG_RESULT_DATA0) {
+                return false;
         }
+
+        b->cursor = nir_before_instr(&intr->instr);
+
+        vc4_nir_lower_blend_instr(c, b, intr);
+
         return true;
 }
 
-void
+bool
 vc4_nir_lower_blend(nir_shader *s, struct vc4_compile *c)
 {
-        nir_foreach_function_impl(impl, s) {
-                nir_foreach_block(block, impl) {
-                        vc4_nir_lower_blend_block(block, c);
-                }
-
-                nir_metadata_preserve(impl,
-                                      nir_metadata_block_index |
-                                      nir_metadata_dominance);
-        }
+        bool progress =
+                nir_shader_intrinsics_pass(s, vc4_nir_lower_blend_impl,
+                                           nir_metadata_control_flow, c);
 
         /* If we didn't do alpha-to-coverage on the output color, we still
          * need to pass glSampleMask() through.
@@ -615,5 +601,8 @@ vc4_nir_lower_blend(nir_shader *s, struct vc4_compile *c)
                 nir_builder b = nir_builder_at(nir_after_impl(impl));
 
                 vc4_nir_store_sample_mask(c, &b, nir_load_sample_mask_in(&b));
+                progress = true;
         }
+
+        return progress;
 }

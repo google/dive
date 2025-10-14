@@ -21,20 +21,20 @@
  * SOFTWARE.
  */
 
+#include "util/ralloc.h"
 #include "util/u_memory.h"
-#include "util/u_prim.h"
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_xfb_info.h"
 
-static unsigned int
+static enum mesa_prim
 gs_in_prim_for_topology(enum mesa_prim prim)
 {
    switch (prim) {
    case MESA_PRIM_QUADS:
       return MESA_PRIM_LINES_ADJACENCY;
    default:
-      return prim;
+      return u_decomposed_prim(prim);
    }
 }
 
@@ -89,7 +89,7 @@ vertices_for_prim(enum mesa_prim prim)
       return 4;
    case MESA_PRIM_PATCHES:
    default:
-      unreachable("unsupported primitive for gs input");
+      UNREACHABLE("unsupported primitive for gs input");
    }
 }
 
@@ -121,21 +121,25 @@ nir_shader *
 nir_create_passthrough_gs(const nir_shader_compiler_options *options,
                           const nir_shader *prev_stage,
                           enum mesa_prim primitive_type,
+                          enum mesa_prim output_primitive_type,
                           bool emulate_edgeflags,
-                          bool force_line_strip_out)
+                          bool force_line_strip_out,
+                          bool passthrough_prim_id)
 {
    unsigned int vertices_out = vertices_for_prim(primitive_type);
    emulate_edgeflags = emulate_edgeflags && (prev_stage->info.outputs_written & VARYING_BIT_EDGE);
-   bool needs_closing = (force_line_strip_out || emulate_edgeflags) && vertices_out >= 3;
-   enum mesa_prim original_our_prim = gs_out_prim_for_topology(primitive_type);
+   enum mesa_prim original_our_prim = gs_out_prim_for_topology(output_primitive_type);
    nir_builder b = nir_builder_init_simple_shader(MESA_SHADER_GEOMETRY,
                                                   options,
                                                   "gs passthrough");
 
+   bool output_lines = force_line_strip_out || original_our_prim == MESA_PRIM_LINE_STRIP;
+   bool needs_closing = (force_line_strip_out || (emulate_edgeflags && output_lines)) && vertices_out >= 3;
+
    nir_shader *nir = b.shader;
    nir->info.gs.input_primitive = gs_in_prim_for_topology(primitive_type);
-   nir->info.gs.output_primitive = (force_line_strip_out || emulate_edgeflags) ? MESA_PRIM_LINE_STRIP : original_our_prim;
-   nir->info.gs.vertices_in = u_vertices_per_prim(primitive_type);
+   nir->info.gs.output_primitive = force_line_strip_out ? MESA_PRIM_LINE_STRIP : original_our_prim;
+   nir->info.gs.vertices_in = mesa_vertices_per_prim(primitive_type);
    nir->info.gs.vertices_out = needs_closing ? vertices_out + 1 : vertices_out;
    nir->info.gs.invocations = 1;
    nir->info.gs.active_stream_mask = 1;
@@ -143,11 +147,11 @@ nir_create_passthrough_gs(const nir_shader_compiler_options *options,
    nir->info.has_transform_feedback_varyings = prev_stage->info.has_transform_feedback_varyings;
    memcpy(nir->info.xfb_stride, prev_stage->info.xfb_stride, sizeof(prev_stage->info.xfb_stride));
    if (prev_stage->xfb_info) {
-      nir->xfb_info = mem_dup(prev_stage->xfb_info, nir_xfb_info_size(prev_stage->xfb_info->output_count));
+      size_t size = nir_xfb_info_size(prev_stage->xfb_info->output_count);
+      nir->xfb_info = ralloc_memdup(nir, prev_stage->xfb_info, size);
    }
 
-   bool handle_flat = nir->info.gs.output_primitive == MESA_PRIM_LINE_STRIP &&
-                      nir->info.gs.output_primitive != original_our_prim;
+   bool handle_flat = output_lines && nir->info.gs.output_primitive != gs_out_prim_for_topology(primitive_type);
    nir_variable *in_vars[VARYING_SLOT_MAX * 4];
    nir_variable *out_vars[VARYING_SLOT_MAX * 4];
    unsigned num_inputs = 0, num_outputs = 0;
@@ -155,6 +159,8 @@ nir_create_passthrough_gs(const nir_shader_compiler_options *options,
    /* Create input/output variables. */
    nir_foreach_shader_out_variable(var, prev_stage) {
       assert(!var->data.patch);
+      assert(var->data.location != VARYING_SLOT_PRIMITIVE_ID &&
+             "not a VS output");
 
       /* input vars can't be created for those */
       if (var->data.location == VARYING_SLOT_LAYER ||
@@ -168,8 +174,7 @@ nir_create_passthrough_gs(const nir_shader_compiler_options *options,
          snprintf(name, sizeof(name), "in_%d", var->data.driver_location);
 
       nir_variable *in = nir_variable_clone(var, nir);
-      ralloc_free(in->name);
-      in->name = ralloc_strdup(in, name);
+      nir_variable_set_name(nir, in, name);
       in->type = glsl_array_type(var->type, 6, false);
       in->data.mode = nir_var_shader_in;
       nir_shader_add_variable(nir, in);
@@ -189,12 +194,29 @@ nir_create_passthrough_gs(const nir_shader_compiler_options *options,
          snprintf(name, sizeof(name), "out_%d", var->data.driver_location);
 
       nir_variable *out = nir_variable_clone(var, nir);
-      ralloc_free(out->name);
-      out->name = ralloc_strdup(out, name);
+      nir_variable_set_name(nir, out, name);
       out->data.mode = nir_var_shader_out;
       nir_shader_add_variable(nir, out);
 
       out_vars[num_outputs++] = out;
+   }
+
+   if (passthrough_prim_id) {
+      /* When a geometry shader is not used, a fragment shader may read primitive
+       * ID and get an implicit value without the vertex shader writing an ID. This
+       * case needs to work even when we inject a GS internally.
+       *
+       * However, if a geometry shader precedes a fragment shader that reads
+       * primitive ID, Vulkan requires that the geometry shader write primitive ID.
+       * To handle this case correctly, we must write primitive ID, copying the
+       * fixed-function gl_PrimitiveIDIn input which matches what the fragment
+       * shader will expect.
+       */
+      in_vars[num_inputs++] = nir_create_variable_with_location(
+         nir, nir_var_shader_in, VARYING_SLOT_PRIMITIVE_ID, glsl_int_type());
+
+      out_vars[num_outputs++] = nir_create_variable_with_location(
+         nir, nir_var_shader_out, VARYING_SLOT_PRIMITIVE_ID, glsl_int_type());
    }
 
    unsigned int start_vert = 0;
@@ -225,7 +247,7 @@ nir_create_passthrough_gs(const nir_shader_compiler_options *options,
    for (unsigned i = start_vert; i < end_vert || needs_closing; i += vert_step) {
       int idx = i < end_vert ? i : start_vert;
       /* Copy inputs to outputs. */
-      for (unsigned j = 0, oj = 0, of = 0; j < num_inputs; ++j) {
+      for (unsigned j = 0, oj = 0; j < num_inputs; ++j) {
          if (in_vars[j]->data.location == VARYING_SLOT_EDGE) {
             continue;
          }
@@ -234,20 +256,35 @@ nir_create_passthrough_gs(const nir_shader_compiler_options *options,
          if (in_vars[j]->data.location == VARYING_SLOT_POS || !handle_flat)
             index = nir_imm_int(&b, idx);
          else {
-            unsigned mask = 1u << (of++);
+            uint64_t mask = BITFIELD64_BIT(in_vars[j]->data.location);
             index = nir_bcsel(&b, nir_ieq_imm(&b, nir_iand_imm(&b, flat_interp_mask_def, mask), 0), nir_imm_int(&b, idx), pv_vert_index);
          }
-         nir_deref_instr *value = nir_build_deref_array(&b, nir_build_deref_var(&b, in_vars[j]), index);
+
+         /* gl_PrimitiveIDIn is not arrayed, all other inputs are */
+         nir_deref_instr *value = nir_build_deref_var(&b, in_vars[j]);
+         if (in_vars[j]->data.location != VARYING_SLOT_PRIMITIVE_ID)
+            value = nir_build_deref_array(&b, value, index);
+
          copy_vars(&b, nir_build_deref_var(&b, out_vars[oj]), value);
          ++oj;
       }
-      nir_emit_vertex(&b, 0);
-      if (emulate_edgeflags) {
+
+      if (emulate_edgeflags && !output_lines) {
          nir_def *edge_value = nir_channel(&b, nir_load_array_var_imm(&b, edge_var, idx), 0);
-         nir_if *edge_if = nir_push_if(&b, nir_fneu_imm(&b, edge_value, 1.0));
-         nir_end_primitive(&b, 0);
-         nir_pop_if(&b, edge_if);
+         nir_push_if(&b, nir_feq_imm(&b, edge_value, 1.0));
       }
+
+      nir_emit_vertex(&b, 0);
+
+      if (emulate_edgeflags) {
+         if (nir->info.gs.output_primitive == MESA_PRIM_LINE_STRIP) {
+            nir_def *edge_value = nir_channel(&b, nir_load_array_var_imm(&b, edge_var, idx), 0);
+            nir_push_if(&b, nir_fneu_imm(&b, edge_value, 1.0));
+            nir_end_primitive(&b, 0);
+         }
+         nir_pop_if(&b, NULL);
+      }
+
       if (i >= end_vert)
          break;
    }

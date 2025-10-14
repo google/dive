@@ -11,7 +11,7 @@
 #include "ac_shader_args.h"
 #include "ac_shader_util.h"
 #include "amd_family.h"
-#include "compiler/nir/nir.h"
+#include "nir_opcodes.h"
 #include <llvm-c/Core.h>
 
 #include <stdbool.h>
@@ -30,10 +30,14 @@ enum
    AC_ADDR_SPACE_CONST_32BIT = 6, /* same as CONST, but the pointer type has 32 bits */
 };
 
-#define AC_WAIT_LGKM   (1 << 0) /* LDS, GDS, constant, message */
-#define AC_WAIT_VLOAD  (1 << 1) /* VMEM load/sample instructions */
-#define AC_WAIT_VSTORE (1 << 2) /* VMEM store instructions */
-#define AC_WAIT_EXP    (1 << 3) /* EXP instructions */
+/* Fine-grained wait flags for GFX12, older chips merge them. */
+#define AC_WAIT_DS     (1 << 0) /* s_wait_dscnt (GFX12) or lgkmcnt (GFX6-11): LDS (all gens), GDS (GFX6-11) */
+#define AC_WAIT_KM     (1 << 1) /* s_wait_kmcnt (GFX12) or lgkmcnt (GFX6-11): SMEM, message */
+#define AC_WAIT_EXP    (1 << 2) /* s_wait_expcnt: Exports */
+#define AC_WAIT_LOAD   (1 << 3) /* s_wait_loadcnt (GFX12) or vmcnt (GFX6-11): VMEM loads */
+#define AC_WAIT_STORE  (1 << 4) /* s_wait_storecnt (GFX12) or vscnt (GFX10-11) or vmcnt (GFX6-9): VMEM stores */
+#define AC_WAIT_SAMPLE (1 << 5) /* s_wait_samplecnt (GFX12) or vmcnt (GFX6-11): VMEM sample/gather */
+#define AC_WAIT_BVH    (1 << 6) /* s_wait_bvhcnt (GFX12) or vmcnt (GFX6-11): BVH */
 
 struct ac_llvm_flow;
 struct ac_llvm_compiler;
@@ -75,12 +79,14 @@ struct ac_llvm_context {
    LLVMTypeRef i64;
    LLVMTypeRef i128;
    LLVMTypeRef intptr;
+   LLVMTypeRef bf16;
    LLVMTypeRef f16;
    LLVMTypeRef f32;
    LLVMTypeRef f64;
    LLVMTypeRef v4i8;
    LLVMTypeRef v2i16;
    LLVMTypeRef v4i16;
+   LLVMTypeRef v2bf16;
    LLVMTypeRef v2f16;
    LLVMTypeRef v4f16;
    LLVMTypeRef v2i32;
@@ -91,7 +97,6 @@ struct ac_llvm_context {
    LLVMTypeRef v4f32;
    LLVMTypeRef v8i32;
    LLVMTypeRef iN_wavemask;
-   LLVMTypeRef iN_ballotmask;
 
    LLVMValueRef i8_0;
    LLVMValueRef i8_1;
@@ -121,20 +126,19 @@ struct ac_llvm_context {
    unsigned range_md_kind;
    unsigned invariant_load_md_kind;
    unsigned uniform_md_kind;
+   unsigned fpmath_md_kind;
    LLVMValueRef empty_md;
+   LLVMValueRef three_md;
 
    const struct radeon_info *info;
    enum amd_gfx_level gfx_level;
 
    unsigned wave_size;
-   unsigned ballot_mask_bits;
 
    unsigned float_mode;
 
    bool exports_color_null;
    bool exports_mrtz;
-
-   struct ac_llvm_pointer lds;
 
    LLVMValueRef ring_offsets;
    int ring_offsets_index;
@@ -142,8 +146,7 @@ struct ac_llvm_context {
 
 void ac_llvm_context_init(struct ac_llvm_context *ctx, struct ac_llvm_compiler *compiler,
                           const struct radeon_info *info, enum ac_float_mode float_mode,
-                          unsigned wave_size, unsigned ballot_mask_bits, bool exports_color_null,
-                          bool exports_mrtz);
+                          unsigned wave_size, bool exports_color_null, bool exports_mrtz);
 
 void ac_llvm_context_dispose(struct ac_llvm_context *ctx);
 
@@ -170,19 +173,16 @@ void ac_build_type_name_for_intr(LLVMTypeRef type, char *buf, unsigned bufsize);
 LLVMValueRef ac_build_phi(struct ac_llvm_context *ctx, LLVMTypeRef type, unsigned count_incoming,
                           LLVMValueRef *values, LLVMBasicBlockRef *blocks);
 
-void ac_build_s_barrier(struct ac_llvm_context *ctx, gl_shader_stage stage);
+void ac_build_s_barrier(struct ac_llvm_context *ctx, mesa_shader_stage stage);
 void ac_build_optimization_barrier(struct ac_llvm_context *ctx, LLVMValueRef *pgpr, bool sgpr);
 
 LLVMValueRef ac_build_shader_clock(struct ac_llvm_context *ctx, mesa_scope scope);
 
 LLVMValueRef ac_build_ballot(struct ac_llvm_context *ctx, LLVMValueRef value);
-LLVMValueRef ac_get_i1_sgpr_mask(struct ac_llvm_context *ctx, LLVMValueRef value);
 
 LLVMValueRef ac_build_vote_all(struct ac_llvm_context *ctx, LLVMValueRef value);
 
 LLVMValueRef ac_build_vote_any(struct ac_llvm_context *ctx, LLVMValueRef value);
-
-LLVMValueRef ac_build_vote_eq(struct ac_llvm_context *ctx, LLVMValueRef value);
 
 LLVMValueRef ac_build_varying_gather_values(struct ac_llvm_context *ctx, LLVMValueRef *values,
                                             unsigned value_count, unsigned component);
@@ -203,18 +203,7 @@ LLVMValueRef ac_build_expand(struct ac_llvm_context *ctx, LLVMValueRef value,
 
 LLVMValueRef ac_build_expand_to_vec4(struct ac_llvm_context *ctx, LLVMValueRef value,
                                      unsigned num_channels);
-LLVMValueRef ac_build_round(struct ac_llvm_context *ctx, LLVMValueRef value);
-
 LLVMValueRef ac_build_fdiv(struct ac_llvm_context *ctx, LLVMValueRef num, LLVMValueRef den);
-
-LLVMValueRef ac_build_fast_udiv(struct ac_llvm_context *ctx, LLVMValueRef num,
-                                LLVMValueRef multiplier, LLVMValueRef pre_shift,
-                                LLVMValueRef post_shift, LLVMValueRef increment);
-LLVMValueRef ac_build_fast_udiv_nuw(struct ac_llvm_context *ctx, LLVMValueRef num,
-                                    LLVMValueRef multiplier, LLVMValueRef pre_shift,
-                                    LLVMValueRef post_shift, LLVMValueRef increment);
-LLVMValueRef ac_build_fast_udiv_u31_d_not_one(struct ac_llvm_context *ctx, LLVMValueRef num,
-                                              LLVMValueRef multiplier, LLVMValueRef post_shift);
 
 LLVMValueRef ac_build_fs_interp(struct ac_llvm_context *ctx, LLVMValueRef llvm_chan,
                                 LLVMValueRef attr_number, LLVMValueRef params, LLVMValueRef i,
@@ -228,33 +217,22 @@ LLVMValueRef ac_build_fs_interp_mov(struct ac_llvm_context *ctx, unsigned parame
                                     LLVMValueRef llvm_chan, LLVMValueRef attr_number,
                                     LLVMValueRef params);
 
-LLVMValueRef ac_build_gep_ptr(struct ac_llvm_context *ctx, LLVMTypeRef type, LLVMValueRef base_ptr,
-                              LLVMValueRef index);
-
-LLVMValueRef ac_build_pointer_add(struct ac_llvm_context *ctx, LLVMTypeRef type, LLVMValueRef ptr,
-                                  LLVMValueRef index);
-
-LLVMTypeRef ac_build_gep0_type(LLVMTypeRef pointee_type, LLVMValueRef index);
 LLVMValueRef ac_build_gep0(struct ac_llvm_context *ctx, struct ac_llvm_pointer ptr, LLVMValueRef index);
 
 void ac_build_indexed_store(struct ac_llvm_context *ctx, struct ac_llvm_pointer ptr, LLVMValueRef index,
                             LLVMValueRef value);
 
-LLVMValueRef ac_build_load(struct ac_llvm_context *ctx, struct ac_llvm_pointer ptr, LLVMValueRef index);
 LLVMValueRef ac_build_load_invariant(struct ac_llvm_context *ctx, struct ac_llvm_pointer ptr,
                                      LLVMValueRef index);
 LLVMValueRef ac_build_load_to_sgpr(struct ac_llvm_context *ctx, struct ac_llvm_pointer ptr,
                                    LLVMValueRef index);
 
-LLVMValueRef ac_build_load_to_sgpr_uint_wraparound(struct ac_llvm_context *ctx, struct ac_llvm_pointer ptr,
-                                                   LLVMValueRef index);
-
 void ac_build_buffer_store_dword(struct ac_llvm_context *ctx, LLVMValueRef rsrc, LLVMValueRef vdata,
                                  LLVMValueRef vindex, LLVMValueRef voffset, LLVMValueRef soffset,
-                                 enum gl_access_qualifier access);
+                                 enum gl_access_qualifier access, bool may_subdword);
 
 void ac_build_buffer_store_format(struct ac_llvm_context *ctx, LLVMValueRef rsrc, LLVMValueRef data,
-                                  LLVMValueRef vindex, LLVMValueRef voffset, enum gl_access_qualifier access);
+                                  LLVMValueRef vindex, LLVMValueRef voffset, enum gl_access_qualifier access, bool may_subdword);
 
 LLVMValueRef ac_build_buffer_load(struct ac_llvm_context *ctx, LLVMValueRef rsrc, int num_channels,
                                   LLVMValueRef vindex, LLVMValueRef voffset, LLVMValueRef soffset,
@@ -389,7 +367,6 @@ struct ac_image_args {
 };
 
 LLVMValueRef ac_build_image_opcode(struct ac_llvm_context *ctx, struct ac_image_args *a);
-LLVMValueRef ac_build_image_get_sample_count(struct ac_llvm_context *ctx, LLVMValueRef rsrc);
 LLVMValueRef ac_build_cvt_pkrtz_f16(struct ac_llvm_context *ctx, LLVMValueRef args[2]);
 LLVMValueRef ac_build_cvt_pknorm_i16(struct ac_llvm_context *ctx, LLVMValueRef args[2]);
 LLVMValueRef ac_build_cvt_pknorm_u16(struct ac_llvm_context *ctx, LLVMValueRef args[2]);
@@ -426,14 +403,7 @@ LLVMValueRef ac_build_sudot_4x8(struct ac_llvm_context *ctx, LLVMValueRef s0, LL
 
 void ac_init_exec_full_mask(struct ac_llvm_context *ctx);
 
-void ac_declare_lds_as_pointer(struct ac_llvm_context *ac);
-LLVMValueRef ac_lds_load(struct ac_llvm_context *ctx, LLVMValueRef dw_addr);
-void ac_lds_store(struct ac_llvm_context *ctx, LLVMValueRef dw_addr, LLVMValueRef value);
-
 LLVMValueRef ac_find_lsb(struct ac_llvm_context *ctx, LLVMTypeRef dst_type, LLVMValueRef src0);
-
-LLVMTypeRef ac_array_in_const_addr_space(LLVMTypeRef elem_type);
-LLVMTypeRef ac_array_in_const32_addr_space(LLVMTypeRef elem_type);
 
 void ac_build_bgnloop(struct ac_llvm_context *ctx, int lable_id);
 void ac_build_break(struct ac_llvm_context *ctx);
@@ -443,11 +413,7 @@ void ac_build_endif(struct ac_llvm_context *ctx, int lable_id);
 void ac_build_endloop(struct ac_llvm_context *ctx, int lable_id);
 void ac_build_ifcc(struct ac_llvm_context *ctx, LLVMValueRef cond, int label_id);
 
-LLVMValueRef ac_build_alloca(struct ac_llvm_context *ac, LLVMTypeRef type, const char *name);
 LLVMValueRef ac_build_alloca_undef(struct ac_llvm_context *ac, LLVMTypeRef type, const char *name);
-LLVMValueRef ac_build_alloca_init(struct ac_llvm_context *ac, LLVMValueRef val, const char *name);
-
-LLVMValueRef ac_cast_ptr(struct ac_llvm_context *ctx, LLVMValueRef ptr, LLVMTypeRef type);
 
 LLVMValueRef ac_trim_vector(struct ac_llvm_context *ctx, LLVMValueRef value, unsigned count);
 
@@ -464,8 +430,10 @@ LLVMValueRef ac_build_readlane(struct ac_llvm_context *ctx, LLVMValueRef src, LL
 LLVMValueRef ac_build_writelane(struct ac_llvm_context *ctx, LLVMValueRef src, LLVMValueRef value,
                                 LLVMValueRef lane);
 
-LLVMValueRef ac_build_mbcnt_add(struct ac_llvm_context *ctx, LLVMValueRef mask, LLVMValueRef add_src);
+LLVMValueRef ac_build_mbcnt_add(struct ac_llvm_context *ctx, LLVMValueRef mask, LLVMValueRef add);
 LLVMValueRef ac_build_mbcnt(struct ac_llvm_context *ctx, LLVMValueRef mask);
+
+LLVMValueRef ac_build_wqm(struct ac_llvm_context *ctx, LLVMValueRef src);
 
 LLVMValueRef ac_build_inclusive_scan(struct ac_llvm_context *ctx, LLVMValueRef src, nir_op op);
 
@@ -475,7 +443,8 @@ LLVMValueRef ac_build_reduce(struct ac_llvm_context *ctx, LLVMValueRef src, nir_
                              unsigned cluster_size);
 
 LLVMValueRef ac_build_quad_swizzle(struct ac_llvm_context *ctx, LLVMValueRef src, unsigned lane0,
-                                   unsigned lane1, unsigned lane2, unsigned lane3);
+                                   unsigned lane1, unsigned lane2, unsigned lane3,
+                                   bool use_wqm);
 
 LLVMValueRef ac_build_shuffle(struct ac_llvm_context *ctx, LLVMValueRef src, LLVMValueRef index);
 
@@ -485,8 +454,6 @@ LLVMValueRef ac_build_frexp_mant(struct ac_llvm_context *ctx, LLVMValueRef src0,
 
 LLVMValueRef ac_build_canonicalize(struct ac_llvm_context *ctx, LLVMValueRef src0,
                                    unsigned bitsize);
-
-LLVMValueRef ac_build_ddxy_interp(struct ac_llvm_context *ctx, LLVMValueRef interp_ij);
 
 LLVMValueRef ac_build_load_helper_invocation(struct ac_llvm_context *ctx);
 
@@ -511,25 +478,7 @@ struct ac_ngg_prim {
    LLVMValueRef passthrough;
 };
 
-LLVMTypeRef ac_arg_type_to_pointee_type(struct ac_llvm_context *ctx, enum ac_arg_type type);
-
-static inline LLVMValueRef ac_get_arg(struct ac_llvm_context *ctx, struct ac_arg arg)
-{
-   assert(arg.used);
-   if (arg.arg_index == ctx->ring_offsets_index)
-      return ctx->ring_offsets;
-   int offset = arg.arg_index > ctx->ring_offsets_index ? -1 : 0;
-   return LLVMGetParam(ctx->main_function.value, arg.arg_index + offset);
-}
-
-static inline struct ac_llvm_pointer
-ac_get_ptr_arg(struct ac_llvm_context *ctx, const struct ac_shader_args *args, struct ac_arg arg)
-{
-   struct ac_llvm_pointer ptr;
-   ptr.pointee_type = ac_arg_type_to_pointee_type(ctx, args->args[arg.arg_index].type);
-   ptr.value = ac_get_arg(ctx, arg);
-   return ptr;
-}
+LLVMValueRef ac_get_arg(struct ac_llvm_context *ctx, struct ac_arg arg);
 
 enum ac_llvm_calling_convention
 {
@@ -543,7 +492,6 @@ enum ac_llvm_calling_convention
 struct ac_llvm_pointer ac_build_main(const struct ac_shader_args *args, struct ac_llvm_context *ctx,
                                      enum ac_llvm_calling_convention convention, const char *name,
                                      LLVMTypeRef ret_type, LLVMModuleRef module);
-void ac_build_s_endpgm(struct ac_llvm_context *ctx);
 
 LLVMValueRef ac_build_is_inf_or_nan(struct ac_llvm_context *ctx, LLVMValueRef a);
 

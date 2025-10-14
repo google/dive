@@ -54,7 +54,7 @@ vc4_utile_stride(int cpp)
         case 8:
                 return 16;
         default:
-                unreachable("bad cpp");
+                UNREACHABLE("bad cpp");
         }
 }
 
@@ -72,22 +72,22 @@ swizzle_lt_x(int x, int cpp)
         switch (cpp) {
         case 1:
                 /* 8x8 inside of 4x4 */
-                return ((x & 0x7) << (0 - 0) |
-                        (x & ~0x7) << (6 - 3));
+                return (((uint32_t)x & 0x7) << (0 - 0) |
+                        ((uint32_t)x & ~0x7) << (6 - 3));
         case 2:
                 /* 8x4 inside of 4x4 */
-                return ((x & 0x7) << (1 - 0) |
-                        (x & ~0x7) << (6 - 3));
+                return (((uint32_t)x & 0x7) << (1 - 0) |
+                        ((uint32_t)x & ~0x7) << (6 - 3));
         case 4:
                 /* 4x4 inside of 4x4 */
-                return ((x & 0x3) << (2 - 0) |
-                        (x & ~0x3) << (6 - 2));
+                return (((uint32_t)x & 0x3) << (2 - 0) |
+                        ((uint32_t)x & ~0x3) << (6 - 2));
         case 8:
                 /* 2x4 inside of 4x4 */
-                return ((x & 0x1) << (3 - 0) |
-                        (x & ~0x1) << (6 - 1));
+                return (((uint32_t)x & 0x1) << (3 - 0) |
+                        ((uint32_t)x & ~0x1) << (6 - 1));
         default:
-                unreachable("bad cpp");
+                UNREACHABLE("bad cpp");
         }
 }
 
@@ -115,7 +115,7 @@ swizzle_lt_y(int y, int cpp)
                 /* 2x4 inside of 4x4 */
                 return ((y & 0x3) << 4);
         default:
-                unreachable("bad cpp");
+                UNREACHABLE("bad cpp");
         }
 }
 
@@ -265,7 +265,7 @@ vc4_lt_image_cpp_helper(void *gpu, uint32_t gpu_stride,
                                     to_cpu);
                 break;
         default:
-                unreachable("bad cpp");
+                UNREACHABLE("bad cpp");
         }
 }
 

@@ -32,6 +32,39 @@
 #define TOKEN(t) (ir3_yylval.tok = t)
 extern YYSTYPE ir3_yylval;
 extern void *ir3_parser_dead_ctx;
+extern char *current_line;
+
+const char *input_buffer = NULL;
+size_t input_buffer_len = 256;
+
+/**
+ * Return up to max_size chars from the current input_buffer.  Reads a new
+ * line into the input_buffer if it is currently empty.
+ */
+static size_t yy_input(char *buf, size_t max_size)
+{
+  if (!input_buffer)
+    current_line = malloc(input_buffer_len);
+
+  if (!input_buffer || !strlen(input_buffer)) {
+    if (getline(&current_line, &input_buffer_len, ir3_yyin) < 0) {
+      if (ferror(ir3_yyin))
+        fprintf(stderr, "Could not read input:\n");
+    } else {
+      input_buffer = current_line;
+    }
+  }
+
+  size_t to_copy = MIN2(max_size, strlen(input_buffer));
+  memcpy(buf, input_buffer, to_copy);
+  input_buffer += to_copy;
+
+  return to_copy;
+}
+
+#define YY_INPUT(buf, result, max_size) \
+  result = yy_input(buf, max_size);
+
 
 void ir3_yyset_input(FILE *f);
 
@@ -39,6 +72,8 @@ void ir3_yyset_input(FILE *f)
 {
 	YY_FLUSH_BUFFER;
 	ir3_yyin = f;
+	if (input_buffer)
+		input_buffer = "";
 }
 
 static int parse_wrmask(const char *src)
@@ -60,7 +95,13 @@ static int parse_reg(const char *str)
 		str++;
 		num++;
 	}
+	if (str[0] == 'u') {
+		str++;
+	}
 	str++;
+	if (str[0] == 't') {
+		str++;
+	}
 	num += strtol(str, (char **)&str, 10) << 3;
 	switch (str[1]) {
 	case 'x': num += 0; break;
@@ -100,6 +141,7 @@ static int parse_reg(const char *str)
 "@localsize"                      return TOKEN(T_A_LOCALSIZE);
 "@const"                          return TOKEN(T_A_CONST);
 "@buf"                            return TOKEN(T_A_BUF);
+"@ubo"                            return TOKEN(T_A_UBO);
 "@invocationid"                   return TOKEN(T_A_INVOCATIONID);
 "@wgid"                           return TOKEN(T_A_WGID);
 "@numwg"                          return TOKEN(T_A_NUMWG);
@@ -108,7 +150,12 @@ static int parse_reg(const char *str)
 "@out"                            return TOKEN(T_A_OUT);
 "@tex"                            return TOKEN(T_A_TEX);
 "@pvtmem"                         return TOKEN(T_A_PVTMEM);
+"@localmem"                       return TOKEN(T_A_LOCALMEM);
 "@earlypreamble"                  return TOKEN(T_A_EARLYPREAMBLE);
+"@fullnopstart"                   return TOKEN(T_A_FULLNOPSTART);
+"@fullnopend"                     return TOKEN(T_A_FULLNOPEND);
+"@fullsyncstart"                  return TOKEN(T_A_FULLSYNCSTART);
+"@fullsyncend"                    return TOKEN(T_A_FULLSYNCEND);
 "(sy)"                            return TOKEN(T_SY);
 "(ss)"                            return TOKEN(T_SS);
 "(absneg)"                        return TOKEN(T_ABSNEG);
@@ -124,15 +171,19 @@ static int parse_reg(const char *str)
 "(jp)"                            return TOKEN(T_JP);
 "(eq)"                            return TOKEN(T_EQ_FLAG);
 "(sat)"                           return TOKEN(T_SAT);
+"(eolm)"                          return TOKEN(T_EOLM);
+"(eogm)"                          return TOKEN(T_EOGM);
 "(rpt"[0-7]")"                    ir3_yylval.num = strtol(yytext+4, NULL, 10); return T_RPT;
 "(nop"[0-7]")"                    ir3_yylval.num = strtol(yytext+4, NULL, 10); return T_NOP;
 "("[x]?[y]?[z]?[w]?")"            ir3_yylval.num = parse_wrmask(yytext); return T_WRMASK;
 
 [h]?"r"[0-9]+"."[xyzw]            ir3_yylval.num = parse_reg(yytext); return T_REGISTER;
 [h]?"c"[0-9]+"."[xyzw]            ir3_yylval.num = parse_reg(yytext); return T_CONSTANT;
+"rt"[0-7]"."[xyzw]                ir3_yylval.num = parse_reg(yytext); return T_RT;
 "a0.x"                            return T_A0;
 "a1.x"                            return T_A1;
 "p0."[xyzw]                       ir3_yylval.num = parse_reg(yytext); return T_P0;
+"up0."[xyzw]                      ir3_yylval.num = parse_reg(yytext); return T_UP0;
 "w"[0-9]+                         ir3_yylval.num = strtol(yytext+1, NULL, 10); return T_W;
 "s#"[0-9]+                        ir3_yylval.num = strtol(yytext+2, NULL, 10); return T_SAMP;
 "t#"[0-9]+                        ir3_yylval.num = strtol(yytext+2, NULL, 10); return T_TEX;
@@ -179,9 +230,9 @@ static int parse_reg(const char *str)
 "swz"                             return TOKEN(T_OP_SWZ);
 "gat"                             return TOKEN(T_OP_GAT);
 "sct"                             return TOKEN(T_OP_SCT);
+"movs"                            return TOKEN(T_OP_MOVS);
 
-("f16"|"f32"|"u16"|"u32"|"s16"|"s32"|"u8"|"s8"){2} ir3_yylval.str = yytext; return T_CAT1_TYPE_TYPE;
-
+("f16"|"f32"|"u16"|"u32"|"s16"|"s32"|"u8"|"u8_32"|"u64"){2} ir3_yylval.str = yytext; return T_CAT1_TYPE_TYPE;
                                   /* category 2: */
 "add.f"                           return TOKEN(T_OP_ADD_F);
 "min.f"                           return TOKEN(T_OP_MIN_F);
@@ -309,6 +360,7 @@ static int parse_reg(const char *str)
                                   /* category 6: */
 "ldg"                             return TOKEN(T_OP_LDG);
 "ldg.a"                           return TOKEN(T_OP_LDG_A);
+"ldg.k"                           return TOKEN(T_OP_LDG_K);
 "ldl"                             return TOKEN(T_OP_LDL);
 "ldp"                             return TOKEN(T_OP_LDP);
 "stg"                             return TOKEN(T_OP_STG);
@@ -323,6 +375,7 @@ static int parse_reg(const char *str)
 "stlw"                            return TOKEN(T_OP_STLW);
 "resfmt"                          return TOKEN(T_OP_RESFMT);
 "resinfo"                         return TOKEN(T_OP_RESINFO);
+"resbase"                         return TOKEN(T_OP_RESBASE);
 "atomic.add"                      return TOKEN(T_OP_ATOMIC_ADD);
 "atomic.sub"                      return TOKEN(T_OP_ATOMIC_SUB);
 "atomic.xchg"                     return TOKEN(T_OP_ATOMIC_XCHG);
@@ -381,8 +434,9 @@ static int parse_reg(const char *str)
 "getfiberid"                      return TOKEN(T_OP_GETFIBERID);
 "stc"                             return TOKEN(T_OP_STC);
 "stsc"                            return TOKEN(T_OP_STSC);
+"shfl"                            return TOKEN(T_OP_SHFL);
 
-("b16"|"b32"){1} ir3_yylval.str = yytext; return T_INSTR_TYPE;
+"ray_intersection"                return TOKEN(T_OP_RAY_INTERSECTION);
 
                                   /* category 7: */
 "bar"                             return TOKEN(T_OP_BAR);
@@ -406,7 +460,10 @@ static int parse_reg(const char *str)
 "s16"                             return TOKEN(T_TYPE_S16);
 "s32"                             return TOKEN(T_TYPE_S32);
 "u8"                              return TOKEN(T_TYPE_U8);
-"s8"                              return TOKEN(T_TYPE_S8);
+"u8_32"                           return TOKEN(T_TYPE_U8_32);
+"u64"                             return TOKEN(T_TYPE_U64);
+"b16"                             return TOKEN(T_TYPE_B16);
+"b32"                             return TOKEN(T_TYPE_B32);
 
 "untyped"                         return TOKEN(T_UNTYPED);
 "typed"                           return TOKEN(T_TYPED);
@@ -434,6 +491,10 @@ static int parse_reg(const char *str)
 "s2en"                            return TOKEN(T_S2EN);
 "s"                               return 's';
 "k"                               return 'k';
+"u"                               return 'u';
+"v"                               return 'v';
+"rck"                             return T_RCK;
+"clp"                             return T_CLP;
 "base"[0-9]+                      ir3_yylval.num = strtol(yytext+4, NULL, 10); return T_BASE;
 "offset"[0-9]+                    ir3_yylval.num = strtol(yytext+6, NULL, 10); return T_OFFSET;
 "uniform"                         return T_UNIFORM;
@@ -443,6 +504,12 @@ static int parse_reg(const char *str)
 "tex"                             return T_MOD_TEX;
 "mem"                             return T_MOD_MEM;
 "rt"                              return T_MOD_RT;
+
+"xor"                             return T_MOD_XOR;
+"up"                              return T_MOD_UP;
+"down"                            return T_MOD_DOWN;
+"rup"                             return T_MOD_RUP;
+"rdown"                           return T_MOD_RDOWN;
 
 "h"                               return 'h';
 "="                               return '=';

@@ -1,25 +1,7 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
  * Copyright © 2018 Google, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -36,7 +18,8 @@
 #include "ir3/ir3_shader.h"
 #include "ir3/ir3_descriptor.h"
 
-#include "a6xx.xml.h"
+#include "fd6_hw.h"
+#include "fd6_pack.h"
 
 struct fd6_lrz_state {
    union {
@@ -110,6 +93,9 @@ struct fd6_context {
    /* pre-baked stateobj for sample-locations disable: */
    struct fd_ringbuffer *sample_locations_disable_stateobj;
 
+   /* pre-baked stateobj for preamble: */
+   struct fd_ringbuffer *preamble, *restore;
+
    /* storage for ctx->last.key: */
    struct ir3_shader_key last_key;
 
@@ -172,20 +158,22 @@ struct fd6_control {
       uint32_t offset;
       uint32_t pad[7];
    } flush_base[4];
+
+   uint32_t vsc_state[32];
 };
 
 #define control_ptr(fd6_ctx, member)                                           \
-   (fd6_ctx)->control_mem, offsetof(struct fd6_control, member), 0, 0
+   (fd6_ctx)->control_mem, offsetof(struct fd6_control, member)
 
+template <chip CHIP>
 static inline void
-emit_marker6(struct fd_ringbuffer *ring, int scratch_idx)
+emit_marker6(fd_cs &cs, int scratch_idx)
 {
    extern int32_t marker_cnt;
-   unsigned reg = REG_A6XX_CP_SCRATCH_REG(scratch_idx);
    if (__EMIT_MARKER) {
-      OUT_WFI5(ring);
-      OUT_PKT4(ring, reg, 1);
-      OUT_RING(ring, p_atomic_inc_return(&marker_cnt));
+      fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+      fd_pkt4(cs, 1)
+         .add(CP_SCRATCH_REG(CHIP, scratch_idx, p_atomic_inc_return(&marker_cnt)));
    }
 }
 

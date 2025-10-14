@@ -39,7 +39,7 @@ struct constant_fold_state {
 static bool
 try_fold_alu(nir_builder *b, nir_alu_instr *alu)
 {
-   nir_const_value src[NIR_MAX_VEC_COMPONENTS][NIR_MAX_VEC_COMPONENTS];
+   nir_const_value src[NIR_ALU_MAX_INPUTS][NIR_MAX_VEC_COMPONENTS];
 
    /* In the case that any outputs/inputs have unsized types, then we need to
     * guess the bit-size. In this case, the validator ensures that all
@@ -75,7 +75,7 @@ try_fold_alu(nir_builder *b, nir_alu_instr *alu)
       bit_size = 32;
 
    nir_const_value dest[NIR_MAX_VEC_COMPONENTS];
-   nir_const_value *srcs[NIR_MAX_VEC_COMPONENTS];
+   nir_const_value *srcs[NIR_ALU_MAX_INPUTS];
    memset(dest, 0, sizeof(dest));
    for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; ++i)
       srcs[i] = src[i];
@@ -87,8 +87,7 @@ try_fold_alu(nir_builder *b, nir_alu_instr *alu)
    nir_def *imm = nir_build_imm(b, alu->def.num_components,
                                 alu->def.bit_size,
                                 dest);
-   nir_def_rewrite_uses(&alu->def, imm);
-   nir_instr_remove(&alu->instr);
+   nir_def_replace(&alu->def, imm);
    nir_instr_free(&alu->instr);
 
    return true;
@@ -123,7 +122,7 @@ const_value_for_deref(nir_deref_instr *deref)
       nir_deref_instr *p = path.path[i];
       switch (p->deref_type) {
       case nir_deref_type_var:
-         unreachable("Deref paths can only start with a var deref");
+         UNREACHABLE("Deref paths can only start with a var deref");
 
       case nir_deref_type_array: {
          assert(v == NULL);
@@ -175,16 +174,12 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
 {
    switch (intrin->intrinsic) {
    case nir_intrinsic_demote_if:
-   case nir_intrinsic_discard_if:
    case nir_intrinsic_terminate_if:
       if (nir_src_is_const(intrin->src[0])) {
          if (nir_src_as_bool(intrin->src[0])) {
             b->cursor = nir_before_instr(&intrin->instr);
             nir_intrinsic_op op;
             switch (intrin->intrinsic) {
-            case nir_intrinsic_discard_if:
-               op = nir_intrinsic_discard;
-               break;
             case nir_intrinsic_demote_if:
                op = nir_intrinsic_demote;
                break;
@@ -192,7 +187,7 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
                op = nir_intrinsic_terminate;
                break;
             default:
-               unreachable("invalid intrinsic");
+               UNREACHABLE("invalid intrinsic");
             }
             nir_intrinsic_instr *new_instr =
                nir_intrinsic_instr_create(b->shader, op);
@@ -210,8 +205,7 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
          b->cursor = nir_before_instr(&intrin->instr);
          nir_def *val = nir_build_imm(b, intrin->def.num_components,
                                       intrin->def.bit_size, v);
-         nir_def_rewrite_uses(&intrin->def, val);
-         nir_instr_remove(&intrin->instr);
+         nir_def_replace(&intrin->def, val);
          return true;
       }
       return false;
@@ -249,8 +243,32 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
          val = nir_build_imm(b, intrin->def.num_components,
                              intrin->def.bit_size, imm);
       }
-      nir_def_rewrite_uses(&intrin->def, val);
-      nir_instr_remove(&intrin->instr);
+      nir_def_replace(&intrin->def, val);
+      return true;
+   }
+
+   case nir_intrinsic_ddx:
+   case nir_intrinsic_ddx_fine:
+   case nir_intrinsic_ddx_coarse:
+   case nir_intrinsic_ddy:
+   case nir_intrinsic_ddy_fine:
+   case nir_intrinsic_ddy_coarse: {
+      if (!nir_src_is_const(intrin->src[0]))
+         return false;
+
+      /* Derivative of a constant is zero, except for NaNs and Infs */
+      nir_const_value imm[NIR_MAX_VEC_COMPONENTS];
+      unsigned sz = intrin->def.bit_size;
+
+      b->cursor = nir_before_instr(&intrin->instr);
+
+      for (unsigned i = 0; i < intrin->def.num_components; i++) {
+         bool finite = isfinite(nir_src_comp_as_float(intrin->src[0], i));
+         imm[i] = nir_const_value_for_float(finite ? 0 : NAN, sz);
+      }
+
+      nir_def_replace(&intrin->def,
+                      nir_build_imm(b, intrin->def.num_components, sz, imm));
       return true;
    }
 
@@ -258,6 +276,7 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
    case nir_intrinsic_vote_all:
    case nir_intrinsic_read_invocation:
    case nir_intrinsic_read_first_invocation:
+   case nir_intrinsic_as_uniform:
    case nir_intrinsic_shuffle:
    case nir_intrinsic_shuffle_xor:
    case nir_intrinsic_shuffle_up:
@@ -273,9 +292,7 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
        * the data is constant.
        */
       if (nir_src_is_const(intrin->src[0])) {
-         nir_def_rewrite_uses(&intrin->def,
-                              intrin->src[0].ssa);
-         nir_instr_remove(&intrin->instr);
+         nir_def_replace(&intrin->def, intrin->src[0].ssa);
          return true;
       }
       return false;
@@ -284,12 +301,27 @@ try_fold_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
    case nir_intrinsic_vote_ieq:
       if (nir_src_is_const(intrin->src[0])) {
          b->cursor = nir_before_instr(&intrin->instr);
-         nir_def_rewrite_uses(&intrin->def,
-                              nir_imm_true(b));
-         nir_instr_remove(&intrin->instr);
+         nir_def_replace(&intrin->def, nir_imm_true(b));
          return true;
       }
       return false;
+
+   case nir_intrinsic_inverse_ballot: {
+      if (!nir_src_is_const(intrin->src[0]))
+         return false;
+      bool constant_true = true;
+      bool constant_false = true;
+      for (unsigned i = 0; i < nir_src_num_components(intrin->src[0]); i++) {
+         int64_t value = nir_src_comp_as_int(intrin->src[0], i);
+         constant_true &= value == -1;
+         constant_false &= value == 0;
+      }
+      if (!constant_true && !constant_false)
+         return false;
+      b->cursor = nir_before_instr(&intrin->instr);
+      nir_def_replace(&intrin->def, nir_imm_bool(b, constant_true));
+      return true;
+   }
 
    default:
       return false;
@@ -321,6 +353,45 @@ try_fold_txb_to_tex(nir_builder *b, nir_tex_instr *tex)
 }
 
 static bool
+try_fold_txd_to_txl(nir_builder *b, nir_tex_instr *tex)
+{
+   assert(tex->op == nir_texop_txd);
+
+   const int ddx_idx = nir_tex_instr_src_index(tex, nir_tex_src_ddx);
+   const int ddy_idx = nir_tex_instr_src_index(tex, nir_tex_src_ddy);
+   const int min_lod_idx = nir_tex_instr_src_index(tex, nir_tex_src_min_lod);
+
+   if (ddx_idx < 0 || ddx_idx < 0)
+      return false;
+
+   /* min_lod is applied after the sampler bias is added, so we can't use it as lod */
+   if (min_lod_idx >= 0)
+      return false;
+
+   if (!nir_src_is_const(tex->src[ddx_idx].src) || !nir_src_is_const(tex->src[ddy_idx].src))
+      return false;
+
+   for (unsigned i = 0; i < tex->src[ddx_idx].src.ssa->num_components; i++) {
+      if (nir_src_comp_as_float(tex->src[ddx_idx].src, i) != 0.0)
+         return false;
+   }
+
+   for (unsigned i = 0; i < tex->src[ddy_idx].src.ssa->num_components; i++) {
+      if (nir_src_comp_as_float(tex->src[ddy_idx].src, i) != 0.0)
+         return false;
+   }
+
+   b->cursor = nir_before_instr(&tex->instr);
+   nir_steal_tex_src(tex, nir_tex_src_ddx);
+   nir_steal_tex_src(tex, nir_tex_src_ddy);
+
+   nir_def *lod = nir_imm_int(b, 0);
+   nir_tex_instr_add_src(tex, nir_tex_src_lod, lod);
+   tex->op = nir_texop_txl;
+   return true;
+}
+
+static bool
 try_fold_tex_offset(nir_tex_instr *tex, unsigned *index,
                     nir_tex_src_type src_type)
 {
@@ -338,6 +409,27 @@ try_fold_tex_offset(nir_tex_instr *tex, unsigned *index,
 }
 
 static bool
+try_fold_texel_offset_src(nir_tex_instr *tex)
+{
+   int offset_src = nir_tex_instr_src_index(tex, nir_tex_src_offset);
+   if (offset_src < 0)
+      return false;
+
+   unsigned size = nir_tex_instr_src_size(tex, offset_src);
+   nir_tex_src *src = &tex->src[offset_src];
+
+   for (unsigned i = 0; i < size; i++) {
+      nir_scalar comp = nir_scalar_resolved(src->src.ssa, i);
+      if (!nir_scalar_is_const(comp) || nir_scalar_as_uint(comp) != 0)
+         return false;
+   }
+
+   nir_tex_instr_remove_src(tex, offset_src);
+
+   return true;
+}
+
+static bool
 try_fold_tex(nir_builder *b, nir_tex_instr *tex)
 {
    bool progress = false;
@@ -350,6 +442,12 @@ try_fold_tex(nir_builder *b, nir_tex_instr *tex)
    /* txb with a bias of constant zero is just tex. */
    if (tex->op == nir_texop_txb)
       progress |= try_fold_txb_to_tex(b, tex);
+   /* txd with ddx/ddy of constant zero is just txl. */
+   if (tex->op == nir_texop_txd)
+      progress |= try_fold_txd_to_txl(b, tex);
+
+   /* tex with a zero offset is just tex. */
+   progress |= try_fold_texel_offset_src(tex);
 
    return progress;
 }
@@ -378,8 +476,7 @@ nir_opt_constant_folding(nir_shader *shader)
    state.has_indirect_load_const = false;
 
    bool progress = nir_shader_instructions_pass(shader, try_fold_instr,
-                                                nir_metadata_block_index |
-                                                   nir_metadata_dominance,
+                                                nir_metadata_control_flow,
                                                 &state);
 
    /* This doesn't free the constant data if there are no constant loads because

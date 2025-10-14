@@ -79,18 +79,6 @@ struct dri_context
    struct hud_context *hud;
 };
 
-static inline struct dri_context *
-dri_context(__DRIcontext *driContextPriv)
-{
-   return (struct dri_context *)driContextPriv;
-}
-
-static inline __DRIcontext *
-opaque_dri_context(struct dri_context *ctx)
-{
-   return (__DRIcontext *)ctx;
-}
-
 /***********************************************************************
  * dri_context.c
  */
@@ -113,7 +101,8 @@ dri_create_context(struct dri_screen *screen,
                    const struct __DriverContextConfig *ctx_config,
                    unsigned *error,
                    struct dri_context *sharedContextPrivate,
-                   void *loaderPrivate);
+                   void *loaderPrivate,
+                   bool thread_safe);
 
 #endif
 

@@ -73,7 +73,7 @@ crocus_combine_swizzle(enum pipe_swizzle outswz[4],
       case PIPE_SWIZZLE_W: outswz[i] = fswz[3]; break;
       case PIPE_SWIZZLE_1: outswz[i] = PIPE_SWIZZLE_1; break;
       case PIPE_SWIZZLE_0: outswz[i] = PIPE_SWIZZLE_0; break;
-      default: unreachable("invalid swizzle");
+      default: UNREACHABLE("invalid swizzle");
       }
    }
 }
@@ -381,8 +381,7 @@ crocus_hiz_exec(struct crocus_context *ice,
                 struct crocus_batch *batch,
                 struct crocus_resource *res,
                 unsigned int level, unsigned int start_layer,
-                unsigned int num_layers, enum isl_aux_op op,
-                bool update_clear_depth);
+                unsigned int num_layers, enum isl_aux_op op);
 
 /**
  * Prepare a miptree for access

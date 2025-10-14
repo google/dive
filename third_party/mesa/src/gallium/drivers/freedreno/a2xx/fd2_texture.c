@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2012-2013 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012-2013 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -121,20 +103,20 @@ fd2_sampler_state_create(struct pipe_context *pctx,
 }
 
 static void
-fd2_sampler_states_bind(struct pipe_context *pctx, enum pipe_shader_type shader,
+fd2_sampler_states_bind(struct pipe_context *pctx, mesa_shader_stage shader,
                         unsigned start, unsigned nr, void **hwcso) in_dt
 {
    if (!hwcso)
       nr = 0;
 
-   if (shader == PIPE_SHADER_FRAGMENT) {
+   if (shader == MESA_SHADER_FRAGMENT) {
       struct fd_context *ctx = fd_context(pctx);
 
       /* on a2xx, since there is a flat address space for textures/samplers,
        * a change in # of fragment textures/samplers will trigger patching and
        * re-emitting the vertex shader:
        */
-      if (nr != ctx->tex[PIPE_SHADER_FRAGMENT].num_samplers)
+      if (nr != ctx->tex[MESA_SHADER_FRAGMENT].num_samplers)
          ctx->dirty |= FD_DIRTY_TEXSTATE;
    }
 
@@ -146,7 +128,7 @@ tex_dimension(unsigned target)
 {
    switch (target) {
    default:
-      unreachable("Unsupported target");
+      UNREACHABLE("Unsupported target");
    case PIPE_TEXTURE_1D:
       assert(0); /* TODO */
       return SQ_TEX_DIMENSION_1D;
@@ -201,25 +183,24 @@ fd2_sampler_view_create(struct pipe_context *pctx, struct pipe_resource *prsc,
 }
 
 static void
-fd2_set_sampler_views(struct pipe_context *pctx, enum pipe_shader_type shader,
+fd2_set_sampler_views(struct pipe_context *pctx, mesa_shader_stage shader,
                       unsigned start, unsigned nr,
                       unsigned unbind_num_trailing_slots,
-                      bool take_ownership,
                       struct pipe_sampler_view **views) in_dt
 {
-   if (shader == PIPE_SHADER_FRAGMENT) {
+   if (shader == MESA_SHADER_FRAGMENT) {
       struct fd_context *ctx = fd_context(pctx);
 
       /* on a2xx, since there is a flat address space for textures/samplers,
        * a change in # of fragment textures/samplers will trigger patching and
        * re-emitting the vertex shader:
        */
-      if (nr != ctx->tex[PIPE_SHADER_FRAGMENT].num_textures)
+      if (nr != ctx->tex[MESA_SHADER_FRAGMENT].num_textures)
          ctx->dirty |= FD_DIRTY_TEXSTATE;
    }
 
    fd_set_sampler_views(pctx, shader, start, nr, unbind_num_trailing_slots,
-                        take_ownership, views);
+                        views);
 }
 
 /* map gallium sampler-id to hw const-idx.. adreno uses a flat address
@@ -237,9 +218,9 @@ unsigned
 fd2_get_const_idx(struct fd_context *ctx, struct fd_texture_stateobj *tex,
                   unsigned samp_id) assert_dt
 {
-   if (tex == &ctx->tex[PIPE_SHADER_FRAGMENT])
+   if (tex == &ctx->tex[MESA_SHADER_FRAGMENT])
       return samp_id;
-   return samp_id + ctx->tex[PIPE_SHADER_FRAGMENT].num_samplers;
+   return samp_id + ctx->tex[MESA_SHADER_FRAGMENT].num_samplers;
 }
 
 void

@@ -1,198 +1,214 @@
 /*
- * Copyright (C) 2019 Collabora, Ltd.
+ * Copyright © 2023-2025 Amazon.com, Inc. or its affiliates.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * Authors:
- *   Alyssa Rosenzweig <alyssa.rosenzweig@collabora.com>
+ * SPDX-License-Identifier: MIT
  */
 
-#include "pan_texture.h"
+#include "pan_afbc.h"
+#include "util/perf/cpu_trace.h"
+#include "util/detect_arch.h"
+#include "util/u_cpu_detect.h"
 
-/* Arm FrameBuffer Compression (AFBC) is a lossless compression scheme natively
- * implemented in Mali GPUs (as well as many display controllers paired with
- * Mali GPUs, etc). Where possible, Panfrost prefers to use AFBC for both
- * rendering and texturing. In most cases, this is a performance-win due to a
- * dramatic reduction in memory bandwidth and cache locality compared to a
- * linear resources.
- *
- * AFBC divides the framebuffer into 16x16 tiles (other sizes possible, TODO:
- * do we need to support this?). So, the width and height each must be aligned
- * up to 16 pixels. This is inherently good for performance; note that for a 4
- * byte-per-pixel format like RGBA8888, that means that rows are 16*4=64 byte
- * aligned, which is the cache-line size.
- *
- * For each AFBC-compressed resource, there is a single contiguous
- * (CPU/GPU-shared) buffer. This buffer itself is divided into two parts:
- * header and body, placed immediately after each other.
- *
- * The AFBC header contains 16 bytes of metadata per tile.
- *
- * The AFBC body is the same size as the original linear resource (padded to
- * the nearest tile). Although the body comes immediately after the header, it
- * must also be cache-line aligned, so there can sometimes be a bit of padding
- * between the header and body.
- *
- * As an example, a 64x64 RGBA framebuffer contains 64/16 = 4 tiles horizontally
- * and 4 tiles vertically. There are 4*4=16 tiles in total, each containing 16
- * bytes of metadata, so there is a 16*16=256 byte header. 64x64 is already
- * tile aligned, so the body is 64*64 * 4 bytes per pixel = 16384 bytes of
- * body.
- *
- * From userspace, Panfrost needs to be able to calculate these sizes. It
- * explicitly does not and can not know the format of the data contained within
- * this header and body. The GPU has native support for AFBC encode/decode. For
- * an internal FBO or a framebuffer used for scanout with an AFBC-compatible
- * winsys/display-controller, the buffer is maintained AFBC throughout flight,
- * and the driver never needs to know the internal data. For edge cases where
- * the driver really does need to read/write from the AFBC resource, we
- * generate a linear staging buffer and use the GPU to blit AFBC<--->linear.
- */
+#if DETECT_ARCH_AARCH64 || (DETECT_ARCH_ARM && !defined(__SOFTFP__))
+/* armhf builds default to VFP, not NEON, and refuses to compile NEON
+ * intrinsics unless you tell it "no really". */
+#if DETECT_ARCH_ARM
+#pragma GCC target ("fpu=neon")
+#endif
+#include <arm_neon.h>
+#endif
 
-static enum pipe_format
-unswizzled_format(enum pipe_format format)
+#if DETECT_ARCH_AARCH64
+
+/* Arm A64 NEON intrinsics version. */
+uint32_t
+pan_afbc_payload_layout_packed(unsigned arch,
+                               const struct pan_afbc_headerblock *headers,
+                               struct pan_afbc_payload_extent *layout,
+                               uint32_t nr_blocks, enum pipe_format format,
+                               uint64_t modifier)
 {
-   switch (format) {
-   case PIPE_FORMAT_A8_UNORM:
-   case PIPE_FORMAT_L8_UNORM:
-   case PIPE_FORMAT_I8_UNORM:
-      return PIPE_FORMAT_R8_UNORM;
+   MESA_TRACE_FUNC();
 
-   case PIPE_FORMAT_L8A8_UNORM:
-      return PIPE_FORMAT_R8G8_UNORM;
+   uint32_t uncompressed_size =
+      pan_afbc_payload_uncompressed_size(format, modifier);
+   uint32_t body_size = 0;
 
-   case PIPE_FORMAT_B8G8R8_UNORM:
-      return PIPE_FORMAT_R8G8B8_UNORM;
+   alignas(16) static const uint8_t idx0[16] =
+      { 4, 5, 6, ~0, 7, 8, 9, ~0, 10, 11, 12, ~0, 13, 14, 15, ~0 };
+   alignas(16) static const uint8_t idx1[16] =
+      { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60 };
+   alignas(16) static const uint8_t mask[16] =
+      { 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63 };
+   alignas(16) static const uint8_t ones[16] =
+      { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
 
-   case PIPE_FORMAT_R8G8B8X8_UNORM:
-   case PIPE_FORMAT_B8G8R8A8_UNORM:
-   case PIPE_FORMAT_B8G8R8X8_UNORM:
-   case PIPE_FORMAT_A8R8G8B8_UNORM:
-   case PIPE_FORMAT_X8R8G8B8_UNORM:
-   case PIPE_FORMAT_X8B8G8R8_UNORM:
-   case PIPE_FORMAT_A8B8G8R8_UNORM:
-      return PIPE_FORMAT_R8G8B8A8_UNORM;
+   uint8x16_t vidx0 = vld1q_u8(idx0);
+   uint8x16_t vidx1 = vld1q_u8(idx1);
+   uint8x16_t vmask = vld1q_u8(mask);
+   uint8x16_t vones = vld1q_u8(ones);
 
-   case PIPE_FORMAT_B5G6R5_UNORM:
-      return PIPE_FORMAT_R5G6B5_UNORM;
+   for (uint32_t i = 0; i < nr_blocks; ++i) {
+      uint32_t payload_size = 0;
 
-   case PIPE_FORMAT_B5G5R5A1_UNORM:
-      return PIPE_FORMAT_R5G5B5A1_UNORM;
+      /* Skip sum if the 1st subblock is 0 (solid color encoding). */
+      if (arch < 7 || headers[i].payload.subblock_sizes[0] & 0x3f) {
+         uint8x16_t vhdr = vld1q_u8((uint8_t *)&headers[i]);
 
-   case PIPE_FORMAT_R10G10B10X2_UNORM:
-   case PIPE_FORMAT_B10G10R10A2_UNORM:
-   case PIPE_FORMAT_B10G10R10X2_UNORM:
-      return PIPE_FORMAT_R10G10B10A2_UNORM;
+         /* Dispatch 6-bit packed 16 subblock sizes into 8-bit vector. */
+         uint8x16_t v0 = vqtbl1q_u8(vhdr, vidx0);
+         uint8x16_t v1 = vreinterpretq_u8_u32(
+            vshrq_n_u32(vreinterpretq_u32_u8(v0), 6));
+         uint8x16_t v2 = vreinterpretq_u8_u32(
+            vshrq_n_u32(vreinterpretq_u32_u8(v0), 12));
+         uint8x16_t v3 = vreinterpretq_u8_u32(
+            vshrq_n_u32(vreinterpretq_u32_u8(v0), 18));
+         uint8x16x4_t vtbl = {{ v0, v1, v2, v3 }};
+         v0 = vqtbl4q_u8(vtbl, vidx1);
+         v0 = vandq_u8(v0, vmask);
 
-   case PIPE_FORMAT_A4B4G4R4_UNORM:
-   case PIPE_FORMAT_B4G4R4A4_UNORM:
-      return PIPE_FORMAT_R4G4B4A4_UNORM;
+         /* Sum across vector. */
+         payload_size = vaddlvq_u8(v0);
 
-   default:
-      return format;
-   }
-}
+         /* Number of subblocks of size 1. */
+         v0 = vceqq_u8(v0, vones);
+         v0 = vandq_u8(v0, vones);
+         uint32_t nr_ones = vaddvq_u8(v0);
 
-/* AFBC supports compressing a few canonical formats. Additional formats are
- * available by using a canonical internal format. Given a PIPE format, find
- * the canonical AFBC internal format if it exists, or NONE if the format
- * cannot be compressed. */
+         /* Payload size already stores subblocks of size 1. Fix-up the sum
+          * using the number of such subblocks. */
+         payload_size += nr_ones * (uncompressed_size - 1);
 
-enum pan_afbc_mode
-panfrost_afbc_format(unsigned arch, enum pipe_format format)
-{
-   /* sRGB does not change the pixel format itself, only the
-    * interpretation. The interpretation is handled by conversion hardware
-    * independent to the compression hardware, so we can compress sRGB
-    * formats by using the corresponding linear format.
-    */
-   format = util_format_linear(format);
+         payload_size = ALIGN_POT(payload_size, 16);
+      }
 
-   /* Luminance-alpha not supported for AFBC on v7+ */
-   switch (format) {
-   case PIPE_FORMAT_A8_UNORM:
-   case PIPE_FORMAT_L8_UNORM:
-   case PIPE_FORMAT_I8_UNORM:
-   case PIPE_FORMAT_L8A8_UNORM:
-      if (arch >= 7)
-         return PAN_AFBC_MODE_INVALID;
-      else
-         break;
-   default:
-      break;
+      layout[i].size = payload_size;
+      layout[i].offset = body_size;
+      body_size += payload_size;
    }
 
-   /* We handle swizzling orthogonally to AFBC */
-   format = unswizzled_format(format);
+   return body_size;
+}
 
-   /* clang-format off */
-   switch (format) {
-   case PIPE_FORMAT_R8_UNORM:          return PAN_AFBC_MODE_R8;
-   case PIPE_FORMAT_R8G8_UNORM:        return PAN_AFBC_MODE_R8G8;
-   case PIPE_FORMAT_R8G8B8_UNORM:      return PAN_AFBC_MODE_R8G8B8;
-   case PIPE_FORMAT_R8G8B8A8_UNORM:    return PAN_AFBC_MODE_R8G8B8A8;
-   case PIPE_FORMAT_R5G6B5_UNORM:      return PAN_AFBC_MODE_R5G6B5;
-   case PIPE_FORMAT_R5G5B5A1_UNORM:    return PAN_AFBC_MODE_R5G5B5A1;
-   case PIPE_FORMAT_R10G10B10A2_UNORM: return PAN_AFBC_MODE_R10G10B10A2;
-   case PIPE_FORMAT_R4G4B4A4_UNORM:    return PAN_AFBC_MODE_R4G4B4A4;
-   case PIPE_FORMAT_Z16_UNORM:         return PAN_AFBC_MODE_R8G8;
+#else
 
-   case PIPE_FORMAT_Z24_UNORM_S8_UINT: return PAN_AFBC_MODE_R8G8B8A8;
-   case PIPE_FORMAT_Z24X8_UNORM:       return PAN_AFBC_MODE_R8G8B8A8;
-   case PIPE_FORMAT_X24S8_UINT:        return PAN_AFBC_MODE_R8G8B8A8;
+/* Arm A32 NEON intrinsics and generic version. */
+uint32_t
+pan_afbc_payload_layout_packed(unsigned arch,
+                               const struct pan_afbc_headerblock *headers,
+                               struct pan_afbc_payload_extent *layout,
+                               uint32_t nr_blocks, enum pipe_format format,
+                               uint64_t modifier)
+{
+   MESA_TRACE_FUNC();
 
-   default:                            return PAN_AFBC_MODE_INVALID;
+   uint32_t uncompressed_size =
+      pan_afbc_payload_uncompressed_size(format, modifier);
+   uint32_t body_size = 0;
+
+#if DETECT_ARCH_ARM && !defined(__SOFTFP__)
+
+   if (unlikely(!util_get_cpu_caps()->has_neon))
+      goto no_neon;
+
+   /* Arm A32 NEON intrinsics version. */
+
+   alignas(16) static const uint8_t idx0[2][8] =
+      { { 4, 5, 6, ~0, 7, 8, 9, ~0 }, { 2, 3, 4, ~0, 5, 6, 7, ~0 } };
+   alignas(8) static const uint8_t idx1[8] =
+      { 0, 4, 8, 12, 16, 20, 24, 28 };
+   alignas(16) static const uint8_t mask[16] =
+      { 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63 };
+   alignas(16) static const uint8_t ones[16] =
+      { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+   uint8x8_t vidx00 = vld1_u8(idx0[0]);
+   uint8x8_t vidx01 = vld1_u8(idx0[1]);
+   uint8x8_t vidx1 = vld1_u8(idx1);
+   uint8x16_t vmask = vld1q_u8(mask);
+   uint8x16_t vones = vld1q_u8(ones);
+
+   for (uint32_t i = 0; i < nr_blocks; ++i) {
+      uint32_t payload_size = 0;
+
+      /* Skip sum if the 1st subblock is 0 (solid color encoding). */
+      if (arch < 7 || headers[i].payload.subblock_sizes[0] & 0x3f) {
+         /* vld1_u8_x2() isn't widely available yet. */
+         uint8x8_t vhdr0 = vld1_u8(&headers[i].u8[0]);
+         uint8x8_t vhdr1 = vld1_u8(&headers[i].u8[8]);
+         uint8x8x2_t vhdr = {{ vhdr0, vhdr1 }};
+
+         /* Dispatch 6-bit packed 16 payload sizes into 8-bit vector. Note
+          * that the NEON TBL instr in A32 only supports doubleword operands
+          * while VSHR also supports quadword. Not sure how to mix doubleword
+          * and quadword intrinsics and get compilers to correctly alias D and
+          * Q registers though (128-bit register Q0 is an alias for the two
+          * consecutive 64-bit registers D0 and D1), so stick with doubleword
+          * intrinsics here. */
+         uint8x8_t v00 = vtbl2_u8(vhdr, vidx00);
+         uint8x8_t v01 = vtbl1_u8(vhdr1, vidx01);
+         uint8x8_t v10 = vreinterpret_u8_u32(
+            vshr_n_u32(vreinterpret_u32_u8(v00), 6));
+         uint8x8_t v11 = vreinterpret_u8_u32(
+            vshr_n_u32(vreinterpret_u32_u8(v01), 6));
+         uint8x8_t v20 = vreinterpret_u8_u32(
+            vshr_n_u32(vreinterpret_u32_u8(v00), 12));
+         uint8x8_t v21 = vreinterpret_u8_u32(
+            vshr_n_u32(vreinterpret_u32_u8(v01), 12));
+         uint8x8_t v30 = vreinterpret_u8_u32(
+            vshr_n_u32(vreinterpret_u32_u8(v00), 18));
+         uint8x8_t v31 = vreinterpret_u8_u32(
+            vshr_n_u32(vreinterpret_u32_u8(v01), 18));
+         uint8x8x4_t vtbl0 = {{ v00, v01, v10, v11 }};
+         uint8x8x4_t vtbl1 = {{ v20, v21, v30, v31 }};
+         v00 = vtbl4_u8(vtbl0, vidx1);
+         v01 = vtbl4_u8(vtbl1, vidx1);
+         uint8x16_t v0 = vandq_u8(vcombine_u8(v00, v01), vmask);
+
+         /* Sum across vector. */
+         uint64x2_t v1 = vpaddlq_u32(vpaddlq_u16(vpaddlq_u8(v0)));
+         payload_size = vget_lane_u64(vadd_u64(vget_low_u64(v1),
+                                               vget_high_u64(v1)), 0);
+
+         /* Number of subblocks of size 1. */
+         v0 = vceqq_u8(v0, vones);
+         v0 = vandq_u8(v0, vones);
+         v1 = vpaddlq_u32(vpaddlq_u16(vpaddlq_u8(v0)));
+         uint32_t nr_ones = vget_lane_u64(vadd_u64(vget_low_u64(v1),
+                                                   vget_high_u64(v1)), 0);
+
+         /* Payload size already stores subblocks of size 1. Fix-up the sum
+          * using the number of such subblocks. */
+         payload_size += nr_ones * (uncompressed_size - 1);
+
+         payload_size = ALIGN_POT(payload_size, 16);
+      }
+
+      layout[i].size = payload_size;
+      layout[i].offset = body_size;
+      body_size += payload_size;
    }
-   /* clang-format on */
+
+   return body_size;
+
+ no_neon:
+#endif
+
+   /* Generic version. */
+
+   /* XXX: It might be faster to copy the header from non-cacheable memory
+    * into a cacheline sized chunk in cacheable memory in order to avoid too
+    * many uncached transactions. Not sure though, so it needs testing. */
+
+   for (uint32_t i = 0; i < nr_blocks; i++) {
+      uint32_t payload_size =
+         pan_afbc_payload_size(arch, headers[i], uncompressed_size);
+      layout[i].size = payload_size;
+      layout[i].offset = body_size;
+      body_size += payload_size;
+   }
+
+   return body_size;
 }
 
-/* A format may be compressed as AFBC if it has an AFBC internal format */
-
-bool
-panfrost_format_supports_afbc(const struct panfrost_device *dev,
-                              enum pipe_format format)
-{
-   return panfrost_afbc_format(dev->arch, format) != PAN_AFBC_MODE_INVALID;
-}
-
-/* The lossless colour transform (AFBC_FORMAT_MOD_YTR) requires RGB. */
-
-bool
-panfrost_afbc_can_ytr(enum pipe_format format)
-{
-   const struct util_format_description *desc = util_format_description(format);
-
-   /* YTR is only defined for RGB(A) */
-   if (desc->nr_channels != 3 && desc->nr_channels != 4)
-      return false;
-
-   /* The fourth channel if it exists doesn't matter */
-   return desc->colorspace == UTIL_FORMAT_COLORSPACE_RGB;
-}
-
-/*
- * Check if the device supports AFBC with tiled headers (and hence also solid
- * colour blocks).
- */
-bool
-panfrost_afbc_can_tile(const struct panfrost_device *dev)
-{
-   return (dev->arch >= 7);
-}
+#endif

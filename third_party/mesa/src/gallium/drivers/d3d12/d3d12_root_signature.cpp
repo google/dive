@@ -38,23 +38,23 @@ struct d3d12_root_signature {
 };
 
 static D3D12_SHADER_VISIBILITY
-get_shader_visibility(enum pipe_shader_type stage)
+get_shader_visibility(mesa_shader_stage stage)
 {
    switch (stage) {
-   case PIPE_SHADER_VERTEX:
+   case MESA_SHADER_VERTEX:
       return D3D12_SHADER_VISIBILITY_VERTEX;
-   case PIPE_SHADER_FRAGMENT:
+   case MESA_SHADER_FRAGMENT:
       return D3D12_SHADER_VISIBILITY_PIXEL;
-   case PIPE_SHADER_GEOMETRY:
+   case MESA_SHADER_GEOMETRY:
       return D3D12_SHADER_VISIBILITY_GEOMETRY;
-   case PIPE_SHADER_TESS_CTRL:
+   case MESA_SHADER_TESS_CTRL:
       return D3D12_SHADER_VISIBILITY_HULL;
-   case PIPE_SHADER_TESS_EVAL:
+   case MESA_SHADER_TESS_EVAL:
       return D3D12_SHADER_VISIBILITY_DOMAIN;
-   case PIPE_SHADER_COMPUTE:
+   case MESA_SHADER_COMPUTE:
       return D3D12_SHADER_VISIBILITY_ALL;
    default:
-      unreachable("unknown shader stage");
+      UNREACHABLE("unknown shader stage");
    }
 }
 
@@ -122,16 +122,16 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
 
    unsigned count = key->compute ? 1 : D3D12_GFX_SHADER_STAGES;
    for (unsigned i = 0; i < count; ++i) {
-      unsigned stage = key->compute ? PIPE_SHADER_COMPUTE : i;
-      D3D12_SHADER_VISIBILITY visibility = get_shader_visibility((enum pipe_shader_type)stage);
+      unsigned stage = key->compute ? MESA_SHADER_COMPUTE : i;
+      D3D12_SHADER_VISIBILITY visibility = get_shader_visibility((mesa_shader_stage)stage);
 
-      if (key->stages[i].num_cb_bindings > 0) {
+      if (key->stages[i].end_cb_bindings - key->stages[i].begin_cb_bindings > 0) {
          init_range_root_param(&root_params[num_params++],
                                &desc_ranges[num_ranges++],
                                D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-                               key->stages[i].num_cb_bindings,
+                               key->stages[i].end_cb_bindings - key->stages[i].begin_cb_bindings,
                                visibility,
-                               key->stages[i].has_default_ubo0 ? 0 : 1,
+                               key->stages[i].begin_cb_bindings,
                                0);
       }
 
@@ -188,12 +188,12 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
 
       if (key->stages[i].state_vars_size > 0) {
          init_constant_root_param(&root_params[num_params++],
-            key->stages[i].num_cb_bindings + (key->stages[i].has_default_ubo0 ? 0 : 1),
+            key->stages[i].end_cb_bindings,
             key->stages[i].state_vars_size,
             visibility);
       }
-      assert(num_params < PIPE_SHADER_TYPES * D3D12_NUM_BINDING_TYPES);
-      assert(num_ranges < PIPE_SHADER_TYPES * (D3D12_NUM_BINDING_TYPES + 1));
+      assert(num_params < MESA_SHADER_STAGES * D3D12_NUM_BINDING_TYPES);
+      assert(num_ranges < MESA_SHADER_STAGES * (D3D12_NUM_BINDING_TYPES + 1));
    }
 
    D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
@@ -216,7 +216,7 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
    if (ctx->dev_config) {
       if (FAILED(ctx->dev_config->SerializeVersionedRootSignature(&root_sig_desc,
                                                                   &sig, &error))) {
-         debug_printf("D3D12SerializeRootSignature failed\n");
+         debug_printf("D3D12SerializeRootSignature failed: %s\n", (char *)error->GetBufferPointer());
          return NULL;
       }
    } else
@@ -224,7 +224,7 @@ create_root_signature(struct d3d12_context *ctx, struct d3d12_root_signature_key
    {
       if (FAILED(ctx->D3D12SerializeVersionedRootSignature(&root_sig_desc,
                                                            &sig, &error))) {
-         debug_printf("D3D12SerializeRootSignature failed\n");
+         debug_printf("D3D12SerializeRootSignature failed: %s\n", (char *)error->GetBufferPointer());
          return NULL;
       }
    }
@@ -253,11 +253,11 @@ fill_key(struct d3d12_context *ctx, struct d3d12_root_signature_key *key, bool c
          ctx->gfx_pipeline_state.stages[i];
 
       if (shader) {
-         key->stages[i].num_cb_bindings = shader->num_cb_bindings;
+         key->stages[i].begin_cb_bindings = shader->begin_ubo_binding;
+         key->stages[i].end_cb_bindings = shader->end_ubo_binding;
          key->stages[i].end_srv_binding = shader->end_srv_binding;
          key->stages[i].begin_srv_binding = shader->begin_srv_binding;
-         key->stages[i].state_vars_size = shader->state_vars_size;
-         key->stages[i].has_default_ubo0 = shader->has_default_ubo0;
+         key->stages[i].state_vars_size = static_cast<unsigned int>(shader->state_vars_size);
          key->stages[i].num_ssbos = shader->nir->info.num_ssbos;
          key->stages[i].num_images = shader->nir->info.num_images;
 

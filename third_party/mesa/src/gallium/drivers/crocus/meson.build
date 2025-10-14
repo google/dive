@@ -1,22 +1,5 @@
 # Copyright © 2017-2019 Intel Corporation
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 files_libcrocus = files(
   'gen4_blorp_exec.h',
@@ -58,13 +41,13 @@ foreach v : ['40', '45', '50', '60', '70', '75', '80']
   crocus_per_hw_ver_libs += static_library(
     'crocus_per_hw_ver@0@'.format(v),
     ['crocus_blorp.c', 'crocus_query.c', 'crocus_state.c', 'crocus_blt.c', gen_xml_pack],
-    include_directories : [inc_include, inc_src, inc_mapi, inc_mesa, inc_gallium, inc_gallium_aux, inc_intel],
+    include_directories : [inc_include, inc_src, inc_mesa, inc_gallium, inc_gallium_aux, inc_intel],
     c_args : [
       no_override_init_args, sse2_args,
       '-DGFX_VERx10=@0@'.format(v),
     ],
     gnu_symbol_visibility : 'hidden',
-    dependencies : [dep_libdrm, dep_valgrind, idep_genxml, idep_nir_headers, idep_intel_dev],
+    dependencies : [dep_libdrm, dep_valgrind, idep_mesautil, idep_genxml, idep_nir_headers, idep_intel_dev, idep_intel_blorp_elk],
   )
 endforeach
 
@@ -75,15 +58,20 @@ libcrocus = static_library(
     inc_src, inc_include, inc_gallium, inc_gallium_aux, inc_intel,
     inc_gallium_drivers,
     # these should not be necessary, but main/macros.h...
-    inc_mesa, inc_mapi
+    inc_mesa
   ],
   c_args : [sse2_args],
   cpp_args : [sse2_args],
   gnu_symbol_visibility : 'hidden',
-  dependencies : [dep_libdrm, dep_valgrind, idep_genxml, idep_libintel_common, idep_nir_headers, idep_intel_dev],
+  dependencies : [
+    dep_libdrm, dep_valgrind, idep_genxml, idep_mesautil,
+    idep_libintel_common, idep_nir_headers,
+    idep_intel_dev, idep_intel_blorp_elk, idep_intel_decoder_elk,
+    idep_intel_compiler_elk,
+  ],
   link_with : [
-    crocus_per_hw_ver_libs, libintel_compiler, libisl,
-    libblorp, libintel_perf
+    crocus_per_hw_ver_libs, libisl,
+    libintel_perf
   ],
 )
 

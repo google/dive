@@ -71,26 +71,6 @@ trace_query_unwrap(struct pipe_query *query)
    }
 }
 
-
-static inline struct pipe_surface *
-trace_surface_unwrap(struct trace_context *tr_ctx,
-                     struct pipe_surface *surface)
-{
-   struct trace_surface *tr_surf;
-
-   if (!surface)
-      return NULL;
-
-   assert(surface->texture);
-   if (!surface->texture)
-      return surface;
-
-   tr_surf = trace_surface(surface);
-
-   assert(tr_surf->surface);
-   return tr_surf->surface;
-}
-
 static void
 dump_fb_state(struct trace_context *tr_ctx,
               const char *method,
@@ -132,15 +112,18 @@ trace_context_draw_vbo(struct pipe_context *_pipe,
    trace_dump_arg(int, drawid_offset);
    trace_dump_arg(draw_indirect_info, indirect);
    trace_dump_arg_begin("draws");
-   trace_dump_struct_array(draw_start_count, draws, num_draws);
+   if (info->index.resource)
+      trace_dump_struct_array(draw_start_count_indexed, draws, num_draws);
+   else
+      trace_dump_struct_array(draw_start_count, draws, num_draws);
    trace_dump_arg_end();
    trace_dump_arg(uint, num_draws);
 
    trace_dump_trace_flush();
 
-   pipe->draw_vbo(pipe, info, drawid_offset, indirect, draws, num_draws);
-
    trace_dump_call_end();
+
+   pipe->draw_vbo(pipe, info, drawid_offset, indirect, draws, num_draws);
 }
 
 static void
@@ -157,9 +140,9 @@ trace_context_draw_mesh_tasks(struct pipe_context *_pipe,
 
    trace_dump_trace_flush();
 
-   pipe->draw_mesh_tasks(pipe, info);
-
    trace_dump_call_end();
+
+   pipe->draw_mesh_tasks(pipe, info);
 }
 
 
@@ -190,9 +173,9 @@ trace_context_draw_vertex_state(struct pipe_context *_pipe,
 
    trace_dump_trace_flush();
 
+   trace_dump_call_end();
    pipe->draw_vertex_state(pipe, state, partial_velem_mask, info, draws,
                            num_draws);
-   trace_dump_call_end();
 }
 
 
@@ -497,7 +480,7 @@ trace_context_create_sampler_state(struct pipe_context *_pipe,
 
 static void
 trace_context_bind_sampler_states(struct pipe_context *_pipe,
-                                  enum pipe_shader_type shader,
+                                  mesa_shader_stage shader,
                                   unsigned start,
                                   unsigned num_states,
                                   void **states)
@@ -505,18 +488,29 @@ trace_context_bind_sampler_states(struct pipe_context *_pipe,
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
 
+   pipe->bind_sampler_states(pipe, shader, start, num_states, states);
+
    /* remove this when we have pipe->bind_sampler_states(..., start, ...) */
    assert(start == 0);
+   bool found = false;
+   for (unsigned i = 0; i < num_states; i++)
+      found |= !!states[i];
 
    trace_dump_call_begin("pipe_context", "bind_sampler_states");
 
    trace_dump_arg(ptr, pipe);
-   trace_dump_arg_enum(pipe_shader_type, shader);
+   trace_dump_arg_enum(mesa_shader_stage, shader);
    trace_dump_arg(uint, start);
+   if (!found)
+      num_states = 1;
    trace_dump_arg(uint, num_states);
-   trace_dump_arg_array(ptr, states, num_states);
-
-   pipe->bind_sampler_states(pipe, shader, start, num_states, states);
+   if (found)
+      trace_dump_arg_array(ptr, states, num_states);
+   else {
+      trace_dump_arg_begin("states");
+      trace_dump_null();
+      trace_dump_arg_end();
+   }
 
    trace_dump_call_end();
 }
@@ -761,7 +755,7 @@ trace_context_link_shader(struct pipe_context *_pipe, void **shaders)
 
    trace_dump_call_begin("pipe_context", "link_shader");
    trace_dump_arg(ptr, pipe);
-   trace_dump_arg_array(ptr, shaders, PIPE_SHADER_TYPES);
+   trace_dump_arg_array(ptr, shaders, MESA_SHADER_MESH_STAGES);
    pipe->link_shader(pipe, shaders);
    trace_dump_call_end();
 }
@@ -947,8 +941,7 @@ trace_context_set_sample_mask(struct pipe_context *_pipe,
 
 static void
 trace_context_set_constant_buffer(struct pipe_context *_pipe,
-                                  enum pipe_shader_type shader, uint index,
-                                  bool take_ownership,
+                                  mesa_shader_stage shader, uint index,
                                   const struct pipe_constant_buffer *constant_buffer)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
@@ -957,12 +950,11 @@ trace_context_set_constant_buffer(struct pipe_context *_pipe,
    trace_dump_call_begin("pipe_context", "set_constant_buffer");
 
    trace_dump_arg(ptr, pipe);
-   trace_dump_arg_enum(pipe_shader_type, shader);
+   trace_dump_arg_enum(mesa_shader_stage, shader);
    trace_dump_arg(uint, index);
-   trace_dump_arg(bool, take_ownership);
    trace_dump_arg(constant_buffer, constant_buffer);
 
-   pipe->set_constant_buffer(pipe, shader, index, take_ownership, constant_buffer);
+   pipe->set_constant_buffer(pipe, shader, index, constant_buffer);
 
    trace_dump_call_end();
 }
@@ -974,16 +966,9 @@ trace_context_set_framebuffer_state(struct pipe_context *_pipe,
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
-   unsigned i;
 
    /* Unwrap the input state */
-   memcpy(&tr_ctx->unwrapped_state, state, sizeof(tr_ctx->unwrapped_state));
-   for (i = 0; i < state->nr_cbufs; ++i)
-      tr_ctx->unwrapped_state.cbufs[i] = trace_surface_unwrap(tr_ctx, state->cbufs[i]);
-   for (i = state->nr_cbufs; i < PIPE_MAX_COLOR_BUFS; ++i)
-      tr_ctx->unwrapped_state.cbufs[i] = NULL;
-   tr_ctx->unwrapped_state.zsbuf = trace_surface_unwrap(tr_ctx, state->zsbuf);
-   state = &tr_ctx->unwrapped_state;
+   util_copy_framebuffer_state(&tr_ctx->unwrapped_state, state);
 
    dump_fb_state(tr_ctx, "set_framebuffer_state", trace_dump_is_triggered());
 
@@ -991,7 +976,7 @@ trace_context_set_framebuffer_state(struct pipe_context *_pipe,
 }
 
 static void
-trace_context_set_inlinable_constants(struct pipe_context *_pipe, enum pipe_shader_type shader,
+trace_context_set_inlinable_constants(struct pipe_context *_pipe, mesa_shader_stage shader,
                                       uint num_values, uint32_t *values)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
@@ -1000,7 +985,7 @@ trace_context_set_inlinable_constants(struct pipe_context *_pipe, enum pipe_shad
    trace_dump_call_begin("pipe_context", "set_inlinable_constants");
 
    trace_dump_arg(ptr, pipe);
-   trace_dump_arg_enum(pipe_shader_type, shader);
+   trace_dump_arg_enum(mesa_shader_stage, shader);
    trace_dump_arg(uint, num_values);
    trace_dump_arg_array(uint, values, num_values);
 
@@ -1123,6 +1108,9 @@ static void
 trace_context_sampler_view_destroy(struct pipe_context *_pipe,
                                    struct pipe_sampler_view *_view)
 {
+   if (!_view)
+      return;
+
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct trace_sampler_view *tr_view = trace_sampler_view(_view);
    struct pipe_context *pipe = tr_ctx->pipe;
@@ -1133,9 +1121,31 @@ trace_context_sampler_view_destroy(struct pipe_context *_pipe,
    trace_dump_arg(ptr, pipe);
    trace_dump_arg(ptr, view);
 
+   trace_dump_call_end();
+
    trace_sampler_view_destroy(tr_view);
+}
+
+static void
+trace_context_sampler_view_release(struct pipe_context *_pipe,
+                                   struct pipe_sampler_view *_view)
+{
+   if (!_view)
+      return;
+
+   struct trace_context *tr_ctx = trace_context(_pipe);
+   struct trace_sampler_view *tr_view = trace_sampler_view(_view);
+   struct pipe_context *pipe = tr_ctx->pipe;
+   struct pipe_sampler_view *view = tr_view->sampler_view;
+
+   trace_dump_call_begin("pipe_context", "sampler_view_release");
+
+   trace_dump_arg(ptr, pipe);
+   trace_dump_arg(ptr, view);
 
    trace_dump_call_end();
+
+   trace_sampler_view_destroy(tr_view);
 }
 
 /********************************************************************
@@ -1143,64 +1153,13 @@ trace_context_sampler_view_destroy(struct pipe_context *_pipe,
  */
 
 
-static struct pipe_surface *
-trace_context_create_surface(struct pipe_context *_pipe,
-                             struct pipe_resource *resource,
-                             const struct pipe_surface *surf_tmpl)
-{
-   struct trace_context *tr_ctx = trace_context(_pipe);
-   struct pipe_context *pipe = tr_ctx->pipe;
-   struct pipe_surface *result = NULL;
-
-   trace_dump_call_begin("pipe_context", "create_surface");
-
-   trace_dump_arg(ptr, pipe);
-   trace_dump_arg(ptr, resource);
-
-   trace_dump_arg_begin("surf_tmpl");
-   trace_dump_surface_template(surf_tmpl, resource->target);
-   trace_dump_arg_end();
-
-
-   result = pipe->create_surface(pipe, resource, surf_tmpl);
-
-   trace_dump_ret(ptr, result);
-
-   trace_dump_call_end();
-
-   result = trace_surf_create(tr_ctx, resource, result);
-
-   return result;
-}
-
-
-static void
-trace_context_surface_destroy(struct pipe_context *_pipe,
-                              struct pipe_surface *_surface)
-{
-   struct trace_context *tr_ctx = trace_context(_pipe);
-   struct pipe_context *pipe = tr_ctx->pipe;
-   struct trace_surface *tr_surf = trace_surface(_surface);
-   struct pipe_surface *surface = tr_surf->surface;
-
-   trace_dump_call_begin("pipe_context", "surface_destroy");
-
-   trace_dump_arg(ptr, pipe);
-   trace_dump_arg(ptr, surface);
-
-   trace_dump_call_end();
-
-   trace_surf_destroy(tr_surf);
-}
-
 
 static void
 trace_context_set_sampler_views(struct pipe_context *_pipe,
-                                enum pipe_shader_type shader,
+                                mesa_shader_stage shader,
                                 unsigned start,
                                 unsigned num,
                                 unsigned unbind_num_trailing_slots,
-                                bool take_ownership,
                                 struct pipe_sampler_view **views)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
@@ -1212,25 +1171,32 @@ trace_context_set_sampler_views(struct pipe_context *_pipe,
    /* remove this when we have pipe->set_sampler_views(..., start, ...) */
    assert(start == 0);
 
+   bool found = false;
    for (i = 0; i < num; ++i) {
       tr_view = trace_sampler_view(views[i]);
+      if (tr_view)
+         found = true;
       unwrapped_views[i] = trace_sampler_view_unwrap(tr_view);
    }
    views = unwrapped_views;
+   pipe->set_sampler_views(pipe, shader, start, num,
+                           unbind_num_trailing_slots, views);
 
    trace_dump_call_begin("pipe_context", "set_sampler_views");
 
    trace_dump_arg(ptr, pipe);
-   trace_dump_arg_enum(pipe_shader_type, shader);
+   trace_dump_arg_enum(mesa_shader_stage, shader);
+   if (!found)
+      start = 0;
    trace_dump_arg(uint, start);
-   trace_dump_arg(uint, num);
    trace_dump_arg(uint, unbind_num_trailing_slots);
-   trace_dump_arg(bool, take_ownership);
-   trace_dump_arg_array(ptr, views, num);
-
-   pipe->set_sampler_views(pipe, shader, start, num,
-                           unbind_num_trailing_slots, take_ownership, views);
-
+   if (found)
+      trace_dump_arg_array(ptr, views, num);
+   else {
+      trace_dump_arg_begin("views");
+      trace_dump_null();
+      trace_dump_arg_end();
+   }
    trace_dump_call_end();
 }
 
@@ -1238,27 +1204,34 @@ trace_context_set_sampler_views(struct pipe_context *_pipe,
 static void
 trace_context_set_vertex_buffers(struct pipe_context *_pipe,
                                  unsigned num_buffers,
-                                 unsigned unbind_num_trailing_slots,
-                                 bool take_ownership,
                                  const struct pipe_vertex_buffer *buffers)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
 
+   bool found = false;
+   for (unsigned i = 0; buffers && i < num_buffers; i++) {
+      if (buffers[i].is_user_buffer || buffers[i].buffer.resource)
+         found = true;
+   }
+
    trace_dump_call_begin("pipe_context", "set_vertex_buffers");
 
    trace_dump_arg(ptr, pipe);
+   if (!found) {
+      num_buffers = 0;
+      buffers = NULL;
+   }
    trace_dump_arg(uint, num_buffers);
-   trace_dump_arg(uint, unbind_num_trailing_slots);
-   trace_dump_arg(bool, take_ownership);
 
    trace_dump_arg_begin("buffers");
-   trace_dump_struct_array(vertex_buffer, buffers, num_buffers);
+   if (found)
+      trace_dump_struct_array(vertex_buffer, buffers, num_buffers);
+   else
+      trace_dump_null();
    trace_dump_arg_end();
 
-   pipe->set_vertex_buffers(pipe, num_buffers,
-                            unbind_num_trailing_slots, take_ownership,
-                            buffers);
+   pipe->set_vertex_buffers(pipe, num_buffers, buffers);
 
    trace_dump_call_end();
 }
@@ -1315,7 +1288,8 @@ static void
 trace_context_set_stream_output_targets(struct pipe_context *_pipe,
                                         unsigned num_targets,
                                         struct pipe_stream_output_target **tgs,
-                                        const unsigned *offsets)
+                                        const unsigned *offsets,
+                                        enum mesa_prim output_prim)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
@@ -1326,8 +1300,9 @@ trace_context_set_stream_output_targets(struct pipe_context *_pipe,
    trace_dump_arg(uint, num_targets);
    trace_dump_arg_array(ptr, tgs, num_targets);
    trace_dump_arg_array(uint, offsets, num_targets);
+   trace_dump_arg(uint, output_prim);
 
-   pipe->set_stream_output_targets(pipe, num_targets, tgs, offsets);
+   pipe->set_stream_output_targets(pipe, num_targets, tgs, offsets, output_prim);
 
    trace_dump_call_end();
 }
@@ -1360,6 +1335,37 @@ trace_context_resource_copy_region(struct pipe_context *_pipe,
    pipe->resource_copy_region(pipe,
                               dst, dst_level, dstx, dsty, dstz,
                               src, src_level, src_box);
+
+   trace_dump_call_end();
+}
+
+
+static void
+trace_context_image_copy_buffer(struct pipe_context *_pipe,
+                                struct pipe_resource *dst,
+                                struct pipe_resource *src,
+                                unsigned buffer_offset,
+                                unsigned buffer_stride,
+                                unsigned buffer_layer_stride,
+                                unsigned level,
+                                const struct pipe_box *box)
+{
+   struct trace_context *tr_ctx = trace_context(_pipe);
+   struct pipe_context *pipe = tr_ctx->pipe;
+
+   trace_dump_call_begin("pipe_context", "image_copy_buffer");
+
+   trace_dump_arg(ptr, pipe);
+   trace_dump_arg(ptr, dst);
+   trace_dump_arg(ptr, src);
+   trace_dump_arg(uint, buffer_offset);
+   trace_dump_arg(uint, buffer_stride);
+   trace_dump_arg(uint, buffer_layer_stride);
+   trace_dump_arg(uint, level);
+   trace_dump_arg(box, box);
+
+   pipe->image_copy_buffer(pipe,
+                           dst, src, buffer_offset, buffer_stride, buffer_layer_stride, level, box);
 
    trace_dump_call_end();
 }
@@ -1444,8 +1450,6 @@ trace_context_clear_render_target(struct pipe_context *_pipe,
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
 
-   dst = trace_surface_unwrap(tr_ctx, dst);
-
    trace_dump_call_begin("pipe_context", "clear_render_target");
 
    trace_dump_arg(ptr, pipe);
@@ -1475,8 +1479,6 @@ trace_context_clear_depth_stencil(struct pipe_context *_pipe,
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
-
-   dst = trace_surface_unwrap(tr_ctx, dst);
 
    trace_dump_call_begin("pipe_context", "clear_depth_stencil");
 
@@ -1616,17 +1618,19 @@ trace_context_create_fence_fd(struct pipe_context *_pipe,
 
 static void
 trace_context_fence_server_sync(struct pipe_context *_pipe,
-                                struct pipe_fence_handle *fence)
+                                struct pipe_fence_handle *fence,
+                                uint64_t timeline_value)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
+
+   pipe->fence_server_sync(pipe, fence, timeline_value);
 
    trace_dump_call_begin("pipe_context", "fence_server_sync");
 
    trace_dump_arg(ptr, pipe);
    trace_dump_arg(ptr, fence);
-
-   pipe->fence_server_sync(pipe, fence);
+   trace_dump_arg(uint, timeline_value);
 
    trace_dump_call_end();
 }
@@ -1634,17 +1638,19 @@ trace_context_fence_server_sync(struct pipe_context *_pipe,
 
 static void
 trace_context_fence_server_signal(struct pipe_context *_pipe,
-                                struct pipe_fence_handle *fence)
+                                struct pipe_fence_handle *fence,
+                                uint64_t timeline_value)
 {
    struct trace_context *tr_ctx = trace_context(_pipe);
    struct pipe_context *pipe = tr_ctx->pipe;
+
+   pipe->fence_server_signal(pipe, fence, timeline_value);
 
    trace_dump_call_begin("pipe_context", "fence_server_signal");
 
    trace_dump_arg(ptr, pipe);
    trace_dump_arg(ptr, fence);
-
-   pipe->fence_server_signal(pipe, fence);
+   trace_dump_arg(uint, timeline_value);
 
    trace_dump_call_end();
 }
@@ -1730,7 +1736,7 @@ trace_context_transfer_map(struct pipe_context *_context,
    trace_dump_arg(ptr, pipe);
    trace_dump_arg(ptr, resource);
    trace_dump_arg(uint, level);
-   trace_dump_arg(uint, usage);
+   trace_dump_arg_enum(pipe_map_flags, usage);
    trace_dump_arg(box, box);
 
    trace_dump_arg(ptr, xfer);
@@ -1804,7 +1810,7 @@ trace_context_transfer_unmap(struct pipe_context *_context,
 
          trace_dump_arg(ptr, context);
          trace_dump_arg(ptr, resource);
-         trace_dump_arg(uint, usage);
+         trace_dump_arg_enum(pipe_map_flags, usage);
          trace_dump_arg(uint, offset);
          trace_dump_arg(uint, size);
 
@@ -1828,7 +1834,7 @@ trace_context_transfer_unmap(struct pipe_context *_context,
          trace_dump_arg(ptr, context);
          trace_dump_arg(ptr, resource);
          trace_dump_arg(uint, level);
-         trace_dump_arg(uint, usage);
+         trace_dump_arg_enum(pipe_map_flags, usage);
          trace_dump_arg(box, box);
 
          trace_dump_arg_begin("data");
@@ -1870,7 +1876,7 @@ trace_context_buffer_subdata(struct pipe_context *_context,
 
    trace_dump_arg(ptr, context);
    trace_dump_arg(ptr, resource);
-   trace_dump_arg(uint, usage);
+   trace_dump_arg_enum(pipe_map_flags, usage);
    trace_dump_arg(uint, offset);
    trace_dump_arg(uint, size);
 
@@ -1903,7 +1909,7 @@ trace_context_texture_subdata(struct pipe_context *_context,
    trace_dump_arg(ptr, context);
    trace_dump_arg(ptr, resource);
    trace_dump_arg(uint, level);
-   trace_dump_arg(uint, usage);
+   trace_dump_arg_enum(pipe_map_flags, usage);
    trace_dump_arg(box, box);
 
    trace_dump_arg_begin("data");
@@ -2177,7 +2183,7 @@ trace_context_set_patch_vertices(struct pipe_context *_context,
 }
 
 static void trace_context_set_shader_buffers(struct pipe_context *_context,
-                                             enum pipe_shader_type shader,
+                                             mesa_shader_stage shader,
                                              unsigned start, unsigned nr,
                                              const struct pipe_shader_buffer *buffers,
                                              unsigned writable_bitmask)
@@ -2185,22 +2191,34 @@ static void trace_context_set_shader_buffers(struct pipe_context *_context,
    struct trace_context *tr_context = trace_context(_context);
    struct pipe_context *context = tr_context->pipe;
 
+   context->set_shader_buffers(context, shader, start, nr, buffers,
+                               writable_bitmask);
+
+   bool found = false;
+   for (unsigned i = 0; buffers && i < nr; i++) {
+      if (buffers[i].buffer)
+         found = true;
+   }
+
    trace_dump_call_begin("pipe_context", "set_shader_buffers");
    trace_dump_arg(ptr, context);
    trace_dump_arg(uint, shader);
+   if (!found)
+      start = 0;
    trace_dump_arg(uint, start);
    trace_dump_arg_begin("buffers");
-   trace_dump_struct_array(shader_buffer, buffers, nr);
+   if (found)
+      trace_dump_struct_array(shader_buffer, buffers, nr);
+   else
+      trace_dump_null();
+
    trace_dump_arg_end();
    trace_dump_arg(uint, writable_bitmask);
    trace_dump_call_end();
-
-   context->set_shader_buffers(context, shader, start, nr, buffers,
-                               writable_bitmask);
 }
 
 static void trace_context_set_shader_images(struct pipe_context *_context,
-                                            enum pipe_shader_type shader,
+                                            mesa_shader_stage shader,
                                             unsigned start, unsigned nr,
                                             unsigned unbind_num_trailing_slots,
                                             const struct pipe_image_view *images)
@@ -2208,18 +2226,30 @@ static void trace_context_set_shader_images(struct pipe_context *_context,
    struct trace_context *tr_context = trace_context(_context);
    struct pipe_context *context = tr_context->pipe;
 
+   context->set_shader_images(context, shader, start, nr,
+                              unbind_num_trailing_slots, images);
+
+   bool found = false;
+   for (unsigned i = 0; images && i < nr; i++) {
+      if (images[i].resource)
+         found = true;
+   }
+
    trace_dump_call_begin("pipe_context", "set_shader_images");
    trace_dump_arg(ptr, context);
    trace_dump_arg(uint, shader);
+   if (!found)
+      start = 0;
    trace_dump_arg(uint, start);
    trace_dump_arg_begin("images");
-   trace_dump_struct_array(image_view, images, nr);
+   if (found)
+      trace_dump_struct_array(image_view, images, nr);
+   else
+      trace_dump_null();
+
    trace_dump_arg_end();
    trace_dump_arg(uint, unbind_num_trailing_slots);
    trace_dump_call_end();
-
-   context->set_shader_images(context, shader, start, nr,
-                              unbind_num_trailing_slots, images);
 }
 
 static void trace_context_launch_grid(struct pipe_context *_pipe,
@@ -2235,8 +2265,25 @@ static void trace_context_launch_grid(struct pipe_context *_pipe,
 
    trace_dump_trace_flush();
 
-   pipe->launch_grid(pipe, info);
+   trace_dump_call_end();
 
+   pipe->launch_grid(pipe, info);
+}
+
+static void trace_context_get_compute_state_info(struct pipe_context *_pipe, void *cso,
+                                                 struct pipe_compute_state_object_info *info)
+{
+   struct trace_context *tr_ctx = trace_context(_pipe);
+   struct pipe_context *pipe = tr_ctx->pipe;
+
+   trace_dump_call_begin("pipe_context", "get_compute_state_info");
+
+   trace_dump_arg(ptr, pipe);
+   trace_dump_arg(ptr, cso);
+
+   pipe->get_compute_state_info(pipe, cso, info);
+
+   trace_dump_ret(compute_state_object_info, info);
    trace_dump_call_end();
 }
 
@@ -2397,6 +2444,39 @@ trace_context_set_hw_atomic_buffers(struct pipe_context *_pipe,
    trace_dump_call_end();
 }
 
+static enum pipe_reset_status
+trace_context_get_device_reset_status(struct pipe_context *_pipe)
+{
+   struct trace_context *tr_ctx = trace_context(_pipe);
+   struct pipe_context *pipe = tr_ctx->pipe;
+   enum pipe_reset_status status;
+
+   trace_dump_call_begin("pipe_context", "get_device_reset_status");
+   trace_dump_arg(ptr, pipe);
+
+   status = pipe->get_device_reset_status(pipe);
+
+   trace_dump_ret(uint, status);
+   trace_dump_call_end();
+
+   return status;
+}
+
+static void
+trace_context_resource_release(struct pipe_context *_pipe, struct pipe_resource *resource)
+{
+   struct trace_context *tr_ctx = trace_context(_pipe);
+   struct pipe_context *pipe = tr_ctx->pipe;
+
+   trace_dump_call_begin("pipe_context", "resource_release");
+   trace_dump_arg(ptr, pipe);
+   trace_dump_arg(ptr, resource);
+
+   pipe->resource_release(pipe, resource);
+
+   trace_dump_call_end();
+}
+
 struct pipe_context *
 trace_context_create(struct trace_screen *tr_scr,
                      struct pipe_context *pipe)
@@ -2493,8 +2573,7 @@ trace_context_create(struct trace_screen *tr_scr,
    TR_CTX_INIT(set_sampler_views);
    TR_CTX_INIT(create_sampler_view);
    TR_CTX_INIT(sampler_view_destroy);
-   TR_CTX_INIT(create_surface);
-   TR_CTX_INIT(surface_destroy);
+   TR_CTX_INIT(sampler_view_release);
    TR_CTX_INIT(set_vertex_buffers);
    TR_CTX_INIT(create_stream_output_target);
    TR_CTX_INIT(stream_output_target_destroy);
@@ -2502,6 +2581,7 @@ trace_context_create(struct trace_screen *tr_scr,
    /* this is lavapipe-only and can't be traced */
    tr_ctx->base.stream_output_target_offset = pipe->stream_output_target_offset;
    TR_CTX_INIT(resource_copy_region);
+   TR_CTX_INIT(image_copy_buffer);
    TR_CTX_INIT(blit);
    TR_CTX_INIT(flush_resource);
    TR_CTX_INIT(clear);
@@ -2524,6 +2604,7 @@ trace_context_create(struct trace_screen *tr_scr,
    TR_CTX_INIT(set_patch_vertices);
    TR_CTX_INIT(set_shader_buffers);
    TR_CTX_INIT(launch_grid);
+   TR_CTX_INIT(get_compute_state_info);
    TR_CTX_INIT(set_shader_images);
    TR_CTX_INIT(create_texture_handle);
    TR_CTX_INIT(delete_texture_handle);
@@ -2542,6 +2623,8 @@ trace_context_create(struct trace_screen *tr_scr,
    TR_CTX_INIT(set_debug_callback);
    TR_CTX_INIT(set_global_binding);
    TR_CTX_INIT(set_hw_atomic_buffers);
+   TR_CTX_INIT(get_device_reset_status);
+   TR_CTX_INIT(resource_release);
 
 
 #undef TR_CTX_INIT

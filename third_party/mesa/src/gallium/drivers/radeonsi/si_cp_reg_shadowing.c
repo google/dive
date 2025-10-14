@@ -9,19 +9,16 @@
 #include "ac_shadowed_regs.h"
 #include "util/u_memory.h"
 
-static void si_set_context_reg_array(struct radeon_cmdbuf *cs, unsigned reg, unsigned num,
-                                     const uint32_t *values)
+bool si_init_cp_reg_shadowing(struct si_context *sctx)
 {
-   radeon_begin(cs);
-   radeon_set_context_reg_seq(reg, num);
-   radeon_emit_array(values, num);
-   radeon_end();
-}
+   if (!si_init_gfx_preamble_state(sctx))
+      return false;
 
-void si_init_cp_reg_shadowing(struct si_context *sctx)
-{
-   if (sctx->has_graphics &&
-       sctx->screen->info.register_shadowing_required) {
+   if (sctx->uses_userq_reg_shadowing) {
+      sctx->ws->userq_submit_cs_preamble_ib_once(&sctx->gfx_cs, &sctx->cs_preamble_state->base);
+      si_pm4_free_state(sctx, sctx->cs_preamble_state, ~0);
+      sctx->cs_preamble_state = NULL;
+   } else if (sctx->uses_kernelq_reg_shadowing) {
       if (sctx->screen->info.has_fw_based_shadowing) {
          sctx->shadowing.registers =
                si_aligned_buffer_create(sctx->b.screen,
@@ -35,12 +32,14 @@ void si_init_cp_reg_shadowing(struct si_context *sctx)
                                         PIPE_USAGE_DEFAULT,
                                         sctx->screen->info.fw_based_mcbp.csa_size,
                                         sctx->screen->info.fw_based_mcbp.csa_alignment);
-         if (!sctx->shadowing.registers || !sctx->shadowing.csa)
-            fprintf(stderr, "radeonsi: cannot create register shadowing buffer(s)\n");
-         else
+         if (!sctx->shadowing.registers || !sctx->shadowing.csa) {
+            mesa_loge("cannot create register shadowing buffer(s)");
+            return false;
+         } else {
             sctx->ws->cs_set_mcbp_reg_shadowing_va(&sctx->gfx_cs,
                                                    sctx->shadowing.registers->gpu_address,
                                                    sctx->shadowing.csa->gpu_address);
+         }
       } else {
          sctx->shadowing.registers =
                si_aligned_buffer_create(sctx->b.screen,
@@ -48,25 +47,27 @@ void si_init_cp_reg_shadowing(struct si_context *sctx)
                                         PIPE_USAGE_DEFAULT,
                                         SI_SHADOWED_REG_BUFFER_SIZE,
                                         4096);
-         if (!sctx->shadowing.registers)
-            fprintf(stderr, "radeonsi: cannot create a shadowed_regs buffer\n");
+         if (!sctx->shadowing.registers) {
+            mesa_loge("cannot create a shadowed_regs buffer");
+            return false;
+         }
       }
-   }
 
-   si_init_gfx_preamble_state(sctx);
-
-   if (sctx->shadowing.registers) {
       /* We need to clear the shadowed reg buffer. */
       si_cp_dma_clear_buffer(sctx, &sctx->gfx_cs, &sctx->shadowing.registers->b.b,
-                             0, sctx->shadowing.registers->bo_size, 0, SI_OP_SYNC_AFTER,
-                             SI_COHERENCY_CP, L2_BYPASS);
+                             0, sctx->shadowing.registers->bo_size, 0);
+      si_barrier_after_simple_buffer_op(sctx, 0, &sctx->shadowing.registers->b.b, NULL);
 
-      /* Create the shadowing preamble. (allocate enough dwords because the preamble is large) */
-      struct si_pm4_state *shadowing_preamble = si_pm4_create_sized(sctx->screen, 256, false);
+      /* Create the shadowing preamble. */
+      struct ac_pm4_state *shadowing_preamble =
+         ac_create_shadowing_ib_preamble(&sctx->screen->info,
+                                         sctx->shadowing.registers->gpu_address,
+                                         sctx->screen->dpbb_allowed);
 
-      ac_create_shadowing_ib_preamble(&sctx->screen->info,
-                                      (pm4_cmd_add_fn)si_pm4_cmd_add, shadowing_preamble,
-                                      sctx->shadowing.registers->gpu_address, sctx->screen->dpbb_allowed);
+      if (!shadowing_preamble) {
+         mesa_loge("failed to create shadowing_preamble");
+         return false;
+      }
 
       /* Initialize shadowed registers as follows. */
       radeon_add_to_buffer_list(sctx, &sctx->gfx_cs, sctx->shadowing.registers,
@@ -75,24 +76,38 @@ void si_init_cp_reg_shadowing(struct si_context *sctx)
          radeon_add_to_buffer_list(sctx, &sctx->gfx_cs, sctx->shadowing.csa,
                                    RADEON_USAGE_READWRITE | RADEON_PRIO_DESCRIPTORS);
       si_pm4_emit_commands(sctx, shadowing_preamble);
-      ac_emulate_clear_state(&sctx->screen->info, &sctx->gfx_cs, si_set_context_reg_array);
+
+      if (sctx->gfx_level < GFX11) {
+         struct ac_pm4_state *clear_state = ac_emulate_clear_state(&sctx->screen->info);
+         if (!clear_state) {
+            ac_pm4_free_state(shadowing_preamble);
+            mesa_loge("failed to create clear_state");
+            return false;
+         }
+         si_pm4_emit_commands(sctx, clear_state);
+         ac_pm4_free_state(clear_state);
+      }
 
       /* TODO: Gfx11 fails GLCTS if we don't re-emit the preamble at the beginning of every IB. */
+      /* TODO: Skipping this may have made register shadowing slower on Gfx11. */
       if (sctx->gfx_level < GFX11) {
-         si_pm4_emit_commands(sctx, sctx->cs_preamble_state);
+         si_pm4_emit_commands(sctx, &sctx->cs_preamble_state->base);
 
          /* The register values are shadowed, so we won't need to set them again. */
          si_pm4_free_state(sctx, sctx->cs_preamble_state, ~0);
          sctx->cs_preamble_state = NULL;
       }
 
-      si_set_tracked_regs_to_clear_state(sctx);
+      if (sctx->gfx_level < GFX12)
+         si_set_tracked_regs_to_clear_state(sctx);
 
       /* Setup preemption. The shadowing preamble will be executed as a preamble IB,
        * which will load register values from memory on a context switch.
        */
       sctx->ws->cs_setup_preemption(&sctx->gfx_cs, shadowing_preamble->pm4,
                                     shadowing_preamble->ndw);
-      si_pm4_free_state(sctx, shadowing_preamble, ~0);
+      ac_pm4_free_state(shadowing_preamble);
    }
+
+   return true;
 }

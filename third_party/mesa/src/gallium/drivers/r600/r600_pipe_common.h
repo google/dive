@@ -1,27 +1,7 @@
 /*
  * Copyright 2013 Advanced Micro Devices, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
  * Authors: Marek Olšák <maraeo@gmail.com>
- *
+ * SPDX-License-Identifier: MIT
  */
 
 /**
@@ -68,12 +48,12 @@ struct u_log_context;
 #define R600_NOT_QUERY		0xffffffff
 
 /* Debug flags. */
-#define DBG_VS			(1 << PIPE_SHADER_VERTEX)
-#define DBG_PS			(1 << PIPE_SHADER_FRAGMENT)
-#define DBG_GS			(1 << PIPE_SHADER_GEOMETRY)
-#define DBG_TCS			(1 << PIPE_SHADER_TESS_CTRL)
-#define DBG_TES			(1 << PIPE_SHADER_TESS_EVAL)
-#define DBG_CS			(1 << PIPE_SHADER_COMPUTE)
+#define DBG_VS			(1 << MESA_SHADER_VERTEX)
+#define DBG_PS			(1 << MESA_SHADER_FRAGMENT)
+#define DBG_GS			(1 << MESA_SHADER_GEOMETRY)
+#define DBG_TCS			(1 << MESA_SHADER_TESS_CTRL)
+#define DBG_TES			(1 << MESA_SHADER_TESS_EVAL)
+#define DBG_CS			(1 << MESA_SHADER_COMPUTE)
 #define DBG_ALL_SHADERS		(DBG_FS - 1)
 #define DBG_FS			(1 << 6) /* fetch shader */
 #define DBG_TEX			(1 << 7)
@@ -105,19 +85,15 @@ struct u_log_context;
 #define R600_MAP_BUFFER_ALIGNMENT 64
 #define R600_MAX_VIEWPORTS        16
 
-#define SI_MAX_VARIABLE_THREADS_PER_BLOCK 1024
+#define R600_MAX_VARIABLE_THREADS_PER_BLOCK 1024
+
+#define R600_MAX_COLOR_BUFFERS 12
 
 enum r600_coherency {
 	R600_COHERENCY_NONE, /* no cache flushes needed */
 	R600_COHERENCY_SHADER,
 	R600_COHERENCY_CB_META,
 };
-
-#if UTIL_ARCH_BIG_ENDIAN
-#define R600_BIG_ENDIAN 1
-#else
-#define R600_BIG_ENDIAN 0
-#endif
 
 struct r600_common_context;
 struct r600_perfcounters;
@@ -131,7 +107,7 @@ struct r600_resource {
 	struct threaded_resource	b;
 
 	/* Winsys objects. */
-	struct pb_buffer		*buf;
+	struct pb_buffer_lean		*buf;
 	uint64_t			gpu_address;
 	/* Memory usage if the buffer placement is optimal. */
 	uint64_t			vram_usage;
@@ -193,6 +169,33 @@ struct r600_cmask_info {
 	uint64_t base_address_reg;
 };
 
+struct r600_pre_eg_cb {
+	struct r600_resource            *cb_buffer_fmask; /* Used for FMASK relocations. R600 only */
+	struct r600_resource            *cb_buffer_cmask; /* Used for CMASK relocations. R600 only */
+
+	/* Misc. color flags. */
+	bool                            alphatest_bypass;
+	bool                            export_16bpc;
+
+	unsigned                        cb_color_size; /* R600 only */
+	unsigned                 	cb_color_info;
+	unsigned                        cb_color_base;
+	unsigned                        cb_color_view;
+	unsigned                        cb_color_fmask;
+	unsigned                        cb_color_cmask;
+	unsigned                        cb_color_mask; /* R600 only */
+};
+
+struct r600_pre_eg_zs {
+	uint64_t                        db_depth_base;
+	uint64_t                        db_htile_data_base;
+	unsigned                        db_depth_view;
+	unsigned                        db_depth_size;
+	unsigned                        db_depth_info; /* R600 only, then SI and later */
+	unsigned                        db_prefetch_limit; /* R600 only */
+	unsigned                        db_htile_surface;
+};
+
 struct r600_texture {
 	struct r600_resource		resource;
 
@@ -231,16 +234,7 @@ struct r600_texture {
 	uint32_t			framebuffers_bound;
 };
 
-struct r600_surface {
-	struct pipe_surface		base;
-
-	/* These can vary with block-compressed textures. */
-	unsigned width0;
-	unsigned height0;
-
-	bool color_initialized;
-	bool depth_initialized;
-
+struct r600_cb_surface {
 	/* Misc. color flags. */
 	bool alphatest_bypass;
 	bool export_16bpc;
@@ -251,7 +245,6 @@ struct r600_surface {
 	unsigned cb_color_info;
 	unsigned cb_color_base;
 	unsigned cb_color_view;
-	unsigned cb_color_size;		/* R600 only */
 	unsigned cb_color_dim;		/* EG only */
 	unsigned cb_color_pitch;	/* EG and later */
 	unsigned cb_color_slice;	/* EG and later */
@@ -259,23 +252,28 @@ struct r600_surface {
 	unsigned cb_color_fmask;	/* CB_COLORn_FMASK (EG and later) or CB_COLORn_FRAG (r600) */
 	unsigned cb_color_fmask_slice;	/* EG and later */
 	unsigned cb_color_cmask;	/* CB_COLORn_TILE (r600 only) */
-	unsigned cb_color_mask;		/* R600 only */
-	struct r600_resource *cb_buffer_fmask; /* Used for FMASK relocations. R600 only */
-	struct r600_resource *cb_buffer_cmask; /* Used for CMASK relocations. R600 only */
 
 	/* DB registers. */
 	uint64_t db_depth_base;		/* DB_Z_READ/WRITE_BASE (EG and later) or DB_DEPTH_BASE (r600) */
 	uint64_t db_stencil_base;	/* EG and later */
 	uint64_t db_htile_data_base;
-	unsigned db_depth_info;		/* R600 only, then SI and later */
 	unsigned db_z_info;		/* EG and later */
 	unsigned db_depth_view;
 	unsigned db_depth_size;
 	unsigned db_depth_slice;	/* EG and later */
 	unsigned db_stencil_info;	/* EG and later */
-	unsigned db_prefetch_limit;	/* R600 only */
 	unsigned db_htile_surface;
 	unsigned db_preload_control;	/* EG and later */
+};
+
+struct evergreen_framebuffer {
+	struct r600_cb_surface cbufs[R600_MAX_COLOR_BUFFERS];
+	struct r600_cb_surface zsbuf;
+};
+
+struct r600_pre_eg_cbzs {
+	struct r600_pre_eg_cb cb_surface[PIPE_MAX_COLOR_BUFS];
+	struct r600_pre_eg_zs zs_surface;
 };
 
 struct r600_mmio_counter {
@@ -320,7 +318,7 @@ union r600_mmio_counters {
 
 struct r600_memory_object {
 	struct pipe_memory_object	b;
-	struct pb_buffer		*buf;
+	struct pb_buffer_lean		*buf;
 	uint32_t			stride;
 	uint32_t			offset;
 };
@@ -402,7 +400,6 @@ struct r600_common_screen {
 	} barrier_flags;
 
 	struct nir_shader_compiler_options nir_options;
-	struct nir_shader_compiler_options nir_options_fs;
 };
 
 /* This encapsulates a state or an operation which can emitted into the GPU
@@ -472,6 +469,16 @@ struct r600_viewports {
 	struct r600_signed_scissor	as_scissor[R600_MAX_VIEWPORTS];
 };
 
+/* EXT_window_rectangles */
+#define R600_MAX_WINDOW_RECTANGLES 4
+
+struct r600_window_rectangles {
+	unsigned			number;
+	bool				include;
+	struct pipe_scissor_state	states[R600_MAX_WINDOW_RECTANGLES];
+	struct r600_atom		atom;
+};
+
 struct r600_ring {
 	struct radeon_cmdbuf		cs;
 	void (*flush)(void *ctx, unsigned flags,
@@ -519,10 +526,28 @@ struct r600_common_context {
 	struct r600_streamout		streamout;
 	struct r600_scissors		scissors;
 	struct r600_viewports		viewports;
+	struct r600_window_rectangles	window_rectangles;
 	bool				scissor_enabled;
 	bool				clip_halfz;
 	bool				vs_writes_viewport_index;
 	bool				vs_disables_clipping_viewport;
+
+	/* The number of pixels outside the viewport that are not culled by the clipper.
+	 * Normally, the clipper clips everything outside the viewport, however, points and lines
+	 * can have vertices outside the viewport, but their edges can be inside the viewport. Those
+	 * shouldn't be culled. The problem is that the register setting (PA_CL_GB_*_DISC_ADJ) that
+	 * controls the discard distance, which depends on the point size and line width, applies to
+	 * all primitive types, and we would have to set 0 distance for triangles and non-zero for
+	 * points and lines whenever the primitive type changes, which would add overhead and cause
+	 * context rolls.
+	 *
+	 * To reduce that, whenever the discard distance changes for points and lines, we keep it
+	 * at that higher value up to a certain small number for all primitive types including all
+	 * points and lines within a specific size. This is slightly inefficient, but it eliminates
+	 * a lot of guardband state updates and context register changes.
+	 */
+	float min_clip_discard_distance_watermark;
+	float current_clip_discard_distance;
 
 	/* Additional context states. */
 	unsigned flags; /* flush flags */
@@ -573,6 +598,9 @@ struct r600_common_context {
 
 	void				*query_result_shader;
 
+	struct evergreen_framebuffer    framebuffer;
+	struct r600_pre_eg_cbzs         *r600_pre_eg_cbzs;
+
 	/* Copy one resource to another using async DMA. */
 	void (*dma_copy)(struct pipe_context *ctx,
 			 struct pipe_resource *dst,
@@ -620,9 +648,42 @@ struct r600_common_context {
 				enum amd_ip_type ring);
 };
 
+#define R600_ALL_PRIM_LINE_MODES                                                                   \
+	((1 << MESA_PRIM_LINES) | (1 << MESA_PRIM_LINE_LOOP) | (1 << MESA_PRIM_LINE_STRIP) |       \
+	 (1 << MESA_PRIM_LINES_ADJACENCY) | (1 << MESA_PRIM_LINE_STRIP_ADJACENCY))
+
+static inline bool r600_prim_is_lines(unsigned prim)
+{
+	return ((1 << prim) & R600_ALL_PRIM_LINE_MODES) != 0;
+}
+
+static inline void r600_set_clip_discard_distance(struct r600_common_context *rctx,
+						  float distance)
+{
+	/* Determine whether the guardband registers change.
+	 *
+	 * When we see a value greater than min_clip_discard_distance_watermark, we increase it
+	 * up to a certain number to eliminate those state changes next time they happen.
+	 * See the comment at min_clip_discard_distance_watermark.
+	 */
+	if (distance > rctx->min_clip_discard_distance_watermark) {
+		/* The maximum number was determined from Viewperf. The number is in units of half-pixels. */
+		rctx->min_clip_discard_distance_watermark = MIN2(distance, 6);
+
+		float old_distance = rctx->current_clip_discard_distance;
+		float new_distance = MAX2(distance, rctx->min_clip_discard_distance_watermark);
+
+		if (old_distance != new_distance) {
+			rctx->current_clip_discard_distance = new_distance;
+			rctx->scissors.dirty_mask = (1 << R600_MAX_VIEWPORTS) - 1;
+			rctx->set_atom_dirty(rctx, &rctx->scissors.atom, true);
+		}
+	}
+}
+
 /* r600_buffer_common.c */
 bool r600_rings_is_buffer_referenced(struct r600_common_context *ctx,
-				     struct pb_buffer *buf,
+				     struct pb_buffer_lean *buf,
 				     unsigned usage);
 void *r600_buffer_map_sync_with_rings(struct r600_common_context *ctx,
                                       struct r600_resource *resource,
@@ -643,7 +704,7 @@ void r600_buffer_flush_region(struct pipe_context *ctx,
 struct pipe_resource *r600_buffer_create(struct pipe_screen *screen,
 					 const struct pipe_resource *templ,
 					 unsigned alignment);
-struct pipe_resource * r600_aligned_buffer_create(struct pipe_screen *screen,
+struct r600_resource * r600_aligned_buffer_create(struct pipe_screen *screen,
 						  unsigned flags,
 						  unsigned usage,
 						  unsigned size,
@@ -683,7 +744,7 @@ void r600_draw_rectangle(struct blitter_context *blitter,
 			 int x1, int y1, int x2, int y2,
 			 float depth, unsigned num_instances,
 			 enum blitter_attrib_type type,
-			 const union blitter_attrib *attrib);
+			 const struct blitter_attrib *attrib);
 bool r600_common_screen_init(struct r600_common_screen *rscreen,
 			     struct radeon_winsys *ws);
 void r600_destroy_common_screen(struct r600_common_screen *rscreen);
@@ -701,7 +762,6 @@ void r600_screen_clear_buffer(struct r600_common_screen *rscreen, struct pipe_re
 			      uint64_t offset, uint64_t size, unsigned value);
 struct pipe_resource *r600_resource_create_common(struct pipe_screen *screen,
 						  const struct pipe_resource *templ);
-const char *r600_get_llvm_processor_name(enum radeon_family family);
 void r600_need_dma_space(struct r600_common_context *ctx, unsigned num_dw,
 			 struct r600_resource *dst, struct r600_resource *src);
 void radeon_save_cs(struct radeon_winsys *ws, struct radeon_cmdbuf *cs,
@@ -730,7 +790,8 @@ void r600_streamout_buffers_dirty(struct r600_common_context *rctx);
 void r600_set_streamout_targets(struct pipe_context *ctx,
 				unsigned num_targets,
 				struct pipe_stream_output_target **targets,
-				const unsigned *offset);
+				const unsigned *offset,
+                                enum mesa_prim output_prim);
 void r600_emit_streamout_end(struct r600_common_context *rctx);
 void r600_update_prims_generated_query_state(struct r600_common_context *rctx,
 					     unsigned type, int diff);
@@ -764,15 +825,11 @@ struct pipe_resource *r600_texture_create(struct pipe_screen *screen,
 					const struct pipe_resource *templ);
 struct pipe_surface *r600_create_surface_custom(struct pipe_context *pipe,
 						struct pipe_resource *texture,
-						const struct pipe_surface *templ,
-						unsigned width0, unsigned height0,
-						unsigned width, unsigned height);
+						const struct pipe_surface *templ);
+void r600_destroy_surface_custom(struct pipe_surface *);
 unsigned r600_translate_colorswap(enum pipe_format format, bool do_endian_swap);
-void evergreen_do_fast_color_clear(struct r600_common_context *rctx,
-				   struct pipe_framebuffer_state *fb,
-				   struct r600_atom *fb_state,
-				   unsigned *buffers, uint8_t *dirty_cbufs,
-				   const union pipe_color_union *color);
+void r600_texture_alloc_cmask_separate(struct r600_common_screen *rscreen,
+					struct r600_texture *rtex);
 void r600_init_screen_texture_functions(struct r600_common_screen *rscreen);
 void r600_init_context_texture_functions(struct r600_common_context *rctx);
 void eg_resource_alloc_immed(struct r600_common_screen *rscreen,
@@ -790,8 +847,6 @@ void r600_texture_transfer_unmap(struct pipe_context *ctx,
 /* r600_viewport.c */
 void evergreen_apply_scissor_bug_workaround(struct r600_common_context *rctx,
 					    struct pipe_scissor_state *scissor);
-void r600_viewport_set_rast_deps(struct r600_common_context *rctx,
-				 bool scissor_enable, bool clip_halfz);
 void r600_update_vs_writes_viewport_index(struct r600_common_context *rctx,
 					  struct tgsi_shader_info *info);
 void r600_init_viewport_functions(struct r600_common_context *rctx);
@@ -810,7 +865,7 @@ void cayman_emit_msaa_state(struct radeon_cmdbuf *cs, int nr_samples,
 
 /* Inline helpers. */
 
-static inline struct r600_resource *r600_resource(struct pipe_resource *r)
+static inline struct r600_resource *r600_as_resource(struct pipe_resource *r)
 {
 	return (struct r600_resource*)r;
 }
@@ -832,7 +887,7 @@ static inline void
 r600_context_add_resource_size(struct pipe_context *ctx, struct pipe_resource *r)
 {
 	struct r600_common_context *rctx = (struct r600_common_context *)ctx;
-	struct r600_resource *res = (struct r600_resource *)r;
+	struct r600_resource *res = r600_as_resource(r);
 
 	if (res) {
 		/* Add memory usage for need_gfx_cs_space */
@@ -918,6 +973,12 @@ static inline bool
 r600_htile_enabled(struct r600_texture *tex, unsigned level)
 {
 	return tex->htile_offset && level == 0;
+}
+
+static inline struct r600_texture *
+r600_as_texture(struct pipe_resource *res)
+{
+	return (struct r600_texture *)res;
 }
 
 #define COMPUTE_DBG(rscreen, fmt, args...) \

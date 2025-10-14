@@ -167,7 +167,7 @@ validate_DispatchComputeGroupSizeARB(struct gl_context *ctx,
     *  for compute shaders with variable group size
     *  (MAX_COMPUTE_VARIABLE_GROUP_INVOCATIONS_ARB)."
     */
-   uint64_t total_invocations = info->block[0] * info->block[1];
+   uint64_t total_invocations = info->block[0] * (uint64_t) info->block[1];
    if (total_invocations <= UINT32_MAX) {
       /* Only bother multiplying the third value if total still fits in
        * 32-bit, since MaxComputeVariableGroupInvocations is also 32-bit.
@@ -197,7 +197,7 @@ validate_DispatchComputeGroupSizeARB(struct gl_context *ctx,
     *  of <group_size_x>, <group_size_y>, and <group_size_z> is not a multiple
     *  of four."
     */
-   if (prog->info.cs.derivative_group == DERIVATIVE_GROUP_QUADS &&
+   if (prog->info.derivative_group == DERIVATIVE_GROUP_QUADS &&
        ((info->block[0] & 1) || (info->block[1] & 1))) {
       _mesa_error(ctx, GL_INVALID_VALUE,
                   "glDispatchComputeGroupSizeARB(derivative_group_quadsNV "
@@ -206,7 +206,7 @@ validate_DispatchComputeGroupSizeARB(struct gl_context *ctx,
       return GL_FALSE;
    }
 
-   if (prog->info.cs.derivative_group == DERIVATIVE_GROUP_LINEAR &&
+   if (prog->info.derivative_group == DERIVATIVE_GROUP_LINEAR &&
        total_invocations & 3) {
       _mesa_error(ctx, GL_INVALID_VALUE,
                   "glDispatchComputeGroupSizeARB(derivative_group_linearNV "
@@ -295,7 +295,9 @@ prepare_compute(struct gl_context *ctx)
    if (ctx->NewState)
       _mesa_update_state(ctx);
 
-   st_validate_state(st, ST_PIPELINE_COMPUTE_STATE_MASK);
+   ST_PIPELINE_COMPUTE_STATE_MASK(mask);
+   st_validate_state(st, mask);
+   st_context_add_work(st);
 }
 
 static ALWAYS_INLINE void

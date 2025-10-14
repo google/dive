@@ -40,6 +40,7 @@
 #include "bufferobj.h"
 #include "externalobjects.h"
 #include "mtypes.h"
+#include "shared.h"
 #include "teximage.h"
 #include "glformats.h"
 #include "texstore.h"
@@ -255,6 +256,13 @@ buffer_usage(GLenum target, GLboolean immutable,
    }
 }
 
+static void
+_mesa_bufferobj_release_buffer(struct gl_context *ctx, struct gl_buffer_object *obj)
+{
+   if (obj->buffer)
+      _mesa_release_pending_resource(ctx, obj->buffer, true);
+   obj->buffer = NULL;
+}
 
 static ALWAYS_INLINE GLboolean
 bufferobj_data(struct gl_context *ctx,
@@ -302,7 +310,7 @@ bufferobj_data(struct gl_context *ctx,
          return GL_TRUE;
       } else if (is_mapped) {
          return GL_TRUE; /* can't reallocate, nothing to do */
-      } else if (screen->get_param(screen, PIPE_CAP_INVALIDATE_BUFFER)) {
+      } else if (screen->caps.invalidate_buffer) {
          pipe->invalidate_resource(pipe, obj->buffer);
          return GL_TRUE;
       }
@@ -312,7 +320,7 @@ bufferobj_data(struct gl_context *ctx,
    obj->Usage = usage;
    obj->StorageFlags = storageFlags;
 
-   _mesa_bufferobj_release_buffer(obj);
+   _mesa_bufferobj_release_buffer(ctx, obj);
 
    unsigned bindings = buffer_target_to_bind_flags(target);
 
@@ -352,7 +360,9 @@ bufferobj_data(struct gl_context *ctx,
          obj->buffer = screen->resource_create(screen, &buffer);
 
          if (obj->buffer && data)
-            pipe_buffer_write(pipe, obj->buffer, 0, size, data);
+            pipe->buffer_subdata(pipe, obj->buffer,
+                                 PIPE_MAP_WRITE | PIPE_MAP_DISCARD_WHOLE_RESOURCE | PIPE_MAP_UNSYNCHRONIZED,
+                                 0, size, data);
       }
 
       if (!obj->buffer) {
@@ -360,23 +370,23 @@ bufferobj_data(struct gl_context *ctx,
          obj->Size = 0;
          return GL_FALSE;
       }
-
-      obj->private_refcount_ctx = ctx;
    }
 
    /* The current buffer may be bound, so we have to revalidate all atoms that
     * might be using it.
     */
    if (obj->UsageHistory & USAGE_ARRAY_BUFFER)
-      ctx->NewDriverState |= ST_NEW_VERTEX_ARRAYS;
+      ST_SET_STATE(ctx->NewDriverState, ST_NEW_VERTEX_ARRAYS);
    if (obj->UsageHistory & USAGE_UNIFORM_BUFFER)
-      ctx->NewDriverState |= ST_NEW_UNIFORM_BUFFER;
+      ST_SET_SHADER_STATES(ctx->NewDriverState, UBOS);
    if (obj->UsageHistory & USAGE_SHADER_STORAGE_BUFFER)
-      ctx->NewDriverState |= ST_NEW_STORAGE_BUFFER;
-   if (obj->UsageHistory & USAGE_TEXTURE_BUFFER)
-      ctx->NewDriverState |= ST_NEW_SAMPLER_VIEWS | ST_NEW_IMAGE_UNITS;
+      ST_SET_SHADER_STATES(ctx->NewDriverState, SSBOS);
+   if (obj->UsageHistory & USAGE_TEXTURE_BUFFER) {
+      ST_SET_SHADER_STATES(ctx->NewDriverState, SAMPLER_VIEWS);
+      ST_SET_SHADER_STATES(ctx->NewDriverState, IMAGES);
+   }
    if (obj->UsageHistory & USAGE_ATOMIC_COUNTER_BUFFER)
-      ctx->NewDriverState |= ctx->DriverFlags.NewAtomicBuffer;
+      ST_SET_STATES(ctx->NewDriverState, ctx->DriverFlags.NewAtomicBuffer);
 
    return GL_TRUE;
 }
@@ -995,36 +1005,17 @@ convert_clear_buffer_data(struct gl_context *ctx,
                           const GLvoid *data, const char *caller)
 {
    GLenum internalformatBase = _mesa_get_format_base_format(internalformat);
+   struct gl_pixelstore_attrib packing = {.Alignment = 1};
 
    if (_mesa_texstore(ctx, 1, internalformatBase, internalformat,
                       0, &clearValue, 1, 1, 1,
-                      format, type, data, &ctx->Unpack)) {
+                      format, type, data, &packing)) {
       return true;
    }
    else {
       _mesa_error(ctx, GL_OUT_OF_MEMORY, "%s", caller);
       return false;
    }
-}
-
-void
-_mesa_bufferobj_release_buffer(struct gl_buffer_object *obj)
-{
-   if (!obj->buffer)
-      return;
-
-   /* Subtract the remaining private references before unreferencing
-    * the buffer. See the header file for explanation.
-    */
-   if (obj->private_refcount) {
-      assert(obj->private_refcount > 0);
-      p_atomic_add(&obj->buffer->reference.count,
-                   -obj->private_refcount);
-      obj->private_refcount = 0;
-   }
-   obj->private_refcount_ctx = NULL;
-
-   pipe_resource_reference(&obj->buffer, NULL);
 }
 
 /**
@@ -1038,7 +1029,7 @@ _mesa_delete_buffer_object(struct gl_context *ctx,
 {
    assert(bufObj->RefCount == 0);
    _mesa_buffer_unmap_all_mappings(ctx, bufObj);
-   _mesa_bufferobj_release_buffer(bufObj);
+   _mesa_bufferobj_release_buffer(ctx, bufObj);
 
    vbo_delete_minmax_cache(bufObj);
 
@@ -1082,21 +1073,6 @@ count_buffer_size(void *data, void *userData)
    *total = *total + bufObj->Size;
 }
 
-
-/**
- * Compute total size (in bytes) of all buffer objects for the given context.
- * For debugging purposes.
- */
-GLuint
-_mesa_total_buffer_object_memory(struct gl_context *ctx)
-{
-   GLuint total = 0;
-
-   _mesa_HashWalkMaybeLocked(ctx->Shared->BufferObjects, count_buffer_size,
-                             &total, ctx->BufferObjectsLocked);
-
-   return total;
-}
 
 /**
  * Initialize the state associated with buffer objects
@@ -1176,6 +1152,13 @@ unreference_zombie_buffers_for_ctx(struct gl_context *ctx)
          detach_ctx_from_buffer(ctx, buf);
       }
    }
+
+   set_foreach(&ctx->Shared->ReleaseResources, entry) {
+      struct pipe_resource *releasebuf = (void*)entry->key;
+      if (_mesa_release_pending_resource(ctx, releasebuf, false))
+         _mesa_set_remove(&ctx->Shared->ReleaseResources, entry);
+   }
+   _mesa_clear_releasebufs(ctx);
 }
 
 /**
@@ -1248,11 +1231,11 @@ _mesa_free_buffer_objects( struct gl_context *ctx )
 				    NULL);
    }
 
-   _mesa_HashLockMutex(ctx->Shared->BufferObjects);
+   _mesa_HashLockMutex(&ctx->Shared->BufferObjects);
    unreference_zombie_buffers_for_ctx(ctx);
-   _mesa_HashWalkLocked(ctx->Shared->BufferObjects,
+   _mesa_HashWalkLocked(&ctx->Shared->BufferObjects,
                         detach_unrefcounted_buffer_from_ctx, ctx);
-   _mesa_HashUnlockMutex(ctx->Shared->BufferObjects);
+   _mesa_HashUnlockMutex(&ctx->Shared->BufferObjects);
 }
 
 struct gl_buffer_object *
@@ -1310,10 +1293,10 @@ handle_bind_buffer_gen(struct gl_context *ctx,
          _mesa_error(ctx, GL_OUT_OF_MEMORY, "%s", caller);
          return false;
       }
-      _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+      _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                                 ctx->BufferObjectsLocked);
-      _mesa_HashInsertLocked(ctx->Shared->BufferObjects, buffer,
-                             *buf_handle, buf != NULL);
+      _mesa_HashInsertLocked(&ctx->Shared->BufferObjects, buffer,
+                             *buf_handle);
       /* If one context only creates buffers and another context only deletes
        * buffers, buffers don't get released because it only produces zombie
        * buffers. Only the context that has created the buffers can release
@@ -1321,7 +1304,7 @@ handle_bind_buffer_gen(struct gl_context *ctx,
        * buffers.
        */
       unreference_zombie_buffers_for_ctx(ctx);
-      _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+      _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                   ctx->BufferObjectsLocked);
    }
 
@@ -1361,8 +1344,7 @@ bind_buffer_object(struct gl_context *ctx,
 
    /* Get pointer to old buffer object (to be unbound) */
    oldBufObj = *bindTarget;
-   GLuint old_name = oldBufObj && !oldBufObj->DeletePending ? oldBufObj->Name : 0;
-   if (unlikely(old_name == buffer))
+   if (unlikely(_mesa_is_same_buffer_object(oldBufObj, buffer)))
       return;   /* rebinding the same buffer object- no change */
 
    newBufObj = _mesa_lookup_bufferobj(ctx, buffer);
@@ -1406,7 +1388,7 @@ _mesa_lookup_bufferobj(struct gl_context *ctx, GLuint buffer)
       return NULL;
    else
       return (struct gl_buffer_object *)
-         _mesa_HashLookupMaybeLocked(ctx->Shared->BufferObjects, buffer,
+         _mesa_HashLookupMaybeLocked(&ctx->Shared->BufferObjects, buffer,
                                      ctx->BufferObjectsLocked);
 }
 
@@ -1418,7 +1400,7 @@ _mesa_lookup_bufferobj_locked(struct gl_context *ctx, GLuint buffer)
       return NULL;
    else
       return (struct gl_buffer_object *)
-         _mesa_HashLookupLocked(ctx->Shared->BufferObjects, buffer);
+         _mesa_HashLookupLocked(&ctx->Shared->BufferObjects, buffer);
 }
 
 /**
@@ -1457,7 +1439,7 @@ _mesa_lookup_bufferobj_err(struct gl_context *ctx, GLuint buffer,
  *
  * This function assumes that the caller has already locked the
  * hash table mutex by calling
- * _mesa_HashLockMutex(ctx->Shared->BufferObjects).
+ * _mesa_HashLockMutex(&ctx->Shared->BufferObjects).
  */
 struct gl_buffer_object *
 _mesa_multi_bind_lookup_bufferobj(struct gl_context *ctx,
@@ -1602,7 +1584,7 @@ set_buffer_multi_binding(struct gl_context *ctx,
 {
    struct gl_buffer_object *bufObj;
 
-   if (binding->BufferObject && binding->BufferObject->Name == buffers[idx])
+   if (_mesa_is_same_buffer_object(binding->BufferObject, buffers[idx]))
       bufObj = binding->BufferObject;
    else {
       bool error;
@@ -1625,7 +1607,6 @@ bind_buffer(struct gl_context *ctx,
             GLintptr offset,
             GLsizeiptr size,
             GLboolean autoSize,
-            uint64_t driver_state,
             gl_buffer_usage usage)
 {
    if (binding->BufferObject == bufObj &&
@@ -1636,7 +1617,20 @@ bind_buffer(struct gl_context *ctx,
    }
 
    FLUSH_VERTICES(ctx, 0, 0);
-   ctx->NewDriverState |= driver_state;
+
+   switch (usage) {
+   case USAGE_UNIFORM_BUFFER:
+      ST_SET_SHADER_STATES(ctx->NewDriverState, UBOS);
+      break;
+   case USAGE_SHADER_STORAGE_BUFFER:
+      ST_SET_SHADER_STATES(ctx->NewDriverState, SSBOS);
+      break;
+   case USAGE_ATOMIC_COUNTER_BUFFER:
+      ST_SET_STATES(ctx->NewDriverState, ctx->DriverFlags.NewAtomicBuffer);
+      break;
+   default:
+      UNREACHABLE("invalid usage");
+   }
 
    set_buffer_binding(ctx, binding, bufObj, offset, size, autoSize, usage);
 }
@@ -1658,7 +1652,6 @@ bind_uniform_buffer(struct gl_context *ctx,
 {
    bind_buffer(ctx, &ctx->UniformBufferBindings[index],
                bufObj, offset, size, autoSize,
-               ST_NEW_UNIFORM_BUFFER,
                USAGE_UNIFORM_BUFFER);
 }
 
@@ -1679,7 +1672,6 @@ bind_shader_storage_buffer(struct gl_context *ctx,
 {
    bind_buffer(ctx, &ctx->ShaderStorageBufferBindings[index],
                bufObj, offset, size, autoSize,
-               ST_NEW_STORAGE_BUFFER,
                USAGE_SHADER_STORAGE_BUFFER);
 }
 
@@ -1697,7 +1689,6 @@ bind_atomic_buffer(struct gl_context *ctx, unsigned index,
 {
    bind_buffer(ctx, &ctx->AtomicBufferBindings[index],
                bufObj, offset, size, autoSize,
-               ctx->DriverFlags.NewAtomicBuffer,
                USAGE_ATOMIC_COUNTER_BUFFER);
 }
 
@@ -1778,7 +1769,7 @@ delete_buffers(struct gl_context *ctx, GLsizei n, const GLuint *ids)
 {
    FLUSH_VERTICES(ctx, 0, 0);
 
-   _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                              ctx->BufferObjectsLocked);
    unreference_zombie_buffers_for_ctx(ctx);
 
@@ -1895,7 +1886,7 @@ delete_buffers(struct gl_context *ctx, GLsizei n, const GLuint *ids)
          }
 
          /* The ID is immediately freed for re-use */
-         _mesa_HashRemoveLocked(ctx->Shared->BufferObjects, ids[i]);
+         _mesa_HashRemoveLocked(&ctx->Shared->BufferObjects, ids[i]);
          /* Make sure we do not run into the classic ABA problem on bind.
           * We don't want to allow re-binding a buffer object that's been
           * "deleted" by glDeleteBuffers().
@@ -1924,7 +1915,7 @@ delete_buffers(struct gl_context *ctx, GLsizei n, const GLuint *ids)
       }
    }
 
-   _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                ctx->BufferObjectsLocked);
 }
 
@@ -1967,7 +1958,7 @@ create_buffers(struct gl_context *ctx, GLsizei n, GLuint *buffers, bool dsa)
    /*
     * This must be atomic (generation and allocation of buffer object IDs)
     */
-   _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                              ctx->BufferObjectsLocked);
    /* If one context only creates buffers and another context only deletes
     * buffers, buffers don't get released because it only produces zombie
@@ -1977,7 +1968,7 @@ create_buffers(struct gl_context *ctx, GLsizei n, GLuint *buffers, bool dsa)
     */
    unreference_zombie_buffers_for_ctx(ctx);
 
-   _mesa_HashFindFreeKeys(ctx->Shared->BufferObjects, buffers, n);
+   _mesa_HashFindFreeKeys(&ctx->Shared->BufferObjects, buffers, n);
 
    /* Insert the ID and pointer into the hash table. If non-DSA, insert a
     * DummyBufferObject.  Otherwise, create a new buffer object and insert
@@ -1988,7 +1979,7 @@ create_buffers(struct gl_context *ctx, GLsizei n, GLuint *buffers, bool dsa)
          buf = new_gl_buffer_object(ctx, buffers[i]);
          if (!buf) {
             _mesa_error(ctx, GL_OUT_OF_MEMORY, "glCreateBuffers");
-            _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+            _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                         ctx->BufferObjectsLocked);
             return;
          }
@@ -1996,10 +1987,10 @@ create_buffers(struct gl_context *ctx, GLsizei n, GLuint *buffers, bool dsa)
       else
          buf = &DummyBufferObject;
 
-      _mesa_HashInsertLocked(ctx->Shared->BufferObjects, buffers[i], buf, true);
+      _mesa_HashInsertLocked(&ctx->Shared->BufferObjects, buffers[i], buf);
    }
 
-   _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                ctx->BufferObjectsLocked);
 }
 
@@ -2194,7 +2185,7 @@ inlined_buffer_storage(GLenum target, GLuint buffer, GLsizeiptr size,
 
    if (mem) {
       if (!no_error) {
-         if (!ctx->Extensions.EXT_memory_object) {
+         if (!_mesa_has_EXT_memory_object(ctx)) {
             _mesa_error(ctx, GL_INVALID_OPERATION, "%s(unsupported)", func);
             return;
          }
@@ -3177,6 +3168,8 @@ _mesa_GetBufferParameteriv(GLenum target, GLenum pname, GLint *params)
    struct gl_buffer_object *bufObj;
    GLint64 parameter;
 
+   *params = 0;
+
    bufObj = get_buffer(ctx, "glGetBufferParameteriv", target,
                        GL_INVALID_OPERATION);
    if (!bufObj)
@@ -3195,6 +3188,8 @@ _mesa_GetBufferParameteri64v(GLenum target, GLenum pname, GLint64 *params)
    GET_CURRENT_CONTEXT(ctx);
    struct gl_buffer_object *bufObj;
    GLint64 parameter;
+
+   *params = 0;
 
    bufObj = get_buffer(ctx, "glGetBufferParameteri64v", target,
                        GL_INVALID_OPERATION);
@@ -3215,6 +3210,8 @@ _mesa_GetNamedBufferParameteriv(GLuint buffer, GLenum pname, GLint *params)
    struct gl_buffer_object *bufObj;
    GLint64 parameter;
 
+   *params = 0;
+
    bufObj = _mesa_lookup_bufferobj_err(ctx, buffer,
                                        "glGetNamedBufferParameteriv");
    if (!bufObj)
@@ -3233,6 +3230,8 @@ _mesa_GetNamedBufferParameterivEXT(GLuint buffer, GLenum pname, GLint *params)
    GET_CURRENT_CONTEXT(ctx);
    struct gl_buffer_object *bufObj;
    GLint64 parameter;
+
+   *params = 0;
 
    if (!buffer) {
       _mesa_error(ctx, GL_INVALID_OPERATION,
@@ -3259,6 +3258,8 @@ _mesa_GetNamedBufferParameteri64v(GLuint buffer, GLenum pname,
    GET_CURRENT_CONTEXT(ctx);
    struct gl_buffer_object *bufObj;
    GLint64 parameter;
+
+   *params = 0;
 
    bufObj = _mesa_lookup_bufferobj_err(ctx, buffer,
                                        "glGetNamedBufferParameteri64v");
@@ -3373,14 +3374,14 @@ copy_buffer_sub_data(struct gl_context *ctx, struct gl_buffer_object *src,
       return;
    }
 
-   if (readOffset + size > src->Size) {
+   if (size > src->Size || readOffset > src->Size - size) {
       _mesa_error(ctx, GL_INVALID_VALUE,
                   "%s(readOffset %d + size %d > src_buffer_size %d)", func,
                   (int) readOffset, (int) size, (int) src->Size);
       return;
    }
 
-   if (writeOffset + size > dst->Size) {
+   if (size > dst->Size || writeOffset > dst->Size - size) {
       _mesa_error(ctx, GL_INVALID_VALUE,
                   "%s(writeOffset %d + size %d > dst_buffer_size %d)", func,
                   (int) writeOffset, (int) size, (int) dst->Size);
@@ -4354,7 +4355,7 @@ bind_uniform_buffers(struct gl_context *ctx, GLuint first, GLsizei count,
 
    /* Assume that at least one binding will be changed */
    FLUSH_VERTICES(ctx, 0, 0);
-   ctx->NewDriverState |= ST_NEW_UNIFORM_BUFFER;
+   ST_SET_SHADER_STATES(ctx->NewDriverState, UBOS);
 
    if (!buffers) {
       /* The ARB_multi_bind spec says:
@@ -4388,7 +4389,7 @@ bind_uniform_buffers(struct gl_context *ctx, GLuint first, GLsizei count,
     *       parameters are valid and no other error occurs."
     */
 
-   _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                              ctx->BufferObjectsLocked);
 
    for (int i = 0; i < count; i++) {
@@ -4440,7 +4441,7 @@ bind_uniform_buffers(struct gl_context *ctx, GLuint first, GLsizei count,
                                USAGE_UNIFORM_BUFFER);
    }
 
-   _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                ctx->BufferObjectsLocked);
 }
 
@@ -4457,7 +4458,7 @@ bind_shader_storage_buffers(struct gl_context *ctx, GLuint first,
 
    /* Assume that at least one binding will be changed */
    FLUSH_VERTICES(ctx, 0, 0);
-   ctx->NewDriverState |= ST_NEW_STORAGE_BUFFER;
+   ST_SET_SHADER_STATES(ctx->NewDriverState, SSBOS);
 
    if (!buffers) {
       /* The ARB_multi_bind spec says:
@@ -4491,7 +4492,7 @@ bind_shader_storage_buffers(struct gl_context *ctx, GLuint first,
     *       parameters are valid and no other error occurs."
     */
 
-   _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                              ctx->BufferObjectsLocked);
 
    for (int i = 0; i < count; i++) {
@@ -4543,7 +4544,7 @@ bind_shader_storage_buffers(struct gl_context *ctx, GLuint first,
                                USAGE_SHADER_STORAGE_BUFFER);
    }
 
-   _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                ctx->BufferObjectsLocked);
 }
 
@@ -4658,7 +4659,7 @@ bind_xfb_buffers(struct gl_context *ctx,
     *       parameters are valid and no other error occurs."
     */
 
-   _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                              ctx->BufferObjectsLocked);
 
    for (int i = 0; i < count; i++) {
@@ -4712,7 +4713,7 @@ bind_xfb_buffers(struct gl_context *ctx,
          size = sizes[i];
       }
 
-      if (boundBufObj && boundBufObj->Name == buffers[i])
+      if (_mesa_is_same_buffer_object(boundBufObj, buffers[i]))
          bufObj = boundBufObj;
       else {
          bool error;
@@ -4726,7 +4727,7 @@ bind_xfb_buffers(struct gl_context *ctx,
                                            offset, size);
    }
 
-   _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                ctx->BufferObjectsLocked);
 }
 
@@ -4785,7 +4786,7 @@ bind_atomic_buffers(struct gl_context *ctx,
 
    /* Assume that at least one binding will be changed */
    FLUSH_VERTICES(ctx, 0, 0);
-   ctx->NewDriverState |= ctx->DriverFlags.NewAtomicBuffer;
+   ST_SET_STATES(ctx->NewDriverState, ctx->DriverFlags.NewAtomicBuffer);
 
    if (!buffers) {
       /* The ARB_multi_bind spec says:
@@ -4819,7 +4820,7 @@ bind_atomic_buffers(struct gl_context *ctx,
     *       parameters are valid and no other error occurs."
     */
 
-   _mesa_HashLockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashLockMaybeLocked(&ctx->Shared->BufferObjects,
                              ctx->BufferObjectsLocked);
 
    for (int i = 0; i < count; i++) {
@@ -4868,7 +4869,7 @@ bind_atomic_buffers(struct gl_context *ctx,
                                USAGE_ATOMIC_COUNTER_BUFFER);
    }
 
-   _mesa_HashUnlockMaybeLocked(ctx->Shared->BufferObjects,
+   _mesa_HashUnlockMaybeLocked(&ctx->Shared->BufferObjects,
                                ctx->BufferObjectsLocked);
 }
 
@@ -4911,7 +4912,7 @@ bind_buffer_range(GLenum target, GLuint index, GLuint buffer, GLintptr offset,
          bind_buffer_range_atomic_buffer(ctx, index, bufObj, offset, size);
          return;
       default:
-         unreachable("invalid BindBufferRange target with KHR_no_error");
+         UNREACHABLE("invalid BindBufferRange target with KHR_no_error");
       }
    } else {
       if (buffer != 0) {

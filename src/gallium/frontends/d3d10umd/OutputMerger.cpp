@@ -83,55 +83,53 @@ CreateRenderTargetView(
 {
    LOG_ENTRYPOINT();
 
-   struct pipe_context *pipe = CastPipeContext(hDevice);
    struct pipe_resource *resource = CastPipeResource(pCreateRenderTargetView->hDrvResource);
    RenderTargetView *pRTView = CastRenderTargetView(hRenderTargetView);
 
    struct pipe_surface desc;
 
    memset(&desc, 0, sizeof desc);
+   pipe_resource_reference(&desc.texture, resource);
    desc.format = FormatTranslate(pCreateRenderTargetView->Format, false);
 
    switch (pCreateRenderTargetView->ResourceDimension) {
    case D3D10DDIRESOURCE_BUFFER:
-      desc.u.buf.first_element = pCreateRenderTargetView->Buffer.FirstElement;
-      desc.u.buf.last_element = pCreateRenderTargetView->Buffer.NumElements - 1 +
-                                   desc.u.buf.first_element;
-      break;
+      LOG_UNSUPPORTED("Render target view into buffer!");
+      SetError(hDevice, E_NOTIMPL);
+      return;
    case D3D10DDIRESOURCE_TEXTURE1D:
       ASSERT(pCreateRenderTargetView->Tex1D.ArraySize != (UINT)-1);
-      desc.u.tex.level = pCreateRenderTargetView->Tex1D.MipSlice;
-      desc.u.tex.first_layer = pCreateRenderTargetView->Tex1D.FirstArraySlice;
-      desc.u.tex.last_layer = pCreateRenderTargetView->Tex1D.ArraySize - 1 +
-                                 desc.u.tex.first_layer;
+      desc.level = pCreateRenderTargetView->Tex1D.MipSlice;
+      desc.first_layer = pCreateRenderTargetView->Tex1D.FirstArraySlice;
+      desc.last_layer = pCreateRenderTargetView->Tex1D.ArraySize - 1 +
+                                 desc.first_layer;
       break;
    case D3D10DDIRESOURCE_TEXTURE2D:
       ASSERT(pCreateRenderTargetView->Tex2D.ArraySize != (UINT)-1);
-      desc.u.tex.level = pCreateRenderTargetView->Tex2D.MipSlice;
-      desc.u.tex.first_layer = pCreateRenderTargetView->Tex2D.FirstArraySlice;
-      desc.u.tex.last_layer = pCreateRenderTargetView->Tex2D.ArraySize - 1 +
-                                 desc.u.tex.first_layer;
+      desc.level = pCreateRenderTargetView->Tex2D.MipSlice;
+      desc.first_layer = pCreateRenderTargetView->Tex2D.FirstArraySlice;
+      desc.last_layer = pCreateRenderTargetView->Tex2D.ArraySize - 1 +
+                                 desc.first_layer;
       break;
    case D3D10DDIRESOURCE_TEXTURE3D:
-      desc.u.tex.level = pCreateRenderTargetView->Tex3D.MipSlice;
-      desc.u.tex.first_layer = pCreateRenderTargetView->Tex3D.FirstW;
-      desc.u.tex.last_layer = pCreateRenderTargetView->Tex3D.WSize - 1 +
-                                 desc.u.tex.first_layer;
+      desc.level = pCreateRenderTargetView->Tex3D.MipSlice;
+      desc.first_layer = pCreateRenderTargetView->Tex3D.FirstW;
+      desc.last_layer = pCreateRenderTargetView->Tex3D.WSize - 1 +
+                                 desc.first_layer;
       break;
    case D3D10DDIRESOURCE_TEXTURECUBE:
       ASSERT(pCreateRenderTargetView->TexCube.ArraySize != (UINT)-1);
-      desc.u.tex.level = pCreateRenderTargetView->TexCube.MipSlice;
-      desc.u.tex.first_layer = pCreateRenderTargetView->TexCube.FirstArraySlice;
-      desc.u.tex.last_layer = pCreateRenderTargetView->TexCube.ArraySize - 1 +
-                                 desc.u.tex.first_layer;;
+      desc.level = pCreateRenderTargetView->TexCube.MipSlice;
+      desc.first_layer = pCreateRenderTargetView->TexCube.FirstArraySlice;
+      desc.last_layer = pCreateRenderTargetView->TexCube.ArraySize - 1 +
+                                 desc.first_layer;
       break;
    default:
       ASSERT(0);
       return;
    }
 
-   pRTView->surface = pipe->create_surface(pipe, resource, &desc);
-   assert(pRTView->surface);
+   pRTView->surface = desc;
 }
 
 
@@ -155,7 +153,7 @@ DestroyRenderTargetView(D3D10DDI_HDEVICE hDevice,                       // IN
 
    RenderTargetView *pRTView = CastRenderTargetView(hRenderTargetView);
 
-   pipe_surface_reference(&pRTView->surface, NULL);
+   pipe_resource_reference(&pRTView->surface.texture, NULL);
 }
 
 
@@ -236,8 +234,8 @@ ClearRenderTargetView(D3D10DDI_HDEVICE hDevice,                      // IN
                              surface,
                              &clear_color,
                              0, 0,
-                             surface->width,
-                             surface->height,
+                             pipe_surface_width(surface),
+                             pipe_surface_height(surface),
                              true);
 }
 
@@ -283,44 +281,43 @@ CreateDepthStencilView(
 {
    LOG_ENTRYPOINT();
 
-   struct pipe_context *pipe = CastPipeContext(hDevice);
    struct pipe_resource *resource = CastPipeResource(pCreateDepthStencilView->hDrvResource);
    DepthStencilView *pDSView = CastDepthStencilView(hDepthStencilView);
 
    struct pipe_surface desc;
 
    memset(&desc, 0, sizeof desc);
+   pipe_resource_reference(&desc.texture, resource);
    desc.format = FormatTranslate(pCreateDepthStencilView->Format, true);
 
    switch (pCreateDepthStencilView->ResourceDimension) {
    case D3D10DDIRESOURCE_TEXTURE1D:
       ASSERT(pCreateDepthStencilView->Tex1D.ArraySize != (UINT)-1);
-      desc.u.tex.level = pCreateDepthStencilView->Tex1D.MipSlice;
-      desc.u.tex.first_layer = pCreateDepthStencilView->Tex1D.FirstArraySlice;
-      desc.u.tex.last_layer = pCreateDepthStencilView->Tex1D.ArraySize - 1 +
-                                 desc.u.tex.first_layer;
+      desc.level = pCreateDepthStencilView->Tex1D.MipSlice;
+      desc.first_layer = pCreateDepthStencilView->Tex1D.FirstArraySlice;
+      desc.last_layer = pCreateDepthStencilView->Tex1D.ArraySize - 1 +
+                                 desc.first_layer;
       break;
    case D3D10DDIRESOURCE_TEXTURE2D:
       ASSERT(pCreateDepthStencilView->Tex2D.ArraySize != (UINT)-1);
-      desc.u.tex.level = pCreateDepthStencilView->Tex2D.MipSlice;
-      desc.u.tex.first_layer = pCreateDepthStencilView->Tex2D.FirstArraySlice;
-      desc.u.tex.last_layer = pCreateDepthStencilView->Tex2D.ArraySize - 1 +
-                                 desc.u.tex.first_layer;
+      desc.level = pCreateDepthStencilView->Tex2D.MipSlice;
+      desc.first_layer = pCreateDepthStencilView->Tex2D.FirstArraySlice;
+      desc.last_layer = pCreateDepthStencilView->Tex2D.ArraySize - 1 +
+                                 desc.first_layer;
       break;
    case D3D10DDIRESOURCE_TEXTURECUBE:
       ASSERT(pCreateDepthStencilView->TexCube.ArraySize != (UINT)-1);
-      desc.u.tex.level = pCreateDepthStencilView->TexCube.MipSlice;
-      desc.u.tex.first_layer = pCreateDepthStencilView->TexCube.FirstArraySlice;
-      desc.u.tex.last_layer = pCreateDepthStencilView->TexCube.ArraySize - 1 +
-                                 desc.u.tex.first_layer;
+      desc.level = pCreateDepthStencilView->TexCube.MipSlice;
+      desc.first_layer = pCreateDepthStencilView->TexCube.FirstArraySlice;
+      desc.last_layer = pCreateDepthStencilView->TexCube.ArraySize - 1 +
+                                 desc.first_layer;
       break;
    default:
       ASSERT(0);
       return;
    }
 
-   pDSView->surface = pipe->create_surface(pipe, resource, &desc);
-   assert(pDSView->surface);
+   pDSView->surface = desc;
 }
 
 
@@ -344,7 +341,7 @@ DestroyDepthStencilView(D3D10DDI_HDEVICE hDevice,                       // IN
 
    DepthStencilView *pDSView = CastDepthStencilView(hDepthStencilView);
 
-   pipe_surface_reference(&pDSView->surface, NULL);
+   pipe_resource_reference(&pDSView->surface.texture, NULL);
 }
 
 
@@ -385,8 +382,8 @@ ClearDepthStencilView(D3D10DDI_HDEVICE hDevice,                      // IN
                              Depth,
                              Stencil,
                              0, 0,
-                             surface->width,
-                             surface->height,
+                             pipe_surface_width(surface),
+                             pipe_surface_height(surface),
                              true);
 }
 
@@ -417,7 +414,7 @@ CalcPrivateBlendStateSize(D3D10DDI_HDEVICE hDevice,                     // IN
  *
  * CalcPrivateBlendStateSize1 --
  *
- *    The CalcPrivateBlendStateSize function determines the size of
+ *    The CalcPrivateBlendStateSize1 function determines the size of
  *    the user-mode display driver's private region of memory (that
  *    is, the size of internal driver structures, not the size of
  *    the resource video memory) for a blend state.
@@ -436,7 +433,7 @@ CalcPrivateBlendStateSize1(D3D10DDI_HDEVICE hDevice,                     // IN
 /*
  * ----------------------------------------------------------------------
  *
- * translateBlend --
+ * translateBlendOp --
  *
  *   Translate blend function from svga3d to gallium representation.
  *
@@ -613,7 +610,7 @@ CreateBlendState(D3D10DDI_HDEVICE hDevice,                     // IN
  *
  * CreateBlendState1 --
  *
- *    The CreateBlendState function creates a blend state.
+ *    The CreateBlendState1 function creates a blend state.
  *
  * ----------------------------------------------------------------------
  */
@@ -753,19 +750,24 @@ SetRenderTargets(D3D10DDI_HDEVICE hDevice,                              // IN
 
    pDevice->fb.nr_cbufs = 0;
    for (unsigned i = 0; i < RTargets; ++i) {
-      pipe_surface_reference(&pDevice->fb.cbufs[i],
-                             CastPipeRenderTargetView(phRenderTargetView[i]));
-      if (pDevice->fb.cbufs[i]) {
+      struct pipe_surface *psurf = CastPipeRenderTargetView(phRenderTargetView[i]);
+      pipe_resource_reference(&pDevice->fb.cbufs[i].texture,
+                              psurf && psurf->texture ? psurf->texture : NULL);
+      if (psurf && psurf->texture) {
          pDevice->fb.nr_cbufs = i + 1;
+         pDevice->fb.cbufs[i] = *psurf;
       }
    }
 
    for (unsigned i = RTargets; i < PIPE_MAX_COLOR_BUFS; ++i) {
-      pipe_surface_reference(&pDevice->fb.cbufs[i], NULL);
+      pipe_resource_reference(&pDevice->fb.cbufs[i].texture, NULL);
    }
 
-   pipe_surface_reference(&pDevice->fb.zsbuf,
-                          CastPipeDepthStencilView(hDepthStencilView));
+   struct pipe_surface *zsbuf = CastPipeDepthStencilView(hDepthStencilView);
+   pipe_resource_reference(&pDevice->fb.zsbuf.texture, zsbuf && zsbuf->texture ? zsbuf->texture : NULL);
+   if(zsbuf && zsbuf->texture) {
+      pDevice->fb.zsbuf = *zsbuf;
+   }
 
    /*
     * Calculate the width/height fields for this framebuffer.  D3D10
@@ -924,7 +926,7 @@ CreateDepthStencilState(
       face1->zfail_op  = translateStencilOp(pDepthStencilDesc->BackFace.StencilDepthFailOp);
       face1->valuemask = pDepthStencilDesc->StencilReadMask;
       face1->writemask = pDepthStencilDesc->StencilWriteMask;
-#ifdef DEBUG
+#if MESA_DEBUG
       if (!pDepthStencilDesc->FrontEnable) {
          ASSERT(face0->func == PIPE_FUNC_ALWAYS);
          ASSERT(face0->fail_op == PIPE_STENCIL_OP_KEEP);
@@ -951,7 +953,7 @@ CreateDepthStencilState(
  *
  * DestroyDepthStencilState --
  *
- *    The CreateDepthStencilState function creates a depth stencil state.
+ *    The DestroyDepthStencilState function destroy a depth stencil state.
  *
  * ----------------------------------------------------------------------
  */

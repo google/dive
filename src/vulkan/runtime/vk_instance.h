@@ -29,7 +29,10 @@
 
 #include "c11/threads.h"
 #include "util/list.h"
+#include "util/simple_mtx.h"
 #include "util/u_debug.h"
+
+#include "renderdoc_app.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -173,6 +176,13 @@ struct vk_instance {
 
    uint32_t trace_frame;
    char *trace_trigger_file;
+
+   /** Whether the capture mode is per-submit. */
+   bool trace_per_submit;
+
+   /** For triggering renderdoc captures from inside the driver. */
+   simple_mtx_t renderdoc_mtx;
+   RENDERDOC_API_1_0_0 *renderdoc_api;
 };
 
 VK_DEFINE_HANDLE_CASTS(vk_instance, base, VkInstance,
@@ -183,18 +193,18 @@ VK_DEFINE_HANDLE_CASTS(vk_instance, base, VkInstance,
  * Along with initializing the data structures in `vk_instance`, this function
  * validates the Vulkan version number provided by the client and checks that
  * every extension specified by
- * `VkInstanceCreateInfo::ppEnabledExtensionNames` is actually supported by
+ * ``VkInstanceCreateInfo::ppEnabledExtensionNames`` is actually supported by
  * the implementation and returns `VK_ERROR_EXTENSION_NOT_PRESENT` if an
  * unsupported extension is requested.
  *
- * @param[out] instance             The instance to initialize
- * @param[in]  supported_extensions Table of all instance extensions supported
- *                                  by this instance
- * @param[in]  dispatch_table       Instance-level dispatch table
- * @param[in]  pCreateInfo          VkInstanceCreateInfo pointer passed to
- *                                  `vkCreateInstance()`
- * @param[in]  alloc                Allocation callbacks used to create this
- *                                  instance; must not be `NULL`
+ * :param instance:             |out| The instance to initialize
+ * :param supported_extensions: |in|  Table of all instance extensions supported
+ *                                    by this instance
+ * :param dispatch_table:       |in|  Instance-level dispatch table
+ * :param pCreateInfo:          |in|  VkInstanceCreateInfo pointer passed to
+ *                                    `vkCreateInstance()`
+ * :param alloc:                |in|  Allocation callbacks used to create this
+ *                                    instance; must not be `NULL`
  */
 VkResult MUST_CHECK
 vk_instance_init(struct vk_instance *instance,
@@ -205,19 +215,19 @@ vk_instance_init(struct vk_instance *instance,
 
 /** Tears down a vk_instance
  *
- * @param[out] instance             The instance to tear down
+ * :param instance:     |out| The instance to tear down
  */
 void
 vk_instance_finish(struct vk_instance *instance);
 
-/** Implementaiton of vkEnumerateInstanceExtensionProperties() */
+/** Implementation of vkEnumerateInstanceExtensionProperties() */
 VkResult
 vk_enumerate_instance_extension_properties(
     const struct vk_instance_extension_table *supported_extensions,
     uint32_t *pPropertyCount,
     VkExtensionProperties *pProperties);
 
-/** Implementaiton of vkGetInstanceProcAddr() */
+/** Implementation of vkGetInstanceProcAddr() */
 PFN_vkVoidFunction
 vk_instance_get_proc_addr(const struct vk_instance *instance,
                           const struct vk_instance_entrypoint_table *entrypoints,
@@ -234,7 +244,7 @@ PFN_vkVoidFunction
 vk_instance_get_proc_addr_unchecked(const struct vk_instance *instance,
                                     const char *name);
 
-/** Implementaiton of vk_icdGetPhysicalDeviceProcAddr() */
+/** Implementation of vk_icdGetPhysicalDeviceProcAddr() */
 PFN_vkVoidFunction
 vk_instance_get_physical_device_proc_addr(const struct vk_instance *instance,
                                           const char *name);
@@ -242,6 +252,13 @@ vk_instance_get_physical_device_proc_addr(const struct vk_instance *instance,
 void
 vk_instance_add_driver_trace_modes(struct vk_instance *instance,
                                    const struct debug_control *modes);
+
+uint32_t
+vk_get_negotiated_icd_version(void);
+
+void vk_instance_start_renderdoc_capture(struct vk_instance *instance);
+
+void vk_instance_end_renderdoc_capture(struct vk_instance *instance);
 
 #ifdef __cplusplus
 }

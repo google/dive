@@ -28,6 +28,7 @@
 #define __VALHALL_H
 
 #include <stdint.h>
+#include "util/macros.h"
 #include "bi_opcodes.h"
 #include "valhall_enums.h"
 
@@ -160,6 +161,51 @@ va_flow_is_wait_or_none(enum va_flow flow)
 {
    return (flow <= VA_FLOW_WAIT);
 }
+
+static inline bool
+va_is_valid_const_table(unsigned table)
+{
+   return (table >= 0 && table <= 11) || (table >= 60 && table <= 63);
+}
+
+static inline uint32_t
+va_res_fold_table_idx(uint32_t table)
+{
+   switch (table) {
+   case 0 ... 11:
+      return table;
+   case 60 ... 63:
+      return table + 12 - 60;
+   default:
+      assert(!"Can't pack table");
+      return 0;
+   }
+}
+
+static inline bool
+va_op_dest_modifier_does_convert(enum bi_opcode op)
+{
+   switch (op) {
+   case BI_OPCODE_FADD_F32:
+   case BI_OPCODE_FADD_LSCALE_F32:
+   case BI_OPCODE_FABSNEG_F32:
+   case BI_OPCODE_FMA_F32:
+      return true;
+   default:
+      return false;
+   }
+}
+
+enum va_shader_output {
+   /* Output position data */
+   VA_SHADER_OUTPUT_POSITION = BITFIELD_BIT(0),
+
+   /* Output position FIFO attributes */
+   VA_SHADER_OUTPUT_ATTRIB = BITFIELD_BIT(1),
+
+   /* Output varying */
+   VA_SHADER_OUTPUT_VARY = BITFIELD_BIT(2),
+};
 
 #ifdef __cplusplus
 } /* extern C */

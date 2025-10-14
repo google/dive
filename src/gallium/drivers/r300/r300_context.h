@@ -1,24 +1,7 @@
 /*
  * Copyright 2008 Corbin Simpson <MostAwesomeDude@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE. */
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef R300_CONTEXT_H
 #define R300_CONTEXT_H
@@ -30,12 +13,14 @@
 #include "util/u_blitter.h"
 
 #include "pipe/p_context.h"
+#include "util/u_framebuffer.h"
 #include "util/u_inlines.h"
 #include "util/u_transfer.h"
 
 #include "r300_defines.h"
 #include "r300_screen.h"
 #include "compiler/radeon_regalloc.h"
+#include "compiler/radeon_code.h"
 
 struct u_upload_mgr;
 struct r300_context;
@@ -270,7 +255,7 @@ struct r300_constant_buffer {
     /* Buffer of constants */
     uint32_t *ptr;
     /* Remapping table. */
-    unsigned *remap_table;
+    struct const_remap *remap_table;
     /* const buffer base */
     uint32_t buffer_base;
 };
@@ -294,14 +279,14 @@ struct r300_query {
     bool begin_emitted;
 
     /* The buffer where query results are stored. */
-    struct pb_buffer *buf;
+    struct pb_buffer_lean *buf;
 };
 
 struct r300_surface {
     struct pipe_surface base;
 
     /* Winsys buffer backing the texture. */
-    struct pb_buffer *buf;
+    struct pb_buffer_lean *buf;
 
     enum radeon_bo_domain domain;
 
@@ -392,7 +377,7 @@ struct r300_resource
     struct pipe_resource b;
 
     /* Winsys buffer backing this resource. */
-    struct pb_buffer *buf;
+    struct pb_buffer_lean *buf;
     enum radeon_bo_domain domain;
 
     /* Constant buffers and SWTCL vertex and index buffers are in user
@@ -456,7 +441,7 @@ struct r300_context {
     /* Draw module. Used mostly for SW TCL. */
     struct draw_context* draw;
     /* Vertex buffer for SW TCL. */
-    struct pb_buffer *vbo;
+    struct pb_buffer_lean *vbo;
     /* Offset and size into the SW TCL VBO. */
     size_t draw_vbo_offset;
 
@@ -480,6 +465,8 @@ struct r300_context {
     struct r300_query *blitter_saved_query;
     /* Query list. */
     struct r300_query query_list;
+
+    PIPE_FB_SURFACES; //STOP USING THIS
 
     /* Various CSO state objects. */
 
@@ -695,15 +682,15 @@ static inline void r300_mark_atom_dirty(struct r300_context *r300,
 }
 
 static inline struct pipe_surface *
-r300_get_nonnull_cb(struct pipe_framebuffer_state *fb, unsigned i)
+r300_get_nonnull_cb(struct r300_context *r300, struct pipe_framebuffer_state *fb, unsigned i)
 {
-    if (fb->cbufs[i])
-        return fb->cbufs[i];
+    if (r300->fb_cbufs[i])
+        return r300->fb_cbufs[i];
 
     /* The i-th framebuffer is NULL, return any non-NULL one. */
     for (i = 0; i < fb->nr_cbufs; i++)
-        if (fb->cbufs[i])
-            return fb->cbufs[i];
+        if (r300->fb_cbufs[i])
+            return r300->fb_cbufs[i];
 
     return NULL;
 }
@@ -744,7 +731,8 @@ void r300_translate_index_buffer(struct r300_context *r300,
                                  const struct pipe_draw_info *info,
                                  struct pipe_resource **out_index_buffer,
                                  unsigned *index_size, unsigned index_offset,
-                                 unsigned *start, unsigned count);
+                                 unsigned *start, unsigned count,
+                                 const uint8_t **export_ptr);
 
 /* r300_render_stencilref.c */
 void r300_plug_in_stencil_ref_fallback(struct r300_context *r300);
@@ -757,7 +745,7 @@ void r300_blitter_draw_rectangle(struct blitter_context *blitter,
                                  int x1, int y1, int x2, int y2,
                                  float depth, unsigned num_instances,
                                  enum blitter_attrib_type type,
-                                 const union blitter_attrib *attrib);
+                                 const struct blitter_attrib *attrib);
 
 /* r300_state.c */
 enum r300_fb_state_change {

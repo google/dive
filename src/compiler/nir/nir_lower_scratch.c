@@ -74,15 +74,15 @@ static bool
 only_used_for_load_store(nir_deref_instr *deref)
 {
    nir_foreach_use(src, &deref->def) {
-      if (!src->parent_instr)
+      if (!nir_src_parent_instr(src))
          return false;
-      if (src->parent_instr->type == nir_instr_type_deref) {
-         if (!only_used_for_load_store(nir_instr_as_deref(src->parent_instr)))
+      if (nir_src_parent_instr(src)->type == nir_instr_type_deref) {
+         if (!only_used_for_load_store(nir_instr_as_deref(nir_src_parent_instr(src))))
             return false;
-      } else if (src->parent_instr->type != nir_instr_type_intrinsic) {
+      } else if (nir_src_parent_instr(src)->type != nir_instr_type_intrinsic) {
          return false;
       } else {
-         nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(src->parent_instr);
+         nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(nir_src_parent_instr(src));
          if (intrin->intrinsic != nir_intrinsic_load_deref &&
              intrin->intrinsic != nir_intrinsic_store_deref)
             return false;
@@ -95,7 +95,8 @@ bool
 nir_lower_vars_to_scratch(nir_shader *shader,
                           nir_variable_mode modes,
                           int size_threshold,
-                          glsl_type_size_align_func size_align)
+                          glsl_type_size_align_func variable_size_align,
+                          glsl_type_size_align_func scratch_layout_size_align)
 {
    struct set *set = _mesa_pointer_set_create(NULL);
 
@@ -131,7 +132,7 @@ nir_lower_vars_to_scratch(nir_shader *shader,
                continue;
 
             unsigned var_size, var_align;
-            size_align(var->type, &var_size, &var_align);
+            variable_size_align(var->type, &var_size, &var_align);
             if (var_size <= size_threshold)
                continue;
 
@@ -145,13 +146,21 @@ nir_lower_vars_to_scratch(nir_shader *shader,
       return false;
    }
 
+   bool progress = false;
+
    nir_foreach_function_impl(impl, shader) {
       nir_foreach_block(block, impl) {
-         nir_foreach_instr(instr, block) {
+         nir_foreach_instr_safe(instr, block) {
             if (instr->type != nir_instr_type_deref)
                continue;
 
             nir_deref_instr *deref = nir_instr_as_deref(instr);
+
+            if (nir_deref_instr_remove_if_unused(deref)) {
+               progress = true;
+               continue;
+            }
+
             if (deref->deref_type != nir_deref_type_var)
                continue;
 
@@ -178,7 +187,6 @@ nir_lower_vars_to_scratch(nir_shader *shader,
       var->data.location = INT_MAX;
    }
 
-   bool progress = false;
    nir_foreach_function_impl(impl, shader) {
       nir_builder build = nir_builder_create(impl);
 
@@ -200,24 +208,19 @@ nir_lower_vars_to_scratch(nir_shader *shader,
 
             if (var->data.location == INT_MAX) {
                unsigned var_size, var_align;
-               size_align(var->type, &var_size, &var_align);
+               scratch_layout_size_align(var->type, &var_size, &var_align);
 
                var->data.location = ALIGN_POT(shader->scratch_size, var_align);
                shader->scratch_size = var->data.location + var_size;
             }
 
-            lower_load_store(&build, intrin, size_align);
+            lower_load_store(&build, intrin, scratch_layout_size_align);
             impl_progress = true;
          }
       }
 
-      if (impl_progress) {
-         progress = true;
-         nir_metadata_preserve(impl, nir_metadata_block_index |
-                                        nir_metadata_dominance);
-      } else {
-         nir_metadata_preserve(impl, nir_metadata_all);
-      }
+      progress |= nir_progress(impl_progress, impl,
+                               nir_metadata_control_flow);
    }
 
    _mesa_set_destroy(set, NULL);

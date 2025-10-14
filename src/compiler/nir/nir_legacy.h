@@ -11,13 +11,15 @@
 
 typedef struct {
    nir_def *handle;
-   nir_def *indirect; /** < NULL for no indirect offset */
+   /** NULL for no indirect offset */
+   nir_def *indirect;
    unsigned base_offset;
 } nir_reg_src;
 
 typedef struct {
    nir_def *handle;
-   nir_def *indirect; /** < NULL for no indirect offset */
+   /** NULL for no indirect offset */
+   nir_def *indirect;
    unsigned base_offset;
 } nir_reg_dest;
 
@@ -71,7 +73,7 @@ typedef struct {
 } nir_legacy_alu_dest;
 
 /* Prepare shader for use with legacy helpers. Must call on final NIR. */
-void nir_legacy_trivialize(nir_shader *s, bool fuse_fabs);
+bool nir_legacy_trivialize(nir_shader *s, bool fuse_fabs);
 
 /* Reconstruct a legacy source/destination (including registers) */
 nir_legacy_src nir_legacy_chase_src(const nir_src *src);

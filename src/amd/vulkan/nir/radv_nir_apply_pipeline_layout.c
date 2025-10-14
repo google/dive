@@ -1,40 +1,29 @@
 /*
  * Copyright © 2020 Valve Corporation
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
+#include "ac_descriptors.h"
 #include "ac_shader_util.h"
 #include "nir.h"
 #include "nir_builder.h"
+#include "radv_descriptor_set.h"
+#include "radv_descriptors.h"
+#include "radv_device.h"
 #include "radv_nir.h"
-#include "radv_private.h"
+#include "radv_physical_device.h"
 #include "radv_shader.h"
 #include "radv_shader_args.h"
+#include "sid.h"
 
 typedef struct {
    enum amd_gfx_level gfx_level;
    uint32_t address32_hi;
+   uint32_t combined_image_sampler_desc_size;
+   uint32_t combined_image_sampler_offset;
    bool disable_aniso_single_level;
    bool has_image_load_dcc_bug;
-   bool conformant_trunc_coord;
+   bool disable_tg4_trunc_coord;
 
    const struct radv_shader_args *args;
    const struct radv_shader_info *info;
@@ -58,14 +47,14 @@ static nir_def *
 load_desc_ptr(nir_builder *b, apply_layout_state *state, unsigned set)
 {
    const struct radv_userdata_locations *user_sgprs_locs = &state->info->user_sgprs_locs;
-   if (user_sgprs_locs->shader_data[AC_UD_INDIRECT_DESCRIPTOR_SETS].sgpr_idx != -1) {
-      nir_def *addr = get_scalar_arg(b, 1, state->args->descriptor_sets[0]);
+   if (user_sgprs_locs->shader_data[AC_UD_INDIRECT_DESCRIPTORS].sgpr_idx != -1) {
+      nir_def *addr = get_scalar_arg(b, 1, state->args->descriptors[0]);
       addr = convert_pointer_to_64_bit(b, state, addr);
-      return nir_load_smem_amd(b, 1, addr, nir_imm_int(b, set * 4));
+      return ac_nir_load_smem(b, 1, addr, nir_imm_int(b, set * 4), 4, 0);
    }
 
-   assert(state->args->descriptor_sets[set].used);
-   return get_scalar_arg(b, 1, state->args->descriptor_sets[set]);
+   assert(state->args->descriptors[set].used);
+   return get_scalar_arg(b, 1, state->args->descriptors[set]);
 }
 
 static void
@@ -78,11 +67,10 @@ visit_vulkan_resource_index(nir_builder *b, apply_layout_state *state, nir_intri
    unsigned stride;
 
    nir_def *set_ptr;
-   if (layout->binding[binding].type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-       layout->binding[binding].type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
+   if (vk_descriptor_type_is_dynamic(layout->binding[binding].type)) {
       unsigned idx = state->layout->set[desc_set].dynamic_offset_start + layout->binding[binding].dynamic_offset_offset;
-      set_ptr = get_scalar_arg(b, 1, state->args->ac.push_constants);
-      offset = state->layout->push_constant_size + idx * 16;
+      set_ptr = get_scalar_arg(b, 1, state->args->ac.dynamic_descriptors);
+      offset = idx * 16;
       stride = 16;
    } else {
       set_ptr = load_desc_ptr(b, state, desc_set);
@@ -90,10 +78,10 @@ visit_vulkan_resource_index(nir_builder *b, apply_layout_state *state, nir_intri
    }
 
    nir_def *binding_ptr = nir_imul_imm(b, intrin->src[0].ssa, stride);
-   nir_instr_as_alu(binding_ptr->parent_instr)->no_unsigned_wrap = true;
+   nir_def_as_alu(binding_ptr)->no_unsigned_wrap = true;
 
    binding_ptr = nir_iadd_imm(b, binding_ptr, offset);
-   nir_instr_as_alu(binding_ptr->parent_instr)->no_unsigned_wrap = true;
+   nir_def_as_alu(binding_ptr)->no_unsigned_wrap = true;
 
    if (layout->binding[binding].type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR) {
       assert(stride == 16);
@@ -113,7 +101,7 @@ visit_vulkan_resource_reindex(nir_builder *b, apply_layout_state *state, nir_int
       nir_def *binding_ptr = nir_unpack_64_2x32_split_y(b, intrin->src[0].ssa);
 
       nir_def *index = nir_imul_imm(b, intrin->src[1].ssa, 16);
-      nir_instr_as_alu(index->parent_instr)->no_unsigned_wrap = true;
+      nir_def_as_alu(index)->no_unsigned_wrap = true;
 
       binding_ptr = nir_iadd_nuw(b, binding_ptr, index);
 
@@ -125,7 +113,7 @@ visit_vulkan_resource_reindex(nir_builder *b, apply_layout_state *state, nir_int
       nir_def *stride = nir_channel(b, intrin->src[0].ssa, 2);
 
       nir_def *index = nir_imul(b, intrin->src[1].ssa, stride);
-      nir_instr_as_alu(index->parent_instr)->no_unsigned_wrap = true;
+      nir_def_as_alu(index)->no_unsigned_wrap = true;
 
       binding_ptr = nir_iadd_nuw(b, binding_ptr, index);
 
@@ -153,20 +141,11 @@ visit_load_vulkan_descriptor(nir_builder *b, apply_layout_state *state, nir_intr
 static nir_def *
 load_inline_buffer_descriptor(nir_builder *b, apply_layout_state *state, nir_def *rsrc)
 {
-   uint32_t desc_type = S_008F0C_DST_SEL_X(V_008F0C_SQ_SEL_X) | S_008F0C_DST_SEL_Y(V_008F0C_SQ_SEL_Y) |
-                        S_008F0C_DST_SEL_Z(V_008F0C_SQ_SEL_Z) | S_008F0C_DST_SEL_W(V_008F0C_SQ_SEL_W);
-   if (state->gfx_level >= GFX11) {
-      desc_type |= S_008F0C_FORMAT(V_008F0C_GFX11_FORMAT_32_FLOAT) | S_008F0C_OOB_SELECT(V_008F0C_OOB_SELECT_RAW);
-   } else if (state->gfx_level >= GFX10) {
-      desc_type |= S_008F0C_FORMAT(V_008F0C_GFX10_FORMAT_32_FLOAT) | S_008F0C_OOB_SELECT(V_008F0C_OOB_SELECT_RAW) |
-                   S_008F0C_RESOURCE_LEVEL(1);
-   } else {
-      desc_type |=
-         S_008F0C_NUM_FORMAT(V_008F0C_BUF_NUM_FORMAT_FLOAT) | S_008F0C_DATA_FORMAT(V_008F0C_BUF_DATA_FORMAT_32);
-   }
+   uint32_t desc[4];
 
-   return nir_vec4(b, rsrc, nir_imm_int(b, S_008F04_BASE_ADDRESS_HI(state->address32_hi)), nir_imm_int(b, 0xffffffff),
-                   nir_imm_int(b, desc_type));
+   ac_build_raw_buffer_descriptor(state->gfx_level, (uint64_t)state->address32_hi << 32, 0xffffffff, desc);
+
+   return nir_vec4(b, rsrc, nir_imm_int(b, desc[1]), nir_imm_int(b, desc[2]), nir_imm_int(b, desc[3]));
 }
 
 static nir_def *
@@ -189,7 +168,7 @@ load_buffer_descriptor(nir_builder *b, apply_layout_state *state, nir_def *rsrc,
       return nir_iadd(b, nir_channel(b, rsrc, 0), nir_channel(b, rsrc, 1));
 
    nir_def *desc_set = convert_pointer_to_64_bit(b, state, nir_channel(b, rsrc, 0));
-   return nir_load_smem_amd(b, 4, desc_set, nir_channel(b, rsrc, 1), .align_mul = 16);
+   return ac_nir_load_smem(b, 4, desc_set, nir_channel(b, rsrc, 1), 4, 0);
 }
 
 static void
@@ -207,12 +186,11 @@ visit_get_ssbo_size(nir_builder *b, apply_layout_state *state, nir_intrinsic_ins
    } else {
       /* load the entire descriptor so it can be CSE'd */
       nir_def *ptr = convert_pointer_to_64_bit(b, state, nir_channel(b, rsrc, 0));
-      nir_def *desc = nir_load_smem_amd(b, 4, ptr, nir_channel(b, rsrc, 1), .align_mul = 16);
+      nir_def *desc = ac_nir_load_smem(b, 4, ptr, nir_channel(b, rsrc, 1), 4, 0);
       size = nir_channel(b, desc, 2);
    }
 
-   nir_def_rewrite_uses(&intrin->def, size);
-   nir_instr_remove(&intrin->instr);
+   nir_def_replace(&intrin->def, size);
 }
 
 static nir_def *
@@ -228,30 +206,6 @@ get_sampler_desc(nir_builder *b, apply_layout_state *state, nir_deref_instr *der
    struct radv_descriptor_set_layout *layout = state->layout->set[desc_set].layout;
    struct radv_descriptor_set_binding_layout *binding = &layout->binding[binding_index];
 
-   /* Handle immutable and embedded (compile-time) samplers
-    * (VkDescriptorSetLayoutBinding::pImmutableSamplers) We can only do this for constant array
-    * index or if all samplers in the array are the same. Note that indexing is forbidden with
-    * embedded samplers.
-    */
-   if (desc_type == AC_DESC_SAMPLER && binding->immutable_samplers_offset &&
-       (!indirect || binding->immutable_samplers_equal)) {
-      unsigned constant_index = 0;
-      if (!binding->immutable_samplers_equal) {
-         while (deref->deref_type != nir_deref_type_var) {
-            assert(deref->deref_type == nir_deref_type_array);
-            unsigned array_size = MAX2(glsl_get_aoa_size(deref->type), 1);
-            constant_index += nir_src_as_uint(deref->arr.index) * array_size;
-            deref = nir_deref_instr_parent(deref);
-         }
-      }
-
-      uint32_t dword0_mask =
-         tex->op == nir_texop_tg4 && !state->conformant_trunc_coord ? C_008F30_TRUNC_COORD : 0xffffffffu;
-      const uint32_t *samplers = radv_immutable_samplers(layout, binding);
-      return nir_imm_ivec4(b, samplers[constant_index * 4 + 0] & dword0_mask, samplers[constant_index * 4 + 1],
-                           samplers[constant_index * 4 + 2], samplers[constant_index * 4 + 3]);
-   }
-
    unsigned size = 8;
    unsigned offset = binding->offset;
    switch (desc_type) {
@@ -259,20 +213,24 @@ get_sampler_desc(nir_builder *b, apply_layout_state *state, nir_deref_instr *der
    case AC_DESC_PLANE_0:
       break;
    case AC_DESC_FMASK:
-   case AC_DESC_PLANE_1:
       offset += 32;
       break;
+   case AC_DESC_PLANE_1:
+      offset += state->combined_image_sampler_desc_size;
+      break;
    case AC_DESC_SAMPLER:
-      size = 4;
+      /* Immutable/embedded samplers are lowered earlier. */
+      assert(!binding->immutable_samplers_offset || indirect);
+
+      size = RADV_SAMPLER_DESC_SIZE / 4;
       if (binding->type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-         offset += radv_combined_image_descriptor_sampler_offset(binding);
+         offset += state->combined_image_sampler_offset;
       break;
    case AC_DESC_BUFFER:
-      size = 4;
+      size = RADV_BUFFER_DESC_SIZE / 4;
       break;
    case AC_DESC_PLANE_2:
-      size = 4;
-      offset += 64;
+      offset += 2 * state->combined_image_sampler_desc_size;
       break;
    }
 
@@ -284,11 +242,11 @@ get_sampler_desc(nir_builder *b, apply_layout_state *state, nir_deref_instr *der
 
       nir_def *tmp = nir_imul_imm(b, deref->arr.index.ssa, array_size);
       if (tmp != deref->arr.index.ssa)
-         nir_instr_as_alu(tmp->parent_instr)->no_unsigned_wrap = true;
+         nir_def_as_alu(tmp)->no_unsigned_wrap = true;
 
       if (index) {
          index = nir_iadd(b, tmp, index);
-         nir_instr_as_alu(index->parent_instr)->no_unsigned_wrap = true;
+         nir_def_as_alu(index)->no_unsigned_wrap = true;
       } else {
          index = tmp;
       }
@@ -298,28 +256,15 @@ get_sampler_desc(nir_builder *b, apply_layout_state *state, nir_deref_instr *der
 
    nir_def *index_offset = index ? nir_iadd_imm(b, index, offset) : nir_imm_int(b, offset);
    if (index && index_offset != index)
-      nir_instr_as_alu(index_offset->parent_instr)->no_unsigned_wrap = true;
+      nir_def_as_alu(index_offset)->no_unsigned_wrap = true;
 
    if (non_uniform)
       return nir_iadd(b, load_desc_ptr(b, state, desc_set), index_offset);
 
    nir_def *addr = convert_pointer_to_64_bit(b, state, load_desc_ptr(b, state, desc_set));
-   nir_def *desc = nir_load_smem_amd(b, size, addr, index_offset, .align_mul = size * 4u);
+   nir_def *desc = ac_nir_load_smem(b, size, addr, index_offset, size * 4u, 0);
 
-   /* 3 plane formats always have same size and format for plane 1 & 2, so
-    * use the tail from plane 1 so that we can store only the first 16 bytes
-    * of the last plane. */
-   if (desc_type == AC_DESC_PLANE_2) {
-      nir_def *desc2 = get_sampler_desc(b, state, deref, AC_DESC_PLANE_1, non_uniform, tex, write);
-
-      nir_def *comp[8];
-      for (unsigned i = 0; i < 4; i++)
-         comp[i] = nir_channel(b, desc, i);
-      for (unsigned i = 4; i < 8; i++)
-         comp[i] = nir_channel(b, desc2, i);
-
-      return nir_vec(b, comp, 8);
-   } else if (desc_type == AC_DESC_IMAGE && state->has_image_load_dcc_bug && !tex && !write) {
+   if (desc_type == AC_DESC_IMAGE && state->has_image_load_dcc_bug && !tex && !write) {
       nir_def *comp[8];
       for (unsigned i = 0; i < 8; i++)
          comp[i] = nir_channel(b, desc, i);
@@ -330,7 +275,7 @@ get_sampler_desc(nir_builder *b, apply_layout_state *state, nir_deref_instr *der
       comp[6] = nir_iand_imm(b, comp[6], C_00A018_WRITE_COMPRESS_ENABLE);
 
       return nir_vec(b, comp, 8);
-   } else if (desc_type == AC_DESC_SAMPLER && tex->op == nir_texop_tg4 && !state->conformant_trunc_coord) {
+   } else if (desc_type == AC_DESC_SAMPLER && tex->op == nir_texop_tg4 && state->disable_tg4_trunc_coord) {
       nir_def *comp[4];
       for (unsigned i = 0; i < 4; i++)
          comp[i] = nir_channel(b, desc, i);
@@ -358,14 +303,87 @@ update_image_intrinsic(nir_builder *b, apply_layout_state *state, nir_intrinsic_
                                     nir_intrinsic_access(intrin) & ACCESS_NON_UNIFORM, NULL, !is_load);
 
    if (intrin->intrinsic == nir_intrinsic_image_deref_descriptor_amd) {
-      nir_def_rewrite_uses(&intrin->def, desc);
-      nir_instr_remove(&intrin->instr);
+      nir_def_replace(&intrin->def, desc);
    } else {
       nir_rewrite_image_intrinsic(intrin, desc, true);
    }
 }
 
-static void
+static bool
+can_increase_load_size(nir_intrinsic_instr *intrin, unsigned offset, unsigned old, unsigned new)
+{
+   /* Only increase the size of loads if doing so won't extend into a new page/cache-line. */
+   unsigned align_mul = MIN2(nir_intrinsic_align_mul(intrin), 64u);
+   unsigned end = (nir_intrinsic_align_offset(intrin) + offset + old) & (align_mul - 1);
+   return (new - old) <= (align_mul - end);
+}
+
+static nir_def *
+load_push_constant(nir_builder *b, apply_layout_state *state, nir_intrinsic_instr *intrin)
+{
+   unsigned base = nir_intrinsic_base(intrin);
+   unsigned bit_size = intrin->def.bit_size;
+   unsigned count = intrin->def.num_components * (bit_size / 32u);
+   assert(bit_size >= 32);
+
+   nir_def *addr = NULL;
+   nir_def *offset = NULL;
+   unsigned const_offset = -1;
+   if (nir_src_is_const(intrin->src[0]))
+      const_offset = (base + nir_src_as_uint(intrin->src[0])) / 4u;
+
+   const unsigned max_push_constant = sizeof(state->args->ac.inline_push_const_mask) * 8u;
+
+   nir_component_mask_t comps_read = nir_def_components_read(&intrin->def);
+
+   nir_def *data[NIR_MAX_VEC_COMPONENTS * 2];
+   unsigned num_loads = 0;
+   for (unsigned start = 0; start < count;) {
+      if (!(comps_read & BITFIELD64_BIT(start >> (bit_size == 64 ? 1 : 0)))) {
+         data[num_loads++] = nir_undef(b, 1, 32);
+         start += 1;
+         continue;
+      }
+
+      /* Try to use inline push constants when possible. */
+      unsigned inline_idx = const_offset + start;
+      if (const_offset != -1 && inline_idx < max_push_constant &&
+          (state->args->ac.inline_push_const_mask & BITFIELD64_BIT(inline_idx))) {
+         inline_idx = util_bitcount64(state->args->ac.inline_push_const_mask & BITFIELD64_MASK(inline_idx));
+         data[num_loads++] = get_scalar_arg(b, 1, state->args->ac.inline_push_consts[inline_idx]);
+         start += 1;
+         continue;
+      }
+
+      if (!state->args->ac.push_constants.used) {
+         /* Assume this is an inlined push constant load which was expanded to include dwords which are not inlined. */
+         assert(const_offset != -1);
+         data[num_loads++] = nir_undef(b, 1, 32);
+         start += 1;
+         continue;
+      }
+
+      if (!offset) {
+         addr = get_scalar_arg(b, 1, state->args->ac.push_constants);
+         addr = convert_pointer_to_64_bit(b, state, addr);
+         offset = nir_iadd_imm_nuw(b, intrin->src[0].ssa, base);
+      }
+
+      /* Decrease to supported size. */
+      unsigned size = count - start;
+      size = state->gfx_level >= GFX12 && size == 3 ? 3 : (1 << (util_last_bit(size) - 1));
+
+      /* Try to round up to power of two instead. */
+      if (size < (count - start) && can_increase_load_size(intrin, start * 4, size, size * 2))
+         size *= 2;
+
+      data[num_loads++] = ac_nir_load_smem(b, size, addr, nir_iadd_imm_nuw(b, offset, start * 4), 4, 0);
+      start += size;
+   }
+   return nir_extract_bits(b, data, num_loads, 0, intrin->def.num_components, bit_size);
+}
+
+static bool
 apply_layout_to_intrin(nir_builder *b, apply_layout_state *state, nir_intrinsic_instr *intrin)
 {
    b->cursor = nir_before_instr(&intrin->instr);
@@ -405,12 +423,18 @@ apply_layout_to_intrin(nir_builder *b, apply_layout_state *state, nir_intrinsic_
    case nir_intrinsic_image_deref_descriptor_amd:
       update_image_intrinsic(b, state, intrin);
       break;
-   default:
+   case nir_intrinsic_load_push_constant: {
+      nir_def_replace(&intrin->def, load_push_constant(b, state, intrin));
       break;
    }
+   default:
+      return false;
+   }
+
+   return true;
 }
 
-static void
+static bool
 apply_layout_to_tex(nir_builder *b, apply_layout_state *state, nir_tex_instr *tex)
 {
    b->cursor = nir_before_instr(&tex->instr);
@@ -418,6 +442,9 @@ apply_layout_to_tex(nir_builder *b, apply_layout_state *state, nir_tex_instr *te
    nir_deref_instr *texture_deref_instr = NULL;
    nir_deref_instr *sampler_deref_instr = NULL;
    int plane = -1;
+
+   nir_def *image = NULL;
+   nir_def *sampler = NULL;
 
    for (unsigned i = 0; i < tex->num_srcs; i++) {
       switch (tex->src[i].src_type) {
@@ -430,13 +457,14 @@ apply_layout_to_tex(nir_builder *b, apply_layout_state *state, nir_tex_instr *te
       case nir_tex_src_plane:
          plane = nir_src_as_int(tex->src[i].src);
          break;
+      case nir_tex_src_sampler_handle:
+         sampler = tex->src[i].src.ssa;
+         break;
       default:
          break;
       }
    }
 
-   nir_def *image = NULL;
-   nir_def *sampler = NULL;
    if (plane >= 0) {
       assert(tex->op != nir_texop_txf_ms && tex->op != nir_texop_samples_identical);
       assert(tex->sampler_dim != GLSL_SAMPLER_DIM_BUF);
@@ -451,35 +479,36 @@ apply_layout_to_tex(nir_builder *b, apply_layout_state *state, nir_tex_instr *te
    }
 
    if (sampler_deref_instr) {
+      assert(!sampler);
       sampler = get_sampler_desc(b, state, sampler_deref_instr, AC_DESC_SAMPLER, tex->sampler_non_uniform, tex, false);
+   }
 
-      if (state->disable_aniso_single_level && tex->sampler_dim < GLSL_SAMPLER_DIM_RECT && state->gfx_level < GFX8) {
-         /* Disable anisotropic filtering if BASE_LEVEL == LAST_LEVEL.
-          *
-          * GFX6-GFX7:
-          *   If BASE_LEVEL == LAST_LEVEL, the shader must disable anisotropic
-          *   filtering manually. The driver sets img7 to a mask clearing
-          *   MAX_ANISO_RATIO if BASE_LEVEL == LAST_LEVEL. The shader must do:
-          *     s_and_b32 samp0, samp0, img7
-          *
-          * GFX8:
-          *   The ANISO_OVERRIDE sampler field enables this fix in TA.
-          */
-         /* TODO: This is unnecessary for combined image+sampler.
-          * We can do this when updating the desc set. */
-         nir_def *comp[4];
-         for (unsigned i = 0; i < 4; i++)
-            comp[i] = nir_channel(b, sampler, i);
-         comp[0] = nir_iand(b, comp[0], nir_channel(b, image, 7));
+   if (sampler && state->disable_aniso_single_level && tex->sampler_dim < GLSL_SAMPLER_DIM_RECT &&
+       state->gfx_level < GFX8) {
+      /* Disable anisotropic filtering if BASE_LEVEL == LAST_LEVEL.
+       *
+       * GFX6-GFX7:
+       *   If BASE_LEVEL == LAST_LEVEL, the shader must disable anisotropic
+       *   filtering manually. The driver sets img7 to a mask clearing
+       *   MAX_ANISO_RATIO if BASE_LEVEL == LAST_LEVEL. The shader must do:
+       *     s_and_b32 samp0, samp0, img7
+       *
+       * GFX8:
+       *   The ANISO_OVERRIDE sampler field enables this fix in TA.
+       */
+      /* TODO: This is unnecessary for combined image+sampler.
+       * We can do this when updating the desc set. */
+      nir_def *comp[4];
+      for (unsigned i = 0; i < 4; i++)
+         comp[i] = nir_channel(b, sampler, i);
+      comp[0] = nir_iand(b, comp[0], nir_channel(b, image, 7));
 
-         sampler = nir_vec(b, comp, 4);
-      }
+      sampler = nir_vec(b, comp, 4);
    }
 
    if (tex->op == nir_texop_descriptor_amd) {
-      nir_def_rewrite_uses(&tex->def, image);
-      nir_instr_remove(&tex->instr);
-      return;
+      nir_def_replace(&tex->def, image);
+      return true;
    }
 
    for (unsigned i = 0; i < tex->num_srcs; i++) {
@@ -492,48 +521,56 @@ apply_layout_to_tex(nir_builder *b, apply_layout_state *state, nir_tex_instr *te
          tex->src[i].src_type = nir_tex_src_sampler_handle;
          nir_src_rewrite(&tex->src[i].src, sampler);
          break;
+      case nir_tex_src_sampler_handle:
+         nir_src_rewrite(&tex->src[i].src, sampler);
+         break;
       default:
          break;
       }
    }
+
+   return true;
 }
 
-void
-radv_nir_apply_pipeline_layout(nir_shader *shader, struct radv_device *device, const struct radv_shader_info *info,
-                               const struct radv_shader_args *args, const struct radv_shader_layout *layout)
+bool
+radv_nir_apply_pipeline_layout(nir_shader *shader, struct radv_device *device, const struct radv_shader_stage *stage)
 {
+   bool progress = false;
+   const struct radv_physical_device *pdev = radv_device_physical(device);
+   const struct radv_instance *instance = radv_physical_device_instance(pdev);
+
    apply_layout_state state = {
-      .gfx_level = device->physical_device->rad_info.gfx_level,
-      .address32_hi = device->physical_device->rad_info.address32_hi,
-      .disable_aniso_single_level = device->instance->disable_aniso_single_level,
-      .has_image_load_dcc_bug = device->physical_device->rad_info.has_image_load_dcc_bug,
-      .conformant_trunc_coord = device->physical_device->rad_info.conformant_trunc_coord,
-      .args = args,
-      .info = info,
-      .layout = layout,
+      .gfx_level = pdev->info.gfx_level,
+      .address32_hi = pdev->info.address32_hi,
+      .combined_image_sampler_desc_size = radv_get_combined_image_sampler_desc_size(pdev),
+      .combined_image_sampler_offset = radv_get_combined_image_sampler_offset(pdev),
+      .disable_aniso_single_level = instance->drirc.debug.disable_aniso_single_level,
+      .has_image_load_dcc_bug = pdev->info.has_image_load_dcc_bug,
+      .disable_tg4_trunc_coord = !pdev->info.conformant_trunc_coord && !instance->drirc.debug.disable_trunc_coord,
+      .args = &stage->args,
+      .info = &stage->info,
+      .layout = &stage->layout,
    };
 
-   nir_builder b;
-
-   nir_foreach_function (function, shader) {
-      if (!function->impl)
-         continue;
-
-      b = nir_builder_create(function->impl);
+   nir_foreach_function_impl (impl, shader) {
+      bool impl_progress = false;
+      nir_builder b = nir_builder_create(impl);
 
       /* Iterate in reverse so load_ubo lowering can look at
        * the vulkan_resource_index to tell if it's an inline
        * ubo.
        */
-      nir_foreach_block_reverse (block, function->impl) {
+      nir_foreach_block_reverse (block, impl) {
          nir_foreach_instr_reverse_safe (instr, block) {
             if (instr->type == nir_instr_type_tex)
-               apply_layout_to_tex(&b, &state, nir_instr_as_tex(instr));
+               impl_progress |= apply_layout_to_tex(&b, &state, nir_instr_as_tex(instr));
             else if (instr->type == nir_instr_type_intrinsic)
-               apply_layout_to_intrin(&b, &state, nir_instr_as_intrinsic(instr));
+               impl_progress |= apply_layout_to_intrin(&b, &state, nir_instr_as_intrinsic(instr));
          }
       }
 
-      nir_metadata_preserve(function->impl, nir_metadata_block_index | nir_metadata_dominance);
+      progress |= nir_progress(impl_progress, impl, nir_metadata_control_flow);
    }
+
+   return progress;
 }

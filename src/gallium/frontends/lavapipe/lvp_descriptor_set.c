@@ -22,10 +22,26 @@
  */
 
 #include "lvp_private.h"
+#include "vk_acceleration_structure.h"
+#include "vk_descriptor_update_template.h"
 #include "vk_descriptors.h"
 #include "vk_util.h"
 #include "util/u_math.h"
 #include "util/u_inlines.h"
+#include "lp_texture.h"
+
+static bool
+binding_has_immutable_samplers(const VkDescriptorSetLayoutBinding *binding)
+{
+   switch (binding->descriptorType) {
+   case VK_DESCRIPTOR_TYPE_SAMPLER:
+   case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+      return binding->pImmutableSamplers != NULL;
+
+   default:
+      return false;
+   }
+}
 
 static void
 lvp_descriptor_set_layout_destroy(struct vk_device *_device, struct vk_descriptor_set_layout *_layout)
@@ -64,10 +80,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateDescriptorSetLayout(
        * We need to be careful here and only parse pImmutableSamplers if we
        * have one of the right descriptor types.
        */
-      VkDescriptorType desc_type = pCreateInfo->pBindings[j].descriptorType;
-      if ((desc_type == VK_DESCRIPTOR_TYPE_SAMPLER ||
-           desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) &&
-          pCreateInfo->pBindings[j].pImmutableSamplers)
+      if (binding_has_immutable_samplers(&pCreateInfo->pBindings[j]))
          immutable_sampler_count += pCreateInfo->pBindings[j].descriptorCount;
    }
 
@@ -75,7 +88,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateDescriptorSetLayout(
                  num_bindings * sizeof(set_layout->binding[0]) +
                  immutable_sampler_count * sizeof(struct lvp_sampler *);
 
-   set_layout = vk_descriptor_set_layout_zalloc(&device->vk, size);
+   set_layout = vk_descriptor_set_layout_zalloc(&device->vk, size, pCreateInfo);
    if (!set_layout)
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
@@ -115,32 +128,28 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateDescriptorSetLayout(
       set_layout->binding[b].uniform_block_offset = 0;
       set_layout->binding[b].uniform_block_size = 0;
 
-      set_layout->size += descriptor_count;
-
-      if (binding->descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-          binding->descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
+      if (vk_descriptor_type_is_dynamic(binding->descriptorType)) {
          set_layout->binding[b].dynamic_index = dynamic_offset_count;
          dynamic_offset_count += binding->descriptorCount;
       }
-      switch (binding->descriptorType) {
-      case VK_DESCRIPTOR_TYPE_SAMPLER:
-      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-         if (binding->pImmutableSamplers) {
-            set_layout->binding[b].immutable_samplers = samplers;
-            samplers += binding->descriptorCount;
 
-            for (uint32_t i = 0; i < binding->descriptorCount; i++) {
-               if (binding->pImmutableSamplers[i])
-                  set_layout->binding[b].immutable_samplers[i] =
-                     lvp_sampler_from_handle(binding->pImmutableSamplers[i]);
-               else
-                  set_layout->binding[b].immutable_samplers[i] = NULL;
-            }
+      uint8_t max_plane_count = 1;
+      if (binding_has_immutable_samplers(binding)) {
+         set_layout->binding[b].immutable_samplers = samplers;
+         samplers += binding->descriptorCount;
+
+         for (uint32_t i = 0; i < binding->descriptorCount; i++) {
+            VK_FROM_HANDLE(lvp_sampler, sampler, binding->pImmutableSamplers[i]);
+            set_layout->binding[b].immutable_samplers[i] = sampler;
+            const uint8_t sampler_plane_count = sampler->vk.ycbcr_conversion ?
+               vk_format_get_plane_count(sampler->vk.ycbcr_conversion->state.format) : 1;
+            if (max_plane_count < sampler_plane_count)
+               max_plane_count = sampler_plane_count;
          }
-         break;
-      default:
-         break;
       }
+
+      set_layout->binding[b].stride = max_plane_count;
+      set_layout->size += descriptor_count * max_plane_count;
 
       switch (binding->descriptorType) {
       case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
@@ -167,7 +176,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateDescriptorSetLayout(
          break;
       }
 
-      set_layout->shader_stages |= binding->stageFlags;
+      set_layout->shader_stages |= binding->stageFlags & MESA_VK_SHADER_STAGE_ALL;
    }
 
    for (uint32_t i = 0; i < pCreateInfo->bindingCount; i++)
@@ -222,7 +231,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreatePipelineLayout(
 }
 
 static struct pipe_resource *
-get_buffer_resource(struct pipe_context *ctx, const VkDescriptorAddressInfoEXT *bda)
+get_buffer_resource(struct pipe_context *ctx, VkDeviceAddress address, size_t range)
 {
    struct pipe_screen *pscreen = ctx->screen;
    struct pipe_resource templ = {0};
@@ -230,7 +239,7 @@ get_buffer_resource(struct pipe_context *ctx, const VkDescriptorAddressInfoEXT *
    templ.screen = pscreen;
    templ.target = PIPE_BUFFER;
    templ.format = PIPE_FORMAT_R8_UNORM;
-   templ.width0 = bda->range;
+   templ.width0 = range;
    templ.height0 = 1;
    templ.depth0 = 1;
    templ.array_size = 1;
@@ -240,17 +249,22 @@ get_buffer_resource(struct pipe_context *ctx, const VkDescriptorAddressInfoEXT *
 
    uint64_t size;
    struct pipe_resource *pres = pscreen->resource_create_unbacked(pscreen, &templ, &size);
-   assert(size == bda->range);
-   pscreen->resource_bind_backing(pscreen, pres, (void *)(uintptr_t)bda->address, 0);
+   assert(size == range);
+
+   struct llvmpipe_memory_allocation alloc = {
+      .cpu_addr = (void *)(uintptr_t)address,
+   };
+
+   pscreen->resource_bind_backing(pscreen, pres, (void *)&alloc, 0, 0, 0);
    return pres;
 }
 
 static struct lp_texture_handle
-get_texture_handle_bda(struct lvp_device *device, const VkDescriptorAddressInfoEXT *bda, enum pipe_format format)
+get_texture_handle_bda(struct lvp_device *device, VkDeviceAddress address, size_t range, enum pipe_format format)
 {
    struct pipe_context *ctx = device->queue.ctx;
 
-   struct pipe_resource *pres = get_buffer_resource(ctx, bda);
+   struct pipe_resource *pres = get_buffer_resource(ctx, address, range);
 
    struct pipe_sampler_view templ;
    memset(&templ, 0, sizeof(templ));
@@ -260,7 +274,7 @@ get_texture_handle_bda(struct lvp_device *device, const VkDescriptorAddressInfoE
    templ.swizzle_b = PIPE_SWIZZLE_Z;
    templ.swizzle_a = PIPE_SWIZZLE_W;
    templ.format = format;
-   templ.u.buf.size = bda->range;
+   templ.u.buf.size = range;
    templ.texture = pres;
    templ.context = ctx;
    struct pipe_sampler_view *view = ctx->create_sampler_view(ctx, pres, &templ);
@@ -274,20 +288,20 @@ get_texture_handle_bda(struct lvp_device *device, const VkDescriptorAddressInfoE
 
    ctx->sampler_view_destroy(ctx, view);
    pipe_resource_reference(&pres, NULL);
-   
+
    return *handle;
 }
 
 static struct lp_texture_handle
-get_image_handle_bda(struct lvp_device *device, const VkDescriptorAddressInfoEXT *bda, enum pipe_format format)
+get_image_handle_bda(struct lvp_device *device, VkDeviceAddress address, size_t range, enum pipe_format format)
 {
    struct pipe_context *ctx = device->queue.ctx;
 
-   struct pipe_resource *pres = get_buffer_resource(ctx, bda);
+   struct pipe_resource *pres = get_buffer_resource(ctx, address, range);
    struct pipe_image_view view = {0};
    view.resource = pres;
    view.format = format;
-   view.u.buf.size = bda->range;
+   view.u.buf.size = range;
 
    simple_mtx_lock(&device->queue.lock);
 
@@ -297,7 +311,7 @@ get_image_handle_bda(struct lvp_device *device, const VkDescriptorAddressInfoEXT
    simple_mtx_unlock(&device->queue.lock);
 
    pipe_resource_reference(&pres, NULL);
-   
+
    return *handle;
 }
 
@@ -321,6 +335,8 @@ lvp_descriptor_set_create(struct lvp_device *device,
    for (unsigned i = 0; i < layout->binding_count; i++)
       bo_size += layout->binding[i].uniform_block_size;
 
+   bo_size = MAX2(bo_size, 64);
+
    struct pipe_resource template = {
       .bind = PIPE_BIND_CONSTANT_BUFFER,
       .screen = device->pscreen,
@@ -339,19 +355,23 @@ lvp_descriptor_set_create(struct lvp_device *device,
    set->map = device->pscreen->map_memory(device->pscreen, set->pmem);
    memset(set->map, 0, bo_size);
 
-   device->pscreen->resource_bind_backing(device->pscreen, set->bo, set->pmem, 0);
+   device->pscreen->resource_bind_backing(device->pscreen, set->bo, set->pmem, 0, 0, 0);
 
    for (uint32_t binding_index = 0; binding_index < layout->binding_count; binding_index++) {
       const struct lvp_descriptor_set_binding_layout *bind_layout = &set->layout->binding[binding_index];
       if (!bind_layout->immutable_samplers)
          continue;
-   
+
       struct lp_descriptor *desc = set->map;
       desc += bind_layout->descriptor_index;
 
       for (uint32_t sampler_index = 0; sampler_index < bind_layout->array_size; sampler_index++) {
-         if (bind_layout->immutable_samplers[sampler_index])
-            desc[sampler_index] = bind_layout->immutable_samplers[sampler_index]->desc;
+         if (bind_layout->immutable_samplers[sampler_index]) {
+            for (uint32_t s = 0; s < bind_layout->stride; s++)  {
+               int idx = sampler_index * bind_layout->stride + s;
+               desc[idx] = bind_layout->immutable_samplers[sampler_index]->desc;
+            }
+         }
       }
    }
 
@@ -445,16 +465,19 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
       }
 
       struct lp_descriptor *desc = set->map;
-      desc += bind_layout->descriptor_index + write->dstArrayElement;
+      desc += bind_layout->descriptor_index + (write->dstArrayElement * bind_layout->stride);
 
       switch (write->descriptorType) {
       case VK_DESCRIPTOR_TYPE_SAMPLER:
          if (!bind_layout->immutable_samplers) {
             for (uint32_t j = 0; j < write->descriptorCount; j++) {
                LVP_FROM_HANDLE(lvp_sampler, sampler, write->pImageInfo[j].sampler);
+               uint32_t didx = j * bind_layout->stride;
 
-               desc[j].sampler = sampler->desc.sampler;
-               desc[j].sampler_index = sampler->desc.sampler_index;
+               for (unsigned k = 0; k < bind_layout->stride; k++) {
+                  desc[didx + k].sampler = sampler->desc.sampler;
+                  desc[didx + k].texture.sampler_index = sampler->desc.texture.sampler_index;
+               }
             }
          }
          break;
@@ -463,20 +486,29 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_image_view, iview,
                             write->pImageInfo[j].imageView);
+            uint32_t didx = j * bind_layout->stride;
             if (iview) {
-               lp_jit_texture_from_pipe(&desc[j].texture, iview->sv);
-               desc[j].functions = iview->texture_handle->functions;
+               unsigned plane_count = iview->plane_count;
+
+               for (unsigned p = 0; p < plane_count; p++) {
+                  lp_jit_bindless_texture_from_pipe(&desc[didx + p].texture, iview->planes[p].sv);
+                  desc[didx + p].functions = iview->planes[p].texture_handle->functions;
+               }
 
                if (!bind_layout->immutable_samplers) {
                   LVP_FROM_HANDLE(lvp_sampler, sampler,
                                   write->pImageInfo[j].sampler);
 
-                  desc[j].sampler = sampler->desc.sampler;
-                  desc[j].sampler_index = sampler->desc.sampler_index;
+                  for (unsigned p = 0; p < plane_count; p++) {
+                     desc[didx + p].sampler = sampler->desc.sampler;
+                     desc[didx + p].texture.sampler_index = sampler->desc.texture.sampler_index;
+                  }
                }
             } else {
-               desc[j].functions = device->null_texture_handle->functions;
-               desc[j].sampler_index = 0;
+               for (unsigned k = 0; k < bind_layout->stride; k++) {
+                  desc[didx + k].functions = device->null_texture_handle->functions;
+                  desc[didx + k].texture.sampler_index = 0;
+               }
             }
          }
          break;
@@ -485,13 +517,19 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_image_view, iview,
                             write->pImageInfo[j].imageView);
-
+            uint32_t didx = j * bind_layout->stride;
             if (iview) {
-               lp_jit_texture_from_pipe(&desc[j].texture, iview->sv);
-               desc[j].functions = iview->texture_handle->functions;
+               unsigned plane_count = iview->plane_count;
+
+               for (unsigned p = 0; p < plane_count; p++) {
+                  lp_jit_bindless_texture_from_pipe(&desc[didx + p].texture, iview->planes[p].sv);
+                  desc[didx + p].functions = iview->planes[p].texture_handle->functions;
+               }
             } else {
-               desc[j].functions = device->null_texture_handle->functions;
-               desc[j].sampler_index = 0;
+               for (unsigned k = 0; k < bind_layout->stride; k++) {
+                  desc[didx + k].functions = device->null_texture_handle->functions;
+                  desc[didx + k].texture.sampler_index = 0;
+               }
             }
          }
          break;
@@ -500,12 +538,17 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_image_view, iview,
                             write->pImageInfo[j].imageView);
-
+            uint32_t didx = j * bind_layout->stride;
             if (iview) {
-               lp_jit_image_from_pipe(&desc[j].image, &iview->iv);
-               desc[j].functions = iview->image_handle->functions;
+               unsigned plane_count = iview->plane_count;
+
+               for (unsigned p = 0; p < plane_count; p++) {
+                  lp_jit_image_from_pipe(&desc[didx + p].image, &iview->planes[p].iv);
+                  desc[didx + p].functions = iview->planes[p].image_handle->functions;
+               }
             } else {
-               desc[j].functions = device->null_image_handle->functions;
+               for (unsigned k = 0; k < bind_layout->stride; k++)
+                  desc[didx + k].functions = device->null_image_handle->functions;
             }
          }
          break;
@@ -514,13 +557,13 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_buffer_view, bview,
                             write->pTexelBufferView[j]);
-
+            assert(bind_layout->stride == 1);
             if (bview) {
-               lp_jit_texture_from_pipe(&desc[j].texture, bview->sv);
+               lp_jit_bindless_texture_from_pipe(&desc[j].texture, bview->sv);
                desc[j].functions = bview->texture_handle->functions;
             } else {
                desc[j].functions = device->null_texture_handle->functions;
-               desc[j].sampler_index = 0;
+               desc[j].texture.sampler_index = 0;
             }
          }
          break;
@@ -529,7 +572,7 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_buffer_view, bview,
                             write->pTexelBufferView[j]);
-
+            assert(bind_layout->stride == 1);
             if (bview) {
                lp_jit_image_from_pipe(&desc[j].image, &bview->iv);
                desc[j].functions = bview->image_handle->functions;
@@ -543,7 +586,7 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
       case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_buffer, buffer, write->pBufferInfo[j].buffer);
-
+            assert(bind_layout->stride == 1);
             if (buffer) {
                struct pipe_constant_buffer ubo = {
                   .buffer = buffer->bo,
@@ -565,7 +608,7 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
       case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
          for (uint32_t j = 0; j < write->descriptorCount; j++) {
             LVP_FROM_HANDLE(lvp_buffer, buffer, write->pBufferInfo[j].buffer);
-
+            assert(bind_layout->stride == 1);
             if (buffer) {
                struct pipe_shader_buffer ubo = {
                   .buffer = buffer->bo,
@@ -583,7 +626,18 @@ VKAPI_ATTR void VKAPI_CALL lvp_UpdateDescriptorSets(
          }
          break;
 
+      case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+         for (uint32_t j = 0; j < write->descriptorCount; j++) {
+            const VkWriteDescriptorSetAccelerationStructureKHR *accel_structs =
+               vk_find_struct_const(write->pNext, WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
+            VK_FROM_HANDLE(vk_acceleration_structure, accel_struct, accel_structs->pAccelerationStructures[j]);
+
+            desc[j].accel_struct = accel_struct ? vk_acceleration_structure_get_va(accel_struct) : 0;
+         }
+         break;
+
       default:
+         UNREACHABLE("Unsupported descriptor type");
          break;
       }
    }
@@ -697,124 +751,45 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorSetLayoutSupport(VkDevice device,
    pSupport->supported = true;
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateDescriptorUpdateTemplate(VkDevice _device,
-                                            const VkDescriptorUpdateTemplateCreateInfo *pCreateInfo,
-                                            const VkAllocationCallbacks *pAllocator,
-                                            VkDescriptorUpdateTemplate *pDescriptorUpdateTemplate)
-{
-   LVP_FROM_HANDLE(lvp_device, device, _device);
-   const uint32_t entry_count = pCreateInfo->descriptorUpdateEntryCount;
-   const size_t size = sizeof(struct lvp_descriptor_update_template) +
-      sizeof(VkDescriptorUpdateTemplateEntry) * entry_count;
-
-   struct lvp_descriptor_update_template *templ;
-
-   templ = vk_alloc(&device->vk.alloc, size, 8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (!templ)
-      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
-
-   vk_object_base_init(&device->vk, &templ->base,
-                       VK_OBJECT_TYPE_DESCRIPTOR_UPDATE_TEMPLATE);
-
-   templ->ref_cnt = 1;
-   templ->type = pCreateInfo->templateType;
-   templ->bind_point = pCreateInfo->pipelineBindPoint;
-   templ->set = pCreateInfo->set;
-   /* This parameter is ignored if templateType is not VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_PUSH_DESCRIPTORS_KHR */
-   if (pCreateInfo->templateType == VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_PUSH_DESCRIPTORS_KHR)
-      templ->pipeline_layout = lvp_pipeline_layout_from_handle(pCreateInfo->pipelineLayout);
-   else
-      templ->pipeline_layout = NULL;
-   templ->entry_count = entry_count;
-
-   VkDescriptorUpdateTemplateEntry *entries = (VkDescriptorUpdateTemplateEntry *)(templ + 1);
-   for (unsigned i = 0; i < entry_count; i++) {
-      entries[i] = pCreateInfo->pDescriptorUpdateEntries[i];
-   }
-
-   *pDescriptorUpdateTemplate = lvp_descriptor_update_template_to_handle(templ);
-   return VK_SUCCESS;
-}
-
-void
-lvp_descriptor_template_destroy(struct lvp_device *device, struct lvp_descriptor_update_template *templ)
-{
-   if (!templ)
-      return;
-
-   vk_object_base_finish(&templ->base);
-   vk_free(&device->vk.alloc, templ);
-}
-
-VKAPI_ATTR void VKAPI_CALL lvp_DestroyDescriptorUpdateTemplate(VkDevice _device,
-                                         VkDescriptorUpdateTemplate descriptorUpdateTemplate,
-                                         const VkAllocationCallbacks *pAllocator)
-{
-   LVP_FROM_HANDLE(lvp_device, device, _device);
-   LVP_FROM_HANDLE(lvp_descriptor_update_template, templ, descriptorUpdateTemplate);
-   lvp_descriptor_template_templ_unref(device, templ);
-}
-
-uint32_t
-lvp_descriptor_update_template_entry_size(VkDescriptorType type)
-{
-   switch (type) {
-   case VK_DESCRIPTOR_TYPE_SAMPLER:
-   case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-   case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-   case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-   case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-      return sizeof(VkDescriptorImageInfo);
-   case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
-   case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-      return sizeof(VkBufferView);
-   case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-   case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-   case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-   case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-   default:
-      return sizeof(VkDescriptorBufferInfo);
-   }
-}
-
 void
 lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descriptorSet,
                                         VkDescriptorUpdateTemplate descriptorUpdateTemplate,
-                                        const void *pData, bool push)
+                                        const void *pData)
 {
    LVP_FROM_HANDLE(lvp_device, device, _device);
    LVP_FROM_HANDLE(lvp_descriptor_set, set, descriptorSet);
-   LVP_FROM_HANDLE(lvp_descriptor_update_template, templ, descriptorUpdateTemplate);
+   LVP_FROM_HANDLE(vk_descriptor_update_template, templ, descriptorUpdateTemplate);
    uint32_t i, j;
 
-   const uint8_t *pSrc = pData;
-
    for (i = 0; i < templ->entry_count; ++i) {
-      VkDescriptorUpdateTemplateEntry *entry = &templ->entry[i];
+      struct vk_descriptor_template_entry *entry = &templ->entries[i];
 
-      if (!push)
-         pSrc = ((const uint8_t *) pData) + entry->offset;
+      const uint8_t *pSrc = ((const uint8_t *) pData) + entry->offset;
 
       const struct lvp_descriptor_set_binding_layout *bind_layout =
-         &set->layout->binding[entry->dstBinding];
+         &set->layout->binding[entry->binding];
 
-      if (entry->descriptorType == VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK) {
-         memcpy((uint8_t *)set->map + bind_layout->uniform_block_offset + entry->dstArrayElement, pSrc, entry->descriptorCount);
+      if (entry->type == VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK) {
+         memcpy((uint8_t *)set->map + bind_layout->uniform_block_offset + entry->array_element, pSrc, entry->array_count);
          continue;
       }
 
       struct lp_descriptor *desc = set->map;
       desc += bind_layout->descriptor_index;
 
-      for (j = 0; j < entry->descriptorCount; ++j) {
-         unsigned idx = j + entry->dstArrayElement;
-         switch (entry->descriptorType) {
-         case VK_DESCRIPTOR_TYPE_SAMPLER: {
-            LVP_FROM_HANDLE(lvp_sampler, sampler,
-                            *(VkSampler *)pSrc);
+      for (j = 0; j < entry->array_count; ++j) {
+         unsigned idx = j + entry->array_element;
 
-            desc[idx].sampler = sampler->desc.sampler;
-            desc[idx].sampler_index = sampler->desc.sampler_index;
+         idx *= bind_layout->stride;
+         switch (entry->type) {
+         case VK_DESCRIPTOR_TYPE_SAMPLER: {
+            VkDescriptorImageInfo *info = (VkDescriptorImageInfo *)pSrc;
+            LVP_FROM_HANDLE(lvp_sampler, sampler, info->sampler);
+
+            for (unsigned k = 0; k < bind_layout->stride; k++) {
+               desc[idx + k].sampler = sampler->desc.sampler;
+               desc[idx + k].texture.sampler_index = sampler->desc.texture.sampler_index;
+            }
             break;
          }
          case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: {
@@ -822,18 +797,24 @@ lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descri
             LVP_FROM_HANDLE(lvp_image_view, iview, info->imageView);
 
             if (iview) {
-               lp_jit_texture_from_pipe(&desc[idx].texture, iview->sv);
-               desc[idx].functions = iview->texture_handle->functions;
+               for (unsigned p = 0; p < iview->plane_count; p++) {
+                  lp_jit_bindless_texture_from_pipe(&desc[idx + p].texture, iview->planes[p].sv);
+                  desc[idx + p].functions = iview->planes[p].texture_handle->functions;
+               }
 
                if (!bind_layout->immutable_samplers) {
                   LVP_FROM_HANDLE(lvp_sampler, sampler, info->sampler);
 
-                  desc[idx].sampler = sampler->desc.sampler;
-                  desc[idx].sampler_index = sampler->desc.sampler_index;
+                  for (unsigned p = 0; p < iview->plane_count; p++) {
+                     desc[idx + p].sampler = sampler->desc.sampler;
+                     desc[idx + p].texture.sampler_index = sampler->desc.texture.sampler_index;
+                  }
                }
             } else {
-               desc[j].functions = device->null_texture_handle->functions;
-               desc[j].sampler_index = 0;
+               for (unsigned k = 0; k < bind_layout->stride; k++) {
+                  desc[idx + k].functions = device->null_texture_handle->functions;
+                  desc[idx + k].texture.sampler_index = 0;
+               }
             }
             break;
          }
@@ -842,11 +823,15 @@ lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descri
             LVP_FROM_HANDLE(lvp_image_view, iview, info->imageView);
 
             if (iview) {
-               lp_jit_texture_from_pipe(&desc[idx].texture, iview->sv);
-               desc[idx].functions = iview->texture_handle->functions;
+               for (unsigned p = 0; p < iview->plane_count; p++) {
+                  lp_jit_bindless_texture_from_pipe(&desc[idx + p].texture, iview->planes[p].sv);
+                  desc[idx + p].functions = iview->planes[p].texture_handle->functions;
+               }
             } else {
-               desc[j].functions = device->null_texture_handle->functions;
-               desc[j].sampler_index = 0;
+               for (unsigned k = 0; k < bind_layout->stride; k++) {
+                  desc[idx + k].functions = device->null_texture_handle->functions;
+                  desc[idx + k].texture.sampler_index = 0;
+               }
             }
             break;
          }
@@ -856,30 +841,33 @@ lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descri
                             ((VkDescriptorImageInfo *)pSrc)->imageView);
 
             if (iview) {
-               lp_jit_image_from_pipe(&desc[idx].image, &iview->iv);
-               desc[idx].functions = iview->image_handle->functions;
+               for (unsigned p = 0; p < iview->plane_count; p++) {
+                  lp_jit_image_from_pipe(&desc[idx + p].image, &iview->planes[p].iv);
+                  desc[idx + p].functions = iview->planes[p].image_handle->functions;
+               }
             } else {
-               desc[idx].functions = device->null_image_handle->functions;
+               for (unsigned k = 0; k < bind_layout->stride; k++)
+                  desc[idx + k].functions = device->null_image_handle->functions;
             }
             break;
          }
          case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER: {
             LVP_FROM_HANDLE(lvp_buffer_view, bview,
                             *(VkBufferView *)pSrc);
-
+            assert(bind_layout->stride == 1);
             if (bview) {
-               lp_jit_texture_from_pipe(&desc[idx].texture, bview->sv);
+               lp_jit_bindless_texture_from_pipe(&desc[idx].texture, bview->sv);
                desc[idx].functions = bview->texture_handle->functions;
             } else {
                desc[j].functions = device->null_texture_handle->functions;
-               desc[j].sampler_index = 0;
+               desc[j].texture.sampler_index = 0;
             }
             break;
          }
          case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER: {
             LVP_FROM_HANDLE(lvp_buffer_view, bview,
                             *(VkBufferView *)pSrc);
-
+            assert(bind_layout->stride == 1);
             if (bview) {
                lp_jit_image_from_pipe(&desc[idx].image, &bview->iv);
                desc[idx].functions = bview->image_handle->functions;
@@ -893,7 +881,7 @@ lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descri
          case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC: {
             VkDescriptorBufferInfo *info = (VkDescriptorBufferInfo *)pSrc;
             LVP_FROM_HANDLE(lvp_buffer, buffer, info->buffer);
-
+            assert(bind_layout->stride == 1);
             if (buffer) {
                struct pipe_constant_buffer ubo = {
                   .buffer = buffer->bo,
@@ -915,6 +903,7 @@ lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descri
          case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC: {
             VkDescriptorBufferInfo *info = (VkDescriptorBufferInfo *)pSrc;
             LVP_FROM_HANDLE(lvp_buffer, buffer, info->buffer);
+            assert(bind_layout->stride == 1);
 
             if (buffer) {
                struct pipe_shader_buffer ubo = {
@@ -932,14 +921,19 @@ lvp_descriptor_set_update_with_template(VkDevice _device, VkDescriptorSet descri
             }
             break;
          }
-         default:
+
+         case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR: {
+            VK_FROM_HANDLE(vk_acceleration_structure, accel_struct, *(VkAccelerationStructureKHR *)pSrc);
+            desc[idx].accel_struct = accel_struct ? vk_acceleration_structure_get_va(accel_struct) : 0;
             break;
          }
 
-         if (push)
-            pSrc += lvp_descriptor_update_template_entry_size(entry->descriptorType);
-         else
-            pSrc += entry->stride;
+         default:
+            UNREACHABLE("Unsupported descriptor type");
+            break;
+         }
+
+         pSrc += entry->stride;
       }
    }
 }
@@ -949,7 +943,7 @@ lvp_UpdateDescriptorSetWithTemplate(VkDevice device, VkDescriptorSet descriptorS
                                     VkDescriptorUpdateTemplate descriptorUpdateTemplate,
                                     const void *pData)
 {
-   lvp_descriptor_set_update_with_template(device, descriptorSet, descriptorUpdateTemplate, pData, false);
+   lvp_descriptor_set_update_with_template(device, descriptorSet, descriptorUpdateTemplate, pData);
 }
 
 VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorSetLayoutSizeEXT(
@@ -998,17 +992,17 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
 
    switch (pCreateInfo->type) {
    case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK: {
-      unreachable("this is a spec violation");
+      UNREACHABLE("this is a spec violation");
       break;
    }
    case VK_DESCRIPTOR_TYPE_SAMPLER: {
       if (pCreateInfo->data.pSampler) {
          LVP_FROM_HANDLE(lvp_sampler, sampler, pCreateInfo->data.pSampler[0]);
          desc->sampler = sampler->desc.sampler;
-         desc->sampler_index = sampler->desc.sampler_index;
+         desc->texture.sampler_index = sampler->desc.texture.sampler_index;
       } else {
          lp_jit_sampler_from_pipe(&desc->sampler, &sampler);
-         desc->sampler_index = 0;
+         desc->texture.sampler_index = 0;
       }
       break;
    }
@@ -1018,20 +1012,28 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
       if (info && info->imageView) {
          LVP_FROM_HANDLE(lvp_image_view, iview, info->imageView);
 
-         lp_jit_texture_from_pipe(&desc->texture, iview->sv);
-         desc->functions = iview->texture_handle->functions;
+         unsigned plane_count = iview->plane_count;
 
-         if (info->sampler) {
-            LVP_FROM_HANDLE(lvp_sampler, sampler, info->sampler);
-            desc->sampler = sampler->desc.sampler;
-            desc->sampler_index = sampler->desc.sampler_index;
-         } else {
-            lp_jit_sampler_from_pipe(&desc->sampler, &sampler);
-            desc->sampler_index = 0;
+         for (unsigned p = 0; p < plane_count; p++) {
+            lp_jit_bindless_texture_from_pipe(&desc[p].texture, iview->planes[p].sv);
+            desc[p].functions = iview->planes[p].texture_handle->functions;
+
+            if (info->sampler) {
+               LVP_FROM_HANDLE(lvp_sampler, sampler, info->sampler);
+               desc[p].sampler = sampler->desc.sampler;
+                 desc[p].texture.sampler_index = sampler->desc.texture.sampler_index;
+            } else {
+               lp_jit_sampler_from_pipe(&desc->sampler, &sampler);
+               desc[p].texture.sampler_index = 0;
+            }
          }
       } else {
-         desc->functions = device->null_texture_handle->functions;
-         desc->sampler_index = 0;
+         unsigned plane_count = size / sizeof(struct lp_descriptor);
+
+         for (unsigned p = 0; p < plane_count; p++) {
+            desc[p].functions = device->null_texture_handle->functions;
+            desc[p].texture.sampler_index = 0;
+         }
       }
 
       break;
@@ -1040,11 +1042,20 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: {
       if (pCreateInfo->data.pSampledImage && pCreateInfo->data.pSampledImage->imageView) {
          LVP_FROM_HANDLE(lvp_image_view, iview, pCreateInfo->data.pSampledImage->imageView);
-         lp_jit_texture_from_pipe(&desc->texture, iview->sv);
-         desc->functions = iview->texture_handle->functions;
+
+         unsigned plane_count = iview->plane_count;
+
+         for (unsigned p = 0; p < plane_count; p++) {
+            lp_jit_bindless_texture_from_pipe(&desc[p].texture, iview->planes[p].sv);
+            desc[p].functions = iview->planes[p].texture_handle->functions;
+         }
       } else {
-         desc->functions = device->null_texture_handle->functions;
-         desc->sampler_index = 0;
+         unsigned plane_count = size / sizeof(struct lp_descriptor);
+
+         for (unsigned p = 0; p < plane_count; p++) {
+            desc[p].functions = device->null_texture_handle->functions;
+            desc[p].texture.sampler_index = 0;
+         }
       }
       break;
    }
@@ -1054,10 +1065,18 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT: {
       if (pCreateInfo->data.pStorageImage && pCreateInfo->data.pStorageImage->imageView) {
          LVP_FROM_HANDLE(lvp_image_view, iview, pCreateInfo->data.pStorageImage->imageView);
-         lp_jit_image_from_pipe(&desc->image, &iview->iv);
-         desc->functions = iview->image_handle->functions;
+
+         unsigned plane_count = iview->plane_count;
+
+         for (unsigned p = 0; p < plane_count; p++) {
+            lp_jit_image_from_pipe(&desc[p].image, &iview->planes[p].iv);
+            desc[p].functions = iview->planes[p].image_handle->functions;
+         }
       } else {
-         desc->functions = device->null_image_handle->functions;
+         unsigned plane_count = size / sizeof(struct lp_descriptor);
+
+         for (unsigned p = 0; p < plane_count; p++)
+            desc[p].functions = device->null_image_handle->functions;
       }
       break;
    }
@@ -1065,11 +1084,11 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
       const VkDescriptorAddressInfoEXT *bda = pCreateInfo->data.pUniformTexelBuffer;
       if (bda && bda->address) {
          enum pipe_format pformat = vk_format_to_pipe_format(bda->format);
-         lp_jit_texture_buffer_from_bda(&desc->texture, (void*)(uintptr_t)bda->address, bda->range, pformat);
-         desc->functions = get_texture_handle_bda(device, bda, pformat).functions;
+         lp_jit_bindless_texture_buffer_from_bda(&desc->texture, (void*)(uintptr_t)bda->address);
+         desc->functions = get_texture_handle_bda(device, bda->address, bda->range, pformat).functions;
       } else {
          desc->functions = device->null_texture_handle->functions;
-         desc->sampler_index = 0;
+         desc->texture.sampler_index = 0;
       }
       break;
    }
@@ -1078,7 +1097,7 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
       if (bda && bda->address) {
          enum pipe_format pformat = vk_format_to_pipe_format(bda->format);
          lp_jit_image_buffer_from_bda(&desc->image, (void *)(uintptr_t)bda->address, bda->range, pformat);
-         desc->functions = get_image_handle_bda(device, bda, pformat).functions;
+         desc->functions = get_image_handle_bda(device, bda->address, bda->range, pformat).functions;
       } else {
          desc->functions = device->null_image_handle->functions;
       }
@@ -1107,7 +1126,12 @@ VKAPI_ATTR void VKAPI_CALL lvp_GetDescriptorEXT(
       }
       break;
    }
+   case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR: {
+      desc->accel_struct = pCreateInfo->data.accelerationStructure;
+      break;
+   }
    default:
+      UNREACHABLE("Unsupported descriptor type");
       break;
    }
 }

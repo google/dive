@@ -54,9 +54,6 @@ nir_intrinsic_set_${name}(nir_intrinsic_instr *instr, ${data_type} val)
    const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
    assert(info->index_map[${enum}] > 0);
 % if "struct" in data_type:
-% if name == "io_semantics":
-   val._pad = 0; /* clear padding bits */
-% endif
    STATIC_ASSERT(sizeof(instr->const_index[0]) == sizeof(val));
    memcpy(&instr->const_index[info->index_map[${enum}] - 1], &val, sizeof(val));
 % else:
@@ -72,7 +69,8 @@ nir_intrinsic_has_${name}(const nir_intrinsic_instr *instr)
 }
 % endfor
 
-#endif /* _NIR_INTRINSICS_INDICES_ */"""
+#endif /* _NIR_INTRINSICS_INDICES_ */
+"""
 
 from nir_intrinsics import INTR_INDICES
 from mako.template import Template
@@ -82,13 +80,12 @@ import os
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--outdir', required=True,
-                        help='Directory to put the generated files in')
+    parser.add_argument('--out', required=True,
+                        help='Output H file')
 
     args = parser.parse_args()
 
-    path = os.path.join(args.outdir, 'nir_intrinsics_indices.h')
-    with open(path, 'w') as f:
+    with open(args.out, 'w', encoding='utf-8') as f:
         f.write(Template(template).render(INTR_INDICES=INTR_INDICES))
 
 if __name__ == '__main__':

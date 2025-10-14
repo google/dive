@@ -43,8 +43,6 @@
 #include "main/macros.h"
 #include "main/varray.h"
 
-#include "compiler/glsl/ir_uniform.h"
-
 #include "vbo/vbo.h"
 
 #include "st_context.h"
@@ -57,13 +55,13 @@
 
 #include "pipe/p_context.h"
 #include "pipe/p_defines.h"
-#include "util/u_cpu_detect.h"
 #include "util/u_inlines.h"
 #include "util/format/u_format.h"
 #include "util/u_prim.h"
 #include "util/u_draw.h"
 #include "util/u_upload_mgr.h"
 #include "util/u_threaded_context.h"
+#include "util/perf/cpu_trace.h"
 #include "draw/draw_context.h"
 #include "cso_cache/cso_context.h"
 
@@ -73,9 +71,11 @@ static_assert(GL_QUADS == MESA_PRIM_QUADS, "enum mismatch");
 static_assert(GL_TRIANGLE_STRIP_ADJACENCY == MESA_PRIM_TRIANGLE_STRIP_ADJACENCY, "enum mismatch");
 static_assert(GL_PATCHES == MESA_PRIM_PATCHES, "enum mismatch");
 
-static inline void
-prepare_draw(struct st_context *st, struct gl_context *ctx, uint64_t state_mask)
+void
+st_prepare_draw(struct gl_context *ctx, const st_state_bitset state_mask)
 {
+   struct st_context *st = ctx->st;
+
    /* Mesa core state should have been validated already */
    assert(ctx->NewState == 0x0);
 
@@ -86,64 +86,22 @@ prepare_draw(struct st_context *st, struct gl_context *ctx, uint64_t state_mask)
 
    /* Validate state. */
    st_validate_state(st, state_mask);
-
-   /* Pin threads regularly to the same Zen CCX that the main thread is
-    * running on. The main thread can move between CCXs.
-    */
-   if (unlikely(st->pin_thread_counter != ST_L3_PINNING_DISABLED &&
-                /* do it occasionally */
-                ++st->pin_thread_counter % 512 == 0)) {
-      st->pin_thread_counter = 0;
-
-      int cpu = util_get_current_cpu();
-      if (cpu >= 0) {
-         struct pipe_context *pipe = st->pipe;
-         uint16_t L3_cache = util_get_cpu_caps()->cpu_to_L3[cpu];
-
-         if (L3_cache != U_CPU_INVALID_L3) {
-            pipe->set_context_param(pipe,
-                                    PIPE_CONTEXT_PARAM_PIN_THREADS_TO_L3_CACHE,
-                                    L3_cache);
-         }
-      }
-   }
+   st_context_add_work(st);
 }
 
-static bool ALWAYS_INLINE
-prepare_indexed_draw(/* pass both st and ctx to reduce dereferences */
-                     struct st_context *st,
-                     struct gl_context *ctx,
-                     struct pipe_draw_info *info,
-                     const struct pipe_draw_start_count_bias *draws,
-                     unsigned num_draws)
-{
-   /* Get index bounds for user buffers. */
-   if (info->index_size && !info->index_bounds_valid &&
-       st->draw_needs_minmax_index) {
-      /* Return if this fails, which means all draws have count == 0. */
-      if (!vbo_get_minmax_indices_gallium(ctx, info, draws, num_draws))
-         return false;
-
-      info->index_bounds_valid = true;
-   }
-   return true;
-}
-
-static void
+void
 st_draw_gallium(struct gl_context *ctx,
-                struct pipe_draw_info *info,
+                const struct pipe_draw_info *info,
                 unsigned drawid_offset,
+                const struct pipe_draw_indirect_info *indirect,
                 const struct pipe_draw_start_count_bias *draws,
                 unsigned num_draws)
 {
+   MESA_TRACE_FUNC();
+
    struct st_context *st = st_context(ctx);
 
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK);
-
-   if (!prepare_indexed_draw(st, ctx, info, draws, num_draws))
-      return;
-
-   cso_draw_vbo(st->cso_context, info, drawid_offset, NULL, draws, num_draws);
+   cso_draw_vbo(st->cso_context, info, drawid_offset, indirect, draws, num_draws);
 }
 
 static void
@@ -155,11 +113,6 @@ st_draw_gallium_multimode(struct gl_context *ctx,
 {
    struct st_context *st = st_context(ctx);
 
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK);
-
-   if (!prepare_indexed_draw(st, ctx, info, draws, num_draws))
-      return;
-
    unsigned i, first;
    struct cso_context *cso = st->cso_context;
 
@@ -169,11 +122,6 @@ st_draw_gallium_multimode(struct gl_context *ctx,
          info->mode = mode[first];
          cso_draw_vbo(cso, info, 0, NULL, &draws[first], i - first);
          first = i;
-
-         /* We can pass the reference only once. st_buffer_object keeps
-          * the reference alive for later draws.
-          */
-         info->take_index_buffer_ownership = false;
       }
    }
 }
@@ -189,7 +137,7 @@ rewrite_partial_stride_indirect(struct st_context *st,
    if (!new_draws)
       return;
    for (unsigned i = 0; i < draw_count; i++)
-      cso_draw_vbo(st->cso_context, &new_draws[i].info, i, NULL, &new_draws[i].draw, 1);
+      st->ctx->Driver.DrawGallium(st->ctx, &new_draws[i].info, i, NULL, &new_draws[i].draw, 1);
    free(new_draws);
 }
 
@@ -212,7 +160,8 @@ st_indirect_draw_vbo(struct gl_context *ctx,
       return;
 
    assert(stride);
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK);
+   ST_PIPELINE_RENDER_STATE_MASK(mask);
+   st_prepare_draw(ctx, mask);
 
    memset(&indirect, 0, sizeof(indirect));
    util_draw_init_info(&info);
@@ -238,14 +187,7 @@ st_indirect_draw_vbo(struct gl_context *ctx,
       /* indices are always in a real VBO */
       assert(bufobj);
 
-      if (st->pipe->draw_vbo == tc_draw_vbo &&
-          (draw_count == 1 || st->has_multi_draw_indirect)) {
-         /* Fast path for u_threaded_context to eliminate atomics. */
-         info.index.resource = _mesa_get_bufferobj_reference(ctx, bufobj);
-         info.take_index_buffer_ownership = true;
-      } else {
-         info.index.resource = bufobj->buffer;
-      }
+      info.index.resource = bufobj->buffer;
 
       /* No index buffer storage allocated - nothing to do. */
       if (!info.index.resource)
@@ -271,7 +213,7 @@ st_indirect_draw_vbo(struct gl_context *ctx,
 
       indirect.draw_count = 1;
       for (i = 0; i < draw_count; i++) {
-         cso_draw_vbo(st->cso_context, &info, i, &indirect, &draw, 1);
+         ctx->Driver.DrawGallium(ctx, &info, i, &indirect, &draw, 1);
          indirect.offset += stride;
       }
    } else {
@@ -291,77 +233,13 @@ st_indirect_draw_vbo(struct gl_context *ctx,
             indirect_draw_count->buffer;
          indirect.indirect_draw_count_offset = indirect_draw_count_offset;
       }
-      cso_draw_vbo(st->cso_context, &info, 0, &indirect, &draw, 1);
+      ctx->Driver.DrawGallium(ctx, &info, 0, &indirect, &draw, 1);
    }
 
    if (MESA_DEBUG_FLAGS & DEBUG_ALWAYS_FLUSH)
       _mesa_flush(ctx);
 }
 
-void
-st_draw_transform_feedback(struct gl_context *ctx, GLenum mode,
-                           unsigned num_instances, unsigned stream,
-                           struct gl_transform_feedback_object *tfb_vertcount)
-{
-   struct st_context *st = st_context(ctx);
-   struct pipe_draw_info info;
-   struct pipe_draw_indirect_info indirect;
-   struct pipe_draw_start_count_bias draw = {0};
-
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK);
-
-   memset(&indirect, 0, sizeof(indirect));
-   util_draw_init_info(&info);
-   info.max_index = ~0u; /* so that u_vbuf can tell that it's unknown */
-   info.mode = mode;
-   info.instance_count = num_instances;
-
-   /* Transform feedback drawing is always non-indexed. */
-   /* Set info.count_from_stream_output. */
-   indirect.count_from_stream_output = tfb_vertcount->draw_count[stream];
-   if (indirect.count_from_stream_output == NULL)
-      return;
-
-   cso_draw_vbo(st->cso_context, &info, 0, &indirect, &draw, 1);
-}
-
-static void
-st_draw_gallium_vertex_state(struct gl_context *ctx,
-                             struct pipe_vertex_state *state,
-                             struct pipe_draw_vertex_state_info info,
-                             const struct pipe_draw_start_count_bias *draws,
-                             const uint8_t *mode,
-                             unsigned num_draws)
-{
-   struct st_context *st = st_context(ctx);
-
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK_NO_VARRAYS);
-
-   struct pipe_context *pipe = st->pipe;
-   uint32_t velem_mask = ctx->VertexProgram._Current->info.inputs_read;
-
-   if (!mode) {
-      pipe->draw_vertex_state(pipe, state, velem_mask, info, draws, num_draws);
-   } else {
-      /* Find consecutive draws where mode doesn't vary. */
-      for (unsigned i = 0, first = 0; i <= num_draws; i++) {
-         if (i == num_draws || mode[i] != mode[first]) {
-            unsigned current_num_draws = i - first;
-
-            /* Increase refcount to be able to use take_vertex_state_ownership
-             * with all draws.
-             */
-            if (i != num_draws && info.take_vertex_state_ownership)
-               p_atomic_inc(&state->reference.count);
-
-            info.mode = mode[first];
-            pipe->draw_vertex_state(pipe, state, velem_mask, info, &draws[first],
-                                    current_num_draws);
-            first = i;
-         }
-      }
-   }
-}
 
 void
 st_init_draw_functions(struct pipe_screen *screen,
@@ -369,11 +247,6 @@ st_init_draw_functions(struct pipe_screen *screen,
 {
    functions->DrawGallium = st_draw_gallium;
    functions->DrawGalliumMultiMode = st_draw_gallium_multimode;
-
-   if (screen->get_param(screen, PIPE_CAP_DRAW_VERTEX_STATE)) {
-      functions->DrawGalliumVertexState = st_draw_gallium_vertex_state;
-      functions->CreateGalliumVertexState = st_create_gallium_vertex_state;
-   }
 }
 
 
@@ -421,10 +294,11 @@ st_draw_quad(struct st_context *st,
 {
    struct pipe_vertex_buffer vb = {0};
    struct st_util_vertex *verts;
+   struct pipe_resource *releasebuf = NULL;
 
    u_upload_alloc(st->pipe->stream_uploader, 0,
                   4 * sizeof(struct st_util_vertex), 4,
-                  &vb.buffer_offset, &vb.buffer.resource, (void **) &verts);
+                  &vb.buffer_offset, &vb.buffer.resource, &releasebuf, (void **) &verts);
    if (!vb.buffer.resource) {
       return false;
    }
@@ -475,8 +349,7 @@ st_draw_quad(struct st_context *st,
 
    u_upload_unmap(st->pipe->stream_uploader);
 
-   cso_set_vertex_buffers(st->cso_context, 1, 0, false, &vb);
-   st->last_num_vbuffers = MAX2(st->last_num_vbuffers, 1);
+   cso_set_vertex_buffers(st->cso_context, 1, &vb);
 
    if (num_instances > 1) {
       cso_draw_arrays_instanced(st->cso_context, MESA_PRIM_TRIANGLE_FAN, 0, 4,
@@ -484,31 +357,31 @@ st_draw_quad(struct st_context *st,
    } else {
       cso_draw_arrays(st->cso_context, MESA_PRIM_TRIANGLE_FAN, 0, 4);
    }
-
-   pipe_resource_reference(&vb.buffer.resource, NULL);
+   pipe_resource_release(st->pipe, releasebuf);
 
    return true;
 }
 
 static void
 st_hw_select_draw_gallium(struct gl_context *ctx,
-                          struct pipe_draw_info *info,
+                          const struct pipe_draw_info *info,
                           unsigned drawid_offset,
+                          const struct pipe_draw_indirect_info *indirect,
                           const struct pipe_draw_start_count_bias *draws,
                           unsigned num_draws)
 {
    struct st_context *st = st_context(ctx);
+   enum mesa_prim old_mode = info->mode;
 
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK);
+   if (st_draw_hw_select_prepare_common(ctx) &&
+       /* Removing "const" is fine because we restore the changed mode
+        * at the end. */
+       st_draw_hw_select_prepare_mode(ctx, ((struct pipe_draw_info*)info))) {
+      cso_draw_vbo(st->cso_context, info, drawid_offset, indirect, draws,
+                   num_draws);
+   }
 
-   if (!prepare_indexed_draw(st, ctx, info, draws, num_draws))
-      return;
-
-   if (!st_draw_hw_select_prepare_common(ctx) ||
-       !st_draw_hw_select_prepare_mode(ctx, info))
-      return;
-
-   cso_draw_vbo(st->cso_context, info, drawid_offset, NULL, draws, num_draws);
+   ((struct pipe_draw_info*)info)->mode = old_mode;
 }
 
 static void
@@ -519,11 +392,6 @@ st_hw_select_draw_gallium_multimode(struct gl_context *ctx,
                                     unsigned num_draws)
 {
    struct st_context *st = st_context(ctx);
-
-   prepare_draw(st, ctx, ST_PIPELINE_RENDER_STATE_MASK);
-
-   if (!prepare_indexed_draw(st, ctx, info, draws, num_draws))
-      return;
 
    if (!st_draw_hw_select_prepare_common(ctx))
       return;
@@ -540,11 +408,6 @@ st_hw_select_draw_gallium_multimode(struct gl_context *ctx,
             cso_draw_vbo(cso, info, 0, NULL, &draws[first], i - first);
 
          first = i;
-
-         /* We can pass the reference only once. st_buffer_object keeps
-          * the reference alive for later draws.
-          */
-         info->take_index_buffer_ownership = false;
       }
    }
 }

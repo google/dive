@@ -37,30 +37,15 @@
 
 ir_variable_refcount_visitor::ir_variable_refcount_visitor()
 {
-   this->mem_ctx = ralloc_context(NULL);
-   this->ht = _mesa_pointer_hash_table_create(NULL);
-}
-
-static void
-free_entry(struct hash_entry *entry)
-{
-   ir_variable_refcount_entry *ivre = (ir_variable_refcount_entry *) entry->data;
-
-   /* Free assignment list */
-   exec_node *n;
-   while ((n = ivre->assign_list.pop_head()) != NULL) {
-      struct assignment_entry *assignment_entry =
-         exec_node_data(struct assignment_entry, n, link);
-      free(assignment_entry);
-   }
-
-   delete ivre;
+   this->linalloc = linear_context(ralloc_context(NULL));
+   _mesa_pointer_hash_table_init(&this->ht, NULL);
+   this->global = true;
 }
 
 ir_variable_refcount_visitor::~ir_variable_refcount_visitor()
 {
-   ralloc_free(this->mem_ctx);
-   _mesa_hash_table_destroy(this->ht, free_entry);
+   ralloc_free(ralloc_parent_of_linear_context(this->linalloc));
+   _mesa_hash_table_fini(&this->ht, NULL);
 }
 
 // constructor
@@ -78,13 +63,13 @@ ir_variable_refcount_visitor::get_variable_entry(ir_variable *var)
 {
    assert(var);
 
-   struct hash_entry *e = _mesa_hash_table_search(this->ht, var);
+   struct hash_entry *e = _mesa_hash_table_search(&this->ht, var);
    if (e)
       return (ir_variable_refcount_entry *)e->data;
 
-   ir_variable_refcount_entry *entry = new ir_variable_refcount_entry(var);
+   ir_variable_refcount_entry *entry = new(linalloc) ir_variable_refcount_entry(var);
    assert(entry->referenced_count == 0);
-   _mesa_hash_table_insert(this->ht, var, entry);
+   _mesa_hash_table_insert(&this->ht, var, entry);
 
    return entry;
 }
@@ -94,8 +79,10 @@ ir_visitor_status
 ir_variable_refcount_visitor::visit(ir_variable *ir)
 {
    ir_variable_refcount_entry *entry = this->get_variable_entry(ir);
-   if (entry)
+   if (entry) {
       entry->declaration = true;
+      entry->is_global = this->global;
+   }
 
    return visit_continue;
 }
@@ -117,10 +104,14 @@ ir_variable_refcount_visitor::visit(ir_dereference_variable *ir)
 ir_visitor_status
 ir_variable_refcount_visitor::visit_enter(ir_function_signature *ir)
 {
+   global = false;
+
    /* We don't want to descend into the function parameters and
     * dead-code eliminate them, so just accept the body here.
     */
    visit_list_elements(this, &ir->body);
+
+   global = true;
    return visit_continue_with_parent;
 }
 
@@ -142,7 +133,8 @@ ir_variable_refcount_visitor::visit_leave(ir_assignment *ir)
       assert(entry->referenced_count >= entry->assigned_count);
       if (entry->referenced_count == entry->assigned_count) {
          struct assignment_entry *assignment_entry =
-            (struct assignment_entry *)calloc(1, sizeof(*assignment_entry));
+            (struct assignment_entry *)linear_zalloc(this->linalloc,
+                                                     struct assignment_entry);
          assignment_entry->assign = ir;
          entry->assign_list.push_head(&assignment_entry->link);
       }

@@ -165,6 +165,8 @@ st_update_rasterizer(struct st_context *st)
 
    raster->poly_stipple_enable = ctx->Polygon.StippleFlag;
 
+   raster->representative_fragment_test = ctx->RepresentativeFragmentTest;
+
    /* Multisampling disables point, line, and polygon smoothing.
     *
     * GL_ARB_multisample says:
@@ -294,6 +296,10 @@ st_update_rasterizer(struct st_context *st)
       if (raster->fill_back != PIPE_POLYGON_MODE_FILL)
          raster->cull_face |= PIPE_FACE_BACK;
    }
+
+   /* Disable two-sided colors if back faces are culled. */
+   if (raster->cull_face & PIPE_FACE_BACK)
+      raster->light_twoside = 0;
 
    /* _NEW_TRANSFORM */
    raster->depth_clip_near = !ctx->Transform.DepthClampNear;

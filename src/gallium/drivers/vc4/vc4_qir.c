@@ -340,7 +340,7 @@ qir_channels_written(struct qinst *inst)
                         return 0xc;
                 }
         }
-        unreachable("Bad pack field");
+        UNREACHABLE("Bad pack field");
 }
 
 char *
@@ -738,10 +738,7 @@ void
 qir_compile_destroy(struct vc4_compile *c)
 {
         qir_for_each_block(block, c) {
-                while (!list_is_empty(&block->instructions)) {
-                        struct qinst *qinst =
-                                list_first_entry(&block->instructions,
-                                                 struct qinst, link);
+                list_for_each_entry_safe(struct qinst, qinst, &block->instructions, link) {
                         qir_remove_instruction(c, qinst);
                 }
         }
@@ -809,7 +806,9 @@ qir_SF(struct vc4_compile *c, struct qreg src)
             last_inst != c->defs[src.index]) {
                 last_inst = qir_MOV_dest(c, qir_reg(QFILE_NULL, 0), src);
         }
-        last_inst->sf = true;
+
+        if (last_inst)
+                last_inst->sf = true;
 }
 
 #define OPTPASS(func)                                                   \

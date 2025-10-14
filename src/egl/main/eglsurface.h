@@ -135,6 +135,11 @@ struct _egl_surface {
    EGLenum VGColorspace;
    EGLenum GLColorspace;
 
+   /* EGL_EXT_surface_compression
+    * Value of EGL_SURFACE_COMPRESSION_EXT attribute selected at creation.
+    */
+   EGLint CompressionRate;
+
    /* attributes set by eglSurfaceAttrib */
    EGLint MipmapLevel;
    EGLenum MultisampleResolve;
@@ -159,8 +164,6 @@ struct _egl_surface {
 
    /* True if the surface is bound to an OpenGL ES texture */
    EGLBoolean BoundToTexture;
-
-   EGLBoolean PostSubBufferSupportedNV;
 
    EGLBoolean ProtectedContent;
 

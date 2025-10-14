@@ -26,20 +26,21 @@
  */
 
 #include "nir.h"
+#include "nir_builder.h"
 
 static bool
 deref_used_for_not_store(nir_deref_instr *deref)
 {
    nir_foreach_use(src, &deref->def) {
-      switch (src->parent_instr->type) {
+      switch (nir_src_parent_instr(src)->type) {
       case nir_instr_type_deref:
-         if (deref_used_for_not_store(nir_instr_as_deref(src->parent_instr)))
+         if (deref_used_for_not_store(nir_instr_as_deref(nir_src_parent_instr(src))))
             return true;
          break;
 
       case nir_instr_type_intrinsic: {
          nir_intrinsic_instr *intrin =
-            nir_instr_as_intrinsic(src->parent_instr);
+            nir_instr_as_intrinsic(nir_src_parent_instr(src));
          /* The first source of copy and store intrinsics is the deref to
           * write.  Don't record those.
           */
@@ -105,52 +106,40 @@ add_var_use_shader(nir_shader *shader, struct set *live, nir_variable_mode modes
    }
 }
 
-static void
-remove_dead_var_writes(nir_shader *shader)
+static bool
+remove_dead_var_writes(nir_builder *b, nir_instr *instr, void *_)
 {
-   nir_foreach_function_impl(impl, shader) {
-      nir_foreach_block(block, impl) {
-         nir_foreach_instr_safe(instr, block) {
-            switch (instr->type) {
-            case nir_instr_type_deref: {
-               nir_deref_instr *deref = nir_instr_as_deref(instr);
-               if (deref->deref_type == nir_deref_type_cast &&
-                   !nir_deref_instr_parent(deref))
-                  continue;
+   if (instr->type == nir_instr_type_deref) {
+      nir_deref_instr *deref = nir_instr_as_deref(instr);
+      if (deref->deref_type == nir_deref_type_cast &&
+          !nir_deref_instr_parent(deref))
+         return false;
 
-               nir_variable_mode parent_modes;
-               if (deref->deref_type == nir_deref_type_var)
-                  parent_modes = deref->var->data.mode;
-               else
-                  parent_modes = nir_deref_instr_parent(deref)->modes;
+      nir_variable_mode parent_modes;
+      if (deref->deref_type == nir_deref_type_var)
+         parent_modes = deref->var->data.mode;
+      else
+         parent_modes = nir_deref_instr_parent(deref)->modes;
 
-               /* If the parent mode is 0, then it references a dead variable.
-                * Flag this deref as dead and remove it.
-                */
-               if (parent_modes == 0) {
-                  deref->modes = 0;
-                  nir_instr_remove(&deref->instr);
-               }
-               break;
-            }
+      /* If the parent mode is 0, then it references a dead variable.
+       * Flag this deref as dead and remove it.
+       */
+      if (parent_modes != 0)
+         return false;
 
-            case nir_instr_type_intrinsic: {
-               nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
-               if (intrin->intrinsic != nir_intrinsic_copy_deref &&
-                   intrin->intrinsic != nir_intrinsic_store_deref)
-                  break;
-
-               if (nir_src_as_deref(intrin->src[0])->modes == 0)
-                  nir_instr_remove(instr);
-               break;
-            }
-
-            default:
-               break; /* Nothing to do */
-            }
-         }
-      }
+      deref->modes = 0;
+   } else if (instr->type == nir_instr_type_intrinsic) {
+      nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+      if (!(intrin->intrinsic == nir_intrinsic_copy_deref ||
+            intrin->intrinsic == nir_intrinsic_store_deref) ||
+          nir_src_as_deref(intrin->src[0])->modes != 0)
+         return false;
+   } else {
+      return false;
    }
+
+   nir_instr_remove(instr);
+   return true;
 }
 
 static bool
@@ -169,7 +158,7 @@ remove_dead_vars(struct exec_list *var_list, nir_variable_mode modes,
 
       struct set_entry *entry = _mesa_set_search(live, var);
       if (entry == NULL) {
-         /* Mark this variable as used by setting the mode to 0 */
+         /* Mark this variable as dead by setting the mode to 0 */
          var->data.mode = 0;
          exec_node_remove(&var->node);
          progress = true;
@@ -184,13 +173,14 @@ nir_remove_dead_variables(nir_shader *shader, nir_variable_mode modes,
                           const nir_remove_dead_variables_options *opts)
 {
    bool progress = false;
-   struct set *live = _mesa_pointer_set_create(NULL);
+   struct set live;
+   _mesa_pointer_set_init(&live, NULL);
 
-   add_var_use_shader(shader, live, modes);
+   add_var_use_shader(shader, &live, modes);
 
    if (modes & ~nir_var_function_temp) {
       progress = remove_dead_vars(&shader->variables, modes,
-                                  live, opts) ||
+                                  &live, opts) ||
                  progress;
    }
 
@@ -198,21 +188,18 @@ nir_remove_dead_variables(nir_shader *shader, nir_variable_mode modes,
       nir_foreach_function_impl(impl, shader) {
          if (remove_dead_vars(&impl->locals,
                               nir_var_function_temp,
-                              live, opts))
+                              &live, opts))
             progress = true;
       }
    }
 
-   _mesa_set_destroy(live, NULL);
+   _mesa_set_fini(&live, NULL);
 
-   nir_foreach_function_impl(impl, shader) {
-      if (progress) {
-         remove_dead_var_writes(shader);
-         nir_metadata_preserve(impl, nir_metadata_block_index |
-                                        nir_metadata_dominance);
-      } else {
-         nir_metadata_preserve(impl, nir_metadata_all);
-      }
+   if (progress) {
+      nir_shader_instructions_pass(shader, remove_dead_var_writes,
+                                   nir_metadata_control_flow, NULL);
+   } else {
+      nir_shader_preserve_all_metadata(shader);
    }
 
    return progress;

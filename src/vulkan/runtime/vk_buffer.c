@@ -41,6 +41,7 @@ vk_buffer_init(struct vk_device *device,
    buffer->create_flags = pCreateInfo->flags;
    buffer->size = pCreateInfo->size;
    buffer->usage = pCreateInfo->usage;
+   buffer->device_address = 0;
 
    const VkBufferUsageFlags2CreateInfoKHR *usage2_info =
       vk_find_struct_const(pCreateInfo->pNext,
@@ -107,9 +108,14 @@ vk_common_GetBufferMemoryRequirements2(VkDevice _device,
    VK_FROM_HANDLE(vk_device, device, _device);
    VK_FROM_HANDLE(vk_buffer, buffer, pInfo->buffer);
 
+   VkBufferUsageFlags2CreateInfoKHR usage2_info = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO_KHR,
+      .pNext = NULL,
+      .usage = buffer->usage,
+   };
    VkBufferCreateInfo pCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .pNext = NULL,
+      .pNext = &usage2_info,
       .usage = buffer->usage,
       .size = buffer->size,
       .flags = buffer->create_flags,
@@ -142,4 +148,13 @@ vk_common_BindBufferMemory(VkDevice _device,
    };
 
    return device->dispatch_table.BindBufferMemory2(_device, 1, &bind);
+}
+
+VKAPI_ATTR VkDeviceAddress VKAPI_CALL
+vk_common_GetBufferDeviceAddress(UNUSED VkDevice device,
+                                 const VkBufferDeviceAddressInfo *pInfo)
+{
+   VK_FROM_HANDLE(vk_buffer, buffer, pInfo->buffer);
+
+   return buffer->device_address;
 }

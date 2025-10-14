@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2012 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -91,9 +73,9 @@ emit_gmem2mem_surf(struct fd_batch *batch, uint32_t base,
    struct fd_ringbuffer *ring = batch->tile_store;
    struct fd_resource *rsc = fd_resource(psurf->texture);
    uint32_t offset =
-      fd_resource_offset(rsc, psurf->u.tex.level, psurf->u.tex.first_layer);
+      fd_resource_offset(rsc, psurf->level, psurf->first_layer);
    enum pipe_format format = fd_gmem_restore_format(psurf->format);
-   uint32_t pitch = fdl2_pitch_pixels(&rsc->layout, psurf->u.tex.level);
+   uint32_t pitch = fdl2_pitch_pixels(&rsc->layout, psurf->level);
 
    assert((pitch & 31) == 0);
    assert((offset & 0xfff) == 0);
@@ -204,10 +186,10 @@ prepare_tile_fini_ib(struct fd_batch *batch) assert_dt
    OUT_RING(ring, A2XX_RB_MODECONTROL_EDRAM_MODE(EDRAM_COPY));
 
    if (batch->resolve & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL))
-      emit_gmem2mem_surf(batch, gmem->zsbuf_base[0], pfb->zsbuf);
+      emit_gmem2mem_surf(batch, gmem->zsbuf_base[0], &pfb->zsbuf);
 
    if (batch->resolve & FD_BUFFER_COLOR)
-      emit_gmem2mem_surf(batch, gmem->cbuf_base[0], pfb->cbufs[0]);
+      emit_gmem2mem_surf(batch, gmem->cbuf_base[0], &pfb->cbufs[0]);
 
    OUT_PKT3(ring, CP_SET_CONSTANT, 2);
    OUT_RING(ring, CP_REG(REG_A2XX_RB_MODECONTROL));
@@ -235,9 +217,8 @@ emit_mem2gmem_surf(struct fd_batch *batch, uint32_t base,
    struct fd_ringbuffer *ring = batch->gmem;
    struct fd_resource *rsc = fd_resource(psurf->texture);
    uint32_t offset =
-      fd_resource_offset(rsc, psurf->u.tex.level, psurf->u.tex.first_layer);
+      fd_resource_offset(rsc, psurf->level, psurf->first_layer);
    enum pipe_format format = fd_gmem_restore_format(psurf->format);
-
    OUT_PKT3(ring, CP_SET_CONSTANT, 2);
    OUT_RING(ring, CP_REG(REG_A2XX_RB_COLOR_INFO));
    OUT_RING(ring, A2XX_RB_COLOR_INFO_BASE(base) |
@@ -250,13 +231,13 @@ emit_mem2gmem_surf(struct fd_batch *batch, uint32_t base,
                      A2XX_SQ_TEX_0_CLAMP_Y(SQ_TEX_WRAP) |
                      A2XX_SQ_TEX_0_CLAMP_Z(SQ_TEX_WRAP) |
                      A2XX_SQ_TEX_0_PITCH(
-                        fdl2_pitch_pixels(&rsc->layout, psurf->u.tex.level)));
+                        fdl2_pitch_pixels(&rsc->layout, psurf->level)));
    OUT_RELOC(ring, rsc->bo, offset,
              A2XX_SQ_TEX_1_FORMAT(fd2_pipe2surface(format).format) |
                 A2XX_SQ_TEX_1_CLAMP_POLICY(SQ_TEX_CLAMP_POLICY_OGL),
              0);
-   OUT_RING(ring, A2XX_SQ_TEX_2_WIDTH(psurf->width - 1) |
-                     A2XX_SQ_TEX_2_HEIGHT(psurf->height - 1));
+   OUT_RING(ring, A2XX_SQ_TEX_2_WIDTH(pipe_surface_width(psurf) - 1) |
+                     A2XX_SQ_TEX_2_HEIGHT(pipe_surface_height(psurf) - 1));
    OUT_RING(ring, A2XX_SQ_TEX_3_MIP_FILTER(SQ_TEX_FILTER_BASEMAP) |
                      A2XX_SQ_TEX_3_SWIZ_X(0) | A2XX_SQ_TEX_3_SWIZ_Y(1) |
                      A2XX_SQ_TEX_3_SWIZ_Z(2) | A2XX_SQ_TEX_3_SWIZ_W(3) |
@@ -378,10 +359,10 @@ fd2_emit_tile_mem2gmem(struct fd_batch *batch,
    OUT_RING(ring, 0x00000000);
 
    if (fd_gmem_needs_restore(batch, tile, FD_BUFFER_DEPTH | FD_BUFFER_STENCIL))
-      emit_mem2gmem_surf(batch, gmem->zsbuf_base[0], pfb->zsbuf);
+      emit_mem2gmem_surf(batch, gmem->zsbuf_base[0], &pfb->zsbuf);
 
    if (fd_gmem_needs_restore(batch, tile, FD_BUFFER_COLOR))
-      emit_mem2gmem_surf(batch, gmem->cbuf_base[0], pfb->cbufs[0]);
+      emit_mem2gmem_surf(batch, gmem->cbuf_base[0], &pfb->cbufs[0]);
 
    OUT_PKT3(ring, CP_SET_CONSTANT, 2);
    OUT_RING(ring, CP_REG(REG_A2XX_PA_CL_VTE_CNTL));
@@ -438,15 +419,15 @@ fd2_emit_sysmem_prep(struct fd_batch *batch)
    struct fd_context *ctx = batch->ctx;
    struct fd_ringbuffer *ring = batch->gmem;
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
-   struct pipe_surface *psurf = pfb->cbufs[0];
+   struct pipe_surface *psurf = &pfb->cbufs[0];
 
-   if (!psurf)
+   if (!psurf->texture)
       return;
 
    struct fd_resource *rsc = fd_resource(psurf->texture);
    uint32_t offset =
-      fd_resource_offset(rsc, psurf->u.tex.level, psurf->u.tex.first_layer);
-   uint32_t pitch = fdl2_pitch_pixels(&rsc->layout, psurf->u.tex.level);
+      fd_resource_offset(rsc, psurf->level, psurf->first_layer);
+   uint32_t pitch = fdl2_pitch_pixels(&rsc->layout, psurf->level);
 
    assert((pitch & 31) == 0);
    assert((offset & 0xfff) == 0);
@@ -489,7 +470,7 @@ fd2_emit_tile_init(struct fd_batch *batch) assert_dt
    struct fd_ringbuffer *ring = batch->gmem;
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
    const struct fd_gmem_stateobj *gmem = batch->gmem_state;
-   enum pipe_format format = pipe_surface_format(pfb->cbufs[0]);
+   enum pipe_format format = pipe_surface_format(&pfb->cbufs[0]);
    uint32_t reg;
 
    fd2_emit_restore(ctx, ring);
@@ -502,19 +483,19 @@ fd2_emit_tile_init(struct fd_batch *batch) assert_dt
    OUT_RING(ring, A2XX_RB_COLOR_INFO_SWAP(fmt2swap(format)) |
                      A2XX_RB_COLOR_INFO_FORMAT(fd2_pipe2color(format)));
    reg = A2XX_RB_DEPTH_INFO_DEPTH_BASE(gmem->zsbuf_base[0]);
-   if (pfb->zsbuf)
-      reg |= A2XX_RB_DEPTH_INFO_DEPTH_FORMAT(fd_pipe2depth(pfb->zsbuf->format));
+   if (pfb->zsbuf.texture)
+      reg |= A2XX_RB_DEPTH_INFO_DEPTH_FORMAT(fd_pipe2depth(pfb->zsbuf.format));
    OUT_RING(ring, reg); /* RB_DEPTH_INFO */
 
    /* fast clear patches */
    int depth_size = -1;
    int color_size = -1;
 
-   if (pfb->cbufs[0])
+   if (pfb->cbufs[0].texture)
       color_size = util_format_get_blocksizebits(format) == 32 ? 4 : 2;
 
-   if (pfb->zsbuf)
-      depth_size = fd_pipe2depth(pfb->zsbuf->format) == 1 ? 4 : 2;
+   if (pfb->zsbuf.texture)
+      depth_size = fd_pipe2depth(pfb->zsbuf.format) == 1 ? 4 : 2;
 
    for (int i = 0; i < fd_patch_num_elements(&batch->gmem_patches); i++) {
       struct fd_cs_patch *patch = fd_patch_element(&batch->gmem_patches, i);
@@ -543,9 +524,9 @@ fd2_emit_tile_init(struct fd_batch *batch) assert_dt
          patch->cs[1] = A2XX_RB_COLOR_INFO_SWAP(fmt2swap(format)) |
                         A2XX_RB_COLOR_INFO_FORMAT(fd2_pipe2color(format));
          patch->cs[2] = A2XX_RB_DEPTH_INFO_DEPTH_BASE(gmem->zsbuf_base[0]);
-         if (pfb->zsbuf)
+         if (pfb->zsbuf.texture)
             patch->cs[2] |= A2XX_RB_DEPTH_INFO_DEPTH_FORMAT(
-               fd_pipe2depth(pfb->zsbuf->format));
+               fd_pipe2depth(pfb->zsbuf.format));
          continue;
       default:
          continue;
@@ -672,7 +653,7 @@ fd2_emit_tile_prep(struct fd_batch *batch, const struct fd_tile *tile)
 {
    struct fd_ringbuffer *ring = batch->gmem;
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
-   enum pipe_format format = pipe_surface_format(pfb->cbufs[0]);
+   enum pipe_format format = pipe_surface_format(&pfb->cbufs[0]);
 
    OUT_PKT3(ring, CP_SET_CONSTANT, 2);
    OUT_RING(ring, CP_REG(REG_A2XX_RB_COLOR_INFO));
@@ -697,7 +678,7 @@ fd2_emit_tile_renderprep(struct fd_batch *batch,
    struct fd2_context *fd2_ctx = fd2_context(ctx);
    struct fd_ringbuffer *ring = batch->gmem;
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
-   enum pipe_format format = pipe_surface_format(pfb->cbufs[0]);
+   enum pipe_format format = pipe_surface_format(&pfb->cbufs[0]);
 
    OUT_PKT3(ring, CP_SET_CONSTANT, 2);
    OUT_RING(ring, CP_REG(REG_A2XX_RB_COLOR_INFO));

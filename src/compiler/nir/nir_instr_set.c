@@ -23,7 +23,11 @@
 
 #include "nir_instr_set.h"
 #include "util/half_float.h"
+#include "nir.h"
 #include "nir_vla.h"
+
+#define XXH_INLINE_ALL
+#include "util/xxhash.h"
 
 /* This function determines if uses of an instruction can safely be rewritten
  * to use another identical instruction instead. Note that this function must
@@ -41,15 +45,42 @@ instr_can_rewrite(const nir_instr *instr)
    case nir_instr_type_load_const:
    case nir_instr_type_phi:
       return true;
-   case nir_instr_type_intrinsic:
-      return nir_intrinsic_can_reorder(nir_instr_as_intrinsic(instr));
+   case nir_instr_type_intrinsic: {
+      nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+      switch (intr->intrinsic) {
+      case nir_intrinsic_ddx:
+      case nir_intrinsic_ddx_fine:
+      case nir_intrinsic_ddx_coarse:
+      case nir_intrinsic_ddy:
+      case nir_intrinsic_ddy_fine:
+      case nir_intrinsic_ddy_coarse:
+         /* Derivatives are not CAN_REORDER, because we cannot move derivatives
+          * across terminates if that would lose helper invocations. However,
+          * they can be CSE'd as a special case - if it is legal to execute a
+          * derivative at instruction A, then it is also legal to execute the
+          * derivative from instruction B. So we can hoist up the derivatives as
+          * CSE is inclined to without a problem.
+          */
+         return true;
+      case nir_intrinsic_terminate:
+      case nir_intrinsic_terminate_if:
+      case nir_intrinsic_demote:
+      case nir_intrinsic_demote_if:
+         /* If a terminate/demote dominates another with the same source,
+          * the second won't affect additional invocations.
+          */
+         return true;
+      default:
+         return nir_intrinsic_can_reorder(intr);
+      }
+   }
    case nir_instr_type_call:
    case nir_instr_type_jump:
    case nir_instr_type_undef:
       return false;
    case nir_instr_type_parallel_copy:
    default:
-      unreachable("Invalid instruction type");
+      UNREACHABLE("Invalid instruction type");
    }
 
    return false;
@@ -77,15 +108,17 @@ hash_alu_src(uint32_t hash, const nir_alu_src *src, unsigned num_components)
 static uint32_t
 hash_alu(uint32_t hash, const nir_alu_instr *instr)
 {
-   hash = HASH(hash, instr->op);
-
    /* We explicitly don't hash instr->exact. */
    uint8_t flags = instr->no_signed_wrap |
                    instr->no_unsigned_wrap << 1;
-   hash = HASH(hash, flags);
-
-   hash = HASH(hash, instr->def.num_components);
-   hash = HASH(hash, instr->def.bit_size);
+   uint8_t v[8];
+   v[0] = flags;
+   v[1] = instr->def.num_components;
+   v[2] = instr->def.bit_size;
+   v[3] = 0;
+   uint32_t op = instr->op;
+   memcpy(v + 4, &op, sizeof(op));
+   hash = XXH32(v, sizeof(v), hash);
 
    if (nir_op_infos[instr->op].algebraic_properties & NIR_OP_IS_2SRC_COMMUTATIVE) {
       assert(nir_op_infos[instr->op].num_inputs >= 2);
@@ -119,9 +152,12 @@ hash_alu(uint32_t hash, const nir_alu_instr *instr)
 static uint32_t
 hash_deref(uint32_t hash, const nir_deref_instr *instr)
 {
-   hash = HASH(hash, instr->deref_type);
-   hash = HASH(hash, instr->modes);
-   hash = HASH(hash, instr->type);
+   uint32_t v[4];
+   v[0] = instr->deref_type;
+   v[1] = instr->modes;
+   uint64_t type = (uintptr_t)instr->type;
+   memcpy(v + 2, &type, sizeof(type));
+   hash = XXH32(v, sizeof(v), hash);
 
    if (instr->deref_type == nir_deref_type_var)
       return HASH(hash, instr->var);
@@ -151,7 +187,7 @@ hash_deref(uint32_t hash, const nir_deref_instr *instr)
       break;
 
    default:
-      unreachable("Invalid instruction deref type");
+      UNREACHABLE("Invalid instruction deref type");
    }
 
    return hash;
@@ -188,20 +224,9 @@ hash_phi(uint32_t hash, const nir_phi_instr *instr)
 {
    hash = HASH(hash, instr->instr.block);
 
-   /* sort sources by predecessor, since the order shouldn't matter */
-   unsigned num_preds = instr->instr.block->predecessors->entries;
-   NIR_VLA(nir_phi_src *, srcs, num_preds);
-   unsigned i = 0;
-   nir_foreach_phi_src(src, instr) {
-      srcs[i++] = src;
-   }
-
-   qsort(srcs, num_preds, sizeof(nir_phi_src *), cmp_phi_src);
-
-   for (i = 0; i < num_preds; i++) {
-      hash = hash_src(hash, &srcs[i]->src);
-      hash = HASH(hash, srcs[i]->pred);
-   }
+   /* Similar to hash_alu(), combine the hashes commutatively. */
+   nir_foreach_phi_src(src, instr)
+      hash *= HASH(hash_src(0, &src->src), src->pred);
 
    return hash;
 }
@@ -213,8 +238,8 @@ hash_intrinsic(uint32_t hash, const nir_intrinsic_instr *instr)
    hash = HASH(hash, instr->intrinsic);
 
    if (info->has_dest) {
-      hash = HASH(hash, instr->def.num_components);
-      hash = HASH(hash, instr->def.bit_size);
+      uint8_t v[4] = { instr->def.num_components, instr->def.bit_size, 0, 0 };
+      hash = XXH32(v, sizeof(v), hash);
    }
 
    hash = XXH32(instr->const_index, info->num_indices * sizeof(instr->const_index[0]), hash);
@@ -225,33 +250,59 @@ hash_intrinsic(uint32_t hash, const nir_intrinsic_instr *instr)
    return hash;
 }
 
+/* Gathers all the small bits of nir_instr_tex as a uint32_t */
+static uint32_t
+pack_tex(const nir_tex_instr *instr)
+{
+   uint32_t packed = 0, bit = 0;
+
+#define PACK(_val, _bits) do { \
+   uint32_t u = (_val), bits = (_bits); \
+   assert(bit + bits <= 32); \
+   assert(u <= BITFIELD_MASK(bits)); \
+   packed |= u << bit; \
+   bit += bits; \
+} while (0)
+
+   PACK(instr->op, 5);
+   PACK(instr->num_srcs, 5);
+   PACK(instr->sampler_dim, 4);
+   PACK(instr->coord_components, 3);
+   PACK(instr->is_array, 1);
+   PACK(instr->is_shadow, 1);
+   PACK(instr->is_new_style_shadow, 1);
+   PACK(instr->is_sparse, 1);
+   PACK(instr->component, 2);
+   PACK(instr->array_is_lowered_cube, 1);
+   PACK(instr->is_gather_implicit_lod, 1);
+   PACK(instr->skip_helpers, 1);
+   PACK(instr->texture_non_uniform, 1);
+   PACK(instr->sampler_non_uniform, 1);
+   PACK(instr->offset_non_uniform, 1);
+
+#undef PACK
+
+   return packed;
+}
+
 static uint32_t
 hash_tex(uint32_t hash, const nir_tex_instr *instr)
 {
-   hash = HASH(hash, instr->op);
-   hash = HASH(hash, instr->num_srcs);
+   uint8_t v[24];
+   uint32_t packed = pack_tex(instr);
+   memcpy(v, &packed, 4);
+   STATIC_ASSERT(sizeof(instr->tg4_offsets) == 8);
+   memcpy(v + 4, instr->tg4_offsets, 8);
+   uint32_t texture_index = instr->texture_index;
+   uint32_t sampler_index = instr->sampler_index;
+   uint32_t backend_flags = instr->backend_flags;
+   memcpy(v + 12, &texture_index, 4);
+   memcpy(v + 16, &sampler_index, 4);
+   memcpy(v + 20, &backend_flags, 4);
+   hash = XXH32(v, sizeof(v), hash);
 
-   for (unsigned i = 0; i < instr->num_srcs; i++) {
-      hash = HASH(hash, instr->src[i].src_type);
-      hash = hash_src(hash, &instr->src[i].src);
-   }
-
-   hash = HASH(hash, instr->coord_components);
-   hash = HASH(hash, instr->sampler_dim);
-   hash = HASH(hash, instr->is_array);
-   hash = HASH(hash, instr->is_shadow);
-   hash = HASH(hash, instr->is_new_style_shadow);
-   hash = HASH(hash, instr->is_sparse);
-   unsigned component = instr->component;
-   hash = HASH(hash, component);
-   for (unsigned i = 0; i < 4; ++i)
-      for (unsigned j = 0; j < 2; ++j)
-         hash = HASH(hash, instr->tg4_offsets[i][j]);
-   hash = HASH(hash, instr->texture_index);
-   hash = HASH(hash, instr->sampler_index);
-   hash = HASH(hash, instr->texture_non_uniform);
-   hash = HASH(hash, instr->sampler_non_uniform);
-   hash = HASH(hash, instr->backend_flags);
+   for (unsigned i = 0; i < instr->num_srcs; i++)
+      hash *= hash_src(0, &instr->src[i].src);
 
    return hash;
 }
@@ -288,7 +339,7 @@ hash_instr(const void *data)
       hash = hash_tex(hash, nir_instr_as_tex(instr));
       break;
    default:
-      unreachable("Invalid instruction type");
+      UNREACHABLE("Invalid instruction type");
    }
 
    return hash;
@@ -306,11 +357,11 @@ nir_srcs_equal(nir_src src1, nir_src src2)
  * returned.
  */
 static nir_alu_instr *
-get_neg_instr(nir_src s)
+get_neg_instr(nir_src s, nir_alu_type base_type)
 {
    nir_alu_instr *alu = nir_src_as_alu_instr(s);
 
-   return alu != NULL && (alu->op == nir_op_fneg || alu->op == nir_op_ineg)
+   return alu != NULL && (alu->op == (base_type == nir_type_float ? nir_op_fneg : nir_op_ineg))
              ? alu
              : NULL;
 }
@@ -356,6 +407,95 @@ nir_const_value_negative_equal(nir_const_value c1,
    return false;
 }
 
+bool
+nir_alu_srcs_negative_equal_typed(const nir_alu_instr *alu1,
+                                  const nir_alu_instr *alu2,
+                                  unsigned src1, unsigned src2,
+                                  nir_alu_type base_type)
+{
+#ifndef NDEBUG
+   for (unsigned i = 0; i < NIR_MAX_VEC_COMPONENTS; i++) {
+      assert(nir_alu_instr_channel_used(alu1, src1, i) ==
+             nir_alu_instr_channel_used(alu2, src2, i));
+   }
+#endif
+
+   /* Handling load_const instructions is tricky. */
+
+   const nir_const_value *const const1 =
+      nir_src_as_const_value(alu1->src[src1].src);
+
+   if (const1 != NULL) {
+      const nir_const_value *const const2 =
+         nir_src_as_const_value(alu2->src[src2].src);
+
+      if (const2 == NULL)
+         return false;
+
+      if (nir_src_bit_size(alu1->src[src1].src) !=
+          nir_src_bit_size(alu2->src[src2].src))
+         return false;
+
+      const nir_alu_type full_type = base_type | nir_src_bit_size(alu1->src[src1].src);
+      for (unsigned i = 0; i < NIR_MAX_VEC_COMPONENTS; i++) {
+         if (nir_alu_instr_channel_used(alu1, src1, i) &&
+             !nir_const_value_negative_equal(const1[alu1->src[src1].swizzle[i]],
+                                             const2[alu2->src[src2].swizzle[i]],
+                                             full_type))
+            return false;
+      }
+
+      return true;
+   }
+
+   uint8_t alu1_swizzle[NIR_MAX_VEC_COMPONENTS] = { 0 };
+   nir_src alu1_actual_src;
+   nir_alu_instr *neg1 = get_neg_instr(alu1->src[src1].src, base_type);
+   bool parity = false;
+
+   if (neg1) {
+      parity = !parity;
+      alu1_actual_src = neg1->src[0].src;
+
+      for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(neg1, 0); i++)
+         alu1_swizzle[i] = neg1->src[0].swizzle[i];
+   } else {
+      alu1_actual_src = alu1->src[src1].src;
+
+      for (unsigned i = 0; i < nir_src_num_components(alu1_actual_src); i++)
+         alu1_swizzle[i] = i;
+   }
+
+   uint8_t alu2_swizzle[NIR_MAX_VEC_COMPONENTS] = { 0 };
+   nir_src alu2_actual_src;
+   nir_alu_instr *neg2 = get_neg_instr(alu2->src[src2].src, base_type);
+
+   if (neg2) {
+      parity = !parity;
+      alu2_actual_src = neg2->src[0].src;
+
+      for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(neg2, 0); i++)
+         alu2_swizzle[i] = neg2->src[0].swizzle[i];
+   } else {
+      alu2_actual_src = alu2->src[src2].src;
+
+      for (unsigned i = 0; i < nir_src_num_components(alu2_actual_src); i++)
+         alu2_swizzle[i] = i;
+   }
+
+   /* Bail early if sources are not equal or we don't have parity. */
+   if (!parity || !nir_srcs_equal(alu1_actual_src, alu2_actual_src))
+      return false;
+
+   for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(alu1, src1); i++) {
+      if (alu1_swizzle[alu1->src[src1].swizzle[i]] !=
+          alu2_swizzle[alu2->src[src2].swizzle[i]])
+         return false;
+   }
+
+   return true;
+}
+
 /**
  * Shallow compare of ALU srcs to determine if one is the negation of the other
  *
@@ -376,12 +516,8 @@ nir_alu_srcs_negative_equal(const nir_alu_instr *alu1,
                             const nir_alu_instr *alu2,
                             unsigned src1, unsigned src2)
 {
-#ifndef NDEBUG
-   for (unsigned i = 0; i < NIR_MAX_VEC_COMPONENTS; i++) {
-      assert(nir_alu_instr_channel_used(alu1, src1, i) ==
-             nir_alu_instr_channel_used(alu2, src2, i));
-   }
 
+#ifndef NDEBUG
    if (nir_alu_type_get_base_type(nir_op_infos[alu1->op].input_types[src1]) == nir_type_float) {
       assert(nir_op_infos[alu1->op].input_types[src1] ==
              nir_op_infos[alu2->op].input_types[src2]);
@@ -391,84 +527,8 @@ nir_alu_srcs_negative_equal(const nir_alu_instr *alu1,
    }
 #endif
 
-   bool parity = false;
-
-   /* Handling load_const instructions is tricky. */
-
-   const nir_const_value *const const1 =
-      nir_src_as_const_value(alu1->src[src1].src);
-
-   if (const1 != NULL) {
-      /* Assume that constant folding will eliminate source mods and unary
-       * ops.
-       */
-      if (parity)
-         return false;
-
-      const nir_const_value *const const2 =
-         nir_src_as_const_value(alu2->src[src2].src);
-
-      if (const2 == NULL)
-         return false;
-
-      if (nir_src_bit_size(alu1->src[src1].src) !=
-          nir_src_bit_size(alu2->src[src2].src))
-         return false;
-
-      const nir_alu_type full_type = nir_op_infos[alu1->op].input_types[src1] |
-                                     nir_src_bit_size(alu1->src[src1].src);
-      for (unsigned i = 0; i < NIR_MAX_VEC_COMPONENTS; i++) {
-         if (nir_alu_instr_channel_used(alu1, src1, i) &&
-             !nir_const_value_negative_equal(const1[alu1->src[src1].swizzle[i]],
-                                             const2[alu2->src[src2].swizzle[i]],
-                                             full_type))
-            return false;
-      }
-
-      return true;
-   }
-
-   uint8_t alu1_swizzle[NIR_MAX_VEC_COMPONENTS] = { 0 };
-   nir_src alu1_actual_src;
-   nir_alu_instr *neg1 = get_neg_instr(alu1->src[src1].src);
-
-   if (neg1) {
-      parity = !parity;
-      alu1_actual_src = neg1->src[0].src;
-
-      for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(neg1, 0); i++)
-         alu1_swizzle[i] = neg1->src[0].swizzle[i];
-   } else {
-      alu1_actual_src = alu1->src[src1].src;
-
-      for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(alu1, src1); i++)
-         alu1_swizzle[i] = i;
-   }
-
-   uint8_t alu2_swizzle[NIR_MAX_VEC_COMPONENTS] = { 0 };
-   nir_src alu2_actual_src;
-   nir_alu_instr *neg2 = get_neg_instr(alu2->src[src2].src);
-
-   if (neg2) {
-      parity = !parity;
-      alu2_actual_src = neg2->src[0].src;
-
-      for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(neg2, 0); i++)
-         alu2_swizzle[i] = neg2->src[0].swizzle[i];
-   } else {
-      alu2_actual_src = alu2->src[src2].src;
-
-      for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(alu2, src2); i++)
-         alu2_swizzle[i] = i;
-   }
-
-   for (unsigned i = 0; i < nir_ssa_alu_instr_src_components(alu1, src1); i++) {
-      if (alu1_swizzle[alu1->src[src1].swizzle[i]] !=
-          alu2_swizzle[alu2->src[src2].swizzle[i]])
-         return false;
-   }
-
-   return parity && nir_srcs_equal(alu1_actual_src, alu2_actual_src);
+   nir_alu_type type = nir_op_infos[alu1->op].input_types[src1];
+   return nir_alu_srcs_negative_equal_typed(alu1, alu2, src1, src2, type);
 }
 
 bool
@@ -583,7 +643,7 @@ nir_instrs_equal(const nir_instr *instr1, const nir_instr *instr2)
          break;
 
       default:
-         unreachable("Invalid instruction deref type");
+         UNREACHABLE("Invalid instruction deref type");
       }
       return true;
    }
@@ -591,11 +651,11 @@ nir_instrs_equal(const nir_instr *instr1, const nir_instr *instr2)
       nir_tex_instr *tex1 = nir_instr_as_tex(instr1);
       nir_tex_instr *tex2 = nir_instr_as_tex(instr2);
 
-      if (tex1->op != tex2->op)
+      /* This covers the opcode and num_srcs */
+      if (pack_tex(tex1) != pack_tex(tex2))
          return false;
 
-      if (tex1->num_srcs != tex2->num_srcs)
-         return false;
+      assert(tex1->num_srcs == tex2->num_srcs);
       for (unsigned i = 0; i < tex1->num_srcs; i++) {
          if (tex1->src[i].src_type != tex2->src[i].src_type ||
              !nir_srcs_equal(tex1->src[i].src, tex2->src[i].src)) {
@@ -603,20 +663,13 @@ nir_instrs_equal(const nir_instr *instr1, const nir_instr *instr2)
          }
       }
 
-      if (tex1->coord_components != tex2->coord_components ||
-          tex1->sampler_dim != tex2->sampler_dim ||
-          tex1->is_array != tex2->is_array ||
-          tex1->is_shadow != tex2->is_shadow ||
-          tex1->is_new_style_shadow != tex2->is_new_style_shadow ||
-          tex1->component != tex2->component ||
-          tex1->texture_index != tex2->texture_index ||
-          tex1->sampler_index != tex2->sampler_index ||
-          tex1->backend_flags != tex2->backend_flags) {
-         return false;
-      }
-
       if (memcmp(tex1->tg4_offsets, tex2->tg4_offsets,
                  sizeof(tex1->tg4_offsets)))
+         return false;
+
+      if (tex1->texture_index != tex2->texture_index ||
+          tex1->sampler_index != tex2->sampler_index ||
+          tex1->backend_flags != tex2->backend_flags)
          return false;
 
       return true;
@@ -706,31 +759,10 @@ nir_instrs_equal(const nir_instr *instr1, const nir_instr *instr2)
    case nir_instr_type_undef:
    case nir_instr_type_parallel_copy:
    default:
-      unreachable("Invalid instruction type");
+      UNREACHABLE("Invalid instruction type");
    }
 
-   unreachable("All cases in the above switch should return");
-}
-
-static nir_def *
-nir_instr_get_def_def(nir_instr *instr)
-{
-   switch (instr->type) {
-   case nir_instr_type_alu:
-      return &nir_instr_as_alu(instr)->def;
-   case nir_instr_type_deref:
-      return &nir_instr_as_deref(instr)->def;
-   case nir_instr_type_load_const:
-      return &nir_instr_as_load_const(instr)->def;
-   case nir_instr_type_phi:
-      return &nir_instr_as_phi(instr)->def;
-   case nir_instr_type_intrinsic:
-      return &nir_instr_as_intrinsic(instr)->def;
-   case nir_instr_type_tex:
-      return &nir_instr_as_tex(instr)->def;
-   default:
-      unreachable("We never ask for any of these");
-   }
+   UNREACHABLE("All cases in the above switch should return");
 }
 
 static bool
@@ -739,53 +771,55 @@ cmp_func(const void *data1, const void *data2)
    return nir_instrs_equal(data1, data2);
 }
 
-struct set *
-nir_instr_set_create(void *mem_ctx)
+void
+nir_instr_set_init(struct set *s, void *mem_ctx)
 {
-   return _mesa_set_create(mem_ctx, hash_instr, cmp_func);
+   _mesa_set_init(s, mem_ctx, hash_instr, cmp_func);
 }
 
 void
-nir_instr_set_destroy(struct set *instr_set)
+nir_instr_set_fini(struct set *instr_set)
 {
-   _mesa_set_destroy(instr_set, NULL);
+   _mesa_set_fini(instr_set, NULL);
 }
 
-bool
+nir_instr *
 nir_instr_set_add_or_rewrite(struct set *instr_set, nir_instr *instr,
                              bool (*cond_function)(const nir_instr *a,
                                                    const nir_instr *b))
 {
    if (!instr_can_rewrite(instr))
-      return false;
+      return NULL;
 
    struct set_entry *e = _mesa_set_search_or_add(instr_set, instr, NULL);
    nir_instr *match = (nir_instr *)e->key;
    if (match == instr)
-      return false;
+      return NULL;
 
    if (!cond_function || cond_function(match, instr)) {
       /* rewrite instruction if condition is matched */
-      nir_def *def = nir_instr_get_def_def(instr);
-      nir_def *new_def = nir_instr_get_def_def(match);
+      nir_def *def = nir_instr_def(instr);
+      nir_def *new_def = nir_instr_def(match);
 
       /* It's safe to replace an exact instruction with an inexact one as
        * long as we make it exact.  If we got here, the two instructions are
        * exactly identical in every other way so, once we've set the exact
        * bit, they are the same.
        */
-      if (instr->type == nir_instr_type_alu && nir_instr_as_alu(instr)->exact)
-         nir_instr_as_alu(match)->exact = true;
+      if (instr->type == nir_instr_type_alu) {
+         nir_instr_as_alu(match)->exact |= nir_instr_as_alu(instr)->exact;
+         nir_instr_as_alu(match)->fp_fast_math |= nir_instr_as_alu(instr)->fp_fast_math;
+      }
 
-      nir_def_rewrite_uses(def, new_def);
+      assert(!def == !new_def);
+      if (def)
+         nir_def_rewrite_uses(def, new_def);
 
-      nir_instr_remove(instr);
-
-      return true;
+      return match;
    } else {
       /* otherwise, replace hashed instruction */
       e->key = instr;
-      return false;
+      return NULL;
    }
 }
 

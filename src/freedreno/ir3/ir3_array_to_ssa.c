@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2021 Valve Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2021 Valve Corporation
+ * SPDX-License-Identifier: MIT
  */
 
 /* This pass lowers array accesses to SSA.
@@ -103,10 +85,8 @@ read_value_beginning(struct array_ctx *ctx, struct ir3_block *block,
    }
 
    unsigned flags = IR3_REG_ARRAY | (arr->half ? IR3_REG_HALF : 0);
-   struct ir3_instruction *phi =
-      ir3_instr_create(block, OPC_META_PHI, 1, block->predecessors_count);
-   list_del(&phi->node);
-   list_add(&phi->node, &block->instr_list);
+   struct ir3_instruction *phi = ir3_instr_create_at(
+      ir3_before_block(block), OPC_META_PHI, 1, block->predecessors_count);
 
    struct ir3_register *dst = __ssa_dst(phi);
    dst->flags |= flags;
@@ -141,40 +121,32 @@ remove_trivial_phi(struct ir3_instruction *phi)
    phi->data = phi->dsts[0];
 
    struct ir3_register *unique_def = NULL;
+   bool unique_def_valid = false;
    bool unique = true;
    for (unsigned i = 0; i < phi->block->predecessors_count; i++) {
       struct ir3_register *src = phi->srcs[i];
 
-      /* If there are any undef sources, then the remaining sources may not
-       * dominate the phi node, even if they are all equal. So we need to
-       * bail out in this case.
-       *
-       * This seems to be a bug in the original paper.
-       */
-      if (!src->def) {
-         unique = false;
-         break;
+      if (src->def) {
+         struct ir3_instruction *src_instr = src->def->instr;
+
+         /* phi sources which point to the phi itself don't count for
+          * figuring out if the phi is trivial
+          */
+         if (src_instr == phi)
+            continue;
+
+         if (src_instr->opc == OPC_META_PHI) {
+            src->def = remove_trivial_phi(src->def->instr);
+         }
       }
 
-      struct ir3_instruction *src_instr = src->def->instr;
-
-      /* phi sources which point to the phi itself don't count for
-       * figuring out if the phi is trivial
-       */
-      if (src_instr == phi)
-         continue;
-
-      if (src_instr->opc == OPC_META_PHI) {
-         src->def = remove_trivial_phi(src->def->instr);
-      }
-
-      if (unique_def) {
+      if (unique_def_valid) {
          if (unique_def != src->def) {
             unique = false;
-            break;
          }
       } else {
          unique_def = src->def;
+         unique_def_valid = true;
       }
    }
 
@@ -189,6 +161,8 @@ remove_trivial_phi(struct ir3_instruction *phi)
 static struct ir3_register *
 lookup_value(struct ir3_register *reg)
 {
+   if (!reg)
+      return NULL;
    if (reg->instr->opc == OPC_META_PHI)
       return reg->instr->data;
    return reg;
@@ -272,14 +246,14 @@ ir3_array_to_ssa(struct ir3 *ir)
    foreach_block (block, &ir->block_list) {
       foreach_instr_safe (instr, &block->instr_list) {
          if (instr->opc == OPC_META_PHI) {
-            if (!(instr->flags & IR3_REG_ARRAY))
+            if (!(instr->dsts[0]->flags & IR3_REG_ARRAY))
                continue;
             if (instr->data != instr->dsts[0]) {
                list_del(&instr->node);
                continue;
             }
             for (unsigned i = 0; i < instr->srcs_count; i++) {
-               instr->srcs[i] = lookup_value(instr->srcs[i]);
+               instr->srcs[i]->def = lookup_value(instr->srcs[i]->def);
             }
          } else {
             foreach_dst (reg, instr) {

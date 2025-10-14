@@ -40,11 +40,15 @@
 #include "nir.h"
 
 #include "i915_context.h"
+#include "i915_debug.h"
 #include "i915_fpc.h"
 #include "i915_reg.h"
 #include "i915_resource.h"
 #include "i915_state.h"
 #include "i915_state_inlines.h"
+#include "i915_surface.h"
+
+static void i915_delete_fs_state(struct pipe_context *pipe, void *shader);
 
 /* The i915 (and related graphics cores) do not support GL_CLAMP.  The
  * Intel drivers for "other operating systems" implement GL_CLAMP as
@@ -346,10 +350,10 @@ i915_create_sampler_state(struct pipe_context *pipe,
 
 static void
 i915_bind_sampler_states(struct pipe_context *pipe,
-                         enum pipe_shader_type shader, unsigned start,
+                         mesa_shader_stage shader, unsigned start,
                          unsigned num, void **samplers)
 {
-   if (shader != PIPE_SHADER_FRAGMENT) {
+   if (shader != MESA_SHADER_FRAGMENT) {
       assert(num == 0);
       return;
    }
@@ -534,6 +538,33 @@ i915_set_polygon_stipple(struct pipe_context *pipe,
 {
 }
 
+static const struct nir_to_tgsi_options ntt_options = {
+   .lower_fabs = true,
+};
+
+static char *
+i915_check_control_flow(nir_shader *s)
+{
+   nir_function_impl *impl = nir_shader_get_entrypoint(s);
+   nir_block *first = nir_start_block(impl);
+   nir_cf_node *next = nir_cf_node_next(&first->cf_node);
+
+   if (next) {
+      switch (next->type) {
+      case nir_cf_node_if:
+         return "if/then statements not supported by i915 fragment shaders, "
+                "should have been flattened by peephole_select.";
+      case nir_cf_node_loop:
+         return "looping not supported i915 fragment shaders, all loops "
+                "must be statically unrollable.";
+      default:
+         return "Unknown control flow type";
+      }
+   }
+
+   return NULL;
+}
+
 static void *
 i915_create_fs_state(struct pipe_context *pipe,
                      const struct pipe_shader_state *templ)
@@ -547,15 +578,29 @@ i915_create_fs_state(struct pipe_context *pipe,
 
    if (templ->type == PIPE_SHADER_IR_NIR) {
       nir_shader *s = templ->ir.nir;
+      ifs->internal = s->info.internal;
 
-      static const struct nir_to_tgsi_options ntt_options = {
-         .lower_fabs = true,
-      };
+      char *msg = i915_check_control_flow(s);
+      if (msg) {
+         if (I915_DBG_ON(DBG_FS) &&
+             (!s->info.internal || NIR_DEBUG(PRINT_INTERNAL))) {
+            mesa_logi("failing shader:");
+            nir_log_shaderi(s);
+         }
+         if (templ->report_compile_error) {
+            ((struct pipe_shader_state *)templ)->error_message = strdup(msg);
+            ralloc_free(s);
+            i915_delete_fs_state(NULL, ifs);
+            return NULL;
+         }
+      }
+
       ifs->state.tokens = nir_to_tgsi_options(s, pipe->screen, &ntt_options);
    } else {
       assert(templ->type == PIPE_SHADER_IR_TGSI);
       /* we need to keep a local copy of the tokens */
       ifs->state.tokens = tgsi_dup_tokens(templ->tokens);
+      ifs->internal = i915->no_log_program_errors;
    }
 
    ifs->state.type = PIPE_SHADER_IR_TGSI;
@@ -564,6 +609,11 @@ i915_create_fs_state(struct pipe_context *pipe,
 
    /* The shader's compiled to i915 instructions here */
    i915_translate_fragment_program(i915, ifs);
+   if (ifs->error && templ->report_compile_error) {
+      ((struct pipe_shader_state *)templ)->error_message = strdup(ifs->error);
+      i915_delete_fs_state(NULL, ifs);
+      return NULL;
+   }
 
    return ifs;
 }
@@ -591,12 +641,21 @@ i915_bind_fs_state(struct pipe_context *pipe, void *shader)
 static void
 i915_delete_fs_state(struct pipe_context *pipe, void *shader)
 {
+   struct i915_context *i915 = i915_context(pipe);
    struct i915_fragment_shader *ifs = (struct i915_fragment_shader *)shader;
 
+   ralloc_free(ifs->error);
    FREE(ifs->program);
    ifs->program = NULL;
    FREE((struct tgsi_token *)ifs->state.tokens);
    ifs->state.tokens = NULL;
+
+   if (ifs->draw_data) {
+      if (likely(i915))
+         draw_delete_fragment_shader(i915->draw, ifs->draw_data);
+      else
+         draw_delete_fragment_shader(NULL, ifs->draw_data);
+   }
 
    ifs->program_len = 0;
 
@@ -608,12 +667,13 @@ i915_create_vs_state(struct pipe_context *pipe,
                      const struct pipe_shader_state *templ)
 {
    struct i915_context *i915 = i915_context(pipe);
+   void *vertex_shader;
 
-   struct pipe_shader_state from_nir = { PIPE_SHADER_IR_TGSI };
+   struct pipe_shader_state from_nir = {PIPE_SHADER_IR_TGSI};
    if (templ->type == PIPE_SHADER_IR_NIR) {
       nir_shader *s = templ->ir.nir;
 
-      NIR_PASS_V(s, nir_lower_point_size, 1.0, 255.0);
+      NIR_PASS(_, s, nir_lower_point_size, 1.0, 255.0);
 
       /* The gallivm draw path doesn't support non-native-integers NIR shaders,
        * st/mesa does native-integers for the screen as a whole rather than
@@ -624,7 +684,11 @@ i915_create_vs_state(struct pipe_context *pipe,
       templ = &from_nir;
    }
 
-   return draw_create_vertex_shader(i915->draw, templ);
+   vertex_shader = draw_create_vertex_shader(i915->draw, templ);
+
+   FREE((void *)from_nir.tokens);
+
+   return vertex_shader;
 }
 
 static void
@@ -654,8 +718,7 @@ i915_delete_vs_state(struct pipe_context *pipe, void *shader)
 
 static void
 i915_set_constant_buffer(struct pipe_context *pipe,
-                         enum pipe_shader_type shader, uint32_t index,
-                         bool take_ownership,
+                         mesa_shader_stage shader, uint32_t index,
                          const struct pipe_constant_buffer *cb)
 {
    struct i915_context *i915 = i915_context(pipe);
@@ -664,7 +727,7 @@ i915_set_constant_buffer(struct pipe_context *pipe,
    bool diff = true;
 
    /* XXX don't support geom shaders now */
-   if (shader == PIPE_SHADER_GEOMETRY)
+   if (shader == MESA_SHADER_GEOMETRY)
       return;
 
    if (cb && cb->user_buffer) {
@@ -697,16 +760,11 @@ i915_set_constant_buffer(struct pipe_context *pipe,
       diff = i915->current.num_user_constants[shader] != 0;
    }
 
-   if (take_ownership) {
-      pipe_resource_reference(&i915->constants[shader], NULL);
-      i915->constants[shader] = buf;
-   } else {
-      pipe_resource_reference(&i915->constants[shader], buf);
-   }
+   pipe_resource_reference(&i915->constants[shader], buf);
    i915->current.num_user_constants[shader] = new_num;
 
    if (diff)
-      i915->dirty |= shader == PIPE_SHADER_VERTEX ? I915_NEW_VS_CONSTANTS
+      i915->dirty |= shader == MESA_SHADER_VERTEX ? I915_NEW_VS_CONSTANTS
                                                   : I915_NEW_FS_CONSTANTS;
 
    if (cb && cb->user_buffer) {
@@ -715,13 +773,12 @@ i915_set_constant_buffer(struct pipe_context *pipe,
 }
 
 static void
-i915_set_sampler_views(struct pipe_context *pipe, enum pipe_shader_type shader,
+i915_set_sampler_views(struct pipe_context *pipe, mesa_shader_stage shader,
                        unsigned start, unsigned num,
                        unsigned unbind_num_trailing_slots,
-                       bool take_ownership,
                        struct pipe_sampler_view **views)
 {
-   if (shader != PIPE_SHADER_FRAGMENT) {
+   if (shader != MESA_SHADER_FRAGMENT) {
       /* No support for VS samplers, because it would mean accessing the
        * write-combined maps of the textures, which is very slow.  VS samplers
        * are not a required feature of GL2.1 or GLES2.
@@ -738,22 +795,12 @@ i915_set_sampler_views(struct pipe_context *pipe, enum pipe_shader_type shader,
    if (views && num == i915->num_fragment_sampler_views &&
        !memcmp(i915->fragment_sampler_views, views,
                num * sizeof(struct pipe_sampler_view *))) {
-      if (take_ownership) {
-         for (unsigned i = 0; i < num; i++) {
-            struct pipe_sampler_view *view = views[i];
-            pipe_sampler_view_reference(&view, NULL);
-         }
-      }
       return;
    }
 
    for (i = 0; i < num; i++) {
-      if (take_ownership) {
-         pipe_sampler_view_reference(&i915->fragment_sampler_views[i], NULL);
-         i915->fragment_sampler_views[i] = views[i];
-      } else {
-         pipe_sampler_view_reference(&i915->fragment_sampler_views[i], views[i]);
-      }
+      pipe_sampler_view_reference(&i915->fragment_sampler_views[i],
+                                    views[i]);
    }
 
    for (i = num; i < i915->num_fragment_sampler_views; i++)
@@ -809,24 +856,63 @@ i915_sampler_view_destroy(struct pipe_context *pipe,
    FREE(view);
 }
 
+void
+i915_framebuffer_init(struct pipe_context *pctx, const struct pipe_framebuffer_state *fb, struct pipe_surface **cbufs, struct pipe_surface **zsbuf)
+{
+   if (fb) {
+      for (unsigned i = 0; i < fb->nr_cbufs; i++) {
+         if (cbufs[i] && pipe_surface_equal(&fb->cbufs[i], cbufs[i]))
+            continue;
+
+         struct pipe_surface *psurf = fb->cbufs[i].texture ? i915_create_surface(pctx, fb->cbufs[i].texture, &fb->cbufs[i]) : NULL;
+         if (cbufs[i])
+            i915_surface_destroy(pctx, cbufs[i]);
+         cbufs[i] = psurf;
+      }
+
+      for (unsigned i = fb->nr_cbufs; i < 1; i++) {
+         if (cbufs[i])
+            i915_surface_destroy(pctx, cbufs[i]);
+         cbufs[i] = NULL;
+      }
+
+      if (*zsbuf && pipe_surface_equal(&fb->zsbuf, *zsbuf))
+         return;
+      struct pipe_surface *zsurf = fb->zsbuf.texture ? i915_create_surface(pctx, fb->zsbuf.texture, &fb->zsbuf) : NULL;
+      if (*zsbuf)
+         i915_surface_destroy(pctx, *zsbuf);
+      *zsbuf = zsurf;
+   } else {
+      for (unsigned i = 0; i < 1; i++) {
+         if (cbufs[i])
+            i915_surface_destroy(pctx, cbufs[i]);
+         cbufs[i] = NULL;
+      }
+      if (*zsbuf)
+         i915_surface_destroy(pctx, *zsbuf);
+      *zsbuf = NULL;
+   }
+}
+
 static void
 i915_set_framebuffer_state(struct pipe_context *pipe,
                            const struct pipe_framebuffer_state *fb)
 {
    struct i915_context *i915 = i915_context(pipe);
 
+   i915_framebuffer_init(pipe, fb, i915->fb_cbufs, &i915->fb_zsbuf);
    util_copy_framebuffer_state(&i915->framebuffer, fb);
    if (fb->nr_cbufs) {
-      struct i915_surface *surf = i915_surface(i915->framebuffer.cbufs[0]);
+      struct i915_surface *surf = i915_surface(i915->fb_cbufs[0]);
       if (i915->current.fixup_swizzle != surf->oc_swizzle) {
          i915->current.fixup_swizzle = surf->oc_swizzle;
          memcpy(i915->current.color_swizzle, surf->color_swizzle,
                 sizeof(surf->color_swizzle));
          i915->dirty |= I915_NEW_COLOR_SWIZZLE;
       }
-   } 
-   if (fb->zsbuf)
-      draw_set_zs_format(i915->draw, fb->zsbuf->format);
+   }
+   if (fb->zsbuf.texture)
+      draw_set_zs_format(i915->draw, fb->zsbuf.format);
 
    i915->dirty |= I915_NEW_FRAMEBUFFER;
 }
@@ -956,21 +1042,16 @@ i915_delete_rasterizer_state(struct pipe_context *pipe, void *raster)
 }
 
 static void
-i915_set_vertex_buffers(struct pipe_context *pipe,
-                        unsigned count, unsigned unbind_num_trailing_slots,
-                        bool take_ownership,
+i915_set_vertex_buffers(struct pipe_context *pipe, unsigned count,
                         const struct pipe_vertex_buffer *buffers)
 {
    struct i915_context *i915 = i915_context(pipe);
    struct draw_context *draw = i915->draw;
 
-   util_set_vertex_buffers_count(i915->vertex_buffers, &i915->nr_vertex_buffers,
-                                 buffers, count,
-                                 unbind_num_trailing_slots, take_ownership);
+   assert(count <= PIPE_MAX_ATTRIBS);
 
-   /* pass-through to draw module */
-   draw_set_vertex_buffers(draw, count, unbind_num_trailing_slots,
-                           buffers);
+   util_set_vertex_buffers_count(draw->pt.vertex_buffer,
+                                 &draw->pt.nr_vertex_buffers, buffers, count);
 }
 
 static void *
@@ -1059,6 +1140,8 @@ i915_init_state_functions(struct i915_context *i915)
    i915->base.set_sampler_views = i915_set_sampler_views;
    i915->base.create_sampler_view = i915_create_sampler_view;
    i915->base.sampler_view_destroy = i915_sampler_view_destroy;
+   i915->base.sampler_view_release = u_default_sampler_view_release;
+   i915->base.resource_release = u_default_resource_release;
    i915->base.set_viewport_states = i915_set_viewport_states;
    i915->base.set_vertex_buffers = i915_set_vertex_buffers;
 }

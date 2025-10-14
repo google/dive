@@ -30,8 +30,10 @@
 
 #include "hwdef/rogue_hw_defs.h"
 #include "hwdef/rogue_hw_utils.h"
+#include "pvr_device.h"
 #include "pvr_hw_pass.h"
-#include "pvr_private.h"
+#include "pvr_formats.h"
+#include "pvr_pass.h"
 #include "util/bitset.h"
 #include "util/list.h"
 #include "util/macros.h"
@@ -267,6 +269,17 @@ struct pvr_renderpass_storage_firstuse {
    struct pvr_renderpass_storage_firstuse_buffer *tile_buffers;
 };
 
+static uint32_t pvr_get_accum_format_bitsize(VkFormat vk_format)
+{
+   if (util_format_has_depth(vk_format_description(vk_format)))
+      return vk_format_get_blocksizebits(vk_format);
+
+   if (!vk_format_has_stencil(vk_format))
+      return pvr_get_pbe_accum_format_size_in_bytes(vk_format) * 8;
+
+   return 0;
+}
+
 /** Copy information about allocated color storage. */
 static VkResult pvr_copy_alloc(struct pvr_renderpass_context *ctx,
                                struct pvr_renderpass_alloc *dst,
@@ -345,6 +358,7 @@ pvr_get_tile_buffer_size_per_core(const struct pvr_device *device)
 uint32_t pvr_get_tile_buffer_size(const struct pvr_device *device)
 {
    /* On a multicore system duplicate the buffer for each core. */
+   /* TODO: Optimise tile buffer size to use core_count, not max_num_cores. */
    return pvr_get_tile_buffer_size_per_core(device) *
           rogue_get_max_num_cores(&device->pdevice->dev_info);
 }
@@ -434,7 +448,7 @@ pvr_surface_setup_render_init(struct pvr_renderpass_context *ctx,
                               bool *use_render_init)
 {
    const uint32_t pixel_size =
-      DIV_ROUND_UP(vk_format_get_blocksizebits(attachment->vk_format), 32U);
+      DIV_ROUND_UP(pvr_get_accum_format_bitsize(attachment->vk_format), 32U);
    struct pvr_renderpass_hwsetup_render *hw_render = ctx->hw_render;
    struct pvr_renderpass_storage_firstuse_buffer *buffer;
    uint32_t start;
@@ -574,8 +588,8 @@ pvr_subpass_setup_render_init(struct pvr_renderpass_context *ctx)
 
          int_attach = &ctx->int_attach[attach_idx];
 
-         assert(vk_format_get_blocksizebits(int_attach->attachment->vk_format) >
-                0U);
+         assert(pvr_get_accum_format_bitsize(
+                   int_attach->attachment->vk_format) > 0U);
 
          /* Is this the first use of the attachment? */
          if (int_attach->first_use == (int32_t)i) {
@@ -590,9 +604,7 @@ pvr_subpass_setup_render_init(struct pvr_renderpass_context *ctx)
                                                    hw_subpass->color_initops[j],
                                                    &use_render_init);
             if (result != VK_SUCCESS) {
-               if (!first_use.tile_buffers)
-                  free(first_use.tile_buffers);
-
+               vk_free(ctx->allocator, first_use.tile_buffers);
                return result;
             }
 
@@ -610,8 +622,7 @@ pvr_subpass_setup_render_init(struct pvr_renderpass_context *ctx)
       }
    }
 
-   if (!first_use.tile_buffers)
-      free(first_use.tile_buffers);
+   vk_free(ctx->allocator, first_use.tile_buffers);
 
    return VK_SUCCESS;
 }
@@ -633,7 +644,7 @@ pvr_mark_storage_allocated(struct pvr_renderpass_context *ctx,
 {
    /* Number of dwords to allocate for the attachment. */
    const uint32_t pixel_size =
-      DIV_ROUND_UP(vk_format_get_blocksizebits(attachment->vk_format), 32U);
+      DIV_ROUND_UP(pvr_get_accum_format_bitsize(attachment->vk_format), 32U);
 
    if (resource->type == USC_MRT_RESOURCE_TYPE_OUTPUT_REG) {
       /* Update the locations used in the pixel output registers. */
@@ -694,7 +705,7 @@ pvr_surface_alloc_color_storage(const struct pvr_device_info *dev_info,
 {
    /* Number of dwords to allocate for the attachment. */
    const uint32_t pixel_size =
-      DIV_ROUND_UP(vk_format_get_blocksizebits(attachment->vk_format), 32U);
+      DIV_ROUND_UP(pvr_get_accum_format_bitsize(attachment->vk_format), 32U);
 
    /* Try allocating pixel output registers. */
    const int32_t output_reg =
@@ -745,7 +756,7 @@ pvr_free_buffer_storage(struct pvr_renderpass_alloc_buffer *buffer,
                         uint32_t start)
 {
    const uint32_t pixel_size = DIV_ROUND_UP(
-      vk_format_get_blocksizebits(int_attach->attachment->vk_format),
+      pvr_get_accum_format_bitsize(int_attach->attachment->vk_format),
       32U);
 
    BITSET_CLEAR_RANGE(buffer->allocs, start, start + pixel_size - 1U);
@@ -865,7 +876,8 @@ pvr_copy_storage_details(struct pvr_renderpass_context *ctx,
    }
 
    for (uint32_t i = 0U; i < input_subpass->input_count; i++) {
-      const uint32_t attach_idx = input_subpass->input_attachments[i];
+      const uint32_t attach_idx =
+         input_subpass->input_attachments[i].attachment_idx;
       struct pvr_render_int_attachment *int_attach;
 
       if (attach_idx == VK_ATTACHMENT_UNUSED)
@@ -953,7 +965,8 @@ pvr_copy_z_replicate_details(struct pvr_renderpass_context *ctx,
 
    /* Is the replicated depth also an input attachment? */
    for (uint32_t i = 0U; i < input_subpass->input_count; i++) {
-      const uint32_t attach_idx = input_subpass->input_attachments[i];
+      const uint32_t attach_idx =
+         input_subpass->input_attachments[i].attachment_idx;
       struct pvr_render_int_attachment *int_attach;
 
       if (attach_idx == VK_ATTACHMENT_UNUSED)
@@ -1046,6 +1059,9 @@ static bool pvr_render_has_side_effects(struct pvr_renderpass_context *ctx)
       return true;
    }
 
+   if (hw_render->stencil_resolve_mode || hw_render->depth_resolve_mode)
+      return true;
+
    for (uint32_t i = 0U; i < hw_render->eot_surface_count; i++) {
       const struct pvr_renderpass_hwsetup_eot_surface *eot_attach =
          &hw_render->eot_surfaces[i];
@@ -1111,6 +1127,16 @@ static VkResult pvr_close_render(const struct pvr_device *device,
 
          /* Allocate memory for the attachment. */
          pvr_mark_surface_alloc(ctx, ctx->int_ds_attach);
+      }
+
+      if (ctx->hw_render->stencil_resolve_mode ||
+          ctx->hw_render->depth_resolve_mode) {
+         assert(ctx->ds_resolve_surface);
+
+         hw_render->ds_attach_resolve_idx =
+            ctx->ds_resolve_surface - ctx->int_attach;
+
+         pvr_mark_surface_alloc(ctx, ctx->ds_resolve_surface);
       }
 
       /* Load the depth and stencil before the next use. */
@@ -1352,7 +1378,7 @@ static bool pvr_is_input(struct pvr_render_subpass *subpass,
       return false;
 
    for (uint32_t i = 0U; i < subpass->input_count; i++) {
-      if (subpass->input_attachments[i] == attach_idx)
+      if (subpass->input_attachments[i].attachment_idx == attach_idx)
          return true;
    }
 
@@ -1691,8 +1717,15 @@ pvr_is_z_replicate_space_available(const struct pvr_device_info *dev_info,
       return VK_SUCCESS;
    }
 
-   /* Find the subpass where the depth is first written. */
+   /* Get the registers used in any subpass after the depth is first written.
+    * Start with registers used in the incoming subpass.
+    */
+   result = pvr_copy_alloc(ctx, &combined_alloc, alloc);
+   if (result != VK_SUCCESS)
+      return result;
+
    if (hw_render) {
+      /* Find the subpass where the depth is first written. */
       first_use = hw_render->subpass_count;
       for (uint32_t i = 0U; i < hw_render->subpass_count; i++) {
          struct pvr_renderpass_subpass *subpass = &ctx->subpasses[i];
@@ -1703,16 +1736,7 @@ pvr_is_z_replicate_space_available(const struct pvr_device_info *dev_info,
             break;
          }
       }
-   }
 
-   /* Get the registers used in any subpass after the depth is first written.
-    * Start with registers used in the incoming subpass.
-    */
-   result = pvr_copy_alloc(ctx, &combined_alloc, alloc);
-   if (result != VK_SUCCESS)
-      return result;
-
-   if (hw_render) {
       /* Merge in registers used in previous subpasses. */
       for (uint32_t i = first_use; i < hw_render->subpass_count; i++) {
          struct pvr_renderpass_subpass *subpass = &ctx->subpasses[i];
@@ -1787,7 +1811,7 @@ pvr_is_subpass_space_available(const struct pvr_device_info *dev_info,
 
       int_attach = &ctx->int_attach[attach_idx];
 
-      assert(vk_format_get_blocksizebits(int_attach->attachment->vk_format) >
+      assert(pvr_get_accum_format_bitsize(int_attach->attachment->vk_format) >
              0U);
 
       /* Is the attachment not allocated on-chip storage? */
@@ -1867,6 +1891,9 @@ pvr_can_combine_with_render(const struct pvr_device_info *dev_info,
    sp_dsts->color = NULL;
    new_alloc->tile_buffers = NULL;
 
+   if (ctx->hw_render && (ctx->hw_render->view_mask != subpass->view_mask))
+      return false;
+
    /* The hardware doesn't support replicating the stencil, so we need to store
     * the depth to memory if a stencil attachment is used as an input
     * attachment.
@@ -1913,7 +1940,7 @@ pvr_can_combine_with_render(const struct pvr_device_info *dev_info,
     * in an existing subpass in the current render.
     */
    for (uint32_t i = 0U; i < subpass->input_count; i++) {
-      const uint32_t attach_idx = subpass->input_attachments[i];
+      const uint32_t attach_idx = subpass->input_attachments[i].attachment_idx;
       if (attach_idx != VK_ATTACHMENT_UNUSED &&
           pvr_is_pending_resolve_dest(ctx, attach_idx)) {
          return false;
@@ -2050,6 +2077,7 @@ pvr_merge_subpass(const struct pvr_device *device,
       ctx->hw_render->depth_init = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
       ctx->hw_render->stencil_init = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
       ctx->hw_render->sample_count = input_subpass->sample_count;
+      ctx->hw_render->view_mask = input_subpass->view_mask;
    }
 
    /* Allocate a new subpass in the in-progress render. */
@@ -2284,14 +2312,17 @@ pvr_dereference_color_output_list(struct pvr_renderpass_context *ctx,
    }
 }
 
-static void pvr_dereference_surface_list(struct pvr_renderpass_context *ctx,
-                                         uint32_t subpass_num,
-                                         uint32_t *attachments,
-                                         uint32_t count)
+static void
+pvr_dereference_surface_list(struct pvr_renderpass_context *ctx,
+                             uint32_t subpass_num,
+                             struct pvr_render_input_attachment *attachments,
+                             uint32_t count)
 {
    for (uint32_t i = 0U; i < count; i++) {
-      if (attachments[i] != VK_ATTACHMENT_UNUSED)
-         pvr_dereference_surface(ctx, attachments[i], subpass_num);
+      if (attachments[i].attachment_idx != VK_ATTACHMENT_UNUSED)
+         pvr_dereference_surface(ctx,
+                                 attachments[i].attachment_idx,
+                                 subpass_num);
    }
 }
 
@@ -2352,6 +2383,33 @@ static VkResult pvr_schedule_subpass(const struct pvr_device *device,
        */
       int_depth_attach->load_op = VK_ATTACHMENT_LOAD_OP_LOAD;
       int_depth_attach->stencil_load_op = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+      if (subpass->depth_stencil_resolve_attachment != VK_ATTACHMENT_UNUSED) {
+         struct pvr_render_int_attachment *int_resolve_attach =
+            &ctx->int_attach[subpass->depth_stencil_resolve_attachment];
+
+         assert(int_depth_attach->last_resolve_src_render <
+                (int32_t)ctx->hw_setup->render_count - 1);
+         int_depth_attach->last_resolve_src_render =
+            ctx->hw_setup->render_count - 1;
+
+         assert(int_depth_attach->last_resolve_dst_render <
+                (int32_t)ctx->hw_setup->render_count - 1);
+         int_depth_attach->last_resolve_dst_render =
+            ctx->hw_setup->render_count - 1;
+
+         assert(!ctx->ds_resolve_surface);
+         ctx->ds_resolve_surface = int_resolve_attach;
+
+         hw_render->stencil_resolve_mode = subpass->stencil_resolve_mode;
+         hw_render->depth_resolve_mode = subpass->depth_resolve_mode;
+
+         if (hw_render->depth_resolve_mode)
+            int_depth_attach->remaining_count++;
+
+         if (hw_render->stencil_resolve_mode)
+            int_depth_attach->stencil_remaining_count++;
+      }
    }
 
    /* Mark surfaces which have been the source or destination of an MSAA resolve
@@ -2409,6 +2467,21 @@ static VkResult pvr_schedule_subpass(const struct pvr_device *device,
    return VK_SUCCESS;
 }
 
+static uint32_t pvr_count_uses_in_input_attachment_list(
+   struct pvr_render_input_attachment *attachments,
+   uint32_t size,
+   uint32_t attach_idx)
+{
+   uint32_t count = 0U;
+
+   for (uint32_t i = 0U; i < size; i++) {
+      if (attachments[i].attachment_idx == attach_idx)
+         count++;
+   }
+
+   return count;
+}
+
 static uint32_t pvr_count_uses_in_list(uint32_t *attachments,
                                        uint32_t size,
                                        uint32_t attach_idx)
@@ -2423,23 +2496,27 @@ static uint32_t pvr_count_uses_in_list(uint32_t *attachments,
    return count;
 }
 
-static uint32_t
+static void
 pvr_count_uses_in_color_output_list(struct pvr_render_subpass *subpass,
-                                    uint32_t attach_idx)
+                                    uint32_t attach_idx,
+                                    uint32_t *color_output_count_out,
+                                    uint32_t *resolve_output_count_out)
 {
-   uint32_t count = 0U;
+   uint32_t resolve_count = 0U;
+   uint32_t color_count = 0U;
 
    for (uint32_t i = 0U; i < subpass->color_count; i++) {
       if (subpass->color_attachments[i] == attach_idx) {
-         count++;
+         color_count++;
 
          if (subpass->resolve_attachments &&
              subpass->resolve_attachments[i] != VK_ATTACHMENT_UNUSED)
-            count++;
+            resolve_count++;
       }
    }
 
-   return count;
+   *color_output_count_out = color_count;
+   *resolve_output_count_out = resolve_count;
 }
 
 void pvr_destroy_renderpass_hwsetup(const VkAllocationCallbacks *alloc,
@@ -2481,6 +2558,7 @@ VkResult pvr_create_renderpass_hwsetup(
    struct pvr_renderpass_hw_map *subpass_map;
    struct pvr_renderpass_hwsetup *hw_setup;
    struct pvr_renderpass_context *ctx;
+   bool requires_frag_pr = false;
    bool *surface_allocate;
    VkResult result;
 
@@ -2528,23 +2606,40 @@ VkResult pvr_create_renderpass_hwsetup(
    for (uint32_t i = 0U; i < pass->attachment_count; i++) {
       struct pvr_render_pass_attachment *attachment = &pass->attachments[i];
       struct pvr_render_int_attachment *int_attach = &ctx->int_attach[i];
-      const uint32_t pixel_size =
-         vk_format_get_blocksizebits(attachment->vk_format) / 32U;
-      const uint32_t part_bits =
-         vk_format_get_blocksizebits(attachment->vk_format) % 32U;
+      const VkFormat format = attachment->vk_format;
+      uint32_t pixel_size_in_chunks;
+      uint32_t pixel_size_in_bits;
+
+      /* TODO: Add support for packing multiple attachments into the same
+       * register.
+       */
+      const uint32_t part_bits = 0;
+
+      if (vk_format_is_color(format) &&
+          pvr_get_pbe_accum_format(attachment->vk_format) ==
+             PVR_PBE_ACCUM_FORMAT_INVALID) {
+         /* The VkFormat is not supported as a color attachment so `0`.
+          * Vulkan doesn't seems to restrict vkCreateRenderPass() to supported
+          * formats only.
+          */
+         pixel_size_in_bits = 0;
+      } else {
+         pixel_size_in_bits =
+            pvr_get_accum_format_bitsize(attachment->vk_format);
+      }
 
       int_attach->resource.type = USC_MRT_RESOURCE_TYPE_INVALID;
       int_attach->resource.intermediate_size =
-         DIV_ROUND_UP(vk_format_get_blocksizebits(attachment->vk_format),
-                      CHAR_BIT);
+         DIV_ROUND_UP(pixel_size_in_bits, CHAR_BIT);
       int_attach->resource.mrt_desc.intermediate_size =
          int_attach->resource.intermediate_size;
 
-      for (uint32_t j = 0U; j < pixel_size; j++)
+      pixel_size_in_chunks = DIV_ROUND_UP(pixel_size_in_bits, 32U);
+      for (uint32_t j = 0U; j < pixel_size_in_chunks; j++)
          int_attach->resource.mrt_desc.valid_mask[j] = ~0;
 
       if (part_bits > 0U) {
-         int_attach->resource.mrt_desc.valid_mask[pixel_size] =
+         int_attach->resource.mrt_desc.valid_mask[pixel_size_in_chunks] =
             BITFIELD_MASK(part_bits);
       }
 
@@ -2563,21 +2658,35 @@ VkResult pvr_create_renderpass_hwsetup(
       /* Count the number of references to this attachment in subpasses. */
       for (uint32_t j = 0U; j < pass->subpass_count; j++) {
          struct pvr_render_subpass *subpass = &pass->subpasses[j];
-         const uint32_t color_output_uses =
-            pvr_count_uses_in_color_output_list(subpass, i);
          const uint32_t input_attachment_uses =
-            pvr_count_uses_in_list(subpass->input_attachments,
-                                   subpass->input_count,
-                                   i);
+            pvr_count_uses_in_input_attachment_list(subpass->input_attachments,
+                                                    subpass->input_count,
+                                                    i);
+         uint32_t resolve_output_uses;
+         uint32_t color_output_uses;
+         uint32_t total_output_uses;
 
-         if (color_output_uses != 0U || input_attachment_uses != 0U)
+         pvr_count_uses_in_color_output_list(subpass,
+                                             i,
+                                             &color_output_uses,
+                                             &resolve_output_uses);
+
+         total_output_uses = color_output_uses + resolve_output_uses;
+
+         if (total_output_uses != 0U || input_attachment_uses != 0U)
             int_attach->last_read = j;
 
          int_attach->remaining_count +=
-            color_output_uses + input_attachment_uses;
+            total_output_uses + input_attachment_uses;
 
          if ((uint32_t)subpass->depth_stencil_attachment == i)
             int_attach->remaining_count++;
+
+         requires_frag_pr |= resolve_output_uses != 0;
+         /* TODO: Should this be checking the normal attachment store op? */
+         requires_frag_pr |= color_output_uses != 0 &&
+                             pass->attachments[i].stencil_store_op !=
+                                VK_ATTACHMENT_STORE_OP_STORE;
       }
 
       if (int_attach->attachment->aspects & VK_IMAGE_ASPECT_STENCIL_BIT) {
@@ -2666,6 +2775,9 @@ VkResult pvr_create_renderpass_hwsetup(
 
    /* Finalise the last in-progress render. */
    result = pvr_close_render(device, ctx);
+
+   for (uint32_t i = 0; i < hw_setup->render_count; i++)
+      hw_setup->renders[i].requires_frag_pr = requires_frag_pr;
 
 end_create_renderpass_hwsetup:
    if (result != VK_SUCCESS) {

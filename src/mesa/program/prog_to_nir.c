@@ -25,7 +25,7 @@
 
 #include "compiler/nir/nir.h"
 #include "compiler/nir/nir_builder.h"
-#include "compiler/glsl/list.h"
+#include "compiler/list.h"
 
 #include "main/mtypes.h"
 #include "main/shader_types.h"
@@ -53,9 +53,6 @@ struct ptn_compile {
    bool error;
 
    nir_variable *parameters;
-   nir_variable *input_vars[VARYING_SLOT_MAX];
-   nir_variable *output_vars[VARYING_SLOT_MAX];
-   nir_variable *sysval_vars[SYSTEM_VALUE_MAX];
    nir_variable *sampler_vars[32]; /* matches number of bits in TexSrcUnit */
    nir_def **output_regs;
    nir_def **temp_regs;
@@ -87,20 +84,47 @@ ptn_get_src(struct ptn_compile *c, const struct prog_src_register *prog_src)
        * attributes; ARB_fragment_program has no relative addressing at all.
        */
       assert(!prog_src->RelAddr);
-
       assert(prog_src->Index >= 0 && prog_src->Index < VARYING_SLOT_MAX);
 
-      nir_variable *var = c->input_vars[prog_src->Index];
-      src.src = nir_src_for_ssa(nir_load_var(b, var));
-      break;
-   }
-   case PROGRAM_SYSTEM_VALUE: {
-      assert(!prog_src->RelAddr);
+      unsigned slot = prog_src->Index;
+      nir_def *input;
 
-      assert(prog_src->Index >= 0 && prog_src->Index < SYSTEM_VALUE_MAX);
+      if (c->prog->info.stage == MESA_SHADER_FRAGMENT) {
+         if (slot == VARYING_SLOT_POS && c->ctx->Const.GLSLFragCoordIsSysVal) {
+            nir_variable *pos =
+               nir_get_variable_with_location(b->shader, nir_var_system_value,
+                                              SYSTEM_VALUE_FRAG_COORD,
+                                              glsl_vec4_type());
+            src.src = nir_src_for_ssa(nir_load_var(b, pos));
+            break;
+         }
 
-      nir_variable *var = c->sysval_vars[prog_src->Index];
-      src.src = nir_src_for_ssa(nir_load_var(b, var));
+         nir_def *baryc = nir_load_barycentric_pixel(b, 32);
+
+         if (slot != VARYING_SLOT_COL0 && slot != VARYING_SLOT_COL1) {
+            nir_intrinsic_set_interp_mode(nir_def_as_intrinsic(baryc),
+                                          INTERP_MODE_SMOOTH);
+         }
+
+         input = nir_load_interpolated_input(b, 4, 32, baryc, nir_imm_int(b, 0),
+                                             .io_semantics.location = slot);
+
+         /* fogcoord is defined as <f, 0.0, 0.0, 1.0>.  Make the actual
+          * input variable a float, and create a local containing the
+          * full vec4 value.
+          */
+         if (slot == VARYING_SLOT_FOGC) {
+            input = nir_vec4(b, nir_channel(b, input, 0),
+                             nir_imm_float(b, 0),
+                             nir_imm_float(b, 0),
+                             nir_imm_float(b, 1));
+         }
+      } else {
+         input = nir_load_input(b, 4, 32, nir_imm_int(b, 0),
+                                .io_semantics.location = slot);
+      }
+
+      src.src = nir_src_for_ssa(input);
       break;
    }
    case PROGRAM_STATE_VAR:
@@ -350,7 +374,7 @@ _mesa_texture_index_to_sampler_dim(gl_texture_index index, bool *is_array)
    case NUM_TEXTURE_TARGETS:
       break;
    }
-   unreachable("unknown texture target");
+   UNREACHABLE("unknown texture target");
 }
 
 static nir_def *
@@ -398,6 +422,7 @@ ptn_tex(struct ptn_compile *c, nir_def **src,
    instr->op = op;
    instr->dest_type = nir_type_float32;
    instr->is_shadow = prog_inst->TexShadow;
+   instr->can_speculate = true;
 
    bool is_array;
    instr->sampler_dim = _mesa_texture_index_to_sampler_dim(prog_inst->TexSrcTarget, &is_array);
@@ -476,8 +501,8 @@ static const nir_op op_trans[MAX_OPCODE] = {
    [OPCODE_ARL] = 0,
    [OPCODE_CMP] = 0,
    [OPCODE_COS] = 0,
-   [OPCODE_DDX] = nir_op_fddx,
-   [OPCODE_DDY] = nir_op_fddy,
+   [OPCODE_DDX] = 0,
+   [OPCODE_DDY] = 0,
    [OPCODE_DP2] = 0,
    [OPCODE_DP3] = 0,
    [OPCODE_DP4] = 0,
@@ -536,6 +561,14 @@ ptn_emit_instruction(struct ptn_compile *c, struct prog_instruction *prog_inst)
       return;
 
    switch (op) {
+   case OPCODE_DDX:
+      dst = nir_ddx(b, src[0]);
+      break;
+
+   case OPCODE_DDY:
+      dst = nir_ddy(b, src[0]);
+      break;
+
    case OPCODE_RSQ:
       dst = nir_frsq(b, nir_fabs(b, ptn_channel(b, src[0], X)));
       break;
@@ -715,24 +748,24 @@ ptn_add_output_stores(struct ptn_compile *c)
 {
    nir_builder *b = &c->build;
 
-   nir_foreach_shader_out_variable(var, b->shader) {
-      nir_def *src = nir_load_reg(b, c->output_regs[var->data.location]);
-      if (c->prog->Target == GL_FRAGMENT_PROGRAM_ARB &&
-          var->data.location == FRAG_RESULT_DEPTH) {
+   u_foreach_bit64(slot, b->shader->info.outputs_written) {
+      nir_def *src = nir_load_reg(b, c->output_regs[slot]);
+      if (c->prog->info.stage == MESA_SHADER_FRAGMENT &&
+          slot == FRAG_RESULT_DEPTH) {
          /* result.depth has this strange convention of being the .z component of
           * a vec4 with undefined .xyw components.  We resolve it to a scalar, to
           * match GLSL's gl_FragDepth and the expectations of most backends.
           */
          src = nir_channel(b, src, 2);
       }
-      if (c->prog->Target == GL_VERTEX_PROGRAM_ARB &&
-          (var->data.location == VARYING_SLOT_FOGC ||
-           var->data.location == VARYING_SLOT_PSIZ)) {
+      if (c->prog->info.stage == MESA_SHADER_VERTEX &&
+          (slot == VARYING_SLOT_FOGC || slot == VARYING_SLOT_PSIZ)) {
          /* result.{fogcoord,psiz} is a single component value */
          src = nir_channel(b, src, 0);
       }
-      unsigned num_components = glsl_get_vector_elements(var->type);
-      nir_store_var(b, var, src, (1 << num_components) - 1);
+
+      nir_store_output(b, src, nir_imm_int(b, 0),
+                       .io_semantics.location = slot);
    }
 }
 
@@ -740,93 +773,17 @@ static void
 setup_registers_and_variables(struct ptn_compile *c)
 {
    nir_builder *b = &c->build;
-   struct nir_shader *shader = b->shader;
 
-   /* Create input variables. */
-   uint64_t inputs_read = c->prog->info.inputs_read;
-   while (inputs_read) {
-      const int i = u_bit_scan64(&inputs_read);
-
-      if (c->ctx->Const.GLSLFragCoordIsSysVal &&
-          shader->info.stage == MESA_SHADER_FRAGMENT &&
-          i == VARYING_SLOT_POS) {
-         c->input_vars[i] = nir_create_variable_with_location(shader, nir_var_system_value,
-                                                              SYSTEM_VALUE_FRAG_COORD, glsl_vec4_type());
-         continue;
-      }
-
-      nir_variable *var =
-          nir_create_variable_with_location(shader, nir_var_shader_in,
-                                            i, glsl_vec4_type());
-
-      if (c->prog->Target == GL_FRAGMENT_PROGRAM_ARB) {
-         if (i == VARYING_SLOT_FOGC) {
-            /* fogcoord is defined as <f, 0.0, 0.0, 1.0>.  Make the actual
-             * input variable a float, and create a local containing the
-             * full vec4 value.
-             */
-            var->type = glsl_float_type();
-
-            nir_variable *fullvar =
-               nir_local_variable_create(b->impl, glsl_vec4_type(),
-                                         "fogcoord_tmp");
-
-            nir_store_var(b, fullvar,
-                          nir_vec4(b, nir_load_var(b, var),
-                                   nir_imm_float(b, 0.0),
-                                   nir_imm_float(b, 0.0),
-                                   nir_imm_float(b, 1.0)),
-                          WRITEMASK_XYZW);
-
-            /* We inserted the real input into the list so the driver has real
-             * inputs, but we set c->input_vars[i] to the temporary so we use
-             * the splatted value.
-             */
-            c->input_vars[i] = fullvar;
-            continue;
-         }
-      }
-
-      c->input_vars[i] = var;
-   }
-
-   /* Create system value variables */
-   int i;
-   BITSET_FOREACH_SET(i, c->prog->info.system_values_read, SYSTEM_VALUE_MAX) {
-      c->sysval_vars[i] = nir_create_variable_with_location(b->shader, nir_var_system_value,
-                                                            i, glsl_vec4_type());
-   }
-
-   /* Create output registers and variables. */
+   /* Create output registers. */
    int max_outputs = util_last_bit64(c->prog->info.outputs_written);
    c->output_regs = rzalloc_array(c, nir_def *, max_outputs);
 
-   uint64_t outputs_written = c->prog->info.outputs_written;
-   while (outputs_written) {
-      const int i = u_bit_scan64(&outputs_written);
-
+   u_foreach_bit64(i, c->prog->info.outputs_written) {
       /* Since we can't load from outputs in the IR, we make temporaries
        * for the outputs and emit stores to the real outputs at the end of
        * the shader.
        */
-      nir_def *reg = nir_decl_reg(b, 4, 32, 0);
-
-      const struct glsl_type *type;
-      if ((c->prog->Target == GL_FRAGMENT_PROGRAM_ARB && i == FRAG_RESULT_DEPTH) ||
-          (c->prog->Target == GL_VERTEX_PROGRAM_ARB && i == VARYING_SLOT_FOGC) ||
-          (c->prog->Target == GL_VERTEX_PROGRAM_ARB && i == VARYING_SLOT_PSIZ))
-         type = glsl_float_type();
-      else
-         type = glsl_vec4_type();
-
-      nir_variable *var =
-         nir_variable_create(shader, nir_var_shader_out, type,
-                             ralloc_asprintf(shader, "out_%d", i));
-      var->data.location = i;
-      var->data.index = 0;
-
-      c->output_regs[i] = reg;
-      c->output_vars[i] = var;
+      c->output_regs[i] = nir_decl_reg(b, 4, 32, 0);
    }
 
    /* Create temporary registers. */
@@ -844,12 +801,13 @@ setup_registers_and_variables(struct ptn_compile *c)
 }
 
 struct nir_shader *
-prog_to_nir(const struct gl_context *ctx, const struct gl_program *prog,
-            const nir_shader_compiler_options *options)
+prog_to_nir(const struct gl_context *ctx, const struct gl_program *prog)
 {
+   const struct nir_shader_compiler_options *options =
+      ctx->screen->nir_options[prog->info.stage];
    struct ptn_compile *c;
    struct nir_shader *s;
-   gl_shader_stage stage = _mesa_program_enum_to_shader_stage(prog->Target);
+   mesa_shader_stage stage = prog->info.stage;
 
    c = rzalloc(NULL, struct ptn_compile);
    if (!c)
@@ -861,6 +819,8 @@ prog_to_nir(const struct gl_context *ctx, const struct gl_program *prog,
 
    /* Copy the shader_info from the gl_program */
    c->build.shader->info = prog->info;
+   c->build.shader->info.max_subgroup_size = 128;
+   c->build.shader->info.min_subgroup_size = 1;
 
    s = c->build.shader;
 
@@ -895,20 +855,20 @@ prog_to_nir(const struct gl_context *ctx, const struct gl_program *prog,
    s->info.clip_distance_array_size = 0;
    s->info.cull_distance_array_size = 0;
    s->info.separate_shader = true;
-   s->info.io_lowered = false;
+   s->info.io_lowered = true;
    s->info.internal = false;
-   memcpy(s->info.source_sha1, c->build.shader->info.source_sha1, 20);
 
    /* ARB_vp: */
    if (prog->arb.IsPositionInvariant) {
-      NIR_PASS_V(s, st_nir_lower_position_invariant,
-                 ctx->Const.ShaderCompilerOptions[MESA_SHADER_VERTEX].OptimizeForAOS,
-                 prog->Parameters);
+      NIR_PASS(_, s, st_nir_lower_position_invariant, prog->Parameters,
+               ctx->Const.PackedDriverUniformStorage);
    }
 
    /* Add OPTION ARB_fog_exp code */
-   if (prog->arb.Fog)
-      NIR_PASS_V(s, st_nir_lower_fog, prog->arb.Fog, prog->Parameters);
+   if (prog->arb.Fog) {
+      NIR_PASS(_, s, st_nir_lower_fog, prog->arb.Fog, prog->Parameters,
+               ctx->Const.PackedDriverUniformStorage);
+   }
 
 fail:
    if (c->error) {

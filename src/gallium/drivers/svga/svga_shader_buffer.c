@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2022 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2022-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "pipe/p_defines.h"
 #include "util/u_bitmask.h"
@@ -83,7 +65,7 @@ svga_create_uav_buffer(struct svga_context *svga,
  */
 static void
 svga_set_shader_buffers(struct pipe_context *pipe,
-                        enum pipe_shader_type shader,
+                        mesa_shader_stage shader,
                         unsigned start, unsigned num,
                         const struct pipe_shader_buffer *buffers,
                         unsigned writeable_bitmask)
@@ -95,7 +77,7 @@ svga_set_shader_buffers(struct pipe_context *pipe,
 
    assert(start + num <= SVGA_MAX_SHADER_BUFFERS);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    const struct pipe_shader_buffer *b = buffers;
    SVGA_DBG(DEBUG_UAV, "%s: shader=%d start=%d num=%d ",
             __func__, shader, start, num);
@@ -110,7 +92,7 @@ svga_set_shader_buffers(struct pipe_context *pipe,
    buf = buffers;
    if (buffers) {
       int last_buffer = -1;
-      for (unsigned i = start; i < start + num; i++, buf++) {
+      for (unsigned i = start, j=0; i < start + num; i++, buf++, j++) {
          struct svga_shader_buffer *cbuf = &svga->curr.shader_buffers[shader][i];
 
          if (buf && buf->buffer) {
@@ -125,6 +107,7 @@ svga_set_shader_buffers(struct pipe_context *pipe,
             pipe_resource_reference(&cbuf->resource, NULL);
          }
          cbuf->uav_index = -1;
+         cbuf->writeAccess = (writeable_bitmask & (1 << j)) != 0;
       }
       svga->curr.num_shader_buffers[shader] =
          MAX2(svga->curr.num_shader_buffers[shader], last_buffer + 1);
@@ -140,7 +123,7 @@ svga_set_shader_buffers(struct pipe_context *pipe,
          svga->curr.num_shader_buffers[shader] = start;
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    SVGA_DBG(DEBUG_UAV,
             "%s: current num_shader_buffers=%d start=%d num=%d buffers=",
             __func__, svga->curr.num_shader_buffers[shader],
@@ -176,7 +159,7 @@ svga_set_hw_atomic_buffers(struct pipe_context *pipe,
 
    assert(start + num <= SVGA_MAX_ATOMIC_BUFFERS);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    SVGA_DBG(DEBUG_UAV, "%s: start=%d num=%d \n", __func__, start, num);
 #endif
 
@@ -220,7 +203,7 @@ svga_set_hw_atomic_buffers(struct pipe_context *pipe,
          svga->curr.num_atomic_buffers = start;
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    SVGA_DBG(DEBUG_UAV, "%s: current num_atomic_buffers=%d start=%d num=%d ",
             __func__, svga->curr.num_atomic_buffers,
             start, num);
@@ -253,7 +236,7 @@ svga_init_shader_buffer_functions(struct svga_context *svga)
    svga->pipe.set_hw_atomic_buffers = svga_set_hw_atomic_buffers;
 
    /* Initialize shader buffers */
-   for (unsigned shader = 0; shader < PIPE_SHADER_TYPES; ++shader) {
+   for (unsigned shader = 0; shader < MESA_SHADER_STAGES; ++shader) {
       struct svga_shader_buffer *hw_buf =
          &svga->state.hw_draw.shader_buffers[shader][0];
       struct svga_shader_buffer *cur_buf =
@@ -341,4 +324,72 @@ svga_validate_shader_buffer_resources(struct svga_context *svga,
    }
 
    return PIPE_OK;
+}
+
+
+/**
+ * Returns TRUE if the shader buffer can be bound to SRV as raw buffer.
+ * It is TRUE if the shader buffer is readonly and the surface already
+ * has the RAW_BUFFER_VIEW bind flag set.
+ */
+bool
+svga_shader_buffer_can_use_srv(struct svga_context *svga,
+                               mesa_shader_stage shader,
+                               unsigned index,
+                               struct svga_shader_buffer *buf)
+{
+   if (buf->resource) {
+      struct svga_buffer *sbuf = svga_buffer(buf->resource);
+      if (sbuf && !buf->writeAccess && svga_has_raw_buffer_view(sbuf)) {
+         return true;
+      }
+   }
+   return false;
+}
+
+
+#define SVGA_SSBO_SRV_START  SVGA_MAX_CONST_BUFS
+
+/**
+ * Bind the shader buffer as SRV raw buffer.
+ */
+enum pipe_error
+svga_shader_buffer_bind_srv(struct svga_context *svga,
+                            mesa_shader_stage shader,
+                            unsigned index,
+                            struct svga_shader_buffer *buf)
+{
+   enum pipe_error ret;
+   unsigned slot = index + SVGA_SSBO_SRV_START;
+
+   svga->state.raw_shaderbufs[shader] |= (1 << index);
+   ret = svga_emit_rawbuf(svga, slot, shader, buf->desc.buffer_offset,
+                          buf->desc.buffer_size, buf->resource);
+   if (ret == PIPE_OK)
+      svga->state.hw_draw.enabled_raw_shaderbufs[shader] |= (1 << index);
+
+   return ret;
+}
+
+
+/**
+ * Unbind the shader buffer SRV.
+ */
+enum pipe_error
+svga_shader_buffer_unbind_srv(struct svga_context *svga,
+                              mesa_shader_stage shader,
+                              unsigned index,
+                              struct svga_shader_buffer *buf)
+{
+   enum pipe_error ret = PIPE_OK;
+   unsigned slot = index + SVGA_SSBO_SRV_START;
+
+   if ((svga->state.hw_draw.enabled_raw_shaderbufs[shader] & (1 << index))
+          != 0) {
+      ret = svga_emit_rawbuf(svga, slot, shader, 0, 0, NULL);
+      if (ret == PIPE_OK)
+         svga->state.hw_draw.enabled_raw_shaderbufs[shader] &= ~(1 << index);
+   }
+   svga->state.raw_shaderbufs[shader] &= ~(1 << index);
+   return ret;
 }

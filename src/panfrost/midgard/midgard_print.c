@@ -79,7 +79,7 @@ mir_print_mask(unsigned mask)
  * don't matter.
  */
 static void
-mir_print_swizzle(unsigned mask, unsigned *swizzle)
+mir_print_swizzle(unsigned mask, const unsigned *swizzle)
 {
    printf(".");
 
@@ -115,7 +115,7 @@ mir_get_unit(unsigned unit)
 }
 
 static void
-mir_print_embedded_constant(midgard_instruction *ins, unsigned src_idx)
+mir_print_embedded_constant(const midgard_instruction *ins, unsigned src_idx)
 {
    assert(src_idx <= 1);
 
@@ -123,7 +123,7 @@ mir_print_embedded_constant(midgard_instruction *ins, unsigned src_idx)
    unsigned sz = nir_alu_type_get_type_size(ins->src_types[src_idx]);
    bool half = (sz == (base_size >> 1));
    unsigned mod = mir_pack_mod(ins, src_idx, false);
-   unsigned *swizzle = ins->swizzle[src_idx];
+   const unsigned *swizzle = ins->swizzle[src_idx];
    midgard_reg_mode reg_mode = reg_mode_for_bitsize(max_bitsize_for_alu(ins));
    unsigned comp_mask = effective_writemask(ins->op, ins->mask);
    unsigned num_comp = util_bitcount(comp_mask);
@@ -153,18 +153,45 @@ mir_print_embedded_constant(midgard_instruction *ins, unsigned src_idx)
 }
 
 static void
-mir_print_src(midgard_instruction *ins, unsigned c)
+mir_print_alu_type(nir_alu_type t, FILE *fp)
+{
+   unsigned size = nir_alu_type_get_type_size(t);
+   nir_alu_type base = nir_alu_type_get_base_type(t);
+
+   switch (base) {
+   case nir_type_int:
+      fprintf(fp, ".i");
+      break;
+   case nir_type_uint:
+      fprintf(fp, ".u");
+      break;
+   case nir_type_bool:
+      fprintf(fp, ".b");
+      break;
+   case nir_type_float:
+      fprintf(fp, ".f");
+      break;
+   default:
+      fprintf(fp, ".unknown");
+      break;
+   }
+
+   fprintf(fp, "%u", size);
+}
+
+static void
+mir_print_src(const midgard_instruction *ins, unsigned c)
 {
    mir_print_index(ins->src[c]);
 
    if (ins->src[c] != ~0 && ins->src_types[c] != nir_type_invalid) {
-      pan_print_alu_type(ins->src_types[c], stdout);
+      mir_print_alu_type(ins->src_types[c], stdout);
       mir_print_swizzle(ins->mask, ins->swizzle[c]);
    }
 }
 
 void
-mir_print_instruction(midgard_instruction *ins)
+mir_print_instruction(const midgard_instruction *ins)
 {
    printf("\t");
 
@@ -260,7 +287,7 @@ mir_print_instruction(midgard_instruction *ins)
    mir_print_index(ins->dest);
 
    if (ins->dest != ~0) {
-      pan_print_alu_type(ins->dest_type, stdout);
+      mir_print_alu_type(ins->dest_type, stdout);
       mir_print_mask(ins->mask);
    }
 
@@ -326,9 +353,9 @@ mir_print_instruction(midgard_instruction *ins)
 /* Dumps MIR for a block or entire shader respective */
 
 void
-mir_print_block(midgard_block *block)
+mir_print_block(const midgard_block *block)
 {
-   printf("block%u: {\n", block->base.name);
+   printf("block%u: {\n", block->name);
 
    if (block->scheduled) {
       mir_foreach_bundle_in_block(block, bundle) {
@@ -345,24 +372,24 @@ mir_print_block(midgard_block *block)
 
    printf("}");
 
-   if (block->base.successors[0]) {
+   if (block->successors[0]) {
       printf(" -> ");
-      pan_foreach_successor((&block->base), succ)
+      mir_foreach_successor(block, succ)
          printf(" block%u ", succ->name);
    }
 
    printf(" from { ");
    mir_foreach_predecessor(block, pred)
-      printf("block%u ", pred->base.name);
+      printf("block%u ", pred->name);
    printf("}");
 
    printf("\n\n");
 }
 
 void
-mir_print_shader(compiler_context *ctx)
+mir_print_shader(const compiler_context *ctx)
 {
    mir_foreach_block(ctx, block) {
-      mir_print_block((midgard_block *)block);
+      mir_print_block((const midgard_block *)block);
    }
 }

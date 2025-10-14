@@ -21,7 +21,6 @@
  */
 
 #include "intel_gem.h"
-#include "drm-uapi/i915_drm.h"
 
 #include "i915/intel_engine.h"
 #include "i915/intel_gem.h"
@@ -111,7 +110,33 @@ intel_gem_read_render_timestamp(int fd,
    case INTEL_KMD_TYPE_XE:
       return xe_gem_read_render_timestamp(fd, value);
    default:
-      unreachable("Missing");
+      UNREACHABLE("Missing");
+      return false;
+   }
+}
+
+bool
+intel_gem_read_correlate_cpu_gpu_timestamp(int fd,
+                                           enum intel_kmd_type kmd_type,
+                                           enum intel_engine_class engine_class,
+                                           uint16_t engine_instance,
+                                           clockid_t cpu_clock_id,
+                                           uint64_t *cpu_timestamp,
+                                           uint64_t *gpu_timestamp,
+                                           uint64_t *cpu_delta)
+{
+   switch (kmd_type) {
+   case INTEL_KMD_TYPE_I915:
+      return false;
+   case INTEL_KMD_TYPE_XE:
+      return xe_gem_read_correlate_cpu_gpu_timestamp(fd, engine_class,
+                                                     engine_instance,
+                                                     cpu_clock_id,
+                                                     cpu_timestamp,
+                                                     gpu_timestamp,
+                                                     cpu_delta);
+   default:
+      UNREACHABLE("Missing");
       return false;
    }
 }
@@ -130,10 +155,9 @@ intel_gem_supports_protected_context(int fd, enum intel_kmd_type kmd_type)
    case INTEL_KMD_TYPE_I915:
       return i915_gem_supports_protected_context(fd);
    case INTEL_KMD_TYPE_XE:
-      /* TODO: so far Xe don't have support for protected contexts/engines */
-      return false;
+      return xe_gem_supports_protected_exec_queue(fd);
    default:
-      unreachable("Missing");
+      UNREACHABLE("Missing");
       return false;
    }
 }
@@ -173,7 +197,7 @@ intel_gem_can_render_on_fd(int fd, enum intel_kmd_type kmd_type)
    case INTEL_KMD_TYPE_XE:
       return xe_gem_can_render_on_fd(fd);
    default:
-      unreachable("Missing");
+      UNREACHABLE("Missing");
       return false;
    }
 }

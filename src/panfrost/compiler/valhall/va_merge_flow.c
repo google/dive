@@ -149,7 +149,7 @@ merge_waits(bi_block *block)
        * we're waiting for. If we wanted to optimize this case, we could check
        * the signaled slots.
        */
-      if (bi_opcode_props[I->op].message)
+      if (bi_get_opcode_props(I)->message)
          last_free = NULL;
 
       /* We can only merge with instructions whose flow control is a wait.
@@ -157,6 +157,35 @@ merge_waits(bi_block *block)
        * includes async instructions.
        */
       if (va_flow_is_wait_or_none(I->flow))
+         last_free = I;
+   }
+}
+
+static void
+merge_resource_waits(bi_block *block)
+{
+   /* Most recent instruction with which we can merge, or NULL if none */
+   bi_instr *last_free = NULL;
+
+   bi_foreach_instr_in_block_safe(block, I) {
+      if (last_free != NULL && I->op == BI_OPCODE_NOP &&
+          I->flow == VA_FLOW_WAIT_RESOURCE) {
+
+         /* Merge resource_waits with compatible instructions */
+         last_free->flow = VA_FLOW_WAIT_RESOURCE;
+         bi_remove_instruction(I);
+         continue;
+      }
+
+      /* Don't move waits past async instructions, since they might be what
+       * we're waiting for. If we wanted to optimize this case, we could check
+       * the signaled slots.
+       */
+      if (bi_get_opcode_props(I)->message)
+         last_free = NULL;
+
+      /* We can only merge with instructions whose flow control is a none. */
+      if (I->flow == VA_FLOW_NONE)
          last_free = I;
    }
 }
@@ -221,6 +250,7 @@ va_merge_flow(bi_context *ctx)
          continue;
 
       merge_end_reconverge(block);
+      merge_resource_waits(block);
       merge_waits(block);
 
       if (ctx->stage == MESA_SHADER_FRAGMENT && !ctx->inputs->is_blend)

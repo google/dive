@@ -41,9 +41,9 @@ struct pvr_winsys_heap;
 struct pvr_winsys_static_data_offsets;
 struct pvr_winsys_vma;
 
-typedef VkResult (*const heap_alloc_reserved_func)(
+typedef VkResult (*const heap_alloc_carveout_func)(
    struct pvr_winsys_heap *const heap,
-   const pvr_dev_addr_t reserved_dev_addr,
+   const pvr_dev_addr_t carveout_dev_addr,
    uint64_t size,
    uint64_t alignment,
    struct pvr_winsys_vma **vma_out);
@@ -64,7 +64,7 @@ void pvr_winsys_helper_heap_free(struct pvr_winsys_vma *const vma);
 
 VkResult pvr_winsys_helper_allocate_static_memory(
    struct pvr_winsys *const ws,
-   heap_alloc_reserved_func heap_alloc_reserved,
+   heap_alloc_carveout_func heap_alloc_carveout,
    struct pvr_winsys_heap *const general_heap,
    struct pvr_winsys_heap *const pds_heap,
    struct pvr_winsys_heap *const usc_heap,
@@ -82,14 +82,18 @@ pvr_winsys_helper_fill_static_memory(struct pvr_winsys *const ws,
                                      struct pvr_winsys_vma *const pds_vma,
                                      struct pvr_winsys_vma *const usc_vma);
 
-static inline VkResult pvr_mmap(const size_t len,
+static inline VkResult pvr_mmap(void *addr,
+                                const size_t len,
                                 const int prot,
-                                const int flags,
+                                int flags,
                                 const int fd,
                                 const off_t offset,
                                 void **const map_out)
 {
-   void *const map = mmap(NULL, len, prot, flags, fd, offset);
+   if (addr)
+      flags |= MAP_FIXED;
+
+   void *const map = mmap(addr, len, prot, flags, fd, offset);
    if (map == MAP_FAILED) {
       const int err = errno;
       return vk_errorf(NULL,
@@ -104,8 +108,29 @@ static inline VkResult pvr_mmap(const size_t len,
    return VK_SUCCESS;
 }
 
-static inline VkResult pvr_munmap(void *const addr, const size_t len)
+static inline VkResult
+pvr_munmap(void *const addr, const size_t len, bool reserve)
 {
+   if (reserve) {
+      void *ret = mmap(addr,
+                       len,
+                       PROT_NONE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                       -1,
+                       0);
+
+      if (ret == MAP_FAILED) {
+         const int err = errno;
+         return vk_errorf(NULL,
+                          VK_ERROR_UNKNOWN,
+                          "mmap(reserve) failed (errno %d: %s)",
+                          err,
+                          strerror(err));
+      }
+
+      return VK_SUCCESS;
+   }
+
    const int ret = munmap(addr, len);
    if (ret) {
       const int err = errno;

@@ -26,7 +26,6 @@
 
 #include <stdint.h>
 
-#ifdef VIRGL_RENDERER_UNSTABLE_APIS
 struct virgl_renderer_capset_venus {
    uint32_t wire_format_version;
    uint32_t vk_xml_version;
@@ -64,7 +63,12 @@ struct virgl_renderer_capset_venus {
     * the associated renderer submission.
     */
    uint32_t supports_multiple_timelines;
+
+   /* This flag indicates to the guest that hypervisor does not support memory
+    * pages injections and blob allocations must be done by guest from the
+    * dedicated heap (Host visible memory).
+    */
+   uint32_t use_guest_vram;
 };
-#endif
 
 #endif /* VENUS_HW_H */

@@ -100,7 +100,7 @@ bi_assign_slot_read(bi_registers *regs, bi_index src)
    }
 
    bi_print_slots(regs, stderr);
-   unreachable("Failed to find a free slot for src");
+   UNREACHABLE("Failed to find a free slot for src");
 }
 
 static bi_registers
@@ -110,8 +110,8 @@ bi_assign_slots(bi_tuple *now, bi_tuple *prev)
     * use the data registers, which has its own mechanism entirely
     * and thus gets skipped over here. */
 
-   bool read_dreg = now->add && bi_opcode_props[now->add->op].sr_read;
-   bool write_dreg = prev->add && bi_opcode_props[prev->add->op].sr_write;
+   bool read_dreg = now->add && bi_get_opcode_props(now->add)->sr_read;
+   bool write_dreg = prev->add && bi_get_opcode_props(prev->add)->sr_write;
 
    /* First, assign reads */
 
@@ -180,7 +180,7 @@ bi_pack_register_mode(bi_registers r)
    }
 
    bi_print_slots(&r, stderr);
-   unreachable("Invalid slot assignment");
+   UNREACHABLE("Invalid slot assignment");
 }
 
 static uint64_t
@@ -296,7 +296,7 @@ bi_get_src_slot(bi_registers *regs, unsigned reg)
    else if (regs->slot[2] == reg && regs->slot23.slot2 == BIFROST_OP_READ)
       return BIFROST_SRC_PORT2;
    else
-      unreachable("Tried to access register with no port");
+      UNREACHABLE("Tried to access register with no port");
 }
 
 static inline enum bifrost_packed_src
@@ -319,7 +319,7 @@ bi_get_src_new(bi_instr *ins, bi_registers *regs, unsigned s)
 
 static struct bi_packed_tuple
 bi_pack_tuple(bi_clause *clause, bi_tuple *tuple, bi_tuple *prev,
-              bool first_tuple, gl_shader_stage stage)
+              bool first_tuple, mesa_shader_stage stage)
 {
    bi_assign_slots(tuple, prev);
    tuple->regs.fau_idx = tuple->fau_idx;
@@ -327,7 +327,7 @@ bi_pack_tuple(bi_clause *clause, bi_tuple *tuple, bi_tuple *prev,
 
    bi_flip_slots(&tuple->regs);
 
-   bool sr_read = tuple->add && bi_opcode_props[(tuple->add)->op].sr_read;
+   bool sr_read = tuple->add && bi_get_opcode_props(tuple->add)->sr_read;
 
    uint64_t reg = bi_pack_registers(tuple->regs);
    uint64_t fma =
@@ -345,7 +345,7 @@ bi_pack_tuple(bi_clause *clause, bi_tuple *tuple, bi_tuple *prev,
       bi_instr *add = tuple->add;
 
       bool sr_write =
-         bi_opcode_props[add->op].sr_write && !bi_is_null(add->dest[0]);
+         bi_get_opcode_props(add)->sr_write && !bi_is_null(add->dest[0]);
 
       if (sr_read && !bi_is_null(add->src[0])) {
          assert(add->src[0].type == BI_INDEX_REGISTER);
@@ -615,7 +615,7 @@ bi_pack_format(struct util_dynarray *emission, unsigned index,
 static void
 bi_pack_clause(bi_context *ctx, bi_clause *clause, bi_clause *next_1,
                bi_clause *next_2, struct util_dynarray *emission,
-               gl_shader_stage stage)
+               mesa_shader_stage stage)
 {
    struct bi_packed_tuple ins[8] = {0};
 
@@ -713,7 +713,7 @@ bi_lower_texc_dual(bi_context *ctx)
    bi_foreach_instr_global(ctx, I) {
       if (I->op == BI_OPCODE_TEXC_DUAL) {
          /* In hardware, TEXC has 1 destination */
-         I->op = BI_OPCODE_TEXC;
+         bi_set_opcode(I, BI_OPCODE_TEXC);
          bi_drop_dests(I, 1);
       }
    }

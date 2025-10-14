@@ -84,6 +84,7 @@ typedef enum {
    ppir_op_min,
    ppir_op_max,
    ppir_op_trunc,
+   ppir_op_clamp_pos,
 
    ppir_op_and,
    ppir_op_or,
@@ -116,6 +117,8 @@ typedef enum {
 
    ppir_op_undef,
    ppir_op_dummy,
+
+   ppir_op_ffma,
 
    ppir_op_num,
 } ppir_op;
@@ -187,6 +190,28 @@ typedef enum {
    ppir_output_num,
    ppir_output_invalid = -1,
 } ppir_output_type;
+
+static inline const char *ppir_pipeline_reg_to_str(ppir_pipeline pipeline)
+{
+   switch (pipeline) {
+   case ppir_pipeline_reg_const0:
+      return "^const0";
+   case ppir_pipeline_reg_const1:
+      return "^const1";
+   case ppir_pipeline_reg_sampler:
+      return "^texture";
+   case ppir_pipeline_reg_uniform:
+      return "^uniform";
+   case ppir_pipeline_reg_vmul:
+      return "^vmul";
+   case ppir_pipeline_reg_fmul:
+      return "^fmul";
+   case ppir_pipeline_reg_discard:
+      return "^discard";
+   default:
+      return "INVALID";
+   }
+}
 
 static inline const char *ppir_output_type_to_str(ppir_output_type type)
 {
@@ -704,6 +729,19 @@ static inline bool ppir_node_schedulable_slot(ppir_node *node,
    return false;
 }
 
+static bool inline ppir_block_is_empty(ppir_block *block)
+{
+   return list_is_empty(&block->node_list);
+}
+
+static bool ppir_src_swizzle_is_identity(ppir_src *src)
+{
+   uint8_t identity[4] = { PIPE_SWIZZLE_X, PIPE_SWIZZLE_Y,
+                           PIPE_SWIZZLE_Z, PIPE_SWIZZLE_W };
+
+   return memcmp(src->swizzle, identity, sizeof(identity)) == 0;
+}
+
 ppir_instr *ppir_instr_create(ppir_block *block);
 bool ppir_instr_insert_node(ppir_instr *instr, ppir_node *node);
 void ppir_instr_add_dep(ppir_instr *succ, ppir_instr *pred);
@@ -734,8 +772,10 @@ bool ppir_lower_prog(ppir_compiler *comp);
 bool ppir_node_to_instr(ppir_compiler *comp);
 bool ppir_schedule_prog(ppir_compiler *comp);
 bool ppir_regalloc_prog(ppir_compiler *comp);
+bool ppir_compact_prog(ppir_compiler *comp);
 bool ppir_codegen_prog(ppir_compiler *comp);
 void ppir_liveness_analysis(ppir_compiler *comp);
+bool ppir_opt_prog(ppir_compiler *comp);
 
 static inline unsigned int reg_mask_size(unsigned int num_reg)
 {

@@ -53,7 +53,7 @@ get_bool_convert_opcode(uint32_t dst_bit_size)
    case 8:
       return nir_op_i2i8;
    default:
-      unreachable("invalid boolean bit-size");
+      UNREACHABLE("invalid boolean bit-size");
    }
 }
 
@@ -413,7 +413,6 @@ bool
 nir_lower_bool_to_bitsize(nir_shader *shader)
 {
    return nir_shader_instructions_pass(shader, nir_lower_bool_to_bitsize_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
+                                       nir_metadata_control_flow,
                                        NULL);
 }

@@ -229,11 +229,6 @@ vc4_write_uniforms(struct vc4_context *vc4, struct vc4_compiled_shader *shader,
                         cl_aligned_f(&uniforms, vc4->viewport.scale[2]);
                         break;
 
-                case QUNIFORM_USER_CLIP_PLANE:
-                        cl_aligned_f(&uniforms,
-                                     vc4->clip.ucp[data / 4][data % 4]);
-                        break;
-
                 case QUNIFORM_TEXTURE_CONFIG_P0:
                         write_texture_p0(job, &uniforms, texstate, data);
                         break;
@@ -257,7 +252,7 @@ vc4_write_uniforms(struct vc4_context *vc4, struct vc4_compiled_shader *shader,
                          * the GPU.
                         */
                         if (!cb->cb[0].buffer) {
-                                u_upload_data(vc4->uploader, 0,
+                                u_upload_data_ref(vc4->uploader, 0,
                                               cb->cb[0].buffer_size, 16,
                                               cb->cb[0].user_buffer,
                                               &cb->cb[0].buffer_offset,
@@ -310,13 +305,13 @@ vc4_write_uniforms(struct vc4_context *vc4, struct vc4_compiled_shader *shader,
 
                 case QUNIFORM_BLEND_CONST_COLOR_RGBA: {
                         const uint8_t *format_swiz =
-                                vc4_get_format_swizzle(vc4->framebuffer.cbufs[0]->format);
+                                vc4_get_format_swizzle(vc4->framebuffer.cbufs[0].format);
                         uint32_t color = 0;
                         for (int i = 0; i < 4; i++) {
                                 if (format_swiz[i] >= 4)
                                         continue;
 
-                                color |= (vc4->blend_color.ub[format_swiz[i]] <<
+                                color |= ((uint32_t)vc4->blend_color.ub[format_swiz[i]] <<
                                           (i * 8));
                         }
                         cl_aligned_u32(&uniforms, color);
@@ -324,7 +319,7 @@ vc4_write_uniforms(struct vc4_context *vc4, struct vc4_compiled_shader *shader,
                 }
 
                 case QUNIFORM_BLEND_CONST_COLOR_AAAA: {
-                        uint8_t a = vc4->blend_color.ub[3];
+                        uint32_t a = vc4->blend_color.ub[3];
                         cl_aligned_u32(&uniforms, ((a) |
                                                    (a << 8) |
                                                    (a << 16) |
@@ -387,10 +382,6 @@ vc4_set_shader_uniform_dirty_flags(struct vc4_compiled_shader *shader)
                 case QUNIFORM_VIEWPORT_Z_OFFSET:
                 case QUNIFORM_VIEWPORT_Z_SCALE:
                         dirty |= VC4_DIRTY_VIEWPORT;
-                        break;
-
-                case QUNIFORM_USER_CLIP_PLANE:
-                        dirty |= VC4_DIRTY_CLIP;
                         break;
 
                 case QUNIFORM_TEXTURE_CONFIG_P0:

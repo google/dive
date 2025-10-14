@@ -396,7 +396,7 @@ nv30_render_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
    if (nv30->draw_dirty & NV30_NEW_CLIP)
       draw_set_clip_state(draw, &nv30->clip);
    if (nv30->draw_dirty & NV30_NEW_ARRAYS) {
-      draw_set_vertex_buffers(draw, nv30->num_vtxbufs, 0, nv30->vtxbuf);
+      draw_set_vertex_buffers(draw, nv30->num_vtxbufs, nv30->vtxbuf);
       draw_set_vertex_elements(draw, nv30->vertex->num_elements, nv30->vertex->pipe);
    }
    if (nv30->draw_dirty & NV30_NEW_FRAGPROG) {
@@ -414,10 +414,10 @@ nv30_render_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
    if (nv30->draw_dirty & NV30_NEW_VERTCONST) {
       if (nv30->vertprog.constbuf) {
          void *map = nv04_resource(nv30->vertprog.constbuf)->data;
-         draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 0,
+         draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 0,
                                          map, nv30->vertprog.constbuf_nr * 16);
       } else {
-         draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 0, NULL, 0);
+         draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 0, NULL, 0);
       }
    }
 

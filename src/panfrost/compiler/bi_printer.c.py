@@ -40,16 +40,26 @@ bi_swizzle_as_str(enum bi_swizzle swz)
         case BI_SWIZZLE_B1032: return ".b1032";
         case BI_SWIZZLE_B3210: return ".b3210";
         case BI_SWIZZLE_B0022: return ".b0022";
+        case BI_SWIZZLE_B1100: return ".b1100";
+        case BI_SWIZZLE_B2200: return ".b2200";
+        case BI_SWIZZLE_B3300: return ".b3300";
+        case BI_SWIZZLE_B2211: return ".b2211";
+        case BI_SWIZZLE_B3311: return ".b3311";
+        case BI_SWIZZLE_B1122: return ".b1122";
+        case BI_SWIZZLE_B3322: return ".b3322";
+        case BI_SWIZZLE_B0033: return ".b0033";
+        case BI_SWIZZLE_B1133: return ".b1133";
+        case BI_SWIZZLE_B1123: return ".b1123";
         }
 
-        unreachable("Invalid swizzle");
+        UNREACHABLE("Invalid swizzle");
 }
 
 static const char *
 bir_fau_name(unsigned fau_idx)
 {
     const char *names[] = {
-            "zero", "lane-id", "wrap-id", "core-id", "fb-extent",
+            "zero", "lane-id", "warp-id", "core-id", "fb-extent",
             "atest-param", "sample-pos", "reserved",
             "blend_descriptor_0", "blend_descriptor_1",
             "blend_descriptor_2", "blend_descriptor_3",
@@ -78,11 +88,15 @@ bi_print_index(FILE *fp, bi_index index)
 {
     if (index.discard)
         fputs("^", fp);
+    if (index.kill_ssa)
+        fputs("!", fp);
 
     if (bi_is_null(index))
         fprintf(fp, "_");
     else if (index.type == BI_INDEX_CONSTANT)
         fprintf(fp, "#0x%x", index.value);
+    else if (index.type == BI_INDEX_FAU && index.memory)
+        fprintf(fp, "m%u", index.value);
     else if (index.type == BI_INDEX_FAU && index.value >= BIR_FAU_UNIFORM)
         fprintf(fp, "u%u", index.value & ~BIR_FAU_UNIFORM);
     else if (index.type == BI_INDEX_FAU)
@@ -94,7 +108,7 @@ bi_print_index(FILE *fp, bi_index index)
     else if (index.type == BI_INDEX_NORMAL)
         fprintf(fp, "%u", index.value);
     else
-        unreachable("Invalid index");
+        UNREACHABLE("Invalid index");
 
     if (index.offset)
         fprintf(fp, "[%u]", index.offset);
@@ -124,7 +138,7 @@ bi_${mod}_as_str(enum bi_${mod} ${mod})
 % endfor
     }
 
-    unreachable("Invalid ${mod}");
+    UNREACHABLE("Invalid ${mod}");
 };
 % endif
 % endfor
@@ -169,7 +183,7 @@ bi_print_instr(const bi_instr *I, FILE *fp)
     if (I->nr_dests > 0)
         fputs(" = ", fp);
 
-    fprintf(fp, "%s", bi_opcode_props[I->op].name);
+    fprintf(fp, "%s", bi_get_opcode_props(I)->name);
 
     if (I->table)
         fprintf(fp, ".table%u", I->table);
@@ -210,7 +224,7 @@ bi_print_instr(const bi_instr *I, FILE *fp)
         break;
 % endfor
     default:
-        unreachable("Invalid opcode");
+        UNREACHABLE("Invalid opcode");
     }
 
     if (I->branch_target)
@@ -224,7 +238,11 @@ import sys
 from bifrost_isa import *
 from mako.template import Template
 
-instructions = parse_instructions(sys.argv[1], include_pseudo = True)
+instructions = {}
+for arg in sys.argv[1:]:
+    new_instructions = parse_instructions(arg, include_pseudo = True)
+    instructions.update(new_instructions)
+
 ir_instructions = partition_mnemonics(instructions)
 modifier_lists = order_modifiers(ir_instructions)
 

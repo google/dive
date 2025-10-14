@@ -24,15 +24,23 @@
  * Copyright © 2015 Intel Corporation
  */
 
+#include "pvr_query.h"
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <vulkan/vulkan.h>
 
 #include "pvr_bo.h"
+#include "pvr_cmd_buffer.h"
 #include "pvr_csb.h"
+#include "pvr_device.h"
 #include "pvr_device_info.h"
-#include "pvr_private.h"
+#include "pvr_entrypoints.h"
+#include "pvr_hw_pass.h"
+#include "pvr_macros.h"
+#include "pvr_pass.h"
 #include "util/macros.h"
 #include "util/os_time.h"
 #include "vk_log.h"
@@ -43,7 +51,7 @@ VkResult pvr_CreateQueryPool(VkDevice _device,
                              const VkAllocationCallbacks *pAllocator,
                              VkQueryPool *pQueryPool)
 {
-   PVR_FROM_HANDLE(pvr_device, device, _device);
+   VK_FROM_HANDLE(pvr_device, device, _device);
    const uint32_t core_count = device->pdevice->dev_runtime_info.core_count;
    const uint32_t query_size = pCreateInfo->queryCount * sizeof(uint32_t);
    struct pvr_query_pool *pool;
@@ -68,7 +76,7 @@ VkResult pvr_CreateQueryPool(VkDevice _device,
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
    pool->result_stride =
-      ALIGN_POT(query_size, PVRX(CR_ISP_OCLQRY_BASE_ADDR_ALIGNMENT));
+      ALIGN_POT(query_size, ROGUE_CR_ISP_OCLQRY_BASE_ADDR_ALIGNMENT);
 
    pool->query_count = pCreateInfo->queryCount;
 
@@ -79,7 +87,7 @@ VkResult pvr_CreateQueryPool(VkDevice _device,
 
    result = pvr_bo_suballoc(&device->suballoc_vis_test,
                             alloc_size,
-                            PVRX(CR_ISP_OCLQRY_BASE_ADDR_ALIGNMENT),
+                            ROGUE_CR_ISP_OCLQRY_BASE_ADDR_ALIGNMENT,
                             false,
                             &pool->result_buffer);
    if (result != VK_SUCCESS)
@@ -110,8 +118,8 @@ void pvr_DestroyQueryPool(VkDevice _device,
                           VkQueryPool queryPool,
                           const VkAllocationCallbacks *pAllocator)
 {
-   PVR_FROM_HANDLE(pvr_query_pool, pool, queryPool);
-   PVR_FROM_HANDLE(pvr_device, device, _device);
+   VK_FROM_HANDLE(pvr_query_pool, pool, queryPool);
+   VK_FROM_HANDLE(pvr_device, device, _device);
 
    if (!pool)
       return;
@@ -196,8 +204,8 @@ VkResult pvr_GetQueryPoolResults(VkDevice _device,
                                  VkDeviceSize stride,
                                  VkQueryResultFlags flags)
 {
-   PVR_FROM_HANDLE(pvr_query_pool, pool, queryPool);
-   PVR_FROM_HANDLE(pvr_device, device, _device);
+   VK_FROM_HANDLE(pvr_query_pool, pool, queryPool);
+   VK_FROM_HANDLE(pvr_device, device, _device);
    VG(volatile uint32_t *available =
          pvr_bo_suballoc_get_map_addr(pool->availability_buffer));
    volatile uint32_t *query_results =
@@ -264,8 +272,9 @@ void pvr_CmdResetQueryPool(VkCommandBuffer commandBuffer,
                            uint32_t firstQuery,
                            uint32_t queryCount)
 {
-   PVR_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
+   VK_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
    struct pvr_query_info query_info;
+   VkResult result;
 
    PVR_CHECK_COMMAND_BUFFER_BUILDING_STATE(cmd_buffer);
 
@@ -275,7 +284,52 @@ void pvr_CmdResetQueryPool(VkCommandBuffer commandBuffer,
    query_info.reset_query_pool.first_query = firstQuery;
    query_info.reset_query_pool.query_count = queryCount;
 
-   pvr_add_query_program(cmd_buffer, &query_info);
+   /* make the query-reset program wait for previous geom/frag,
+    * to not overwrite them
+    */
+   result = pvr_cmd_buffer_start_sub_cmd(cmd_buffer, PVR_SUB_CMD_TYPE_EVENT);
+   if (result != VK_SUCCESS)
+      return;
+
+   cmd_buffer->state.current_sub_cmd->event = (struct pvr_sub_cmd_event){
+      .type = PVR_EVENT_TYPE_BARRIER,
+      .barrier = {
+         .wait_for_stage_mask = PVR_PIPELINE_STAGE_ALL_GRAPHICS_BITS,
+         .wait_at_stage_mask = PVR_PIPELINE_STAGE_QUERY_BIT,
+      },
+   };
+
+   /* add the query-program itself */
+   result = pvr_add_query_program(cmd_buffer, &query_info);
+   if (result != VK_SUCCESS)
+      return;
+
+   /* make future geom/frag wait for the query-reset program to
+    * reset the counters to 0
+    */
+   result = pvr_cmd_buffer_start_sub_cmd(cmd_buffer, PVR_SUB_CMD_TYPE_EVENT);
+   if (result != VK_SUCCESS)
+      return;
+
+   cmd_buffer->state.current_sub_cmd->event = (struct pvr_sub_cmd_event){
+      .type = PVR_EVENT_TYPE_BARRIER,
+      .barrier = {
+         .wait_for_stage_mask = PVR_PIPELINE_STAGE_QUERY_BIT,
+         .wait_at_stage_mask = PVR_PIPELINE_STAGE_ALL_GRAPHICS_BITS,
+      },
+   };
+}
+
+void pvr_ResetQueryPool(VkDevice _device,
+                        VkQueryPool queryPool,
+                        uint32_t firstQuery,
+                        uint32_t queryCount)
+{
+   VK_FROM_HANDLE(pvr_query_pool, pool, queryPool);
+   uint32_t *availability =
+      pvr_bo_suballoc_get_map_addr(pool->availability_buffer);
+
+   memset(availability + firstQuery, 0, sizeof(uint32_t) * queryCount);
 }
 
 void pvr_CmdCopyQueryPoolResults(VkCommandBuffer commandBuffer,
@@ -287,7 +341,7 @@ void pvr_CmdCopyQueryPoolResults(VkCommandBuffer commandBuffer,
                                  VkDeviceSize stride,
                                  VkQueryResultFlags flags)
 {
-   PVR_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
+   VK_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
    struct pvr_query_info query_info;
    VkResult result;
 
@@ -324,7 +378,7 @@ void pvr_CmdCopyQueryPoolResults(VkCommandBuffer commandBuffer,
       .type = PVR_EVENT_TYPE_BARRIER,
       .barrier = {
          .wait_for_stage_mask = PVR_PIPELINE_STAGE_TRANSFER_BIT,
-         .wait_at_stage_mask = PVR_PIPELINE_STAGE_OCCLUSION_QUERY_BIT,
+         .wait_at_stage_mask = PVR_PIPELINE_STAGE_QUERY_BIT,
       },
    };
 
@@ -341,10 +395,28 @@ void pvr_CmdCopyQueryPoolResults(VkCommandBuffer commandBuffer,
    cmd_buffer->state.current_sub_cmd->event = (struct pvr_sub_cmd_event){
       .type = PVR_EVENT_TYPE_BARRIER,
       .barrier = {
-         .wait_for_stage_mask = PVR_PIPELINE_STAGE_OCCLUSION_QUERY_BIT,
+         .wait_for_stage_mask = PVR_PIPELINE_STAGE_QUERY_BIT,
          .wait_at_stage_mask = PVR_PIPELINE_STAGE_TRANSFER_BIT,
       },
    };
+}
+
+static inline const uint32_t
+pvr_cmd_buffer_state_get_view_count(const struct pvr_cmd_buffer_state *state)
+{
+   const struct pvr_render_pass_info *render_pass_info =
+      &state->render_pass_info;
+   const struct pvr_sub_cmd_gfx *gfx_sub_cmd = &state->current_sub_cmd->gfx;
+   const uint32_t hw_render_idx = gfx_sub_cmd->hw_render_idx;
+   const struct pvr_renderpass_hwsetup_render *hw_render =
+      &render_pass_info->pass->hw_setup->renders[hw_render_idx];
+   const uint32_t view_count = util_bitcount(hw_render->view_mask);
+
+   assert(state->current_sub_cmd->type == PVR_SUB_CMD_TYPE_GRAPHICS);
+   /* hw_render view masks have 1 bit set at least. */
+   assert(view_count);
+
+   return view_count;
 }
 
 void pvr_CmdBeginQuery(VkCommandBuffer commandBuffer,
@@ -352,9 +424,10 @@ void pvr_CmdBeginQuery(VkCommandBuffer commandBuffer,
                        uint32_t query,
                        VkQueryControlFlags flags)
 {
-   PVR_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
+   VK_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
    struct pvr_cmd_buffer_state *state = &cmd_buffer->state;
-   PVR_FROM_HANDLE(pvr_query_pool, pool, queryPool);
+   uint32_t view_count = 1;
+   VK_FROM_HANDLE(pvr_query_pool, pool, queryPool);
 
    PVR_CHECK_COMMAND_BUFFER_BUILDING_STATE(cmd_buffer);
 
@@ -388,6 +461,8 @@ void pvr_CmdBeginQuery(VkCommandBuffer commandBuffer,
          state->current_sub_cmd->gfx.barrier_store = false;
          state->current_sub_cmd->gfx.query_pool = pool;
       }
+
+      view_count = pvr_cmd_buffer_state_get_view_count(state);
    }
 
    state->query_pool = pool;
@@ -396,14 +471,15 @@ void pvr_CmdBeginQuery(VkCommandBuffer commandBuffer,
    state->dirty.vis_test = true;
 
    /* Add the index to the list for this render. */
-   util_dynarray_append(&state->query_indices, __typeof__(query), query);
+   for (uint32_t i = 0; i < view_count; i++)
+      util_dynarray_append(&state->query_indices, __typeof__(query), query);
 }
 
 void pvr_CmdEndQuery(VkCommandBuffer commandBuffer,
                      VkQueryPool queryPool,
                      uint32_t query)
 {
-   PVR_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
+   VK_FROM_HANDLE(pvr_cmd_buffer, cmd_buffer, commandBuffer);
    struct pvr_cmd_buffer_state *state = &cmd_buffer->state;
 
    PVR_CHECK_COMMAND_BUFFER_BUILDING_STATE(cmd_buffer);

@@ -4,6 +4,7 @@ include:
 virpipe-on-gl:
   extends:
     - .deqp-test
+    - .test-piglit
     - .virpipe-test
   variables:
     DEQP_SUITE: virpipe-gl
@@ -18,7 +19,7 @@ virgl-on-gl:
     LP_NUM_THREADS: 1 # There will be FDO_CI_CONCURRENT Crosvm processes, so each should use a single thread
   parallel: 3
   tags:
-    - kvm
+    - $FDO_RUNNER_JOB_PRIORITY_TAG_X86_64_KVM
   extends:
     - .deqp-test
     - .virgl-test
@@ -28,7 +29,7 @@ virgl-on-gles:
     VIRGL_HOST_API: GLES
     DEQP_SUITE: virgl-gles
     GPU_VERSION: virgl-gles
-    CROSVM_GPU_ARGS: "gles=true,backend=virglrenderer,egl=true,surfaceless=true,width=1024,height=768"
+    CROSVM_GPU_ARGS: "gles=true,backend=virglrenderer,egl=true,surfaceless=true"
   extends:
     - virgl-on-gl
 
@@ -38,12 +39,12 @@ virgl-traces:
     - .piglit-traces-test
   variables:
     EGL_PLATFORM: "surfaceless"
-    PIGLIT_REPLAY_DESCRIPTION_FILE: "${CI_PROJECT_DIR}/install/traces-virgl.yml"
+    PIGLIT_TRACES_FILE: traces-virgl.yml
     PIGLIT_REPLAY_DEVICE_NAME: "gl-virgl"
     PIGLIT_RESULTS: "virgl-replay"
     LD_LIBRARY_PATH: "${CI_PROJECT_DIR}/install/lib/"     # For Crosvm
   tags:
-    - kvm
+    - $FDO_RUNNER_JOB_PRIORITY_TAG_X86_64_KVM
   script:
     - . "$SCRIPTS_DIR"/setup-test-env.sh
     # Use all threads for rendering and only run one job at a time
@@ -54,10 +55,8 @@ virgl-traces:
   extends:
     - .virgl-iris-test
     - .virgl-iris-manual-rules
-  variables:
-    PIGLIT_REPLAY_EXTRA_ARGS: "--keep-image --download-caching-proxy-url=${FDO_HTTP_CACHE_URI}"
 
-virgl-iris-traces-performance:
+.virgl-iris-traces-performance:
   extends:
     - .virgl-iris-test
     - .virgl-iris-rules-performance
@@ -65,14 +64,12 @@ virgl-iris-traces-performance:
     HWCI_FREQ_MAX: "true"
     PIGLIT_REPLAY_SUBCOMMAND: profile
     PIGLIT_REPLAY_LOOP_TIMES: 150
-    PIGLIT_REPLAY_EXTRA_ARGS: "--download-caching-proxy-url=${FDO_HTTP_CACHE_URI}"
 
-android-virgl-llvmpipe:
+.android-virgl-llvmpipe:
   extends:
     - .test-android
     - .virgl-rules
   variables:
-    ANDROID_GPU_MODE: drm_virgl
-    ANDROID_DRIVER: virtio_gpu
+    CUTTLEFISH_GPU_MODE: drm_virgl
     GPU_VERSION: virgl-gl
     DEQP_SUITE: android-virgl

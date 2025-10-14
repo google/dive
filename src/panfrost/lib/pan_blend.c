@@ -27,15 +27,14 @@
 
 #ifdef PAN_ARCH
 #include "pan_shader.h"
+#include "pan_texture.h"
 #endif
 
 #include "compiler/nir/nir.h"
 #include "compiler/nir/nir_builder.h"
 #include "compiler/nir/nir_conversion_builder.h"
 #include "compiler/nir/nir_lower_blend.h"
-#include "panfrost/util/pan_lower_framebuffer.h"
 #include "util/format/u_format.h"
-#include "pan_texture.h"
 
 #ifndef PAN_ARCH
 
@@ -171,15 +170,15 @@ to_c_factor(enum pipe_blendfactor factor)
       return MALI_BLEND_OPERAND_C_CONSTANT;
 
    default:
-      unreachable("Unsupported blend factor");
+      UNREACHABLE("Unsupported blend factor");
    }
 }
 
 static void
-to_panfrost_function(enum pipe_blend_func blend_func,
-                     enum pipe_blendfactor src_factor,
-                     enum pipe_blendfactor dest_factor, bool is_alpha,
-                     struct MALI_BLEND_FUNCTION *function)
+to_mali_function(enum pipe_blend_func blend_func,
+                 enum pipe_blendfactor src_factor,
+                 enum pipe_blendfactor dest_factor, bool is_alpha,
+                 struct MALI_BLEND_FUNCTION *function)
 {
    assert(can_fixed_function_equation(blend_func, src_factor, dest_factor,
                                       is_alpha, true));
@@ -243,7 +242,7 @@ to_panfrost_function(enum pipe_blend_func blend_func,
          function->b = MALI_BLEND_OPERAND_B_SRC_MINUS_DEST;
          break;
       default:
-         unreachable("Invalid blend function");
+         UNREACHABLE("Invalid blend function");
       }
    } else if (is_2srcdest(blend_func, src_factor, dest_factor, is_alpha)) {
       /* src*dest + dest*src = 2*src*dest = 0 + dest*(2*src) */
@@ -272,7 +271,7 @@ to_panfrost_function(enum pipe_blend_func blend_func,
          function->negate_a = true;
          break;
       default:
-         unreachable("Invalid blend function\n");
+         UNREACHABLE("Invalid blend function\n");
       }
    }
 }
@@ -447,10 +446,10 @@ pan_blend_to_fixed_function_equation(const struct pan_blend_equation equation,
    }
 
    /* Compile the fixed-function blend */
-   to_panfrost_function(equation.rgb_func, equation.rgb_src_factor,
-                        equation.rgb_dst_factor, false, &out->rgb);
-   to_panfrost_function(equation.alpha_func, equation.alpha_src_factor,
-                        equation.alpha_dst_factor, true, &out->alpha);
+   to_mali_function(equation.rgb_func, equation.rgb_src_factor,
+                    equation.rgb_dst_factor, false, &out->rgb);
+   to_mali_function(equation.alpha_func, equation.alpha_src_factor,
+                    equation.alpha_dst_factor, true, &out->alpha);
 
    out->color_mask = equation.color_mask;
 }
@@ -458,41 +457,37 @@ pan_blend_to_fixed_function_equation(const struct pan_blend_equation equation,
 uint32_t
 pan_pack_blend(const struct pan_blend_equation equation)
 {
-   STATIC_ASSERT(sizeof(uint32_t) == MALI_BLEND_EQUATION_LENGTH);
-
-   uint32_t out = 0;
+   struct mali_blend_equation_packed out;
 
    pan_pack(&out, BLEND_EQUATION, cfg) {
       pan_blend_to_fixed_function_equation(equation, &cfg);
    }
 
-   return out;
+   return out.opaque[0];
 }
 
-static uint32_t
-pan_blend_shader_key_hash(const void *key)
+enum mali_register_file_format
+pan_blend_type_from_nir(nir_alu_type nir_type)
 {
-   return _mesa_hash_data(key, sizeof(struct pan_blend_shader_key));
-}
-
-static bool
-pan_blend_shader_key_equal(const void *a, const void *b)
-{
-   return !memcmp(a, b, sizeof(struct pan_blend_shader_key));
-}
-
-void
-pan_blend_shaders_init(struct panfrost_device *dev)
-{
-   dev->blend_shaders.shaders = _mesa_hash_table_create(
-      NULL, pan_blend_shader_key_hash, pan_blend_shader_key_equal);
-   pthread_mutex_init(&dev->blend_shaders.lock, NULL);
-}
-
-void
-pan_blend_shaders_cleanup(struct panfrost_device *dev)
-{
-   _mesa_hash_table_destroy(dev->blend_shaders.shaders, NULL);
+   switch (nir_type) {
+   case 0: /* Render target not in use */
+      return 0;
+   case nir_type_float16:
+      return MALI_REGISTER_FILE_FORMAT_F16;
+   case nir_type_float32:
+      return MALI_REGISTER_FILE_FORMAT_F32;
+   case nir_type_int32:
+      return MALI_REGISTER_FILE_FORMAT_I32;
+   case nir_type_uint32:
+      return MALI_REGISTER_FILE_FORMAT_U32;
+   case nir_type_int16:
+      return MALI_REGISTER_FILE_FORMAT_I16;
+   case nir_type_uint16:
+      return MALI_REGISTER_FILE_FORMAT_U16;
+   default:
+      UNREACHABLE("Unsupported blend shader type for NIR alu type");
+      return 0;
+   }
 }
 
 #else /* ifndef PAN_ARCH */
@@ -534,7 +529,7 @@ logicop_str(enum pipe_logicop logicop)
    case PIPE_LOGICOP_SET:
       return "set";
    default:
-      unreachable("Invalid logicop\n");
+      UNREACHABLE("Invalid logicop\n");
    }
 }
 
@@ -603,30 +598,9 @@ get_equation_str(const struct pan_blend_rt_state *rt_state, char *str,
    }
 }
 
-static bool
-pan_inline_blend_constants(nir_builder *b, nir_intrinsic_instr *intr,
-                           void *data)
-{
-   if (intr->intrinsic != nir_intrinsic_load_blend_const_color_rgba)
-      return false;
-
-   float *floats = data;
-   const nir_const_value constants[4] = {
-      nir_const_value_for_float(floats[0], 32),
-      nir_const_value_for_float(floats[1], 32),
-      nir_const_value_for_float(floats[2], 32),
-      nir_const_value_for_float(floats[3], 32)};
-
-   b->cursor = nir_after_instr(&intr->instr);
-   nir_def *constant = nir_build_imm(b, 4, 32, constants);
-   nir_def_rewrite_uses(&intr->def, constant);
-   nir_instr_remove(&intr->instr);
-   return true;
-}
 
 nir_shader *
-GENX(pan_blend_create_shader)(const struct panfrost_device *dev,
-                              const struct pan_blend_state *state,
+GENX(pan_blend_create_shader)(const struct pan_blend_state *state,
                               nir_alu_type src0_type, nir_alu_type src1_type,
                               unsigned rt)
 {
@@ -636,7 +610,7 @@ GENX(pan_blend_create_shader)(const struct panfrost_device *dev,
    get_equation_str(rt_state, equation_str, sizeof(equation_str));
 
    nir_builder b = nir_builder_init_simple_shader(
-      MESA_SHADER_FRAGMENT, GENX(pan_shader_get_compiler_options)(),
+      MESA_SHADER_FRAGMENT, pan_shader_get_compiler_options(PAN_ARCH),
       "pan_blend(rt=%d,fmt=%s,nr_samples=%d,%s=%s)", rt,
       util_format_name(rt_state->format), rt_state->nr_samples,
       state->logicop_enable ? "logicop" : "equation",
@@ -697,6 +671,13 @@ GENX(pan_blend_create_shader)(const struct panfrost_device *dev,
          .io_semantics.location = i ? VARYING_SLOT_VAR0 : VARYING_SLOT_COL0,
          .io_semantics.num_slots = 1, .base = i, .dest_type = src_type);
 
+      if (state->alpha_to_one && src_type == nir_type_float32) {
+         /* force alpha to 1 */
+         src = nir_vector_insert_imm(&b, src,
+                                     nir_imm_floatN_t(&b, 1.0, src->bit_size),
+                                     3);
+      }
+
       /* On Midgard, the blend shader is responsible for format conversion.
        * As the OpenGL spec requires integer conversions to saturate, we must
        * saturate ourselves here. On Bifrost and later, the conversion
@@ -716,22 +697,18 @@ GENX(pan_blend_create_shader)(const struct panfrost_device *dev,
 
    b.shader->info.io_lowered = true;
 
-   NIR_PASS_V(b.shader, nir_lower_blend, &options);
-   nir_shader_intrinsics_pass(b.shader, pan_inline_blend_constants,
-                              nir_metadata_block_index | nir_metadata_dominance,
-                              (void *)state->constants);
+   NIR_PASS(_, b.shader, nir_lower_blend, &options);
 
    return b.shader;
 }
 
 #if PAN_ARCH >= 6
 uint64_t
-GENX(pan_blend_get_internal_desc)(const struct panfrost_device *dev,
-                                  enum pipe_format fmt, unsigned rt,
+GENX(pan_blend_get_internal_desc)(enum pipe_format fmt, unsigned rt,
                                   unsigned force_size, bool dithered)
 {
    const struct util_format_description *desc = util_format_description(fmt);
-   uint64_t res;
+   struct mali_internal_blend_packed res;
 
    pan_pack(&res, INTERNAL_BLEND, cfg) {
       cfg.mode = MALI_BLEND_MODE_OPAQUE;
@@ -771,20 +748,15 @@ GENX(pan_blend_get_internal_desc)(const struct panfrost_device *dev,
             MALI_REGISTER_FILE_FORMAT_U32;
          break;
       default:
-         unreachable("Invalid format");
+         UNREACHABLE("Invalid format");
       }
 
       cfg.fixed_function.conversion.memory_format =
-         panfrost_format_to_bifrost_blend(dev, fmt, dithered);
+         GENX(pan_dithered_format_from_pipe_format)(fmt, dithered);
    }
 
-   return res;
+   return res.opaque[0] | ((uint64_t)res.opaque[1] << 32);
 }
-
-struct rt_conversion_inputs {
-   const struct panfrost_device *dev;
-   enum pipe_format *formats;
-};
 
 static bool
 inline_rt_conversion(nir_builder *b, nir_intrinsic_instr *intr, void *data)
@@ -792,11 +764,11 @@ inline_rt_conversion(nir_builder *b, nir_intrinsic_instr *intr, void *data)
    if (intr->intrinsic != nir_intrinsic_load_rt_conversion_pan)
       return false;
 
-   struct rt_conversion_inputs *inputs = data;
+   enum pipe_format *formats = data;
    unsigned rt = nir_intrinsic_base(intr);
    unsigned size = nir_alu_type_get_type_size(nir_intrinsic_src_type(intr));
-   uint64_t conversion = GENX(pan_blend_get_internal_desc)(
-      inputs->dev, inputs->formats[rt], rt, size, false);
+   uint64_t conversion =
+      GENX(pan_blend_get_internal_desc)(formats[rt], rt, size, false);
 
    b->cursor = nir_after_instr(&intr->instr);
    nir_def_rewrite_uses(&intr->def, nir_imm_int(b, conversion >> 32));
@@ -804,114 +776,25 @@ inline_rt_conversion(nir_builder *b, nir_intrinsic_instr *intr, void *data)
 }
 
 bool
-GENX(pan_inline_rt_conversion)(nir_shader *s, const struct panfrost_device *dev,
-                               enum pipe_format *formats)
+GENX(pan_inline_rt_conversion)(nir_shader *s, enum pipe_format *formats)
 {
-   return nir_shader_intrinsics_pass(
-      s, inline_rt_conversion,
-      nir_metadata_block_index | nir_metadata_dominance,
-      &(struct rt_conversion_inputs){.dev = dev, .formats = formats});
+   return nir_shader_intrinsics_pass(s, inline_rt_conversion,
+                                     nir_metadata_control_flow, formats);
+}
+
+#if PAN_ARCH < 9
+enum mali_register_file_format
+GENX(pan_fixup_blend_type)(nir_alu_type T_size, enum pipe_format format)
+{
+   const struct util_format_description *desc = util_format_description(format);
+   unsigned size = nir_alu_type_get_type_size(T_size);
+   nir_alu_type T_format = pan_unpacked_type_for_format(desc);
+   nir_alu_type T = nir_alu_type_get_base_type(T_format) | size;
+
+   return pan_blend_type_from_nir(T);
 }
 #endif
 
-struct pan_blend_shader_variant *
-GENX(pan_blend_get_shader_locked)(const struct panfrost_device *dev,
-                                  const struct pan_blend_state *state,
-                                  nir_alu_type src0_type,
-                                  nir_alu_type src1_type, unsigned rt)
-{
-   struct pan_blend_shader_key key = {
-      .format = state->rts[rt].format,
-      .src0_type = src0_type,
-      .src1_type = src1_type,
-      .rt = rt,
-      .has_constants = pan_blend_constant_mask(state->rts[rt].equation) != 0,
-      .logicop_enable = state->logicop_enable,
-      .logicop_func = state->logicop_func,
-      .nr_samples = state->rts[rt].nr_samples,
-      .equation = state->rts[rt].equation,
-   };
-
-   /* Blend shaders should only be used for blending on Bifrost onwards */
-   assert(dev->arch <= 5 || state->logicop_enable ||
-          !pan_blend_is_opaque(state->rts[rt].equation));
-   assert(state->rts[rt].equation.color_mask != 0);
-
-   struct hash_entry *he =
-      _mesa_hash_table_search(dev->blend_shaders.shaders, &key);
-   struct pan_blend_shader *shader = he ? he->data : NULL;
-
-   if (!shader) {
-      shader = rzalloc(dev->blend_shaders.shaders, struct pan_blend_shader);
-      shader->key = key;
-      list_inithead(&shader->variants);
-      _mesa_hash_table_insert(dev->blend_shaders.shaders, &shader->key, shader);
-   }
-
-   list_for_each_entry(struct pan_blend_shader_variant, iter, &shader->variants,
-                       node) {
-      if (!key.has_constants ||
-          !memcmp(iter->constants, state->constants, sizeof(iter->constants))) {
-         return iter;
-      }
-   }
-
-   struct pan_blend_shader_variant *variant = NULL;
-
-   if (shader->nvariants < PAN_BLEND_SHADER_MAX_VARIANTS) {
-      variant = rzalloc(shader, struct pan_blend_shader_variant);
-      util_dynarray_init(&variant->binary, variant);
-      list_add(&variant->node, &shader->variants);
-      shader->nvariants++;
-   } else {
-      variant = list_last_entry(&shader->variants,
-                                struct pan_blend_shader_variant, node);
-      list_del(&variant->node);
-      list_add(&variant->node, &shader->variants);
-      util_dynarray_clear(&variant->binary);
-   }
-
-   memcpy(variant->constants, state->constants, sizeof(variant->constants));
-
-   nir_shader *nir =
-      GENX(pan_blend_create_shader)(dev, state, src0_type, src1_type, rt);
-
-   /* Compile the NIR shader */
-   struct panfrost_compile_inputs inputs = {
-      .gpu_id = dev->gpu_id,
-      .is_blend = true,
-      .blend.nr_samples = key.nr_samples,
-   };
-
-   enum pipe_format rt_formats[8] = {0};
-   rt_formats[rt] = key.format;
-
-#if PAN_ARCH >= 6
-   inputs.blend.bifrost_blend_desc =
-      GENX(pan_blend_get_internal_desc)(dev, key.format, key.rt, 0, false);
 #endif
 
-   struct pan_shader_info info;
-   pan_shader_preprocess(nir, inputs.gpu_id);
-
-#if PAN_ARCH >= 6
-   NIR_PASS_V(nir, GENX(pan_inline_rt_conversion), dev, rt_formats);
-#else
-   NIR_PASS_V(nir, pan_lower_framebuffer, rt_formats,
-              pan_raw_format_mask_midgard(rt_formats), MAX2(key.nr_samples, 1),
-              dev->gpu_id < 0x700);
-#endif
-
-   GENX(pan_shader_compile)(nir, &inputs, &variant->binary, &info);
-
-   variant->work_reg_count = info.work_reg_count;
-
-#if PAN_ARCH <= 5
-   variant->first_tag = info.midgard.first_tag;
-#endif
-
-   ralloc_free(nir);
-
-   return variant;
-}
 #endif /* ifndef PAN_ARCH */

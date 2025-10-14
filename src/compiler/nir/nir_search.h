@@ -28,7 +28,7 @@
 #include "nir.h"
 #include "nir_worklist.h"
 
-#define NIR_SEARCH_MAX_VARIABLES 16
+#define NIR_SEARCH_MAX_VARIABLES 24
 
 struct nir_builder;
 
@@ -139,6 +139,24 @@ typedef struct {
    /** Don't make the replacement exact if the search expression is exact. */
    bool ignore_exact : 1;
 
+   /** Replacement does not preserve signed of zero. */
+   bool nsz : 1;
+
+   /** Replacement does not preserve NaN. */
+   bool nnan : 1;
+
+   /** Replacement does not preserve infinities. */
+   bool ninf : 1;
+
+   /** Replacement contracts an expression */
+   bool contract : 1;
+
+   /** Whether the second source is a nir_search_value_constant */
+   bool src1_is_const : 1;
+
+   /** Whether the use of the instruction should have a swizzle. */
+   int16_t swizzle : 5;
+
    /* One of nir_op or nir_search_op */
    uint16_t opcode : 13;
 
@@ -186,8 +204,13 @@ typedef union {
    nir_search_expression expression;
 } nir_search_value_union;
 
+typedef struct {
+   struct hash_table *range_ht;
+   struct hash_table *numlsb_ht;
+} nir_search_state;
+
 typedef bool (*nir_search_expression_cond)(const nir_alu_instr *instr);
-typedef bool (*nir_search_variable_cond)(struct hash_table *range_ht,
+typedef bool (*nir_search_variable_cond)(const nir_search_state *state,
                                          const nir_alu_instr *instr,
                                          unsigned src, unsigned num_components,
                                          const uint8_t *swizzle);

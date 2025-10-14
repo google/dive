@@ -77,12 +77,6 @@
  */
 #define LP_MAX_TGSI_NESTING 80
 
-/**
- * Maximum iterations before loop termination
- * Shared between every loop in a TGSI shader
- */
-#define LP_MAX_TGSI_LOOP_ITERATIONS 65535
-
 static inline bool
 lp_has_fp16(void)
 {
@@ -95,71 +89,38 @@ lp_has_fp16(void)
  * actually try to allocate the maximum and run out of memory and crash.  So
  * stick with something reasonable here.
  */
-static inline int
-gallivm_get_shader_param(enum pipe_shader_cap param)
+static inline void
+gallivm_init_shader_caps(struct pipe_shader_caps *caps)
 {
-   switch(param) {
-   case PIPE_SHADER_CAP_MAX_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_ALU_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_TEX_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_TEX_INDIRECTIONS:
-      return 1 * 1024 * 1024;
-   case PIPE_SHADER_CAP_MAX_CONTROL_FLOW_DEPTH:
-      return LP_MAX_TGSI_NESTING;
-   case PIPE_SHADER_CAP_MAX_INPUTS:
-      return 32;
-   case PIPE_SHADER_CAP_MAX_OUTPUTS:
-      return 32;
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFER0_SIZE:
-      return LP_MAX_TGSI_CONST_BUFFER_SIZE;
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
-      return LP_MAX_TGSI_CONST_BUFFERS;
-   case PIPE_SHADER_CAP_MAX_TEMPS:
-      return LP_MAX_TGSI_TEMPS;
-   case PIPE_SHADER_CAP_CONT_SUPPORTED:
-      return 1;
-   case PIPE_SHADER_CAP_INDIRECT_INPUT_ADDR:
-   case PIPE_SHADER_CAP_INDIRECT_OUTPUT_ADDR:
-   case PIPE_SHADER_CAP_INDIRECT_TEMP_ADDR:
-   case PIPE_SHADER_CAP_INDIRECT_CONST_ADDR:
-      return 1;
-   case PIPE_SHADER_CAP_SUBROUTINES:
-      return 1;
-   case PIPE_SHADER_CAP_INTEGERS:
-      return 1;
-   case PIPE_SHADER_CAP_FP16:
-   case PIPE_SHADER_CAP_FP16_DERIVATIVES:
-      return lp_has_fp16();
+   caps->max_instructions =
+   caps->max_alu_instructions =
+   caps->max_tex_instructions =
+   caps->max_tex_indirections = 1 * 1024 * 1024;
+   caps->max_control_flow_depth = LP_MAX_TGSI_NESTING;
+   caps->max_inputs = 32;
+   caps->max_outputs = 32;
+   caps->max_const_buffer0_size = LP_MAX_TGSI_CONST_BUFFER_SIZE;
+   caps->max_const_buffers = LP_MAX_TGSI_CONST_BUFFERS;
+   caps->max_temps = LP_MAX_TGSI_TEMPS;
+   caps->cont_supported = true;
+   caps->indirect_temp_addr = true;
+   caps->indirect_const_addr = true;
+   caps->subroutines = true;
+   caps->integers = true;
+   caps->fp16 =
+   caps->fp16_derivatives = lp_has_fp16();
    //enabling this breaks GTF-GL46.gtf21.GL2Tests.glGetUniform.glGetUniform
-   case PIPE_SHADER_CAP_FP16_CONST_BUFFERS:
-      return 0;
-   case PIPE_SHADER_CAP_INT64_ATOMICS:
-      return 0;
-   case PIPE_SHADER_CAP_INT16:
-   case PIPE_SHADER_CAP_GLSL_16BIT_CONSTS:
-      return 1;
-   case PIPE_SHADER_CAP_MAX_TEXTURE_SAMPLERS:
-      return PIPE_MAX_SAMPLERS;
-   case PIPE_SHADER_CAP_MAX_SAMPLER_VIEWS:
-      return PIPE_MAX_SHADER_SAMPLER_VIEWS;
-   case PIPE_SHADER_CAP_SUPPORTED_IRS:
-      return (1 << PIPE_SHADER_IR_TGSI) | (1 << PIPE_SHADER_IR_NIR);
-   case PIPE_SHADER_CAP_TGSI_SQRT_SUPPORTED:
-   case PIPE_SHADER_CAP_TGSI_ANY_INOUT_DECL_RANGE:
-      return 1;
-   case PIPE_SHADER_CAP_DROUND_SUPPORTED:
-   case PIPE_SHADER_CAP_MAX_HW_ATOMIC_COUNTERS:
-   case PIPE_SHADER_CAP_MAX_HW_ATOMIC_COUNTER_BUFFERS:
-      return 0;
-   case PIPE_SHADER_CAP_MAX_SHADER_BUFFERS:
-      return LP_MAX_TGSI_SHADER_BUFFERS;
-   case PIPE_SHADER_CAP_MAX_SHADER_IMAGES:
-      return LP_MAX_TGSI_SHADER_IMAGES;
-   }
-   /* if we get here, we missed a shader cap above (and should have seen
-    * a compiler warning.)
-    */
-   return 0;
+   caps->fp16_const_buffers = false;
+   caps->int16 = true;
+   caps->glsl_16bit_consts = true;
+   caps->glsl_16bit_load_dst = true;
+   caps->max_texture_samplers = PIPE_MAX_SAMPLERS;
+   caps->max_sampler_views = PIPE_MAX_SHADER_SAMPLER_VIEWS;
+   caps->supported_irs = (1 << PIPE_SHADER_IR_TGSI) | (1 << PIPE_SHADER_IR_NIR);
+   caps->tgsi_sqrt_supported = true;
+   caps->tgsi_any_inout_decl_range = true;
+   caps->max_shader_buffers = LP_MAX_TGSI_SHADER_BUFFERS;
+   caps->max_shader_images = LP_MAX_TGSI_SHADER_IMAGES;
 }
 
 

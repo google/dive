@@ -31,13 +31,10 @@
 
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
+#include "util/u_framebuffer.h"
 
 struct lima_context_framebuffer {
    struct pipe_framebuffer_state base;
-   int tiled_w, tiled_h;
-   int shift_w, shift_h;
-   int block_w, block_h;
-   int shift_min;
 };
 
 struct lima_depth_stencil_alpha_state {
@@ -201,7 +198,6 @@ struct lima_context {
       LIMA_CONTEXT_DIRTY_STENCIL_REF  = (1 << 12),
       LIMA_CONTEXT_DIRTY_CONST_BUFF   = (1 << 13),
       LIMA_CONTEXT_DIRTY_TEXTURES     = (1 << 14),
-      LIMA_CONTEXT_DIRTY_CLIP         = (1 << 15),
       LIMA_CONTEXT_DIRTY_UNCOMPILED_VS = (1 << 16),
       LIMA_CONTEXT_DIRTY_UNCOMPILED_FS = (1 << 17),
       LIMA_CONTEXT_DIRTY_SAMPLE_MASK   = (1 << 18),
@@ -230,7 +226,7 @@ struct lima_context {
    struct lima_blend_state *blend;
    struct pipe_stencil_ref stencil_ref;
    struct pipe_clip_state clip;
-   struct lima_context_constant_buffer const_buffer[PIPE_SHADER_TYPES];
+   struct lima_context_constant_buffer const_buffer[MESA_SHADER_STAGES];
    struct lima_texture_stateobj tex_stateobj;
    struct lima_pp_stream_state pp_stream;
 

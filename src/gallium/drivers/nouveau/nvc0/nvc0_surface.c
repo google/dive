@@ -25,6 +25,7 @@
 #include "compiler/nir/nir.h"
 #include "compiler/nir/nir_builder.h"
 
+#include "nir/pipe_nir.h"
 #include "pipe/p_defines.h"
 
 #include "util/u_inlines.h"
@@ -327,10 +328,10 @@ nvc0_clear_render_target(struct pipe_context *pipe,
       PUSH_DATA(push, sf->height);
       PUSH_DATA(push, nvc0_format_table[dst->format].rt);
       PUSH_DATA(push, (mt->layout_3d << 16) |
-               mt->level[sf->base.u.tex.level].tile_mode);
-      PUSH_DATA(push, dst->u.tex.first_layer + sf->depth);
+               mt->level[sf->base.level].tile_mode);
+      PUSH_DATA(push, dst->first_layer + sf->depth);
       PUSH_DATA(push, mt->layer_stride >> 2);
-      PUSH_DATA(push, dst->u.tex.first_layer);
+      PUSH_DATA(push, dst->first_layer);
       IMMED_NVC0(push, NVC0_3D(MULTISAMPLE_MODE), mt->ms_mode);
    } else {
       if (res->base.target == PIPE_BUFFER) {
@@ -663,16 +664,16 @@ nvc0_clear_depth_stencil(struct pipe_context *pipe,
    PUSH_DATAh(push, mt->base.address + sf->offset);
    PUSH_DATA (push, mt->base.address + sf->offset);
    PUSH_DATA (push, nvc0_format_table[dst->format].rt);
-   PUSH_DATA (push, mt->level[sf->base.u.tex.level].tile_mode);
+   PUSH_DATA (push, mt->level[sf->base.level].tile_mode);
    PUSH_DATA (push, mt->layer_stride >> 2);
    BEGIN_NVC0(push, NVC0_3D(ZETA_ENABLE), 1);
    PUSH_DATA (push, 1);
    BEGIN_NVC0(push, NVC0_3D(ZETA_HORIZ), 3);
    PUSH_DATA (push, sf->width);
    PUSH_DATA (push, sf->height);
-   PUSH_DATA (push, (unk << 16) | (dst->u.tex.first_layer + sf->depth));
+   PUSH_DATA (push, (unk << 16) | (dst->first_layer + sf->depth));
    BEGIN_NVC0(push, NVC0_3D(ZETA_BASE_LAYER), 1);
-   PUSH_DATA (push, dst->u.tex.first_layer);
+   PUSH_DATA (push, dst->first_layer);
    IMMED_NVC0(push, NVC0_3D(MULTISAMPLE_MODE), mt->ms_mode);
 
    if (!render_condition_enabled)
@@ -747,12 +748,12 @@ nvc0_clear(struct pipe_context *pipe, unsigned buffers,
 
    if (mode) {
       int zs_layers = 0, color0_layers = 0;
-      if (fb->cbufs[0] && (mode & 0x3c))
-         color0_layers = fb->cbufs[0]->u.tex.last_layer -
-            fb->cbufs[0]->u.tex.first_layer + 1;
-      if (fb->zsbuf && (mode & ~0x3c))
-         zs_layers = fb->zsbuf->u.tex.last_layer -
-            fb->zsbuf->u.tex.first_layer + 1;
+      if (fb->cbufs[0].texture && (mode & 0x3c))
+         color0_layers = fb->cbufs[0].last_layer -
+            fb->cbufs[0].first_layer + 1;
+      if (fb->zsbuf.texture && (mode & ~0x3c))
+         zs_layers = fb->zsbuf.last_layer -
+            fb->zsbuf.first_layer + 1;
 
       for (j = 0; j < MIN2(zs_layers, color0_layers); j++) {
          BEGIN_NVC0(push, NVC0_3D(CLEAR_BUFFERS), 1);
@@ -769,10 +770,10 @@ nvc0_clear(struct pipe_context *pipe, unsigned buffers,
    }
 
    for (i = 1; i < fb->nr_cbufs; i++) {
-      struct pipe_surface *sf = fb->cbufs[i];
-      if (!sf || !(buffers & (PIPE_CLEAR_COLOR0 << i)))
+      const struct pipe_surface *sf = &fb->cbufs[i];
+      if (!sf->texture || !(buffers & (PIPE_CLEAR_COLOR0 << i)))
          continue;
-      for (j = 0; j <= sf->u.tex.last_layer - sf->u.tex.first_layer; j++) {
+      for (j = 0; j <= sf->last_layer - sf->first_layer; j++) {
          BEGIN_NVC0(push, NVC0_3D(CLEAR_BUFFERS), 1);
          PUSH_DATA (push, (i << 6) | 0x3c |
                     (j << NVC0_3D_CLEAR_BUFFERS_LAYER__SHIFT));
@@ -832,6 +833,7 @@ struct nvc0_blitctx
    enum pipe_texture_target target;
    struct {
       struct pipe_framebuffer_state fb;
+      struct pipe_surface *cbuf0, *zsbuf;
       struct nvc0_window_rect_stateobj window_rect;
       struct nvc0_rasterizer_stateobj *rast;
       struct nvc0_program *vp;
@@ -854,7 +856,7 @@ nvc0_blitter_make_vp(struct pipe_context *pipe)
 {
    const nir_shader_compiler_options *options =
       nv50_ir_nir_shader_compiler_options(nouveau_screen(pipe->screen)->device->chipset,
-                                          PIPE_SHADER_VERTEX);
+                                          MESA_SHADER_VERTEX);
 
    struct nir_builder b =
       nir_builder_init_simple_shader(MESA_SHADER_VERTEX, options,
@@ -886,11 +888,9 @@ nvc0_blitter_make_vp(struct pipe_context *pipe)
    nir_copy_var(&b, opos, ipos);
    nir_copy_var(&b, otex, itex);
 
-   NIR_PASS_V(b.shader, nir_lower_var_copies);
+   NIR_PASS(_, b.shader, nir_lower_var_copies);
 
-   struct pipe_shader_state state;
-   pipe_shader_state_from_nir(&state, b.shader);
-   return pipe->create_vs_state(pipe, &state);
+   return pipe_shader_from_nir(pipe, b.shader);
 }
 
 static void
@@ -964,25 +964,27 @@ nvc0_blit_set_dst(struct nvc0_blitctx *ctx,
    struct pipe_context *pipe = &nvc0->base.pipe;
    struct pipe_surface templ;
 
+   /* We are going to reset this, so no point in refcounting */
+   templ.texture = res;
    if (util_format_is_depth_or_stencil(format))
       templ.format = nv50_blit_zeta_to_colour_format(format);
    else
       templ.format = format;
 
-   templ.u.tex.level = level;
-   templ.u.tex.first_layer = templ.u.tex.last_layer = layer;
+   templ.level = level;
+   templ.first_layer = templ.last_layer = layer;
 
    if (layer == -1) {
-      templ.u.tex.first_layer = 0;
-      templ.u.tex.last_layer =
+      templ.first_layer = 0;
+      templ.last_layer =
          (res->target == PIPE_TEXTURE_3D ? res->depth0 : res->array_size) - 1;
    }
 
-   nvc0->framebuffer.cbufs[0] = nvc0_miptree_surface_new(pipe, res, &templ);
+   nvc0->framebuffer.cbufs[0] = templ;
+   nvc0->fb_cbufs[0] = nvc0_miptree_surface_new(pipe, res, &templ);
    nvc0->framebuffer.nr_cbufs = 1;
-   nvc0->framebuffer.zsbuf = NULL;
-   nvc0->framebuffer.width = nvc0->framebuffer.cbufs[0]->width;
-   nvc0->framebuffer.height = nvc0->framebuffer.cbufs[0]->height;
+   memset(&nvc0->framebuffer.zsbuf, 0, sizeof(nvc0->framebuffer.zsbuf));
+   pipe_surface_size(&nvc0->framebuffer.cbufs[0], &nvc0->framebuffer.width, &nvc0->framebuffer.height);
 }
 
 static void
@@ -1093,6 +1095,8 @@ nvc0_blitctx_pre_blit(struct nvc0_blitctx *ctx,
    ctx->saved.fb.nr_cbufs = nvc0->framebuffer.nr_cbufs;
    ctx->saved.fb.cbufs[0] = nvc0->framebuffer.cbufs[0];
    ctx->saved.fb.zsbuf = nvc0->framebuffer.zsbuf;
+   ctx->saved.cbuf0 = nvc0->fb_cbufs[0];
+   ctx->saved.zsbuf = nvc0->fb_zsbuf;
 
    ctx->saved.rast = nvc0->rast;
 
@@ -1161,7 +1165,7 @@ nvc0_blitctx_post_blit(struct nvc0_blitctx *blit)
    struct nvc0_context *nvc0 = blit->nvc0;
    int s;
 
-   pipe_surface_reference(&nvc0->framebuffer.cbufs[0], NULL);
+   nv50_surface_destroy(&nvc0->base.pipe, nvc0->fb_cbufs[0]);
 
    nvc0->framebuffer.width = blit->saved.fb.width;
    nvc0->framebuffer.height = blit->saved.fb.height;
@@ -1170,6 +1174,8 @@ nvc0_blitctx_post_blit(struct nvc0_blitctx *blit)
    nvc0->framebuffer.nr_cbufs = blit->saved.fb.nr_cbufs;
    nvc0->framebuffer.cbufs[0] = blit->saved.fb.cbufs[0];
    nvc0->framebuffer.zsbuf = blit->saved.fb.zsbuf;
+   nvc0->fb_cbufs[0] = blit->saved.cbuf0;
+   nvc0->fb_zsbuf = blit->saved.zsbuf;
 
    nvc0->rast = blit->saved.rast;
 

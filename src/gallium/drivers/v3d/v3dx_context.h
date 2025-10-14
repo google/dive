@@ -39,15 +39,20 @@ void v3dX(create_texture_shader_state_bo)(struct v3d_context *v3d,
                                           struct v3d_sampler_view *so);
 
 void v3dX(bcl_epilogue)(struct v3d_context *v3d, struct v3d_job *job);
+void v3dX(job_emit_enable_double_buffer)(struct v3d_job *job);
 
 const struct v3d_format *v3dX(get_format_desc)(enum pipe_format f);
-void v3dX(get_internal_type_bpp_for_output_format)(uint32_t format,
-                                                   uint32_t *type,
-                                                   uint32_t *bpp);
 
-/* FIXME: tex_format should be `enum V3DX(Texture_Data_Formats)`, but using
- * that enum type in the header requires including v3dx_pack.h, which triggers
- * circular include dependencies issues, so we're using a `uint32_t` for now.
- */
-bool v3dX(tfu_supports_tex_format)(uint32_t tex_format,
-                                   bool for_mipmap);
+bool v3dX(tfu)(struct pipe_context *pctx,
+               struct pipe_resource *pdst,
+               struct pipe_resource *psrc,
+               unsigned int src_level,
+               unsigned int base_level,
+               unsigned int last_level,
+               unsigned int src_layer,
+               unsigned int dst_layer,
+               bool for_mipmap);
+
+struct pipe_query *v3dX(create_batch_query_perfcnt)(struct v3d_context *v3d,
+                                                    unsigned num_queries,
+                                                    unsigned *query_types);

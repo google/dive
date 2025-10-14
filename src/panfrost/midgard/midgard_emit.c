@@ -78,7 +78,7 @@ midgard_unpack_varying_params(midgard_load_store_word word)
 }
 
 unsigned
-mir_pack_mod(midgard_instruction *ins, unsigned i, bool scalar)
+mir_pack_mod(const midgard_instruction *ins, unsigned i, bool scalar)
 {
    bool integer = midgard_is_integer_op(ins->op);
    unsigned base_size = max_bitsize_for_alu(ins);
@@ -261,7 +261,7 @@ mir_pack_swizzle(unsigned mask, unsigned *swizzle, unsigned sz,
 
          *expand_mode = hi ? midgard_src_expand_high : midgard_src_expand_low;
       } else if (sz < 32) {
-         unreachable("Cannot encode 8/16 swizzle in 64-bit");
+         UNREACHABLE("Cannot encode 8/16 swizzle in 64-bit");
       }
    } else {
       /* For 32-bit, swizzle packing is stupid-simple. For 16-bit,
@@ -312,7 +312,7 @@ mir_pack_swizzle(unsigned mask, unsigned *swizzle, unsigned sz,
          *expand_mode =
             upper ? midgard_src_expand_high : midgard_src_expand_low;
       } else if (reg_mode == midgard_reg_mode_8) {
-         unreachable("Unhandled reg mode");
+         UNREACHABLE("Unhandled reg mode");
       }
    }
 
@@ -491,7 +491,7 @@ midgard_pack_common_store_mask(midgard_instruction *ins)
       }
       return packed;
    default:
-      unreachable("unexpected ldst opcode");
+      UNREACHABLE("unexpected ldst opcode");
    }
 }
 
@@ -743,10 +743,10 @@ emit_branch(midgard_instruction *ins, compiler_context *ctx,
       quadword_offset = 0x2;
    } else if (is_tilebuf_wait) {
       quadword_offset = -1;
-   } else if (target_number > block->base.name) {
+   } else if (target_number > block->name) {
       /* Jump forward */
 
-      for (int idx = block->base.name + 1; idx < target_number; ++idx) {
+      for (int idx = block->name + 1; idx < target_number; ++idx) {
          midgard_block *blk = mir_get_block(ctx, idx);
          assert(blk);
 
@@ -755,7 +755,7 @@ emit_branch(midgard_instruction *ins, compiler_context *ctx,
    } else {
       /* Jump backwards */
 
-      for (int idx = block->base.name; idx >= target_number; --idx) {
+      for (int idx = block->name; idx >= target_number; --idx) {
          midgard_block *blk = mir_get_block(ctx, idx);
          assert(blk);
 
@@ -918,7 +918,7 @@ midgard_sampler_type(nir_alu_type t)
    case nir_type_uint:
       return MALI_SAMPLER_UNSIGNED;
    default:
-      unreachable("Unknown sampler type");
+      UNREACHABLE("Unknown sampler type");
    }
 }
 
@@ -1040,6 +1040,6 @@ emit_binary_bundle(compiler_context *ctx, midgard_block *block,
    }
 
    default:
-      unreachable("Unknown midgard instruction type\n");
+      UNREACHABLE("Unknown midgard instruction type\n");
    }
 }

@@ -7,24 +7,29 @@
 #include "nir_builtin_builder.h"
 #include "st_nir.h"
 
+
 static nir_def *
-fog_result(nir_builder *b, nir_def *color, enum gl_fog_mode fog_mode, struct gl_program_parameter_list *paramList)
+fog_result(nir_builder *b, nir_def *color, enum gl_fog_mode fog_mode,
+           struct gl_program_parameter_list *paramList,
+           bool packed_driver_uniform_storage)
 {
    nir_shader *s = b->shader;
-   nir_variable *fogc_var =
-      nir_create_variable_with_location(s, nir_var_shader_in, VARYING_SLOT_FOGC, glsl_float_type());
-   nir_def *fogc = nir_load_var(b, fogc_var);
-   s->info.inputs_read |= VARYING_BIT_FOGC;
+   nir_def *baryc = nir_load_barycentric_pixel(b, 32,
+                                               .interp_mode = INTERP_MODE_SMOOTH);
+   nir_def *fogc = nir_load_interpolated_input(b, 1, 32, baryc, nir_imm_int(b, 0),
+                                               .io_semantics.location = VARYING_SLOT_FOGC);
 
    static const gl_state_index16 fog_params_tokens[STATE_LENGTH] = {STATE_FOG_PARAMS_OPTIMIZED};
    static const gl_state_index16 fog_color_tokens[STATE_LENGTH] = {STATE_FOG_COLOR};
 
-   nir_variable *fog_params_var = st_nir_state_variable_create(s, glsl_vec4_type(), fog_params_tokens);
-   fog_params_var->data.driver_location = _mesa_add_state_reference(paramList, fog_params_tokens);
+   nir_variable *fog_params_var =
+      st_nir_state_variable_create(s, glsl_vec4_type(), paramList, fog_params_tokens,
+                                   NULL, packed_driver_uniform_storage);
    nir_def *params = nir_load_var(b, fog_params_var);
 
-   nir_variable *fog_color_var = st_nir_state_variable_create(s, glsl_vec4_type(), fog_color_tokens);
-   fog_color_var->data.driver_location = _mesa_add_state_reference(paramList, fog_color_tokens);
+   nir_variable *fog_color_var =
+      st_nir_state_variable_create(s, glsl_vec4_type(), paramList, fog_color_tokens,
+                                   NULL, packed_driver_uniform_storage);
    nir_def *fog_color = nir_load_var(b, fog_color_var);
 
    /* compute the 1 component fog factor f */
@@ -62,7 +67,7 @@ fog_result(nir_builder *b, nir_def *color, enum gl_fog_mode fog_mode, struct gl_
       f = nir_fexp2(b, nir_fneg(b, f));
       break;
    default:
-      unreachable("unsupported fog mode");
+      UNREACHABLE("unsupported fog mode");
    }
    f = nir_fsat(b, f);
 
@@ -75,6 +80,7 @@ fog_result(nir_builder *b, nir_def *color, enum gl_fog_mode fog_mode, struct gl_
 struct lower_fog_state {
    enum gl_fog_mode fog_mode;
    struct gl_program_parameter_list *paramList;
+   bool packed_driver_uniform_storage;
 };
 
 static bool
@@ -97,7 +103,8 @@ st_nir_lower_fog_instr(nir_builder *b, nir_instr *instr, void *_state)
    nir_def *color = intr->src[0].ssa;
    color = nir_resize_vector(b, color, 4);
 
-   nir_def *fog = fog_result(b, color, state->fog_mode, state->paramList);
+   nir_def *fog = fog_result(b, color, state->fog_mode, state->paramList,
+                             state->packed_driver_uniform_storage);
 
    /* retain the non-fog-blended alpha value for color */
    color = nir_vector_insert_imm(b, fog, nir_channel(b, color, 3), 3);
@@ -109,41 +116,18 @@ st_nir_lower_fog_instr(nir_builder *b, nir_instr *instr, void *_state)
 }
 
 bool
-st_nir_lower_fog(nir_shader *s, enum gl_fog_mode fog_mode, struct gl_program_parameter_list *paramList)
+st_nir_lower_fog(nir_shader *s, enum gl_fog_mode fog_mode,
+                 struct gl_program_parameter_list *paramList,
+                 bool packed_driver_uniform_storage)
 {
-   if (s->info.io_lowered) {
-      struct lower_fog_state state = {
-         .fog_mode = fog_mode,
-         .paramList = paramList,
-      };
-      nir_shader_instructions_pass(s, st_nir_lower_fog_instr,
-                                   nir_metadata_block_index |
-                                   nir_metadata_dominance,
-                                   &state);
-   } else {
-      nir_variable *color_var = nir_find_variable_with_location(s, nir_var_shader_out, FRAG_RESULT_COLOR);
-      if (!color_var) {
-         color_var = nir_find_variable_with_location(s, nir_var_shader_out, FRAG_RESULT_DATA0);
-         /* Fog result would be undefined if we had no output color (in ARB_fragment_program) */
-         if (!color_var)
-            return false;
-      }
+   assert(s->info.io_lowered);
 
-      nir_function_impl *impl = nir_shader_get_entrypoint(s);
-      nir_builder b = nir_builder_at(nir_after_impl(impl));
-
-      /* Note: while ARB_fragment_program plus ARB_draw_buffers allows an array
-       * of result colors, prog_to_nir generates separate vars per slot so we
-       * don't have to handle that.  Fog only applies to the first color result.
-       */
-      assert(!glsl_type_is_array(color_var->type));
-
-      nir_def *color = nir_load_var(&b, color_var);
-      color = fog_result(&b, color, fog_mode, paramList);
-      nir_store_var(&b, color_var, color, 0x7);
-
-      nir_metadata_preserve(b.impl, nir_metadata_block_index |
-                                    nir_metadata_dominance);   }
-
-   return true;
+   struct lower_fog_state state = {
+      .fog_mode = fog_mode,
+      .paramList = paramList,
+      .packed_driver_uniform_storage = packed_driver_uniform_storage,
+   };
+   return nir_shader_instructions_pass(s, st_nir_lower_fog_instr,
+                                       nir_metadata_control_flow,
+                                       &state);
 }

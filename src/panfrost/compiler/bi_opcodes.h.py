@@ -89,6 +89,7 @@ struct bi_op_props {
         bool table : 1;
         bool fma : 1;
         bool add : 1;
+        bool is_float : 1;
 
         /* Supported propagable modifiers */
         bool clamp : 1;
@@ -108,7 +109,11 @@ import sys
 from bifrost_isa import *
 from mako.template import Template
 
-instructions = parse_instructions(sys.argv[1], include_pseudo = True)
+instructions = {}
+for arg in sys.argv[1:]:
+    new_instructions = parse_instructions(arg, include_pseudo = True)
+    instructions.update(new_instructions)
+
 ir_instructions = partition_mnemonics(instructions)
 modifier_lists = order_modifiers(ir_instructions)
 

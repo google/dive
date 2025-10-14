@@ -43,16 +43,20 @@
 #include <llvm/Support/Host.h>
 #endif
 
+#include "util/detect_os.h"
 #include "util/u_math.h"
 #include "util/u_debug.h"
+#include "util/os_file.h"
 
 #include "lp_bld_debug.h"
+#include "lp_bld_intr.h"
 
 #ifdef __linux__
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif
 
+#include <llvm/BinaryFormat/Dwarf.h>
 
 
 /**
@@ -126,15 +130,22 @@ disassemble(const void* func, std::ostream &buffer)
        * so that between runs.
        */
 
-      buffer << std::setw(6) << (unsigned long)pc << ":\t";
+      buffer << std::setw(6) << std::hex << (unsigned long)pc
+             << std::setw(0) << std::dec << ":";
 
       Size = LLVMDisasmInstruction(D, (uint8_t *)bytes + pc, extent - pc, 0, outline,
-                                   sizeof outline);
+                                   sizeof(outline));
 
       if (!Size) {
-         buffer << "invalid\n";
-         pc += 1;
+#if DETECT_ARCH_AARCH64
+         uint32_t invalid = bytes[pc + 0] << 0 | bytes[pc + 1] << 8 |
+                            bytes[pc + 2] << 16 | bytes[pc + 3] << 24;
+         snprintf(outline, sizeof(outline), "\tinvalid %x", invalid);
+         Size = 4;
+#else
+         buffer << "\tinvalid\n";
          break;
+#endif
       }
 
       /*
@@ -145,10 +156,11 @@ disassemble(const void* func, std::ostream &buffer)
          unsigned i;
          for (i = 0; i < Size; ++i) {
             buffer << std::hex << std::setfill('0') << std::setw(2)
-                   << static_cast<int> (bytes[pc + i]);
+                   << static_cast<int> (bytes[pc + i])
+                   << std::setw(0) << std::dec;
          }
          for (; i < 16; ++i) {
-            buffer << std::dec << "   ";
+            buffer << "   ";
          }
       }
 
@@ -156,26 +168,28 @@ disassemble(const void* func, std::ostream &buffer)
        * Print the instruction.
        */
 
-      buffer << std::setw(Size) << outline << '\n';
-
-      /*
-       * Stop disassembling on return statements, if there is no record of a
-       * jump to a successive address.
-       *
-       * XXX: This currently assumes x86
-       */
-
-#if DETECT_ARCH_X86 || DETECT_ARCH_X86_64
-      if (Size == 1 && bytes[pc] == 0xc3) {
-         break;
-      }
-#endif
+      buffer << outline << '\n';
 
       /*
        * Advance.
        */
 
       pc += Size;
+
+      /*
+       * Stop disassembling on return statements
+       */
+
+#if DETECT_ARCH_X86 || DETECT_ARCH_X86_64
+      if (Size == 1 && bytes[pc - 1] == 0xc3) {
+         break;
+      }
+#elif DETECT_ARCH_AARCH64
+      if (Size == 4 && bytes[pc - 1] == 0xD6 && bytes[pc - 2] == 0x5F &&
+            (bytes[pc - 3] & 0xFC) == 0 && (bytes[pc - 4] & 0x1F) == 0) {
+         break;
+      }
+#endif
 
       if (pc >= extent) {
          buffer << "disassembly larger than " << extent << " bytes, aborting\n";
@@ -191,8 +205,8 @@ disassemble(const void* func, std::ostream &buffer)
     * Print GDB command, useful to verify output.
     */
    if (0) {
-      buffer << "disassemble " << static_cast<const void*>(bytes) << ' '
-             << static_cast<const void*>(bytes + pc) << '\n';
+      buffer << "disassemble " << std::hex << static_cast<const void*>(bytes) << ' '
+             << static_cast<const void*>(bytes + pc) << std::dec << '\n';
    }
 
    return pc;
@@ -224,11 +238,14 @@ lp_disassemble(LLVMValueRef func, const void *code)
 extern "C" void
 lp_profile(LLVMValueRef func, const void *code)
 {
-#if defined(__linux__) && defined(PROFILE)
+#if defined(PROFILE)
    static std::ofstream perf_asm_file;
    static bool first_time = true;
    static FILE *perf_map_file = NULL;
    if (first_time) {
+      unsigned long long pid = (unsigned long long)getpid();
+      char filename[1024];
+#if defined(__linux__)
       /*
        * We rely on the disassembler for determining a function's size, but
        * the disassembly is a leaky and slow operation, so avoid running
@@ -236,19 +253,26 @@ lp_profile(LLVMValueRef func, const void *code)
        * by the PERF_BUILDID_DIR environment variable.
        */
       if (getenv("PERF_BUILDID_DIR")) {
-         pid_t pid = getpid();
-         char filename[256];
-         snprintf(filename, sizeof filename, "/tmp/perf-%llu.map", (unsigned long long)pid);
+         snprintf(filename, sizeof(filename), "/tmp/perf-%llu.map", pid);
          perf_map_file = fopen(filename, "wt");
-         snprintf(filename, sizeof filename, "/tmp/perf-%llu.map.asm", (unsigned long long)pid);
+         snprintf(filename, sizeof(filename), "/tmp/perf-%llu.map.asm", pid);
          perf_asm_file.open(filename);
       }
+#else
+      if (const char* output_dir = getenv("JIT_SYMBOL_MAP_DIR")) {
+         snprintf(filename, sizeof(filename), "%s/jit-symbols-%llu.map", output_dir, pid);
+         perf_map_file = fopen(filename, "wt");
+         snprintf(filename, sizeof(filename), "%s/jit-symbols-%llu.map.asm", output_dir, pid);
+         perf_asm_file.open(filename);
+      }
+#endif
       first_time = false;
    }
    if (perf_map_file) {
       const char *symbol = LLVMGetValueName(func);
       unsigned long addr = (uintptr_t)code;
-      perf_asm_file << symbol << ":\n";
+      perf_asm_file << symbol << " " << std::hex
+                    << (uintptr_t)code << std::dec << ":\n";
       unsigned long size = disassemble(code, perf_asm_file);
       perf_asm_file.flush();
       fprintf(perf_map_file, "%lx %lx %s\n", addr, size, symbol);
@@ -261,3 +285,119 @@ lp_profile(LLVMValueRef func, const void *code)
 }
 
 
+LLVMMetadataRef
+lp_bld_debug_info_type(gallivm_state *gallivm, LLVMTypeRef type)
+{
+   LLVMTypeKind kind = LLVMGetTypeKind(type);
+
+   if (kind == LLVMHalfTypeKind)
+      return LLVMDIBuilderCreateBasicType(
+         gallivm->di_builder, "float16_t", strlen("float16_t"), 16, llvm::dwarf::DW_ATE_float, LLVMDIFlagZero);
+   if (kind == LLVMFloatTypeKind)
+      return LLVMDIBuilderCreateBasicType(
+         gallivm->di_builder, "float", strlen("float"), 32, llvm::dwarf::DW_ATE_float, LLVMDIFlagZero);
+   if (kind == LLVMDoubleTypeKind)
+      return LLVMDIBuilderCreateBasicType(
+         gallivm->di_builder, "double", strlen("double"), 64, llvm::dwarf::DW_ATE_float, LLVMDIFlagZero);
+
+   if (kind == LLVMIntegerTypeKind) {
+      uint32_t bit_size = LLVMGetIntTypeWidth(type);
+      if (bit_size == 1)
+         return LLVMDIBuilderCreateBasicType(
+            gallivm->di_builder, "bool", strlen("bool"), 1, llvm::dwarf::DW_ATE_unsigned, LLVMDIFlagZero);
+      if (bit_size == 8)
+         return LLVMDIBuilderCreateBasicType(
+            gallivm->di_builder, "int8_t", strlen("int8_t"), 8, llvm::dwarf::DW_ATE_unsigned, LLVMDIFlagZero);
+      if (bit_size == 16)
+         return LLVMDIBuilderCreateBasicType(
+            gallivm->di_builder, "int16_t", strlen("int16_t"), 16, llvm::dwarf::DW_ATE_unsigned, LLVMDIFlagZero);
+      if (bit_size == 32)
+         return LLVMDIBuilderCreateBasicType(
+            gallivm->di_builder, "int32_t", strlen("int32_t"), 32, llvm::dwarf::DW_ATE_unsigned, LLVMDIFlagZero);
+      if (bit_size == 64)
+         return LLVMDIBuilderCreateBasicType(
+            gallivm->di_builder, "int64_t", strlen("int64_t"), 64, llvm::dwarf::DW_ATE_unsigned, LLVMDIFlagZero);
+   }
+
+   if (kind == LLVMFunctionTypeKind) {
+      uint32_t num_params = LLVMCountParamTypes(type);
+
+      LLVMTypeRef *param_types = (LLVMTypeRef *)calloc(num_params, sizeof(LLVMTypeRef));
+      LLVMMetadataRef *di_param_types = (LLVMMetadataRef *)calloc(num_params + 1, sizeof(LLVMMetadataRef));
+
+      LLVMGetParamTypes(type, param_types);
+
+      di_param_types[0] = lp_bld_debug_info_type(gallivm, LLVMGetReturnType(type));
+      for (uint32_t i = 0;  i < num_params; i++)
+         di_param_types[i + 1] = lp_bld_debug_info_type(gallivm, param_types[i]);
+
+      LLVMMetadataRef function = LLVMDIBuilderCreateSubroutineType(
+         gallivm->di_builder, gallivm->file, di_param_types, num_params + 1, LLVMDIFlagZero);
+
+      free(param_types);
+      free(di_param_types);
+
+      return function;
+   }
+
+   if (kind == LLVMArrayTypeKind) {
+      uint32_t count = LLVMGetArrayLength(type);
+      LLVMMetadataRef subrange = LLVMDIBuilderGetOrCreateSubrange(gallivm->di_builder, 0, count);
+      LLVMMetadataRef element_type = lp_bld_debug_info_type(gallivm, LLVMGetElementType(type));
+      return LLVMDIBuilderCreateArrayType(
+         gallivm->di_builder, count, 0, element_type, &subrange, 1);
+   }
+
+   if (kind == LLVMPointerTypeKind) {
+      return LLVMDIBuilderCreatePointerType(
+         gallivm->di_builder, NULL, sizeof(void *) * 8, 0, 0, "", 0);
+   }
+
+   if (kind == LLVMVectorTypeKind) {
+      uint32_t count = LLVMGetVectorSize(type);
+      LLVMMetadataRef subrange = LLVMDIBuilderGetOrCreateSubrange(gallivm->di_builder, 0, count);
+      LLVMMetadataRef element_type = lp_bld_debug_info_type(gallivm, LLVMGetElementType(type));
+      return LLVMDIBuilderCreateVectorType(
+         gallivm->di_builder, count, 0, element_type, &subrange, 1);
+   }
+
+   return NULL;
+}
+
+
+static uint32_t global_shader_index = 0;
+
+
+void
+lp_function_add_debug_info(gallivm_state *gallivm, LLVMValueRef func, LLVMTypeRef func_type)
+{
+   if (!gallivm->di_builder)
+      return;
+
+   if (!gallivm->file) {
+      uint32_t shader_index = p_atomic_add_return(&global_shader_index, 1);
+
+      os_mkdir(LP_NIR_SHADER_DUMP_DIR, 0755);
+
+      asprintf(&gallivm->file_name, "%s/%u.nir", LP_NIR_SHADER_DUMP_DIR, shader_index);
+
+      gallivm->file = LLVMDIBuilderCreateFile(gallivm->di_builder, gallivm->file_name, strlen(gallivm->file_name), ".", 1);
+   
+      LLVMDIBuilderCreateCompileUnit(
+         gallivm->di_builder, LLVMDWARFSourceLanguageC11, gallivm->file, gallivm->file_name, strlen(gallivm->file_name),
+         0, NULL, 0, 0, NULL, 0, LLVMDWARFEmissionFull, 0, 0, 0, "/", 1, "", 0);
+   }
+
+   LLVMMetadataRef di_function_type = lp_bld_debug_info_type(gallivm, func_type);
+   const char *func_name = LLVMGetValueName(func);
+   LLVMMetadataRef di_function = LLVMDIBuilderCreateFunction(
+      gallivm->di_builder, NULL, func_name, strlen(func_name), func_name, strlen(func_name),
+      gallivm->file, 1, di_function_type, true, true, 1, LLVMDIFlagZero, false);
+
+   LLVMSetSubprogram(func, di_function);
+
+   lp_add_function_attr(func, -1, LP_FUNC_ATTR_NOINLINE);
+   lp_add_function_attr(func, -1, LP_FUNC_ATTR_OPTNONE);
+
+   gallivm->di_function = di_function;
+}

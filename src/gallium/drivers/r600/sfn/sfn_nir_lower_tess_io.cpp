@@ -1,33 +1,13 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_nir.h"
 
 bool
-r600_lower_tess_io_filter(const nir_instr *instr, gl_shader_stage stage)
+r600_lower_tess_io_filter(const nir_instr *instr, mesa_shader_stage stage)
 {
    if (instr->type != nir_instr_type_intrinsic)
       return false;
@@ -162,7 +142,7 @@ load_offset_group(nir_builder *b, int ncomponents)
       return nir_imm_ivec2(b, 16, 20);
    default:
       debug_printf("Got %d components\n", ncomponents);
-      unreachable("Unsupported component count");
+      UNREACHABLE("Unsupported component count");
    }
 }
 
@@ -202,7 +182,7 @@ get_dest_usee_mask(nir_intrinsic_instr *op)
 
    nir_foreach_use(use_src, &op->def)
    {
-      auto use_instr = use_src->parent_instr;
+      auto use_instr = nir_src_parent_instr(use_src);
       mq.ssa_index = use_src->ssa->index;
 
       switch (use_instr->type) {
@@ -345,8 +325,7 @@ r600_lower_tess_io_impl(nir_builder *b, nir_instr *instr, enum mesa_prim prim_ty
          auto base = nir_load_tcs_in_param_base_r600(b);
          vertices_in = nir_channel(b, base, 2);
       }
-      nir_def_rewrite_uses(&op->def, vertices_in);
-      nir_instr_remove(&op->instr);
+      nir_def_replace(&op->def, vertices_in);
       return true;
    }
    case nir_intrinsic_load_per_vertex_input: {
@@ -442,14 +421,15 @@ r600_lower_tess_io(nir_shader *shader, enum mesa_prim prim_type)
 
       nir_foreach_block(block, impl)
       {
-         nir_foreach_instr_safe(instr, block)
-         {
+         bool progress_impl = false;
+         nir_foreach_instr_safe (instr, block) {
             if (instr->type != nir_instr_type_intrinsic)
                continue;
 
             if (r600_lower_tess_io_filter(instr, shader->info.stage))
-               progress |= r600_lower_tess_io_impl(&b, instr, prim_type);
+               progress_impl |= r600_lower_tess_io_impl(&b, instr, prim_type);
          }
+         progress |= nir_progress(progress_impl, impl, nir_metadata_control_flow);
       }
    }
    return progress;
@@ -489,7 +469,7 @@ r600_append_tcs_TF_emission(nir_shader *shader, enum mesa_prim prim_type)
    }
 
    assert(exec_list_length(&shader->functions) == 1);
-   nir_function *f = (nir_function *)shader->functions.get_head();
+   nir_function *f = (nir_function *)exec_list_get_head(&shader->functions);
    nir_builder builder = nir_builder_create(f->impl);
    nir_builder *b = &builder;
 
@@ -572,7 +552,5 @@ r600_append_tcs_TF_emission(nir_shader *shader, enum mesa_prim prim_type)
 
    nir_pop_if(b, nullptr);
 
-   nir_metadata_preserve(f->impl, nir_metadata_none);
-
-   return true;
+   return nir_progress(true, f->impl, nir_metadata_none);
 }

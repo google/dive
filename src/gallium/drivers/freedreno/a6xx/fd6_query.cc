@@ -1,25 +1,7 @@
 /*
- * Copyright (C) 2017 Rob Clark <robclark@freedesktop.org>
+ * Copyright © 2017 Rob Clark <robclark@freedesktop.org>
  * Copyright © 2018 Google, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -36,6 +18,8 @@
 #include "fd6_emit.h"
 #include "fd6_query.h"
 
+#include "fd6_pack.h"
+
 /* g++ is a picky about offsets that cannot be resolved at compile time, so
  * roll our own __offsetof()
  */
@@ -45,21 +29,20 @@
 struct PACKED fd6_query_sample {
    struct fd_acc_query_sample base;
 
-   /* The RB_SAMPLE_COUNT_ADDR destination needs to be 16-byte aligned: */
+   /* The RB_SAMPLE_COUNTER_BASE destination needs to be 16-byte aligned: */
    uint64_t pad;
 
    uint64_t start;
    uint64_t result;
    uint64_t stop;
 };
-DEFINE_CAST(fd_acc_query_sample, fd6_query_sample);
+FD_DEFINE_CAST(fd_acc_query_sample, fd6_query_sample);
 
 /* offset of a single field of an array of fd6_query_sample: */
 #define query_sample_idx(aq, idx, field)                                       \
    fd_resource((aq)->prsc)->bo,                                                \
       (idx * sizeof(struct fd6_query_sample)) +                                \
-         offsetof(struct fd6_query_sample, field),                             \
-      0, 0
+         offsetof(struct fd6_query_sample, field)
 
 /* offset of a single field of fd6_query_sample: */
 #define query_sample(aq, field) query_sample_idx(aq, 0, field)
@@ -71,64 +54,132 @@ DEFINE_CAST(fd_acc_query_sample, fd6_query_sample);
  * interpret results
  */
 
+template <chip CHIP>
 static void
 occlusion_resume(struct fd_acc_query *aq, struct fd_batch *batch)
 {
-   struct fd_ringbuffer *ring = batch->draw;
+   struct fd_context *ctx = batch->ctx;
+   fd_cs cs(batch->draw);
 
    ASSERT_ALIGNED(struct fd6_query_sample, start, 16);
 
-   OUT_PKT4(ring, REG_A6XX_RB_SAMPLE_COUNT_CONTROL, 1);
-   OUT_RING(ring, A6XX_RB_SAMPLE_COUNT_CONTROL_COPY);
+   fd_pkt4(cs, 1)
+      .add(A6XX_RB_SAMPLE_COUNTER_CNTL(.copy = true));
 
-   OUT_PKT4(ring, REG_A6XX_RB_SAMPLE_COUNT_ADDR, 2);
-   OUT_RELOC(ring, query_sample(aq, start));
+   if (!ctx->screen->info->a7xx.has_event_write_sample_count) {
+      fd_pkt4(cs, 2)
+         .add(A6XX_RB_SAMPLE_COUNTER_BASE(query_sample(aq, start)));
 
-   fd6_event_write(batch, ring, ZPASS_DONE, false);
+      fd6_event_write<CHIP>(ctx, cs, FD_ZPASS_DONE);
+
+      /* Copied from blob's cmdstream, not sure why it is done. */
+      if (CHIP == A7XX) {
+         fd6_event_write<CHIP>(ctx, cs, FD_CCU_CLEAN_DEPTH);
+      }
+   } else {
+      fd_pkt7(cs, CP_EVENT_WRITE7, 3)
+         .add(CP_EVENT_WRITE7_0(
+            .event = ZPASS_DONE,
+            .write_sample_count = true,
+         ))
+         .add(EV_DST_RAM_CP_EVENT_WRITE7_1(query_sample(aq, start)));
+
+      fd_pkt7(cs, CP_EVENT_WRITE7, 3)
+         .add(CP_EVENT_WRITE7_0(
+            .event = ZPASS_DONE,
+            .write_sample_count = true,
+            .sample_count_end_offset = true,
+            .write_accum_sample_count_diff = true,
+         ))
+         .add(EV_DST_RAM_CP_EVENT_WRITE7_1(query_sample(aq, start)));
+   }
+
+   ctx->occlusion_queries_active++;
+
+   /* Just directly bash the gen specific LRZ dirty bit, since we don't
+    * need to re-emit any other LRZ related state:
+    */
+   ctx->gen_dirty |= FD6_GROUP_LRZ;
 }
 
+template <chip CHIP>
 static void
 occlusion_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 {
-   struct fd_ringbuffer *ring = batch->draw;
+   struct fd_context *ctx = batch->ctx;
+   fd_cs cs(batch->draw);
 
-   OUT_PKT7(ring, CP_MEM_WRITE, 4);
-   OUT_RELOC(ring, query_sample(aq, stop));
-   OUT_RING(ring, 0xffffffff);
-   OUT_RING(ring, 0xffffffff);
+   if (!ctx->screen->info->a7xx.has_event_write_sample_count) {
+      fd_pkt7(cs, CP_MEM_WRITE, 4)
+         .add(A5XX_CP_MEM_WRITE_ADDR(query_sample(aq, stop)))
+         .add(0xffffffff)
+         .add(0xffffffff);
 
-   OUT_PKT7(ring, CP_WAIT_MEM_WRITES, 0);
+      fd_pkt7(cs, CP_WAIT_MEM_WRITES, 0);
+   }
 
-   OUT_PKT4(ring, REG_A6XX_RB_SAMPLE_COUNT_CONTROL, 1);
-   OUT_RING(ring, A6XX_RB_SAMPLE_COUNT_CONTROL_COPY);
+   fd_pkt4(cs, 1)
+      .add(A6XX_RB_SAMPLE_COUNTER_CNTL(.copy = true));
 
    ASSERT_ALIGNED(struct fd6_query_sample, stop, 16);
 
-   OUT_PKT4(ring, REG_A6XX_RB_SAMPLE_COUNT_ADDR, 2);
-   OUT_RELOC(ring, query_sample(aq, stop));
+   if (!ctx->screen->info->a7xx.has_event_write_sample_count) {
+      fd_pkt4(cs, 2)
+         .add(A6XX_RB_SAMPLE_COUNTER_BASE(query_sample(aq, stop)));
 
-   fd6_event_write(batch, ring, ZPASS_DONE, false);
+      fd6_event_write<CHIP>(batch->ctx, cs, FD_ZPASS_DONE);
 
-   /* To avoid stalling in the draw buffer, emit code the code to compute the
-    * counter delta in the epilogue ring.
+      /* To avoid stalling in the draw buffer, emit code the code to compute the
+       * counter delta in the epilogue ring.
+       */
+      fd_cs epilogue(fd_batch_get_tile_epilogue(batch));
+
+      fd_pkt7(epilogue, CP_WAIT_REG_MEM, 6)
+         .add(CP_WAIT_REG_MEM_0(.function = WRITE_NE, .poll = POLL_MEMORY))
+         .add(CP_WAIT_REG_MEM_POLL_ADDR(query_sample(aq, stop)))
+         .add(CP_WAIT_REG_MEM_3(.ref = 0xffffffff))
+         .add(CP_WAIT_REG_MEM_4(.mask = 0xffffffff))
+         .add(CP_WAIT_REG_MEM_5(.delay_loop_cycles = 16));
+
+      /* result += stop - start: */
+      fd_pkt7(epilogue, CP_MEM_TO_MEM, 9)
+         .add(CP_MEM_TO_MEM_0(.neg_c = true, ._double = true))
+         .add(CP_MEM_TO_MEM_DST(query_sample(aq, result)))
+         .add(CP_MEM_TO_MEM_SRC_A(query_sample(aq, result)))
+         .add(CP_MEM_TO_MEM_SRC_B(query_sample(aq, stop)))
+         .add(CP_MEM_TO_MEM_SRC_C(query_sample(aq, start)));
+   } else {
+      fd_pkt7(cs, CP_EVENT_WRITE7, 3)
+         .add(CP_EVENT_WRITE7_0(
+            .event = ZPASS_DONE,
+            .write_sample_count = true,
+         ))
+         .add(EV_DST_RAM_CP_EVENT_WRITE7_1(query_sample(aq, stop)));
+
+      fd_pkt7(cs, CP_EVENT_WRITE7, 3)
+         .add(CP_EVENT_WRITE7_0(
+            .event = ZPASS_DONE,
+            .write_sample_count = true,
+            .sample_count_end_offset = true,
+            .write_accum_sample_count_diff = true,
+         ))
+         /* Note: SQE is adding offsets to the iova, SAMPLE_COUNT_END_OFFSET causes
+          * the result to be written to iova+16, and WRITE_ACCUM_SAMP_COUNT_DIFF
+          * does *(iova + 8) += *(iova + 16) - *iova
+          *
+          * It just so happens this is the layout we already to for start/result/stop
+          * So we just give the start address in all cases.
+          */
+         .add(EV_DST_RAM_CP_EVENT_WRITE7_1(query_sample(aq, start)));
+   }
+
+   assert(ctx->occlusion_queries_active > 0);
+   ctx->occlusion_queries_active--;
+
+   /* Just directly bash the gen specific LRZ dirty bit, since we don't
+    * need to re-emit any other LRZ related state:
     */
-   struct fd_ringbuffer *epilogue = fd_batch_get_tile_epilogue(batch);
-
-   OUT_PKT7(epilogue, CP_WAIT_REG_MEM, 6);
-   OUT_RING(epilogue, CP_WAIT_REG_MEM_0_FUNCTION(WRITE_NE) |
-                      CP_WAIT_REG_MEM_0_POLL(POLL_MEMORY));
-   OUT_RELOC(epilogue, query_sample(aq, stop));
-   OUT_RING(epilogue, CP_WAIT_REG_MEM_3_REF(0xffffffff));
-   OUT_RING(epilogue, CP_WAIT_REG_MEM_4_MASK(0xffffffff));
-   OUT_RING(epilogue, CP_WAIT_REG_MEM_5_DELAY_LOOP_CYCLES(16));
-
-   /* result += stop - start: */
-   OUT_PKT7(epilogue, CP_MEM_TO_MEM, 9);
-   OUT_RING(epilogue, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C);
-   OUT_RELOC(epilogue, query_sample(aq, result)); /* dst */
-   OUT_RELOC(epilogue, query_sample(aq, result)); /* srcA */
-   OUT_RELOC(epilogue, query_sample(aq, stop));   /* srcB */
-   OUT_RELOC(epilogue, query_sample(aq, start));  /* srcC */
+   ctx->gen_dirty |= FD6_GROUP_LRZ;
 }
 
 static void
@@ -165,49 +216,56 @@ occlusion_predicate_result_resource(struct fd_acc_query *aq, struct fd_ringbuffe
                                     int index, struct fd_resource *dst,
                                     unsigned offset)
 {
+   fd_cs cs(ring);
+
    /* This is a bit annoying but we need to turn the result into a one or
     * zero.. to do this use a CP_COND_WRITE to overwrite the result with
     * a one if it is non-zero.  This doesn't change the results if the
     * query is also read on the CPU (ie. occlusion_predicate_result()).
     */
-   OUT_PKT7(ring, CP_COND_WRITE5, 9);
-   OUT_RING(ring, CP_COND_WRITE5_0_FUNCTION(WRITE_NE) |
-                  CP_WAIT_REG_MEM_0_POLL(POLL_MEMORY) |
-                  CP_COND_WRITE5_0_WRITE_MEMORY);
-   OUT_RELOC(ring, query_sample(aq, result)); /* POLL_ADDR_LO/HI */
-   OUT_RING(ring, CP_COND_WRITE5_3_REF(0));
-   OUT_RING(ring, CP_COND_WRITE5_4_MASK(~0));
-   OUT_RELOC(ring, query_sample(aq, result)); /* WRITE_ADDR_LO/HI */
-   OUT_RING(ring, 1);
-   OUT_RING(ring, 0);
+   fd_pkt7(cs, CP_COND_WRITE5, 9)
+      .add(CP_COND_WRITE5_0(
+         .function = WRITE_NE,
+         .poll = POLL_MEMORY,
+         .write_memory = true
+      ))
+      .add(CP_COND_WRITE5_POLL_ADDR(query_sample(aq, result)))
+      .add(CP_COND_WRITE5_3(.ref = 0))
+      .add(CP_COND_WRITE5_4(.mask = ~0))
+      .add(CP_COND_WRITE5_WRITE_ADDR(query_sample(aq, result)))
+      .add(1)
+      .add(0);
 
-   copy_result(ring, result_type, dst, offset, fd_resource(aq->prsc),
+   copy_result(cs.ring(), result_type, dst, offset, fd_resource(aq->prsc),
                offsetof(struct fd6_query_sample, result));
 }
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider occlusion_counter = {
    .query_type = PIPE_QUERY_OCCLUSION_COUNTER,
    .size = sizeof(struct fd6_query_sample),
-   .resume = occlusion_resume,
-   .pause = occlusion_pause,
+   .resume = occlusion_resume<CHIP>,
+   .pause = occlusion_pause<CHIP>,
    .result = occlusion_counter_result,
    .result_resource = occlusion_counter_result_resource,
 };
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider occlusion_predicate = {
    .query_type = PIPE_QUERY_OCCLUSION_PREDICATE,
    .size = sizeof(struct fd6_query_sample),
-   .resume = occlusion_resume,
-   .pause = occlusion_pause,
+   .resume = occlusion_resume<CHIP>,
+   .pause = occlusion_pause<CHIP>,
    .result = occlusion_predicate_result,
    .result_resource = occlusion_predicate_result_resource,
 };
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider occlusion_predicate_conservative = {
    .query_type = PIPE_QUERY_OCCLUSION_PREDICATE_CONSERVATIVE,
    .size = sizeof(struct fd6_query_sample),
-   .resume = occlusion_resume,
-   .pause = occlusion_pause,
+   .resume = occlusion_resume<CHIP>,
+   .pause = occlusion_pause<CHIP>,
    .result = occlusion_predicate_result,
    .result_resource = occlusion_predicate_result_resource,
 };
@@ -216,38 +274,32 @@ static const struct fd_acc_sample_provider occlusion_predicate_conservative = {
  * Timestamp Queries:
  */
 
+template <chip CHIP>
 static void
 timestamp_resume(struct fd_acc_query *aq, struct fd_batch *batch)
 {
-   struct fd_ringbuffer *ring = batch->draw;
+   fd_cs cs(batch->draw);
 
-   OUT_PKT7(ring, CP_EVENT_WRITE, 4);
-   OUT_RING(ring,
-            CP_EVENT_WRITE_0_EVENT(RB_DONE_TS) | CP_EVENT_WRITE_0_TIMESTAMP);
-   OUT_RELOC(ring, query_sample(aq, start));
-   OUT_RING(ring, 0x00000000);
+   fd6_record_ts<CHIP>(cs, query_sample(aq, start));
 }
 
+template <chip CHIP>
 static void
 time_elapsed_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 {
-   struct fd_ringbuffer *ring = batch->draw;
+   fd_cs cs(batch->draw);
 
-   OUT_PKT7(ring, CP_EVENT_WRITE, 4);
-   OUT_RING(ring,
-            CP_EVENT_WRITE_0_EVENT(RB_DONE_TS) | CP_EVENT_WRITE_0_TIMESTAMP);
-   OUT_RELOC(ring, query_sample(aq, stop));
-   OUT_RING(ring, 0x00000000);
+   fd6_record_ts<CHIP>(cs, query_sample(aq, stop));
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    /* result += stop - start: */
-   OUT_PKT7(ring, CP_MEM_TO_MEM, 9);
-   OUT_RING(ring, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C);
-   OUT_RELOC(ring, query_sample(aq, result)); /* dst */
-   OUT_RELOC(ring, query_sample(aq, result)); /* srcA */
-   OUT_RELOC(ring, query_sample(aq, stop));   /* srcB */
-   OUT_RELOC(ring, query_sample(aq, start));  /* srcC */
+   fd_pkt7(cs, CP_MEM_TO_MEM, 9)
+      .add(CP_MEM_TO_MEM_0(.neg_c = true, ._double = true))
+      .add(CP_MEM_TO_MEM_DST(query_sample(aq, result)))
+      .add(CP_MEM_TO_MEM_SRC_A(query_sample(aq, result)))
+      .add(CP_MEM_TO_MEM_SRC_B(query_sample(aq, stop)))
+      .add(CP_MEM_TO_MEM_SRC_C(query_sample(aq, start)));
 }
 
 static void
@@ -257,24 +309,14 @@ timestamp_pause(struct fd_acc_query *aq, struct fd_batch *batch)
 }
 
 /* timestamp logging for u_trace: */
+template <chip CHIP>
 static void
 record_timestamp(struct fd_ringbuffer *ring, struct fd_bo *bo, unsigned offset)
 {
-   OUT_PKT7(ring, CP_EVENT_WRITE, 4);
-   OUT_RING(ring,
-            CP_EVENT_WRITE_0_EVENT(RB_DONE_TS) | CP_EVENT_WRITE_0_TIMESTAMP);
-   OUT_RELOC(ring, bo, offset, 0, 0);
-   OUT_RING(ring, 0x00000000);
-}
+   fd_cs cs(ring);
 
-static uint64_t
-ticks_to_ns(uint64_t ts)
-{
-   /* This is based on the 19.2MHz always-on rbbm timer.
-    *
-    * TODO we should probably query this value from kernel..
-    */
-   return ts * (1000000000 / 19200000);
+   cs.attach_bo(bo);
+   fd6_record_ts<CHIP>(cs, bo, offset);
 }
 
 static void
@@ -317,12 +359,13 @@ timestamp_result_resource(struct fd_acc_query *aq, struct fd_ringbuffer *ring,
                offsetof(struct fd6_query_sample, start));
 }
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider time_elapsed = {
    .query_type = PIPE_QUERY_TIME_ELAPSED,
    .always = true,
    .size = sizeof(struct fd6_query_sample),
-   .resume = timestamp_resume,
-   .pause = time_elapsed_pause,
+   .resume = timestamp_resume<CHIP>,
+   .pause = time_elapsed_pause<CHIP>,
    .result = time_elapsed_accumulate_result,
    .result_resource = time_elapsed_result_resource,
 };
@@ -334,11 +377,12 @@ static const struct fd_acc_sample_provider time_elapsed = {
  * kind of good enough.
  */
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider timestamp = {
    .query_type = PIPE_QUERY_TIMESTAMP,
    .always = true,
    .size = sizeof(struct fd6_query_sample),
-   .resume = timestamp_resume,
+   .resume = timestamp_resume<CHIP>,
    .pause = timestamp_pause,
    .result = timestamp_accumulate_result,
    .result_resource = timestamp_result_resource,
@@ -349,11 +393,10 @@ struct PACKED fd6_pipeline_stats_sample {
 
    uint64_t start, stop, result;
 };
-DEFINE_CAST(fd_acc_query_sample, fd6_pipeline_stats_sample);
+FD_DEFINE_CAST(fd_acc_query_sample, fd6_pipeline_stats_sample);
 
-#define stats_reloc(ring, aq, field)                                           \
-   OUT_RELOC(ring, fd_resource((aq)->prsc)->bo,                                \
-             __offsetof(struct fd6_pipeline_stats_sample, field), 0, 0);
+#define stats_sample(aq, field) \
+   fd_resource((aq)->prsc)->bo, offsetof(struct fd6_pipeline_stats_sample, field)
 
 /* Mapping of counters to pipeline stats:
  *
@@ -361,18 +404,15 @@ DEFINE_CAST(fd_acc_query_sample, fd6_pipeline_stats_sample);
  *   ----------------------------+--------------------------------------------+----------------
  *   IA_VERTICES                 | INPUT_ASSEMBLY_VERTICES                    | RBBM_PRIMCTR_0
  *   IA_PRIMITIVES               | INPUT_ASSEMBLY_PRIMITIVES                  | RBBM_PRIMCTR_1
- *   VS_INVOCATIONS              | VERTEX_SHADER_INVOCATIONS                  | RBBM_PRIMCTR_0
+ *   VS_INVOCATIONS              | VERTEX_SHADER_INVOCATIONS                  | RBBM_PRIMCTR_2
  *   GS_INVOCATIONS              | GEOMETRY_SHADER_INVOCATIONS                | RBBM_PRIMCTR_5
  *   GS_PRIMITIVES               | GEOMETRY_SHADER_PRIMITIVES                 | RBBM_PRIMCTR_6
  *   C_INVOCATIONS               | CLIPPING_INVOCATIONS                       | RBBM_PRIMCTR_7
  *   C_PRIMITIVES                | CLIPPING_PRIMITIVES                        | RBBM_PRIMCTR_8
  *   PS_INVOCATIONS              | FRAGMENT_SHADER_INVOCATIONS                | RBBM_PRIMCTR_9
- *   HS_INVOCATIONS              | TESSELLATION_CONTROL_SHADER_PATCHES        | RBBM_PRIMCTR_2
+ *   HS_INVOCATIONS              | TESSELLATION_CONTROL_SHADER_PATCHES        | RBBM_PRIMCTR_3
  *   DS_INVOCATIONS              | TESSELLATION_EVALUATION_SHADER_INVOCATIONS | RBBM_PRIMCTR_4
  *   CS_INVOCATIONS              | COMPUTE_SHADER_INVOCATIONS                 | RBBM_PRIMCTR_10
- *
- * Note that "Vertices corresponding to incomplete primitives may contribute to the count.",
- * in our case they do not, so IA_VERTICES and VS_INVOCATIONS are the same thing.
  */
 
 enum stats_type {
@@ -382,11 +422,11 @@ enum stats_type {
 };
 
 static const struct {
-   enum vgt_event_type start, stop;
+   enum fd_gpu_event start, stop;
 } stats_counter_events[] = {
-      [STATS_PRIMITIVE] = { START_PRIMITIVE_CTRS, STOP_PRIMITIVE_CTRS },
-      [STATS_FRAGMENT]  = { START_FRAGMENT_CTRS,  STOP_FRAGMENT_CTRS },
-      [STATS_COMPUTE]   = { START_COMPUTE_CTRS,   STOP_COMPUTE_CTRS },
+      [STATS_PRIMITIVE] = { FD_START_PRIMITIVE_CTRS, FD_STOP_PRIMITIVE_CTRS },
+      [STATS_FRAGMENT]  = { FD_START_FRAGMENT_CTRS,  FD_STOP_FRAGMENT_CTRS },
+      [STATS_COMPUTE]   = { FD_START_COMPUTE_CTRS,   FD_STOP_COMPUTE_CTRS },
 };
 
 static enum stats_type
@@ -412,13 +452,13 @@ stats_counter_index(struct fd_acc_query *aq)
    switch (aq->base.index) {
    case PIPE_STAT_QUERY_IA_VERTICES:    return 0;
    case PIPE_STAT_QUERY_IA_PRIMITIVES:  return 1;
-   case PIPE_STAT_QUERY_VS_INVOCATIONS: return 0;
+   case PIPE_STAT_QUERY_VS_INVOCATIONS: return 2;
    case PIPE_STAT_QUERY_GS_INVOCATIONS: return 5;
    case PIPE_STAT_QUERY_GS_PRIMITIVES:  return 6;
    case PIPE_STAT_QUERY_C_INVOCATIONS:  return 7;
    case PIPE_STAT_QUERY_C_PRIMITIVES:   return 8;
    case PIPE_STAT_QUERY_PS_INVOCATIONS: return 9;
-   case PIPE_STAT_QUERY_HS_INVOCATIONS: return 2;
+   case PIPE_STAT_QUERY_HS_INVOCATIONS: return 3;
    case PIPE_STAT_QUERY_DS_INVOCATIONS: return 4;
    case PIPE_STAT_QUERY_CS_INVOCATIONS: return 10;
    default:
@@ -431,10 +471,10 @@ log_pipeline_stats(struct fd6_pipeline_stats_sample *ps, unsigned idx)
 {
 #ifdef DEBUG_COUNTERS
    const char *labels[] = {
-      "VS_INVOCATIONS",
+      "IA_VERTICES",
       "IA_PRIMITIVES",
+      "VS_INVOCATIONS",
       "HS_INVOCATIONS",
-      "??",
       "DS_INVOCATIONS",
       "GS_INVOCATIONS",
       "GS_PRIMITIVES",
@@ -450,62 +490,65 @@ log_pipeline_stats(struct fd6_pipeline_stats_sample *ps, unsigned idx)
 #endif
 }
 
+template <chip CHIP>
 static void
 pipeline_stats_resume(struct fd_acc_query *aq, struct fd_batch *batch)
    assert_dt
 {
-   struct fd_ringbuffer *ring = batch->draw;
    enum stats_type type = get_stats_type(aq);
    unsigned idx = stats_counter_index(aq);
-   unsigned reg = REG_A6XX_RBBM_PRIMCTR_0_LO + (2 * idx);
+   unsigned reg = REG_A6XX_RBBM_PIPESTAT_IAVERTICES + (2 * idx);
+   fd_cs cs(batch->draw);
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
-   OUT_PKT7(ring, CP_REG_TO_MEM, 3);
-   OUT_RING(ring, CP_REG_TO_MEM_0_64B |
-                  CP_REG_TO_MEM_0_CNT(2) |
-                  CP_REG_TO_MEM_0_REG(reg));
-   stats_reloc(ring, aq, start);
+   /* snapshot the start value: */
+   fd_pkt7(cs, CP_REG_TO_MEM, 3)
+      .add(CP_REG_TO_MEM_0(.reg = reg, .cnt = 2, ._64b = true))
+      .add(A5XX_CP_REG_TO_MEM_DEST(stats_sample(aq, start)));
 
    assert(type < ARRAY_SIZE(batch->pipeline_stats_queries_active));
 
    if (!batch->pipeline_stats_queries_active[type])
-      fd6_event_write(batch, ring, stats_counter_events[type].start, false);
+      fd6_event_write<CHIP>(batch->ctx, cs, stats_counter_events[type].start);
    batch->pipeline_stats_queries_active[type]++;
 }
 
+template <chip CHIP>
 static void
 pipeline_stats_pause(struct fd_acc_query *aq, struct fd_batch *batch)
    assert_dt
 {
-   struct fd_ringbuffer *ring = batch->draw;
    enum stats_type type = get_stats_type(aq);
    unsigned idx = stats_counter_index(aq);
-   unsigned reg = REG_A6XX_RBBM_PRIMCTR_0_LO + (2 * idx);
+   unsigned reg = REG_A6XX_RBBM_PIPESTAT_IAVERTICES + (2 * idx);
+   fd_cs cs(batch->draw);
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    /* snapshot the end values: */
-   OUT_PKT7(ring, CP_REG_TO_MEM, 3);
-   OUT_RING(ring, CP_REG_TO_MEM_0_64B |
-                  CP_REG_TO_MEM_0_CNT(2) |
-                  CP_REG_TO_MEM_0_REG(reg));
-   stats_reloc(ring, aq, stop);
+   fd_pkt7(cs, CP_REG_TO_MEM, 3)
+      .add(CP_REG_TO_MEM_0(.reg = reg, .cnt = 2, ._64b = true))
+      .add(A5XX_CP_REG_TO_MEM_DEST(stats_sample(aq, stop)));
 
    assert(type < ARRAY_SIZE(batch->pipeline_stats_queries_active));
    assert(batch->pipeline_stats_queries_active[type] > 0);
 
    batch->pipeline_stats_queries_active[type]--;
    if (batch->pipeline_stats_queries_active[type])
-      fd6_event_write(batch, ring, stats_counter_events[type].stop, false);
+      fd6_event_write<CHIP>(batch->ctx, cs, stats_counter_events[type].stop);
 
    /* result += stop - start: */
-   OUT_PKT7(ring, CP_MEM_TO_MEM, 9);
-   OUT_RING(ring, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C | 0x40000000);
-   stats_reloc(ring, aq, result);
-   stats_reloc(ring, aq, result);
-   stats_reloc(ring, aq, stop)
-   stats_reloc(ring, aq, start);
+   fd_pkt7(cs, CP_MEM_TO_MEM, 9)
+      .add(CP_MEM_TO_MEM_0(
+         .neg_c = true,
+         ._double = true,
+         .wait_for_mem_writes = true
+      ))
+      .add(CP_MEM_TO_MEM_DST(stats_sample(aq, result)))
+      .add(CP_MEM_TO_MEM_SRC_A(stats_sample(aq, result)))
+      .add(CP_MEM_TO_MEM_SRC_B(stats_sample(aq, stop)))
+      .add(CP_MEM_TO_MEM_SRC_C(stats_sample(aq, start)));
 }
 
 static void
@@ -531,20 +574,22 @@ pipeline_stats_result_resource(struct fd_acc_query *aq,
                offsetof(struct fd6_pipeline_stats_sample, result));
 }
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider primitives_generated = {
    .query_type = PIPE_QUERY_PRIMITIVES_GENERATED,
    .size = sizeof(struct fd6_pipeline_stats_sample),
-   .resume = pipeline_stats_resume,
-   .pause = pipeline_stats_pause,
+   .resume = pipeline_stats_resume<CHIP>,
+   .pause = pipeline_stats_pause<CHIP>,
    .result = pipeline_stats_result,
    .result_resource = pipeline_stats_result_resource,
 };
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider pipeline_statistics_single = {
    .query_type = PIPE_QUERY_PIPELINE_STATISTICS_SINGLE,
    .size = sizeof(struct fd6_pipeline_stats_sample),
-   .resume = pipeline_stats_resume,
-   .pause = pipeline_stats_pause,
+   .resume = pipeline_stats_resume<CHIP>,
+   .pause = pipeline_stats_pause<CHIP>,
    .result = pipeline_stats_result,
    .result_resource = pipeline_stats_result_resource,
 };
@@ -552,18 +597,17 @@ static const struct fd_acc_sample_provider pipeline_statistics_single = {
 struct PACKED fd6_primitives_sample {
    struct fd_acc_query_sample base;
 
-   /* VPC_SO_STREAM_COUNTS dest address must be 32b aligned: */
+   /* VPC_SO_QUERY_BASE dest address must be 32b aligned: */
    uint64_t pad[3];
 
    struct {
       uint64_t emitted, generated;
    } start[4], stop[4], result;
 };
-DEFINE_CAST(fd_acc_query_sample, fd6_primitives_sample);
+FD_DEFINE_CAST(fd_acc_query_sample, fd6_primitives_sample);
 
-#define primitives_reloc(ring, aq, field)                                      \
-   OUT_RELOC(ring, fd_resource((aq)->prsc)->bo,                                \
-             __offsetof(struct fd6_primitives_sample, field), 0, 0);
+#define primitives_sample(aq, field) \
+   fd_resource((aq)->prsc)->bo, __offsetof(struct fd6_primitives_sample, field)
 
 static void
 log_primitives_sample(struct fd6_primitives_sample *ps)
@@ -586,78 +630,75 @@ log_primitives_sample(struct fd6_primitives_sample *ps)
 #endif
 }
 
+template <chip CHIP>
 static void
 primitives_emitted_resume(struct fd_acc_query *aq,
                           struct fd_batch *batch) assert_dt
 {
-   struct fd_ringbuffer *ring = batch->draw;
+   fd_cs cs(batch->draw);
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    ASSERT_ALIGNED(struct fd6_primitives_sample, start[0], 32);
 
-   OUT_PKT4(ring, REG_A6XX_VPC_SO_STREAM_COUNTS, 2);
-   primitives_reloc(ring, aq, start[0]);
+   fd_pkt4(cs, 2)
+      .add(VPC_SO_QUERY_BASE(CHIP, primitives_sample(aq, start[0])));
 
-   fd6_event_write(batch, ring, WRITE_PRIMITIVE_COUNTS, false);
+   fd6_event_write<CHIP>(batch->ctx, cs, FD_WRITE_PRIMITIVE_COUNTS);
 }
 
 static void
-accumultate_primitives_emitted(struct fd_acc_query *aq,
-                               struct fd_ringbuffer *ring,
-                               int idx)
+accumultate_primitives_emitted(struct fd_acc_query *aq, fd_cs &cs, int idx)
 {
    /* result += stop - start: */
-   OUT_PKT7(ring, CP_MEM_TO_MEM, 9);
-   OUT_RING(ring, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C | 0x80000000);
-   primitives_reloc(ring, aq, result.emitted);
-   primitives_reloc(ring, aq, result.emitted);
-   primitives_reloc(ring, aq, stop[idx].emitted);
-   primitives_reloc(ring, aq, start[idx].emitted);
+   fd_pkt7(cs, CP_MEM_TO_MEM, 9)
+      .add(CP_MEM_TO_MEM_0(.neg_c = true, ._double = true, .unk31 = true))
+      .add(CP_MEM_TO_MEM_DST(primitives_sample(aq, result.emitted)))
+      .add(CP_MEM_TO_MEM_SRC_A(primitives_sample(aq, result.emitted)))
+      .add(CP_MEM_TO_MEM_SRC_B(primitives_sample(aq, stop[idx].emitted)))
+      .add(CP_MEM_TO_MEM_SRC_C(primitives_sample(aq, start[idx].emitted)));
 }
 
 static void
-accumultate_primitives_generated(struct fd_acc_query *aq,
-                                 struct fd_ringbuffer *ring,
-                                 int idx)
+accumultate_primitives_generated(struct fd_acc_query *aq, fd_cs &cs, int idx)
 {
    /* result += stop - start: */
-   OUT_PKT7(ring, CP_MEM_TO_MEM, 9);
-   OUT_RING(ring, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C | 0x80000000);
-   primitives_reloc(ring, aq, result.generated);
-   primitives_reloc(ring, aq, result.generated);
-   primitives_reloc(ring, aq, stop[idx].generated);
-   primitives_reloc(ring, aq, start[idx].generated);
+   fd_pkt7(cs, CP_MEM_TO_MEM, 9)
+      .add(CP_MEM_TO_MEM_0(.neg_c = true, ._double = true, .unk31 = true))
+      .add(CP_MEM_TO_MEM_DST(primitives_sample(aq, result.generated)))
+      .add(CP_MEM_TO_MEM_SRC_A(primitives_sample(aq, result.generated)))
+      .add(CP_MEM_TO_MEM_SRC_B(primitives_sample(aq, stop[idx].generated)))
+      .add(CP_MEM_TO_MEM_SRC_C(primitives_sample(aq, start[idx].generated)));
 }
 
+template <chip CHIP>
 static void
 primitives_emitted_pause(struct fd_acc_query *aq,
                          struct fd_batch *batch) assert_dt
 {
-   struct fd_ringbuffer *ring = batch->draw;
+   fd_cs cs(batch->draw);
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    ASSERT_ALIGNED(struct fd6_primitives_sample, stop[0], 32);
 
-   OUT_PKT4(ring, REG_A6XX_VPC_SO_STREAM_COUNTS, 2);
-   primitives_reloc(ring, aq, stop[0]);
+   fd_pkt4(cs, 2)
+      .add(VPC_SO_QUERY_BASE(CHIP, primitives_sample(aq, stop[0])));
 
-   fd6_event_write(batch, ring, WRITE_PRIMITIVE_COUNTS, false);
-
-   fd6_event_write(batch, batch->draw, CACHE_FLUSH_TS, true);
+   fd6_event_write<CHIP>(batch->ctx, cs, FD_WRITE_PRIMITIVE_COUNTS);
+   fd6_event_write<CHIP>(batch->ctx, cs, FD_CACHE_CLEAN);
 
    if (aq->provider->query_type == PIPE_QUERY_SO_OVERFLOW_ANY_PREDICATE) {
       /* Need results from all channels: */
       for (int i = 0; i < PIPE_MAX_SO_BUFFERS; i++) {
-         accumultate_primitives_emitted(aq, ring, i);
-         accumultate_primitives_generated(aq, ring, i);
+         accumultate_primitives_emitted(aq, cs, i);
+         accumultate_primitives_generated(aq, cs, i);
       }
    } else {
-      accumultate_primitives_emitted(aq, ring, aq->base.index);
+      accumultate_primitives_emitted(aq, cs, aq->base.index);
       /* Only need primitives generated counts for the overflow queries: */
       if (aq->provider->query_type == PIPE_QUERY_SO_OVERFLOW_PREDICATE)
-         accumultate_primitives_generated(aq, ring, aq->base.index);
+         accumultate_primitives_generated(aq, cs, aq->base.index);
    }
 }
 
@@ -703,52 +744,64 @@ so_overflow_predicate_result_resource(struct fd_acc_query *aq,
                                       int index, struct fd_resource *dst,
                                       unsigned offset)
 {
+   fd_cs cs(ring);
+
+   cs.attach_bo(dst->bo);
+   cs.attach_bo(fd_resource(aq->prsc)->bo);
+
    /* result = generated - emitted: */
-   OUT_PKT7(ring, CP_MEM_TO_MEM, 7);
-   OUT_RING(ring, CP_MEM_TO_MEM_0_NEG_B |
-            COND(result_type >= PIPE_QUERY_TYPE_I64, CP_MEM_TO_MEM_0_DOUBLE));
-   OUT_RELOC(ring, dst->bo, offset, 0, 0);
-   primitives_reloc(ring, aq, result.generated);
-   primitives_reloc(ring, aq, result.emitted);
+   fd_pkt7(cs, CP_MEM_TO_MEM, 7)
+      .add(CP_MEM_TO_MEM_0(
+         .neg_b = true,
+         ._double = result_type >= PIPE_QUERY_TYPE_I64,
+      ))
+      .add(CP_MEM_TO_MEM_DST(dst->bo, offset))
+      .add(CP_MEM_TO_MEM_SRC_A(primitives_sample(aq, result.generated)))
+      .add(CP_MEM_TO_MEM_SRC_B(primitives_sample(aq, result.emitted)));
 
    /* This is a bit awkward, but glcts expects the result to be 1 or 0
     * rather than non-zero vs zero:
     */
-   OUT_PKT7(ring, CP_COND_WRITE5, 9);
-   OUT_RING(ring, CP_COND_WRITE5_0_FUNCTION(WRITE_NE) |
-                  CP_COND_WRITE5_0_POLL(POLL_MEMORY) |
-                  CP_COND_WRITE5_0_WRITE_MEMORY);
-   OUT_RELOC(ring, dst->bo, offset, 0, 0);    /* POLL_ADDR_LO/HI */
-   OUT_RING(ring, CP_COND_WRITE5_3_REF(0));
-   OUT_RING(ring, CP_COND_WRITE5_4_MASK(~0));
-   OUT_RELOC(ring, dst->bo, offset, 0, 0);    /* WRITE_ADDR_LO/HI */
-   OUT_RING(ring, 1);
-   OUT_RING(ring, 0);
+   fd_pkt7(cs, CP_COND_WRITE5, 9)
+      .add(CP_COND_WRITE5_0(
+         .function = WRITE_NE,
+         .poll = POLL_MEMORY,
+         .write_memory = true
+      ))
+      .add(CP_COND_WRITE5_POLL_ADDR(dst->bo, offset))
+      .add(CP_COND_WRITE5_3(.ref = 0))
+      .add(CP_COND_WRITE5_4(.mask = ~0))
+      .add(CP_COND_WRITE5_WRITE_ADDR(dst->bo, offset))
+      .add(1)
+      .add(0);
 }
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider primitives_emitted = {
    .query_type = PIPE_QUERY_PRIMITIVES_EMITTED,
    .size = sizeof(struct fd6_primitives_sample),
-   .resume = primitives_emitted_resume,
-   .pause = primitives_emitted_pause,
+   .resume = primitives_emitted_resume<CHIP>,
+   .pause = primitives_emitted_pause<CHIP>,
    .result = primitives_emitted_result,
    .result_resource = primitives_emitted_result_resource,
 };
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider so_overflow_any_predicate = {
    .query_type = PIPE_QUERY_SO_OVERFLOW_ANY_PREDICATE,
    .size = sizeof(struct fd6_primitives_sample),
-   .resume = primitives_emitted_resume,
-   .pause = primitives_emitted_pause,
+   .resume = primitives_emitted_resume<CHIP>,
+   .pause = primitives_emitted_pause<CHIP>,
    .result = so_overflow_predicate_result,
    .result_resource = so_overflow_predicate_result_resource,
 };
 
+template <chip CHIP>
 static const struct fd_acc_sample_provider so_overflow_predicate = {
    .query_type = PIPE_QUERY_SO_OVERFLOW_PREDICATE,
    .size = sizeof(struct fd6_primitives_sample),
-   .resume = primitives_emitted_resume,
-   .pause = primitives_emitted_pause,
+   .resume = primitives_emitted_resume<CHIP>,
+   .pause = primitives_emitted_pause<CHIP>,
    .result = so_overflow_predicate_result,
    .result_resource = so_overflow_predicate_result_resource,
 };
@@ -778,12 +831,12 @@ perfcntr_resume(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 {
    struct fd_batch_query_data *data = (struct fd_batch_query_data *)aq->query_data;
    struct fd_screen *screen = data->screen;
-   struct fd_ringbuffer *ring = batch->draw;
+   fd_cs cs(batch->draw);
 
    unsigned counters_per_group[screen->num_perfcntr_groups];
    memset(counters_per_group, 0, sizeof(counters_per_group));
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    /* configure performance counters for the requested queries: */
    for (unsigned i = 0; i < data->num_query_entries; i++) {
@@ -793,8 +846,10 @@ perfcntr_resume(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 
       assert(counter_idx < g->num_counters);
 
-      OUT_PKT4(ring, g->counters[counter_idx].select_reg, 1);
-      OUT_RING(ring, g->countables[entry->cid].selector);
+      fd_pkt4(cs, 1).add((fd_reg_pair){
+         .reg = g->counters[counter_idx].select_reg,
+         .value = g->countables[entry->cid].selector,
+      });
    }
 
    memset(counters_per_group, 0, sizeof(counters_per_group));
@@ -806,10 +861,9 @@ perfcntr_resume(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
       unsigned counter_idx = counters_per_group[entry->gid]++;
       const struct fd_perfcntr_counter *counter = &g->counters[counter_idx];
 
-      OUT_PKT7(ring, CP_REG_TO_MEM, 3);
-      OUT_RING(ring, CP_REG_TO_MEM_0_64B |
-                        CP_REG_TO_MEM_0_REG(counter->counter_reg_lo));
-      OUT_RELOC(ring, query_sample_idx(aq, i, start));
+      fd_pkt7(cs, CP_REG_TO_MEM, 3)
+         .add(CP_REG_TO_MEM_0(.reg = counter->counter_reg_lo, ._64b = true))
+         .add(A5XX_CP_REG_TO_MEM_DEST(query_sample_idx(aq, i, start)));
    }
 }
 
@@ -818,12 +872,12 @@ perfcntr_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 {
    struct fd_batch_query_data *data = (struct fd_batch_query_data *)aq->query_data;
    struct fd_screen *screen = data->screen;
-   struct fd_ringbuffer *ring = batch->draw;
+   fd_cs cs(batch->draw);
 
    unsigned counters_per_group[screen->num_perfcntr_groups];
    memset(counters_per_group, 0, sizeof(counters_per_group));
 
-   OUT_WFI5(ring);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    /* TODO do we need to bother to turn anything off? */
 
@@ -834,21 +888,20 @@ perfcntr_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
       unsigned counter_idx = counters_per_group[entry->gid]++;
       const struct fd_perfcntr_counter *counter = &g->counters[counter_idx];
 
-      OUT_PKT7(ring, CP_REG_TO_MEM, 3);
-      OUT_RING(ring, CP_REG_TO_MEM_0_64B |
-                        CP_REG_TO_MEM_0_REG(counter->counter_reg_lo));
-      OUT_RELOC(ring, query_sample_idx(aq, i, stop));
+      fd_pkt7(cs, CP_REG_TO_MEM, 3)
+         .add(CP_REG_TO_MEM_0(.reg = counter->counter_reg_lo, ._64b = true))
+         .add(A5XX_CP_REG_TO_MEM_DEST(query_sample_idx(aq, i, stop)));
    }
 
    /* and compute the result: */
    for (unsigned i = 0; i < data->num_query_entries; i++) {
       /* result += stop - start: */
-      OUT_PKT7(ring, CP_MEM_TO_MEM, 9);
-      OUT_RING(ring, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C);
-      OUT_RELOC(ring, query_sample_idx(aq, i, result)); /* dst */
-      OUT_RELOC(ring, query_sample_idx(aq, i, result)); /* srcA */
-      OUT_RELOC(ring, query_sample_idx(aq, i, stop));   /* srcB */
-      OUT_RELOC(ring, query_sample_idx(aq, i, start));  /* srcC */
+      fd_pkt7(cs, CP_MEM_TO_MEM, 9)
+         .add(CP_MEM_TO_MEM_0(.neg_c = true, ._double = true))
+         .add(CP_MEM_TO_MEM_DST(query_sample_idx(aq, i, result)))
+         .add(CP_MEM_TO_MEM_SRC_A(query_sample_idx(aq, i, result)))
+         .add(CP_MEM_TO_MEM_SRC_B(query_sample_idx(aq, i, stop)))
+         .add(CP_MEM_TO_MEM_SRC_C(query_sample_idx(aq, i, start)));
    }
 }
 
@@ -949,6 +1002,7 @@ error:
    return NULL;
 }
 
+template <chip CHIP>
 void
 fd6_query_context_init(struct pipe_context *pctx) disable_thread_safety_analysis
 {
@@ -957,22 +1011,23 @@ fd6_query_context_init(struct pipe_context *pctx) disable_thread_safety_analysis
    ctx->create_query = fd_acc_create_query;
    ctx->query_update_batch = fd_acc_query_update_batch;
 
-   ctx->record_timestamp = record_timestamp;
+   ctx->record_timestamp = record_timestamp<CHIP>;
    ctx->ts_to_ns = ticks_to_ns;
 
    pctx->create_batch_query = fd6_create_batch_query;
 
-   fd_acc_query_register_provider(pctx, &occlusion_counter);
-   fd_acc_query_register_provider(pctx, &occlusion_predicate);
-   fd_acc_query_register_provider(pctx, &occlusion_predicate_conservative);
+   fd_acc_query_register_provider(pctx, &occlusion_counter<CHIP>);
+   fd_acc_query_register_provider(pctx, &occlusion_predicate<CHIP>);
+   fd_acc_query_register_provider(pctx, &occlusion_predicate_conservative<CHIP>);
 
-   fd_acc_query_register_provider(pctx, &time_elapsed);
-   fd_acc_query_register_provider(pctx, &timestamp);
+   fd_acc_query_register_provider(pctx, &time_elapsed<CHIP>);
+   fd_acc_query_register_provider(pctx, &timestamp<CHIP>);
 
-   fd_acc_query_register_provider(pctx, &primitives_generated);
-   fd_acc_query_register_provider(pctx, &pipeline_statistics_single);
+   fd_acc_query_register_provider(pctx, &primitives_generated<CHIP>);
+   fd_acc_query_register_provider(pctx, &pipeline_statistics_single<CHIP>);
 
-   fd_acc_query_register_provider(pctx, &primitives_emitted);
-   fd_acc_query_register_provider(pctx, &so_overflow_any_predicate);
-   fd_acc_query_register_provider(pctx, &so_overflow_predicate);
+   fd_acc_query_register_provider(pctx, &primitives_emitted<CHIP>);
+   fd_acc_query_register_provider(pctx, &so_overflow_any_predicate<CHIP>);
+   fd_acc_query_register_provider(pctx, &so_overflow_predicate<CHIP>);
 }
+FD_GENX(fd6_query_context_init);

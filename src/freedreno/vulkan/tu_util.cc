@@ -8,8 +8,11 @@
 #include <errno.h>
 #include <stdarg.h>
 
+#include "common/freedreno_rd_output.h"
 #include "util/u_math.h"
 #include "util/timespec.h"
+#include "util/os_file_notify.h"
+#include "util/os_file.h"
 #include "vk_enum_to_str.h"
 
 #include "tu_device.h"
@@ -31,6 +34,7 @@ static const struct debug_control tu_debug_options[] = {
    { "perfc", TU_DEBUG_PERFC },
    { "flushall", TU_DEBUG_FLUSHALL },
    { "syncdraw", TU_DEBUG_SYNCDRAW },
+   { "push_consts_per_stage", TU_DEBUG_PUSH_CONSTS_PER_STAGE },
    { "rast_order", TU_DEBUG_RAST_ORDER },
    { "unaligned_store", TU_DEBUG_UNALIGNED_STORE },
    { "log_skip_gmem_ops", TU_DEBUG_LOG_SKIP_GMEM_OPS },
@@ -39,26 +43,144 @@ static const struct debug_control tu_debug_options[] = {
    { "3d_load", TU_DEBUG_3D_LOAD },
    { "fdm", TU_DEBUG_FDM },
    { "noconform", TU_DEBUG_NOCONFORM },
+   { "rd", TU_DEBUG_RD },
+   { "hiprio", TU_DEBUG_HIPRIO },
+   { "noconcurrentresolves", TU_DEBUG_NO_CONCURRENT_RESOLVES },
+   { "noconcurrentunresolves", TU_DEBUG_NO_CONCURRENT_UNRESOLVES },
+   { "dumpas", TU_DEBUG_DUMPAS },
+   { "nobinmerging", TU_DEBUG_NO_BIN_MERGING },
+   { "perfcraw", TU_DEBUG_PERFCRAW },
+   { "fdmoffset", TU_DEBUG_FDM_OFFSET },
+   { "check_cmd_buffer_status", TU_DEBUG_CHECK_CMD_BUFFER_STATUS },
+   { "comm", TU_DEBUG_COMM },
+   { "nofdm", TU_DEBUG_NOFDM },
    { NULL, 0 }
 };
 
+/*
+ * The runtime debug flags are a subset of the debug flags that can be set at
+ * runtime. Flags which depend on running state of the driver, the application
+ * or the hardware and would otherwise break when toggled should not be set here.
+ * Note: Keep in sync with the list of flags in 'docs/drivers/freedreno.rst'.
+ */
+const uint64_t tu_runtime_debug_flags =
+   TU_DEBUG_NIR | TU_DEBUG_NOBIN | TU_DEBUG_SYSMEM | TU_DEBUG_GMEM |
+   TU_DEBUG_FORCEBIN | TU_DEBUG_LAYOUT | TU_DEBUG_NOLRZ | TU_DEBUG_NOLRZFC |
+   TU_DEBUG_PERF | TU_DEBUG_FLUSHALL | TU_DEBUG_SYNCDRAW |
+   TU_DEBUG_RAST_ORDER | TU_DEBUG_UNALIGNED_STORE |
+   TU_DEBUG_LOG_SKIP_GMEM_OPS | TU_DEBUG_3D_LOAD | TU_DEBUG_FDM |
+   TU_DEBUG_NO_CONCURRENT_RESOLVES | TU_DEBUG_NO_CONCURRENT_UNRESOLVES |
+   TU_DEBUG_NO_BIN_MERGING;
+
+os_file_notifier_t tu_debug_notifier;
 struct tu_env tu_env;
+
+static uint64_t
+tu_env_get_file_flags(const char *path)
+{
+   char *str = os_read_file(path, NULL);
+   if (str) {
+      uint64_t flags = parse_debug_string(str, tu_debug_options);
+      free(str);
+      return flags;
+   }
+   return 0;
+}
+
+static void
+tu_env_notify(
+   void *data, const char *path, bool created, bool deleted, bool dir_deleted)
+{
+   uint64_t file_flags = 0;
+   if (!deleted) {
+      file_flags = tu_env_get_file_flags(path);
+   }
+
+   uint64_t runtime_flags = file_flags & tu_runtime_debug_flags;
+   if ((tu_env.debug.load(std::memory_order_acquire) & tu_runtime_debug_flags) ^ runtime_flags) {
+      mesa_logd("TU_DEBUG_FILE: Runtime debug flags change detected. Flags set:");
+      for (unsigned i = 0; i < ARRAY_SIZE(tu_debug_options); i++) {
+         if (runtime_flags & tu_debug_options[i].flag)
+            mesa_logd("TU_DEBUG_FILE:   %s", tu_debug_options[i].string);
+      }
+
+      if (runtime_flags == 0)
+         mesa_logd("TU_DEBUG_FILE:   None");
+   }
+
+   tu_env.debug.store(runtime_flags | tu_env.start_debug, std::memory_order_release);
+
+   if (unlikely(dir_deleted))
+      mesa_logw(
+         "Directory containing TU_DEBUG_FILE (%s) was deleted, stopping watching",
+         path);
+}
+
+static void
+tu_env_deinit(void)
+{
+   if (tu_debug_notifier)
+      os_file_notifier_destroy(tu_debug_notifier);
+}
 
 static void
 tu_env_init_once(void)
 {
-    tu_env.debug = parse_debug_string(os_get_option("TU_DEBUG"),
-            tu_debug_options);
+   tu_env.start_debug = tu_env.debug = parse_debug_string(os_get_option("TU_DEBUG"), tu_debug_options);
 
    if (TU_DEBUG(STARTUP))
-      mesa_logi("TU_DEBUG=0x%x", tu_env.debug);
+      mesa_logi("TU_DEBUG=0x%" PRIx64, tu_env.debug.load());
+
+   /* TU_DEBUG=rd functionality was moved to fd_rd_output. This debug option
+    * should translate to the basic-level FD_RD_DUMP_ENABLE option.
+    */
+   if (TU_DEBUG(RD))
+      fd_rd_dump_env.flags |= FD_RD_DUMP_ENABLE;
+
+   const char *debug_file = os_get_option("TU_DEBUG_FILE");
+   if (debug_file) {
+      if ((tu_env.debug & tu_runtime_debug_flags) != 0) {
+         mesa_logw("TU_DEBUG_FILE is set (%s), but TU_DEBUG is also set. "
+                   "Any runtime options (0x%" PRIx64 ") set in TU_DEBUG cannot be changed at runtime.",
+                   debug_file, tu_env.debug & tu_runtime_debug_flags);
+      }
+
+      uint64_t file_flags = tu_env_get_file_flags(debug_file);
+      tu_env.start_debug |= file_flags & ~tu_runtime_debug_flags;
+      tu_env.debug = file_flags | tu_env.start_debug;
+
+      if (TU_DEBUG(STARTUP))
+         mesa_logi("Watching TU_DEBUG_FILE: %s", debug_file);
+
+      const char* error_str = "Unknown error";
+      tu_debug_notifier =
+         os_file_notifier_create(debug_file, tu_env_notify, NULL, &error_str);
+      if (!tu_debug_notifier)
+         mesa_logw("Failed to watch TU_DEBUG_FILE (%s): %s", debug_file, error_str);
+   } else {
+      tu_debug_notifier = NULL;
+   }
+
+   atexit(tu_env_deinit);
 }
 
 void
 tu_env_init(void)
 {
+   fd_rd_dump_env_init();
+
    static once_flag once = ONCE_FLAG_INIT;
    call_once(&once, tu_env_init_once);
+}
+
+const char *
+tu_env_debug_as_string(void)
+{
+   static thread_local char debug_string[96];
+   dump_debug_control_string(debug_string, sizeof(debug_string),
+                             tu_debug_options,
+                             tu_env.debug.load(std::memory_order_acquire));
+   return debug_string;
 }
 
 void PRINTFLIKE(3, 4)
@@ -77,7 +199,6 @@ void PRINTFLIKE(3, 4)
 VkResult
 __vk_startup_errorf(struct tu_instance *instance,
                     VkResult error,
-                    bool always_print,
                     const char *file,
                     int line,
                     const char *format,
@@ -87,11 +208,6 @@ __vk_startup_errorf(struct tu_instance *instance,
    char buffer[256];
 
    const char *error_str = vk_Result_to_str(error);
-
-#ifndef DEBUG
-   if (!always_print)
-      return error;
-#endif
 
    if (format) {
       va_start(ap, format);
@@ -116,6 +232,17 @@ tu_tiling_config_update_tile_layout(struct tu_framebuffer *fb,
    uint32_t tile_align_h = dev->physical_device->info->tile_align_h;
    struct tu_tiling_config *tiling = &fb->tiling[gmem_layout];
 
+   *tiling = (struct tu_tiling_config) {
+      /* Put in dummy values that will assertion fail in register setup using
+       * them, since you shouldn't be doing gmem work if gmem is not possible.
+       */
+      .tile0 = (VkExtent2D) { ~0, ~0 },
+      .possible = false,
+      .vsc = {
+         .tile_count = (VkExtent2D) { .width = 1, .height = 1 },
+      },
+   };
+
    /* From the Vulkan 1.3.232 spec, under VkFramebufferCreateInfo:
     *
     *   If the render pass uses multiview, then layers must be one and each
@@ -127,7 +254,7 @@ tu_tiling_config_update_tile_layout(struct tu_framebuffer *fb,
    uint32_t layers = MAX2(fb->layers, pass->num_views);
 
    /* If there is more than one layer, we need to make sure that the layer
-    * stride is expressible as an offset in RB_BLIT_BASE_GMEM which ignores
+    * stride is expressible as an offset in RB_RESOLVE_GMEM_BUFFER_BASE which ignores
     * the low 12 bits. The layer stride seems to be implicitly calculated from
     * the tile width and height so we need to adjust one of them.
     */
@@ -151,17 +278,8 @@ tu_tiling_config_update_tile_layout(struct tu_framebuffer *fb,
    /* will force to sysmem, don't bother trying to have a valid tile config
     * TODO: just skip all GMEM stuff when sysmem is forced?
     */
-   if (!pass->gmem_pixels[gmem_layout]) {
-      tiling->possible = false;
-      /* Put in dummy values that will assertion fail in register setup using
-       * them, since you shouldn't be doing gmem work if gmem is not possible.
-       */
-      tiling->tile_count = (VkExtent2D) { 1, 1 };
-      tiling->tile0 = (VkExtent2D) { ~0, ~0 };
+   if (!pass->gmem_pixels[gmem_layout])
       return;
-   }
-
-   tiling->possible = false;
 
    uint32_t best_tile_count = ~0;
    VkExtent2D tile_count;
@@ -182,6 +300,19 @@ tu_tiling_config_update_tile_layout(struct tu_framebuffer *fb,
       if (!tile_size.height)
          continue;
 
+      /* When using FDM, we need approximately square tiles to maintain
+       * proper density distribution across the framebuffer.
+       * Way to wide or tall tiles would distort the density mapping, causing
+       * areas intended for low density to receive higher density and vice
+       * versa.
+       */
+      uint32_t fdm_penalty = 0;
+      if (pass->has_fdm &&
+          (tile_size.width > tile_size.height * 2 ||
+           tile_size.height > tile_size.width * 2)) {
+         fdm_penalty = 1000;
+      }
+
       tile_count.width = DIV_ROUND_UP(fb->width, tile_size.width);
       tile_count.height = DIV_ROUND_UP(fb->height, tile_size.height);
 
@@ -195,122 +326,146 @@ tu_tiling_config_update_tile_layout(struct tu_framebuffer *fb,
        * and amount of cache flushing), but the most square tiles in the case
        * of a tie (likely highest cache locality).
        */
-      if (tile_count.width * tile_count.height < best_tile_count ||
-          (tile_count.width * tile_count.height == best_tile_count &&
+      uint32_t total_tiles = tile_count.width * tile_count.height + fdm_penalty;
+      if (total_tiles < best_tile_count ||
+          (total_tiles == best_tile_count &&
            abs((int)(tile_size.width - tile_size.height)) <
               abs((int)(tiling->tile0.width - tiling->tile0.height)))) {
          tiling->possible = true;
          tiling->tile0 = tile_size;
-         tiling->tile_count = tile_count;
-         best_tile_count = tile_count.width * tile_count.height;
+         tiling->vsc.tile_count = tile_count;
+         best_tile_count = total_tiles;
       }
    }
 
    /* If forcing binning, try to get at least 2 tiles in each direction. */
    if (TU_DEBUG(FORCEBIN) && tiling->possible) {
-      if (tiling->tile_count.width == 1 && tiling->tile0.width != tile_align_w) {
+      if (tiling->vsc.tile_count.width == 1 && tiling->tile0.width != tile_align_w) {
          tiling->tile0.width = util_align_npot(DIV_ROUND_UP(tiling->tile0.width, 2), tile_align_w);
-         tiling->tile_count.width = 2;
+         tiling->vsc.tile_count.width = 2;
       }
-      if (tiling->tile_count.height == 1 && tiling->tile0.height != tile_align_h) {
+      if (tiling->vsc.tile_count.height == 1 && tiling->tile0.height != tile_align_h) {
          tiling->tile0.height = align(DIV_ROUND_UP(tiling->tile0.height, 2), tile_align_h);
-         tiling->tile_count.height = 2;
+         tiling->vsc.tile_count.height = 2;
       }
    }
-}
-
-static void
-tu_tiling_config_update_pipe_layout(struct tu_tiling_config *tiling,
-                                    const struct tu_device *dev)
-{
-   const uint32_t max_pipe_count =
-      dev->physical_device->info->num_vsc_pipes;
-
-   /* start from 1 tile per pipe */
-   tiling->pipe0 = (VkExtent2D) {
-      .width = 1,
-      .height = 1,
-   };
-   tiling->pipe_count = tiling->tile_count;
-
-   while (tiling->pipe_count.width * tiling->pipe_count.height > max_pipe_count) {
-      if (tiling->pipe0.width < tiling->pipe0.height) {
-         tiling->pipe0.width += 1;
-         tiling->pipe_count.width =
-            DIV_ROUND_UP(tiling->tile_count.width, tiling->pipe0.width);
-      } else {
-         tiling->pipe0.height += 1;
-         tiling->pipe_count.height =
-            DIV_ROUND_UP(tiling->tile_count.height, tiling->pipe0.height);
-      }
-   }
-}
-
-static void
-tu_tiling_config_update_pipes(struct tu_tiling_config *tiling,
-                              const struct tu_device *dev)
-{
-   const uint32_t max_pipe_count =
-      dev->physical_device->info->num_vsc_pipes;
-   const uint32_t used_pipe_count =
-      tiling->pipe_count.width * tiling->pipe_count.height;
-   const VkExtent2D last_pipe = {
-      .width = (tiling->tile_count.width - 1) % tiling->pipe0.width + 1,
-      .height = (tiling->tile_count.height - 1) % tiling->pipe0.height + 1,
-   };
-
-   assert(used_pipe_count <= max_pipe_count);
-   assert(max_pipe_count <= ARRAY_SIZE(tiling->pipe_config));
-
-   for (uint32_t y = 0; y < tiling->pipe_count.height; y++) {
-      for (uint32_t x = 0; x < tiling->pipe_count.width; x++) {
-         const uint32_t pipe_x = tiling->pipe0.width * x;
-         const uint32_t pipe_y = tiling->pipe0.height * y;
-         const uint32_t pipe_w = (x == tiling->pipe_count.width - 1)
-                                    ? last_pipe.width
-                                    : tiling->pipe0.width;
-         const uint32_t pipe_h = (y == tiling->pipe_count.height - 1)
-                                    ? last_pipe.height
-                                    : tiling->pipe0.height;
-         const uint32_t n = tiling->pipe_count.width * y + x;
-
-         tiling->pipe_config[n] = A6XX_VSC_PIPE_CONFIG_REG_X(pipe_x) |
-                                  A6XX_VSC_PIPE_CONFIG_REG_Y(pipe_y) |
-                                  A6XX_VSC_PIPE_CONFIG_REG_W(pipe_w) |
-                                  A6XX_VSC_PIPE_CONFIG_REG_H(pipe_h);
-         tiling->pipe_sizes[n] = CP_SET_BIN_DATA5_0_VSC_SIZE(pipe_w * pipe_h);
-      }
-   }
-
-   memset(tiling->pipe_config + used_pipe_count, 0,
-          sizeof(uint32_t) * (max_pipe_count - used_pipe_count));
 }
 
 static bool
-is_hw_binning_possible(const struct tu_tiling_config *tiling)
+is_hw_binning_possible(const struct tu_vsc_config *vsc)
 {
    /* Similar to older gens, # of tiles per pipe cannot be more than 32.
     * But there are no hangs with 16 or more tiles per pipe in either
     * X or Y direction, so that limit does not seem to apply.
     */
-   uint32_t tiles_per_pipe = tiling->pipe0.width * tiling->pipe0.height;
+   uint32_t tiles_per_pipe = vsc->pipe0.width * vsc->pipe0.height;
    return tiles_per_pipe <= 32;
 }
 
 static void
-tu_tiling_config_update_binning(struct tu_tiling_config *tiling, const struct tu_device *device)
+tu_tiling_config_update_pipe_layout(struct tu_vsc_config *vsc,
+                                    const struct tu_device *dev,
+                                    bool fdm)
 {
-   tiling->binning_possible = is_hw_binning_possible(tiling);
+   const uint32_t max_pipe_count =
+      dev->physical_device->info->num_vsc_pipes;
 
-   if (tiling->binning_possible) {
-      tiling->binning = (tiling->tile_count.width * tiling->tile_count.height) > 2;
+   /* If there is a fragment density map and bin merging is enabled, we will
+    * likely be able to merge some bins. Bins can only be merged if they are
+    * in the same visibility stream, so making the pipes cover too small an
+    * area can prevent bin merging from happening. Maximize the size of each
+    * pipe instead of minimizing it.
+    */
+   if (fdm && dev->physical_device->info->a6xx.has_bin_mask &&
+       !TU_DEBUG(NO_BIN_MERGING)) {
+      vsc->pipe0.width = 4;
+      vsc->pipe0.height = 8;
+      vsc->pipe_count.width =
+         DIV_ROUND_UP(vsc->tile_count.width, vsc->pipe0.width);
+      vsc->pipe_count.height =
+         DIV_ROUND_UP(vsc->tile_count.height, vsc->pipe0.height);
+      vsc->binning_possible =
+         vsc->pipe_count.width * vsc->pipe_count.height <= max_pipe_count;
+      return;
+   }
+
+   /* start from 1 tile per pipe */
+   vsc->pipe0 = (VkExtent2D) {
+      .width = 1,
+      .height = 1,
+   };
+   vsc->pipe_count = vsc->tile_count;
+
+   while (vsc->pipe_count.width * vsc->pipe_count.height > max_pipe_count) {
+      if (vsc->pipe0.width < vsc->pipe0.height) {
+         vsc->pipe0.width += 1;
+         vsc->pipe_count.width =
+            DIV_ROUND_UP(vsc->tile_count.width, vsc->pipe0.width);
+      } else {
+         vsc->pipe0.height += 1;
+         vsc->pipe_count.height =
+            DIV_ROUND_UP(vsc->tile_count.height, vsc->pipe0.height);
+      }
+   }
+
+   vsc->binning_possible = is_hw_binning_possible(vsc);
+}
+
+static void
+tu_tiling_config_update_pipes(struct tu_vsc_config *vsc,
+                              const struct tu_device *dev)
+{
+   const uint32_t max_pipe_count =
+      dev->physical_device->info->num_vsc_pipes;
+   const uint32_t used_pipe_count =
+      vsc->pipe_count.width * vsc->pipe_count.height;
+   const VkExtent2D last_pipe = {
+      .width = (vsc->tile_count.width - 1) % vsc->pipe0.width + 1,
+      .height = (vsc->tile_count.height - 1) % vsc->pipe0.height + 1,
+   };
+
+   if (!vsc->binning_possible)
+      return;
+
+   assert(used_pipe_count <= max_pipe_count);
+   assert(max_pipe_count <= ARRAY_SIZE(vsc->pipe_config));
+
+   for (uint32_t y = 0; y < vsc->pipe_count.height; y++) {
+      for (uint32_t x = 0; x < vsc->pipe_count.width; x++) {
+         const uint32_t pipe_x = vsc->pipe0.width * x;
+         const uint32_t pipe_y = vsc->pipe0.height * y;
+         const uint32_t pipe_w = (x == vsc->pipe_count.width - 1)
+                                    ? last_pipe.width
+                                    : vsc->pipe0.width;
+         const uint32_t pipe_h = (y == vsc->pipe_count.height - 1)
+                                    ? last_pipe.height
+                                    : vsc->pipe0.height;
+         const uint32_t n = vsc->pipe_count.width * y + x;
+
+         vsc->pipe_config[n] = A6XX_VSC_PIPE_CONFIG_REG_X(pipe_x) |
+                                  A6XX_VSC_PIPE_CONFIG_REG_Y(pipe_y) |
+                                  A6XX_VSC_PIPE_CONFIG_REG_W(pipe_w) |
+                                  A6XX_VSC_PIPE_CONFIG_REG_H(pipe_h);
+         vsc->pipe_sizes[n] = CP_SET_BIN_DATA5_0_VSC_SIZE(pipe_w * pipe_h);
+      }
+   }
+
+   memset(vsc->pipe_config + used_pipe_count, 0,
+          sizeof(uint32_t) * (max_pipe_count - used_pipe_count));
+}
+
+static void
+tu_tiling_config_update_binning(struct tu_vsc_config *vsc, const struct tu_device *device)
+{
+   if (vsc->binning_possible) {
+      vsc->binning = (vsc->tile_count.width * vsc->tile_count.height) > 2;
 
       if (TU_DEBUG(FORCEBIN))
-         tiling->binning = true;
+         vsc->binning = true;
       if (TU_DEBUG(NOBIN))
-         tiling->binning = false;
+         vsc->binning = false;
    } else {
-      tiling->binning = false;
+      vsc->binning = false;
    }
 }
 
@@ -323,9 +478,23 @@ tu_framebuffer_tiling_config(struct tu_framebuffer *fb,
       struct tu_tiling_config *tiling = &fb->tiling[gmem_layout];
       tu_tiling_config_update_tile_layout(fb, device, pass,
                                           (enum tu_gmem_layout) gmem_layout);
-      tu_tiling_config_update_pipe_layout(tiling, device);
-      tu_tiling_config_update_pipes(tiling, device);
-      tu_tiling_config_update_binning(tiling, device);
+      if (!tiling->possible)
+         continue;
+
+      struct tu_vsc_config *vsc = &tiling->vsc;
+      tu_tiling_config_update_pipe_layout(vsc, device, pass->has_fdm);
+      tu_tiling_config_update_pipes(vsc, device);
+      tu_tiling_config_update_binning(vsc, device);
+
+      if (pass->has_fdm) {
+         struct tu_vsc_config *fdm_offset_vsc = &tiling->fdm_offset_vsc;
+         fdm_offset_vsc->tile_count = (VkExtent2D) {
+            vsc->tile_count.width + 1, vsc->tile_count.height + 1
+         };
+         tu_tiling_config_update_pipe_layout(fdm_offset_vsc, device, true);
+         tu_tiling_config_update_pipes(fdm_offset_vsc, device);
+         tu_tiling_config_update_binning(fdm_offset_vsc, device);
+      }
    }
 }
 

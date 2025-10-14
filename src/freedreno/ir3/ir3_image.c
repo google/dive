@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2017-2018 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2017-2018 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -27,13 +9,13 @@
 #include "ir3_image.h"
 
 /*
- * SSBO/Image to/from IBO/tex hw mapping table:
+ * SSBO/Image to/from UAV/tex hw mapping table:
  */
 
 void
 ir3_ibo_mapping_init(struct ir3_ibo_mapping *mapping, unsigned num_textures)
 {
-   memset(mapping, IBO_INVALID, sizeof(*mapping));
+   memset(mapping, UAV_INVALID, sizeof(*mapping));
    mapping->num_tex = 0;
    mapping->tex_base = num_textures;
 }
@@ -49,10 +31,10 @@ ir3_ssbo_to_ibo(struct ir3_context *ctx, nir_src src)
 unsigned
 ir3_ssbo_to_tex(struct ir3_ibo_mapping *mapping, unsigned ssbo)
 {
-   if (mapping->ssbo_to_tex[ssbo] == IBO_INVALID) {
+   if (mapping->ssbo_to_tex[ssbo] == UAV_INVALID) {
       unsigned tex = mapping->num_tex++;
       mapping->ssbo_to_tex[ssbo] = tex;
-      mapping->tex_to_image[tex] = IBO_SSBO | ssbo;
+      mapping->tex_to_image[tex] = UAV_SSBO | ssbo;
    }
    return mapping->ssbo_to_tex[ssbo] + mapping->tex_base;
 }
@@ -67,13 +49,12 @@ ir3_image_to_ibo(struct ir3_context *ctx, nir_src src)
 
    if (nir_src_is_const(src)) {
       int image_idx = nir_src_as_uint(src);
-      return create_immed(ctx->block, ctx->s->info.num_ssbos + image_idx);
+      return create_immed(&ctx->build, ctx->s->info.num_ssbos + image_idx);
    } else {
       struct ir3_instruction *image_idx = ir3_get_src(ctx, &src)[0];
       if (ctx->s->info.num_ssbos) {
-         return ir3_ADD_U(ctx->block,
-            image_idx, 0,
-            create_immed(ctx->block, ctx->s->info.num_ssbos), 0);
+         return ir3_ADD_U(&ctx->build, image_idx, 0,
+                          create_immed(&ctx->build, ctx->s->info.num_ssbos), 0);
       } else {
          return image_idx;
       }
@@ -83,7 +64,7 @@ ir3_image_to_ibo(struct ir3_context *ctx, nir_src src)
 unsigned
 ir3_image_to_tex(struct ir3_ibo_mapping *mapping, unsigned image)
 {
-   if (mapping->image_to_tex[image] == IBO_INVALID) {
+   if (mapping->image_to_tex[image] == UAV_INVALID) {
       unsigned tex = mapping->num_tex++;
       mapping->image_to_tex[image] = tex;
       mapping->tex_to_image[tex] = image;
@@ -121,7 +102,9 @@ ir3_get_type_for_image_intrinsic(const nir_intrinsic_instr *instr)
    nir_alu_type type = nir_type_uint;
    switch (instr->intrinsic) {
    case nir_intrinsic_image_load:
+   case nir_intrinsic_image_sparse_load:
    case nir_intrinsic_bindless_image_load:
+   case nir_intrinsic_bindless_image_sparse_load:
       type = nir_alu_type_get_base_type(nir_intrinsic_dest_type(instr));
       /* SpvOpAtomicLoad doesn't have dest type */
       if (type == nir_type_invalid)
@@ -144,7 +127,7 @@ ir3_get_type_for_image_intrinsic(const nir_intrinsic_instr *instr)
       break;
 
    default:
-      unreachable("Unhandled NIR image intrinsic");
+      UNREACHABLE("Unhandled NIR image intrinsic");
    }
 
    switch (type) {
@@ -155,7 +138,7 @@ ir3_get_type_for_image_intrinsic(const nir_intrinsic_instr *instr)
    case nir_type_float:
       return bit_size == 16 ? TYPE_F16 : TYPE_F32;
    default:
-      unreachable("bad type");
+      UNREACHABLE("bad type");
    }
 }
 

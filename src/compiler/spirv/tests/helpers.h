@@ -25,6 +25,7 @@
 
 #include <gtest/gtest.h>
 #include "compiler/spirv/nir_spirv.h"
+#include "compiler/spirv/spirv_info.h"
 #include "compiler/nir/nir.h"
 
 class spirv_test : public ::testing::Test {
@@ -33,21 +34,15 @@ protected:
    : shader(NULL), break_on_failure(false)
    {
       glsl_type_singleton_init_or_ref();
-   }
 
-   ~spirv_test()
-   {
-      ralloc_free(shader);
-      glsl_type_singleton_decref();
-   }
+      memset(&spirv_caps, 0, sizeof(spirv_caps));
+      spirv_caps.Shader = true;
+      spirv_caps.VulkanMemoryModel = true;
+      spirv_caps.VulkanMemoryModelDeviceScope = true;
 
-   void get_nir(size_t num_words, const uint32_t *words, gl_shader_stage stage = MESA_SHADER_COMPUTE)
-   {
-      spirv_to_nir_options spirv_options;
       memset(&spirv_options, 0, sizeof(spirv_options));
       spirv_options.environment = NIR_SPIRV_VULKAN;
-      spirv_options.caps.vk_memory_model = true;
-      spirv_options.caps.vk_memory_model_device_scope = true;
+      spirv_options.capabilities = &spirv_caps;
       spirv_options.ubo_addr_format = nir_address_format_32bit_index_offset;
       spirv_options.ssbo_addr_format = nir_address_format_32bit_index_offset;
       spirv_options.phys_ssbo_addr_format = nir_address_format_64bit_global;
@@ -56,9 +51,17 @@ protected:
       spirv_options.task_payload_addr_format = nir_address_format_32bit_offset;
       spirv_options.skip_os_break_in_debug_build = !break_on_failure;
 
-      nir_shader_compiler_options nir_options;
       memset(&nir_options, 0, sizeof(nir_options));
+   }
 
+   ~spirv_test()
+   {
+      ralloc_free(shader);
+      glsl_type_singleton_decref();
+   }
+
+   void get_nir(size_t num_words, const uint32_t *words, mesa_shader_stage stage = MESA_SHADER_COMPUTE)
+   {
       shader = spirv_to_nir(words, num_words, NULL, 0,
                             stage, "main", &spirv_options, &nir_options);
    }
@@ -80,6 +83,28 @@ protected:
 
       return NULL;
    }
+
+   nir_tex_instr *find_tex_instr(nir_texop op, unsigned index=0)
+   {
+      nir_function_impl *impl = nir_shader_get_entrypoint(shader);
+      nir_foreach_block(block, impl) {
+         nir_foreach_instr(instr, block) {
+            if (instr->type != nir_instr_type_tex ||
+                nir_instr_as_tex(instr)->op != op)
+               continue;
+            if (index == 0)
+               return nir_instr_as_tex(instr);
+            else
+               index--;
+         }
+      }
+
+      return NULL;
+   }
+
+   spirv_capabilities spirv_caps;
+   spirv_to_nir_options spirv_options;
+   nir_shader_compiler_options nir_options;
 
    nir_shader *shader;
    bool break_on_failure;

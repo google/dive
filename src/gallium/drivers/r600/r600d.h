@@ -1,28 +1,10 @@
 /*
  * Copyright 2010 Jerome Glisse <glisse@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
  * Authors:
  *      Jerome Glisse
+ * SPDX-License-Identifier: MIT
  */
+
 #ifndef R600D_H
 #define R600D_H
 
@@ -54,6 +36,7 @@
 #define PKT3_NOP                               0x10
 #define EG_PKT3_SET_BASE                       0x11 /* >= evergreen */
 #define     EG_DRAW_INDEX_INDIRECT_PATCH_TABLE_BASE 1 /* DX11 Draw_Index_Indirect Patch Table Base */
+#define PKT3_CLEAR_STATE                       0x12
 #define EG_PKT3_INDEX_BUFFER_SIZE              0x13
 #define PKT3_INDIRECT_BUFFER_END               0x17
 #define PKT3_SET_PREDICATION                   0x20
@@ -2296,6 +2279,12 @@
 #define   S_028C08_PIX_CENTER_HALF(x)                  (((unsigned)(x) & 0x1) << 0)
 #define   G_028C08_PIX_CENTER_HALF(x)                  (((x) >> 0) & 0x1)
 #define   C_028C08_PIX_CENTER_HALF                     0xFFFFFFFE
+#define   S_028C08_ROUND_MODE(x)                       (((unsigned)(x) & 0x03) << 1)
+#define   G_028C08_ROUND_MODE(x)                       (((x) >> 1) & 0x03)
+#define     V_028C08_X_TRUNCATE                        0x00
+#define     V_028C08_X_ROUND                           0x01
+#define     V_028C08_X_ROUND_TO_EVEN                   0x02
+#define     V_028C08_X_ROUND_TO_ODD                    0x03
 #define   S_028C08_QUANT_MODE(x)                       (((unsigned)(x) & 0x7) << 3)
 #define   G_028C08_QUANT_MODE(x)                       (((x) >> 3) & 0x7)
 #define   C_028C08_QUANT_MODE                          0xFFFFFFC7
@@ -2866,6 +2855,22 @@
 #define   S_02820C_CLIP_RULE(x)                        (((unsigned)(x) & 0xFFFF) << 0)
 #define   G_02820C_CLIP_RULE(x)                        (((x) >> 0) & 0xFFFF)
 #define   C_02820C_CLIP_RULE                           0xFFFF0000
+#define     V_02820C_OUT                                 0x0001
+#define     V_02820C_IN_0                                0x0002
+#define     V_02820C_IN_1                                0x0004
+#define     V_02820C_IN_10                               0x0008
+#define     V_02820C_IN_2                                0x0010
+#define     V_02820C_IN_20                               0x0020
+#define     V_02820C_IN_21                               0x0040
+#define     V_02820C_IN_210                              0x0080
+#define     V_02820C_IN_3                                0x0100
+#define     V_02820C_IN_30                               0x0200
+#define     V_02820C_IN_31                               0x0400
+#define     V_02820C_IN_310                              0x0800
+#define     V_02820C_IN_32                               0x1000
+#define     V_02820C_IN_320                              0x2000
+#define     V_02820C_IN_321                              0x4000
+#define     V_02820C_IN_3210                             0x8000
 #define R_028210_PA_SC_CLIPRECT_0_TL                 0x028210
 #define   S_028210_TL_X(x)                             (((unsigned)(x) & 0x3FFF) << 0)
 #define   G_028210_TL_X(x)                             (((x) >> 0) & 0x3FFF)

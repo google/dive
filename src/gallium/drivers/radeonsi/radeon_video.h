@@ -11,9 +11,13 @@
 
 #include "winsys/radeon_winsys.h"
 #include "vl/vl_video_buffer.h"
+#include "util/log.h"
+
+#undef  MESA_LOG_TAG
+#define MESA_LOG_TAG "radeonsi"
 
 #define RVID_ERR(fmt, args...)                                                                     \
-   fprintf(stderr, "EE %s:%d %s UVD - " fmt, __FILE__, __LINE__, __func__, ##args)
+   mesa_loge("%s:%d %s UVD - " fmt, __FILE__, __LINE__, __func__, ##args)
 
 #define UVD_FW_1_66_16 ((1 << 24) | (66 << 16) | (16 << 8))
 
@@ -21,6 +25,7 @@
 struct rvid_buffer {
    unsigned usage;
    struct si_resource *res;
+   void *user_data;
 };
 
 /* video buffer offset info representation */
@@ -45,7 +50,7 @@ bool si_vid_create_tmz_buffer(struct pipe_screen *screen, struct rvid_buffer *bu
 void si_vid_destroy_buffer(struct rvid_buffer *buffer);
 
 /* reallocate a buffer, preserving its content */
-bool si_vid_resize_buffer(struct pipe_screen *screen, struct radeon_cmdbuf *cs,
+bool si_vid_resize_buffer(struct pipe_context *context,
                           struct rvid_buffer *new_buf, unsigned new_size,
                           struct rvid_buf_offset_info *buf_ofst_info);
 

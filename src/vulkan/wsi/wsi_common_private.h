@@ -25,8 +25,8 @@
 
 #include "wsi_common.h"
 #include "util/perf/cpu_trace.h"
-#include "vulkan/runtime/vk_object.h"
-#include "vulkan/runtime/vk_sync.h"
+#include "vk_object.h"
+#include "vk_sync.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +40,7 @@ struct wsi_swapchain;
 #define WSI_DEBUG_NOSHM       (1ull << 2)
 #define WSI_DEBUG_LINEAR      (1ull << 3)
 #define WSI_DEBUG_DXGI        (1ull << 4)
+#define WSI_DEBUG_NOWLTS      (1ull << 5)
 
 extern uint64_t WSI_DEBUG;
 
@@ -47,6 +48,7 @@ enum wsi_image_type {
    WSI_IMAGE_TYPE_CPU,
    WSI_IMAGE_TYPE_DRM,
    WSI_IMAGE_TYPE_DXGI,
+   WSI_IMAGE_TYPE_METAL,
 };
 
 struct wsi_base_image_params {
@@ -63,6 +65,8 @@ struct wsi_drm_image_params {
    struct wsi_base_image_params base;
 
    bool same_gpu;
+   /* See wsi_image_info.explicit_sync. */
+   bool explicit_sync;
 
    uint32_t num_modifier_lists;
    const uint32_t *num_modifiers;
@@ -83,6 +87,22 @@ struct wsi_image_info {
    VkExternalMemoryImageCreateInfo ext_mem;
    VkImageFormatListCreateInfo format_list;
    VkImageDrmFormatModifierListCreateInfoEXT drm_mod_list;
+   VkColorSpaceKHR color_space;
+
+   enum wsi_image_type image_type;
+
+   /**
+    * If set, the WSI backend and the WSI device support timeline-based explicit
+    * synchronization.  The device check requires non-emulated timeline
+    * semaphores, so they can be exported as an opaque fd.
+    *
+    * The present will take in the explicit_sync[WSI_ES_ACQUIRE] timeline point
+    * and not present until that completes, and sets up the
+    * explicit_sync[WSI_ES_RELEASE] timeline point for when the image is done
+    * being used by the compositor (whether that's a GPU composite completing,
+    * or the scanned-out frame being flipped away from).
+    */
+   bool explicit_sync;
 
    bool prime_use_linear_modifier;
 
@@ -96,7 +116,7 @@ struct wsi_image_info {
    uint32_t linear_stride;
 
    /* For buffer blit images, the size of the buffer in bytes */
-   uint32_t linear_size;
+   uint64_t linear_size;
 
    wsi_memory_type_select_cb select_image_memory_type;
    wsi_memory_type_select_cb select_blit_dst_memory_type;
@@ -110,6 +130,23 @@ struct wsi_image_info {
    VkResult (*finish_create)(const struct wsi_swapchain *chain,
                              const struct wsi_image_info *info,
                              struct wsi_image *image);
+};
+
+enum wsi_explicit_sync_timelines
+{
+   /** Timeline point that must be passed before the display can start reading from the image */
+   WSI_ES_ACQUIRE,
+   /** Timeline point that indicates that the display is done reading from this image. */
+   WSI_ES_RELEASE,
+
+   WSI_ES_COUNT,
+};
+
+struct wsi_image_explicit_sync_timeline {
+   VkSemaphore semaphore;
+   uint64_t timeline;
+   int fd;
+   uint32_t handle;
 };
 
 enum wsi_swapchain_blit_type {
@@ -127,7 +164,18 @@ struct wsi_image {
       VkImage image;
       VkDeviceMemory memory;
       VkCommandBuffer *cmd_buffers;
+      /* Whether the backing memory of the blit dst buffer is shared directly
+       * with the compositor instead of being mapped via vkMapMemory locally.
+       */
+      bool to_foreign_queue;
    } blit;
+   /* Whether or not the image has been acquired
+    * on the CPU side via acquire_next_image.
+    */
+   bool acquired;
+   uint64_t present_serial;
+
+   struct wsi_image_explicit_sync_timeline explicit_sync[WSI_ES_COUNT];
 
 #ifndef _WIN32
    uint64_t drm_modifier;
@@ -147,17 +195,38 @@ struct wsi_swapchain {
 
    const struct wsi_device *wsi;
 
+   VkSwapchainCreateFlagsKHR create_flags;
+
    VkDevice device;
    VkAllocationCallbacks alloc;
    VkFence* fences;
    VkPresentModeKHR present_mode;
+   VkPresentGravityFlagsEXT present_gravity_x;
+   VkPresentGravityFlagsEXT present_gravity_y;
+
+   /**
+    * Timeline for presents completing according to VK_KHR_present_wait.  The
+    * present should complete as close as possible (before or after!) to the
+    * first pixel being scanned out.
+    */
    VkSemaphore present_id_timeline;
 
    int signal_dma_buf_from_semaphore;
+   /**
+    * Optional semaphore for implicit-sync swapchains.  It will be signaled by
+    * the pre-present vkQueueSubmit2, and its syncobj will get imported into the
+    * image's dma-buf before being presented.
+    *
+    * If not set (due to older kernels missing sync-file import/export), for
+    * implicit-sync swapchains, then you have to support
+    * create_sync_for_memory().
+    */
    VkSemaphore dma_buf_semaphore;
 
    struct wsi_image_info image_info;
    uint32_t image_count;
+
+   uint64_t present_serial;
 
    struct {
       enum wsi_swapchain_blit_type type;
@@ -168,7 +237,7 @@ struct wsi_swapchain {
        * The created queue will be stored here and will be used to execute the
        * buffer blit instead of using the present queue.
        */
-      VkQueue queue;
+      struct vk_queue *queue;
    } blit;
 
    bool capture_key_pressed;
@@ -190,15 +259,20 @@ struct wsi_swapchain {
    VkResult (*wait_for_present)(struct wsi_swapchain *swap_chain,
                                 uint64_t present_id,
                                 uint64_t timeout);
+   VkResult (*wait_for_present2)(struct wsi_swapchain *swap_chain,
+                                 uint64_t present_id,
+                                 uint64_t timeout);
    VkResult (*release_images)(struct wsi_swapchain *swap_chain,
                               uint32_t count,
                               const uint32_t *indices);
    void (*set_present_mode)(struct wsi_swapchain *swap_chain,
                             VkPresentModeKHR mode);
+   void (*set_hdr_metadata)(struct wsi_swapchain *swap_chain,
+                            const VkHdrMetadataEXT* pMetadata);
 };
 
 bool
-wsi_device_matches_drm_fd(const struct wsi_device *wsi, int drm_fd);
+wsi_device_matches_drm_fd(VkPhysicalDevice pdevice, int drm_fd);
 
 void
 wsi_wl_surface_destroy(VkIcdSurfaceBase *icd_surface, VkInstance _instance,
@@ -216,7 +290,7 @@ wsi_swapchain_init(const struct wsi_device *wsi,
                    const struct wsi_base_image_params *image_params,
                    const VkAllocationCallbacks *pAllocator);
 
-enum VkPresentModeKHR
+VkPresentModeKHR
 wsi_swapchain_get_present_mode(struct wsi_device *wsi,
                                const VkSwapchainCreateInfoKHR *pCreateInfo);
 
@@ -266,8 +340,7 @@ VkResult
 wsi_create_buffer_blit_context(const struct wsi_swapchain *chain,
                                const struct wsi_image_info *info,
                                struct wsi_image *image,
-                               VkExternalMemoryHandleTypeFlags handle_types,
-                               bool implicit_sync);
+                               VkExternalMemoryHandleTypeFlags handle_types);
 
 VkResult
 wsi_finish_create_blit_context(const struct wsi_swapchain *chain,
@@ -319,6 +392,30 @@ wsi_create_sync_for_dma_buf_wait(const struct wsi_swapchain *chain,
                                  const struct wsi_image *image,
                                  enum vk_sync_features sync_features,
                                  struct vk_sync **sync_out);
+VkResult
+wsi_create_sync_for_image_syncobj(const struct wsi_swapchain *chain,
+                                  const struct wsi_image *image,
+                                  enum vk_sync_features req_features,
+                                  struct vk_sync **sync_out);
+
+VkResult
+wsi_create_image_explicit_sync_drm(const struct wsi_swapchain *chain,
+                                   struct wsi_image *image);
+
+void
+wsi_destroy_image_explicit_sync_drm(const struct wsi_swapchain *chain,
+                                    struct wsi_image *image);
+
+VkResult
+wsi_drm_wait_for_explicit_sync_release(struct wsi_swapchain *chain,
+                                       uint32_t image_count,
+                                       struct wsi_image **images,
+                                       uint64_t rel_timeout_ns,
+                                       uint32_t *image_index);
+
+VkResult
+wsi_drm_init_swapchain_implicit_sync(struct wsi_swapchain *chain);
+
 #endif
 
 struct wsi_interface {
@@ -370,6 +467,11 @@ VkResult wsi_win32_init_wsi(struct wsi_device *wsi_device,
                          VkPhysicalDevice physical_device);
 void wsi_win32_finish_wsi(struct wsi_device *wsi_device,
                        const VkAllocationCallbacks *alloc);
+VkResult wsi_metal_init_wsi(struct wsi_device *wsi_device,
+                           const VkAllocationCallbacks *alloc,
+                           VkPhysicalDevice physical_device);
+void wsi_metal_finish_wsi(struct wsi_device *wsi_device,
+                          const VkAllocationCallbacks *alloc);
 
 
 VkResult
@@ -395,10 +497,21 @@ void wsi_headless_finish_wsi(struct wsi_device *wsi_device,
 VK_DEFINE_NONDISP_HANDLE_CASTS(wsi_swapchain, base, VkSwapchainKHR,
                                VK_OBJECT_TYPE_SWAPCHAIN_KHR)
 
-#if defined(HAVE_PTHREAD) && !defined(_WIN32)
-bool
-wsi_init_pthread_cond_monotonic(pthread_cond_t *cond);
-#endif
+#if defined(VK_USE_PLATFORM_METAL_EXT)
+struct wsi_metal_image_params {
+   struct wsi_base_image_params base;
+   /* Software implementations like lavapipe cannot render to an MTLTexture
+    * directly and therefore require a blit
+    */
+   bool can_render_to_texture;
+};
+
+VkResult
+wsi_metal_configure_image(const struct wsi_swapchain *chain,
+                          const VkSwapchainCreateInfoKHR *pCreateInfo,
+                          const struct wsi_metal_image_params *params,
+                          struct wsi_image_info *info);
+#endif /* defined(VK_USE_PLATFORM_METAL_EXT) */
 
 #ifdef __cplusplus
 }

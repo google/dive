@@ -62,7 +62,7 @@ pan_unpacked_type_for_format(const struct util_format_description *desc)
    int c = util_format_get_first_non_void_channel(desc->format);
 
    if (c == -1)
-      unreachable("Void format not renderable");
+      UNREACHABLE("Void format not renderable");
 
    bool large = (desc->channel[c].size > 16);
    bool large_norm = (desc->channel[c].size > 8);
@@ -80,7 +80,7 @@ pan_unpacked_type_for_format(const struct util_format_description *desc)
    case UTIL_FORMAT_TYPE_FLOAT:
       return large ? nir_type_float32 : nir_type_float16;
    default:
-      unreachable("Format not renderable");
+      UNREACHABLE("Format not renderable");
    }
 }
 
@@ -202,7 +202,7 @@ static nir_def *
 pan_fsat(nir_builder *b, nir_def *v, bool is_signed)
 {
    if (is_signed)
-      return nir_fsat_signed_mali(b, v);
+      return nir_fsat_signed(b, v);
    else
       return nir_fsat(b, v);
 }
@@ -371,7 +371,7 @@ pan_unpack_pure(nir_builder *b, nir_def *packed, unsigned size, unsigned nr)
    case 8:
       return pan_unpack_pure_8(b, packed, nr);
    default:
-      unreachable("Unrenderable size");
+      UNREACHABLE("Unrenderable size");
    }
 }
 
@@ -417,8 +417,8 @@ pan_unpack(nir_builder *b, const struct util_format_description *desc,
       break;
    }
 
-   fprintf(stderr, "%s\n", desc->name);
-   unreachable("Unknown format");
+   mesa_loge("%s\n", desc->name);
+   UNREACHABLE("Unknown format");
 }
 
 static nir_def *pan_pack(nir_builder *b,
@@ -455,7 +455,7 @@ static nir_def *pan_pack(nir_builder *b,
       case 8:
          return pan_pack_pure_8(b, raw, desc->nr_channels);
       default:
-         unreachable("Unrenderable size");
+         UNREACHABLE("Unrenderable size");
       }
    }
 
@@ -488,8 +488,8 @@ static nir_def *pan_pack(nir_builder *b,
       break;
    }
 
-   fprintf(stderr, "%s\n", desc->name);
-   unreachable("Unknown format");
+   mesa_loge("%s\n", desc->name);
+   UNREACHABLE("Unknown format");
 }
 
 static void
@@ -559,7 +559,7 @@ pan_lower_fb_load(nir_builder *b, nir_intrinsic_instr *intr,
    if (reorder_comps)
       unpacked = pan_unpack_reorder(b, desc, unpacked);
 
-   nir_def_rewrite_uses_after(&intr->def, unpacked, &intr->instr);
+   nir_def_rewrite_uses_after_instr(&intr->def, unpacked, &intr->instr);
 }
 
 struct inputs {
@@ -625,7 +625,7 @@ pan_lower_framebuffer(nir_shader *shader, const enum pipe_format *rt_fmts,
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
 
    return nir_shader_instructions_pass(
-      shader, lower, nir_metadata_block_index | nir_metadata_dominance,
+      shader, lower, nir_metadata_control_flow,
       &(struct inputs){
          .rt_fmts = rt_fmts,
          .raw_fmt_mask = raw_fmt_mask,

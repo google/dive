@@ -20,14 +20,21 @@ struct vn_query_pool {
 
    VkAllocationCallbacks allocator;
 
+   uint32_t query_count;
+   /* synchronize lazy init of qfb buffer */
+   simple_mtx_t mutex;
    /* non-NULL if VN_PERF_NO_QUERY_FEEDBACK is disabled */
-   struct vn_feedback_buffer *feedback;
+   struct vn_feedback_buffer *fb_buf;
    uint32_t result_array_size;
    bool saturate_on_overflow;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_query_pool,
-                               base.base,
+                               base.vk,
                                VkQueryPool,
                                VK_OBJECT_TYPE_QUERY_POOL)
+
+VkResult
+vn_query_feedback_buffer_init_once(struct vn_device *dev,
+                                   struct vn_query_pool *pool);
 
 #endif /* VN_QUERY_POOL_H */

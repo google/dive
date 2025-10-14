@@ -29,6 +29,7 @@
 #include "tgsi/tgsi_parse.h"
 
 #include "compiler/nir/nir_serialize.h"
+#include "compiler/nir/nir.h"
 
 #include "util/blob.h"
 #include "util/hash_table.h"
@@ -77,7 +78,7 @@ util_live_shader_cache_get(struct pipe_context *ctx,
    struct blob blob = {0};
    unsigned ir_size;
    const void *ir_binary;
-   enum pipe_shader_type stage;
+   mesa_shader_stage stage;
 
    /* Get the shader binary and shader stage. */
    if (state->type == PIPE_SHADER_IR_TGSI) {
@@ -90,7 +91,7 @@ util_live_shader_cache_get(struct pipe_context *ctx,
       nir_serialize(&blob, state->ir.nir, true);
       ir_binary = blob.data;
       ir_size = blob.size;
-      stage = pipe_shader_type_from_mesa(((nir_shader*)state->ir.nir)->info.stage);
+      stage = state->ir.nir->info.stage;
    } else {
       assert(0);
       return NULL;
@@ -101,9 +102,9 @@ util_live_shader_cache_get(struct pipe_context *ctx,
    unsigned char sha1[20];
    _mesa_sha1_init(&sha1_ctx);
    _mesa_sha1_update(&sha1_ctx, ir_binary, ir_size);
-   if ((stage == PIPE_SHADER_VERTEX ||
-        stage == PIPE_SHADER_TESS_EVAL ||
-        stage == PIPE_SHADER_GEOMETRY) &&
+   if ((stage == MESA_SHADER_VERTEX ||
+        stage == MESA_SHADER_TESS_EVAL ||
+        stage == MESA_SHADER_GEOMETRY) &&
        state->stream_output.num_outputs) {
       _mesa_sha1_update(&sha1_ctx, &state->stream_output,
                         sizeof(state->stream_output));
@@ -139,6 +140,9 @@ util_live_shader_cache_get(struct pipe_context *ctx,
     * invocations to run simultaneously.
     */
    shader = (struct util_live_shader*)cache->create_shader(ctx, state);
+   if (!shader)
+      return NULL;
+
    pipe_reference_init(&shader->reference, 1);
    memcpy(shader->sha1, sha1, sizeof(sha1));
 

@@ -42,12 +42,6 @@ struct vc4_resource_slice {
         uint8_t tiling;
 };
 
-struct vc4_surface {
-        struct pipe_surface base;
-        uint32_t offset;
-        uint8_t tiling;
-};
-
 struct vc4_resource {
         struct pipe_resource base;
         struct vc4_bo *bo;
@@ -86,12 +80,6 @@ vc4_resource(struct pipe_resource *prsc)
         return (struct vc4_resource *)prsc;
 }
 
-static inline struct vc4_surface *
-vc4_surface(struct pipe_surface *psurf)
-{
-        return (struct vc4_surface *)psurf;
-}
-
 static inline struct vc4_transfer *
 vc4_transfer(struct pipe_transfer *ptrans)
 {
@@ -110,5 +98,20 @@ struct pipe_resource *vc4_get_shadow_index_buffer(struct pipe_context *pctx,
                                                   uint32_t count,
                                                   uint32_t *shadow_offset);
 void vc4_dump_surface(struct pipe_surface *psurf);
+
+static inline uint32_t vc4_surface_get_offset(struct pipe_surface *psurf)
+{
+        assert(psurf && psurf->texture);
+        struct vc4_resource *rsc = vc4_resource(psurf->texture);
+        return rsc->slices[psurf->level].offset +
+                psurf->first_layer * rsc->cube_map_stride;
+}
+
+static inline uint8_t vc4_surface_get_tiling(struct pipe_surface *psurf)
+{
+        assert(psurf && psurf->texture);
+        struct vc4_resource *rsc = vc4_resource(psurf->texture);
+        return rsc->slices[psurf->level].tiling;
+}
 
 #endif /* VC4_RESOURCE_H */

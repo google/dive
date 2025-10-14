@@ -30,7 +30,7 @@
 #include <xf86drm.h>
 
 #include "fw-api/pvr_rogue_fwif_shared.h"
-#include "pvr_private.h"
+#include "pvr_macros.h"
 #include "pvr_srv.h"
 #include "pvr_srv_bridge.h"
 #include "pvr_types.h"
@@ -242,7 +242,7 @@ VkResult pvr_srv_get_multicore_info(int fd,
                            ret);
    }
 
-   if (!num_cores)
+   if (num_cores)
       *num_cores = ret.num_cores;
 
    return VK_SUCCESS;
@@ -1028,6 +1028,10 @@ VkResult pvr_srv_rgx_submit_transfer2(int fd,
                                 &ret,
                                 sizeof(ret));
    if (result || ret.error != PVR_SRV_OK) {
+      /* There is no 'retry' VkResult, so treat it as VK_NOT_READY instead. */
+      if (result == PVR_SRV_ERROR_RETRY || ret.error == PVR_SRV_ERROR_RETRY)
+         return VK_NOT_READY;
+
       return vk_bridge_err(VK_ERROR_OUT_OF_DEVICE_MEMORY,
                            "PVR_SRV_BRIDGE_RGXTQ_RGXSUBMITTRANSFER2",
                            ret);
@@ -1175,6 +1179,10 @@ VkResult pvr_srv_rgx_kick_compute2(int fd,
                                 &ret,
                                 sizeof(ret));
    if (result || ret.error != PVR_SRV_OK) {
+      /* There is no 'retry' VkResult, so treat it as VK_NOT_READY instead. */
+      if (result == PVR_SRV_ERROR_RETRY || ret.error == PVR_SRV_ERROR_RETRY)
+         return VK_NOT_READY;
+
       return vk_bridge_err(VK_ERROR_OUT_OF_DEVICE_MEMORY,
                            "PVR_SRV_BRIDGE_RGXCMP_RGXKICKCDM2",
                            ret);
@@ -1582,7 +1590,7 @@ VkResult pvr_srv_rgx_kick_render2(int fd,
                                 sizeof(ret));
    if (result || ret.error != PVR_SRV_OK) {
       /* There is no 'retry' VkResult, so treat it as VK_NOT_READY instead. */
-      if (result == PVR_SRV_ERROR_RETRY)
+      if (result == PVR_SRV_ERROR_RETRY || ret.error == PVR_SRV_ERROR_RETRY)
          return VK_NOT_READY;
 
       return vk_bridge_err(VK_ERROR_OUT_OF_DEVICE_MEMORY,

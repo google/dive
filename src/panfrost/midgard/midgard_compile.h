@@ -30,9 +30,11 @@
 #include "util/u_dynarray.h"
 
 void midgard_preprocess_nir(nir_shader *nir, unsigned gpu_id);
+void midgard_postprocess_nir(nir_shader *nir, unsigned gpu_id);
+void midgard_lower_texture_nir(nir_shader *nir, unsigned gpu_id);
 
 void midgard_compile_shader_nir(nir_shader *nir,
-                                const struct panfrost_compile_inputs *inputs,
+                                const struct pan_compile_inputs *inputs,
                                 struct util_dynarray *binary,
                                 struct pan_shader_info *info);
 
@@ -57,6 +59,8 @@ static const nir_shader_compiler_options midgard_nir_options = {
    .lower_find_lsb = true,
    .lower_ifind_msb = true,
    .lower_fdph = true,
+   .lower_fisnormal = true,
+   .lower_hadd = true,
    .lower_uadd_carry = true,
    .lower_usub_borrow = true,
 
@@ -68,12 +72,13 @@ static const nir_shader_compiler_options midgard_nir_options = {
    .lower_bitfield_reverse = true,
    .lower_bitfield_insert = true,
    .lower_bitfield_extract = true,
+   .lower_bitfield_extract8 = true,
+   .lower_bitfield_extract16 = true,
    .lower_extract_byte = true,
    .lower_extract_word = true,
    .lower_insert_byte = true,
    .lower_insert_word = true,
    .lower_ldexp = true,
-   .lower_rotate = true,
 
    .lower_pack_half_2x16 = true,
    .lower_pack_unorm_2x16 = true,
@@ -95,16 +100,16 @@ static const nir_shader_compiler_options midgard_nir_options = {
    .lower_uniforms_to_ubo = true,
    .has_fsub = true,
    .has_isub = true,
-   .vectorize_io = true,
-   .use_interpolated_input_intrinsics = true,
 
-   .vertex_id_zero_based = true,
    .has_cs_global_id = true,
    .lower_cs_local_index_to_id = true,
    .max_unroll_iterations = 32,
    .force_indirect_unrolling =
       (nir_var_shader_in | nir_var_shader_out | nir_var_function_temp),
    .force_indirect_unrolling_sampler = true,
+   .support_indirect_inputs = BITFIELD_BIT(MESA_SHADER_TESS_CTRL) |
+                              BITFIELD_BIT(MESA_SHADER_TESS_EVAL) |
+                              BITFIELD_BIT(MESA_SHADER_FRAGMENT),
 };
 
 #endif

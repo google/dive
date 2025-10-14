@@ -23,13 +23,67 @@
 #ifndef VK_ANDROID_H
 #define VK_ANDROID_H
 
+#include <stdbool.h>
+
 #include "vulkan/vulkan_core.h"
+
+#include "util/detect_os.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#if ANDROID_API_LEVEL >= 26
+struct u_gralloc;
+struct vk_device;
+struct vk_image;
+
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+
+struct u_gralloc *vk_android_get_ugralloc(void);
+
+VkResult vk_android_import_anb(struct vk_device *device,
+                               const VkImageCreateInfo *pCreateInfo,
+                               const VkAllocationCallbacks *alloc,
+                               struct vk_image *image);
+
+VkResult vk_android_get_anb_layout(
+   const VkImageCreateInfo *pCreateInfo,
+   VkImageDrmFormatModifierExplicitCreateInfoEXT *out,
+   VkSubresourceLayout *out_layouts, int max_planes);
+
+#else
+
+static inline struct u_gralloc *
+vk_android_get_ugralloc(void)
+{
+   return NULL;
+}
+
+static inline VkResult
+vk_android_import_anb(struct vk_device *device,
+                      const VkImageCreateInfo *pCreateInfo,
+                      const VkAllocationCallbacks *alloc,
+                      struct vk_image *image)
+{
+   return VK_ERROR_FEATURE_NOT_PRESENT;
+}
+
+static inline VkResult
+vk_android_get_anb_layout(
+   const VkImageCreateInfo *pCreateInfo,
+   VkImageDrmFormatModifierExplicitCreateInfoEXT *out,
+   VkSubresourceLayout *out_layouts, int max_planes)
+{
+   return VK_ERROR_FEATURE_NOT_PRESENT;
+}
+
+#endif
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR) && ANDROID_API_LEVEL >= 26
+
+struct AHardwareBuffer;
+
+uint64_t vk_android_get_front_buffer_usage(void);
 
 VkFormat vk_ahb_format_to_image_format(uint32_t ahb_format);
 
@@ -38,10 +92,34 @@ uint32_t vk_image_format_to_ahb_format(VkFormat vk_format);
 uint64_t vk_image_usage_to_ahb_usage(const VkImageCreateFlags vk_create,
                                      const VkImageUsageFlags vk_usage);
 
-struct AHardwareBuffer *
-vk_alloc_ahardware_buffer(const VkMemoryAllocateInfo *pAllocateInfo);
+struct AHardwareBuffer *vk_alloc_ahardware_buffer(
+   const VkMemoryAllocateInfo *pAllocateInfo);
 
-#else /* ANDROID_API_LEVEL >= 26 */
+VkResult vk_android_get_ahb_layout(
+   struct AHardwareBuffer *ahardware_buffer,
+   VkImageDrmFormatModifierExplicitCreateInfoEXT *out,
+   VkSubresourceLayout *out_layouts, int max_planes);
+
+VkResult vk_android_get_ahb_image_properties(
+   VkPhysicalDevice pdev_handle,
+   const VkPhysicalDeviceImageFormatInfo2 *info,
+   VkImageFormatProperties2 *props);
+
+void vk_android_get_ahb_buffer_properties(
+   VkPhysicalDevice pdev_handle,
+   const VkPhysicalDeviceExternalBufferInfo *info,
+   VkExternalBufferProperties *props);
+
+bool vk_android_rp_attachment_has_external_format(
+   const VkAttachmentDescription2 *desc);
+
+#else /* defined(VK_USE_PLATFORM_ANDROID_KHR) && ANDROID_API_LEVEL >= 26 */
+
+static inline uint64_t
+vk_android_get_front_buffer_usage(void)
+{
+   return 0;
+}
 
 static inline VkFormat
 vk_ahb_format_to_image_format(uint32_t ahb_format)
@@ -66,6 +144,39 @@ static inline struct AHardwareBuffer *
 vk_alloc_ahardware_buffer(const VkMemoryAllocateInfo *pAllocateInfo)
 {
    return NULL;
+}
+
+static inline VkResult
+vk_android_get_ahb_layout(
+   struct AHardwareBuffer *ahardware_buffer,
+   VkImageDrmFormatModifierExplicitCreateInfoEXT *out,
+   VkSubresourceLayout *out_layouts, int max_planes)
+{
+   return VK_ERROR_FEATURE_NOT_PRESENT;
+}
+
+static inline VkResult
+vk_android_get_ahb_image_properties(
+   VkPhysicalDevice pdev_handle,
+   const VkPhysicalDeviceImageFormatInfo2 *info,
+   VkImageFormatProperties2 *props)
+{
+   return VK_ERROR_FORMAT_NOT_SUPPORTED;
+}
+
+static inline void
+vk_android_get_ahb_buffer_properties(
+   VkPhysicalDevice pdev_handle,
+   const VkPhysicalDeviceExternalBufferInfo *info,
+   VkExternalBufferProperties *props)
+{
+}
+
+static bool
+vk_android_rp_attachment_has_external_format(
+   const VkAttachmentDescription2 *desc)
+{
+   return false;
 }
 
 #endif /* ANDROID_API_LEVEL >= 26 */

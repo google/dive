@@ -29,6 +29,7 @@ import subprocess
 import typing
 
 import attr
+from packaging.version import Version
 
 if typing.TYPE_CHECKING:
     from .ui import UI
@@ -51,6 +52,8 @@ IS_FIX = re.compile(r'^\s*fixes:\s*([a-f0-9]{6,40})', flags=re.MULTILINE | re.IG
 IS_CC = re.compile(r'^\s*cc:\s*["\']?([0-9]{2}\.[0-9])?["\']?\s*["\']?([0-9]{2}\.[0-9])?["\']?\s*\<?mesa-stable',
                    flags=re.MULTILINE | re.IGNORECASE)
 IS_REVERT = re.compile(r'This reverts commit ([0-9a-f]{40})')
+IS_BACKPORT = re.compile(r'^\s*backport-to:\s*(\d{2}\.\d),?\s*(\d{2}\.\d)?',
+                         flags=re.MULTILINE | re.IGNORECASE)
 
 # XXX: hack
 SEM = asyncio.Semaphore(50)
@@ -69,10 +72,11 @@ class PickUIException(Exception):
 @enum.unique
 class NominationType(enum.Enum):
 
-    CC = 0
-    FIXES = 1
-    REVERT = 2
-    NONE = 3
+    NONE = 0
+    CC = 1
+    FIXES = 2
+    REVERT = 3
+    BACKPORT = 4
 
 
 @enum.unique
@@ -273,16 +277,14 @@ async def resolve_nomination(commit: 'Commit', version: str) -> 'Commit':
         )
         _out, _ = await p.communicate()
         assert p.returncode == 0, f'git log for {commit.sha} failed'
-    out = _out.decode()
+        commit_message = _out.decode()
 
     # We give precedence to fixes and cc tags over revert tags.
-    # XXX: not having the walrus operator available makes me sad :=
-    m = IS_FIX.search(out)
-    if m:
+    if fix_for_commit := IS_FIX.search(commit_message):
         # We set the nomination_type and because_sha here so that we can later
         # check to see if this fixes another staged commit.
         try:
-            commit.because_sha = fixed = await full_sha(m.group(1))
+            commit.because_sha = fixed = await full_sha(fix_for_commit.group(1))
         except PickUIException:
             pass
         else:
@@ -291,18 +293,24 @@ async def resolve_nomination(commit: 'Commit', version: str) -> 'Commit':
                 commit.nominated = True
                 return commit
 
-    m = IS_CC.search(out)
-    if m:
-        if m.groups() == (None, None) or version in m.groups():
+    if backport_to := IS_BACKPORT.findall(commit_message):
+        for match in backport_to:
+            if any(Version(version) >= Version(backport_version)
+                   for backport_version in match if backport_version != ''):
+                commit.nominated = True
+                commit.nomination_type = NominationType.BACKPORT
+                return commit
+
+    if cc_to := IS_CC.search(commit_message):
+        if cc_to.groups() == (None, None) or version in cc_to.groups():
             commit.nominated = True
             commit.nomination_type = NominationType.CC
             return commit
 
-    m = IS_REVERT.search(out)
-    if m:
+    if revert_of := IS_REVERT.search(commit_message):
         # See comment for IS_FIX path
         try:
-            commit.because_sha = reverted = await full_sha(m.group(1))
+            commit.because_sha = reverted = await full_sha(revert_of.group(1))
         except PickUIException:
             pass
         else:

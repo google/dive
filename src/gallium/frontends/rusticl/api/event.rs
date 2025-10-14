@@ -1,6 +1,10 @@
+// Copyright 2020 Red Hat.
+// SPDX-License-Identifier: MIT
+
 use crate::api::icd::*;
 use crate::api::types::*;
 use crate::api::util::*;
+use crate::core::context::*;
 use crate::core::event::*;
 use crate::core::queue::*;
 
@@ -8,87 +12,86 @@ use rusticl_opencl_gen::*;
 use rusticl_proc_macros::cl_entrypoint;
 use rusticl_proc_macros::cl_info_entrypoint;
 
-use std::collections::HashSet;
-use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Arc;
+use std::sync::Weak;
 
-#[cl_info_entrypoint(cl_get_event_info)]
-impl CLInfo<cl_event_info> for cl_event {
-    fn query(&self, q: cl_event_info, _: &[u8]) -> CLResult<Vec<MaybeUninit<u8>>> {
-        let event = self.get_ref()?;
-        Ok(match *q {
-            CL_EVENT_COMMAND_EXECUTION_STATUS => cl_prop::<cl_int>(event.status()),
+#[cl_info_entrypoint(clGetEventInfo)]
+unsafe impl CLInfo<cl_event_info> for cl_event {
+    fn query(&self, q: cl_event_info, v: CLInfoValue) -> CLResult<CLInfoRes> {
+        let event = Event::ref_from_raw(*self)?;
+        match *q {
+            CL_EVENT_COMMAND_EXECUTION_STATUS => v.write::<cl_int>(event.status()),
             CL_EVENT_CONTEXT => {
                 // Note we use as_ptr here which doesn't increase the reference count.
                 let ptr = Arc::as_ptr(&event.context);
-                cl_prop::<cl_context>(cl_context::from_ptr(ptr))
+                v.write::<cl_context>(cl_context::from_ptr(ptr))
             }
             CL_EVENT_COMMAND_QUEUE => {
                 let ptr = match event.queue.as_ref() {
                     // Note we use as_ptr here which doesn't increase the reference count.
-                    Some(queue) => Arc::as_ptr(queue),
+                    Some(queue) => Weak::as_ptr(queue),
                     None => ptr::null_mut(),
                 };
-                cl_prop::<cl_command_queue>(cl_command_queue::from_ptr(ptr))
+                v.write::<cl_command_queue>(cl_command_queue::from_ptr(ptr))
             }
-            CL_EVENT_REFERENCE_COUNT => cl_prop::<cl_uint>(self.refcnt()?),
-            CL_EVENT_COMMAND_TYPE => cl_prop::<cl_command_type>(event.cmd_type),
-            _ => return Err(CL_INVALID_VALUE),
-        })
+            CL_EVENT_REFERENCE_COUNT => v.write::<cl_uint>(Event::refcnt(*self)?),
+            CL_EVENT_COMMAND_TYPE => v.write::<cl_command_type>(event.cmd_type),
+            _ => Err(CL_INVALID_VALUE),
+        }
     }
 }
 
-#[cl_info_entrypoint(cl_get_event_profiling_info)]
-impl CLInfo<cl_profiling_info> for cl_event {
-    fn query(&self, q: cl_profiling_info, _: &[u8]) -> CLResult<Vec<MaybeUninit<u8>>> {
-        let event = self.get_ref()?;
+#[cl_info_entrypoint(clGetEventProfilingInfo)]
+unsafe impl CLInfo<cl_profiling_info> for cl_event {
+    fn query(&self, q: cl_profiling_info, v: CLInfoValue) -> CLResult<CLInfoRes> {
+        let event = Event::ref_from_raw(*self)?;
         if event.cmd_type == CL_COMMAND_USER {
             // CL_PROFILING_INFO_NOT_AVAILABLE [...] if event is a user event object.
             return Err(CL_PROFILING_INFO_NOT_AVAILABLE);
         }
 
-        Ok(match *q {
-            CL_PROFILING_COMMAND_QUEUED => cl_prop::<cl_ulong>(event.get_time(EventTimes::Queued)),
-            CL_PROFILING_COMMAND_SUBMIT => cl_prop::<cl_ulong>(event.get_time(EventTimes::Submit)),
-            CL_PROFILING_COMMAND_START => cl_prop::<cl_ulong>(event.get_time(EventTimes::Start)),
-            CL_PROFILING_COMMAND_END => cl_prop::<cl_ulong>(event.get_time(EventTimes::End)),
+        match *q {
+            CL_PROFILING_COMMAND_QUEUED => v.write::<cl_ulong>(event.get_time(EventTimes::Queued)),
+            CL_PROFILING_COMMAND_SUBMIT => v.write::<cl_ulong>(event.get_time(EventTimes::Submit)),
+            CL_PROFILING_COMMAND_START => v.write::<cl_ulong>(event.get_time(EventTimes::Start)),
+            CL_PROFILING_COMMAND_END => v.write::<cl_ulong>(event.get_time(EventTimes::End)),
             // For now, we treat Complete the same as End
-            CL_PROFILING_COMMAND_COMPLETE => cl_prop::<cl_ulong>(event.get_time(EventTimes::End)),
-            _ => return Err(CL_INVALID_VALUE),
-        })
+            CL_PROFILING_COMMAND_COMPLETE => v.write::<cl_ulong>(event.get_time(EventTimes::End)),
+            _ => Err(CL_INVALID_VALUE),
+        }
     }
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clCreateUserEvent)]
 fn create_user_event(context: cl_context) -> CLResult<cl_event> {
-    let c = context.get_arc()?;
-    Ok(cl_event::from_arc(Event::new_user(c)))
+    let c = Context::arc_from_raw(context)?;
+    Ok(Event::new_user(c).into_cl())
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clRetainEvent)]
 fn retain_event(event: cl_event) -> CLResult<()> {
-    event.retain()
+    Event::retain(event)
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clReleaseEvent)]
 fn release_event(event: cl_event) -> CLResult<()> {
-    event.release()
+    Event::release(event)
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clWaitForEvents)]
 fn wait_for_events(num_events: cl_uint, event_list: *const cl_event) -> CLResult<()> {
-    let evs = cl_event::get_arc_vec_from_arr(event_list, num_events)?;
+    let evs = Event::arcs_from_arr(event_list, num_events)?;
 
-    // CL_INVALID_VALUE if num_events is zero or event_list is NULL.
-    if evs.is_empty() {
+    if let Some((first, rest)) = evs.split_first() {
+        // > CL_INVALID_CONTEXT if events specified in event_list do not belong
+        // > to the same context.
+        if rest.iter().any(|e| e.context != first.context) {
+            return Err(CL_INVALID_CONTEXT);
+        }
+    } else {
+        // > CL_INVALID_VALUE if num_events is zero or event_list is NULL.
         return Err(CL_INVALID_VALUE);
-    }
-
-    // CL_INVALID_CONTEXT if events specified in event_list do not belong to the same context.
-    let contexts: HashSet<_> = evs.iter().map(|e| &e.context).collect();
-    if contexts.len() != 1 {
-        return Err(CL_INVALID_CONTEXT);
     }
 
     // find all queues we have to flush
@@ -111,36 +114,32 @@ fn wait_for_events(num_events: cl_uint, event_list: *const cl_event) -> CLResult
     Ok(())
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clSetEventCallback)]
 fn set_event_callback(
     event: cl_event,
     command_exec_callback_type: cl_int,
-    pfn_event_notify: Option<EventCB>,
+    pfn_event_notify: Option<FuncEventCB>,
     user_data: *mut ::std::os::raw::c_void,
 ) -> CLResult<()> {
-    let e = event.get_ref()?;
+    let e = Event::ref_from_raw(event)?;
 
-    // CL_INVALID_VALUE if pfn_event_notify is NULL
-    // or if command_exec_callback_type is not CL_SUBMITTED, CL_RUNNING, or CL_COMPLETE.
-    if pfn_event_notify.is_none()
-        || ![CL_SUBMITTED, CL_RUNNING, CL_COMPLETE]
-            .contains(&(command_exec_callback_type as cl_uint))
-    {
+    // CL_INVALID_VALUE [...] if command_exec_callback_type is not CL_SUBMITTED, CL_RUNNING, or CL_COMPLETE.
+    if ![CL_SUBMITTED, CL_RUNNING, CL_COMPLETE].contains(&(command_exec_callback_type as cl_uint)) {
         return Err(CL_INVALID_VALUE);
     }
 
-    e.add_cb(
-        command_exec_callback_type,
-        pfn_event_notify.unwrap(),
-        user_data,
-    );
+    // SAFETY: The requirements on `EventCB::new` match the requirements
+    // imposed by the OpenCL specification. It is the caller's duty to uphold them.
+    let cb = unsafe { EventCB::new(pfn_event_notify, user_data)? };
+
+    e.add_cb(command_exec_callback_type, cb);
 
     Ok(())
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clSetUserEventStatus)]
 fn set_user_event_status(event: cl_event, execution_status: cl_int) -> CLResult<()> {
-    let e = event.get_ref()?;
+    let e = Event::ref_from_raw(event)?;
 
     // CL_INVALID_VALUE if the execution_status is not CL_COMPLETE or a negative integer value.
     if execution_status != CL_COMPLETE as cl_int && execution_status > 0 {
@@ -157,6 +156,7 @@ fn set_user_event_status(event: cl_event, execution_status: cl_int) -> CLResult<
     Ok(())
 }
 
+/// implements CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST when `block = true`
 pub fn create_and_queue(
     q: Arc<Queue>,
     cmd_type: cl_command_type,
@@ -165,11 +165,30 @@ pub fn create_and_queue(
     block: bool,
     work: EventSig,
 ) -> CLResult<()> {
+    if deps.iter().any(|dep| dep.is_error()) {
+        return Err(CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST);
+    }
+
     let e = Event::new(&q, cmd_type, deps, work);
-    cl_event::leak_ref(event, &e);
-    q.queue(e);
+    if !event.is_null() {
+        // SAFETY: we check for null and valid API use is to pass in a valid pointer
+        unsafe {
+            event.write(Arc::clone(&e).into_cl());
+        }
+    }
     if block {
+        q.queue(Arc::clone(&e));
         q.flush(true)?;
+        if e.deps.iter().any(|dep| dep.is_error()) {
+            return Err(CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST);
+        }
+        // return any execution errors when blocking
+        let err = e.status();
+        if err < 0 {
+            return Err(err);
+        }
+    } else {
+        q.queue(e);
     }
     Ok(())
 }

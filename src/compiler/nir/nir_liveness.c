@@ -134,11 +134,6 @@ nir_live_defs_impl(nir_function_impl *impl)
    };
    state.tmp_live = rzalloc_array(impl, BITSET_WORD, state.bitset_words),
 
-   /* Number the instructions so we can do cheap interference tests using the
-    * instruction index.
-    */
-      nir_metadata_require(impl, nir_metadata_instr_index);
-
    nir_block_worklist_init(&state.worklist, impl->num_blocks, NULL);
 
    /* Allocate live_in and live_out sets and add all of the blocks to the
@@ -185,7 +180,7 @@ nir_live_defs_impl(nir_function_impl *impl)
        * changed, add the predecessor to the work list so that we ensure
        * that the new information is used.
        */
-      set_foreach(block->predecessors, entry) {
+      set_foreach(&block->predecessors, entry) {
          nir_block *pred = (nir_block *)entry->key;
          if (propagate_across_edge(pred, block, &state))
             nir_block_worklist_push_tail(&state.worklist, pred);
@@ -295,7 +290,7 @@ nir_def_is_live_at(nir_def *def, nir_instr *instr)
       return true;
    } else {
       if (BITSET_TEST(instr->block->live_in, def->index) ||
-          def->parent_instr->block == instr->block) {
+          nir_def_block(def) == instr->block) {
          /* In this case it is either live coming into instr's block or it
           * is defined in the same block.  In this case, we simply need to
           * see if it is used after instr.

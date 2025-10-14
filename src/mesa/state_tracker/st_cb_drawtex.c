@@ -32,7 +32,6 @@
 #include "util/u_inlines.h"
 #include "pipe/p_shader_tokens.h"
 #include "util/u_draw_quad.h"
-#include "util/u_simple_shaders.h"
 #include "util/u_upload_mgr.h"
 
 #include "cso_cache/cso_context.h"
@@ -68,7 +67,7 @@ slot_to_vert_attrib(gl_varying_slot slot)
    case VARYING_SLOT_TEX0:
       return VERT_ATTRIB_GENERIC0;
    default:
-      unreachable("unhandled slot");
+      UNREACHABLE("unhandled slot");
    }
 }
 
@@ -110,10 +109,8 @@ lookup_shader(struct st_context *st,
    }
 
    CachedShaders[i].handle =
-      st_nir_make_passthrough_shader(st, "st/drawtex VS",
-                                       MESA_SHADER_VERTEX,
-                                       num_attribs, inputs,
-                                       slots, NULL, 0);
+      st_nir_make_passthrough_vs(st, "st/drawtex VS", num_attribs, inputs,
+                                 slots, 0);
 
    NumCachedShaders++;
 
@@ -138,7 +135,8 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    st_flush_bitmap_cache(st);
    st_invalidate_readpix_cache(st);
 
-   st_validate_state(st, ST_PIPELINE_META_STATE_MASK);
+   ST_PIPELINE_META_STATE_MASK(mask);
+   st_validate_state(st, mask);
 
    /* determine if we need vertex color */
    if (ctx->FragmentProgram._Current->info.inputs_read & VARYING_BIT_COL0)
@@ -159,6 +157,7 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    numAttribs = 1 + emitColor + numTexCoords;
 
    /* load vertex buffer */
+   struct pipe_resource *releasebuf = NULL;
    {
 #define SET_ATTRIB(VERT, ATTR, X, Y, Z, W)                              \
       do {                                                              \
@@ -176,7 +175,7 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
 
       u_upload_alloc(pipe->stream_uploader, 0,
                      numAttribs * 4 * 4 * sizeof(GLfloat), 4,
-                     &offset, &vbuffer, (void **) &vbuf);
+                     &offset, &vbuffer, &releasebuf, (void **) &vbuf);
       if (!vbuffer) {
          return;
       }
@@ -253,6 +252,8 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
                         CSO_BIT_TESSCTRL_SHADER |
                         CSO_BIT_TESSEVAL_SHADER |
                         CSO_BIT_GEOMETRY_SHADER |
+                        CSO_BIT_TASK_SHADER |
+                        CSO_BIT_MESH_SHADER |
                         CSO_BIT_VERTEX_ELEMENTS));
 
    {
@@ -262,6 +263,8 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    cso_set_tessctrl_shader_handle(cso, NULL);
    cso_set_tesseval_shader_handle(cso, NULL);
    cso_set_geometry_shader_handle(cso, NULL);
+   cso_set_task_shader_handle(cso, NULL);
+   cso_set_mesh_shader_handle(cso, NULL);
 
    for (i = 0; i < numAttribs; i++) {
       velems.velems[i].src_offset = i * 4 * sizeof(float);
@@ -274,7 +277,7 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    velems.count = numAttribs;
 
    cso_set_vertex_elements(cso, &velems);
-   cso_set_stream_outputs(cso, 0, NULL, NULL);
+   cso_set_stream_outputs(cso, 0, NULL, NULL, 0);
 
    /* viewport state: viewport matching window dims */
    {
@@ -297,18 +300,17 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    }
 
    util_draw_vertex_buffer(pipe, cso, vbuffer,
-                           offset,  /* offset */
+                           offset,
                            MESA_PRIM_TRIANGLE_FAN,
                            4,  /* verts */
                            numAttribs); /* attribs/vert */
-   st->last_num_vbuffers = MAX2(st->last_num_vbuffers, 1);
 
-   pipe_resource_reference(&vbuffer, NULL);
+   pipe_resource_release(pipe, releasebuf);
 
    /* restore state */
    cso_restore_state(cso, 0);
    ctx->Array.NewVertexElements = true;
-   ctx->NewDriverState |= ST_NEW_VERTEX_ARRAYS;
+   ST_SET_STATE(ctx->NewDriverState, ST_NEW_VERTEX_ARRAYS);
 }
 
 /**

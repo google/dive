@@ -36,9 +36,8 @@
 #include "util/u_dynarray.h"
 #include "util/u_math.h"
 
+#include "compiler/glsl_types.h"
 #include "compiler/nir/nir.h"
-#include "compiler/nir_types.h"
-#include "panfrost/util/lcra.h"
 #include "panfrost/util/pan_ir.h"
 
 /* Forward declare */
@@ -190,7 +189,25 @@ typedef struct midgard_instruction {
 } midgard_instruction;
 
 typedef struct midgard_block {
-   pan_block base;
+   /* Link to next block. Must be first for mir_get_block */
+   struct list_head link;
+
+   /* List of instructions emitted for the current block */
+   struct list_head instructions;
+
+   /* Index of the block in source order */
+   unsigned name;
+
+   /* Control flow graph */
+   struct midgard_block *successors[2];
+   struct set *predecessors;
+   bool unconditional_jumps;
+
+   /* In liveness analysis, these are live masks (per-component) for
+    * indices for the block. Scalar compilers have the luxury of using
+    * simple bit fields, but for us, liveness is a vector idea. */
+   uint16_t *live_in;
+   uint16_t *live_out;
 
    bool scheduled;
 
@@ -240,10 +257,10 @@ enum midgard_rt_id {
 #define MIDGARD_MAX_SAMPLE_ITER 16
 
 typedef struct compiler_context {
-   const struct panfrost_compile_inputs *inputs;
+   const struct pan_compile_inputs *inputs;
    nir_shader *nir;
    struct pan_shader_info *info;
-   gl_shader_stage stage;
+   mesa_shader_stage stage;
 
    /* Index to precolour to r0 for an input blend colour */
    unsigned blend_input;
@@ -315,26 +332,27 @@ typedef struct compiler_context {
 /* Append instruction to end of current block */
 
 static inline midgard_instruction *
-mir_upload_ins(struct compiler_context *ctx, struct midgard_instruction ins)
+mir_upload_ins(struct compiler_context *ctx,
+               const struct midgard_instruction *ins)
 {
    midgard_instruction *heap = ralloc(ctx, struct midgard_instruction);
-   memcpy(heap, &ins, sizeof(ins));
+   memcpy(heap, ins, sizeof(*ins));
    return heap;
 }
 
 static inline midgard_instruction *
 emit_mir_instruction(struct compiler_context *ctx,
-                     struct midgard_instruction ins)
+                     const struct midgard_instruction *ins)
 {
    midgard_instruction *u = mir_upload_ins(ctx, ins);
-   list_addtail(&u->link, &ctx->current_block->base.instructions);
+   list_addtail(&u->link, &ctx->current_block->instructions);
    return u;
 }
 
 static inline struct midgard_instruction *
 mir_insert_instruction_before(struct compiler_context *ctx,
                               struct midgard_instruction *tag,
-                              struct midgard_instruction ins)
+                              const struct midgard_instruction *ins)
 {
    struct midgard_instruction *u = mir_upload_ins(ctx, ins);
    list_addtail(&u->link, &tag->link);
@@ -347,46 +365,48 @@ mir_remove_instruction(struct midgard_instruction *ins)
    list_del(&ins->link);
 }
 
-static inline midgard_instruction *
-mir_prev_op(struct midgard_instruction *ins)
-{
-   return list_last_entry(&(ins->link), midgard_instruction, link);
-}
+#define mir_prev_op(ins) \
+   list_last_entry(&((ins)->link), midgard_instruction, link)
 
-static inline midgard_instruction *
-mir_next_op(struct midgard_instruction *ins)
+#define mir_next_op(ins) \
+   list_first_entry(&((ins)->link), midgard_instruction, link)
+
+static inline midgard_block *
+mir_exit_block(struct list_head *blocks)
 {
-   return list_first_entry(&(ins->link), midgard_instruction, link);
+   midgard_block *last = list_last_entry(blocks, midgard_block, link);
+   assert(!last->successors[0] && !last->successors[1]);
+   return last;
 }
 
 #define mir_foreach_block(ctx, v)                                              \
-   list_for_each_entry(pan_block, v, &ctx->blocks, link)
+   list_for_each_entry(midgard_block, v, &ctx->blocks, link)
 
 #define mir_foreach_block_from(ctx, from, v)                                   \
-   list_for_each_entry_from(pan_block, v, &from->base, &ctx->blocks, link)
+   list_for_each_entry_from(midgard_block, v, from, &ctx->blocks, link)
 
 #define mir_foreach_instr_in_block(block, v)                                   \
    list_for_each_entry(struct midgard_instruction, v,                          \
-                       &block->base.instructions, link)
+                       &block->instructions, link)
 #define mir_foreach_instr_in_block_rev(block, v)                               \
    list_for_each_entry_rev(struct midgard_instruction, v,                      \
-                           &block->base.instructions, link)
+                           &block->instructions, link)
 
 #define mir_foreach_instr_in_block_safe(block, v)                              \
    list_for_each_entry_safe(struct midgard_instruction, v,                     \
-                            &block->base.instructions, link)
+                            &block->instructions, link)
 
 #define mir_foreach_instr_in_block_safe_rev(block, v)                          \
    list_for_each_entry_safe_rev(struct midgard_instruction, v,                 \
-                                &block->base.instructions, link)
+                                &block->instructions, link)
 
 #define mir_foreach_instr_in_block_from(block, v, from)                        \
    list_for_each_entry_from(struct midgard_instruction, v, from,               \
-                            &block->base.instructions, link)
+                            &block->instructions, link)
 
 #define mir_foreach_instr_in_block_from_rev(block, v, from)                    \
    list_for_each_entry_from_rev(struct midgard_instruction, v, from,           \
-                                &block->base.instructions, link)
+                                &block->instructions, link)
 
 #define mir_foreach_bundle_in_block(block, v)                                  \
    util_dynarray_foreach(&block->bundles, midgard_bundle, v)
@@ -411,22 +431,31 @@ mir_next_op(struct midgard_instruction *ins)
 
 /* Based on set_foreach, expanded with automatic type casts */
 
+#define mir_foreach_successor(blk, v)                                          \
+   struct midgard_block *v;                                                    \
+   struct midgard_block **_v;                                                  \
+   for (_v = (midgard_block **)&blk->successors[0], v = *_v;                   \
+        v != NULL && _v < (midgard_block **)&blk->successors[2];               \
+        _v++, v = *_v)
+
 #define mir_foreach_predecessor(blk, v)                                        \
    struct set_entry *_entry_##v;                                               \
    struct midgard_block *v;                                                    \
-   for (_entry_##v = _mesa_set_next_entry(blk->base.predecessors, NULL),       \
+   for (_entry_##v = _mesa_set_next_entry(blk->predecessors, NULL),       \
        v = (struct midgard_block *)(_entry_##v ? _entry_##v->key : NULL);      \
         _entry_##v != NULL;                                                    \
-        _entry_##v = _mesa_set_next_entry(blk->base.predecessors, _entry_##v), \
+        _entry_##v = _mesa_set_next_entry(blk->predecessors, _entry_##v), \
        v = (struct midgard_block *)(_entry_##v ? _entry_##v->key : NULL))
 
 #define mir_foreach_src(ins, v)                                                \
    for (unsigned v = 0; v < ARRAY_SIZE(ins->src); ++v)
 
+void mir_block_add_successor(midgard_block *block, midgard_block *successor);
+
 static inline midgard_instruction *
 mir_last_in_block(struct midgard_block *block)
 {
-   return list_last_entry(&block->base.instructions, struct midgard_instruction,
+   return list_last_entry(&block->instructions, struct midgard_instruction,
                           link);
 }
 
@@ -452,6 +481,9 @@ make_compiler_temp(compiler_context *ctx)
 {
    return (ctx->func->impl->ssa_alloc + ctx->temp_alloc++) << 1;
 }
+
+/* IR indexing */
+#define PAN_IS_REG (1)
 
 static inline unsigned
 make_compiler_temp_reg(compiler_context *ctx)
@@ -522,35 +554,35 @@ void mir_rewrite_index_src_swizzle(compiler_context *ctx, unsigned old,
                                    unsigned new, unsigned *swizzle);
 bool mir_single_use(compiler_context *ctx, unsigned value);
 unsigned mir_use_count(compiler_context *ctx, unsigned value);
-uint16_t mir_bytemask_of_read_components(midgard_instruction *ins,
+uint16_t mir_bytemask_of_read_components(const midgard_instruction *ins,
                                          unsigned node);
-uint16_t mir_bytemask_of_read_components_index(midgard_instruction *ins,
+uint16_t mir_bytemask_of_read_components_index(const midgard_instruction *ins,
                                                unsigned i);
 uint16_t mir_from_bytemask(uint16_t bytemask, unsigned bits);
-uint16_t mir_bytemask(midgard_instruction *ins);
+uint16_t mir_bytemask(const midgard_instruction *ins);
 uint16_t mir_round_bytemask_up(uint16_t mask, unsigned bits);
 void mir_set_bytemask(midgard_instruction *ins, uint16_t bytemask);
-signed mir_upper_override(midgard_instruction *ins, unsigned inst_size);
+signed mir_upper_override(const midgard_instruction *ins, unsigned inst_size);
 unsigned mir_components_for_type(nir_alu_type T);
-unsigned max_bitsize_for_alu(midgard_instruction *ins);
+unsigned max_bitsize_for_alu(const midgard_instruction *ins);
 midgard_reg_mode reg_mode_for_bitsize(unsigned bitsize);
 
 /* MIR printing */
 
-void mir_print_instruction(midgard_instruction *ins);
-void mir_print_bundle(midgard_bundle *ctx);
-void mir_print_block(midgard_block *block);
-void mir_print_shader(compiler_context *ctx);
-bool mir_nontrivial_mod(midgard_instruction *ins, unsigned i,
+void mir_print_instruction(const midgard_instruction *ins);
+void mir_print_bundle(const midgard_bundle *ctx);
+void mir_print_block(const midgard_block *block);
+void mir_print_shader(const compiler_context *ctx);
+bool mir_nontrivial_mod(const midgard_instruction *ins, unsigned i,
                         bool check_swizzle);
-bool mir_nontrivial_outmod(midgard_instruction *ins);
+bool mir_nontrivial_outmod(const midgard_instruction *ins);
 
 midgard_instruction *mir_insert_instruction_before_scheduled(
-   compiler_context *ctx, midgard_block *block, midgard_instruction *tag,
-   midgard_instruction ins);
+   compiler_context *ctx, midgard_block *block, const midgard_instruction *tag,
+   const midgard_instruction *ins);
 midgard_instruction *mir_insert_instruction_after_scheduled(
-   compiler_context *ctx, midgard_block *block, midgard_instruction *tag,
-   midgard_instruction ins);
+   compiler_context *ctx, midgard_block *block, const midgard_instruction *tag,
+   const midgard_instruction *ins);
 void mir_flip(midgard_instruction *ins);
 void mir_compute_temp_count(compiler_context *ctx);
 
@@ -641,7 +673,7 @@ v_load_store_scratch(unsigned srcdest, unsigned index, bool is_store,
 }
 
 static inline bool
-mir_has_arg(midgard_instruction *ins, unsigned arg)
+mir_has_arg(const midgard_instruction *ins, unsigned arg)
 {
    if (!ins)
       return false;
@@ -661,21 +693,22 @@ void midgard_schedule_program(compiler_context *ctx);
 void mir_ra(compiler_context *ctx);
 void mir_squeeze_index(compiler_context *ctx);
 void mir_lower_special_reads(compiler_context *ctx);
-void mir_liveness_ins_update(uint16_t *live, midgard_instruction *ins,
+void mir_liveness_ins_update(uint16_t *live, const midgard_instruction *ins,
                              unsigned max);
 void mir_compute_liveness(compiler_context *ctx);
 void mir_invalidate_liveness(compiler_context *ctx);
-bool mir_is_live_after(compiler_context *ctx, midgard_block *block,
-                       midgard_instruction *start, int src);
+bool mir_is_live_after(compiler_context *ctx, const midgard_block *block,
+                       const midgard_instruction *start, int src);
 
 void mir_create_pipeline_registers(compiler_context *ctx);
 void midgard_promote_uniforms(compiler_context *ctx);
 
-void midgard_emit_derivatives(compiler_context *ctx, nir_alu_instr *instr);
+void midgard_emit_derivatives(compiler_context *ctx,
+                              nir_intrinsic_instr *instr);
 
 void midgard_lower_derivatives(compiler_context *ctx, midgard_block *block);
 
-bool mir_op_computes_derivatives(gl_shader_stage stage, unsigned op);
+bool mir_op_computes_derivatives(mesa_shader_stage stage, unsigned op);
 
 void mir_analyze_helper_terminate(compiler_context *ctx);
 void mir_analyze_helper_requirements(compiler_context *ctx);

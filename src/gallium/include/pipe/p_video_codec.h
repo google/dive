@@ -55,6 +55,7 @@ struct pipe_video_codec
    unsigned height;
    unsigned max_references;
    bool expect_chunked_decode;
+   struct pipe_enc_two_pass_encoder_config two_pass;
 
    /**
     * destroy this video decoder
@@ -96,18 +97,58 @@ struct pipe_video_codec
                             void **feedback);
 
    /**
+    * encode an entire frame texture to a bitstream, but get notified asynchronously
+    * in slice_fences[] as the slices are ready (can be of out order if multi engine encoder)
+    * for frontend consumption before the full frame is finished.
+    *
+    * The different slices are written in each slice_destinations[] buffer
+    *
+    * num_slice_objects indicates the number of elements in the input
+    * array slice_destinations and indicates the number of outputs expected
+    * in slice_fences
+    *
+    * The frame NALs are attached to the first slice buffer
+    * Any packed slice header (e.g SVC NAL prefix) is attached to each slice buffer
+    *
+    * get_feedback information/stats is still only available after full frame
+    * completion is signaled (e.g pipe_picture_desc::fence)
+    *
+    *  Driver reports support for this function used with different codecs/profiles
+    *  in PIPE_VIDEO_CAP_ENC_SLICED_NOTIFICATIONS, frontend must check before using it.
+    */
+   void (*encode_bitstream_sliced)(struct pipe_video_codec *codec,
+                                   struct pipe_video_buffer *source,
+                                   unsigned num_slice_objects,
+                                   struct pipe_resource **slice_destinations,
+                                   struct pipe_fence_handle **slice_fences,
+                                   void **feedback);
+
+
+   /**
+    * Once encode_bitstream_sliced::slice_fences[slice_idx] is signaled, use this function
+    * to retrieve the slice size and offset for readback from encode_bitstream_sliced::slice_destinations[slice_idx]
+    * As the slice may include other packed headers, a list of codec_unit_location_t elements is returned
+    */
+   void (*get_slice_bitstream_data)(struct pipe_video_codec *codec,
+                                    void *feedback, /* corresponding to the encode_bitstream_sliced frame call */
+                                    unsigned slice_idx, /* [0..max_slices_expected] */
+                                    struct codec_unit_location_t *codec_unit_metadata,
+                                    unsigned *codec_unit_metadata_count);
+
+   /**
     * Perform post-process effect
     */
-   void (*process_frame)(struct pipe_video_codec *codec,
+   int (*process_frame)(struct pipe_video_codec *codec,
                          struct pipe_video_buffer *source,
                          const struct pipe_vpp_desc *process_properties);
 
    /**
     * end decoding of the current frame
+    * returns 0 on success
     */
-   void (*end_frame)(struct pipe_video_codec *codec,
-                     struct pipe_video_buffer *target,
-                     struct pipe_picture_desc *picture);
+   int (*end_frame)(struct pipe_video_codec *codec,
+                    struct pipe_video_buffer *target,
+                    struct pipe_picture_desc *picture);
 
    /**
     * flush any outstanding command buffers to the hardware
@@ -118,35 +159,24 @@ struct pipe_video_codec
    /**
     * get encoder feedback
     */
-   void (*get_feedback)(struct pipe_video_codec *codec, void *feedback, unsigned *size);
+   void (*get_feedback)(struct pipe_video_codec *codec,
+                        void *feedback,
+                        unsigned *size,
+                        struct pipe_enc_feedback_metadata* metadata /* opt NULL */);
 
    /**
-    * Get decoder fence.
+    * Wait for fence.
     *
-    * Can be used to query the status of the previous decode job denoted by
+    * Can be used to query the status of the previous job denoted by
     * 'fence' given 'timeout'.
     *
     * A pointer to a fence pointer can be passed to the codecs before the
     * end_frame vfunc and the codec should then be responsible for allocating a
     * fence on command stream submission.
     */
-   int (*get_decoder_fence)(struct pipe_video_codec *codec,
-                            struct pipe_fence_handle *fence,
-                            uint64_t timeout);
-
-   /**
-    * Get processor fence.
-    *
-    * Can be used to query the status of the previous process job denoted by
-    * 'fence' given 'timeout'.
-    *
-    * A pointer to a fence pointer can be passed to the codecs before the
-    * end_frame vfunc and the codec should then be responsible for allocating a
-    * fence on command stream submission.
-    */
-   int (*get_processor_fence)(struct pipe_video_codec *codec,
-                              struct pipe_fence_handle *fence,
-                              uint64_t timeout);
+   int (*fence_wait)(struct pipe_video_codec *codec,
+                     struct pipe_fence_handle *fence,
+                     uint64_t timeout);
 
    /**
     * Destroy fence.
@@ -155,18 +185,27 @@ struct pipe_video_codec
                          struct pipe_fence_handle *fence);
 
    /**
-    * Update target buffer address.
+    * Gets the bitstream headers for a given pipe_picture_desc
+    * of an encode operation
     *
-    * Due to reallocation, target buffer address has changed, and the
-    * changed buffer will need to update to decoder so that when this buffer
-    * used as a reference frame, decoder can obtain its recorded information.
-    * Failed updating this buffer will miss reference frames and
-    * cause image corruption in the sebsequent output.
-    * If no target buffer change, this call is not necessary.
+    * User passes a buffer and its allocated size and
+    * driver writes the bitstream headers in the buffer,
+    * updating the size parameter as well.
+    *
+    * Returns 0 on success or an errno error code otherwise.
+    * such as ENOMEM if the buffer passed was not big enough
     */
-   void (*update_decoder_target)(struct pipe_video_codec *codec,
-                                 struct pipe_video_buffer *old,
-                                 struct pipe_video_buffer *updated);
+   int (*get_encode_headers)(struct pipe_video_codec *codec,
+                              struct pipe_picture_desc *picture,
+                              void* bitstream_buf,
+                              unsigned *size);
+
+   /**
+    * Creates a DPB buffer used for a single reconstructed picture.
+    */
+   struct pipe_video_buffer *(*create_dpb_buffer)(struct pipe_video_codec *codec,
+                                                  struct pipe_picture_desc *picture,
+                                                  const struct pipe_video_buffer *templat);
 };
 
 /**
@@ -181,6 +220,8 @@ struct pipe_video_buffer
    unsigned height;
    bool interlaced;
    unsigned bind;
+   unsigned flags;
+   bool contiguous_planes;
 
    /**
     * destroy this video buffer
@@ -206,7 +247,7 @@ struct pipe_video_buffer
    /**
     * get an individual surfaces for each plane
     */
-   struct pipe_surface **(*get_surfaces)(struct pipe_video_buffer *buffer);
+   struct pipe_surface *(*get_surfaces)(struct pipe_video_buffer *buffer);
 
    /*
     * auxiliary associated data

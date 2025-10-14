@@ -113,6 +113,35 @@ lp_setup_get_empty_scene(struct lp_setup_context *setup)
 
    setup->scene = setup->scenes[i];
    setup->scene->permit_linear_rasterizer = setup->permit_linear_rasterizer;
+
+   /* XXX: doing that here is ugly... */
+   setup->scene->fb_max_samples = util_framebuffer_get_num_samples(&setup->fb);
+   if (setup->scene->fb_max_samples == 4) {
+      if (setup->sample_locations_enabled) {
+         for (unsigned i = 0; i < 4; i++) {
+            setup->scene->fixed_sample_pos[i][0] = (setup->sample_locations[i] & 0xF) << (FIXED_ORDER - 4);
+            setup->scene->fixed_sample_pos[i][1] = (setup->sample_locations[i] >> 4) << (FIXED_ORDER - 4);
+         }
+      } else {
+         for (unsigned i = 0; i < 4; i++) {
+            setup->scene->fixed_sample_pos[i][0] = util_iround(lp_sample_pos_4x[i][0] * FIXED_ONE);
+            setup->scene->fixed_sample_pos[i][1] = util_iround(lp_sample_pos_4x[i][1] * FIXED_ONE);
+         }
+      }
+   } else if (setup->scene->fb_max_samples == 8) {
+      if (setup->sample_locations_enabled) {
+         for (unsigned i = 0; i < 8; i++) {
+            setup->scene->fixed_sample_pos[i][0] = (setup->sample_locations[i] & 0xF) << (FIXED_ORDER - 4);
+            setup->scene->fixed_sample_pos[i][1] = (setup->sample_locations[i] >> 4) << (FIXED_ORDER - 4);
+         }
+      } else {
+         for (unsigned i = 0; i < 8; i++) {
+            setup->scene->fixed_sample_pos[i][0] = util_iround(lp_sample_pos_8x[i][0] * FIXED_ONE);
+            setup->scene->fixed_sample_pos[i][1] = util_iround(lp_sample_pos_8x[i][1] * FIXED_ONE);
+         }
+      }
+   }
+
    lp_scene_begin_binning(setup->scene, &setup->fb);
 }
 
@@ -165,7 +194,7 @@ first_point(struct lp_setup_context *setup,
 }
 
 
-void
+static void
 lp_setup_reset(struct lp_setup_context *setup)
 {
    LP_DBG(DEBUG_SETUP, "%s\n", __func__);
@@ -177,7 +206,7 @@ lp_setup_reset(struct lp_setup_context *setup)
    }
 
    setup->fs.stored = NULL;
-   setup->dirty = ~0;
+   setup->dirty = ~0U;
 
    /* no current bin */
    setup->scene = NULL;
@@ -238,9 +267,9 @@ begin_binning(struct lp_setup_context *setup)
    }
 
    bool need_zsload = false;
-   if (setup->fb.zsbuf &&
+   if (setup->fb.zsbuf.texture &&
        ((setup->clear.flags & PIPE_CLEAR_DEPTHSTENCIL) != PIPE_CLEAR_DEPTHSTENCIL) &&
-        util_format_is_depth_and_stencil(setup->fb.zsbuf->format)) {
+        util_format_is_depth_and_stencil(setup->fb.zsbuf.format)) {
       need_zsload = true;
    }
 
@@ -274,7 +303,7 @@ begin_binning(struct lp_setup_context *setup)
       }
    }
 
-   if (setup->fb.zsbuf) {
+   if (setup->fb.zsbuf.texture) {
       if (setup->clear.flags & PIPE_CLEAR_DEPTHSTENCIL) {
          if (!lp_scene_bin_everywhere(scene,
                                       LP_RAST_OP_CLEAR_ZSTENCIL,
@@ -410,9 +439,25 @@ lp_setup_bind_framebuffer(struct lp_setup_context *setup,
    setup->framebuffer.y0 = 0;
    setup->framebuffer.x1 = fb->width-1;
    setup->framebuffer.y1 = fb->height-1;
+   setup->viewport_index_slot = -1;
    setup->dirty |= LP_SETUP_NEW_SCISSOR;
 }
 
+
+void
+lp_setup_set_sample_locations(struct lp_setup_context *setup,
+                              bool sample_locations_enabled,
+                              const uint8_t *sample_locations)
+{
+   LP_DBG(DEBUG_SETUP, "%s\n", __func__);
+
+   set_scene_state(setup, SETUP_FLUSHED, __func__);
+
+   assert(!setup->scene);
+
+   setup->sample_locations_enabled = sample_locations_enabled;
+   memcpy(setup->sample_locations, sample_locations, sizeof(setup->sample_locations));
+}
 
 /*
  * Try to clear one color buffer of the attached fb, either by binning a clear
@@ -425,7 +470,7 @@ lp_setup_try_clear_color_buffer(struct lp_setup_context *setup,
 {
    union lp_rast_cmd_arg clearrb_arg;
    union util_color uc;
-   const enum pipe_format format = setup->fb.cbufs[cbuf]->format;
+   const enum pipe_format format = setup->fb.cbufs[cbuf].format;
 
    LP_DBG(DEBUG_SETUP, "%s state %d\n", __func__, setup->state);
 
@@ -482,10 +527,10 @@ lp_setup_try_clear_zs(struct lp_setup_context *setup,
 {
    LP_DBG(DEBUG_SETUP, "%s state %d\n", __func__, setup->state);
 
-   enum pipe_format format = setup->fb.zsbuf->format;
+   enum pipe_format format = setup->fb.zsbuf.format;
 
-   const uint32_t zmask32 = (flags & PIPE_CLEAR_DEPTH) ? ~0 : 0;
-   const uint8_t smask8 = (flags & PIPE_CLEAR_STENCIL) ? ~0 : 0;
+   const uint32_t zmask32 = (flags & PIPE_CLEAR_DEPTH) ? ~0U : 0U;
+   const uint8_t smask8 = (flags & PIPE_CLEAR_STENCIL) ? ~0U : 0U;
 
    uint64_t zsvalue = util_pack64_z_stencil(format, depth, stencil);
    uint64_t zsmask = util_pack64_mask_z_stencil(format, zmask32, smask8);
@@ -498,7 +543,7 @@ lp_setup_try_clear_zs(struct lp_setup_context *setup,
        * Make full mask if there's "X" bits so we can do full
        * clear (without rmw).
        */
-      uint32_t zsmask_full = util_pack_mask_z_stencil(format, ~0, ~0);
+      uint32_t zsmask_full = util_pack_mask_z_stencil(format, ~0U, (uint8_t) ~0U);
       zsmask |= ~zsmask_full;
    }
 
@@ -560,7 +605,7 @@ lp_setup_clear(struct lp_setup_context *setup,
    if (flags & PIPE_CLEAR_COLOR) {
       assert(PIPE_CLEAR_COLOR0 == (1 << 2));
       for (unsigned i = 0; i < setup->fb.nr_cbufs; i++) {
-         if ((flags & (1 << (2 + i))) && setup->fb.cbufs[i]) {
+         if ((flags & (1 << (2 + i))) && setup->fb.cbufs[i].texture) {
             if (!lp_setup_try_clear_color_buffer(setup, color, i)) {
                set_scene_state(setup, SETUP_FLUSHED, __func__);
 
@@ -584,7 +629,7 @@ lp_setup_bind_rasterizer(struct lp_setup_context *setup,
    setup->triangle = first_triangle;
    setup->rect = first_rectangle;
    setup->multisample = rast->multisample;
-   setup->pixel_offset = rast->half_pixel_center ? 0.5f : 0.0f;
+   setup->pixel_offset = !rast->multisample && rast->half_pixel_center ? 0.5f : 0.0f;
    setup->bottom_edge_rule = rast->bottom_edge_rule;
 
    if (setup->scissor_test != rast->scissor) {
@@ -638,10 +683,10 @@ lp_setup_set_fs_constants(struct lp_setup_context *setup,
    unsigned i;
    for (i = 0; i < num; ++i) {
       util_copy_constant_buffer(&setup->constants[i].current,
-                                &buffers[i], false);
+                                &buffers[i]);
    }
    for (; i < ARRAY_SIZE(setup->constants); i++) {
-      util_copy_constant_buffer(&setup->constants[i].current, NULL, false);
+      util_copy_constant_buffer(&setup->constants[i].current, NULL);
    }
    setup->dirty |= LP_SETUP_NEW_CONSTANTS;
 }
@@ -950,10 +995,10 @@ lp_setup_is_resource_referenced(const struct lp_setup_context *setup,
 {
    /* check the render targets */
    for (unsigned i = 0; i < setup->fb.nr_cbufs; i++) {
-      if (setup->fb.cbufs[i] && setup->fb.cbufs[i]->texture == texture)
+      if (setup->fb.cbufs[i].texture == texture)
          return LP_REFERENCED_FOR_READ | LP_REFERENCED_FOR_WRITE;
    }
-   if (setup->fb.zsbuf && setup->fb.zsbuf->texture == texture) {
+   if (setup->fb.zsbuf.texture == texture) {
       return LP_REFERENCED_FOR_READ | LP_REFERENCED_FOR_WRITE;
    }
 
@@ -1051,8 +1096,8 @@ try_update_scene_state(struct lp_setup_context *setup)
    struct llvmpipe_context *llvmpipe = llvmpipe_context(setup->pipe);
    if (llvmpipe->dirty & LP_NEW_FS_CONSTANTS)
       lp_setup_set_fs_constants(llvmpipe->setup,
-                                ARRAY_SIZE(llvmpipe->constants[PIPE_SHADER_FRAGMENT]),
-                                llvmpipe->constants[PIPE_SHADER_FRAGMENT]);
+                                ARRAY_SIZE(llvmpipe->constants[MESA_SHADER_FRAGMENT]),
+                                llvmpipe->constants[MESA_SHADER_FRAGMENT]);
 
    if (setup->dirty & LP_SETUP_NEW_CONSTANTS) {
       for (unsigned i = 0; i < ARRAY_SIZE(setup->constants); ++i) {
@@ -1100,8 +1145,6 @@ try_update_scene_state(struct lp_setup_context *setup)
                 &setup->fs.current.jit_resources,
                 sizeof setup->fs.current.jit_resources);         
 
-         stored->jit_resources.aniso_filter_table =
-            lp_build_sample_aniso_filter_table();
          stored->variant = setup->fs.current.variant;
 
          if (!lp_scene_add_frag_shader_reference(scene,
@@ -1368,7 +1411,7 @@ lp_setup_create(struct pipe_context *pipe,
    setup->line     = first_line;
    setup->point    = first_point;
 
-   setup->dirty = ~0;
+   setup->dirty = ~0U;
 
    /* Initialize empty default fb correctly, so the rect is empty */
    setup->framebuffer.x1 = -1;
@@ -1534,7 +1577,7 @@ lp_setup_flush_and_restart(struct lp_setup_context *setup)
 void
 lp_setup_add_scissor_planes(const struct u_rect *scissor,
                             struct lp_rast_plane *plane_s,
-                            bool s_planes[4], bool multisample)
+                            bool s_planes[4])
 {
    /*
     * When rasterizing scissored tris, use the intersection of the
@@ -1556,43 +1599,53 @@ lp_setup_add_scissor_planes(const struct u_rect *scissor,
     * (Or only store the c value together with a bit indicating which
     * scissor edge this is, so rasterization would treat them differently
     * (easier to evaluate) to ordinary planes.)
+    *
+    * Note it's important the planes are defined precisely.
+    * For msaa, need to cover exactly 1 pixel, and even without msaa, the
+    * scissor boundaries are actually at exact pixel locations (since there's
+    * no half center offset used in rasterization itself, although could
+    * shift scissor planes in this case instead).
     */
-   int adj = multisample ? 127 : 0;
    if (s_planes[0]) {
-      int x0 = scissor->x0 - 1;
+      int x0 = scissor->x0;
       plane_s->dcdx = ~0U << 8;
       plane_s->dcdy = 0;
       plane_s->c = x0 << 8;
-      plane_s->c += adj;
       plane_s->c = -plane_s->c; /* flip sign */
+      /*
+       * we need x0 to be exactly on plane edge, adjust by 1 since
+       * this is an inclusive edge.
+       */
+      plane_s->c += 1;
       plane_s->eo = 1 << 8;
       plane_s++;
    }
    if (s_planes[1]) {
-      int x1 = scissor->x1;
+      int x1 = scissor->x1 + 1;
       plane_s->dcdx = 1 << 8;
       plane_s->dcdy = 0;
       plane_s->c = x1 << 8;
-      plane_s->c += 127 + adj;
+      /*
+       * no c adjustment, this edge should be exclusive.
+       */
       plane_s->eo = 0 << 8;
       plane_s++;
    }
    if (s_planes[2]) {
-      int y0 = scissor->y0 - 1;
+      int y0 = scissor->y0;
       plane_s->dcdx = 0;
       plane_s->dcdy = 1 << 8;
       plane_s->c = y0 << 8;
-      plane_s->c += adj;
       plane_s->c = -plane_s->c; /* flip sign */
+      plane_s->c += 1;
       plane_s->eo = 1 << 8;
       plane_s++;
    }
    if (s_planes[3]) {
-      int y1 = scissor->y1;
+      int y1 = scissor->y1 + 1;
       plane_s->dcdx = 0;
       plane_s->dcdy = ~0U << 8;
       plane_s->c = y1 << 8;
-      plane_s->c += 127 + adj;
       plane_s->eo = 0;
       plane_s++;
    }

@@ -37,24 +37,40 @@ vk_pipeline_layout_init(struct vk_device *device,
                         const VkPipelineLayoutCreateInfo *pCreateInfo)
 {
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-   assert(pCreateInfo->setLayoutCount <= VK_MESA_PIPELINE_LAYOUT_MAX_SETS);
+   assert(pCreateInfo->setLayoutCount <= MESA_VK_MAX_DESCRIPTOR_SETS);
 
    vk_object_base_init(device, &layout->base, VK_OBJECT_TYPE_PIPELINE_LAYOUT);
 
    layout->ref_cnt = 1;
    layout->create_flags = pCreateInfo->flags;
    layout->set_count = pCreateInfo->setLayoutCount;
+   layout->push_descriptor_idx = UINT32_MAX;
    layout->destroy = vk_pipeline_layout_destroy;
 
+   uint32_t dynamic_descriptor_count = 0;
    for (uint32_t s = 0; s < pCreateInfo->setLayoutCount; s++) {
       VK_FROM_HANDLE(vk_descriptor_set_layout, set_layout,
                      pCreateInfo->pSetLayouts[s]);
 
-      if (set_layout != NULL)
+      layout->dynamic_descriptor_offset[s] = dynamic_descriptor_count;
+      if (set_layout != NULL) {
          layout->set_layouts[s] = vk_descriptor_set_layout_ref(set_layout);
-      else
+         if (set_layout->flags &
+             VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR) {
+            assert(layout->push_descriptor_idx == UINT32_MAX);
+            layout->push_descriptor_idx = s;
+         }
+         dynamic_descriptor_count += set_layout->dynamic_descriptor_count;
+      } else {
          layout->set_layouts[s] = NULL;
+      }
    }
+
+   assert(pCreateInfo->pushConstantRangeCount <
+          MESA_VK_MAX_PUSH_CONSTANT_RANGES);
+   layout->push_range_count = pCreateInfo->pushConstantRangeCount;
+   for (uint32_t r = 0; r < pCreateInfo->pushConstantRangeCount; r++)
+      layout->push_ranges[r] = pCreateInfo->pPushConstantRanges[r];
 }
 
 void *
@@ -66,7 +82,7 @@ vk_pipeline_layout_zalloc(struct vk_device *device, size_t size,
     * their own object.
     */
    struct vk_pipeline_layout *layout =
-      vk_zalloc(&device->alloc, size, 8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      vk_zalloc(&device->alloc, size, 8, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
    if (layout == NULL)
       return NULL;
 

@@ -37,6 +37,7 @@
 #include "util/format/u_format.h"
 #include "util/format/u_format_s3tc.h"
 #include "util/u_math.h"
+#include "util/perf/cpu_trace.h"
 
 /**
  * Copy 2D rect from one place to another.
@@ -56,6 +57,8 @@ util_copy_rect(void * dst_in,
                unsigned src_x,
                unsigned src_y)
 {
+   MESA_TRACE_SCOPE("%s width=%u height=%u", __func__, width, height);
+
    uint8_t *dst = dst_in;
    const uint8_t *src = src_in;
    unsigned i;
@@ -299,6 +302,39 @@ util_format_is_luminance_alpha(enum pipe_format format)
    return false;
 }
 
+bool
+util_format_is_red_alpha(enum pipe_format format)
+{
+   const struct util_format_description *desc =
+      util_format_description(format);
+
+   if ((desc->colorspace == UTIL_FORMAT_COLORSPACE_RGB ||
+        desc->colorspace == UTIL_FORMAT_COLORSPACE_SRGB) &&
+       desc->swizzle[0] == PIPE_SWIZZLE_X &&
+       desc->swizzle[1] == PIPE_SWIZZLE_0 &&
+       desc->swizzle[2] == PIPE_SWIZZLE_0 &&
+       desc->swizzle[3] == PIPE_SWIZZLE_Y) {
+      return true;
+   }
+   return false;
+}
+
+bool
+util_format_is_red_green(enum pipe_format format)
+{
+   const struct util_format_description *desc =
+      util_format_description(format);
+
+   if ((desc->colorspace == UTIL_FORMAT_COLORSPACE_RGB ||
+        desc->colorspace == UTIL_FORMAT_COLORSPACE_SRGB) &&
+       desc->swizzle[0] == PIPE_SWIZZLE_X &&
+       desc->swizzle[1] == PIPE_SWIZZLE_Y &&
+       desc->swizzle[2] == PIPE_SWIZZLE_0 &&
+       desc->swizzle[3] == PIPE_SWIZZLE_1) {
+      return true;
+   }
+   return false;
+}
 
 bool
 util_format_is_intensity(enum pipe_format format)
@@ -327,6 +363,18 @@ util_format_is_subsampled_422(enum pipe_format format)
       desc->block.width == 2 &&
       desc->block.height == 1 &&
       desc->block.bits == 32;
+}
+
+bool
+util_format_is_float16(enum pipe_format format)
+{
+   const struct util_format_description *desc =
+      util_format_description(format);
+   const int c = util_format_get_first_non_void_channel(format);
+   if (c < 0)
+      return false;
+
+   return desc->channel[c].type == UTIL_FORMAT_TYPE_FLOAT && desc->channel[c].size == 16;
 }
 
 /**
@@ -984,101 +1032,6 @@ void util_format_unswizzle_4f(float *dst, const float *src,
    }
 }
 
-enum pipe_format
-util_format_snorm_to_sint(enum pipe_format format)
-{
-   switch (format) {
-   case PIPE_FORMAT_R32_SNORM:
-      return PIPE_FORMAT_R32_SINT;
-   case PIPE_FORMAT_R32G32_SNORM:
-      return PIPE_FORMAT_R32G32_SINT;
-   case PIPE_FORMAT_R32G32B32_SNORM:
-      return PIPE_FORMAT_R32G32B32_SINT;
-   case PIPE_FORMAT_R32G32B32A32_SNORM:
-      return PIPE_FORMAT_R32G32B32A32_SINT;
-
-   case PIPE_FORMAT_R16_SNORM:
-      return PIPE_FORMAT_R16_SINT;
-   case PIPE_FORMAT_R16G16_SNORM:
-      return PIPE_FORMAT_R16G16_SINT;
-   case PIPE_FORMAT_R16G16B16_SNORM:
-      return PIPE_FORMAT_R16G16B16_SINT;
-   case PIPE_FORMAT_R16G16B16A16_SNORM:
-      return PIPE_FORMAT_R16G16B16A16_SINT;
-
-   case PIPE_FORMAT_R8_SNORM:
-      return PIPE_FORMAT_R8_SINT;
-   case PIPE_FORMAT_R8G8_SNORM:
-      return PIPE_FORMAT_R8G8_SINT;
-   case PIPE_FORMAT_R8G8B8_SNORM:
-      return PIPE_FORMAT_R8G8B8_SINT;
-   case PIPE_FORMAT_B8G8R8_SNORM:
-      return PIPE_FORMAT_B8G8R8_SINT;
-   case PIPE_FORMAT_R8G8B8A8_SNORM:
-      return PIPE_FORMAT_R8G8B8A8_SINT;
-   case PIPE_FORMAT_B8G8R8A8_SNORM:
-      return PIPE_FORMAT_B8G8R8A8_SINT;
-
-   case PIPE_FORMAT_R10G10B10A2_SNORM:
-      return PIPE_FORMAT_R10G10B10A2_SINT;
-   case PIPE_FORMAT_B10G10R10A2_SNORM:
-      return PIPE_FORMAT_B10G10R10A2_SINT;
-
-   case PIPE_FORMAT_R10G10B10X2_SNORM:
-      return PIPE_FORMAT_R10G10B10X2_SINT;
-
-   case PIPE_FORMAT_A8_SNORM:
-      return PIPE_FORMAT_A8_SINT;
-   case PIPE_FORMAT_L8_SNORM:
-      return PIPE_FORMAT_L8_SINT;
-   case PIPE_FORMAT_L8A8_SNORM:
-      return PIPE_FORMAT_L8A8_SINT;
-   case PIPE_FORMAT_I8_SNORM:
-      return PIPE_FORMAT_I8_SINT;
-
-   case PIPE_FORMAT_A16_SNORM:
-      return PIPE_FORMAT_A16_SINT;
-   case PIPE_FORMAT_L16_SNORM:
-      return PIPE_FORMAT_L16_SINT;
-   case PIPE_FORMAT_L16A16_SNORM:
-      return PIPE_FORMAT_L16A16_SINT;
-   case PIPE_FORMAT_I16_SNORM:
-      return PIPE_FORMAT_I16_SINT;
-
-   case PIPE_FORMAT_R8G8B8X8_SNORM:
-      return PIPE_FORMAT_R8G8B8X8_SINT;
-   case PIPE_FORMAT_R16G16B16X16_SNORM:
-      return PIPE_FORMAT_R16G16B16X16_SINT;
-
-   case PIPE_FORMAT_R8A8_SNORM:
-      return PIPE_FORMAT_R8A8_SINT;
-   case PIPE_FORMAT_R16A16_SNORM:
-      return PIPE_FORMAT_R16A16_SINT;
-
-   case PIPE_FORMAT_G8R8_SNORM:
-      return PIPE_FORMAT_G8R8_SINT;
-   case PIPE_FORMAT_G16R16_SNORM:
-      return PIPE_FORMAT_G16R16_SINT;
-
-   case PIPE_FORMAT_A8B8G8R8_SNORM:
-      return PIPE_FORMAT_A8B8G8R8_SINT;
-   case PIPE_FORMAT_X8B8G8R8_SNORM:
-      return PIPE_FORMAT_X8B8G8R8_SINT;
-
-   case PIPE_FORMAT_B8G8R8X8_SNORM:
-      return PIPE_FORMAT_B8G8R8X8_SINT;
-   case PIPE_FORMAT_A8R8G8B8_SNORM:
-      return PIPE_FORMAT_A8R8G8B8_SINT;
-   case PIPE_FORMAT_X8R8G8B8_SNORM:
-      return PIPE_FORMAT_X8R8G8B8_SINT;
-   case PIPE_FORMAT_B10G10R10X2_SNORM:
-      return PIPE_FORMAT_B10G10R10X2_SINT;
-
-   default:
-      return format;
-   }
-}
-
 /**
  * If the format is RGB, return BGR. If the format is BGR, return RGB.
  * This may fail by returning PIPE_FORMAT_NONE.
@@ -1207,72 +1160,6 @@ util_format_unpack_description(enum pipe_format format)
    call_once(&flag, util_format_unpack_table_init);
 
    return util_format_unpack_table[format];
-}
-
-enum pipe_format
-util_format_snorm_to_unorm(enum pipe_format format)
-{
-#define CASE(x) case PIPE_FORMAT_##x##_SNORM: return PIPE_FORMAT_##x##_UNORM
-
-   switch (format) {
-   CASE(R8G8B8A8);
-   CASE(R8G8B8X8);
-   CASE(B8G8R8A8);
-   CASE(B8G8R8X8);
-   CASE(A8R8G8B8);
-   CASE(X8R8G8B8);
-   CASE(A8B8G8R8);
-   CASE(X8B8G8R8);
-
-   CASE(R10G10B10A2);
-   CASE(R10G10B10X2);
-   CASE(B10G10R10A2);
-   CASE(B10G10R10X2);
-
-   CASE(R8);
-   CASE(R8G8);
-   CASE(G8R8);
-   CASE(R8G8B8);
-   CASE(B8G8R8);
-
-   CASE(R16);
-   CASE(R16G16);
-   CASE(G16R16);
-   CASE(R16G16B16);
-
-   CASE(R16G16B16A16);
-   CASE(R16G16B16X16);
-
-   CASE(R32);
-   CASE(R32G32);
-   CASE(R32G32B32);
-   CASE(R32G32B32A32);
-
-   CASE(RGTC1);
-   CASE(RGTC2);
-   CASE(ETC2_R11);
-   CASE(ETC2_RG11);
-
-   CASE(A8);
-   CASE(A16);
-   CASE(L8);
-   CASE(L16);
-   CASE(I8);
-   CASE(I16);
-
-   CASE(L8A8);
-   CASE(L16A16);
-   CASE(R8A8);
-   CASE(R16A16);
-
-   CASE(LATC1);
-   CASE(LATC2);
-
-   default:
-      return format;
-   }
-
-#undef CASE
 }
 
 enum pipe_format
@@ -1434,4 +1321,79 @@ util_format_get_array(const enum util_format_type type, const unsigned bits,
 #undef SWITCH_BY_BITS_CASEX4
 
    return PIPE_FORMAT_NONE;
+}
+
+unsigned
+util_format_get_last_component(enum pipe_format format)
+{
+   const struct util_format_description *desc = util_format_description(format);
+   unsigned num = 0;
+
+   for (unsigned i = 1; i < 4; i++) {
+      if (desc->swizzle[i] <= PIPE_SWIZZLE_W)
+         num = i;
+   }
+   return num;
+}
+
+int
+util_format_get_largest_non_void_channel(enum pipe_format format)
+{
+   const struct util_format_description *desc = util_format_description(format);
+   int chan = -1, max_size = 0;
+
+   for (int i = 0; i < 4; i++) {
+      if (desc->channel[i].type != UTIL_FORMAT_TYPE_VOID &&
+          desc->channel[i].size > max_size) {
+         chan = i;
+         max_size = desc->channel[i].size;
+      }
+   }
+
+   return chan;
+}
+
+unsigned
+util_format_get_max_channel_size(enum pipe_format format)
+{
+   const struct util_format_description *desc = util_format_description(format);
+   int max_src_chan = util_format_get_largest_non_void_channel(format);
+   assert(max_src_chan >= 0 || util_format_is_compressed(format));
+
+   switch (format) {
+   case PIPE_FORMAT_BPTC_RGB_FLOAT:
+   case PIPE_FORMAT_BPTC_RGB_UFLOAT:
+      return 16;
+   case PIPE_FORMAT_ETC2_R11_UNORM:
+   case PIPE_FORMAT_ETC2_R11_SNORM:
+   case PIPE_FORMAT_ETC2_RG11_UNORM:
+   case PIPE_FORMAT_ETC2_RG11_SNORM:
+      return 11;
+   default:
+      return util_format_is_compressed(format) ?
+               8 : desc->channel[max_src_chan].size;
+   }
+}
+
+static uint32_t blocksizes_64kb[5][6][3] = {
+/*   3D              2D 1 sample      2D 2 samples     2D 4 samples      2D 8 samples   2D 16 samples) */
+   { { 64, 32, 32 }, { 256, 256, 1 }, { 128, 256, 1 }, { 128, 128, 1 }, { 64, 128, 1 }, { 64, 64, 1 } }, /* 8 bits */
+   { { 32, 32, 32 }, { 256, 128, 1 }, { 128, 128, 1 }, { 128, 64,  1 }, { 64, 64,  1 }, { 64, 32, 1 } }, /* 16 bits */
+   { { 32, 32, 16 }, { 128, 128, 1 }, { 64,  128, 1 }, { 64,  64,  1 }, { 32, 64,  1 }, { 32, 32, 1 } }, /* 32 bits */
+   { { 32, 16, 16 }, { 128, 64,  1 }, { 64,  64,  1 }, { 64,  32,  1 }, { 32, 32,  1 }, { 32, 16, 1 } }, /* 64 bits */
+   { { 16, 16, 16 }, { 64,  64,  1 }, { 32,  64,  1 }, { 32,  32,  1 }, { 16, 32,  1 }, { 16, 16, 1 } }, /* 128 bits */
+};
+
+uint32_t
+util_format_get_tilesize(enum pipe_format format, uint32_t dimensions, uint32_t samples, uint32_t axis)
+{
+   if (dimensions == 1)
+      return axis == 0 ? 64 * 1024 / util_next_power_of_two(util_format_get_blocksize(format)) : 1;
+
+   uint32_t kind = 0;
+   if (dimensions == 2)
+      kind = util_logbase2(samples) + 1;
+
+   uint32_t block_size_log2 = util_logbase2_ceil(util_format_get_blocksize(format));
+   return blocksizes_64kb[block_size_log2][kind][axis];
 }

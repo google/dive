@@ -144,7 +144,7 @@ is_compatible_condition(const nir_alu_instr *instr)
       return true;
 
    nir_foreach_use(src, &instr->def) {
-      const nir_instr *const user_instr = src->parent_instr;
+      const nir_instr *const user_instr = nir_src_parent_instr(src);
 
       if (user_instr->type != nir_instr_type_alu)
          continue;
@@ -384,14 +384,7 @@ nir_opt_comparison_pre_impl(nir_function_impl *impl)
 
    block_queue_finish(&bq);
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool

@@ -6,15 +6,15 @@
 
 #include "nvk_device.h"
 #include "nvk_entrypoints.h"
+#include "nvk_format.h"
 #include "nvk_image.h"
 #include "nvk_image_view.h"
 #include "nvk_mme.h"
 #include "nvk_physical_device.h"
 
-#include "nil_format.h"
 #include "vk_format.h"
 
-#include "nvk_cl9097.h"
+#include "nv_push_cl9097.h"
 #include "drf.h"
 
 void
@@ -55,6 +55,34 @@ nvk_mme_clear(struct mme_builder *b)
    mme_free_reg(b, payload);
    mme_free_reg(b, view_mask);
 }
+
+const struct nvk_mme_test_case nvk_mme_clear_tests[] = {{
+   .init = (struct nvk_mme_mthd_data[]) {
+      { NVK_SET_MME_SCRATCH(VIEW_MASK), 0 },
+      { }
+   },
+   .params = (uint32_t[]) { 0x3c, 5 },
+   .expected = (struct nvk_mme_mthd_data[]) {
+      { NV9097_CLEAR_SURFACE, 0x003c },
+      { NV9097_CLEAR_SURFACE, 0x043c },
+      { NV9097_CLEAR_SURFACE, 0x083c },
+      { NV9097_CLEAR_SURFACE, 0x0c3c },
+      { NV9097_CLEAR_SURFACE, 0x103c },
+      { }
+   },
+}, {
+   .init = (struct nvk_mme_mthd_data[]) {
+      { NVK_SET_MME_SCRATCH(VIEW_MASK), 0xb },
+      { }
+   },
+   .params = (uint32_t[]) { 0x3c },
+   .expected = (struct nvk_mme_mthd_data[]) {
+      { NV9097_CLEAR_SURFACE, 0x03c },
+      { NV9097_CLEAR_SURFACE, 0x43c },
+      { NV9097_CLEAR_SURFACE, 0xc3c },
+      { }
+   },
+}, {}};
 
 static void
 emit_clear_rects(struct nvk_cmd_buffer *cmd,
@@ -172,7 +200,7 @@ render_view_type(VkImageType image_type, unsigned layer_count)
    case VK_IMAGE_TYPE_3D:
       return VK_IMAGE_VIEW_TYPE_3D;
    default:
-      unreachable("Invalid image type");
+      UNREACHABLE("Invalid image type");
    }
 }
 
@@ -217,6 +245,7 @@ clear_image(struct nvk_cmd_buffer *cmd,
          const VkImageViewCreateInfo view_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .pNext = &view_usage_info,
+            .flags = VK_IMAGE_VIEW_CREATE_DRIVER_INTERNAL_BIT_MESA,
             .image = nvk_image_to_handle(image),
             .viewType = render_view_type(image->vk.image_type, layer_count),
             .format = format,
@@ -230,7 +259,7 @@ clear_image(struct nvk_cmd_buffer *cmd,
          };
 
          struct nvk_image_view view;
-         result = nvk_image_view_init(dev, &view, true, &view_info);
+         result = nvk_image_view_init(dev, &view, &view_info);
          assert(result == VK_SUCCESS);
 
          VkRenderingInfo render = {
@@ -277,7 +306,7 @@ vk_packed_int_format_for_size(unsigned size_B)
    case 4:  return VK_FORMAT_R32_UINT;
    case 8:  return VK_FORMAT_R32G32_UINT;
    case 16: return VK_FORMAT_R32G32B32A32_UINT;
-   default: unreachable("Invalid image format size");
+   default: UNREACHABLE("Invalid image format size");
    }
 }
 
@@ -291,6 +320,7 @@ nvk_CmdClearColorImage(VkCommandBuffer commandBuffer,
 {
    VK_FROM_HANDLE(nvk_cmd_buffer, cmd, commandBuffer);
    struct nvk_device *dev = nvk_cmd_buffer_device(cmd);
+   const struct nvk_physical_device *pdev = nvk_device_physical(dev);
    VK_FROM_HANDLE(nvk_image, image, _image);
 
    VkClearValue clear_value = {
@@ -298,10 +328,13 @@ nvk_CmdClearColorImage(VkCommandBuffer commandBuffer,
    };
 
    VkFormat vk_format = image->vk.format;
-   enum pipe_format p_format = vk_format_to_pipe_format(vk_format);
+   if (vk_format == VK_FORMAT_R64_UINT || vk_format == VK_FORMAT_R64_SINT)
+      vk_format = VK_FORMAT_R32G32_UINT;
+
+   enum pipe_format p_format = nvk_format_to_pipe_format(vk_format);
    assert(p_format != PIPE_FORMAT_NONE);
 
-   if (!nil_format_supports_color_targets(&dev->pdev->info, p_format)) {
+   if (!nil_format_supports_color_targets(&pdev->info, p_format)) {
       memset(&clear_value, 0, sizeof(clear_value));
       util_format_pack_rgba(p_format, clear_value.color.uint32,
                             pColor->uint32, 1);

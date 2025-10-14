@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __AGX_NIR_LOWER_VBO_H
-#define __AGX_NIR_LOWER_VBO_H
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -18,29 +17,36 @@ extern "C" {
 #define AGX_MAX_ATTRIBS (16)
 #define AGX_MAX_VBUFS   (16)
 
-/* See pipe_vertex_element for justification on the sizes. This structure should
- * be small so it can be embedded into a shader key.
- */
-struct agx_attribute {
-   uint32_t divisor;
-   uint32_t stride;
-   uint16_t src_offset;
-   uint8_t buf;
+enum agx_robustness_level {
+   /* No robustness */
+   AGX_ROBUSTNESS_DISABLED,
 
-   /* pipe_format, all vertex formats should be <= 255 */
-   uint8_t format;
+   /* Invalid load/store must not fault, but undefined value/effect */
+   AGX_ROBUSTNESS_GLES,
+
+   /* Invalid load/store access something from the array (or 0) */
+   AGX_ROBUSTNESS_GL,
+
+   /* Invalid loads return 0 and invalid stores are dropped */
+   AGX_ROBUSTNESS_D3D,
 };
 
-struct agx_vbufs {
-   unsigned count;
-   struct agx_attribute attributes[AGX_MAX_ATTRIBS];
+struct agx_robustness {
+   enum agx_robustness_level level;
+
+   /* Whether hardware "soft fault" is enabled. */
+   bool soft_fault;
 };
 
-bool agx_nir_lower_vbo(nir_shader *shader, struct agx_vbufs *vbufs);
+struct agx_velem_key;
+
+bool agx_nir_lower_vbo(nir_shader *shader, const struct agx_velem_key *attribs,
+                       struct agx_robustness rs, bool dynamic_strides);
+
+enum pipe_format agx_vbo_internal_format(enum pipe_format format);
+
 bool agx_vbo_supports_format(enum pipe_format format);
 
 #ifdef __cplusplus
 } /* extern C */
-#endif
-
 #endif

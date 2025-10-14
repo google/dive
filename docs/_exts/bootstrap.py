@@ -71,6 +71,9 @@ class BootstrapHTML5TranslatorMixin:
             self.body.append(str(admonitionlabels[name]))
             self.body.append('</div>')
 
+    def depart_admonition(self, node) -> None:
+        self.body.append('</div>\n')
+
     def visit_table(self, node):
         # init the attributes
         atts = {}
@@ -96,6 +99,9 @@ class BootstrapHTML5TranslatorMixin:
         self.body.append(tag)
 
 def setup_translators(app):
+    if app.builder.format != "html":
+        return
+
     if not app.registry.translators.items():
         translator = types.new_class(
             "BootstrapHTML5Translator",
@@ -108,10 +114,6 @@ def setup_translators(app):
         app.set_translator(app.builder.name, translator, override=True)
     else:
         for name, klass in app.registry.translators.items():
-            if app.builder.format != "html":
-                # Skip translators that are not HTML
-                continue
-
             translator = types.new_class(
                 "BootstrapHTML5Translator",
                 (

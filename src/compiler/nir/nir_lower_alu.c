@@ -37,24 +37,20 @@
  * The shader must be in SSA for this pass.
  */
 
-#define LOWER_MUL_HIGH (1 << 0)
-
 static bool
-lower_alu_instr(nir_builder *b, nir_instr *instr_, UNUSED void *cb_data)
+lower_alu_instr(nir_builder *b, nir_alu_instr *instr, UNUSED void *cb_data)
 {
-   if (instr_->type != nir_instr_type_alu)
-      return false;
-
-   nir_alu_instr *instr = nir_instr_as_alu(instr_);
-
    nir_def *lowered = NULL;
 
    b->cursor = nir_before_instr(&instr->instr);
    b->exact = instr->exact;
+   b->fp_fast_math = instr->fp_fast_math;
 
    switch (instr->op) {
    case nir_op_bitfield_reverse:
       if (b->shader->options->lower_bitfield_reverse) {
+         assert(instr->def.bit_size == 32);
+
          /* For more details, see:
           *
           * http://graphics.stanford.edu/~seander/bithacks.html#ReverseParallel
@@ -103,33 +99,21 @@ lower_alu_instr(nir_builder *b, nir_instr *instr_, UNUSED void *cb_data)
           *
           * http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
           */
-         nir_def *c1 = nir_imm_int(b, 1);
-         nir_def *c2 = nir_imm_int(b, 2);
-         nir_def *c4 = nir_imm_int(b, 4);
-         nir_def *c24 = nir_imm_int(b, 24);
-         nir_def *c33333333 = nir_imm_int(b, 0x33333333);
-         nir_def *c55555555 = nir_imm_int(b, 0x55555555);
-         nir_def *c0f0f0f0f = nir_imm_int(b, 0x0f0f0f0f);
-         nir_def *c01010101 = nir_imm_int(b, 0x01010101);
 
          lowered = nir_ssa_for_alu_src(b, instr, 0);
+         unsigned bit_size = lowered->bit_size;
 
          lowered = nir_isub(b, lowered,
-                            nir_iand(b, nir_ushr(b, lowered, c1), c55555555));
+                            nir_iand_imm(b, nir_ushr_imm(b, lowered, 1), 0x55555555));
 
-         lowered = nir_iadd(b,
-                            nir_iand(b, lowered, c33333333),
-                            nir_iand(b, nir_ushr(b, lowered, c2), c33333333));
+         lowered = nir_iadd(b, nir_iand_imm(b, lowered, 0x33333333),
+                            nir_iand_imm(b, nir_ushr_imm(b, lowered, 2), 0x33333333));
 
-         lowered = nir_ushr(b,
-                            nir_imul(b,
-                                     nir_iand(b,
-                                              nir_iadd(b,
-                                                       lowered,
-                                                       nir_ushr(b, lowered, c4)),
-                                              c0f0f0f0f),
-                                     c01010101),
-                            c24);
+         lowered = nir_iadd(b, lowered, nir_ushr_imm(b, lowered, 4));
+
+         lowered = nir_iand_imm(b, lowered, 0x0f0f0f0f);
+         lowered = nir_imul_imm(b, lowered, 0x01010101);
+         lowered = nir_u2u32(b, nir_ushr_imm(b, lowered, bit_size - 8));
       }
       break;
 
@@ -150,71 +134,94 @@ lower_alu_instr(nir_builder *b, nir_instr *instr_, UNUSED void *cb_data)
          } else {
             nir_def *cshift = nir_imm_int(b, src0->bit_size / 2);
             nir_def *cmask = nir_imm_intN_t(b, (1ull << (src0->bit_size / 2)) - 1, src0->bit_size);
-            nir_def *different_signs = NULL;
-            if (instr->op == nir_op_imul_high) {
-               nir_def *c0 = nir_imm_intN_t(b, 0, src0->bit_size);
-               different_signs = nir_ixor(b,
-                                          nir_ilt(b, src0, c0),
-                                          nir_ilt(b, src1, c0));
-               src0 = nir_iabs(b, src0);
-               src1 = nir_iabs(b, src1);
-            }
 
-            /*   ABCD
-             * * EFGH
-             * ======
-             * (GH * CD) + (GH * AB) << 16 + (EF * CD) << 16 + (EF * AB) << 32
-             *
-             * Start by splitting into the 4 multiplies.
+            /* Taken from Figure 8-2 in Hacker's Delight, which is derived
+             * from Knuth's Algorithm M.
              */
+            bool is_signed = instr->op == nir_op_imul_high;
             nir_def *src0l = nir_iand(b, src0, cmask);
             nir_def *src1l = nir_iand(b, src1, cmask);
-            nir_def *src0h = nir_ushr(b, src0, cshift);
-            nir_def *src1h = nir_ushr(b, src1, cshift);
+            nir_def *src0h = nir_shr(b, is_signed, src0, cshift);
+            nir_def *src1h = nir_shr(b, is_signed, src1, cshift);
 
             nir_def *lo = nir_imul(b, src0l, src1l);
             nir_def *m1 = nir_imul(b, src0l, src1h);
             nir_def *m2 = nir_imul(b, src0h, src1l);
             nir_def *hi = nir_imul(b, src0h, src1h);
 
-            nir_def *tmp;
-
-            tmp = nir_ishl(b, m1, cshift);
-            hi = nir_iadd(b, hi, nir_uadd_carry(b, lo, tmp));
-            lo = nir_iadd(b, lo, tmp);
-            hi = nir_iadd(b, hi, nir_ushr(b, m1, cshift));
-
-            tmp = nir_ishl(b, m2, cshift);
-            hi = nir_iadd(b, hi, nir_uadd_carry(b, lo, tmp));
-            lo = nir_iadd(b, lo, tmp);
-            hi = nir_iadd(b, hi, nir_ushr(b, m2, cshift));
-
-            if (instr->op == nir_op_imul_high) {
-               /* For channels where different_signs is set we have to perform a
-                * 64-bit negation.  This is *not* the same as just negating the
-                * high 32-bits.  Consider -3 * 2.  The high 32-bits is 0, but the
-                * desired result is -1, not -0!  Recall -x == ~x + 1.
-                */
-               nir_def *c1 = nir_imm_intN_t(b, 1, src0->bit_size);
-               hi = nir_bcsel(b, different_signs,
-                              nir_iadd(b,
-                                       nir_inot(b, hi),
-                                       nir_uadd_carry(b, nir_inot(b, lo), c1)),
-                              hi);
-            }
+            nir_def *t = nir_iadd(b, m2, nir_ushr(b, lo, cshift));
+            nir_def *w1 = nir_iand(b, t, cmask);
+            nir_def *w2 = nir_shr(b, is_signed, t, cshift);
+            w1 = nir_iadd(b, m1, w1);
+            hi = nir_iadd(b, hi,
+                          nir_iadd(b, nir_shr(b, is_signed, w1, cshift), w2));
 
             lowered = hi;
          }
       }
       break;
 
+   case nir_op_fmin:
+   case nir_op_fmax: {
+      if (!b->shader->options->lower_fminmax_signed_zero ||
+          !nir_alu_instr_is_signed_zero_preserve(instr))
+         break;
+
+      nir_def *s0 = nir_ssa_for_alu_src(b, instr, 0);
+      nir_def *s1 = nir_ssa_for_alu_src(b, instr, 1);
+
+      bool max = instr->op == nir_op_fmax;
+
+      /* Lower the fmin/fmax to a no_signed_zero fmin/fmax. This ensures that
+       * nir_lower_alu is idempotent, and allows the backend to implement
+       * soundly the no_signed_zero subset of fmin/fmax.
+       */
+      b->fp_fast_math &= ~FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE;
+      nir_def *fminmax = max ? nir_fmax(b, s0, s1) : nir_fmin(b, s0, s1);
+      b->fp_fast_math = instr->fp_fast_math;
+
+      /* If we have a constant source, we can usually optimize */
+      if (s0->num_components == 1 && s0->bit_size == 32) {
+         for (unsigned i = 0; i < 2 && lowered == NULL; ++i) {
+            if (!nir_src_is_const(instr->src[i].src))
+               continue;
+
+            uint32_t x = nir_alu_src_as_uint(instr->src[i]);
+            bool pos_zero = x == fui(+0.0);
+            bool neg_zero = x == fui(-0.0);
+            nir_def *zero = i == 0 ? s0 : s1;
+            nir_def *other = i == 0 ? s1 : s0;
+
+            if (!pos_zero && !neg_zero) {
+               /* The lowering is only required when both sources are zero, so
+                * if we have a nonzero constant source, skip the lowering.
+                */
+               lowered = fminmax;
+            } else if (pos_zero && max) {
+               /* max(x, +0.0) = +0.0 < x ? x : +0.0 */
+               lowered = nir_bcsel(b, nir_flt(b, zero, other), other, zero);
+            } else if (neg_zero && !max) {
+               /* min(x, -0.0) = x < -0.0 ? x : -0.0 */
+               lowered = nir_bcsel(b, nir_flt(b, other, zero), other, zero);
+            }
+         }
+      }
+
+      /* Fallback on the emulation */
+      if (!lowered) {
+         nir_def *iminmax = max ? nir_imax(b, s0, s1) : nir_imin(b, s0, s1);
+         lowered = nir_bcsel(b, nir_feq(b, s0, s1), iminmax, fminmax);
+      }
+
+      break;
+   }
+
    default:
       break;
    }
 
    if (lowered) {
-      nir_def_rewrite_uses(&instr->def, lowered);
-      nir_instr_remove(&instr->instr);
+      nir_def_replace(&instr->def, lowered);
       return true;
    } else {
       return false;
@@ -225,11 +232,11 @@ bool
 nir_lower_alu(nir_shader *shader)
 {
    if (!shader->options->lower_bitfield_reverse &&
-       !shader->options->lower_mul_high)
+       !shader->options->lower_bit_count &&
+       !shader->options->lower_mul_high &&
+       !shader->options->lower_fminmax_signed_zero)
       return false;
 
-   return nir_shader_instructions_pass(shader, lower_alu_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
-                                       NULL);
+   return nir_shader_alu_pass(shader, lower_alu_instr,
+                              nir_metadata_control_flow, NULL);
 }

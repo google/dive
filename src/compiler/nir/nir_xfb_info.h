@@ -24,7 +24,9 @@
 #ifndef NIR_XFB_INFO_H
 #define NIR_XFB_INFO_H
 
-#include "nir.h"
+#include "nir_defines.h"
+#include <stddef.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,7 +44,10 @@ typedef struct {
    uint8_t buffer;
    uint16_t offset;
    uint8_t location;
-   bool high_16bits;
+   bool data_is_16bit;  /* whether the src data has bit_size=16 */
+   bool high_16bits;    /* whether the src data comes from high 16 bits */
+   bool mediump;        /* whether 16-bit data must be upconverted to 32 bits before memory stores */
+   nir_alu_type mediump_upconvert_type; /* the type of upconversion (float, int, or uint) */
    uint8_t component_mask;
    uint8_t component_offset;
 } nir_xfb_output_info;

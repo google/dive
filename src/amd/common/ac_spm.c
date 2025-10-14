@@ -487,10 +487,12 @@ bool ac_init_spm(const struct radeon_info *info,
       create_info = gfx103_spm_counters;
       break;
    case GFX11:
+   case GFX11_5:
       create_info_count = ARRAY_SIZE(gfx11_spm_counters);
       create_info = gfx11_spm_counters;
       break;
    default:
+      fprintf(stderr, "radv: Failed to initialize SPM because SPM counters aren't implemented.\n");
       return false; /* not implemented */
    }
 
@@ -622,12 +624,11 @@ static uint32_t ac_spm_get_sample_size(const struct ac_spm *spm)
    return sample_size;
 }
 
-static uint32_t ac_spm_get_num_samples(const struct ac_spm *spm)
+static bool ac_spm_get_num_samples(const struct ac_spm *spm, uint32_t *num_samples)
 {
    uint32_t sample_size = ac_spm_get_sample_size(spm);
    uint32_t *ptr = (uint32_t *)spm->ptr;
    uint32_t data_size, num_lines_written;
-   uint32_t num_samples = 0;
 
    /* Get the data size (in bytes) written by the hw to the ring buffer. */
    data_size = ptr[0] * spm->ptr_granularity;
@@ -637,15 +638,15 @@ static uint32_t ac_spm_get_num_samples(const struct ac_spm *spm)
 
    /* Check for overflow. */
    if (num_lines_written % (sample_size / 32)) {
-      abort();
-   } else {
-      num_samples = num_lines_written / (sample_size / 32);
+      /* Buffer is too small and it needs to be resized. */
+      return false;
    }
 
-   return num_samples;
+   *num_samples = num_lines_written / (sample_size / 32);
+   return true;
 }
 
-void ac_spm_get_trace(const struct ac_spm *spm, struct ac_spm_trace *trace)
+bool ac_spm_get_trace(const struct ac_spm *spm, struct ac_spm_trace *trace)
 {
    memset(trace, 0, sizeof(*trace));
 
@@ -654,5 +655,6 @@ void ac_spm_get_trace(const struct ac_spm *spm, struct ac_spm_trace *trace)
    trace->num_counters = spm->num_counters;
    trace->counters = spm->counters;
    trace->sample_size_in_bytes = ac_spm_get_sample_size(spm);
-   trace->num_samples = ac_spm_get_num_samples(spm);
+
+   return ac_spm_get_num_samples(spm, &trace->num_samples);
 }

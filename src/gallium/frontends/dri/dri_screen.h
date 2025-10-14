@@ -63,18 +63,13 @@ struct dri_screen
    int max_gl_es1_version;
    int max_gl_es2_version;
 
-   const __DRIextension **extensions;
+   enum dri_screen_type type;
 
    const __DRIswrastLoaderExtension *swrast_loader;
    const __DRIkopperLoaderExtension *kopper_loader;
 
    struct {
-       /* Flag to indicate that this is a DRI2 screen.  Many of the above
-        * fields will not be valid or initializaed in that case. */
-       const __DRIdri2LoaderExtension *loader;
        const __DRIimageLookupExtension *image;
-       const __DRIuseInvalidateExtension *useInvalidate;
-       const __DRIbackgroundCallableExtension *backgroundCallable;
    } dri2;
 
    struct {
@@ -91,6 +86,8 @@ struct dri_screen
    unsigned int api_mask;
 
    bool throttle;
+   bool dmabuf_import;
+   bool has_multibuffer;
 
    struct st_config_options options;
 
@@ -104,23 +101,11 @@ struct dri_screen
    struct pipe_loader_device *dev;
 
    /* gallium */
-   bool d_depth_bits_last;
-   bool sd_depth_bits_last;
-   bool auto_fake_front;
    bool has_reset_status_query;
    bool has_protected_context;
    enum pipe_texture_target target;
 
    bool swrast_no_present;
-
-   /* hooks filled in by dri2 & drisw */
-   __DRIimage * (*lookup_egl_image)(struct dri_screen *ctx, void *handle);
-   bool (*validate_egl_image)(struct dri_screen *ctx, void *handle);
-   __DRIimage * (*lookup_egl_image_validated)(struct dri_screen *ctx, void *handle);
-
-   /* DRI exts that vary based on gallium pipe_screen caps. */
-   __DRIimageExtension image_extension;
-   __DRI2bufferDamageExtension buffer_damage_extension;
 
    /* DRI exts on this screen. Populated at init time based on device caps. */
    const __DRIextension *screen_extensions[14];
@@ -133,36 +118,9 @@ struct dri_screen
    opencl_dri_event_get_fence_t opencl_dri_event_get_fence;
 
    /* kopper */
-   struct pipe_screen *unwrapped_screen;
    bool has_dmabuf;
-   bool has_modifiers;
    bool is_sw;
-
-   struct dri_drawable *(*create_drawable)(struct dri_screen *screen,
-                                           const struct gl_config *glVis,
-                                           bool pixmapBuffer,
-                                           void *loaderPrivate);
-
-   __DRIbuffer *(*allocate_buffer)(struct dri_screen *screen,
-                                   unsigned int attachment,
-                                   unsigned int format,
-                                   int width, int height);
-
-   void (*release_buffer)(__DRIbuffer *buffer);
 };
-
-/** cast wrapper */
-static inline struct dri_screen *
-dri_screen(__DRIscreen * sPriv)
-{
-   return (struct dri_screen *)sPriv;
-}
-
-static inline __DRIscreen *
-opaque_dri_screen(struct dri_screen *screen)
-{
-   return (__DRIscreen *)screen;
-}
 
 static inline const __DRIkopperLoaderExtension *
 dri_screen_get_kopper(struct dri_screen *screen)
@@ -170,13 +128,12 @@ dri_screen_get_kopper(struct dri_screen *screen)
    return screen->kopper_loader;
 }
 
-struct __DRIimageRec {
+struct dri_image {
    struct pipe_resource *texture;
    unsigned level;
    unsigned layer;
    uint32_t dri_format;
    uint32_t dri_fourcc;
-   uint32_t dri_components;
    /* Provided by eglCreateImageKHR if creating from a
     * texture or a renderbuffer. 0 otherwise.
     */
@@ -200,16 +157,6 @@ struct __DRIimageRec {
    struct dri_screen *screen;
 };
 
-static inline bool
-dri_with_format(struct dri_screen *screen)
-{
-   const __DRIdri2LoaderExtension *loader = screen->dri2.loader;
-
-   return loader
-       && (loader->base.version >= 3)
-       && (loader->getBuffersWithFormat != NULL);
-}
-
 void
 dri_fill_st_visual(struct st_visual *stvis,
                    const struct dri_screen *screen,
@@ -218,15 +165,25 @@ dri_fill_st_visual(struct st_visual *stvis,
 void
 dri_init_options(struct dri_screen *screen);
 
-const __DRIconfig **
+const struct dri_config **
 dri_init_screen(struct dri_screen *screen,
-                struct pipe_screen *pscreen);
+                struct pipe_screen *pscreen,
+                bool has_multibuffer);
 
 void
 dri_release_screen(struct dri_screen * screen);
 
 void
 dri_destroy_screen(struct dri_screen *screen);
+
+struct pipe_screen *
+dri2_init_screen(struct dri_screen *screen, bool driver_name_is_inferred);
+struct pipe_screen *
+dri_swrast_kms_init_screen(struct dri_screen *screen, bool driver_name_is_inferred);
+struct pipe_screen *
+kopper_init_screen(struct dri_screen *screen, bool driver_name_is_inferred);
+struct pipe_screen *
+drisw_init_screen(struct dri_screen *screen, bool driver_name_is_inferred);
 
 extern const struct __DriverAPIRec dri_swrast_kms_driver_api;
 extern const __DRIextension *dri_swrast_kms_driver_extensions[];

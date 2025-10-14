@@ -49,6 +49,7 @@ struct virgl_vtest_winsys {
    struct virgl_resource_cache cache;
    mtx_t mutex;
 
+   int32_t blob_id;
    unsigned protocol_version;
 };
 
@@ -79,9 +80,6 @@ struct virgl_vtest_cmd_buf {
    unsigned cres;
    struct virgl_winsys *ws;
    struct virgl_hw_res **res_bo;
-
-   char                        is_handle_added[512];
-   unsigned                    reloc_indices_hashlist[512];
 };
 
 static inline struct virgl_hw_res *
@@ -107,24 +105,25 @@ int virgl_vtest_connect(struct virgl_vtest_winsys *vws);
 int virgl_vtest_send_get_caps(struct virgl_vtest_winsys *vws,
                               struct virgl_drm_caps *caps);
 
-int virgl_vtest_send_resource_create(struct virgl_vtest_winsys *vws,
-                                     uint32_t handle,
-                                     enum pipe_texture_target target,
-                                     uint32_t format,
-                                     uint32_t bind,
-                                     uint32_t width,
-                                     uint32_t height,
-                                     uint32_t depth,
-                                     uint32_t array_size,
-                                     uint32_t last_level,
-                                     uint32_t nr_samples,
-                                     uint32_t size,
-                                     int *out_fd);
+uint32_t virgl_vtest_send_resource_create(struct virgl_vtest_winsys *vws,
+                                          uint32_t handle,
+                                          enum pipe_texture_target target,
+                                          uint32_t format,
+                                          uint32_t bind,
+                                          uint32_t width,
+                                          uint32_t height,
+                                          uint32_t depth,
+                                          uint32_t array_size,
+                                          uint32_t last_level,
+                                          uint32_t nr_samples,
+                                          uint32_t size,
+                                          int *out_fd);
 
 int virgl_vtest_send_resource_unref(struct virgl_vtest_winsys *vws,
                                     uint32_t handle);
-int virgl_vtest_submit_cmd(struct virgl_vtest_winsys *vtws,
-                           struct virgl_vtest_cmd_buf *cbuf);
+
+int virgl_vtest_submit_cmd(struct virgl_vtest_winsys *vws,
+                           uint32_t *buf, uint32_t buf_len);
 
 int virgl_vtest_send_transfer_get(struct virgl_vtest_winsys *vws,
                                   uint32_t handle,
@@ -154,4 +153,8 @@ int virgl_vtest_recv_transfer_get_data(struct virgl_vtest_winsys *vws,
 
 int virgl_vtest_busy_wait(struct virgl_vtest_winsys *vws, int handle,
                           int flags);
+
+uint32_t
+virgl_vtest_send_create_blob(struct virgl_vtest_winsys *vws,
+                             uint32_t size, uint32_t blob_id, int *fd);
 #endif

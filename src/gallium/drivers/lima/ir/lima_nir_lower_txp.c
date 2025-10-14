@@ -50,7 +50,7 @@ get_proj_index(nir_instr *coord_instr, nir_instr *proj_instr,
    if (coord_src_ssa->parent_instr->type != nir_instr_type_intrinsic)
       return NULL;
 
-   nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(coord_src_ssa->parent_instr);
+   nir_intrinsic_instr *intrin = nir_def_as_intrinsic(coord_src_ssa);
    if (intrin->intrinsic != nir_intrinsic_load_input)
       return NULL;
 
@@ -157,7 +157,6 @@ bool
 lima_nir_lower_txp(nir_shader *shader)
 {
    return nir_shader_instructions_pass(shader, lima_nir_lower_txp_instr,
-                                       nir_metadata_block_index |
-                                       nir_metadata_dominance,
+                                       nir_metadata_control_flow,
                                        NULL);
 }

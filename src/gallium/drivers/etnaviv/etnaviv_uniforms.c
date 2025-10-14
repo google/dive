@@ -103,7 +103,27 @@ get_texture_size(const struct etna_context *ctx, bool frag,
 
       return u_minify(texture->texture->depth0, texture->u.tex.first_level);
    default:
-      unreachable("Bad texture size field");
+      UNREACHABLE("Bad texture size field");
+   }
+}
+
+static uint32_t
+get_sampler_lod(const struct etna_context *ctx, bool frag,
+                enum etna_uniform_contents contents, uint32_t data)
+{
+   unsigned index = get_const_idx(ctx, frag, data);
+   const struct pipe_sampler_state *sampler = ctx->sampler[index];
+   const bool mipmap = sampler->min_mip_filter != PIPE_TEX_MIPFILTER_NONE;
+
+   switch (contents) {
+   case ETNA_UNIFORM_SAMPLER_LOD_MIN:
+      return mipmap ? fui(sampler->min_lod) : fui(0.0f);
+   case ETNA_UNIFORM_SAMPLER_LOD_MAX:
+      return mipmap ? fui(sampler->max_lod) : fui(0.0f);
+   case ETNA_UNIFORM_SAMPLER_LOD_BIAS:
+      return fui(sampler->lod_bias);
+   default:
+      UNREACHABLE("Bad sampler lod field");
    }
 }
 
@@ -117,7 +137,9 @@ etna_uniforms_write(const struct etna_context *ctx,
    const struct etna_shader_uniform_info *uinfo = &sobj->uniforms;
    bool frag = (sobj == ctx->shader.fs);
    uint32_t base = frag ? screen->specs.ps_uniforms_offset : screen->specs.vs_uniforms_offset;
-   unsigned idx;
+
+   if (screen->specs.has_unified_uniforms && frag)
+      base += ctx->shader.vs->uniforms.count * 4;
 
    if (!uinfo->count)
       return;
@@ -151,12 +173,18 @@ etna_uniforms_write(const struct etna_context *ctx,
             get_texture_size(ctx, frag, uinfo->contents[i], val));
          break;
 
-      case ETNA_UNIFORM_UBO0_ADDR ... ETNA_UNIFORM_UBOMAX_ADDR:
-         idx = uinfo->contents[i] - ETNA_UNIFORM_UBO0_ADDR;
+      case ETNA_UNIFORM_SAMPLER_LOD_MIN:
+      case ETNA_UNIFORM_SAMPLER_LOD_MAX:
+      case ETNA_UNIFORM_SAMPLER_LOD_BIAS:
+         etna_cmd_stream_emit(stream,
+            get_sampler_lod(ctx, frag, uinfo->contents[i], val));
+         break;
+
+      case ETNA_UNIFORM_UBO_ADDR:
          etna_cmd_stream_reloc(stream, &(struct etna_reloc) {
-            .bo = etna_resource(cb[idx].buffer)->bo,
+            .bo = etna_buffer_resource(cb[val].buffer)->bo,
             .flags = ETNA_RELOC_READ,
-            .offset = cb[idx].buffer_offset + val,
+            .offset = cb[val].buffer_offset,
          });
          break;
 
@@ -182,7 +210,16 @@ etna_set_shader_uniforms_dirty_flags(struct etna_shader_variant *sobj)
 
       case ETNA_UNIFORM_TEXRECT_SCALE_X:
       case ETNA_UNIFORM_TEXRECT_SCALE_Y:
+      case ETNA_UNIFORM_TEXTURE_WIDTH:
+      case ETNA_UNIFORM_TEXTURE_HEIGHT:
+      case ETNA_UNIFORM_TEXTURE_DEPTH:
          dirty |= ETNA_DIRTY_SAMPLER_VIEWS;
+         break;
+
+      case ETNA_UNIFORM_SAMPLER_LOD_MIN:
+      case ETNA_UNIFORM_SAMPLER_LOD_MAX:
+      case ETNA_UNIFORM_SAMPLER_LOD_BIAS:
+         dirty |= ETNA_DIRTY_SAMPLERS;
          break;
       }
    }

@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 
 #include "pipe/p_shader_tokens.h"
@@ -330,7 +312,7 @@ ps30_output(struct svga_shader_emitter *emit,
 {
    switch (semantic.Name) {
    case TGSI_SEMANTIC_COLOR:
-      if (emit->unit == PIPE_SHADER_FRAGMENT) {
+      if (emit->unit == MESA_SHADER_FRAGMENT) {
          if (emit->key.fs.white_fragments) {
             /* Used for XOR logicop mode */
             emit->output_map[idx] = dst_register(SVGA3DREG_TEMP,
@@ -583,7 +565,7 @@ svga_translate_decl_sm30(struct svga_shader_emitter *emit,
 
       switch (decl->Declaration.File) {
       case TGSI_FILE_SAMPLER:
-         assert (emit->unit == PIPE_SHADER_FRAGMENT);
+         assert (emit->unit == MESA_SHADER_FRAGMENT);
          /* just keep track of the number of samplers here.
           * Will emit the declaration in the helpers function.
           */
@@ -591,14 +573,14 @@ svga_translate_decl_sm30(struct svga_shader_emitter *emit,
          break;
 
       case TGSI_FILE_INPUT:
-         if (emit->unit == PIPE_SHADER_VERTEX)
+         if (emit->unit == MESA_SHADER_VERTEX)
             ok = vs30_input(emit, decl->Semantic, idx);
          else
             ok = ps30_input(emit, decl->Semantic, idx);
          break;
 
       case TGSI_FILE_OUTPUT:
-         if (emit->unit == PIPE_SHADER_VERTEX)
+         if (emit->unit == MESA_SHADER_VERTEX)
             ok = vs30_output(emit, decl->Semantic, idx);
          else
             ok = ps30_output(emit, decl->Semantic, idx);

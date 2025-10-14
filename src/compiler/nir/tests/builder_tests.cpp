@@ -30,11 +30,11 @@ private:
    const glsl_type *type_for_def(nir_def *def)
    {
       switch (def->bit_size) {
-      case 8:  return glsl_type::u8vec(def->num_components);
-      case 16: return glsl_type::u16vec(def->num_components);
-      case 32: return glsl_type::uvec(def->num_components);
-      case 64: return glsl_type::u64vec(def->num_components);
-      default: unreachable("Invalid bit size");
+      case 8:  return glsl_u8vec_type(def->num_components);
+      case 16: return glsl_u16vec_type(def->num_components);
+      case 32: return glsl_uvec_type(def->num_components);
+      case 64: return glsl_u64vec_type(def->num_components);
+      default: UNREACHABLE("Invalid bit size");
       }
    }
 
@@ -82,7 +82,7 @@ TEST_F(nir_extract_bits_test, DISABLED_unaligned8)
 
    store_test_val(nir_extract_bits(b, srcs, 2, 24, 1, 64));
 
-   NIR_PASS_V(b->shader, nir_opt_constant_folding);
+   NIR_PASS(_, b->shader, nir_opt_constant_folding);
 
    nir_src val = nir_src_for_ssa(test_val(0));
 
@@ -98,7 +98,7 @@ TEST_F(nir_extract_bits_test, unaligned16_disabled)
 
    store_test_val(nir_extract_bits(b, srcs, 2, 16, 1, 64));
 
-   NIR_PASS_V(b->shader, nir_opt_constant_folding);
+   NIR_PASS(_, b->shader, nir_opt_constant_folding);
 
    nir_src val = nir_src_for_ssa(test_val(0));
 
@@ -117,7 +117,7 @@ TEST_F(nir_extract_bits_test, mixed_bit_sizes)
 
    store_test_val(nir_extract_bits(b, srcs, 4, 24, 2, 32));
 
-   NIR_PASS_V(b->shader, nir_opt_constant_folding);
+   NIR_PASS(_, b->shader, nir_opt_constant_folding);
 
    nir_src val = nir_src_for_ssa(test_val(0));
 

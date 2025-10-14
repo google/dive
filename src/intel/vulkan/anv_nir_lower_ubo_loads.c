@@ -44,7 +44,7 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
    unsigned byte_size = bit_size / 8;
 
    nir_def *val;
-   if (!nir_src_is_divergent(load->src[0]) && nir_src_is_const(load->src[1])) {
+   if (!nir_src_is_divergent(&load->src[0]) && nir_src_is_const(load->src[1])) {
       uint32_t offset = nir_src_as_uint(load->src[1]);
 
       /* Things should be component-aligned. */
@@ -53,22 +53,42 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
       assert(ANV_UBO_ALIGNMENT == 64);
 
       unsigned suboffset = offset % 64;
-      uint64_t aligned_offset = offset - suboffset;
+      unsigned aligned_offset = offset - suboffset;
 
       /* Load two just in case we go over a 64B boundary */
       nir_def *data[2];
       for (unsigned i = 0; i < 2; i++) {
-         nir_def *pred;
-         if (bound) {
-            pred = nir_igt_imm(b, bound, aligned_offset + i * 64 + 63);
-         } else {
-            pred = nir_imm_true(b);
+         nir_def *addr = nir_iadd_imm(b, base_addr, aligned_offset + i * 64);
+
+         data[i] = nir_load_global_constant_uniform_block_intel(
+            b, 16, 32, addr,
+            .access = nir_intrinsic_access(load),
+            .align_mul = 64);
+      }
+
+      if (bound) {
+         nir_def* offsets =
+            nir_imm_uvec8(b, aligned_offset, aligned_offset + 16,
+                          aligned_offset + 32, aligned_offset + 48,
+                          aligned_offset + 64, aligned_offset + 80,
+                          aligned_offset + 96, aligned_offset + 112);
+         nir_def* mask =
+            nir_bcsel(b, nir_ilt(b, offsets, bound),
+                      nir_imm_int(b, 0xFFFFFFFF),
+                      nir_imm_int(b, 0x00000000));
+
+         for (unsigned i = 0; i < 2; i++) {
+            /* We prepared a mask where every 1 bit of mask covers 4 bits of the
+             * UBO block we've loaded, when we apply it we'll sign extend each
+             * byte of the mask to a dword to get the final bitfield, this can
+             * be optimized because Intel HW allows instructions to mix several
+             * types and perform the sign extensions implicitly.
+             */
+            data[i] =
+               nir_iand(b,
+                        nir_i2iN(b, nir_extract_bits(b, &mask, 1, i * 128, 16, 8), 32),
+                        data[i]);
          }
-
-         nir_def *addr = nir_iadd_imm(b, base_addr,
-                                          aligned_offset + i * 64);
-
-         data[i] = nir_load_global_const_block_intel(b, 16, addr, pred);
       }
 
       val = nir_extract_bits(b, data, 2, suboffset * 8,
@@ -105,8 +125,7 @@ lower_ubo_load_instr(nir_builder *b, nir_intrinsic_instr *load,
       }
    }
 
-   nir_def_rewrite_uses(&load->def, val);
-   nir_instr_remove(&load->instr);
+   nir_def_replace(&load->def, val);
 
    return true;
 }

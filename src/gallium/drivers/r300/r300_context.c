@@ -1,24 +1,7 @@
 /*
  * Copyright 2008 Corbin Simpson <MostAwesomeDude@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE. */
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "draw/draw_context.h"
 
@@ -27,7 +10,6 @@
 #include "util/u_upload_mgr.h"
 #include "util/u_debug_cb.h"
 #include "util/os_time.h"
-#include "vl/vl_decoder.h"
 #include "vl/vl_video_buffer.h"
 
 #include "r300_cb.h"
@@ -48,6 +30,7 @@ static void r300_release_referenced_objects(struct r300_context *r300)
     unsigned i;
 
     /* Framebuffer state. */
+    util_framebuffer_init(&r300->context, NULL, r300->fb_cbufs, &r300->fb_zsbuf);
     util_unreference_framebuffer_state(fb);
 
     /* Textures. */
@@ -64,7 +47,7 @@ static void r300_release_referenced_objects(struct r300_context *r300)
 
     /* Manually-created vertex buffers. */
     pipe_vertex_buffer_unreference(&r300->dummy_vb);
-    pb_reference(&r300->vbo, NULL);
+    radeon_bo_reference(r300->rws, &r300->vbo, NULL);
 
     r300->context.delete_depth_stencil_alpha_state(&r300->context,
                                                    r300->dsa_decompress_zmask);
@@ -86,10 +69,15 @@ static void r300_destroy_context(struct pipe_context* context)
     if (r300->draw)
         draw_destroy(r300->draw);
 
+    for (unsigned i = 0; i < r300->nr_vertex_buffers; i++)
+       pipe_vertex_buffer_unreference(&r300->vertex_buffer[i]);
+
     if (r300->uploader)
         u_upload_destroy(r300->uploader);
     if (r300->context.stream_uploader)
         u_upload_destroy(r300->context.stream_uploader);
+    if (r300->context.const_uploader)
+       u_upload_destroy(r300->context.const_uploader);
 
     /* XXX: This function assumes r300->query_list was initialized */
     r300_release_referenced_objects(r300);
@@ -99,6 +87,7 @@ static void r300_destroy_context(struct pipe_context* context)
         r300->rws->ctx_destroy(r300->ctx);
 
     rc_destroy_regalloc_state(&r300->fs_regalloc_state);
+    rc_destroy_regalloc_state(&r300->vs_regalloc_state);
 
     /* XXX: No way to tell if this was initialized or not? */
     slab_destroy_child(&r300->pool_transfers);
@@ -125,6 +114,9 @@ static void r300_destroy_context(struct pipe_context* context)
             FREE(r300->vertex_stream_state.state);
         }
     }
+
+    FREE(r300->stencilref_fallback);
+
     FREE(r300);
 }
 
@@ -389,7 +381,7 @@ struct pipe_context* r300_create_context(struct pipe_screen* screen,
 
     slab_create_child(&r300->pool_transfers, &r300screen->pool_transfers);
 
-    r300->ctx = rws->ctx_create(rws, RADEON_CTX_PRIORITY_MEDIUM, false);
+    r300->ctx = rws->ctx_create(rws, flags);
     if (!r300->ctx)
         goto fail;
 
@@ -422,9 +414,6 @@ struct pipe_context* r300_create_context(struct pipe_screen* screen,
     r300_init_resource_functions(r300);
     r300_init_render_functions(r300);
     r300_init_states(&r300->context);
-
-    r300->context.create_video_codec = vl_create_decoder;
-    r300->context.create_video_buffer = vl_video_buffer_create;
 
     r300->uploader = u_upload_create(&r300->context, 128 * 1024,
                                      PIPE_BIND_CUSTOM, PIPE_USAGE_STREAM, 0);
@@ -474,7 +463,8 @@ struct pipe_context* r300_create_context(struct pipe_screen* screen,
         vb.depth0 = 1;
 
         r300->dummy_vb.buffer.resource = screen->resource_create(screen, &vb);
-        r300->context.set_vertex_buffers(&r300->context, 1, 0, false, &r300->dummy_vb);
+        pipe_reference(NULL, &r300->dummy_vb.buffer.resource->reference);
+        r300->context.set_vertex_buffers(&r300->context, 1, &r300->dummy_vb);
     }
 
     {
@@ -494,7 +484,7 @@ struct pipe_context* r300_create_context(struct pipe_screen* screen,
     rc_init_regalloc_state(&r300->vs_regalloc_state, RC_VERTEX_PROGRAM);
 
     /* Print driver info. */
-#ifdef DEBUG
+#if MESA_DEBUG
     {
 #else
     if (DBG_ON(r300, DBG_INFO)) {

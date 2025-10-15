@@ -21,7 +21,6 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include "object_names.h"
-#include <iostream>
 #include <qtimer.h>
 
 static constexpr double kZoomStepFactor = 1.25;

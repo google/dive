@@ -12,7 +12,6 @@
 */
 
 #include <QWidget>
-#include <qscrollarea.h>
 #pragma once
 
 // Forward declaration

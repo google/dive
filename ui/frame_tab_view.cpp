@@ -31,8 +31,7 @@ FrameTabView::FrameTabView(QWidget *parent) :
     m_image_label = new QLabel(this);
     m_image_label->setAlignment(Qt::AlignCenter);
     m_image_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    m_image = new QPixmap();
-    m_image_label->setPixmap(*m_image);
+    m_image_label->setPixmap(m_image);
 
     m_scroll_area = new QScrollArea(this);
     m_scroll_area->setBackgroundRole(QPalette::Dark);
@@ -64,19 +63,13 @@ FrameTabView::FrameTabView(QWidget *parent) :
     QObject::connect(m_zoom_out_button, &QPushButton::clicked, this, &FrameTabView::OnZoomOut);
 }
 
-// QPixmap does not derive from QObject, so it needs to be manually deleted.
-FrameTabView::~FrameTabView()
-{
-    delete m_image;
-}
-
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnCalculateInitialScale()
 {
-    if (!m_image->isNull() && m_initial_scale_needed)
+    if (!m_image.isNull() && m_initial_scale_needed)
     {
         QSize viewport_size = m_scroll_area->viewport()->size();
-        QSize image_size = m_image->size();
+        QSize image_size = m_image.size();
 
         double width_ratio = static_cast<double>(viewport_size.width()) /
                              static_cast<double>(image_size.width());
@@ -97,7 +90,7 @@ void FrameTabView::OnCalculateInitialScale()
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
 {
-    if (m_image->load(file_path))
+    if (m_image.load(file_path))
     {
         m_scale_factor = 1.0;
         m_initial_scale_needed = true;
@@ -115,12 +108,12 @@ void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::ScaleAndDisplayImage()
 {
-    if (m_image->isNull())
+    if (m_image.isNull())
         return;
 
-    QSize new_size = m_image->size() * m_scale_factor;
+    QSize new_size = m_image.size() * m_scale_factor;
 
-    QPixmap scaled_image = m_image->scaled(new_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPixmap scaled_image = m_image.scaled(new_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     m_image_label->setPixmap(scaled_image);
     m_image_label->resize(scaled_image.size());
@@ -129,11 +122,11 @@ void FrameTabView::ScaleAndDisplayImage()
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnFitToView()
 {
-    if (m_image->isNull())
+    if (m_image.isNull())
         return;
 
     QSize viewport_size = m_scroll_area->viewport()->size();
-    QSize image_size = m_image->size();
+    QSize image_size = m_image.size();
 
     if (viewport_size.isEmpty() || image_size.isEmpty())
         return;
@@ -151,7 +144,7 @@ void FrameTabView::OnFitToView()
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnActualSize()
 {
-    if (!m_image->isNull())
+    if (!m_image.isNull())
     {
         m_scale_factor = m_initial_scale_factor;
         ScaleAndDisplayImage();

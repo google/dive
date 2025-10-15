@@ -1154,11 +1154,23 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::TriggerScreenCapture(std::string on_device_screenshot_path)
+absl::Status AndroidDevice::TriggerScreenCapture(std::string on_device_screenshot_dir)
 {
+    std::filesystem::path dir_path(on_device_screenshot_dir);
+
+    // If the path segment has an extension, it is invalid for a directory name.
+    if (dir_path.has_extension())
+    {
+        return absl::InvalidArgumentError(
+        absl::
+        StrFormat("Invalid screenshot directory '%s'. Path appears to contain a file extension "
+                  "and must be a directory.",
+                  on_device_screenshot_dir));
+    }
+
     std::string  on_device_capture_screen_shot = absl::StrCat(std::string(Dive::kDeviceCapturePath),
                                                              "/",
-                                                             on_device_screenshot_path,
+                                                             on_device_screenshot_dir,
                                                              "/",
                                                              Dive::kCaptureScreenshotFile);
     absl::Status ret = m_adb.Run(

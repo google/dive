@@ -623,7 +623,8 @@ void TriggerGfxrCapture(Dive::DeviceManager& mgr,
                     return;
                 }
 
-                ret = mgr.GetDevice()->TriggerScreenCapture(gfxr_capture_directory);
+                std::filesystem::path gfxr_capture_directory_path(gfxr_capture_directory);
+                ret = mgr.GetDevice()->TriggerScreenCapture(gfxr_capture_directory_path);
 
                 if (!ret.ok())
                 {

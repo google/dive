@@ -1179,8 +1179,9 @@ void TraceDialog::OnGfxrCaptureClicked()
             return;
         }
 
-        ret = device->TriggerScreenCapture(
+        std::filesystem::path capture_path(
         m_gfxr_capture_file_directory_input_box->text().toStdString());
+        ret = device->TriggerScreenCapture(capture_path);
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to create capture screenshot: ",

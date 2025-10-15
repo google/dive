@@ -165,8 +165,8 @@ public:
     // Checks if the current GPU clock frequency is expected_freq_mhz [MHz]
     absl::Status IsGpuClockPinned(uint32_t expected_freq_mhz) const;
 
-    // Triggers a screenshot and saves it to the location specified
-    absl::Status TriggerScreenCapture(std::string on_device_screenshot_path);
+    // Triggers a screenshot and saves it to the specified path.
+    absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
 
 private:
     const std::string                   m_serial;

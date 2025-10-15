@@ -1501,7 +1501,7 @@ void MainWindow::OnCapture(bool is_capture_delayed, bool is_gfxr_capture)
 {
     m_trace_dig->UseGfxrCapture(is_gfxr_capture);
     m_trace_dig->UpdateDeviceList(true);
-    m_trace_dig->exec();
+    m_trace_dig->open();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1518,7 +1518,7 @@ void MainWindow::OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_
     }
     QString file_path_q_string = QString::fromStdString(file_path);
     m_analyze_dig->SetSelectedCaptureFile(file_path_q_string);
-    m_analyze_dig->exec();
+    m_analyze_dig->open();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1555,14 +1555,19 @@ void MainWindow::OnExpandToLevel()
 void MainWindow::OnAbout()
 {
     AboutDialog *about = new AboutDialog();
-    about->exec();
+    QObject::connect(about, &AboutDialog::finished, about, &AboutDialog::deleteLater);
+    about->open();
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnShortcuts()
 {
     ShortcutsDialog *shortcuts = new ShortcutsDialog();
-    shortcuts->exec();
+    QObject::connect(shortcuts,
+                     &ShortcutsDialog::finished,
+                     shortcuts,
+                     &ShortcutsDialog::deleteLater);
+    shortcuts->open();
 }
 
 //--------------------------------------------------------------------------------------------------

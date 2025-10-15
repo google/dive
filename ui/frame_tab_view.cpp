@@ -32,20 +32,22 @@ FrameTabView::FrameTabView(QWidget *parent) :
     m_image_label = new QLabel(this);
     m_image_label->setAlignment(Qt::AlignCenter);
     m_image_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    m_image_label->setScaledContents(true);
     m_image = new QPixmap();
     m_image_label->setPixmap(*m_image);
 
     m_scroll_area = new QScrollArea(this);
     m_scroll_area->setBackgroundRole(QPalette::Dark);
     m_scroll_area->setWidget(m_image_label);
-    m_scroll_area->setWidgetResizable(true);
     m_scroll_area->setAlignment(Qt::AlignCenter);
 
+    m_actual_size_button = new QPushButton("1:1", this);
+    m_fit_to_fill_button = new QPushButton("Fit", this);
     m_zoom_in_button = new QPushButton("Zoom In (+)", this);
     m_zoom_out_button = new QPushButton("Zoom Out (-)", this);
 
     QHBoxLayout *controls_layout = new QHBoxLayout();
+    controls_layout->addWidget(m_actual_size_button);
+    controls_layout->addWidget(m_fit_to_fill_button);
     controls_layout->addWidget(m_zoom_in_button);
     controls_layout->addWidget(m_zoom_out_button);
     controls_layout->addStretch();
@@ -54,6 +56,11 @@ FrameTabView::FrameTabView(QWidget *parent) :
     main_layout->addLayout(controls_layout);
     main_layout->addWidget(m_scroll_area);
 
+    QObject::connect(m_actual_size_button,
+                     &QPushButton::clicked,
+                     this,
+                     &FrameTabView::OnActualSize);
+    QObject::connect(m_fit_to_fill_button, &QPushButton::clicked, this, &FrameTabView::OnFitToView);
     QObject::connect(m_zoom_in_button, &QPushButton::clicked, this, &FrameTabView::OnZoomIn);
     QObject::connect(m_zoom_out_button, &QPushButton::clicked, this, &FrameTabView::OnZoomOut);
 }
@@ -64,6 +71,7 @@ FrameTabView::~FrameTabView()
     delete m_image;
 }
 
+//--------------------------------------------------------------------------------------------------
 void FrameTabView::OnCalculateInitialScale()
 {
     if (!m_image->isNull() && m_initial_scale_needed)
@@ -105,6 +113,7 @@ void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
     }
 }
 
+//--------------------------------------------------------------------------------------------------
 void FrameTabView::ScaleAndDisplayImage()
 {
     if (m_image->isNull())
@@ -119,18 +128,59 @@ void FrameTabView::ScaleAndDisplayImage()
 }
 
 //--------------------------------------------------------------------------------------------------
+void FrameTabView::OnFitToView()
+{
+    if (m_image->isNull())
+        return;
+
+    QSize viewport_size = m_scroll_area->viewport()->size();
+    QSize image_size = m_image->size();
+
+    if (viewport_size.isEmpty() || image_size.isEmpty())
+        return;
+
+    double width_ratio = static_cast<double>(viewport_size.width()) /
+                         static_cast<double>(image_size.width());
+    double height_ratio = static_cast<double>(viewport_size.height()) /
+                          static_cast<double>(image_size.height());
+
+    m_scale_factor = qMax(width_ratio, height_ratio);
+
+    ScaleAndDisplayImage();
+}
+
+//--------------------------------------------------------------------------------------------------
+void FrameTabView::OnActualSize()
+{
+    if (!m_image->isNull())
+    {
+        m_scale_factor = m_initial_scale_factor;
+        ScaleAndDisplayImage();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
 void FrameTabView::OnZoomIn()
 {
-    m_scale_factor *= kZoomStepFactor;
-    ScaleAndDisplayImage();
+    // Calculate the next potential scale factor
+    double next_scale = m_scale_factor * kZoomStepFactor;
+
+    // Guard against exceeding the maximum zoom limit
+    if (next_scale <= m_max_scale_factor)
+    {
+        m_scale_factor = next_scale;
+        ScaleAndDisplayImage();
+    }
+    else if (m_scale_factor < m_max_scale_factor)
+    {
+        m_scale_factor = m_max_scale_factor;
+        ScaleAndDisplayImage();
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnZoomOut()
 {
-    if (m_scale_factor / kZoomStepFactor > m_initial_scale_factor)
-    {
-        m_scale_factor /= kZoomStepFactor;
-        ScaleAndDisplayImage();
-    }
+    m_scale_factor /= kZoomStepFactor;
+    ScaleAndDisplayImage();
 }

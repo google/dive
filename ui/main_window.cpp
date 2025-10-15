@@ -530,6 +530,7 @@ MainWindow::MainWindow()
                      &MainWindow::PendingPerfCounterResults,
                      this,
                      &MainWindow::OnPendingPerfCounterResults);
+    QObject::connect(this, &MainWindow::PendingScreenshot, this, &MainWindow::OnPendingScreenshot);
 
     CreateActions();
     CreateMenus();
@@ -1185,6 +1186,27 @@ void MainWindow::OnPendingGpuTimingResults(const QString &file_name)
     task();
 }
 
+void MainWindow::OnPendingScreenshot(const QString &file_name)
+{
+    if (!m_frame_tab_view)
+    {
+        return;
+    }
+    auto task = [=]() {
+        m_frame_tab_view->OnCaptureScreenshotLoaded(file_name);
+        if (!file_name.isEmpty())
+        {
+            qDebug() << "Loaded: " << file_name;
+        }
+    };
+    if (m_loading_result.valid())
+    {
+        m_loading_pending_task.push_back(task);
+        return;
+    }
+    task();
+}
+
 //--------------------------------------------------------------------------------------------------
 MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name, bool is_temp_file)
 {
@@ -1284,13 +1306,12 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         qDebug() << "Attempting to load screenshot from: " << screenshot_file_path.string().c_str();
         if (std::filesystem::exists(screenshot_file_path))
         {
-            m_frame_tab_view->OnCaptureScreenshotLoaded(
-            QString::fromStdWString(screenshot_file_path.wstring()));
+            PendingScreenshot(QString::fromStdWString(screenshot_file_path.wstring()));
             qDebug() << "Loaded: " << screenshot_file_path.string().c_str();
         }
         else
         {
-            m_frame_tab_view->OnCaptureScreenshotLoaded("");
+            PendingScreenshot("");
             qDebug() << "Failed to find gfxr capture screenshot";
         }
     }

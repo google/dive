@@ -58,7 +58,8 @@ const std::vector<std::string> kAppTypes{ "Vulkan APK", "OpenXR APK", "Command L
 // =================================================================================================
 // TraceDialog
 // =================================================================================================
-TraceDialog::TraceDialog(QWidget *parent)
+TraceDialog::TraceDialog(QWidget *parent) :
+    QDialog(parent)
 {
     qDebug() << "TraceDialog created.";
     m_capture_layout = new QHBoxLayout();

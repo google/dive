@@ -438,52 +438,35 @@ absl::Status IsCaptureDirectoryBusy(Dive::DeviceManager& mgr,
                              absl::InternalError("Capture file operation in progress.");
 }
 
-absl::Status RenameScreenshotFile(std::filesystem::path full_target_download_dir)
+absl::Status RenameScreenshotFile(const std::filesystem::path& full_target_download_dir,
+                                  const std::filesystem::path& gfxr_capture_file_name)
 {
-    std::filesystem::path gfxr_file_path;
-    std::filesystem::path screenshot_file_path;
+    const std::filesystem::path old_screenshot_file_path = full_target_download_dir /
+                                                           Dive::kCaptureScreenshotFile;
 
-    // Iterate over all items in the newly downloaded directory
-    for (const auto& entry : std::filesystem::directory_iterator(full_target_download_dir))
+    // Ensure the file to rename actually exists.
+    if (!std::filesystem::exists(old_screenshot_file_path))
     {
-        if (entry.is_regular_file())
-        {
-            if (entry.path().extension() == ".gfxr")
-            {
-                gfxr_file_path = entry.path();
-            }
-            else if (entry.path().extension() == ".png")
-            {
-                screenshot_file_path = entry.path();
-            }
-        }
+        return absl::NotFoundError(absl::StrCat("Could not find the expected screenshot file: ",
+                                                old_screenshot_file_path.string()));
     }
 
-    // Check if both files were successfully located
-    if (gfxr_file_path.empty())
-    {
-        return absl::InternalError(
-        "Could not find .gfxr file in downloaded directory to perform rename.");
-    }
+    // Derive the base name from the GFXR file.
+    std::string base_name = gfxr_capture_file_name.stem().string();
 
-    if (screenshot_file_path.empty())
-    {
-        return absl::InternalError("Could not find screenshot file in downloaded directory.");
-    }
+    // Define the new, final path of the screenshot.
+    const std::filesystem::path new_screenshot_file_path = full_target_download_dir /
+                                                           absl::StrCat(base_name, ".png");
 
-    // Perform the rename if both files were successfully located
-    std::string           base_name = gfxr_file_path.stem().string();
-    std::filesystem::path new_screenshot_file_path = full_target_download_dir /
-                                                     absl::StrCat(base_name, ".png");
-
-    std::cout << "Renaming screenshot from " << screenshot_file_path << " to "
-              << new_screenshot_file_path << std::endl;
+    std::cout << "Renaming screenshot from " << old_screenshot_file_path.string() << " to "
+              << new_screenshot_file_path.string() << std::endl;
 
     try
     {
-        if (screenshot_file_path != new_screenshot_file_path)
+        // Avoid renaming if the names are accidentally the same
+        if (old_screenshot_file_path != new_screenshot_file_path)
         {
-            std::filesystem::rename(screenshot_file_path, new_screenshot_file_path);
+            std::filesystem::rename(old_screenshot_file_path, new_screenshot_file_path);
         }
     }
     catch (const std::exception& e)
@@ -493,6 +476,21 @@ absl::Status RenameScreenshotFile(std::filesystem::path full_target_download_dir
     }
 
     return absl::OkStatus();
+}
+
+const std::filesystem::path GetGfxrCaptureFileName(
+const std::filesystem::path&    full_target_download_dir,
+const std::vector<std::string>& file_list)
+{
+    for (const std::string& filename : file_list)
+    {
+        std::string trimmed_filename(absl::StripAsciiWhitespace(filename));
+        if (absl::EndsWith(trimmed_filename, ".gfxr"))
+        {
+            return full_target_download_dir / trimmed_filename;
+        }
+    }
+    return std::filesystem::path();
 }
 
 bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
@@ -515,10 +513,12 @@ bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_captu
         return false;
     }
 
-    std::vector<std::string> file_list = absl::StrSplit(std::string(output->data()), '\n');
+    std::vector<std::string> file_list = absl::StrSplit(std::string(output->data()),
+                                                        '\n',
+                                                        absl::SkipEmpty());
 
     // Check if on-device directory is empty
-    if ((file_list.empty()) || (file_list[0].empty()))
+    if (file_list.empty())
     {
         std::cout << "Error, captures not present on device at: " << on_device_capture_directory
                   << std::endl;
@@ -549,9 +549,17 @@ bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_captu
         return false;
     }
 
-    absl::Status ret = RenameScreenshotFile(full_target_download_dir);
+    const std::filesystem::path gfxr_capture_file = GetGfxrCaptureFileName(full_target_download_dir,
+                                                                           file_list);
 
-    if (!ret.ok())
+    if (gfxr_capture_file.empty())
+    {
+        std::cout << "Error: No file with '.gfxr' extension found in the list." << std::endl;
+        return false;
+    }
+
+    if (absl::Status ret = RenameScreenshotFile(full_target_download_dir, gfxr_capture_file);
+        !ret.ok())
     {
         std::cout << "Error renaming screenshot: " << ret.message() << std::endl;
     }

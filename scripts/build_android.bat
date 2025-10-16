@@ -26,7 +26,6 @@ if "%1"=="Release" set BUILD_TYPE=%1
 if not !BUILD_TYPE!==%1 (
     echo Invalid parameter passed for BUILD_TYPE: %1
     echo Valid options: 'Debug', 'Release'
-    echo To build all types, do not pass a parameter.
     exit /b 1
 )
 :parsingdone

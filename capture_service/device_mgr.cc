@@ -418,7 +418,7 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name,
     }
 
     std::vector<std::filesystem::path> search_paths{
-        exe_dir / "install", "./install", "../../build_android/Release/bin", "../../install", "./"
+        exe_dir, exe_dir / "install", "./install", "../../build_android/Release/bin", "../../install", "./"
     };
 
     if (!device_architecture.empty())
@@ -426,6 +426,7 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name,
         const std::filesystem::path gfxr_sub_path = std::filesystem::path("gfxr_layer") / "jni" /
                                                     device_architecture;
 
+        search_paths.push_back(exe_dir / gfxr_sub_path);
         search_paths.push_back(exe_dir / "install" / gfxr_sub_path);
         search_paths.push_back("./install" / gfxr_sub_path);
         search_paths.push_back("../../install" / gfxr_sub_path);

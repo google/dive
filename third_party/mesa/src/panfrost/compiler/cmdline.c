@@ -29,8 +29,11 @@
 #include "bifrost/disassemble.h"
 #include "util/macros.h"
 #include "valhall/disassemble.h"
+#include "panfrost/lib/pan_props.h"
 
-unsigned gpu_id = 0x7212;
+#include "util/os_file.h"
+
+unsigned gpu_id = 0x72120000;
 int verbose = 0;
 
 #define BI_FOURCC(ch0, ch1, ch2, ch3)                                          \
@@ -43,17 +46,12 @@ disassemble(const char *filename)
    FILE *fp = fopen(filename, "rb");
    assert(fp);
 
-   fseek(fp, 0, SEEK_END);
-   unsigned filesize = ftell(fp);
-   rewind(fp);
-
-   uint32_t *code = malloc(filesize);
-   unsigned res = fread(code, 1, filesize, fp);
-   if (res != filesize) {
-      printf("Couldn't read full file\n");
+   size_t filesize = 0;
+   uint32_t *code = (uint32_t *)os_read_file(filename, &filesize);
+   if (!code) {
+      fprintf(stderr, "Couldn't read full file\n");
+      return;
    }
-
-   fclose(fp);
 
    void *entrypoint = code;
 
@@ -70,7 +68,7 @@ disassemble(const char *filename)
       }
    }
 
-   if ((gpu_id >> 12) >= 9)
+   if (pan_arch(gpu_id) >= 9)
       disassemble_valhall(stdout, entrypoint, filesize, verbose);
    else
       disassemble_bifrost(stdout, entrypoint, filesize, verbose);
@@ -115,6 +113,7 @@ main(int argc, char **argv)
             return 1;
          }
 
+         gpu_id <<= 16;
          break;
       case 'g':
          gpu_id = 0;

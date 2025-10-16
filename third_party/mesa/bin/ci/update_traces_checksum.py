@@ -19,12 +19,13 @@ import sys
 from ruamel.yaml import YAML
 
 import gitlab
-from colorama import Fore, Style
-from gitlab_common import get_gitlab_project, read_token, wait_for_pipeline
+from gitlab_common import (get_gitlab_project, read_token, wait_for_pipeline,
+                           get_gitlab_pipeline_from_url, TOKEN_DIR, get_token_from_default_dir)
+from rich import print
 
 
-DESCRIPTION_FILE = "export PIGLIT_REPLAY_DESCRIPTION_FILE='.*/install/(.*)'$"
-DEVICE_NAME = "export PIGLIT_REPLAY_DEVICE_NAME='(.*)'$"
+DESCRIPTION_FILE = "export PIGLIT_REPLAY_DESCRIPTION_FILE=.*/install/(.*)$"
+DEVICE_NAME = "(?:declare -x|export) PIGLIT_REPLAY_DEVICE_NAME='?([^']*)'?$"
 
 
 def gather_results(
@@ -40,7 +41,7 @@ def gather_results(
             cur_job = project.jobs.get(job.id)
             # get variables
             print(f"👁  {job.name}...")
-            log: list[str] = cur_job.trace().decode("unicode_escape").splitlines()
+            log: list[str] = cur_job.trace().decode().splitlines()
             filename: str = ''
             dev_name: str = ''
             for logline in log:
@@ -52,7 +53,7 @@ def gather_results(
                     dev_name = device_name.group(1)
 
             if not filename or not dev_name:
-                print(Fore.RED + "Couldn't find device name or YML file in the logs!" + Style.RESET_ALL)
+                print("[red]Couldn't find device name or YML file in the logs!")
                 return
 
             print(f"👁 Found {dev_name} and file {filename}")
@@ -69,7 +70,7 @@ def gather_results(
                 target = yaml.load(target_file)
 
                 # parse artifact
-                results_json_bz2 = cur_job.artifact(path="results/results.json.bz2", streamed=False)
+                results_json_bz2 = cur_job.artifact("results/results.json.bz2")
                 results_json = bz2.decompress(results_json_bz2).decode("utf-8", errors="replace")
                 results = json.loads(results_json)
 
@@ -85,20 +86,24 @@ def gather_results(
                     checksum: str = value['images'][0]['checksum_render']
 
                     if not checksum:
-                        print(Fore.RED + f"{dev_name}: {trace}: checksum is missing! Crash?" + Style.RESET_ALL)
+                        print(f"[red]{dev_name}: {trace}: checksum is missing! Crash?")
                         continue
 
                     if checksum == "error":
-                        print(Fore.RED + f"{dev_name}: {trace}: crashed" + Style.RESET_ALL)
+                        print(f"[red]{dev_name}: {trace}: crashed")
                         continue
 
                     if target['traces'][trace][dev_name].get('checksum') == checksum:
                         continue
 
                     if "label" in target['traces'][trace][dev_name]:
-                        print(f'{dev_name}: {trace}: please verify that label {Fore.BLUE}{target["traces"][trace][dev_name]["label"]}{Style.RESET_ALL} is still valid')
+                        print(
+                            f"{dev_name}: {trace}: please verify that label "
+                            f"[blue]{target['traces'][trace][dev_name]['label']}[/blue] "
+                            "is still valid"
+                             )
 
-                    print(Fore.GREEN + f'{dev_name}: {trace}: checksum updated' + Style.RESET_ALL)
+                    print(f"[green]{dev_name}: {trace}: checksum updated")
                     target['traces'][trace][dev_name]['checksum'] = checksum
 
             with open(traces_file[0], 'w', encoding='utf-8') as target_file:
@@ -113,12 +118,20 @@ def parse_args() -> None:
         epilog="Example: update_traces_checksum.py --rev $(git rev-parse HEAD) "
     )
     parser.add_argument(
-        "--rev", metavar="revision", help="repository git revision", required=True
+        "--rev", metavar="revision", help="repository git revision",
     )
     parser.add_argument(
         "--token",
         metavar="token",
-        help="force GitLab token, otherwise it's read from ~/.config/gitlab-token",
+        type=str,
+        default=get_token_from_default_dir(),
+        help="Use the provided GitLab token or token file, "
+             f"otherwise it's read from {TOKEN_DIR / 'gitlab-token'}",
+    )
+    parser.add_argument(
+        "--pipeline-url",
+        metavar="pipeline_url",
+        help="specify a pipeline url",
     )
     return parser.parse_args()
 
@@ -133,8 +146,15 @@ if __name__ == "__main__":
 
         cur_project = get_gitlab_project(gl, "mesa")
 
-        print(f"Revision: {args.rev}")
-        pipe = wait_for_pipeline(cur_project, args.rev)
+        if args.pipeline_url:
+            pipe, cur_project = get_gitlab_pipeline_from_url(gl, args.pipeline_url)
+            REV = pipe.sha
+        else:
+            if not args.rev:
+                print('error: the following arguments are required: --rev')
+                sys.exit(1)
+            print(f"Revision: {args.rev}")
+            (pipe, cur_project) = wait_for_pipeline([cur_project], args.rev)
         print(f"Pipeline: {pipe.web_url}")
         gather_results(cur_project, pipe)
 

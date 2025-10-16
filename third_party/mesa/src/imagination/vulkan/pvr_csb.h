@@ -48,7 +48,16 @@
 #define __pvr_make_address(addr_u64) PVR_DEV_ADDR(addr_u64)
 /* clang-format on */
 
-#include "csbgen/rogue_hwdefs.h"
+#include "csbgen/rogue/cdm.h"
+#include "csbgen/rogue/cr.h"
+#include "csbgen/rogue/ipf.h"
+#include "csbgen/rogue/kmd_stream.h"
+#include "csbgen/rogue/lls.h"
+#include "csbgen/rogue/pbestate.h"
+#include "csbgen/rogue/pds.h"
+#include "csbgen/rogue/ppp.h"
+#include "csbgen/rogue/texstate.h"
+#include "csbgen/rogue/vdm.h"
 
 /**
  * \brief Size of the individual csb buffer object.
@@ -80,7 +89,7 @@ struct pvr_csb {
     * be relocated into the new bo without breaking the update.
     */
    void *relocation_mark;
-#if defined(DEBUG)
+#if MESA_DEBUG
    /* Used to track the state of the `relocation_mark` and to catch cases where
     * the driver might have emitted to the cs without using the
     * `relocation_mark`. Doing so is mostly harmless but will waste memory in
@@ -201,7 +210,7 @@ pvr_csb_get_start_address(const struct pvr_csb *csb)
  */
 static inline void pvr_csb_set_relocation_mark(struct pvr_csb *csb)
 {
-#if defined(DEBUG)
+#if MESA_DEBUG
    assert(csb->relocation_mark_status ==
              PVR_CSB_RELOCATION_MARK_UNINITIALIZED ||
           csb->relocation_mark_status == PVR_CSB_RELOCATION_MARK_CLEARED);
@@ -220,7 +229,7 @@ static inline void pvr_csb_set_relocation_mark(struct pvr_csb *csb)
  */
 static inline void pvr_csb_clear_relocation_mark(UNUSED struct pvr_csb *csb)
 {
-#if defined(DEBUG)
+#if MESA_DEBUG
    assert(csb->relocation_mark_status == PVR_CSB_RELOCATION_MARK_SET ||
           csb->relocation_mark_status ==
              PVR_CSB_RELOCATION_MARK_SET_AND_CONSUMED);
@@ -247,12 +256,11 @@ void pvr_csb_dump(const struct pvr_csb *csb,
                   uint32_t frame_num,
                   uint32_t job_num);
 
-#define PVRX(x) ROGUE_##x
-#define pvr_cmd_length(x) PVRX(x##_length)
-#define pvr_cmd_header(x) PVRX(x##_header)
-#define pvr_cmd_pack(x) PVRX(x##_pack)
-#define pvr_cmd_unpack(x) PVRX(x##_unpack)
-#define pvr_cmd_enum_to_str(x) PVRX(x##_to_str)
+#define pvr_cmd_length(x) ROGUE_##x##_length
+#define pvr_cmd_header(x) ROGUE_##x##_header
+#define pvr_cmd_pack(x) ROGUE_##x##_pack
+#define pvr_cmd_unpack(x) ROGUE_##x##_unpack
+#define pvr_cmd_enum_to_str(x) ROGUE_##x##_to_str
 
 /**
  * \brief Merges dwords0 and dwords1 arrays and stores the result into the
@@ -285,7 +293,7 @@ void pvr_csb_dump(const struct pvr_csb *csb,
  *                     information before it's packed.
  */
 #define pvr_csb_emit(csb, cmd, name)                               \
-   for (struct PVRX(cmd)                                           \
+   for (struct ROGUE_##cmd                                         \
            name = { pvr_cmd_header(cmd) },                         \
            *_dst = pvr_csb_alloc_dwords(csb, pvr_cmd_length(cmd)); \
         __builtin_expect(_dst != NULL, 1);                         \
@@ -332,8 +340,8 @@ void pvr_csb_dump(const struct pvr_csb *csb,
  *                     state information before it's packed.
  */
 #define pvr_csb_pack(_dst, cmd, name)                           \
-   for (struct PVRX(cmd) name = { pvr_cmd_header(cmd) },        \
-                         *_loop_terminate = &name;              \
+   for (struct ROGUE_##cmd name = { pvr_cmd_header(cmd) },      \
+                           *_loop_terminate = &name;            \
         __builtin_expect(_loop_terminate != NULL, 1);           \
         ({                                                      \
            STATIC_ASSERT(sizeof(*(_dst)) ==                     \
@@ -353,7 +361,7 @@ void pvr_csb_dump(const struct pvr_csb *csb,
  */
 #define pvr_csb_unpack(_src, cmd)                                             \
    ({                                                                         \
-      struct PVRX(cmd) _name;                                                 \
+      struct ROGUE_##cmd _name;                                               \
       STATIC_ASSERT(sizeof(*(_src)) == PVR_DW_TO_BYTES(pvr_cmd_length(cmd))); \
       pvr_cmd_unpack(cmd)((_src), &_name);                                    \
       _name;                                                                  \

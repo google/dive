@@ -16,21 +16,51 @@
 #include <sys/sysmacros.h>
 #endif
 
+#include <sys/mman.h>
+
+#include "vk_debug_utils.h"
+
 #include "util/libdrm.h"
 
 #include "tu_device.h"
 #include "tu_knl.h"
+#include "tu_queue.h"
+#include "tu_rmv.h"
 
 
 VkResult
 tu_bo_init_new_explicit_iova(struct tu_device *dev,
+                             struct vk_object_base *base,
                              struct tu_bo **out_bo,
                              uint64_t size,
                              uint64_t client_iova,
                              VkMemoryPropertyFlags mem_property,
-                             enum tu_bo_alloc_flags flags, const char *name)
+                             enum tu_bo_alloc_flags flags,
+                             struct tu_sparse_vma *lazy_vma,
+                             const char *name)
 {
-   return dev->instance->knl->bo_init(dev, out_bo, size, client_iova, mem_property, flags, name);
+   MESA_TRACE_FUNC();
+   struct tu_instance *instance = dev->physical_device->instance;
+
+   size = align64(size, os_page_size);
+
+   VkResult result =
+      dev->instance->knl->bo_init(dev, base, out_bo, size, client_iova,
+                                  mem_property, flags, lazy_vma, name);
+   if (result != VK_SUCCESS)
+      return result;
+
+   if ((mem_property & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) &&
+       !(mem_property & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+      (*out_bo)->cached_non_coherent = true;
+
+   vk_address_binding_report(&instance->vk, base ? base : &dev->vk.base,
+                             (*out_bo)->iova, (*out_bo)->size,
+                             VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT);
+
+   (*out_bo)->dump = flags & TU_BO_ALLOC_ALLOW_DUMP;
+
+   return VK_SUCCESS;
 }
 
 VkResult
@@ -39,7 +69,20 @@ tu_bo_init_dmabuf(struct tu_device *dev,
                   uint64_t size,
                   int fd)
 {
-   return dev->instance->knl->bo_init_dmabuf(dev, bo, size, fd);
+   size = align64(size, os_page_size);
+   VkResult result = dev->instance->knl->bo_init_dmabuf(dev, bo, size, fd);
+   if (result != VK_SUCCESS)
+      return result;
+
+   /* If we have non-coherent cached memory, then defensively assume that it
+    * may need to be invalidated/flushed. If not, then we just have to assume
+    * that whatever dma-buf producer didn't allocate it non-coherent cached
+    * because we have no way of handling that.
+    */
+   if (dev->physical_device->has_cached_non_coherent_memory)
+      (*bo)->cached_non_coherent = true;
+
+   return VK_SUCCESS;
 }
 
 int
@@ -51,18 +94,172 @@ tu_bo_export_dmabuf(struct tu_device *dev, struct tu_bo *bo)
 void
 tu_bo_finish(struct tu_device *dev, struct tu_bo *bo)
 {
+   MESA_TRACE_FUNC();
+   struct tu_instance *instance = dev->physical_device->instance;
+
+   vk_address_binding_report(&instance->vk, bo->base ? bo->base : &dev->vk.base,
+                             bo->iova, bo->size,
+                             VK_DEVICE_ADDRESS_BINDING_TYPE_UNBIND_EXT);
+
    dev->instance->knl->bo_finish(dev, bo);
 }
 
 VkResult
-tu_bo_map(struct tu_device *dev, struct tu_bo *bo)
+tu_bo_map(struct tu_device *dev, struct tu_bo *bo, void *placed_addr)
 {
-   return dev->instance->knl->bo_map(dev, bo);
+   if (bo->map && (placed_addr == NULL || placed_addr == bo->map))
+      return VK_SUCCESS;
+   else if (bo->map)
+      /* The BO is already mapped, but with a different address. */
+      return vk_errorf(dev, VK_ERROR_MEMORY_MAP_FAILED, "Cannot remap BO to a different address");
+
+   return dev->instance->knl->bo_map(dev, bo, placed_addr);
+}
+
+VkResult
+tu_bo_unmap(struct tu_device *dev, struct tu_bo *bo, bool reserve)
+{
+   if (!bo->map || bo->never_unmap)
+      return VK_SUCCESS;
+
+   TU_RMV(bo_unmap, dev, bo);
+
+   if (reserve) {
+      void *map = mmap(bo->map, bo->size, PROT_NONE,
+                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+      if (map == MAP_FAILED)
+         return vk_errorf(dev, VK_ERROR_MEMORY_MAP_FAILED,
+                          "Failed to replace mapping with reserved memory");
+   } else {
+      munmap(bo->map, bo->size);
+   }
+
+   bo->map = NULL;
+
+   return VK_SUCCESS;
+}
+
+static inline void
+tu_sync_cacheline_to_gpu(void const *p __attribute__((unused)))
+{
+#if DETECT_ARCH_AARCH64
+   /* Clean data cache. */
+   __asm volatile("dc cvac, %0" : : "r" (p) : "memory");
+#elif (DETECT_ARCH_X86 || DETECT_ARCH_X86_64)
+   __builtin_ia32_clflush(p);
+#elif DETECT_ARCH_ARM
+   /* DCCMVAC - same as DC CVAC on aarch64.
+    * Seems to be illegal to call from userspace.
+    */
+   //__asm volatile("mcr p15, 0, %0, c7, c10, 1" : : "r" (p) : "memory");
+   UNREACHABLE("Cache line clean is unsupported on ARMv7");
+#endif
+}
+
+static inline void
+tu_sync_cacheline_from_gpu(void const *p __attribute__((unused)))
+{
+#if DETECT_ARCH_AARCH64
+   /* Clean and Invalidate data cache, there is no separate Invalidate. */
+   __asm volatile("dc civac, %0" : : "r" (p) : "memory");
+#elif (DETECT_ARCH_X86 || DETECT_ARCH_X86_64)
+   __builtin_ia32_clflush(p);
+#elif DETECT_ARCH_ARM
+   /* DCCIMVAC - same as DC CIVAC on aarch64.
+    * Seems to be illegal to call from userspace.
+    */
+   //__asm volatile("mcr p15, 0, %0, c7, c14, 1" : : "r" (p) : "memory");
+   UNREACHABLE("Cache line invalidate is unsupported on ARMv7");
+#endif
+}
+
+void
+tu_bo_sync_cache(struct tu_device *dev,
+                 struct tu_bo *bo,
+                 VkDeviceSize offset,
+                 VkDeviceSize size,
+                 enum tu_mem_sync_op op)
+{
+   uintptr_t level1_dcache_size = dev->physical_device->level1_dcache_size;
+   char *start = (char *) bo->map + offset;
+   char *end = start + (size == VK_WHOLE_SIZE ? (bo->size - offset) : size);
+
+   start = (char *) ((uintptr_t) start & ~(level1_dcache_size - 1));
+
+   for (; start < end; start += level1_dcache_size) {
+      if (op == TU_MEM_SYNC_CACHE_TO_GPU) {
+         tu_sync_cacheline_to_gpu(start);
+      } else {
+         tu_sync_cacheline_from_gpu(start);
+      }
+   }
+}
+
+uint32_t
+tu_get_l1_dcache_size()
+{
+if (!(DETECT_ARCH_AARCH64 || DETECT_ARCH_X86 || DETECT_ARCH_X86_64))
+   return 0;
+
+#if DETECT_ARCH_AARCH64 &&                                                   \
+   (!defined(_SC_LEVEL1_DCACHE_LINESIZE) || DETECT_OS_ANDROID)
+   /* Bionic does not implement _SC_LEVEL1_DCACHE_LINESIZE properly: */
+   uint64_t ctr_el0;
+   asm("mrs\t%x0, ctr_el0" : "=r"(ctr_el0));
+   return 4 << ((ctr_el0 >> 16) & 0xf);
+#elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
+   return sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
+#else
+   return 0;
+#endif
 }
 
 void tu_bo_allow_dump(struct tu_device *dev, struct tu_bo *bo)
 {
    dev->instance->knl->bo_allow_dump(dev, bo);
+
+   p_atomic_set(&bo->dump, true);
+}
+
+void
+tu_bo_set_metadata(struct tu_device *dev, struct tu_bo *bo,
+                   void *metadata, uint32_t metadata_size)
+{
+   if (!dev->instance->knl->bo_set_metadata)
+      return;
+   dev->instance->knl->bo_set_metadata(dev, bo, metadata, metadata_size);
+}
+
+VkResult
+tu_sparse_vma_init(struct tu_device *dev,
+                   struct vk_object_base *base,
+                   struct tu_sparse_vma *out_vma,
+                   uint64_t *out_iova,
+                   enum tu_sparse_vma_flags flags,
+                   uint64_t size, uint64_t client_iova)
+{
+   size = align64(size, os_page_size);
+
+   out_vma->flags = flags;
+   return dev->instance->knl->sparse_vma_init(dev, base, out_vma, out_iova,
+                                              flags, size, client_iova);
+
+}
+
+void
+tu_sparse_vma_finish(struct tu_device *dev,
+                     struct tu_sparse_vma *vma)
+{
+   dev->instance->knl->sparse_vma_finish(dev, vma);
+}
+
+int
+tu_bo_get_metadata(struct tu_device *dev, struct tu_bo *bo,
+                   void *metadata, uint32_t metadata_size)
+{
+   if (!dev->instance->knl->bo_get_metadata)
+      return -ENOSYS;
+   return dev->instance->knl->bo_get_metadata(dev, bo, metadata, metadata_size);
 }
 
 VkResult
@@ -92,9 +289,11 @@ tu_device_get_suspend_count(struct tu_device *dev,
 }
 
 VkResult
-tu_device_wait_u_trace(struct tu_device *dev, struct tu_u_trace_syncobj *syncobj)
+tu_queue_wait_fence(struct tu_queue *queue, uint32_t fence,
+                    uint64_t timeout_ns)
 {
-   return dev->instance->knl->device_wait_u_trace(dev, syncobj);
+   return queue->device->instance->knl->queue_wait_fence(queue, fence,
+                                                         timeout_ns);
 }
 
 VkResult
@@ -105,24 +304,61 @@ tu_device_check_status(struct vk_device *vk_device)
 }
 
 int
-tu_drm_submitqueue_new(struct tu_device *dev,
-                       int priority,
-                       uint32_t *queue_id)
+tu_drm_submitqueue_new(struct tu_device *dev, struct tu_queue *queue)
 {
-   return dev->instance->knl->submitqueue_new(dev, priority, queue_id);
+   return dev->instance->knl->submitqueue_new(dev, queue);
 }
 
 void
-tu_drm_submitqueue_close(struct tu_device *dev, uint32_t queue_id)
+tu_drm_submitqueue_close(struct tu_device *dev, struct tu_queue *queue)
 {
-   dev->instance->knl->submitqueue_close(dev, queue_id);
+   dev->instance->knl->submitqueue_close(dev, queue);
+}
+
+void *
+tu_submit_create(struct tu_device *dev)
+{
+   return dev->instance->knl->submit_create(dev);
+}
+
+void
+tu_submit_finish(struct tu_device *dev, void *submit)
+{
+   return dev->instance->knl->submit_finish(dev, submit);
+}
+
+void
+tu_submit_add_entries(struct tu_device *dev, void *submit,
+                      struct tu_cs_entry *entries,
+                      unsigned num_entries)
+{
+   return dev->instance->knl->submit_add_entries(dev, submit, entries,
+                                                 num_entries);
+}
+
+void
+tu_submit_add_bind(struct tu_device *dev,
+                   void *_submit,
+                   struct tu_sparse_vma *vma, uint64_t vma_offset,
+                   struct tu_bo *bo, uint64_t bo_offset,
+                   uint64_t size)
+{
+   assert(vma_offset % 4096 == 0);
+   assert(bo_offset % 4096 == 0);
+   return dev->instance->knl->submit_add_bind(dev, _submit, vma, vma_offset,
+                                              bo, bo_offset, size);
 }
 
 VkResult
-tu_queue_submit(struct vk_queue *vk_queue, struct vk_queue_submit *submit)
+tu_queue_submit(struct tu_queue *queue, void *submit,
+                struct vk_sync_wait *waits, uint32_t wait_count,
+                struct vk_sync_signal *signals, uint32_t signal_count,
+                struct tu_u_trace_submission_data *u_trace_submission_data)
 {
-   struct tu_queue *queue = container_of(vk_queue, struct tu_queue, vk);
-   return queue->device->instance->knl->queue_submit(queue, submit);
+   return queue->device->instance->knl->queue_submit(queue, submit,
+                                                     waits, wait_count,
+                                                     signals, signal_count,
+                                                     u_trace_submission_data);
 }
 
 /**
@@ -202,6 +438,13 @@ tu_physical_device_try_create(struct vk_instance *vk_instance,
    struct tu_physical_device *device = NULL;
 
    VkResult result = VK_ERROR_INCOMPATIBLE_DRIVER;
+
+#ifdef TU_HAS_VIRTIO
+   if (debug_get_bool_option("FD_FORCE_VTEST", false)) {
+      result = tu_knl_drm_virtio_load(instance, -1, version, &device);
+      path = "";
+   } else
+#endif
    if (strcmp(version->name, "msm") == 0) {
 #ifdef TU_HAS_MSM
       result = tu_knl_drm_msm_load(instance, fd, version, &device);
@@ -210,7 +453,7 @@ tu_physical_device_try_create(struct vk_instance *vk_instance,
 #ifdef TU_HAS_VIRTIO
       result = tu_knl_drm_virtio_load(instance, fd, version, &device);
 #endif
-   } else {
+   } else if (TU_DEBUG(STARTUP)) {
       result = vk_startup_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
                                  "device %s (%s) is not compatible with turnip",
                                  path, version->name);
@@ -221,27 +464,12 @@ tu_physical_device_try_create(struct vk_instance *vk_instance,
 
    assert(device);
 
-#ifdef _SC_LEVEL1_DCACHE_LINESIZE
-   if (DETECT_ARCH_AARCH64 || DETECT_ARCH_X86 || DETECT_ARCH_X86_64) {
-      long l1_dcache;
-#if defined(ANDROID) && DETECT_ARCH_AARCH64
-      /* Bionic does not implement _SC_LEVEL1_DCACHE_LINESIZE properly: */
-      uint64_t ctr_el0;
-      asm("mrs\t%x0, ctr_el0" : "=r"(ctr_el0));
-      l1_dcache = 4 << ((ctr_el0 >> 16) & 0xf);
-#else
-      l1_dcache = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
-#endif
-      device->has_cached_non_coherent_memory = l1_dcache > 0;
-      device->level1_dcache_size = l1_dcache;
-   }
-#endif
-
    if (instance->vk.enabled_extensions.KHR_display) {
       master_fd = open(primary_path, O_RDWR | O_CLOEXEC);
    }
 
    device->master_fd = master_fd;
+   device->kgsl_dma_fd = -1;
 
    assert(strlen(path) < ARRAY_SIZE(device->fd_path));
    snprintf(device->fd_path, ARRAY_SIZE(device->fd_path), "%s", path);
@@ -258,7 +486,12 @@ tu_physical_device_try_create(struct vk_instance *vk_instance,
       device->master_minor = 0;
    }
 
-   if (stat(path, &st) == 0) {
+   if (strlen(path) == 0) {
+      /* if vtest, then fake it: */
+      device->has_local = true;
+      device->local_major = 226;
+      device->local_minor = 128;
+   } else if (stat(path, &st) == 0) {
       device->has_local = true;
       device->local_major = major(st.st_rdev);
       device->local_minor = minor(st.st_rdev);

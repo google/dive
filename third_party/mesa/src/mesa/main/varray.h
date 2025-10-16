@@ -155,8 +155,8 @@ _mesa_primitive_restart_index(const struct gl_context *ctx,
 
 void
 _mesa_InternalBindVertexBuffers(struct gl_context *ctx,
-                                const struct glthread_attrib_binding *buffers,
-                                GLbitfield buffer_mask);
+                                struct gl_buffer_object **buffers,
+                                const int *offsets, GLbitfield buffer_mask);
 
 extern void
 _mesa_print_arrays(struct gl_context *ctx);
@@ -186,7 +186,7 @@ _mesa_update_edgeflag_state_vao(struct gl_context *ctx);
  * \param comps number of components.
  * \param type data type.
  */
-static inline int
+ALWAYS_INLINE static int
 _mesa_bytes_per_vertex_attrib(int comps, GLenum type)
 {
    /* This has comps = 3, but should return 4, so it's difficult to

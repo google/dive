@@ -21,6 +21,8 @@
  * SOFTWARE.
  */
 
+#include "panfrost/lib/pan_props.h"
+
 #include "bi_builder.h"
 #include "va_compiler.h"
 #include "valhall_enums.h"
@@ -105,7 +107,7 @@ static bool
 bi_ld_vary_writes_hidden_register(const bi_instr *I)
 {
    /* Only varying loads can write the hidden register */
-   if (bi_opcode_props[I->op].message != BIFROST_MESSAGE_VARYING)
+   if (bi_get_opcode_props(I)->message != BIFROST_MESSAGE_VARYING)
       return false;
 
    /* They only write in some update modes */
@@ -115,15 +117,22 @@ bi_ld_vary_writes_hidden_register(const bi_instr *I)
 static bool
 bi_is_memory_access(const bi_instr *I)
 {
-   /* On the attribute unit but functionally a general memory load */
-   if (I->op == BI_OPCODE_LD_ATTR_TEX)
+   /* Some instructions on the attribute unit are functionally
+      a general memory load */
+   switch (I->op) {
+   case BI_OPCODE_LD_ATTR_TEX:
+   case BI_OPCODE_LD_TEX:
+   case BI_OPCODE_LD_TEX_IMM:
       return true;
+   default:
+      break;
+   }
 
    /* UBOs are read-only so there are no ordering constriants */
    if (I->seg == BI_SEG_UBO)
       return false;
 
-   switch (bi_opcode_props[I->op].message) {
+   switch (bi_get_opcode_props(I)->message) {
    case BIFROST_MESSAGE_LOAD:
    case BIFROST_MESSAGE_STORE:
    case BIFROST_MESSAGE_ATOMIC:
@@ -138,13 +147,13 @@ bi_is_memory_access(const bi_instr *I)
 static void
 bi_push_instr(struct bi_scoreboard_state *st, bi_instr *I)
 {
-   if (bi_opcode_props[I->op].sr_write)
+   if (bi_get_opcode_props(I)->sr_write)
       st->write[I->slot] |= bi_write_mask(I);
 
    if (bi_is_memory_access(I))
       st->memory |= BITFIELD_BIT(I->slot);
 
-   if (bi_opcode_props[I->op].message == BIFROST_MESSAGE_VARYING)
+   if (bi_get_opcode_props(I)->message == BIFROST_MESSAGE_VARYING)
       st->varying |= BITFIELD_BIT(I->slot);
 }
 
@@ -434,11 +443,21 @@ va_insert_flow_control_nops(bi_context *ctx)
           * instructions. Wait for slot 0 immediately after the ATEST.
           */
          case BI_OPCODE_BLEND:
-         case BI_OPCODE_LD_TILE:
          case BI_OPCODE_ST_TILE:
             if (!ctx->inputs->is_blend)
                bi_flow(ctx, bi_before_instr(I), VA_FLOW_WAIT);
             break;
+
+         case BI_OPCODE_LD_TILE: {
+            if (ctx->inputs->is_blend)
+               break;
+
+            assert(!I->wait_resource || pan_arch(ctx->inputs->gpu_id) >= 10);
+            bi_flow(ctx, bi_before_instr(I),
+                    I->wait_resource ? VA_FLOW_WAIT_RESOURCE : VA_FLOW_WAIT);
+            break;
+	 }
+
          case BI_OPCODE_ATEST:
             bi_flow(ctx, bi_before_instr(I), VA_FLOW_WAIT0126);
             bi_flow(ctx, bi_after_instr(I), VA_FLOW_WAIT0);
@@ -521,7 +540,7 @@ va_assign_slots(bi_context *ctx)
          I->slot = 7;
       } else if (I->op == BI_OPCODE_ZS_EMIT || I->op == BI_OPCODE_ATEST) {
          I->slot = 0;
-      } else if (bi_opcode_props[I->op].message) {
+      } else if (bi_get_opcode_props(I)->message) {
          I->slot = counter++;
 
          if (counter == 3)

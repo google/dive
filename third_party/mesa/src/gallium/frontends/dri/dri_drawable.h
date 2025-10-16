@@ -33,6 +33,11 @@
 #include "frontend/api.h"
 #include "dri_util.h"
 
+#ifdef VK_USE_PLATFORM_XCB_KHR
+#include <xcb/xcb.h>
+#endif
+
+struct pipe_context;
 struct dri_context;
 struct dri_screen;
 
@@ -84,11 +89,17 @@ struct dri_drawable
    unsigned int lastStamp;
    int w, h;
 
+   /* generic for swrast */
+   unsigned buffer_age;
+
    /* kopper */
    struct kopper_loader_info info;
-   __DRIimage   *image; //texture_from_pixmap
+   struct dri_image   *image; //texture_from_pixmap
    bool is_window;
-   bool has_modifiers;
+   bool window_valid;
+#ifdef VK_USE_PLATFORM_XCB_KHR
+   xcb_special_event_t *special_event;
+#endif
 
    /* hooks filled in by dri2 & drisw */
    void (*allocate_textures)(struct dri_context *ctx,
@@ -109,21 +120,8 @@ struct dri_drawable
                              struct dri_drawable *drawable);
 
    void (*swap_buffers)(struct dri_drawable *drawable);
+   void (*swap_buffers_with_damage)(struct dri_drawable *drawable, int nrects, const int *rects);
 };
-
-/* Typecast the opaque pointer to our own type. */
-static inline struct dri_drawable *
-dri_drawable(__DRIdrawable *drawable)
-{
-   return (struct dri_drawable *)drawable;
-}
-
-/* Typecast our own type to the opaque pointer. */
-static inline __DRIdrawable *
-opaque_dri_drawable(struct dri_drawable *drawable)
-{
-   return (__DRIdrawable *)drawable;
-}
 
 static inline void
 dri_get_drawable(struct dri_drawable *drawable)
@@ -134,10 +132,6 @@ dri_get_drawable(struct dri_drawable *drawable)
 /***********************************************************************
  * dri_drawable.c
  */
-struct dri_drawable *
-dri_create_drawable(struct dri_screen *screen, const struct gl_config *visual,
-                    bool isPixmap, void *loaderPrivate);
-
 void
 dri_put_drawable(struct dri_drawable *drawable);
 
@@ -153,16 +147,27 @@ dri_pipe_blit(struct pipe_context *pipe,
               struct pipe_resource *src);
 
 void
-dri_flush(__DRIcontext *cPriv,
-          __DRIdrawable *dPriv,
+dri_flush(struct dri_context *ctx,
+          struct dri_drawable *drawable,
           unsigned flags,
           enum __DRI2throttleReason reason);
 
 void
-dri_flush_drawable(__DRIdrawable *dPriv);
+dri_flush_drawable(struct dri_drawable *dPriv);
 
-extern const __DRItexBufferExtension driTexBufferExtension;
-extern const __DRI2throttleExtension dri2ThrottleExtension;
+void
+drisw_update_tex_buffer(struct dri_drawable *drawable,
+                        struct dri_context *ctx,
+                        struct pipe_resource *res);
+
+void
+kopper_init_drawable(struct dri_drawable *drawable, bool isPixmap, int alphaBits);
+void
+drisw_init_drawable(struct dri_drawable *drawable, bool isPixmap, int alphaBits);
+void
+dri2_init_drawable(struct dri_drawable *drawable, bool isPixmap, int alphaBits);
+void
+kopper_destroy_drawable(struct dri_drawable *drawable);
 #endif
 
 /* vim: set sw=3 ts=8 sts=3 expandtab: */

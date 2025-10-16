@@ -32,8 +32,8 @@
 
 #include "fw-api/pvr_rogue_fwif.h"
 #include "fw-api/pvr_rogue_fwif_rf.h"
+#include "pvr_csb.h"
 #include "pvr_device_info.h"
-#include "pvr_private.h"
 #include "pvr_srv.h"
 #include "pvr_srv_bridge.h"
 #include "pvr_srv_job_common.h"
@@ -41,6 +41,7 @@
 #include "pvr_srv_sync.h"
 #include "pvr_winsys.h"
 #include "util/macros.h"
+#include "util/os_file.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
 
@@ -163,12 +164,19 @@ pvr_srv_compute_cmd_stream_load(struct rogue_fwif_cmd_compute *const cmd,
    regs->cdm_resume_pds1 = *stream_ptr;
    stream_ptr += pvr_cmd_length(CR_CDM_CONTEXT_PDS1);
 
-   regs->cdm_item = *stream_ptr;
-   stream_ptr += pvr_cmd_length(CR_CDM_ITEM);
+   if (PVR_HAS_FEATURE(dev_info, compute_morton_capable)) {
+      regs->cdm_item = *stream_ptr;
+      stream_ptr += pvr_cmd_length(CR_CDM_ITEM);
+   }
 
    if (PVR_HAS_FEATURE(dev_info, cluster_grouping)) {
       regs->compute_cluster = *stream_ptr;
       stream_ptr += pvr_cmd_length(CR_COMPUTE_CLUSTER);
+   }
+
+   if (PVR_HAS_FEATURE(dev_info, tpu_dm_global_registers)) {
+      regs->tpu_tag_cdm_ctrl = *stream_ptr;
+      stream_ptr++;
    }
 
    if (PVR_HAS_FEATURE(dev_info, gpu_multicore_support)) {
@@ -193,7 +201,7 @@ static void pvr_srv_compute_cmd_ext_stream_load(
       (const uint32_t *)((uint8_t *)stream + ext_stream_offset);
    struct rogue_fwif_cdm_regs *const regs = &cmd->regs;
 
-   struct PVRX(KMD_STREAM_EXTHDR_COMPUTE0) header0;
+   struct ROGUE_KMD_STREAM_EXTHDR_COMPUTE0 header0;
 
    header0 = pvr_csb_unpack(ext_stream_ptr, KMD_STREAM_EXTHDR_COMPUTE0);
    ext_stream_ptr += pvr_cmd_length(KMD_STREAM_EXTHDR_COMPUTE0);
@@ -260,7 +268,7 @@ VkResult pvr_srv_winsys_compute_submit(
       struct pvr_srv_sync *srv_wait_sync = to_srv_sync(submit_info->wait);
 
       if (srv_wait_sync->fd >= 0) {
-         in_fd = dup(srv_wait_sync->fd);
+         in_fd = os_dupfd_cloexec(srv_wait_sync->fd);
          if (in_fd == -1) {
             return vk_errorf(NULL,
                              VK_ERROR_OUT_OF_HOST_MEMORY,

@@ -127,7 +127,7 @@ C_TEMPLATE = Template(textwrap.dedent(u"""\
         case VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO: return sizeof(VkLayerInstanceCreateInfo);
         case VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO: return sizeof(VkLayerDeviceCreateInfo);
         default:
-            unreachable("Undefined struct type.");
+            UNREACHABLE("Undefined struct type.");
         }
     }
 
@@ -190,7 +190,8 @@ H_TEMPLATE = Template(textwrap.dedent(u"""\
     } /* extern "C" */
     #endif
 
-    #endif"""))
+    #endif
+    """))
 
 
 H_DEFINE_TEMPLATE = Template(textwrap.dedent(u"""\
@@ -253,7 +254,8 @@ H_DEFINE_TEMPLATE = Template(textwrap.dedent(u"""\
     } /* extern "C" */
     #endif
 
-    #endif"""))
+    #endif
+    """))
 
 
 class NamedFactory(object):
@@ -289,10 +291,12 @@ def CamelCase_to_SHOUT_CASE(s):
 def compute_max_enum_name(s):
     if s == "VkSwapchainImageUsageFlagBitsANDROID":
         return "VK_SWAPCHAIN_IMAGE_USAGE_FLAG_BITS_MAX_ENUM"
+    if s == "VkTensorTilingARM":
+        return "VK_TENSOR_TILING_MAX_ENUM_ARM"
     max_enum_name = CamelCase_to_SHOUT_CASE(s)
     last_prefix = max_enum_name.rsplit('_', 1)[-1]
     # Those special prefixes need to be always at the end
-    if last_prefix in ['AMD', 'EXT', 'INTEL', 'KHR', 'NV', 'LUNARG', 'QCOM', 'MSFT'] :
+    if last_prefix in ['AMD', 'AMDX', 'EXT', 'INTEL', 'KHR', 'NV', 'LUNARG', 'QCOM', 'MSFT', 'ARM'] :
         max_enum_name = "_".join(max_enum_name.split('_')[:-1])
         max_enum_name = max_enum_name + "_MAX_ENUM_" + last_prefix
     else:
@@ -534,8 +538,14 @@ def main():
                         help='Vulkan API XML files',
                         action='append',
                         dest='xml_files')
-    parser.add_argument('--outdir',
-                        help='Directory to put the generated files in',
+    parser.add_argument('--out-c',
+                        help='Output C file',
+                        required=True)
+    parser.add_argument('--out-h',
+                        help='Output H file',
+                        required=True)
+    parser.add_argument('--out-d',
+                        help='Output defines H file',
                         required=True)
 
     args = parser.parse_args()
@@ -555,9 +565,9 @@ def main():
     bitmasks = sorted(bitmask_factory.registry.values(), key=lambda e: e.name)
     object_types = sorted(obj_type_factory.registry.values(), key=lambda e: e.name)
 
-    for template, file_ in [(C_TEMPLATE, os.path.join(args.outdir, 'vk_enum_to_str.c')),
-                            (H_TEMPLATE, os.path.join(args.outdir, 'vk_enum_to_str.h')),
-                            (H_DEFINE_TEMPLATE, os.path.join(args.outdir, 'vk_enum_defines.h'))]:
+    for template, file_ in [(C_TEMPLATE, args.out_c),
+                            (H_TEMPLATE, args.out_h),
+                            (H_DEFINE_TEMPLATE, args.out_d)]:
         with open(file_, 'w', encoding='utf-8') as f:
             f.write(template.render(
                 file=os.path.basename(__file__),

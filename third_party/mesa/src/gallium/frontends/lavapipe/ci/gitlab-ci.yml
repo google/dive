@@ -1,38 +1,82 @@
 include:
   - local: 'src/gallium/frontends/lavapipe/ci/gitlab-ci-inc.yml'
 
-lavapipe:
+lavapipe-vkcts:
+  timeout: 15m
   variables:
     DEQP_SUITE: lvp
-    MESA_VK_IGNORE_CONFORMANCE_WARNING: 1
-    DEQP_FRACTION: 10
-  stage: software-renderer
+    GPU_VERSION: lvp
+    DEQP_FRACTION: 9
   extends:
-    - .deqp-test-vk
+    - .deqp-test
     - .lavapipe-test
+    - .lavapipe-rules
 
-lavapipe-vk-asan:
+lavapipe-vkcts-full:
   extends:
-    - .deqp-test-vk
-    - .lavapipe-test
+    - lavapipe-vkcts
+    - .lavapipe-manual-rules
+  timeout: 2h  # base runtime = 1h15m
   variables:
+    DEQP_FRACTION: 1
+
+lavapipe-vkcts-asan:
+  timeout: 15m
+  extends:
+    - .deqp-test
+    - .lavapipe-test
+    - .lavapipe-rules
+  variables:
+    DEQP_SUITE: lvp-asan
     GPU_VERSION: lvp-asan
-    DEQP_FRACTION: 1000
-    # Skip dlclose so that we get good backtraces of the leaks.
-    # Don't batch the tests into caselists while we're leaky.
-    DEQP_RUNNER_OPTIONS: "--env LD_PRELOAD=libasan.so.8:libdlclose-skip.so --tests-per-group 1"
+    DEQP_FORCE_ASAN: 1
+    S3_ARTIFACT_NAME: mesa-x86_64-asan-debugoptimized
   needs:
-    - debian/x86_64_test-vk
-    - debian-testing-asan
+    - job: debian/x86_64_test-vk
+      optional: true
+    - job: debian-x86_64-asan
 
-lavapipe-traces:
+lavapipe-vkd3d:
+  extends:
+    - .lavapipe-test
+    - .lavapipe-rules
+    - .test-vkd3d-proton
+  timeout: 15m  # base runtime = 8m
   variables:
-    MESA_VK_IGNORE_CONFORMANCE_WARNING: 1
-    PIGLIT_REPLAY_DESCRIPTION_FILE: "${CI_PROJECT_DIR}/install/traces-lavapipe.yml"
+    GPU_VERSION: lvp
+    # Random tests fail/crash when trying to run them in parallel
+    FDO_CI_CONCURRENT: 1
+  script: install/vkd3d-runner.sh
+
+# Disabled due to only running a single trace which was using old Wine.
+.lavapipe-traces:
+  timeout: 15m
+  variables:
+    PIGLIT_TRACES_FILE: traces-lavapipe.yml
     PIGLIT_REPLAY_DEVICE_NAME: "vk-lvp"
-    PIGLIT_RESULTS: "${GPU_VERSION}-replay"
-  stage: software-renderer
   extends:
     - .piglit-traces-test
     - .lavapipe-test
     - .lavapipe-manual-rules
+
+android-angle-lavapipe:
+  variables:
+    CUTTLEFISH_GPU_MODE: mesa_swrast_guest_angle
+    DEQP_SUITE: android-angle-lavapipe
+    GPU_VERSION: lvp-android-angle
+  timeout: 15m
+  extends:
+    - .test-android
+    - .lavapipe-rules
+    - .test-angle
+
+android-angle-lavapipe-cts:
+  variables:
+    CUTTLEFISH_GPU_MODE: mesa_swrast_guest_angle
+    GPU_VERSION: lvp-android-angle
+  timeout: 15m
+  extends:
+    - .test-android
+    - .test-android-cts
+    - .lavapipe-rules
+    - .test-angle

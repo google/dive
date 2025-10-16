@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef INSTR_TEX_H
@@ -154,7 +134,7 @@ public:
 
    uint32_t slots() const override { return 1; };
 
-   auto prepare_instr() const { return m_prepare_instr; }
+   Block::Instructions prepare_instr() const override { return m_prepare_instr; }
 
    bool replace_source(PRegister old_src, PVirtualValue new_src) override;
    void update_indirect_addr(PRegister old_reg, PRegister addr) override;
@@ -203,7 +183,7 @@ private:
    int m_inst_mode;
 
    static const std::map<Opcode, std::string> s_opcode_map;
-   std::list<TexInstr *, Allocator<TexInstr *>> m_prepare_instr;
+   Block::Instructions m_prepare_instr;
 
    Resource m_sampler;
 };

@@ -30,13 +30,17 @@
 
 #include "genxml/gen_macros.h"
 #include "genxml/genX_pack.h"
-#include "common/intel_genX_state.h"
+#include "common/intel_common.h"
+#include "common/intel_compute_slm.h"
+#include "common/intel_genX_state_brw.h"
 
 static void
 genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
 {
-   assert(state->cmd_buffer == NULL ||
-          state->cmd_buffer->state.current_pipeline == _3D);
+   assert(state->cmd_buffer && state->cmd_buffer->state.current_pipeline == _3D);
+
+   /* Wa_16013994831 - Turn preemption on if it was previous left disabled. */
+   genX(cmd_buffer_set_preemption)(state->cmd_buffer, true);
 
    struct anv_batch *batch = state->batch;
    struct anv_device *device = state->device;
@@ -52,7 +56,7 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
     *
     * Find more about how to set up a 3D pipeline with a fragment shader but
     * without a vertex shader in blorp_emit_vertex_elements() in
-    * blorp_genX_exec.h.
+    * blorp_genX_exec_brw.h.
     */
    GENX(VERTEX_ELEMENT_STATE_pack)(
       batch, dw + 1, &(struct GENX(VERTEX_ELEMENT_STATE)) {
@@ -77,7 +81,16 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
          .Component3Control   = VFCOMP_STORE_1_FP,
       });
 
-   anv_batch_emit(batch, GENX(3DSTATE_VF_STATISTICS), vf);
+   anv_batch_emit(batch, GENX(3DSTATE_VF_STATISTICS), vfs);
+   anv_batch_emit(batch, GENX(3DSTATE_VF), vf) {
+#if GFX_VERx10 >= 125
+      /* Simple shaders have no requirement that we need to disable geometry
+       * distribution.
+       */
+      vf.GeometryDistributionEnable =
+         device->physical->instance->enable_vf_distribution;
+#endif
+   }
    anv_batch_emit(batch, GENX(3DSTATE_VF_SGVS), sgvs) {
       sgvs.InstanceIDEnable = true;
       sgvs.InstanceIDComponentNumber = COMP_1;
@@ -103,16 +116,23 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
     * allocate space for the VS.  Even though one isn't run, we need VUEs to
     * store the data that VF is going to pass to SOL.
     */
-   const unsigned entry_size[4] = { DIV_ROUND_UP(32, 64), 1, 1, 1 };
+   struct intel_urb_config urb_cfg = {
+      .size = { DIV_ROUND_UP(32, 64), 1, 1, 1 },
+   };
 
-   genX(emit_l3_config)(batch, device, state->l3_config);
+   genX(emit_l3_config)(batch, device, device->l3_config);
+   state->cmd_buffer->state.current_l3_config = device->l3_config;
 
-   state->cmd_buffer->state.current_l3_config = state->l3_config;
+   bool constrained;
+   intel_get_urb_config(device->info, device->l3_config, false, false,
+                        &urb_cfg, &constrained);
 
-   enum intel_urb_deref_block_size deref_block_size;
-   genX(emit_urb_setup)(device, batch, state->l3_config,
-                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                        entry_size, &deref_block_size);
+   if (genX(need_wa_16014912113)(&state->cmd_buffer->state.gfx.urb_cfg,
+                                 &urb_cfg)) {
+      genX(batch_emit_wa_16014912113)(
+         batch, &state->cmd_buffer->state.gfx.urb_cfg);
+   }
+   genX(emit_urb_setup)(batch, device, &urb_cfg);
 
    anv_batch_emit(batch, GENX(3DSTATE_PS_BLEND), ps_blend) {
       ps_blend.HasWriteableRT = true;
@@ -155,7 +175,7 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
 
    anv_batch_emit(batch, GENX(3DSTATE_SF), sf) {
 #if GFX_VER >= 12
-      sf.DerefBlockSize = deref_block_size;
+      sf.DerefBlockSize = urb_cfg.deref_block_size;
 #endif
    }
 
@@ -184,38 +204,63 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
       ps.VectorMaskEnable       = prog_data->uses_vmask;
 
       ps.BindingTableEntryCount = GFX_VER == 9 ? 1 : 0;
+#if GFX_VER < 20
       ps.PushConstantEnable     = prog_data->base.nr_params > 0 ||
                                   prog_data->base.ubo_ranges[0].length;
+#endif
 
       ps.DispatchGRFStartRegisterForConstantSetupData0 =
          brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 0);
       ps.DispatchGRFStartRegisterForConstantSetupData1 =
          brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 1);
+#if GFX_VER < 20
       ps.DispatchGRFStartRegisterForConstantSetupData2 =
          brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 2);
+#endif
 
       ps.KernelStartPointer0 = state->kernel->kernel.offset +
          brw_wm_prog_data_prog_offset(prog_data, ps, 0);
       ps.KernelStartPointer1 = state->kernel->kernel.offset +
          brw_wm_prog_data_prog_offset(prog_data, ps, 1);
+#if GFX_VER < 20
       ps.KernelStartPointer2 = state->kernel->kernel.offset +
          brw_wm_prog_data_prog_offset(prog_data, ps, 2);
+#endif
+
+#if GFX_VER >= 30
+      ps.RegistersPerThread = ptl_register_blocks(prog_data->base.grf_used);
+#endif
 
       ps.MaximumNumberofThreadsPerPSD = device->info->max_threads_per_psd - 1;
    }
 
+#if INTEL_WA_18038825448_GFX_VER
+   const bool needs_ps_dependency =
+      genX(cmd_buffer_set_coarse_pixel_active)
+         (state->cmd_buffer, ANV_COARSE_PIXEL_STATE_DISABLED);
+#endif
+
    anv_batch_emit(batch, GENX(3DSTATE_PS_EXTRA), psx) {
       psx.PixelShaderValid = true;
+#if GFX_VER < 20
       psx.AttributeEnable = prog_data->num_varying_inputs > 0;
+#endif
       psx.PixelShaderIsPerSample = prog_data->persample_dispatch;
       psx.PixelShaderComputedDepthMode = prog_data->computed_depth_mode;
       psx.PixelShaderComputesStencil = prog_data->computed_stencil;
+
+#if INTEL_WA_18038825448_GFX_VER
+      psx.EnablePSDependencyOnCPsizeChange = needs_ps_dependency;
+#endif
    }
 
    anv_batch_emit(batch, GENX(3DSTATE_VIEWPORT_STATE_POINTERS_CC), cc) {
       struct anv_state cc_state =
          anv_state_stream_alloc(state->dynamic_state_stream,
                                 4 * GENX(CC_VIEWPORT_length), 32);
+      if (cc_state.map == NULL)
+         return;
+
       struct GENX(CC_VIEWPORT) cc_viewport = {
          .MinimumDepth = 0.0f,
          .MaximumDepth = 1.0f,
@@ -259,7 +304,7 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
    /* Allocate a binding table for Gfx9 for 2 reason :
     *
     *   1. we need a to emit a 3DSTATE_BINDING_TABLE_POINTERS_PS to make the
-    *      HW apply the preceeding 3DSTATE_CONSTANT_PS
+    *      HW apply the preceding 3DSTATE_CONSTANT_PS
     *
     *   2. Emitting an empty 3DSTATE_BINDING_TABLE_POINTERS_PS would cause RT
     *      writes (even though they're empty) to disturb later writes
@@ -278,7 +323,7 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
       /* Re-emit state base addresses so we get the new surface state base
        * address before we start emitting binding tables etc.
        */
-      genX(cmd_buffer_emit_state_base_address)(state->cmd_buffer);
+      genX(cmd_buffer_emit_bt_pool_base_address)(state->cmd_buffer);
 
       state->bt_state =
          anv_cmd_buffer_alloc_binding_table(state->cmd_buffer, 1, &bt_offset);
@@ -293,47 +338,59 @@ genX(emit_simpler_shader_init_fragment)(struct anv_simple_shader *state)
    state->cmd_buffer->state.descriptors_dirty |= VK_SHADER_STAGE_FRAGMENT_BIT;
 #endif
 
+#if INTEL_WA_14018283232_GFX_VER
+   genX(cmd_buffer_ensure_wa_14018283232)(state->cmd_buffer, false);
+#endif
+
    /* Flag all the instructions emitted by the memcpy. */
    struct anv_gfx_dynamic_state *hw_state =
       &state->cmd_buffer->state.gfx.dyn_state;
 
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_URB);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VF_STATISTICS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VF);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VF_TOPOLOGY);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VERTEX_INPUT);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VF_SGVS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_URB);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VF_STATISTICS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VF);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VF_TOPOLOGY);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VERTEX_INPUT);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VF_SGVS);
 #if GFX_VER >= 11
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VF_SGVS_2);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VF_SGVS_2);
 #endif
 #if GFX_VER >= 12
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_PRIMITIVE_REPLICATION);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_PRIMITIVE_REPLICATION);
 #endif
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_STREAMOUT);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_CLIP);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_SAMPLE_MASK);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_MULTISAMPLE);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_DEPTH_BOUNDS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_WM);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_WM_DEPTH_STENCIL);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_SF);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_SBE);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_VS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_HS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_DS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_TE);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_GS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_PS);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_PS_EXTRA);
-   BITSET_SET(hw_state->dirty, ANV_GFX_STATE_PS_BLEND);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_STREAMOUT);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VIEWPORT_CC);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_CLIP);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_RASTER);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_SAMPLE_MASK);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_MULTISAMPLE);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_DEPTH_BOUNDS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_WM);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_WM_DEPTH_STENCIL);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_SF);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_SBE);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_VS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_HS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_DS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_TE);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_GS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_PS);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_PS_EXTRA);
+   BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_PS_BLEND);
    if (device->vk.enabled_extensions.EXT_mesh_shader) {
-      BITSET_SET(hw_state->dirty, ANV_GFX_STATE_MESH_CONTROL);
-      BITSET_SET(hw_state->dirty, ANV_GFX_STATE_TASK_CONTROL);
+      BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_MESH_CONTROL);
+      BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_TASK_CONTROL);
    }
+
+   /* Update urb config after simple shader. */
+   memcpy(&state->cmd_buffer->state.gfx.urb_cfg, &urb_cfg,
+          sizeof(urb_cfg));
 
    state->cmd_buffer->state.gfx.vb_dirty = BITFIELD_BIT(0);
    state->cmd_buffer->state.gfx.dirty |= ~(ANV_CMD_DIRTY_INDEX_BUFFER |
-                                           ANV_CMD_DIRTY_XFB_ENABLE);
+                                           ANV_CMD_DIRTY_XFB_ENABLE |
+                                           ANV_CMD_DIRTY_OCCLUSION_QUERY_ACTIVE |
+                                           ANV_CMD_DIRTY_INDEX_TYPE);
    state->cmd_buffer->state.push_constants_dirty |= VK_SHADER_STAGE_FRAGMENT_BIT;
    state->cmd_buffer->state.gfx.push_constant_stages = VK_SHADER_STAGE_FRAGMENT_BIT;
 }
@@ -345,7 +402,7 @@ genX(emit_simpler_shader_init_compute)(struct anv_simple_shader *state)
           state->cmd_buffer->state.current_pipeline == GPGPU);
 
 #if GFX_VERx10 >= 125
-   struct anv_shader_bin *cs_bin = state->kernel;
+   struct anv_shader_internal *cs_bin = state->kernel;
    const struct brw_cs_prog_data *prog_data =
       (const struct brw_cs_prog_data *) cs_bin->prog_data;
    /* Currently our simple shaders are simple enough that they never spill. */
@@ -360,6 +417,11 @@ genX(emit_simpler_shader_init_compute)(struct anv_simple_shader *state)
       }
    }
 #endif
+
+   if (state->cmd_buffer) {
+      state->cmd_buffer->state.push_constants_dirty |= VK_SHADER_STAGE_COMPUTE_BIT;
+      state->cmd_buffer->state.compute.pipeline_dirty = true;
+   }
 }
 
 /** Initialize a simple shader emission */
@@ -379,16 +441,23 @@ genX(emit_simple_shader_init)(struct anv_simple_shader *state)
 struct anv_state
 genX(simple_shader_alloc_push)(struct anv_simple_shader *state, uint32_t size)
 {
+   struct anv_state s;
+
    if (state->kernel->stage == MESA_SHADER_FRAGMENT) {
-      return anv_state_stream_alloc(state->dynamic_state_stream,
-                                    size, ANV_UBO_ALIGNMENT);
+      s = anv_state_stream_alloc(state->dynamic_state_stream,
+                                 size, ANV_UBO_ALIGNMENT);
    } else {
 #if GFX_VERx10 >= 125
-      return anv_state_stream_alloc(state->general_state_stream, align(size, 64), 64);
+      s = anv_state_stream_alloc(state->general_state_stream, align(size, 64), 64);
 #else
-      return anv_state_stream_alloc(state->dynamic_state_stream, size, 64);
+      s = anv_state_stream_alloc(state->dynamic_state_stream, size, 64);
 #endif
    }
+
+   if (s.map == NULL)
+      anv_batch_set_error(state->batch, VK_ERROR_OUT_OF_DEVICE_MEMORY);
+
+   return s;
 }
 
 /** Get the address of allocated push constant data by
@@ -432,6 +501,8 @@ genX(emit_simple_shader_dispatch)(struct anv_simple_shader *state,
       struct anv_state vs_data_state =
          anv_state_stream_alloc(state->dynamic_state_stream,
                                 9 * sizeof(uint32_t), 32);
+      if (vs_data_state.map == NULL)
+         return;
 
       float x0 = 0.0f, x1 = MIN2(num_threads, 8192);
       float y0 = 0.0f, y1 = DIV_ROUND_UP(num_threads, 8192);
@@ -511,30 +582,70 @@ genX(emit_simple_shader_dispatch)(struct anv_simple_shader *state,
          prim.VertexCountPerInstance   = 3;
          prim.InstanceCount            = 1;
       }
+      genX(batch_emit_post_3dprimitive_was)(batch, device, _3DPRIM_RECTLIST, 3);
       genX(emit_breakpoint)(batch, device, false);
    } else {
       const struct intel_device_info *devinfo = device->info;
       const struct brw_cs_prog_data *prog_data =
          (const struct brw_cs_prog_data *) state->kernel->prog_data;
-      const struct brw_cs_dispatch_info dispatch =
+      const struct intel_cs_dispatch_info dispatch =
          brw_cs_get_dispatch_info(devinfo, prog_data, NULL);
 
 #if GFX_VERx10 >= 125
-      anv_batch_emit(batch, GENX(COMPUTE_WALKER), cw) {
-         cw.SIMDSize                       = dispatch.simd_size / 16;
-         cw.IndirectDataStartAddress       = push_state.offset;
-         cw.IndirectDataLength             = push_state.alloc_size;
-         cw.LocalXMaximum                  = prog_data->local_size[0] - 1;
-         cw.LocalYMaximum                  = prog_data->local_size[1] - 1;
-         cw.LocalZMaximum                  = prog_data->local_size[2] - 1;
-         cw.ThreadGroupIDXDimension        = DIV_ROUND_UP(num_threads,
-                                                          dispatch.simd_size);
-         cw.ThreadGroupIDYDimension        = 1;
-         cw.ThreadGroupIDZDimension        = 1;
-         cw.ExecutionMask                  = dispatch.right_mask;
-         cw.PostSync.MOCS                  = anv_mocs(device, NULL, 0);
 
-         cw.InterfaceDescriptor = (struct GENX(INTERFACE_DESCRIPTOR_DATA)) {
+/* Not need with VRT enabled */
+#if GFX_VERx10 < 300
+      uint8_t pixel_async_compute_thread_limit, z_pass_async_compute_thread_limit,
+              np_z_async_throttle_settings;
+      bool slm_or_barrier_enabled = prog_data->base.total_shared != 0 || prog_data->uses_barrier;
+
+      intel_compute_engine_async_threads_limit(devinfo, dispatch.threads,
+                                               slm_or_barrier_enabled,
+                                               &pixel_async_compute_thread_limit,
+                                               &z_pass_async_compute_thread_limit,
+                                               &np_z_async_throttle_settings);
+      anv_batch_emit(batch, GENX(STATE_COMPUTE_MODE), cm) {
+   #if GFX_VER >= 20
+         cm.AsyncComputeThreadLimit = pixel_async_compute_thread_limit;
+         cm.ZPassAsyncComputeThreadLimit = z_pass_async_compute_thread_limit;
+         cm.ZAsyncThrottlesettings = np_z_async_throttle_settings;
+         cm.AsyncComputeThreadLimitMask = 0x7;
+         cm.ZPassAsyncComputeThreadLimitMask = 0x7;
+         cm.ZAsyncThrottlesettingsMask = 0x3;
+   #else
+         cm.PixelAsyncComputeThreadLimit = pixel_async_compute_thread_limit;
+         cm.ZPassAsyncComputeThreadLimit = z_pass_async_compute_thread_limit;
+         cm.PixelAsyncComputeThreadLimitMask = 0x7;
+         cm.ZPassAsyncComputeThreadLimitMask = 0x7;
+         if (intel_device_info_is_mtl_or_arl(devinfo)) {
+            cm.ZAsyncThrottlesettings = np_z_async_throttle_settings;
+            cm.ZAsyncThrottlesettingsMask = 0x3;
+         }
+   #endif
+      }
+#endif /* GFX_VERx10 < 300 */
+
+      struct GENX(COMPUTE_WALKER_BODY) body = {
+         .SIMDSize                       = dispatch.simd_size / 16,
+         .MessageSIMD                    = dispatch.simd_size / 16,
+         .IndirectDataStartAddress       = push_state.offset,
+         .IndirectDataLength             = push_state.alloc_size,
+         .LocalXMaximum                  = prog_data->local_size[0] - 1,
+         .LocalYMaximum                  = prog_data->local_size[1] - 1,
+         .LocalZMaximum                  = prog_data->local_size[2] - 1,
+         .ThreadGroupIDXDimension        = DIV_ROUND_UP(num_threads,
+                                                        dispatch.simd_size),
+         .ThreadGroupIDYDimension        = 1,
+         .ThreadGroupIDZDimension        = 1,
+         .ExecutionMask                  = dispatch.right_mask,
+         .PostSync.MOCS                  = anv_mocs(device, NULL, 0),
+         .GenerateLocalID                = prog_data->generate_local_id != 0,
+         .EmitLocal                      = prog_data->generate_local_id,
+         .WalkOrder                      = prog_data->walk_order,
+         .TileLayout = prog_data->walk_order == INTEL_WALK_ORDER_YXZ ?
+                       TileY32bpe : Linear,
+
+         .InterfaceDescriptor = (struct GENX(INTERFACE_DESCRIPTOR_DATA)) {
             .KernelStartPointer                = state->kernel->kernel.offset +
                                                  brw_cs_prog_data_prog_offset(prog_data,
                                                                               dispatch.simd_size),
@@ -542,12 +653,23 @@ genX(emit_simple_shader_dispatch)(struct anv_simple_shader *state,
             .BindingTablePointer               = 0,
             .BindingTableEntryCount            = 0,
             .NumberofThreadsinGPGPUThreadGroup = dispatch.threads,
-            .SharedLocalMemorySize             = encode_slm_size(GFX_VER,
-                                                                 prog_data->base.total_shared),
+            .ThreadGroupDispatchSize           = intel_compute_threads_group_dispatch_size(dispatch.threads),
+            .SharedLocalMemorySize             = intel_compute_slm_encode_size(GFX_VER,
+                                                                               prog_data->base.total_shared),
             .NumberOfBarriers                  = prog_data->uses_barrier,
-         };
+#if GFX_VER >= 30
+            .RegistersPerThread = ptl_register_blocks(prog_data->base.grf_used),
+#endif
+         },
+      };
+
+      anv_batch_emit(batch, GENX(COMPUTE_WALKER), cw) {
+         cw.body = body;
       }
-#else
+
+      genX(cmd_buffer_state_cache_inval_wa_14025112257)(state->cmd_buffer);
+
+#else /* GFX_VERx10 < 125 */
       const uint32_t vfe_curbe_allocation =
          ALIGN(prog_data->push.per_thread.regs * dispatch.threads +
                prog_data->push.cross_thread.regs, 2);
@@ -600,6 +722,9 @@ genX(emit_simple_shader_dispatch)(struct anv_simple_shader *state,
       struct anv_state iface_desc_state =
          anv_state_stream_alloc(state->dynamic_state_stream,
                                 GENX(INTERFACE_DESCRIPTOR_DATA_length) * 4, 64);
+      if (iface_desc_state.map == NULL)
+         return;
+
       struct GENX(INTERFACE_DESCRIPTOR_DATA) iface_desc = {
          .KernelStartPointer                    = state->kernel->kernel.offset +
                                                   brw_cs_prog_data_prog_offset(prog_data,
@@ -608,8 +733,8 @@ genX(emit_simple_shader_dispatch)(struct anv_simple_shader *state,
          .SamplerCount                          = 0,
          .BindingTableEntryCount                = 0,
          .BarrierEnable                         = prog_data->uses_barrier,
-         .SharedLocalMemorySize                 = encode_slm_size(GFX_VER,
-                                                                  prog_data->base.total_shared),
+         .SharedLocalMemorySize                 = intel_compute_slm_encode_size(GFX_VER,
+                                                                                prog_data->base.total_shared),
 
          .ConstantURBEntryReadOffset            = 0,
          .ConstantURBEntryReadLength            = prog_data->push.per_thread.regs,
@@ -649,6 +774,7 @@ genX(emit_simple_shader_dispatch)(struct anv_simple_shader *state,
          ggw.RightExecutionMask           = dispatch.right_mask;
          ggw.BottomExecutionMask          = 0xffffffff;
       }
+      anv_batch_emit(batch, GENX(MEDIA_STATE_FLUSH), msf);
 #endif
    }
 }

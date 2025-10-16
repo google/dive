@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef SVGA_SURFACE_H
 #define SVGA_SURFACE_H
@@ -78,18 +60,45 @@ struct svga_surface
 };
 
 
+static inline void
+svga_surface_reference(struct svga_surface **dst,
+                       struct svga_surface *src)
+{
+   pipe_surface_reference((struct pipe_surface **) dst,
+                          (struct pipe_surface *) src);
+}
+
+
+static inline void
+svga_surface_unref(struct pipe_context *pipe,
+                   struct svga_surface **s)
+{
+   pipe_surface_unref(pipe, (struct pipe_surface **) s);
+}
+
+
+static inline bool
+svga_surface_equal(const struct svga_surface *s1, const struct svga_surface *s2)
+{
+   if (s1 == NULL && s2 == NULL)
+      return true;
+   return pipe_surface_equal((struct pipe_surface *) s1,
+                             (struct pipe_surface *) s2);
+}
+
+
 void
 svga_mark_surfaces_dirty(struct svga_context *svga);
 
 extern void
-svga_propagate_surface(struct svga_context *svga, struct pipe_surface *surf,
+svga_propagate_surface(struct svga_context *svga, struct svga_surface *surf,
                        bool reset);
 
 void
 svga_propagate_rendertargets(struct svga_context *svga);
 
 extern bool
-svga_surface_needs_propagation(const struct pipe_surface *surf);
+svga_surface_needs_propagation(const struct svga_surface *s);
 
 struct svga_winsys_surface *
 svga_texture_view_surface(struct svga_context *svga,
@@ -126,6 +135,11 @@ svga_texture_copy_handle(struct svga_context *svga,
                          unsigned width, unsigned height, unsigned depth);
 
 
+struct pipe_surface *
+svga_create_surface(struct pipe_context *pipe,
+                    struct pipe_resource *pt,
+                    const struct pipe_surface *surf_tmpl);
+
 static inline struct svga_surface *
 svga_surface(struct pipe_surface *surface)
 {
@@ -141,6 +155,7 @@ svga_surface_const(const struct pipe_surface *surface)
 
 struct pipe_surface *
 svga_validate_surface_view(struct svga_context *svga, struct svga_surface *s);
+
 
 static inline SVGA3dResourceType
 svga_resource_type(enum pipe_texture_target target)

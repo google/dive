@@ -32,19 +32,22 @@
 #include "util/bitset.h"
 
 #define PVR_BORDER_COLOR_TABLE_NR_ENTRIES \
-   (PVRX(TEXSTATE_SAMPLER_BORDERCOLOR_INDEX_MAX_SIZE) + 1)
+   (ROGUE_TEXSTATE_SAMPLER_WORD0_BORDERCOLOR_INDEX_MAX_SIZE + 1)
 
 #define PVR_BORDER_COLOR_TABLE_NR_BUILTIN_ENTRIES \
-   (VK_BORDER_COLOR_INT_OPAQUE_WHITE + 1U)
+   (VK_BORDER_COLOR_INT_OPAQUE_WHITE + 1)
 
 #define PVR_BORDER_COLOR_TABLE_NR_CUSTOM_ENTRIES \
    (PVR_BORDER_COLOR_TABLE_NR_ENTRIES -          \
     PVR_BORDER_COLOR_TABLE_NR_BUILTIN_ENTRIES)
 
+/* Forward declaration from "pvr_common.h" */
+struct pvr_sampler;
+
 /* Forward declaration from "pvr_bo.h" */
 struct pvr_bo;
 
-/* Forward declaration from "pvr_private.h" */
+/* Forward declaration from "pvr_device.h" */
 struct pvr_device;
 
 struct pvr_border_color_table {
@@ -61,10 +64,14 @@ VkResult pvr_border_color_table_init(struct pvr_border_color_table *table,
 void pvr_border_color_table_finish(struct pvr_border_color_table *table,
                                    struct pvr_device *device);
 
-VkResult pvr_border_color_table_get_or_create_entry(
-   struct pvr_border_color_table *table,
-   const struct VkSamplerCreateInfo *sampler_create_info,
-   uint32_t *index_out);
+VkResult
+pvr_border_color_table_get_or_create_entry(struct pvr_device *device,
+                                           const struct pvr_sampler *sampler,
+                                           struct pvr_border_color_table *table,
+                                           uint32_t *index_out);
+
+void pvr_border_color_table_release_entry(struct pvr_border_color_table *table,
+                                          uint32_t index);
 
 static inline bool pvr_border_color_table_is_index_valid(
    const struct pvr_border_color_table *const table,

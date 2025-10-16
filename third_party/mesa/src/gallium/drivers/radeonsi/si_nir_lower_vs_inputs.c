@@ -37,23 +37,19 @@ fast_udiv_nuw(nir_builder *b, nir_def *num, nir_def *divisor)
 }
 
 static nir_def *
-get_vertex_index_for_mono_shader(nir_builder *b, int input_index,
-                                 struct lower_vs_inputs_state *s)
+get_vertex_index(nir_builder *b, int input_index, struct lower_vs_inputs_state *s)
 {
    const union si_shader_key *key = &s->shader->key;
 
    bool divisor_is_one =
-      key->ge.part.vs.prolog.instance_divisor_is_one & (1u << input_index);
+      key->ge.mono.instance_divisor_is_one & (1u << input_index);
    bool divisor_is_fetched =
-      key->ge.part.vs.prolog.instance_divisor_is_fetched & (1u << input_index);
+      key->ge.mono.instance_divisor_is_fetched & (1u << input_index);
 
    if (divisor_is_one || divisor_is_fetched) {
       nir_def *instance_id = nir_load_instance_id(b);
-
-      /* This is used to determine vs vgpr count in si_get_vs_vgpr_comp_cnt(). */
-      s->shader->info.uses_instanceid = true;
-
       nir_def *index = NULL;
+
       if (divisor_is_one) {
          index = instance_id;
       } else {
@@ -77,13 +73,6 @@ get_vertex_index_for_mono_shader(nir_builder *b, int input_index,
    }
 }
 
-static nir_def *
-get_vertex_index_for_part_shader(nir_builder *b, int input_index,
-                                 struct lower_vs_inputs_state *s)
-{
-   return ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vertex_index0, input_index);
-}
-
 static void
 get_vertex_index_for_all_inputs(nir_shader *nir, struct lower_vs_inputs_state *s)
 {
@@ -95,16 +84,13 @@ get_vertex_index_for_all_inputs(nir_shader *nir, struct lower_vs_inputs_state *s
    const struct si_shader_selector *sel = s->shader->selector;
    const union si_shader_key *key = &s->shader->key;
 
-   if (key->ge.part.vs.prolog.instance_divisor_is_fetched) {
+   if (key->ge.mono.instance_divisor_is_fetched) {
       s->instance_divisor_constbuf =
-         si_nir_load_internal_binding(b, s->args, SI_VS_CONST_INSTANCE_DIVISORS, 4);
+         si_nir_load_internal_binding(sel->screen, b, s->args, SI_VS_CONST_INSTANCE_DIVISORS, 4);
    }
 
-   for (int i = 0; i < sel->info.num_inputs; i++) {
-      s->vertex_index[i] = s->shader->is_monolithic ?
-         get_vertex_index_for_mono_shader(b, i, s) :
-         get_vertex_index_for_part_shader(b, i, s);
-   }
+   for (int i = 0; i < sel->info.num_inputs; i++)
+      s->vertex_index[i] = get_vertex_index(b, i, s);
 }
 
 static void
@@ -142,23 +128,18 @@ load_vs_input_from_blit_sgpr(nir_builder *b, unsigned input_index,
       /* Color or texture coordinates: */
       assert(input_index == 1);
 
-      unsigned vs_blit_property = s->shader->selector->info.base.vs.blit_sgprs_amd;
-      if (vs_blit_property == SI_VS_BLIT_SGPRS_POS_COLOR + has_attribute_ring_address) {
-         for (int i = 0; i < 4; i++)
-            out[i] = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 3 + i);
-      } else {
-         assert(vs_blit_property == SI_VS_BLIT_SGPRS_POS_TEXCOORD + has_attribute_ring_address);
+      unsigned vs_blit_property = b->shader->info.vs.blit_sgprs_amd;
+      assert(vs_blit_property == SI_VS_BLIT_SGPRS_POS_TEXCOORD + has_attribute_ring_address);
 
-         nir_def *x1 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 3);
-         nir_def *y1 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 4);
-         nir_def *x2 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 5);
-         nir_def *y2 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 6);
+      nir_def *x1 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 3);
+      nir_def *y1 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 4);
+      nir_def *x2 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 5);
+      nir_def *y2 = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 6);
 
-         out[0] = nir_bcsel(b, sel_x1, x1, x2);
-         out[1] = nir_bcsel(b, sel_y1, y1, y2);
-         out[2] = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 7);
-         out[3] = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 8);
-      }
+      out[0] = nir_bcsel(b, sel_x1, x1, x2);
+      out[1] = nir_bcsel(b, sel_y1, y1, y2);
+      out[2] = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 7);
+      out[3] = ac_nir_load_arg_at_offset(b, &s->args->ac, s->args->vs_blit_inputs, 8);
    }
 }
 
@@ -257,7 +238,8 @@ opencoded_load_format(nir_builder *b, nir_def *rsrc, nir_def *vindex,
       unsigned bit_size = 8 << MIN2(load_log_size, 2);
       nir_def *zero = nir_imm_int(b, 0);
 
-      loads[i] = nir_load_buffer_amd(b, num_channels, bit_size, rsrc, zero, soffset, vindex);
+      loads[i] = nir_load_buffer_amd(b, num_channels, bit_size, rsrc, zero, soffset, vindex,
+                                     .access = ACCESS_CAN_REORDER | ACCESS_CAN_SPECULATE);
    }
 
    if (log_recombine > 0) {
@@ -356,7 +338,7 @@ opencoded_load_format(nir_builder *b, nir_def *rsrc, nir_def *vindex,
          break;
       }
       default:
-         unreachable("invalid fetch format");
+         UNREACHABLE("invalid fetch format");
          break;
       }
    }
@@ -414,7 +396,7 @@ opencoded_load_format(nir_builder *b, nir_def *rsrc, nir_def *vindex,
       }
       break;
    default:
-      unreachable("invalid fetch format");
+      UNREACHABLE("invalid fetch format");
       break;
    }
 
@@ -438,18 +420,22 @@ opencoded_load_format(nir_builder *b, nir_def *rsrc, nir_def *vindex,
 static void
 load_vs_input_from_vertex_buffer(nir_builder *b, unsigned input_index,
                                  struct lower_vs_inputs_state *s,
-                                 unsigned bit_size, nir_def *out[4])
+                                 nir_intrinsic_instr *intr, nir_def *out[4])
 {
    const struct si_shader_selector *sel = s->shader->selector;
    const union si_shader_key *key = &s->shader->key;
+   unsigned bit_size = intr->def.bit_size;
+   unsigned channels_read = nir_def_components_read(&intr->def) << nir_intrinsic_component(intr);
 
    nir_def *vb_desc;
    if (input_index < sel->info.num_vbos_in_user_sgprs) {
       vb_desc = ac_nir_load_arg(b, &s->args->ac, s->args->vb_descriptors[input_index]);
    } else {
       unsigned index = input_index - sel->info.num_vbos_in_user_sgprs;
-      nir_def *addr = ac_nir_load_arg(b, &s->args->ac, s->args->ac.vertex_buffers);
-      vb_desc = nir_load_smem_amd(b, 4, addr, nir_imm_int(b, index * 16));
+      nir_def *addr = si_nir_load_addr32_arg(s->shader->selector->screen, s->args,
+                                             b, s->args->ac.vertex_buffers);
+      vb_desc = ac_nir_load_smem(b, 4, addr, nir_imm_int(b, index * 16), 16,
+                                 ACCESS_CAN_SPECULATE);
    }
 
    nir_def *vertex_index = s->vertex_index[input_index];
@@ -479,7 +465,7 @@ load_vs_input_from_vertex_buffer(nir_builder *b, unsigned input_index,
       return;
    }
 
-   unsigned required_channels = util_last_bit(sel->info.input[input_index].usage_mask);
+   unsigned required_channels = util_last_bit(channels_read);
    if (required_channels == 0) {
       for (unsigned i = 0; i < 4; ++i)
          out[i] = nir_undef(b, 1, bit_size);
@@ -507,7 +493,8 @@ load_vs_input_from_vertex_buffer(nir_builder *b, unsigned input_index,
       fetches[i] = nir_load_buffer_amd(b, channels_per_fetch, bit_size, vb_desc,
                                        zero, zero, vertex_index,
                                        .base = fetch_stride * i,
-                                       .access = ACCESS_USES_FORMAT_AMD);
+                                       .access = ACCESS_USES_FORMAT_AMD | ACCESS_CAN_REORDER |
+                                                 ACCESS_CAN_SPECULATE);
    }
 
    if (num_fetches == 1 && channels_per_fetch > 1) {
@@ -582,15 +569,14 @@ lower_vs_input_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
    unsigned num_components = intrin->def.num_components;
 
    nir_def *comp[4];
-   if (s->shader->selector->info.base.vs.blit_sgprs_amd)
+   if (b->shader->info.vs.blit_sgprs_amd)
       load_vs_input_from_blit_sgpr(b, input_index, s, comp);
    else
-      load_vs_input_from_vertex_buffer(b, input_index, s, intrin->def.bit_size, comp);
+      load_vs_input_from_vertex_buffer(b, input_index, s, intrin, comp);
 
    nir_def *replacement = nir_vec(b, &comp[component], num_components);
 
-   nir_def_rewrite_uses(&intrin->def, replacement);
-   nir_instr_remove(&intrin->instr);
+   nir_def_replace(&intrin->def, replacement);
    nir_instr_free(&intrin->instr);
 
    return true;
@@ -610,10 +596,10 @@ si_nir_lower_vs_inputs(nir_shader *nir, struct si_shader *shader, struct si_shad
       .args = args,
    };
 
-   if (!sel->info.base.vs.blit_sgprs_amd)
+   if (!nir->info.vs.blit_sgprs_amd)
       get_vertex_index_for_all_inputs(nir, &state);
 
    return nir_shader_intrinsics_pass(nir, lower_vs_input_instr,
-                                       nir_metadata_dominance | nir_metadata_block_index,
+                                       nir_metadata_control_flow,
                                        &state);
 }

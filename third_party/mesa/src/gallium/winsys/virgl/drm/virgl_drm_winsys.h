@@ -48,6 +48,13 @@ struct virgl_hw_res {
    uint32_t flags;
    uint32_t flink_name;
 
+   /* We are not holding a lock when releasing references of the
+    * resource (intentionally) so we might start destroying it in one thread
+    * while briefly increasing the reference in another one leading to the
+    * free function being called twice, this ensures that it will be only
+    * called once. */
+   int needed_references;
+
    /* false when the resource is known to be typed */
    bool maybe_untyped;
 
@@ -120,10 +127,6 @@ struct virgl_drm_cmd_buf {
    struct virgl_hw_res **res_bo;
    struct virgl_winsys *ws;
    uint32_t *res_hlist;
-
-   char                        is_handle_added[512];
-   unsigned                    reloc_indices_hashlist[512];
-
 };
 
 static inline struct virgl_drm_winsys *

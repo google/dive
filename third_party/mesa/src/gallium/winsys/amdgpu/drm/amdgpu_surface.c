@@ -47,7 +47,7 @@ static int amdgpu_surface_init(struct radeon_winsys *rws,
                                enum radeon_surf_mode mode,
                                struct radeon_surf *surf)
 {
-   struct amdgpu_winsys *ws = amdgpu_winsys(rws);
+   struct amdgpu_winsys *aws = amdgpu_winsys(rws);
    int r;
 
    r = amdgpu_surface_sanity(tex);
@@ -81,17 +81,45 @@ static int amdgpu_surface_init(struct radeon_winsys *rws,
     * always use consecutive surface indices when FMASK is allocated between
     * them.
     */
-   config.info.surf_index = &ws->surf_index_color;
-   config.info.fmask_surf_index = &ws->surf_index_fmask;
+   config.info.surf_index = &aws->surf_index_color;
+   config.info.fmask_surf_index = &aws->surf_index_fmask;
 
    if (flags & RADEON_SURF_Z_OR_SBUFFER)
       config.info.surf_index = NULL;
 
    /* Use radeon_info from the driver, not the winsys. The driver is allowed to change it. */
-   return ac_compute_surface(ws->addrlib, info, &config, mode, surf);
+   return ac_compute_surface(aws->addrlib, info, &config, mode, surf);
 }
 
-void amdgpu_surface_init_functions(struct amdgpu_screen_winsys *ws)
+static uint64_t
+amdgpu_surface_offset_from_coord(struct radeon_winsys *rws,
+                                 const struct radeon_info *info,
+                                 const struct radeon_surf *surf,
+                                 const struct pipe_resource *tex,
+                                 unsigned level, unsigned x,
+                                 unsigned y, unsigned layer)
 {
-   ws->base.surface_init = amdgpu_surface_init;
+   struct amdgpu_winsys *aws = amdgpu_winsys(rws);
+   unsigned samples = MAX2(1, tex->nr_samples);
+
+   const struct ac_surf_info surf_info = {
+      .width = tex->width0,
+      .height = tex->height0,
+      .depth = tex->depth0,
+      .samples = samples,
+      .storage_samples = samples,
+      .levels = tex->last_level + 1,
+      .num_channels = util_format_get_last_component(tex->format) + 1,
+      .array_size = tex->array_size,
+   };
+
+   return ac_surface_addr_from_coord(
+      aws->addrlib, info, surf, &surf_info,
+      level, x, y, layer, tex->target == PIPE_TEXTURE_3D);
+}
+
+void amdgpu_surface_init_functions(struct amdgpu_screen_winsys *sws)
+{
+   sws->base.surface_init = amdgpu_surface_init;
+   sws->base.surface_offset_from_coord = amdgpu_surface_offset_from_coord;
 }

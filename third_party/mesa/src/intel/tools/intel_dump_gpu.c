@@ -46,6 +46,7 @@
 #include "c11/threads.h"
 #include "dev/intel_debug.h"
 #include "dev/intel_device_info.h"
+#include "common/intel_debug_identifier.h"
 #include "common/intel_gem.h"
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -118,7 +119,7 @@ ensure_device_info(int fd)
 {
    /* We can't do this at open time as we're not yet authenticated. */
    if (device == 0) {
-      fail_if(!intel_get_device_info_from_fd(fd, &devinfo),
+      fail_if(!intel_get_device_info_from_fd(fd, &devinfo, -1, -1),
               "failed to identify chipset.\n");
       device = devinfo.pci_device_id;
    } else if (devinfo.ver == 0) {
@@ -427,7 +428,7 @@ maybe_init(int fd)
 
    initialized = true;
 
-   const char *config_path = getenv("INTEL_DUMP_GPU_CONFIG");
+   const char *config_path = os_get_option("INTEL_DUMP_GPU_CONFIG");
    fail_if(config_path == NULL, "INTEL_DUMP_GPU_CONFIG is not set\n");
 
    config = fopen(config_path, "r");

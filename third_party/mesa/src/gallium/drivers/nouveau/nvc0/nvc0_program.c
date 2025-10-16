@@ -20,7 +20,9 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "nir/pipe_nir.h"
 #include "pipe/p_defines.h"
+#include "pipe/p_shader_tokens.h"
 
 #include "compiler/nir/nir.h"
 #include "compiler/nir/nir_builder.h"
@@ -184,14 +186,14 @@ nvc0_program_assign_varying_slots(struct nv50_ir_prog_info_out *info)
 {
    int ret;
 
-   if (info->type == PIPE_SHADER_VERTEX)
+   if (info->type == MESA_SHADER_VERTEX)
       ret = nvc0_vp_assign_input_slots(info);
    else
       ret = nvc0_sp_assign_input_slots(info);
    if (ret)
       return ret;
 
-   if (info->type == PIPE_SHADER_FRAGMENT)
+   if (info->type == MESA_SHADER_FRAGMENT)
       ret = nvc0_fp_assign_output_slots(info);
    else
       ret = nvc0_sp_assign_output_slots(info);
@@ -553,7 +555,7 @@ nvc0_program_dump(struct nvc0_program *prog)
 {
    unsigned pos;
 
-   if (prog->type != PIPE_SHADER_COMPUTE) {
+   if (prog->type != MESA_SHADER_COMPUTE) {
       _debug_printf("dumping HDR for type %i\n", prog->type);
       for (pos = 0; pos < ARRAY_SIZE(prog->hdr); ++pos)
          _debug_printf("HDR[%02"PRIxPTR"] = 0x%08x\n",
@@ -616,7 +618,7 @@ nvc0_program_translate(struct nvc0_program *prog, uint16_t chipset,
       info->io.bindlessBase = NVC0_CB_AUX_BINDLESS_INFO(0);
    }
 
-   if (prog->type == PIPE_SHADER_COMPUTE) {
+   if (prog->type == MESA_SHADER_COMPUTE) {
       if (info->target >= NVISA_GK104_CHIPSET) {
          info->io.auxCBSlot = 7;
          info->io.msInfoCBSlot = 7;
@@ -688,22 +690,22 @@ nvc0_program_translate(struct nvc0_program *prog, uint16_t chipset,
    prog->vp.edgeflag = info_out.io.edgeFlagIn;
 
    switch (prog->type) {
-   case PIPE_SHADER_VERTEX:
+   case MESA_SHADER_VERTEX:
       ret = nvc0_vp_gen_header(prog, &info_out);
       break;
-   case PIPE_SHADER_TESS_CTRL:
+   case MESA_SHADER_TESS_CTRL:
       ret = nvc0_tcp_gen_header(prog, &info_out);
       break;
-   case PIPE_SHADER_TESS_EVAL:
+   case MESA_SHADER_TESS_EVAL:
       ret = nvc0_tep_gen_header(prog, &info_out);
       break;
-   case PIPE_SHADER_GEOMETRY:
+   case MESA_SHADER_GEOMETRY:
       ret = nvc0_gp_gen_header(prog, &info_out);
       break;
-   case PIPE_SHADER_FRAGMENT:
+   case MESA_SHADER_FRAGMENT:
       ret = nvc0_fp_gen_header(prog, &info_out);
       break;
-   case PIPE_SHADER_COMPUTE:
+   case MESA_SHADER_COMPUTE:
       break;
    default:
       ret = -1;
@@ -760,7 +762,7 @@ static inline int
 nvc0_program_alloc_code(struct nvc0_context *nvc0, struct nvc0_program *prog)
 {
    struct nvc0_screen *screen = nvc0->screen;
-   const bool is_cp = prog->type == PIPE_SHADER_COMPUTE;
+   const bool is_cp = prog->type == MESA_SHADER_COMPUTE;
    int ret;
    uint32_t size = prog->code_size;
 
@@ -812,7 +814,7 @@ static inline void
 nvc0_program_upload_code(struct nvc0_context *nvc0, struct nvc0_program *prog)
 {
    struct nvc0_screen *screen = nvc0->screen;
-   const bool is_cp = prog->type == PIPE_SHADER_COMPUTE;
+   const bool is_cp = prog->type == MESA_SHADER_COMPUTE;
    uint32_t code_pos = prog->code_base;
    uint32_t size_sph = 0;
 
@@ -860,7 +862,7 @@ bool
 nvc0_program_upload(struct nvc0_context *nvc0, struct nvc0_program *prog)
 {
    struct nvc0_screen *screen = nvc0->screen;
-   const bool is_cp = prog->type == PIPE_SHADER_COMPUTE;
+   const bool is_cp = prog->type == MESA_SHADER_COMPUTE;
    int ret;
    uint32_t size = prog->code_size;
 
@@ -921,7 +923,7 @@ nvc0_program_upload(struct nvc0_context *nvc0, struct nvc0_program *prog)
          }
          nvc0_program_upload_code(nvc0, progs[i]);
 
-         if (progs[i]->type == PIPE_SHADER_COMPUTE) {
+         if (progs[i]->type == MESA_SHADER_COMPUTE) {
             /* Caches have to be invalidated but the CP_START_ID will be
              * updated in the launch_grid functions. */
             BEGIN_NVC0(nvc0->base.pushbuf, NVC0_CP(FLUSH), 1);
@@ -1003,7 +1005,7 @@ nvc0_program_init_tcp_empty(struct nvc0_context *nvc0)
 {
    const nir_shader_compiler_options *options =
       nv50_ir_nir_shader_compiler_options(nvc0->screen->base.device->chipset,
-                                          PIPE_SHADER_TESS_CTRL);
+                                          MESA_SHADER_TESS_CTRL);
 
    struct nir_builder b =
       nir_builder_init_simple_shader(MESA_SHADER_TESS_CTRL, options,
@@ -1012,7 +1014,5 @@ nvc0_program_init_tcp_empty(struct nvc0_context *nvc0)
 
    nir_validate_shader(b.shader, "in nvc0_program_init_tcp_empty");
 
-   struct pipe_shader_state state;
-   pipe_shader_state_from_nir(&state, b.shader);
-   nvc0->tcp_empty = nvc0->base.pipe.create_tcs_state(&nvc0->base.pipe, &state);
+   nvc0->tcp_empty = pipe_shader_from_nir(&nvc0->base.pipe, b.shader);
 }

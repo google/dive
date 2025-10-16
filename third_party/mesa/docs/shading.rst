@@ -2,7 +2,7 @@ Shading Language
 ================
 
 This page describes the features and status of Mesa's support for the
-`OpenGL Shading Language <https://www.khronos.org/opengl/wiki/OpenGL_Shading_Language>`__.
+`OpenGL Shading Language <https://wikis.khronos.org/opengl/OpenGL_Shading_Language>`__.
 
 .. _envvars:
 
@@ -144,7 +144,7 @@ installed as the binary ``glsl_compiler``.
 Here's an example of using the compiler to compile a vertex shader and
 emit :ext:`GL_ARB_vertex_program`-style instructions:
 
-.. code-block:: console
+.. code-block:: sh
 
        src/compiler/glsl/glsl_compiler --version XXX --dump-ast myshader.vert
 
@@ -153,7 +153,6 @@ Options include
 -  **--dump-ast** - dump source syntax tree
 -  **--dump-hir** - dump high-level IR code
 -  **--dump-lir** - dump low-level IR code
--  **--dump-builder** - dump C++ ir_builder code to generate the shader's GLSL IR
 -  **--link** - link shaders
 -  **--just-log** - display only shader / linker info if exist, without
    any header or separator

@@ -28,6 +28,7 @@
 #include "main/image.h"
 #include "main/pbo.h"
 
+#include "nir/pipe_nir.h"
 #include "state_tracker/st_nir.h"
 #include "state_tracker/st_format.h"
 #include "state_tracker/st_pbo.h"
@@ -48,7 +49,7 @@ struct pbo_spec_async_data {
    unsigned uses;
    struct util_queue_fence fence;
    nir_shader *nir;
-   struct pipe_shader_state *cs;
+   void *cs;
 };
 
 struct pbo_async_data {
@@ -94,6 +95,7 @@ get_convert_format(struct gl_context *ctx,
    struct st_context *st = st_context(ctx);
    GLint bpp = _mesa_bytes_per_pixel(format, type);
    if (_mesa_is_depth_format(format) ||
+       format == GL_STENCIL_INDEX ||
        format == GL_GREEN_INTEGER ||
        format == GL_BLUE_INTEGER) {
       switch (bpp) {
@@ -628,7 +630,7 @@ do_shader_conversion(nir_builder *b, nir_def *pixel,
 static nir_shader *
 create_conversion_shader(struct st_context *st, enum pipe_texture_target target, unsigned num_components)
 {
-   const nir_shader_compiler_options *options = st_get_nir_compiler_options(st, MESA_SHADER_COMPUTE);
+   const nir_shader_compiler_options *options = st->screen->nir_options[MESA_SHADER_COMPUTE];
    nir_builder b = nir_builder_init_simple_shader(MESA_SHADER_COMPUTE, options, "%s", "convert");
    b.shader->info.workgroup_size[0] = target != PIPE_TEXTURE_1D ? 8 : 64;
    b.shader->info.workgroup_size[1] = target != PIPE_TEXTURE_1D ? 8 : 1;
@@ -681,6 +683,7 @@ create_conversion_shader(struct st_context *st, enum pipe_texture_target target,
    txf->coord_components = coord_components;
    txf->texture_index = 0;
    txf->sampler_index = 0;
+   txf->can_speculate = true;
    txf->src[0] = nir_tex_src_for_ssa(nir_tex_src_coord, coord);
    txf->src[1] = nir_tex_src_for_ssa(nir_tex_src_lod, nir_imm_int(&b, 0));
    txf->src[2].src_type = nir_tex_src_texture_deref;
@@ -843,7 +846,7 @@ add_spec_data(struct pbo_async_data *async, struct pbo_data *pd)
    struct pbo_spec_async_data *spec;
    struct set_entry *entry = _mesa_set_search_or_add(&async->specialized, pd, &found);
    if (!found) {
-      spec = calloc(1, sizeof(struct pbo_async_data));
+      spec = calloc(1, sizeof(struct pbo_spec_async_data));
       util_queue_fence_init(&spec->fence);
       memcpy(spec->data, pd, sizeof(struct pbo_data));
       entry->key = spec;
@@ -930,6 +933,7 @@ download_texture_compute(struct st_context *st,
                .ir.nir = spec->nir,
             };
             cs = spec->cs = st_create_nir_shader(st, &state);
+            spec->nir = NULL;
          }
          cb.buffer_size = 2 * sizeof(uint32_t);
       } else if (!st->force_compute_based_texture_transfer && screen->driver_thread_add_job) {
@@ -941,12 +945,8 @@ download_texture_compute(struct st_context *st,
          if (!async->cs) {
             /* cs job not yet started */
             assert(async->nir && !async->cs);
-            struct pipe_compute_state state = {0};
-            state.ir_type = PIPE_SHADER_IR_NIR;
-            state.static_shared_mem = async->nir->info.shared_size;
-            state.prog = async->nir;
+            async->cs = pipe_shader_from_nir(pipe, async->nir);
             async->nir = NULL;
-            async->cs = pipe->create_compute_state(pipe, &state);
          }
          /* cs *may* be done */
          if (screen->is_parallel_shader_compilation_finished &&
@@ -956,12 +956,8 @@ download_texture_compute(struct st_context *st,
          if (spec->uses > SPEC_USES_THRESHOLD && util_queue_fence_is_signalled(&spec->fence)) {
             if (spec->created) {
                if (!spec->cs) {
-                  struct pipe_compute_state state = {0};
-                  state.ir_type = PIPE_SHADER_IR_NIR;
-                  state.static_shared_mem = spec->nir->info.shared_size;
-                  state.prog = spec->nir;
+                  spec->cs = pipe_shader_from_nir(pipe, spec->nir);
                   spec->nir = NULL;
-                  spec->cs = pipe->create_compute_state(pipe, &state);
                }
                if (screen->is_parallel_shader_compilation_finished &&
                    screen->is_parallel_shader_compilation_finished(screen, spec->cs, MESA_SHADER_COMPUTE)) {
@@ -993,6 +989,7 @@ download_texture_compute(struct st_context *st,
             .ir.nir = spec->nir,
          };
          cs = spec->cs = st_create_nir_shader(st, &state);
+         spec->nir = NULL;
          cb.buffer_size = 2 * sizeof(uint32_t);
       } else {
          nir_shader *nir = create_conversion_shader(st, view_target, num_components);
@@ -1007,15 +1004,15 @@ download_texture_compute(struct st_context *st,
    assert(cs);
    struct cso_context *cso = st->cso_context;
 
-   pipe->set_constant_buffer(pipe, PIPE_SHADER_COMPUTE, 0, false, &cb);
+   pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_COMPUTE, &cb);
 
    cso_save_compute_state(cso, CSO_BIT_COMPUTE_SHADER | CSO_BIT_COMPUTE_SAMPLERS);
    cso_set_compute_shader_handle(cso, cs);
 
    /* Set up the sampler_view */
+   struct pipe_sampler_view *sampler_view = NULL;
    {
       struct pipe_sampler_view templ;
-      struct pipe_sampler_view *sampler_view;
       struct pipe_sampler_state sampler = {0};
       const struct pipe_sampler_state *samplers[1] = {&sampler};
       const struct util_format_description *desc = util_format_description(dst_format);
@@ -1115,14 +1112,12 @@ download_texture_compute(struct st_context *st,
       if (sampler_view == NULL)
          goto fail;
 
-      pipe->set_sampler_views(pipe, PIPE_SHADER_COMPUTE, 0, 1, 0, false,
+      pipe->set_sampler_views(pipe, MESA_SHADER_COMPUTE, 0, 1, 0,
                               &sampler_view);
-      st->state.num_sampler_views[PIPE_SHADER_COMPUTE] =
-         MAX2(st->state.num_sampler_views[PIPE_SHADER_COMPUTE], 1);
+      st->state.num_sampler_views[MESA_SHADER_COMPUTE] =
+         MAX2(st->state.num_sampler_views[MESA_SHADER_COMPUTE], 1);
 
-      pipe_sampler_view_reference(&sampler_view, NULL);
-
-      cso_set_samplers(cso, PIPE_SHADER_COMPUTE, 1, samplers);
+      cso_set_samplers(cso, MESA_SHADER_COMPUTE, 1, samplers);
    }
 
    /* Set up destination buffer */
@@ -1148,7 +1143,7 @@ download_texture_compute(struct st_context *st,
       buffer.buffer = dst;
       buffer.buffer_size = buffer_size;
 
-      pipe->set_shader_buffers(pipe, PIPE_SHADER_COMPUTE, 0, 1, &buffer, 0x1);
+      pipe->set_shader_buffers(pipe, MESA_SHADER_COMPUTE, 0, 1, &buffer, 0x1);
    }
 
    struct pipe_grid_info info = { 0 };
@@ -1163,21 +1158,21 @@ download_texture_compute(struct st_context *st,
 
    pipe->launch_grid(pipe, &info);
 
+   st->pipe->sampler_view_release(st->pipe, sampler_view);
 fail:
    cso_restore_compute_state(cso);
 
    /* Unbind all because st/mesa won't do it if the current shader doesn't
     * use them.
     */
-   pipe->set_sampler_views(pipe, PIPE_SHADER_COMPUTE, 0, 0,
-                           st->state.num_sampler_views[PIPE_SHADER_COMPUTE],
-                           false, NULL);
-   st->state.num_sampler_views[PIPE_SHADER_COMPUTE] = 0;
-   pipe->set_shader_buffers(pipe, PIPE_SHADER_COMPUTE, 0, 1, NULL, 0);
+   pipe->set_sampler_views(pipe, MESA_SHADER_COMPUTE, 0, 0,
+                           st->state.num_sampler_views[MESA_SHADER_COMPUTE],
+                           NULL);
+   st->state.num_sampler_views[MESA_SHADER_COMPUTE] = 0;
+   pipe->set_shader_buffers(pipe, MESA_SHADER_COMPUTE, 0, 1, NULL, 0);
 
-   st->ctx->NewDriverState |= ST_NEW_CS_CONSTANTS |
-                              ST_NEW_CS_SSBOS |
-                              ST_NEW_CS_SAMPLER_VIEWS;
+   ST_SET_STATE3(st->ctx->NewDriverState, ST_NEW_CS_CONSTANTS,
+                 ST_NEW_CS_SSBOS, ST_NEW_CS_SAMPLER_VIEWS);
 
    return dst;
 }
@@ -1269,6 +1264,10 @@ st_GetTexSubImage_shader(struct gl_context * ctx,
    if (src_format == PIPE_FORMAT_NONE)
       return false;
 
+   /* special case for stencil extraction */
+   if (format == GL_STENCIL_INDEX && util_format_is_depth_and_stencil(src_format))
+      src_format = PIPE_FORMAT_X24S8_UINT;
+
    if (texImage->_BaseFormat != _mesa_get_format_base_format(texImage->TexFormat)) {
       /* special handling for drivers that don't support these formats natively */
       if (texImage->_BaseFormat == GL_LUMINANCE)
@@ -1348,6 +1347,7 @@ st_pbo_compute_deinit(struct st_context *st)
          if (async->cs)
             st->pipe->delete_compute_state(st->pipe, async->cs);
          util_queue_fence_destroy(&async->fence);
+         ralloc_free(async->nir);
          ralloc_free(async->copy);
          set_foreach_remove(&async->specialized, se) {
             struct pbo_spec_async_data *spec = (void*)se->key;
@@ -1359,7 +1359,7 @@ st_pbo_compute_deinit(struct st_context *st)
             }
             free(spec);
          }
-         ralloc_free(async->specialized.table);
+         _mesa_set_fini(&async->specialized, NULL);
          free(async);
       } else {
          st->pipe->delete_compute_state(st->pipe, entry->data);

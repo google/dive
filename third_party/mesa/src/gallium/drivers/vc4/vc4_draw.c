@@ -240,13 +240,13 @@ vc4_emit_gl_shader_state(struct vc4_context *vc4,
         }
 
         vc4_write_uniforms(vc4, vc4->prog.fs,
-                           &vc4->constbuf[PIPE_SHADER_FRAGMENT],
+                           &vc4->constbuf[MESA_SHADER_FRAGMENT],
                            &vc4->fragtex);
         vc4_write_uniforms(vc4, vc4->prog.vs,
-                           &vc4->constbuf[PIPE_SHADER_VERTEX],
+                           &vc4->constbuf[MESA_SHADER_VERTEX],
                            &vc4->verttex);
         vc4_write_uniforms(vc4, vc4->prog.cs,
-                           &vc4->constbuf[PIPE_SHADER_VERTEX],
+                           &vc4->constbuf[MESA_SHADER_VERTEX],
                            &vc4->verttex);
 
         vc4->last_index_bias = index_bias + extra_index_bias;
@@ -403,7 +403,7 @@ vc4_draw_vbo(struct pipe_context *pctx, const struct pipe_draw_info *info,
                         if (info->has_user_indices) {
                                 unsigned start_offset = draws[0].start * info->index_size;
                                 prsc = NULL;
-                                u_upload_data(vc4->uploader, start_offset,
+                                u_upload_data_ref(vc4->uploader, start_offset,
                                               draws[0].count * index_size, 4,
                                               (char*)info->index.user + start_offset,
                                               &offset, &prsc);
@@ -501,9 +501,9 @@ vc4_draw_vbo(struct pipe_context *pctx, const struct pipe_draw_info *info,
          */
         assert(job->draw_calls_queued <= VC4_HW_2116_COUNT);
 
-        if (vc4->zsa && vc4->framebuffer.zsbuf) {
+        if (vc4->zsa && vc4->framebuffer.zsbuf.texture) {
                 struct vc4_resource *rsc =
-                        vc4_resource(vc4->framebuffer.zsbuf->texture);
+                        vc4_resource(vc4->framebuffer.zsbuf.texture);
 
                 if (vc4->zsa->base.depth_enabled) {
                         job->resolve |= PIPE_CLEAR_DEPTH;
@@ -549,7 +549,7 @@ vc4_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor
 
         if (buffers & PIPE_CLEAR_DEPTHSTENCIL) {
                 struct vc4_resource *rsc =
-                        vc4_resource(vc4->framebuffer.zsbuf->texture);
+                        vc4_resource(vc4->framebuffer.zsbuf.texture);
                 unsigned zsclear = buffers & PIPE_CLEAR_DEPTHSTENCIL;
 
                 /* Clearing ZS will clear both Z and stencil, so if we're
@@ -561,7 +561,7 @@ vc4_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor
                 if ((zsclear == PIPE_CLEAR_DEPTH ||
                      zsclear == PIPE_CLEAR_STENCIL) &&
                     (rsc->initialized_buffers & ~(zsclear | job->cleared)) &&
-                    util_format_is_depth_and_stencil(vc4->framebuffer.zsbuf->format)) {
+                    util_format_is_depth_and_stencil(vc4->framebuffer.zsbuf.format)) {
                         static const union pipe_color_union dummy_color = {};
 
                         perf_debug("Partial clear of Z+stencil buffer, "
@@ -592,10 +592,10 @@ vc4_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor
 
         if (buffers & PIPE_CLEAR_COLOR0) {
                 struct vc4_resource *rsc =
-                        vc4_resource(vc4->framebuffer.cbufs[0]->texture);
+                        vc4_resource(vc4->framebuffer.cbufs[0].texture);
                 uint32_t clear_color;
 
-                if (vc4_rt_format_is_565(vc4->framebuffer.cbufs[0]->format)) {
+                if (vc4_rt_format_is_565(vc4->framebuffer.cbufs[0].format)) {
                         /* In 565 mode, the hardware will be packing our color
                          * for us.
                          */
@@ -606,7 +606,7 @@ vc4_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor
                          * support multiple swizzlings of RGBA8888.
                          */
                         clear_color =
-                                pack_rgba(vc4->framebuffer.cbufs[0]->format,
+                                pack_rgba(vc4->framebuffer.cbufs[0].format,
                                           color->f);
                 }
                 job->clear_color[0] = job->clear_color[1] = clear_color;
@@ -615,7 +615,7 @@ vc4_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor
 
         if (buffers & PIPE_CLEAR_DEPTHSTENCIL) {
                 struct vc4_resource *rsc =
-                        vc4_resource(vc4->framebuffer.zsbuf->texture);
+                        vc4_resource(vc4->framebuffer.zsbuf.texture);
 
                 /* Though the depth buffer is stored with Z in the high 24,
                  * for this field we just need to store it in the low 24.

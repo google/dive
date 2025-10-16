@@ -33,7 +33,7 @@
 #include <GL/wglext.h>
 #include <GL/mesa_glinterop.h>
 
-#include "glapi/glapi.h"
+#include "glapi/glapi/glapi.h"
 #include "stw_device.h"
 #include "stw_gdishim.h"
 #include "gldrv.h"
@@ -108,7 +108,7 @@ DrvGetProcAddress(
             return entry->proc;
 
    if (lpszProc[0] == 'g' && lpszProc[1] == 'l') {
-      p = (PROC) _glapi_get_proc_address(lpszProc);
+      p = (PROC) _mesa_glapi_get_proc_address(lpszProc);
       if (p)
          return p;
    }

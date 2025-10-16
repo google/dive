@@ -49,10 +49,6 @@
 #include "virgl_drm_winsys.h"
 #include "virgl_drm_public.h"
 
-// Delete local definitions when virglrenderer_hw.h becomes public
-#define VIRGL_DRM_CAPSET_VIRGL  1
-#define VIRGL_DRM_CAPSET_VIRGL2 2
-
 #define VIRGL_DRM_VERSION(major, minor) ((major) << 16 | (minor))
 #define VIRGL_DRM_VERSION_FENCE_FD      VIRGL_DRM_VERSION(0, 1)
 
@@ -75,8 +71,6 @@ static inline bool can_cache_resource(uint32_t bind)
 static void virgl_hw_res_destroy(struct virgl_drm_winsys *qdws,
                                  struct virgl_hw_res *res)
 {
-      struct drm_gem_close args;
-
       mtx_lock(&qdws->bo_handles_mutex);
 
       /* We intentionally avoid taking the lock in
@@ -88,18 +82,26 @@ static void virgl_hw_res_destroy(struct virgl_drm_winsys *qdws,
          return;
       }
 
+      if (--res->needed_references > 0) {
+         mtx_unlock(&qdws->bo_handles_mutex);
+         return;
+      }
+
       _mesa_hash_table_remove_key(qdws->bo_handles,
                              (void *)(uintptr_t)res->bo_handle);
       if (res->flink_name)
          _mesa_hash_table_remove_key(qdws->bo_names,
                                 (void *)(uintptr_t)res->flink_name);
-      mtx_unlock(&qdws->bo_handles_mutex);
       if (res->ptr)
          os_munmap(res->ptr, res->size);
 
-      memset(&args, 0, sizeof(args));
-      args.handle = res->bo_handle;
-      drmIoctl(qdws->fd, DRM_IOCTL_GEM_CLOSE, &args);
+      drmCloseBufferHandle(qdws->fd, res->bo_handle);
+
+      /* We need to unlock the access to bo_handles after closing the GEM to
+       * avoid a race condition where another thread would not find the
+       * bo_handle leading to a call of DRM_IOCTL_GEM_OPEN which will return
+       * the same bo_handle as the one we are closing here. */
+      mtx_unlock(&qdws->bo_handles_mutex);
       FREE(res);
 }
 
@@ -199,15 +201,12 @@ virgl_drm_winsys_resource_create_blob(struct virgl_winsys *qws,
       return NULL;
 
    /* Make sure blob is page aligned. */
-   if (flags & (VIRGL_RESOURCE_FLAG_MAP_PERSISTENT |
-                VIRGL_RESOURCE_FLAG_MAP_COHERENT)) {
-      width = ALIGN(width, getpagesize());
-      size = ALIGN(size, getpagesize());
-   }
+   width = ALIGN(width, getpagesize());
+   size = ALIGN(size, getpagesize());
 
    blob_id = p_atomic_inc_return(&qdws->blob_id);
    cmd[0] = VIRGL_CMD0(VIRGL_CCMD_PIPE_RESOURCE_CREATE, 0, VIRGL_PIPE_RES_CREATE_SIZE);
-   cmd[VIRGL_PIPE_RES_CREATE_FORMAT] = format;
+   cmd[VIRGL_PIPE_RES_CREATE_FORMAT] = pipe_to_virgl_format(format);
    cmd[VIRGL_PIPE_RES_CREATE_BIND] = bind;
    cmd[VIRGL_PIPE_RES_CREATE_TARGET] = target;
    cmd[VIRGL_PIPE_RES_CREATE_WIDTH] = width;
@@ -241,6 +240,7 @@ virgl_drm_winsys_resource_create_blob(struct virgl_winsys *qws,
    pipe_reference_init(&res->reference, 1);
    p_atomic_set(&res->external, false);
    p_atomic_set(&res->num_cs_references, 0);
+   res->needed_references = 1;
    virgl_resource_cache_entry_init(&res->cache_entry, params);
    return res;
 }
@@ -309,6 +309,7 @@ virgl_drm_winsys_resource_create(struct virgl_winsys *qws,
    pipe_reference_init(&res->reference, 1);
    p_atomic_set(&res->external, false);
    p_atomic_set(&res->num_cs_references, 0);
+   res->needed_references = 1;
 
    /* A newly created resource is considered busy by the kernel until the
     * command is retired.  But for our purposes, we can consider it idle
@@ -478,6 +479,7 @@ virgl_drm_winsys_resource_get_storage_size(struct virgl_winsys *qws,
 static struct virgl_hw_res *
 virgl_drm_winsys_resource_create_handle(struct virgl_winsys *qws,
                                         struct winsys_handle *whandle,
+                                        UNUSED struct pipe_resource *templ,
                                         uint32_t *plane,
                                         uint32_t *stride,
                                         uint32_t *plane_offset,
@@ -532,8 +534,15 @@ virgl_drm_winsys_resource_create_handle(struct virgl_winsys *qws,
        * until it enters virgl_hw_res_destroy, there is a small window that
        * the refcount can drop to zero. Call p_atomic_inc directly instead of
        * virgl_drm_resource_reference to avoid hitting assert failures.
+       *
+       * If the refcount was 0, that means that the resource is currently
+       * waiting to be freed in another thread, increase the needed_references
+       * as a workaround to make sure that it won't be double freed for now.
        */
-      p_atomic_inc(&res->reference.count);
+      int32_t ref = p_atomic_inc_return(&res->reference.count);
+      if (ref == 1)
+         res->needed_references++;
+
       goto done;
    }
 
@@ -559,6 +568,8 @@ virgl_drm_winsys_resource_create_handle(struct virgl_winsys *qws,
    info_arg.bo_handle = res->bo_handle;
 
    if (drmIoctl(qdws->fd, DRM_IOCTL_VIRTGPU_RESOURCE_INFO, &info_arg)) {
+      drmCloseBufferHandle(qdws->fd, res->bo_handle);
+
       /* close */
       FREE(res);
       res = NULL;
@@ -574,6 +585,7 @@ virgl_drm_winsys_resource_create_handle(struct virgl_winsys *qws,
    pipe_reference_init(&res->reference, 1);
    p_atomic_set(&res->external, true);
    res->num_cs_references = 0;
+   res->needed_references = 1;
 
    if (res->flink_name)
       _mesa_hash_table_insert(qdws->bo_names, (void *)(uintptr_t)res->flink_name, res);
@@ -754,24 +766,14 @@ static void virgl_drm_free_res_list(struct virgl_drm_cmd_buf *cbuf)
    FREE(cbuf->res_bo);
 }
 
-static bool virgl_drm_lookup_res(struct virgl_drm_cmd_buf *cbuf,
-                                 struct virgl_hw_res *res)
+static bool virgl_drm_res_is_added(struct virgl_drm_cmd_buf *cbuf,
+                                   struct virgl_hw_res *res)
 {
-   unsigned hash = res->res_handle & (sizeof(cbuf->is_handle_added)-1);
-   int i;
-
-   if (cbuf->is_handle_added[hash]) {
-      i = cbuf->reloc_indices_hashlist[hash];
+   for (int i = 0; i < cbuf->cres; i++) {
       if (cbuf->res_bo[i] == res)
          return true;
-
-      for (i = 0; i < cbuf->cres; i++) {
-         if (cbuf->res_bo[i] == res) {
-            cbuf->reloc_indices_hashlist[hash] = i;
-            return true;
-         }
-      }
    }
+
    return false;
 }
 
@@ -779,7 +781,9 @@ static void virgl_drm_add_res(struct virgl_drm_winsys *qdws,
                               struct virgl_drm_cmd_buf *cbuf,
                               struct virgl_hw_res *res)
 {
-   unsigned hash = res->res_handle & (sizeof(cbuf->is_handle_added)-1);
+   bool already_in_list = virgl_drm_res_is_added(cbuf, res);
+   if (unlikely(already_in_list))
+      return;
 
    if (cbuf->cres >= cbuf->nres) {
       unsigned new_nres = cbuf->nres + 256;
@@ -806,9 +810,6 @@ static void virgl_drm_add_res(struct virgl_drm_winsys *qdws,
    cbuf->res_bo[cbuf->cres] = NULL;
    virgl_drm_resource_reference(&qdws->base, &cbuf->res_bo[cbuf->cres], res);
    cbuf->res_hlist[cbuf->cres] = res->bo_handle;
-   cbuf->is_handle_added[hash] = true;
-
-   cbuf->reloc_indices_hashlist[hash] = cbuf->cres;
    p_atomic_inc(&res->num_cs_references);
    cbuf->cres++;
 }
@@ -827,8 +828,6 @@ static void virgl_drm_clear_res_list(struct virgl_drm_cmd_buf *cbuf)
    }
 
    cbuf->cres = 0;
-
-   memset(cbuf->is_handle_added, 0, sizeof(cbuf->is_handle_added));
 }
 
 static void virgl_drm_emit_res(struct virgl_winsys *qws,
@@ -837,13 +836,11 @@ static void virgl_drm_emit_res(struct virgl_winsys *qws,
 {
    struct virgl_drm_winsys *qdws = virgl_drm_winsys(qws);
    struct virgl_drm_cmd_buf *cbuf = virgl_drm_cmd_buf(_cbuf);
-   bool already_in_list = virgl_drm_lookup_res(cbuf, res);
 
    if (write_buf)
       cbuf->base.buf[cbuf->base.cdw++] = res->res_handle;
 
-   if (!already_in_list)
-      virgl_drm_add_res(qdws, cbuf, res);
+   virgl_drm_add_res(qdws, cbuf, res);
 }
 
 static bool virgl_drm_res_is_ref(struct virgl_winsys *qws,
@@ -1179,10 +1176,10 @@ static int virgl_init_context(int drmFD)
    uint64_t supports_capset_virgl, supports_capset_virgl2;
    supports_capset_virgl = supports_capset_virgl2 = 0;
 
-   supports_capset_virgl = ((1 << VIRGL_DRM_CAPSET_VIRGL) &
+   supports_capset_virgl = ((1 << VIRTGPU_DRM_CAPSET_VIRGL) &
                              params[param_supported_capset_ids].value);
 
-   supports_capset_virgl2 = ((1 << VIRGL_DRM_CAPSET_VIRGL2) &
+   supports_capset_virgl2 = ((1 << VIRTGPU_DRM_CAPSET_VIRGL2) &
                               params[param_supported_capset_ids].value);
 
    if (!supports_capset_virgl && !supports_capset_virgl2) {
@@ -1192,8 +1189,8 @@ static int virgl_init_context(int drmFD)
 
    ctx_set_param.param = VIRTGPU_CONTEXT_PARAM_CAPSET_ID;
    ctx_set_param.value = (supports_capset_virgl2) ?
-                         VIRGL_DRM_CAPSET_VIRGL2 :
-                         VIRGL_DRM_CAPSET_VIRGL;
+                         VIRTGPU_DRM_CAPSET_VIRGL2 :
+                         VIRTGPU_DRM_CAPSET_VIRGL;
 
    init.ctx_set_params = (unsigned long)(void *)&ctx_set_param;
    init.num_params = 1;
@@ -1379,6 +1376,8 @@ virgl_drm_screen_create(int fd, const struct pipe_screen_config *config)
    } else {
       struct virgl_winsys *vws;
       int dup_fd = os_dupfd_cloexec(fd);
+      if (dup_fd < 0)
+         goto unlock;
 
       vws = virgl_drm_winsys_create(dup_fd);
       if (!vws) {

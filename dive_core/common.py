@@ -14,6 +14,7 @@ class BitfieldsBits(ctypes.LittleEndianStructure):
             ("A5XX", c_uint8, 1),
             ("A6XX", c_uint8, 1),
             ("A7XX", c_uint8, 1),
+            ("A8XX", c_uint8, 1),
         ]
 
 class Bitfields(ctypes.Union):
@@ -69,6 +70,7 @@ def GetGPUVariantsBitField(str):
             case "A5XX": bitfields.bits.A5XX = 1
             case "A6XX": bitfields.bits.A6XX = 1
             case "A7XX": bitfields.bits.A7XX = 1
+            case "A8XX": bitfields.bits.A8XX = 1
     return bitfields.asbyte
 
 # ---------------------------------------------------------------------------------------
@@ -78,40 +80,25 @@ def isBuiltInType(type):
 
 # ---------------------------------------------------------------------------------------
 def gatherAllEnums(registers_et_root):
-  enums = registers_et_root.findall('{http://nouveau.freedesktop.org/}enum')
-
-  # Find all enums within domain blocks
-  # Those are reserved for use within the domain, but we need to keep track of all
-  # enums in our list, irrespective of scope
-  domains = registers_et_root.findall('{http://nouveau.freedesktop.org/}domain')
-  for domain in domains:
-    domain_enums = domain.findall('{http://nouveau.freedesktop.org/}enum')
-    if domain_enums:
-      for enum in domain_enums:
-        enums.append(enum)
+  # Find all enums anywhere in the tree
+  enums = registers_et_root.findall('.//{http://nouveau.freedesktop.org/}enum')
   return enums
 
 # ---------------------------------------------------------------------------------------
 def addMissingDomains(registers_et_root):
-  # CP_INDIRECT_BUFFER
-  new_domain = ET.SubElement(registers_et_root, '{http://nouveau.freedesktop.org/}domain', name='CP_INDIRECT_BUFFER')
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='0', name='ADDR_LO', type='hex'))
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='1', name='ADDR_HI', type='hex'))
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='SIZE', type='uint'))
-
   # CP_INDIRECT_BUFFER_PFD
   new_domain = ET.SubElement(registers_et_root, '{http://nouveau.freedesktop.org/}domain', name='CP_INDIRECT_BUFFER_PFD')
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='0', name='ADDR_LO', type='hex'))
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='1', name='ADDR_HI', type='hex'))
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='SIZE', type='uint'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg64', dict(offset='0', name='IB_BASE', type='address'))
+  new_element = ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='2'))
+  ET.SubElement(new_element, '{http://nouveau.freedesktop.org/}bitfield', dict(name='IB_SIZE', low='0', high='19'))
 
   # CP_INDIRECT_BUFFER_PFE
   new_domain = ET.SubElement(registers_et_root, '{http://nouveau.freedesktop.org/}domain', name='CP_INDIRECT_BUFFER_PFE')
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='0', name='ADDR_LO', type='hex'))
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='1', name='ADDR_HI', type='hex'))
-  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='SIZE', type='uint'))
+  ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg64', dict(offset='0', name='IB_BASE', type='address'))
+  new_element = ET.SubElement(new_domain, '{http://nouveau.freedesktop.org/}reg32', dict(offset='2', name='2'))
+  ET.SubElement(new_element, '{http://nouveau.freedesktop.org/}bitfield', dict(name='IB_SIZE', low='0', high='19'))
 
- # Grab and make a copy of CP_LOAD_STATE. Get rid of the enums.
+  # Grab and make a copy of CP_LOAD_STATE. Get rid of the enums.
   cp_load_state_domain = registers_et_root.find('./{http://nouveau.freedesktop.org/}domain[@name="CP_LOAD_STATE6"]')
   cp_load_state_geom = copy.deepcopy(cp_load_state_domain)
   for child in cp_load_state_geom.findall('{http://nouveau.freedesktop.org/}enum'):

@@ -97,7 +97,7 @@ vc4_invalidate_resource(struct pipe_context *pctx, struct pipe_resource *prsc)
                 return;
 
         struct vc4_job *job = entry->data;
-        if (job->key.zsbuf && job->key.zsbuf->texture == prsc)
+        if (job->key.zsbuf.texture && job->key.zsbuf.texture == prsc)
                 job->resolve &= ~(PIPE_CLEAR_DEPTH | PIPE_CLEAR_STENCIL);
 }
 

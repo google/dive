@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2021 Collabora LTD
- *
+ * Copyright 2021 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -45,7 +25,7 @@
 #else
 #define ASSERT_OR_THROW(EXPR, ERROR)                                                     \
    if (!(EXPR))                                                                          \
-   unreachable(ERROR)
+   UNREACHABLE(ERROR)
 #endif
 
 namespace r600 {
@@ -189,6 +169,8 @@ public:
    bool has_uses() const { return !m_uses.empty() || pin() == pin_array; }
    void set_chan(int c) { do_set_chan(c); }
 
+   bool can_switch_to_chan(int c);
+
    virtual VirtualValue *addr() const { return nullptr; }
 
    int index() const { return m_index; }
@@ -237,8 +219,8 @@ public:
    }
 
 protected:
-   void do_set_chan(UNUSED int c) { unreachable("Address registers must have chan 0");}
-   void set_sel_internal(UNUSED int sel) {unreachable("Address registers don't support sel override");}
+   void do_set_chan(UNUSED int c) { UNREACHABLE("Address registers must have chan 0");}
+   void set_sel_internal(UNUSED int sel) {UNREACHABLE("Address registers don't support sel override");}
 };
 
 
@@ -307,7 +289,6 @@ public:
       void set_value(PRegister reg) { m_value = reg; }
 
    private:
-      const RegisterVec4& m_parent;
       PRegister m_value;
    };
 

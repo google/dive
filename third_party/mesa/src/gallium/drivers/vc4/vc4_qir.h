@@ -241,8 +241,6 @@ enum quniform_contents {
         QUNIFORM_VIEWPORT_Z_OFFSET,
         QUNIFORM_VIEWPORT_Z_SCALE,
 
-        QUNIFORM_USER_CLIP_PLANE,
-
         /**
          * A reference to a texture config parameter 0 uniform.
          *
@@ -317,7 +315,6 @@ struct vc4_key {
                         };
                 };
         } tex[VC4_MAX_TEXTURE_SAMPLERS];
-        uint8_t ucp_enables;
 };
 
 struct vc4_fs_key {
@@ -337,6 +334,7 @@ struct vc4_fs_key {
         uint8_t logicop_func;
         uint32_t point_sprite_mask;
         uint32_t ubo_1_size;
+        uint8_t ucp_enables;
 
         struct pipe_rt_blend_state blend;
 };
@@ -572,11 +570,11 @@ bool qir_opt_dead_code(struct vc4_compile *c);
 bool qir_opt_peephole_sf(struct vc4_compile *c);
 bool qir_opt_small_immediates(struct vc4_compile *c);
 bool qir_opt_vpm(struct vc4_compile *c);
-void vc4_nir_lower_blend(nir_shader *s, struct vc4_compile *c);
-void vc4_nir_lower_io(nir_shader *s, struct vc4_compile *c);
+bool vc4_nir_lower_blend(nir_shader *s, struct vc4_compile *c);
+bool vc4_nir_lower_io(nir_shader *s, struct vc4_compile *c);
 nir_def *vc4_nir_get_swizzled_channel(struct nir_builder *b,
                                           nir_def **srcs, int swiz);
-void vc4_nir_lower_txf_ms(nir_shader *s, struct vc4_compile *c);
+bool vc4_nir_lower_txf_ms(nir_shader *s, struct vc4_compile *c);
 void qir_lower_uniforms(struct vc4_compile *c);
 
 uint32_t qpu_schedule_instructions(struct vc4_compile *c);

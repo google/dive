@@ -1,27 +1,8 @@
 /*
  * Copyright 2013 Advanced Micro Devices, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
  * Authors:
  *      Marek Olšák
+ * SPDX-License-Identifier: MIT
  */
 
 #include "r600_cs.h"
@@ -34,7 +15,7 @@
 #include <stdio.h>
 
 bool r600_rings_is_buffer_referenced(struct r600_common_context *ctx,
-				     struct pb_buffer *buf,
+				     struct pb_buffer_lean *buf,
 				     unsigned usage)
 {
 	if (ctx->ws->cs_is_buffer_referenced(&ctx->gfx.cs, buf, usage)) {
@@ -166,7 +147,7 @@ void r600_init_resource_fields(struct r600_common_screen *rscreen,
 bool r600_alloc_resource(struct r600_common_screen *rscreen,
 			 struct r600_resource *res)
 {
-	struct pb_buffer *old_buf, *new_buf;
+	struct pb_buffer_lean *old_buf, *new_buf;
 
 	/* Allocate a new resource. */
 	new_buf = rscreen->ws->buffer_create(rscreen->ws, res->bo_size,
@@ -188,7 +169,7 @@ bool r600_alloc_resource(struct r600_common_screen *rscreen,
 	else
 		res->gpu_address = 0;
 
-	pb_reference(&old_buf, NULL);
+	radeon_bo_reference(rscreen->ws, &old_buf, NULL);
 
 	util_range_set_empty(&res->valid_buffer_range);
 
@@ -203,12 +184,13 @@ bool r600_alloc_resource(struct r600_common_screen *rscreen,
 
 void r600_buffer_destroy(struct pipe_screen *screen, struct pipe_resource *buf)
 {
-	struct r600_resource *rbuffer = r600_resource(buf);
+	struct r600_screen *rscreen = (struct r600_screen*)screen;
+	struct r600_resource *rbuffer = r600_as_resource(buf);
 
 	threaded_resource_deinit(buf);
 	util_range_destroy(&rbuffer->valid_buffer_range);
 	pipe_resource_reference((struct pipe_resource**)&rbuffer->immed_buffer, NULL);
-	pb_reference(&rbuffer->buf, NULL);
+	radeon_bo_reference(rscreen->b.ws, &rbuffer->buf, NULL);
 	FREE(rbuffer);
 }
 
@@ -247,11 +229,11 @@ void r600_replace_buffer_storage(struct pipe_context *ctx,
 				 struct pipe_resource *src)
 {
 	struct r600_common_context *rctx = (struct r600_common_context *)ctx;
-	struct r600_resource *rdst = r600_resource(dst);
-	struct r600_resource *rsrc = r600_resource(src);
+	struct r600_resource *rdst = r600_as_resource(dst);
+	struct r600_resource *rsrc = r600_as_resource(src);
 	uint64_t old_gpu_address = rdst->gpu_address;
 
-	pb_reference(&rdst->buf, rsrc->buf);
+	radeon_bo_reference(rctx->ws, &rdst->buf, rsrc->buf);
 	rdst->gpu_address = rsrc->gpu_address;
 	rdst->b.b.bind = rsrc->b.b.bind;
 	rdst->flags = rsrc->flags;
@@ -269,7 +251,7 @@ void r600_invalidate_resource(struct pipe_context *ctx,
 			      struct pipe_resource *resource)
 {
 	struct r600_common_context *rctx = (struct r600_common_context*)ctx;
-	struct r600_resource *rbuffer = r600_resource(resource);
+	struct r600_resource *rbuffer = r600_as_resource(resource);
 
 	/* We currently only do anything here for buffers */
 	if (resource->target == PIPE_BUFFER)
@@ -321,10 +303,10 @@ void *r600_buffer_transfer_map(struct pipe_context *ctx,
 {
 	struct r600_common_context *rctx = (struct r600_common_context*)ctx;
 	struct r600_common_screen *rscreen = (struct r600_common_screen*)ctx->screen;
-	struct r600_resource *rbuffer = r600_resource(resource);
+	struct r600_resource *rbuffer = r600_as_resource(resource);
 	uint8_t *data;
 
-	if (r600_resource(resource)->compute_global_bo) {
+	if (r600_as_resource(resource)->compute_global_bo) {
 		if ((data = r600_compute_global_transfer_map(ctx, resource, level, usage, box, ptransfer)))
 			return data;
 	}
@@ -392,7 +374,7 @@ void *r600_buffer_transfer_map(struct pipe_context *ctx,
 			unsigned offset;
 			struct r600_resource *staging = NULL;
 
-			u_upload_alloc(ctx->stream_uploader, 0,
+			u_upload_alloc_ref(ctx->stream_uploader, 0,
                                        box->width + (box->x % R600_MAP_BUFFER_ALIGNMENT),
 				       rctx->screen->info.tcc_cache_line_size,
 				       &offset, (struct pipe_resource**)&staging,
@@ -420,9 +402,9 @@ void *r600_buffer_transfer_map(struct pipe_context *ctx,
 		struct r600_resource *staging;
 
 		assert(!(usage & TC_TRANSFER_MAP_THREADED_UNSYNC));
-		staging = (struct r600_resource*) pipe_buffer_create(
-				ctx->screen, 0, PIPE_USAGE_STAGING,
-				box->width + (box->x % R600_MAP_BUFFER_ALIGNMENT));
+		staging = r600_as_resource(pipe_buffer_create(
+						ctx->screen, 0, PIPE_USAGE_STAGING,
+						box->width + (box->x % R600_MAP_BUFFER_ALIGNMENT)));
 		if (staging) {
 			/* Copy the VRAM buffer to the staging buffer. */
 			rctx->dma_copy(ctx, &staging->b.b, 0,
@@ -459,7 +441,7 @@ static void r600_buffer_do_flush_region(struct pipe_context *ctx,
 				        const struct pipe_box *box)
 {
 	struct r600_transfer *rtransfer = (struct r600_transfer*)transfer;
-	struct r600_resource *rbuffer = r600_resource(transfer->resource);
+	struct r600_resource *rbuffer = r600_as_resource(transfer->resource);
 
 	if (rtransfer->staging) {
 		struct pipe_resource *dst, *src;
@@ -487,7 +469,7 @@ void r600_buffer_flush_region(struct pipe_context *ctx,
 	unsigned required_usage = PIPE_MAP_WRITE |
 				  PIPE_MAP_FLUSH_EXPLICIT;
 
-	if (r600_resource(transfer->resource)->compute_global_bo)
+	if (r600_as_resource(transfer->resource)->compute_global_bo)
 		return;
 
 	if ((transfer->usage & required_usage) == required_usage) {
@@ -503,7 +485,7 @@ void r600_buffer_transfer_unmap(struct pipe_context *ctx,
 {
 	struct r600_common_context *rctx = (struct r600_common_context*)ctx;
 	struct r600_transfer *rtransfer = (struct r600_transfer*)transfer;
-	struct r600_resource *rtransferr = r600_resource(transfer->resource);
+	struct r600_resource *rtransferr = r600_as_resource(transfer->resource);
 
 	if (rtransferr->compute_global_bo && !rtransferr->b.is_user_ptr) {
 		r600_compute_global_transfer_unmap(ctx, transfer);
@@ -588,7 +570,7 @@ struct pipe_resource *r600_buffer_create(struct pipe_screen *screen,
 	return &rbuffer->b.b;
 }
 
-struct pipe_resource *r600_aligned_buffer_create(struct pipe_screen *screen,
+struct r600_resource *r600_aligned_buffer_create(struct pipe_screen *screen,
 						 unsigned flags,
 						 unsigned usage,
 						 unsigned size,
@@ -606,7 +588,7 @@ struct pipe_resource *r600_aligned_buffer_create(struct pipe_screen *screen,
 	buffer.height0 = 1;
 	buffer.depth0 = 1;
 	buffer.array_size = 1;
-	return r600_buffer_create(screen, &buffer, alignment);
+	return r600_as_resource(r600_buffer_create(screen, &buffer, alignment));
 }
 
 struct pipe_resource *
@@ -618,9 +600,8 @@ r600_buffer_from_user_memory(struct pipe_screen *screen,
 	struct radeon_winsys *ws = rscreen->ws;
 	struct r600_resource *rbuffer;
 
-	if ((templ->bind & PIPE_BIND_GLOBAL) &&
-	    (templ->bind & PIPE_BIND_COMPUTE_RESOURCE)) {
-		rbuffer = r600_resource(r600_compute_global_buffer_create(screen, templ));
+	if (templ->bind & PIPE_BIND_GLOBAL) {
+		rbuffer = r600_as_resource(r600_compute_global_buffer_create(screen, templ));
 		((struct r600_resource_global *)rbuffer)->chunk->real_buffer = rbuffer;
 	} else {
 		rbuffer = r600_alloc_buffer_struct(screen, templ);
@@ -633,8 +614,7 @@ r600_buffer_from_user_memory(struct pipe_screen *screen,
 	util_range_add(&rbuffer->b.b, &rbuffer->b.valid_buffer_range, 0, templ->width0);
 
 	/* Convert a user pointer to a buffer. */
-	rbuffer->buf = ws->buffer_from_ptr(ws, user_memory, templ->width0,
-	                                   templ->usage == PIPE_USAGE_IMMUTABLE? RADEON_FLAG_READ_ONLY : 0);
+	rbuffer->buf = ws->buffer_from_ptr(ws, user_memory, templ->width0, 0);
 	if (!rbuffer->buf) {
 		FREE(rbuffer);
 		return NULL;

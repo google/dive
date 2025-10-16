@@ -5,7 +5,8 @@
 #include "mme_runner.h"
 #include "mme_tu104_sim.h"
 
-#include "nvk_clc597.h"
+#include "clcd97.h"
+#include "nv_push_clc597.h"
 
 class mme_tu104_sim_test : public ::testing::Test, public mme_hw_runner {
 public:
@@ -50,7 +51,7 @@ mme_tu104_sim_test::test_macro(const mme_builder *b,
       .size = DATA_BO_SIZE,
    };
    mme_tu104_sim(insts.size(), &insts[0],
-                 params.size(), &params[0],
+                 params.size(), params.size() ? &params[0] : NULL,
                  1, &sim_mem);
 
    /* Now run the macro on the GPU */
@@ -909,6 +910,23 @@ TEST_F(mme_tu104_sim_test, bfe)
    }
 }
 
+TEST_F(mme_tu104_sim_test, not)
+{
+   mme_builder b;
+   mme_builder_init(&b, devinfo);
+
+   mme_value x = mme_load(&b);
+   mme_value v1 = mme_not(&b, x);
+   mme_store_imm_addr(&b, data_addr + 0, v1);
+
+   auto macro = mme_builder_finish_vec(&b);
+
+   std::vector<uint32_t> params;
+   params.push_back(0x0c406fe0);
+
+   test_macro(&b, macro, params);
+}
+
 #define BITOP_TEST(op)                                               \
 TEST_F(mme_tu104_sim_test, op)                                       \
 {                                                                    \
@@ -934,6 +952,7 @@ TEST_F(mme_tu104_sim_test, op)                                       \
 }
 
 BITOP_TEST(and)
+BITOP_TEST(and_not)
 BITOP_TEST(nand)
 BITOP_TEST(or)
 BITOP_TEST(xor)
@@ -1286,7 +1305,7 @@ static bool c_ine(int32_t x, int32_t y) { return x != y; };
 TEST_F(mme_tu104_sim_test, if_##op)                                  \
 {                                                                    \
    mme_builder b;                                                    \
-   mme_builder_init(&b, devinfo);                                 \
+   mme_builder_init(&b, devinfo);                                    \
                                                                      \
    mme_value x = mme_load(&b);                                       \
    mme_value y = mme_load(&b);                                       \
@@ -1295,6 +1314,11 @@ TEST_F(mme_tu104_sim_test, if_##op)                                  \
    mme_start_if_##op(&b, x, y);                                      \
    {                                                                 \
       mme_add_to(&b, i, i, mme_imm(1));                              \
+      mme_add_to(&b, i, i, mme_imm(1));                              \
+   }                                                                 \
+   mme_end_if(&b);                                                   \
+   mme_start_if_##op(&b, x, mme_imm(56));                            \
+   {                                                                 \
       mme_add_to(&b, i, i, mme_imm(1));                              \
    }                                                                 \
    mme_end_if(&b);                                                   \
@@ -1317,7 +1341,13 @@ TEST_F(mme_tu104_sim_test, if_##op)                                  \
                                                                      \
       test_macro(&b, macro, params);                                 \
                                                                      \
-      ASSERT_EQ(data[0], c_##op(params[0], params[1]) ? 5 : 3);      \
+      uint32_t expected = 3;                                         \
+      if (c_##op(params[0], params[1]))                              \
+         expected += 2;                                              \
+      if (c_##op(params[0], 56))                                     \
+         expected += 1;                                              \
+                                                                     \
+      ASSERT_EQ(data[0], expected);                                  \
    }                                                                 \
 }
 
@@ -1609,7 +1639,8 @@ TEST_F(mme_tu104_sim_test, dma_read_fifoed)
 
    auto macro = mme_builder_finish_vec(&b);
 
-   P_IMMD(p, NVC597, SET_MME_DATA_FIFO_CONFIG, FIFO_SIZE_SIZE_4KB);
+   if (devinfo->cls_eng3d < BLACKWELL_A)
+      P_IMMD(p, NVC597, SET_MME_DATA_FIFO_CONFIG, FIFO_SIZE_SIZE_4KB);
 
    for (uint32_t i = 0; i < 64; i++)
       data[i] = 1000 + i;
@@ -1657,6 +1688,127 @@ TEST_F(mme_tu104_sim_test, scratch_limit)
       P_1INC(p, NVC597, CALL_MME_MACRO(0));
       P_INLINE_DATA(p, i);
       P_INLINE_DATA(p, chunk_size);
+
+      submit_push();
+
+      for (uint32_t j = 0; j < chunk_size; j++)
+         ASSERT_EQ(data[j], i + j);
+   }
+}
+
+TEST_F(mme_tu104_sim_test, sanity_compute)
+{
+   const uint32_t canary = 0xc0ffee01;
+
+   mme_builder b;
+   mme_builder_init(&b, devinfo);
+
+   mme_store_compute_imm_addr(&b, data_addr, mme_imm(canary));
+   auto macro = mme_builder_finish_vec(&b);
+
+   reset_push();
+   push_macro(0, macro);
+
+   P_1INC(p, NVC7C0, CALL_MME_MACRO(0));
+   P_NVC7C0_CALL_MME_MACRO(p, 0, 0);
+   submit_push();
+
+   ASSERT_EQ(data[0], canary);
+}
+
+TEST_F(mme_tu104_sim_test, scratch_limit_compute)
+{
+   static const uint32_t chunk_size = 4;
+
+   mme_builder b;
+   mme_builder_init(&b, devinfo);
+
+   mme_value start = mme_load(&b);
+   mme_value count = mme_load(&b);
+
+   mme_value i = mme_mov(&b, start);
+   mme_loop(&b, count) {
+      mme_mthd_arr(&b, NVC7C0_SET_MME_SHADOW_SCRATCH(0), i);
+      mme_emit(&b, i);
+      mme_add_to(&b, i, i, mme_imm(1));
+   }
+
+   mme_value j = mme_mov(&b, start);
+   struct mme_value64 addr = mme_mov64(&b, mme_imm64(data_addr));
+
+   mme_loop(&b, count) {
+      mme_value x = mme_state_arr(&b, NVC7C0_SET_MME_SHADOW_SCRATCH(0), j);
+      mme_store_compute(&b, addr, x);
+      mme_add_to(&b, j, j, mme_imm(1));
+      mme_add64_to(&b, addr, addr, mme_imm64(4));
+   }
+
+   auto macro = mme_builder_finish_vec(&b);
+
+   for (uint32_t i = 0; i < 8; i += chunk_size) {
+      reset_push();
+
+      push_macro(0, macro);
+
+      P_1INC(p, NVC7C0, CALL_MME_MACRO(1));
+      P_INLINE_DATA(p, i);
+      P_INLINE_DATA(p, chunk_size);
+
+      submit_push();
+
+      for (uint32_t j = 0; j < chunk_size; j++)
+         ASSERT_EQ(data[j], i + j);
+   }
+}
+
+TEST_F(mme_tu104_sim_test, scratch_share_3d_to_compute)
+{
+   static const uint32_t chunk_size = 4;
+   
+   mme_builder b;
+   mme_builder_init(&b, devinfo);
+
+   mme_value start = mme_load(&b);
+   mme_value count = mme_load(&b);
+   mme_value channel = mme_load(&b);
+
+   mme_if(&b, ieq, channel, mme_zero()) {
+      mme_value i = mme_mov(&b, start);
+      mme_loop(&b, count) {
+         mme_mthd_arr(&b, NVC597_SET_MME_SHADOW_SCRATCH(0), i);
+         mme_emit(&b, i);
+         mme_add_to(&b, i, i, mme_imm(1));
+      }
+   }
+
+   mme_if(&b, ieq, channel, mme_imm(1)) {
+      mme_value i = mme_mov(&b, start);
+      struct mme_value64 addr = mme_mov64(&b, mme_imm64(data_addr));
+
+      mme_loop(&b, count) {
+         mme_value val = mme_state_arr(&b, NVC7C0_SET_MME_SHADOW_SCRATCH(0), i);
+         mme_store_compute(&b, addr, val);
+         mme_add_to(&b, i, i, mme_imm(1));
+         mme_add64_to(&b, addr, addr, mme_imm64(4));
+      }
+   }
+
+   auto macro = mme_builder_finish_vec(&b);
+
+   for (uint32_t i = 0; i < 8; i += chunk_size) {
+      reset_push();
+
+      push_macro(0, macro);
+
+      P_1INC(p, NVC597, CALL_MME_MACRO(0));
+      P_INLINE_DATA(p, i);
+      P_INLINE_DATA(p, chunk_size);
+      P_INLINE_DATA(p, 0);
+
+      P_1INC(p, NVC7C0, CALL_MME_MACRO(0));
+      P_INLINE_DATA(p, i);
+      P_INLINE_DATA(p, chunk_size);
+      P_INLINE_DATA(p, 1);
 
       submit_push();
 

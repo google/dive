@@ -15,7 +15,9 @@
 
 #include "vn_descriptor_set.h"
 #include "vn_device.h"
+#include "vn_feedback.h"
 #include "vn_image.h"
+#include "vn_physical_device.h"
 #include "vn_query_pool.h"
 #include "vn_render_pass.h"
 
@@ -26,21 +28,25 @@ vn_cmd_submit(struct vn_command_buffer *cmd);
    do {                                                                      \
       struct vn_command_buffer *_cmd =                                       \
          vn_command_buffer_from_handle(commandBuffer);                       \
-      size_t _cmd_size = vn_sizeof_##cmd_name(commandBuffer, ##__VA_ARGS__); \
+      const size_t _cmd_size =                                               \
+         vn_sizeof_##cmd_name(commandBuffer, ##__VA_ARGS__);                 \
                                                                              \
-      if (vn_cs_encoder_reserve(&_cmd->cs, _cmd_size))                       \
+      if (likely(vn_cs_encoder_reserve(&_cmd->cs, _cmd_size)))               \
          vn_encode_##cmd_name(&_cmd->cs, 0, commandBuffer, ##__VA_ARGS__);   \
       else                                                                   \
-         _cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;                      \
+         _cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;         \
                                                                              \
-      if (VN_PERF(NO_CMD_BATCHING))                                          \
+      if (unlikely(VN_PERF(NO_CMD_BATCHING)))                                \
          vn_cmd_submit(_cmd);                                                \
    } while (0)
 
 static bool
-vn_image_memory_barrier_has_present_src(
+vn_image_memory_barriers_needs_present_fix(
    const VkImageMemoryBarrier *img_barriers, uint32_t count)
 {
+   if (VN_PRESENT_SRC_INTERNAL_LAYOUT == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+      return false;
+
    for (uint32_t i = 0; i < count; i++) {
       if (img_barriers[i].oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR ||
           img_barriers[i].newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
@@ -50,9 +56,12 @@ vn_image_memory_barrier_has_present_src(
 }
 
 static bool
-vn_dependency_info_has_present_src(uint32_t dep_count,
-                                   const VkDependencyInfo *dep_infos)
+vn_dependency_infos_needs_present_fix(uint32_t dep_count,
+                                      const VkDependencyInfo *dep_infos)
 {
+   if (VN_PRESENT_SRC_INTERNAL_LAYOUT == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+      return false;
+
    for (uint32_t i = 0; i < dep_count; i++) {
       for (uint32_t j = 0; j < dep_infos[i].imageMemoryBarrierCount; j++) {
          const VkImageMemoryBarrier2 *b =
@@ -63,34 +72,77 @@ vn_dependency_info_has_present_src(uint32_t dep_count,
          }
       }
    }
-
    return false;
 }
 
-static void *
-vn_cmd_get_tmp_data(struct vn_command_buffer *cmd, size_t size)
-{
-   struct vn_command_pool *pool = cmd->pool;
-   /* avoid shrinking in case of non efficient reallocation implementation */
-   if (size > pool->tmp.size) {
-      void *data =
-         vk_realloc(&pool->allocator, pool->tmp.data, size, VN_DEFAULT_ALIGN,
-                    VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-      if (!data)
-         return NULL;
+struct vn_cmd_fix_image_memory_barrier_result {
+   bool availability_op_needed; // set src access/stage (flush)
+   bool visibility_op_needed;   // set dst access/stage (invalidate)
+   bool external_acquire_unmodified;
+};
 
-      pool->tmp.data = data;
-      pool->tmp.size = size;
+struct vn_cmd_cached_storage {
+   VkDependencyInfo *dep_infos;
+   union {
+      VkImageMemoryBarrier *barriers;
+      VkImageMemoryBarrier2 *barriers2;
+   };
+   uint32_t acquire_unmodified_count;
+   uint32_t used_acquire_unmodified;
+   VkExternalMemoryAcquireUnmodifiedEXT *acquire_unmodified_infos;
+};
+
+static inline bool
+vn_cmd_get_cached_storage(struct vn_command_buffer *cmd,
+                          VkStructureType barrier_type,
+                          uint32_t barrier_count,
+                          uint32_t dep_info_count,
+                          struct vn_cmd_cached_storage *out_storage)
+{
+   struct vn_command_pool *cmd_pool = vn_cmd_pool(cmd);
+   size_t dep_infos_size = dep_info_count * sizeof(VkDependencyInfo);
+   size_t barriers_size;
+
+   switch (barrier_type) {
+   case VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER:
+      assert(!dep_info_count);
+      barriers_size = barrier_count * sizeof(VkImageMemoryBarrier);
+      break;
+   case VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2:
+      barriers_size = barrier_count * sizeof(VkImageMemoryBarrier2);
+      break;
+   default:
+      UNREACHABLE("invalid barrier_type");
    }
 
-   return pool->tmp.data;
+   size_t total_size =
+      dep_infos_size + barriers_size +
+      barrier_count * sizeof(VkExternalMemoryAcquireUnmodifiedEXT);
+   void *data = vn_cached_storage_get(&cmd_pool->storage, total_size);
+   if (!data)
+      return false;
+
+   memset(out_storage, 0, sizeof(*out_storage));
+   if (dep_info_count) {
+      out_storage->dep_infos = data;
+      data += dep_infos_size;
+   }
+   out_storage->barriers = data;
+   data += barriers_size;
+
+   out_storage->acquire_unmodified_count = barrier_count;
+   out_storage->acquire_unmodified_infos = data;
+   return true;
 }
 
-static inline VkImageMemoryBarrier *
-vn_cmd_get_image_memory_barriers(struct vn_command_buffer *cmd,
-                                 uint32_t count)
+static inline VkExternalMemoryAcquireUnmodifiedEXT *
+vn_cached_get_acquire_unmodified(struct vn_cmd_cached_storage *storage)
 {
-   return vn_cmd_get_tmp_data(cmd, count * sizeof(VkImageMemoryBarrier));
+   VkExternalMemoryAcquireUnmodifiedEXT *acquire_unmodified =
+      &storage->acquire_unmodified_infos[storage->used_acquire_unmodified++];
+   assert(storage->used_acquire_unmodified <=
+          storage->acquire_unmodified_count);
+   return acquire_unmodified;
 }
 
 /* About VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, the spec says
@@ -116,23 +168,18 @@ vn_cmd_get_image_memory_barriers(struct vn_command_buffer *cmd,
  *    created; however, taking ownership in this way has the effect that the
  *    contents of the image subresource or buffer range are undefined.
  *
- * It is unclear if that is applicable to external resources, which supposedly
- * have the same semantics
+ * Now it has been made clear the same is applicable to external resources
  *
  *    Binding a resource to a memory object shared between multiple Vulkan
  *    instances or other APIs does not change the ownership of the underlying
  *    memory. The first entity to access the resource implicitly acquires
- *    ownership. Accessing a resource backed by memory that is owned by a
- *    particular instance or API has the same semantics as accessing a
- *    VK_SHARING_MODE_EXCLUSIVE resource[...]
+ *    ownership. An entity can also implicitly take ownership from another
+ *    entity in the same way without an explicit ownership transfer. However,
+ *    taking ownership in this way has the effect that the contents of the
+ *    underlying memory are undefined.
  *
- * We should get the spec clarified, or get rid of this completely broken code
- * (TODO).
- *
- * Assuming a queue family can acquire the ownership implicitly when the
- * contents are not needed, we do not need to worry about
- * VK_IMAGE_LAYOUT_UNDEFINED.  We can use VK_IMAGE_LAYOUT_PRESENT_SRC_KHR as
- * the sole signal to trigger queue family ownership transfers.
+ * So we can use VK_IMAGE_LAYOUT_PRESENT_SRC_KHR as the sole signal to trigger
+ * queue family ownership transfers.
  *
  * When the image has VK_SHARING_MODE_CONCURRENT, we can, and are required to,
  * use VK_QUEUE_FAMILY_IGNORED as the other queue family whether we are
@@ -150,160 +197,154 @@ vn_cmd_get_image_memory_barriers(struct vn_command_buffer *cmd,
  * whether the barrier transitions to or from VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
  * we are only interested in the ownership release or acquire respectively and
  * should be careful to avoid double releases/acquires.
- *
- * I haven't followed all transition paths mentally to verify the correctness.
- * I likely also violate some VUs or miss some cases below.  They are
- * hopefully fixable and are left as TODOs.
  */
-static void
-vn_cmd_fix_image_memory_barrier(const struct vn_command_buffer *cmd,
-                                const VkImageMemoryBarrier *src_barrier,
-                                VkImageMemoryBarrier *out_barrier)
+static struct vn_cmd_fix_image_memory_barrier_result
+vn_cmd_fix_image_memory_barrier_common(const struct vn_image *img,
+                                       uint32_t cmd_pool_qfi,
+                                       VkImageLayout *old_layout,
+                                       VkImageLayout *new_layout,
+                                       uint32_t *src_qfi,
+                                       uint32_t *dst_qfi)
 {
-   const struct vn_image *img = vn_image_from_handle(src_barrier->image);
+   assert(VN_PRESENT_SRC_INTERNAL_LAYOUT != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-   *out_barrier = *src_barrier;
+   struct vn_cmd_fix_image_memory_barrier_result result = {
+      .availability_op_needed = true,
+      .visibility_op_needed = true,
+   };
 
    /* no fix needed */
-   if (out_barrier->oldLayout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR &&
-       out_barrier->newLayout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-      return;
-
-   assert(img->wsi.is_wsi);
-
-   if (VN_PRESENT_SRC_INTERNAL_LAYOUT == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-      return;
+   if (*old_layout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR &&
+       *new_layout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+      return result;
 
    /* prime blit src or no layout transition */
-   if (img->wsi.is_prime_blit_src ||
-       out_barrier->oldLayout == out_barrier->newLayout) {
-      if (out_barrier->oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-         out_barrier->oldLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-      if (out_barrier->newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-         out_barrier->newLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-      return;
+   if (img->wsi.is_prime_blit_src || *old_layout == *new_layout) {
+      if (*old_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+         *old_layout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
+      if (*new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+         *new_layout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
+      return result;
    }
 
-   if (out_barrier->oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
-      out_barrier->oldLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
+   if (*old_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+      *old_layout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
 
-      /* no availability operation needed */
-      out_barrier->srcAccessMask = 0;
+      result.availability_op_needed = false;
+      result.external_acquire_unmodified = true;
 
-      const uint32_t dst_qfi = out_barrier->dstQueueFamilyIndex;
-      if (img->sharing_mode == VK_SHARING_MODE_CONCURRENT) {
-         out_barrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-         out_barrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      } else if (dst_qfi == out_barrier->srcQueueFamilyIndex ||
-                 dst_qfi == cmd->pool->queue_family_index) {
-         out_barrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-         out_barrier->dstQueueFamilyIndex = cmd->pool->queue_family_index;
+      if (img->base.vk.sharing_mode == VK_SHARING_MODE_CONCURRENT) {
+         *src_qfi = VK_QUEUE_FAMILY_FOREIGN_EXT;
+         *dst_qfi = VK_QUEUE_FAMILY_IGNORED;
+      } else if (*dst_qfi == *src_qfi || *dst_qfi == cmd_pool_qfi) {
+         *src_qfi = VK_QUEUE_FAMILY_FOREIGN_EXT;
+         *dst_qfi = cmd_pool_qfi;
       } else {
          /* The barrier also defines a queue family ownership transfer, and
           * this is the one that gets submitted to the source queue family to
           * release the ownership.  Skip both the transfer and the transition.
           */
-         out_barrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         out_barrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         out_barrier->newLayout = out_barrier->oldLayout;
+         *src_qfi = VK_QUEUE_FAMILY_IGNORED;
+         *dst_qfi = VK_QUEUE_FAMILY_IGNORED;
+         *new_layout = *old_layout;
       }
    } else {
-      out_barrier->newLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
+      *new_layout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
 
-      /* no visibility operation needed */
-      out_barrier->dstAccessMask = 0;
+      result.visibility_op_needed = false;
 
-      const uint32_t src_qfi = out_barrier->srcQueueFamilyIndex;
-      if (img->sharing_mode == VK_SHARING_MODE_CONCURRENT) {
-         out_barrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         out_barrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-      } else if (src_qfi == out_barrier->dstQueueFamilyIndex ||
-                 src_qfi == cmd->pool->queue_family_index) {
-         out_barrier->srcQueueFamilyIndex = cmd->pool->queue_family_index;
-         out_barrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+      if (img->base.vk.sharing_mode == VK_SHARING_MODE_CONCURRENT) {
+         *src_qfi = VK_QUEUE_FAMILY_IGNORED;
+         *dst_qfi = VK_QUEUE_FAMILY_FOREIGN_EXT;
+      } else if (*src_qfi == *dst_qfi || *src_qfi == cmd_pool_qfi) {
+         *src_qfi = cmd_pool_qfi;
+         *dst_qfi = VK_QUEUE_FAMILY_FOREIGN_EXT;
       } else {
          /* The barrier also defines a queue family ownership transfer, and
           * this is the one that gets submitted to the destination queue
           * family to acquire the ownership.  Skip both the transfer and the
           * transition.
           */
-         out_barrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         out_barrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         out_barrier->oldLayout = out_barrier->newLayout;
+         *src_qfi = VK_QUEUE_FAMILY_IGNORED;
+         *dst_qfi = VK_QUEUE_FAMILY_IGNORED;
+         *old_layout = *new_layout;
       }
+   }
+
+   return result;
+}
+
+static void
+vn_cmd_set_external_acquire_unmodified(VkBaseOutStructure *chain,
+                                       struct vn_cmd_cached_storage *storage)
+{
+   VkExternalMemoryAcquireUnmodifiedEXT *acquire_unmodified =
+      vk_find_struct(chain->pNext, EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT);
+   if (acquire_unmodified) {
+      acquire_unmodified->acquireUnmodifiedMemory = VK_TRUE;
+   } else {
+      acquire_unmodified = vn_cached_get_acquire_unmodified(storage);
+      *acquire_unmodified = (VkExternalMemoryAcquireUnmodifiedEXT){
+         .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT,
+         .pNext = chain->pNext,
+         .acquireUnmodifiedMemory = VK_TRUE,
+      };
+      chain->pNext = (void *)acquire_unmodified;
    }
 }
 
-/** See vn_cmd_fix_image_memory_barrier(). */
+static void
+vn_cmd_fix_image_memory_barrier(const struct vn_command_buffer *cmd,
+                                VkImageMemoryBarrier *barrier,
+                                struct vn_cmd_cached_storage *storage)
+{
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
+   const struct vn_image *img = vn_image_from_handle(barrier->image);
+
+   struct vn_cmd_fix_image_memory_barrier_result result =
+      vn_cmd_fix_image_memory_barrier_common(
+         img, cmd->base.vk.pool->queue_family_index, &barrier->oldLayout,
+         &barrier->newLayout, &barrier->srcQueueFamilyIndex,
+         &barrier->dstQueueFamilyIndex);
+   if (!result.availability_op_needed)
+      barrier->srcAccessMask = 0;
+   if (!result.visibility_op_needed)
+      barrier->dstAccessMask = 0;
+
+   if (result.external_acquire_unmodified &&
+       dev->physical_device->renderer_extensions
+          .EXT_external_memory_acquire_unmodified)
+      vn_cmd_set_external_acquire_unmodified((VkBaseOutStructure *)barrier,
+                                             storage);
+}
+
 static void
 vn_cmd_fix_image_memory_barrier2(const struct vn_command_buffer *cmd,
-                                 VkImageMemoryBarrier2 *b)
+                                 VkImageMemoryBarrier2 *barrier,
+                                 struct vn_cmd_cached_storage *storage)
 {
-   if (VN_PRESENT_SRC_INTERNAL_LAYOUT == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-      return;
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
+   const struct vn_image *img = vn_image_from_handle(barrier->image);
 
-   if (b->oldLayout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR &&
-       b->newLayout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-      return;
-
-   const struct vn_image *img = vn_image_from_handle(b->image);
-   assert(img->wsi.is_wsi);
-
-   if (img->wsi.is_prime_blit_src || b->oldLayout == b->newLayout) {
-      if (b->oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-         b->oldLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-      if (b->newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-         b->newLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-      return;
+   struct vn_cmd_fix_image_memory_barrier_result result =
+      vn_cmd_fix_image_memory_barrier_common(
+         img, cmd->base.vk.pool->queue_family_index, &barrier->oldLayout,
+         &barrier->newLayout, &barrier->srcQueueFamilyIndex,
+         &barrier->dstQueueFamilyIndex);
+   if (!result.availability_op_needed) {
+      barrier->srcStageMask = 0;
+      barrier->srcAccessMask = 0;
+   }
+   if (!result.visibility_op_needed) {
+      barrier->dstStageMask = 0;
+      barrier->dstAccessMask = 0;
    }
 
-   if (b->oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
-      b->oldLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-
-      /* no availability operation needed */
-      b->srcStageMask = 0;
-      b->srcAccessMask = 0;
-
-      if (img->sharing_mode == VK_SHARING_MODE_CONCURRENT) {
-         b->srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-         b->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      } else if (b->dstQueueFamilyIndex == b->srcQueueFamilyIndex ||
-                 b->dstQueueFamilyIndex == cmd->pool->queue_family_index) {
-         b->srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-         b->dstQueueFamilyIndex = cmd->pool->queue_family_index;
-      } else {
-         /* The barrier also defines a queue family ownership transfer, and
-          * this is the one that gets submitted to the source queue family to
-          * release the ownership.  Skip both the transfer and the transition.
-          */
-         b->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         b->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         b->newLayout = b->oldLayout;
-      }
-   } else {
-      b->newLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-
-      /* no visibility operation needed */
-      b->dstStageMask = 0;
-      b->dstAccessMask = 0;
-
-      if (img->sharing_mode == VK_SHARING_MODE_CONCURRENT) {
-         b->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         b->dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-      } else if (b->srcQueueFamilyIndex == b->dstQueueFamilyIndex ||
-                 b->srcQueueFamilyIndex == cmd->pool->queue_family_index) {
-         b->srcQueueFamilyIndex = cmd->pool->queue_family_index;
-         b->dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-      } else {
-         /* The barrier also defines a queue family ownership transfer, and
-          * this is the one that gets submitted to the destination queue
-          * family to acquire the ownership.  Skip both the transfer and the
-          * transition.
-          */
-         b->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         b->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-         b->oldLayout = b->newLayout;
-      }
+   if (result.external_acquire_unmodified &&
+       dev->physical_device->renderer_extensions
+          .EXT_external_memory_acquire_unmodified) {
+      vn_cmd_set_external_acquire_unmodified((VkBaseOutStructure *)barrier,
+                                             storage);
    }
 }
 
@@ -317,32 +358,30 @@ vn_cmd_wait_events_fix_image_memory_barriers(
    *out_transfer_count = 0;
 
    if (cmd->builder.in_render_pass ||
-       !vn_image_memory_barrier_has_present_src(src_barriers, count))
+       !vn_image_memory_barriers_needs_present_fix(src_barriers, count))
       return src_barriers;
 
-   VkImageMemoryBarrier *img_barriers =
-      vn_cmd_get_image_memory_barriers(cmd, count * 2);
-   if (!img_barriers) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   struct vn_cmd_cached_storage storage;
+   if (!vn_cmd_get_cached_storage(cmd, VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                  count * 2, /*dep_info_count=*/0,
+                                  &storage)) {
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return src_barriers;
    }
+   VkImageMemoryBarrier *img_barriers = storage.barriers;
+   VkImageMemoryBarrier *transfer_barriers = storage.barriers + count;
 
    /* vkCmdWaitEvents cannot be used for queue family ownership transfers.
     * Nothing appears to be said about the submission order of image memory
     * barriers in the same array.  We take the liberty to move queue family
     * ownership transfers to the tail.
     */
-   VkImageMemoryBarrier *transfer_barriers = img_barriers + count;
    uint32_t transfer_count = 0;
    uint32_t valid_count = 0;
    for (uint32_t i = 0; i < count; i++) {
       VkImageMemoryBarrier *img_barrier = &img_barriers[valid_count];
-      vn_cmd_fix_image_memory_barrier(cmd, &src_barriers[i], img_barrier);
-
-      if (VN_PRESENT_SRC_INTERNAL_LAYOUT == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
-         valid_count++;
-         continue;
-      }
+      *img_barrier = src_barriers[i];
+      vn_cmd_fix_image_memory_barrier(cmd, img_barrier, &storage);
 
       if (img_barrier->srcQueueFamilyIndex ==
           img_barrier->dstQueueFamilyIndex) {
@@ -370,22 +409,22 @@ vn_cmd_pipeline_barrier_fix_image_memory_barriers(
    uint32_t count)
 {
    if (cmd->builder.in_render_pass ||
-       !vn_image_memory_barrier_has_present_src(src_barriers, count))
+       !vn_image_memory_barriers_needs_present_fix(src_barriers, count))
       return src_barriers;
 
-   VkImageMemoryBarrier *img_barriers =
-      vn_cmd_get_image_memory_barriers(cmd, count);
-   if (!img_barriers) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   struct vn_cmd_cached_storage storage;
+   if (!vn_cmd_get_cached_storage(cmd, VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                  count, /*dep_info_count=*/0, &storage)) {
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return src_barriers;
    }
 
-   for (uint32_t i = 0; i < count; i++) {
-      vn_cmd_fix_image_memory_barrier(cmd, &src_barriers[i],
-                                      &img_barriers[i]);
-   }
+   memcpy(storage.barriers, src_barriers,
+          count * sizeof(VkImageMemoryBarrier));
+   for (uint32_t i = 0; i < count; i++)
+      vn_cmd_fix_image_memory_barrier(cmd, &storage.barriers[i], &storage);
 
-   return img_barriers;
+   return storage.barriers;
 }
 
 static const VkDependencyInfo *
@@ -394,41 +433,39 @@ vn_cmd_fix_dependency_infos(struct vn_command_buffer *cmd,
                             const VkDependencyInfo *dep_infos)
 {
    if (cmd->builder.in_render_pass ||
-       !vn_dependency_info_has_present_src(dep_count, dep_infos))
+       !vn_dependency_infos_needs_present_fix(dep_count, dep_infos))
       return dep_infos;
 
    uint32_t total_barrier_count = 0;
    for (uint32_t i = 0; i < dep_count; i++)
       total_barrier_count += dep_infos[i].imageMemoryBarrierCount;
 
-   size_t tmp_size = dep_count * sizeof(VkDependencyInfo) +
-                     total_barrier_count * sizeof(VkImageMemoryBarrier2);
-   void *tmp = vn_cmd_get_tmp_data(cmd, tmp_size);
-   if (!tmp) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   struct vn_cmd_cached_storage storage;
+   if (!vn_cmd_get_cached_storage(cmd,
+                                  VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                                  total_barrier_count, dep_count, &storage)) {
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return dep_infos;
    }
+   memcpy(storage.dep_infos, dep_infos, dep_count * sizeof(VkDependencyInfo));
 
-   VkDependencyInfo *new_dep_infos = tmp;
-   tmp += dep_count * sizeof(VkDependencyInfo);
-   memcpy(new_dep_infos, dep_infos, dep_count * sizeof(VkDependencyInfo));
-
+   uint32_t barrier_index = 0;
    for (uint32_t i = 0; i < dep_count; i++) {
       uint32_t barrier_count = dep_infos[i].imageMemoryBarrierCount;
 
-      VkImageMemoryBarrier2 *new_barriers = tmp;
-      tmp += barrier_count * sizeof(VkImageMemoryBarrier2);
+      VkImageMemoryBarrier2 *new_barriers = &storage.barriers2[barrier_index];
+      barrier_index += barrier_count;
 
       memcpy(new_barriers, dep_infos[i].pImageMemoryBarriers,
              barrier_count * sizeof(VkImageMemoryBarrier2));
-      new_dep_infos[i].pImageMemoryBarriers = new_barriers;
+      storage.dep_infos[i].pImageMemoryBarriers = new_barriers;
 
       for (uint32_t j = 0; j < barrier_count; j++) {
-         vn_cmd_fix_image_memory_barrier2(cmd, &new_barriers[j]);
+         vn_cmd_fix_image_memory_barrier2(cmd, &new_barriers[j], &storage);
       }
    }
 
-   return new_dep_infos;
+   return storage.dep_infos;
 }
 
 static void
@@ -480,10 +517,10 @@ vn_cmd_transfer_present_src_images(
    const struct vn_present_src_attachment *atts,
    uint32_t count)
 {
-   VkImageMemoryBarrier *img_barriers =
-      vn_cmd_get_image_memory_barriers(cmd, count);
-   if (!img_barriers) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   struct vn_cmd_cached_storage storage;
+   if (!vn_cmd_get_cached_storage(cmd, VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                  count, /*dep_info_count=*/0, &storage)) {
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return;
    }
 
@@ -494,86 +531,58 @@ vn_cmd_transfer_present_src_images(
       dst_stage_mask |= atts[i].dst_stage_mask;
 
       vn_present_src_attachment_to_image_memory_barrier(
-         images[i], &atts[i], &img_barriers[i], acquire);
-      vn_cmd_fix_image_memory_barrier(cmd, &img_barriers[i],
-                                      &img_barriers[i]);
+         images[i], &atts[i], &storage.barriers[i], acquire);
+      vn_cmd_fix_image_memory_barrier(cmd, &storage.barriers[i], &storage);
    }
-
-   if (VN_PRESENT_SRC_INTERNAL_LAYOUT == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-      return;
 
    vn_cmd_encode_memory_barriers(cmd, src_stage_mask, dst_stage_mask, 0, NULL,
-                                 count, img_barriers);
+                                 count, storage.barriers);
 }
 
-/* query feedback batch for deferred recording */
-struct vn_command_buffer_query_batch {
-   struct vn_query_pool *query_pool;
-   uint32_t query;
-   uint32_t query_count;
-
-   struct list_head head;
-};
-
-static bool
-vn_cmd_query_batch_push(struct vn_command_buffer *cmd,
-                        struct vn_query_pool *query_pool,
-                        uint32_t query,
-                        uint32_t query_count)
+struct vn_cmd_query_record *
+vn_cmd_pool_alloc_query_record(struct vn_command_pool *cmd_pool,
+                               struct vn_query_pool *query_pool,
+                               uint32_t query,
+                               uint32_t query_count,
+                               bool copy)
 {
-   struct vn_command_buffer_query_batch *batch;
-   if (list_is_empty(&cmd->pool->free_query_batches)) {
-      batch = vk_alloc(&cmd->pool->allocator, sizeof(*batch),
-                       VN_DEFAULT_ALIGN, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-      if (!batch)
-         return false;
+   struct vn_cmd_query_record *record;
+   if (list_is_empty(&cmd_pool->free_query_records)) {
+      record = vk_alloc(&cmd_pool->base.vk.alloc, sizeof(*record),
+                        VN_DEFAULT_ALIGN, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      if (!record)
+         return NULL;
    } else {
-      batch = list_first_entry(&cmd->pool->free_query_batches,
-                               struct vn_command_buffer_query_batch, head);
-      list_del(&batch->head);
+      record = list_first_entry(&cmd_pool->free_query_records,
+                                struct vn_cmd_query_record, head);
+      list_del(&record->head);
    }
 
-   batch->query_pool = query_pool;
-   batch->query = query;
-   batch->query_count = query_count;
-   list_add(&batch->head, &cmd->builder.query_batches);
+   record->query_pool = query_pool;
+   record->query = query;
+   record->query_count = query_count;
+   record->copy = copy;
 
-   return true;
+   return record;
 }
 
 static inline void
-vn_cmd_query_batch_pop(struct vn_command_buffer *cmd,
-                       struct vn_command_buffer_query_batch *batch)
+vn_cmd_merge_query_records(struct vn_command_buffer *primary_cmd,
+                           struct vn_command_buffer *secondary_cmd)
 {
-   list_move_to(&batch->head, &cmd->pool->free_query_batches);
-}
+   struct vn_command_pool *cmd_pool = vn_cmd_pool(primary_cmd);
 
-static void
-vn_cmd_record_batched_query_feedback(struct vn_command_buffer *cmd)
-{
-   list_for_each_entry_safe(struct vn_command_buffer_query_batch, batch,
-                            &cmd->builder.query_batches, head) {
-      vn_feedback_query_cmd_record(vn_command_buffer_to_handle(cmd),
-                                   vn_query_pool_to_handle(batch->query_pool),
-                                   batch->query, batch->query_count, true);
-
-      vn_cmd_query_batch_pop(cmd, batch);
-   }
-}
-
-static inline void
-vn_cmd_merge_batched_query_feedback(struct vn_command_buffer *primary_cmd,
-                                    struct vn_command_buffer *secondary_cmd)
-{
-   list_for_each_entry_safe(struct vn_command_buffer_query_batch,
-                            secondary_batch,
-                            &secondary_cmd->builder.query_batches, head) {
-      if (!vn_cmd_query_batch_push(primary_cmd, secondary_batch->query_pool,
-                                   secondary_batch->query,
-                                   secondary_batch->query_count)) {
-         primary_cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   list_for_each_entry_safe(struct vn_cmd_query_record, secondary_record,
+                            &secondary_cmd->builder.query_records, head) {
+      struct vn_cmd_query_record *record = vn_cmd_pool_alloc_query_record(
+         cmd_pool, secondary_record->query_pool, secondary_record->query,
+         secondary_record->query_count, secondary_record->copy);
+      if (!record) {
+         primary_cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
          return;
       }
+
+      list_addtail(&record->head, &primary_cmd->builder.query_records);
    }
 }
 
@@ -584,7 +593,7 @@ vn_cmd_begin_render_pass(struct vn_command_buffer *cmd,
                          const VkRenderPassBeginInfo *begin_info)
 {
    assert(begin_info);
-   assert(cmd->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+   assert(cmd->base.vk.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
    cmd->builder.render_pass = pass;
    cmd->builder.in_render_pass = true;
@@ -609,11 +618,11 @@ vn_cmd_begin_render_pass(struct vn_command_buffer *cmd,
       view_count = imageless_info->attachmentCount;
    }
 
-   const struct vn_image **images =
-      vk_alloc(&cmd->pool->allocator, sizeof(*images) * pass->present_count,
-               VN_DEFAULT_ALIGN, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   const struct vn_image **images = vk_alloc(
+      &cmd->base.vk.pool->alloc, sizeof(*images) * pass->present_count,
+      VN_DEFAULT_ALIGN, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (!images) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return;
    }
 
@@ -638,8 +647,6 @@ vn_cmd_end_render_pass(struct vn_command_buffer *cmd)
    const struct vn_render_pass *pass = cmd->builder.render_pass;
    const struct vn_image **images = cmd->builder.present_src_images;
 
-   vn_cmd_record_batched_query_feedback(cmd);
-
    cmd->builder.render_pass = NULL;
    cmd->builder.present_src_images = NULL;
    cmd->builder.in_render_pass = false;
@@ -655,7 +662,7 @@ vn_cmd_end_render_pass(struct vn_command_buffer *cmd)
          pass->present_release_attachments, pass->present_release_count);
    }
 
-   vk_free(&cmd->pool->allocator, images);
+   vk_free(&cmd->base.vk.pool->alloc, images);
 }
 
 static inline void
@@ -670,33 +677,13 @@ vn_cmd_begin_rendering(struct vn_command_buffer *cmd,
                        const VkRenderingInfo *rendering_info)
 {
    cmd->builder.in_render_pass = true;
-   cmd->builder.suspending =
-      rendering_info->flags & VK_RENDERING_SUSPENDING_BIT;
    cmd->builder.view_mask = rendering_info->viewMask;
 }
 
 static inline void
 vn_cmd_end_rendering(struct vn_command_buffer *cmd)
 {
-   /* XXX query feedback is broken for suspended render pass instance
-    *
-    * If resume occurs in a different cmd (only needed for parallel render
-    * pass recording), the batched query feedbacks here are never recorded.
-    * Query result retrieval will end up with device lost.
-    *
-    * In practice, explicit query usages within the suspended render pass
-    * instance is a minor (not seeing any so far). Will fix once hit. The
-    * potential options are:
-    * - doing a synchronous query pool results retrieval as a fallback
-    * - store the deferred query feedback in a cmd and inject upon submit
-    */
-   if (!cmd->builder.suspending)
-      vn_cmd_record_batched_query_feedback(cmd);
-   else if (VN_DEBUG(RESULT) && !list_is_empty(&cmd->builder.query_batches))
-      vn_log(cmd->pool->device->instance, "query dropped by suspended pass");
-
    cmd->builder.in_render_pass = false;
-   cmd->builder.suspending = false;
    cmd->builder.view_mask = 0;
 }
 
@@ -711,7 +698,7 @@ vn_CreateCommandPool(VkDevice device,
    VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
    const VkAllocationCallbacks *alloc =
-      pAllocator ? pAllocator : &dev->base.base.alloc;
+      pAllocator ? pAllocator : &dev->base.vk.alloc;
 
    struct vn_command_pool *pool =
       vk_zalloc(alloc, sizeof(*pool), VN_DEFAULT_ALIGN,
@@ -719,21 +706,42 @@ vn_CreateCommandPool(VkDevice device,
    if (!pool)
       return vn_error(dev->instance, VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   vn_object_base_init(&pool->base, VK_OBJECT_TYPE_COMMAND_POOL, &dev->base);
+   vn_command_pool_base_init(&pool->base, &dev->base, pCreateInfo, alloc);
 
-   pool->allocator = *alloc;
-   pool->device = dev;
-   pool->queue_family_index = pCreateInfo->queueFamilyIndex;
-   list_inithead(&pool->command_buffers);
-   list_inithead(&pool->free_query_batches);
+   list_inithead(&pool->free_query_records);
+
+   vn_cached_storage_init(&pool->storage, alloc);
 
    VkCommandPool pool_handle = vn_command_pool_to_handle(pool);
-   vn_async_vkCreateCommandPool(dev->instance, device, pCreateInfo, NULL,
+   vn_async_vkCreateCommandPool(dev->primary_ring, device, pCreateInfo, NULL,
                                 &pool_handle);
+
+   vn_tls_set_async_pipeline_create();
 
    *pCommandPool = pool_handle;
 
    return VK_SUCCESS;
+}
+
+static void
+vn_cmd_reset(struct vn_command_buffer *cmd)
+{
+   struct vn_command_pool *cmd_pool = vn_cmd_pool(cmd);
+
+   vn_cs_encoder_reset(&cmd->cs);
+
+   cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INITIAL;
+
+   /* reset cmd builder */
+   vk_free(&cmd->base.vk.pool->alloc, cmd->builder.present_src_images);
+   vn_cmd_pool_free_query_records(cmd_pool, &cmd->builder.query_records);
+   memset(&cmd->builder, 0, sizeof(cmd->builder));
+   list_inithead(&cmd->builder.query_records);
+
+   if (cmd->linked_qfb_cmd) {
+      vn_query_feedback_cmd_free(cmd->linked_qfb_cmd);
+      cmd->linked_qfb_cmd = NULL;
+   }
 }
 
 void
@@ -749,59 +757,19 @@ vn_DestroyCommandPool(VkDevice device,
    if (!pool)
       return;
 
-   alloc = pAllocator ? pAllocator : &pool->allocator;
+   alloc = pAllocator ? pAllocator : &pool->base.vk.alloc;
 
-   /* We must emit vkDestroyCommandPool before freeing the command buffers in
-    * pool->command_buffers.  Otherwise, another thread might reuse their
-    * object ids while they still refer to the command buffers in the
-    * renderer.
-    */
-   vn_async_vkDestroyCommandPool(dev->instance, device, commandPool, NULL);
+   vn_async_vkDestroyCommandPool(dev->primary_ring, device, commandPool,
+                                 NULL);
 
-   list_for_each_entry_safe(struct vn_command_buffer, cmd,
-                            &pool->command_buffers, head) {
-      vn_cs_encoder_fini(&cmd->cs);
-      vn_object_base_fini(&cmd->base);
+   list_for_each_entry_safe(struct vn_cmd_query_record, record,
+                            &pool->free_query_records, head)
+      vk_free(alloc, record);
 
-      if (cmd->builder.present_src_images)
-         vk_free(alloc, cmd->builder.present_src_images);
+   vn_cached_storage_fini(&pool->storage);
 
-      list_for_each_entry_safe(struct vn_command_buffer_query_batch, batch,
-                               &cmd->builder.query_batches, head)
-         vk_free(alloc, batch);
-
-      vk_free(alloc, cmd);
-   }
-
-   list_for_each_entry_safe(struct vn_command_buffer_query_batch, batch,
-                            &pool->free_query_batches, head)
-      vk_free(alloc, batch);
-
-   if (pool->tmp.data)
-      vk_free(alloc, pool->tmp.data);
-
-   vn_object_base_fini(&pool->base);
+   vn_command_pool_base_fini(&pool->base);
    vk_free(alloc, pool);
-}
-
-static void
-vn_cmd_reset(struct vn_command_buffer *cmd)
-{
-   vn_cs_encoder_reset(&cmd->cs);
-
-   cmd->state = VN_COMMAND_BUFFER_STATE_INITIAL;
-   cmd->draw_cmd_batched = 0;
-
-   if (cmd->builder.present_src_images)
-      vk_free(&cmd->pool->allocator, cmd->builder.present_src_images);
-
-   list_for_each_entry_safe(struct vn_command_buffer_query_batch, batch,
-                            &cmd->builder.query_batches, head)
-      vn_cmd_query_batch_pop(cmd, batch);
-
-   memset(&cmd->builder, 0, sizeof(cmd->builder));
-
-   list_inithead(&cmd->builder.query_batches);
 }
 
 VkResult
@@ -813,11 +781,24 @@ vn_ResetCommandPool(VkDevice device,
    struct vn_device *dev = vn_device_from_handle(device);
    struct vn_command_pool *pool = vn_command_pool_from_handle(commandPool);
 
-   list_for_each_entry_safe(struct vn_command_buffer, cmd,
-                            &pool->command_buffers, head)
+   list_for_each_entry_safe(struct vk_command_buffer, cmd_vk,
+                            &pool->base.vk.command_buffers, pool_link) {
+      struct vn_command_buffer *cmd = vn_cmd_from_vk(cmd_vk);
       vn_cmd_reset(cmd);
+   }
 
-   vn_async_vkResetCommandPool(dev->instance, device, commandPool, flags);
+   if (flags & VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT) {
+      list_for_each_entry_safe(struct vn_cmd_query_record, record,
+                               &pool->free_query_records, head)
+         vk_free(&pool->base.vk.alloc, record);
+
+      list_inithead(&pool->free_query_records);
+
+      vn_cached_storage_fini(&pool->storage);
+      vn_cached_storage_init(&pool->storage, &pool->base.vk.alloc);
+   }
+
+   vn_async_vkResetCommandPool(dev->primary_ring, device, commandPool, flags);
 
    return VK_SUCCESS;
 }
@@ -830,10 +811,24 @@ vn_TrimCommandPool(VkDevice device,
    VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
 
-   vn_async_vkTrimCommandPool(dev->instance, device, commandPool, flags);
+   vn_async_vkTrimCommandPool(dev->primary_ring, device, commandPool, flags);
 }
 
 /* command buffer commands */
+
+static void
+vn_cmd_destroy(struct vk_command_buffer *cmd_vk)
+{
+   struct vn_command_buffer *cmd = vn_cmd_from_vk(cmd_vk);
+   vn_cmd_reset(cmd);
+   vn_cs_encoder_fini(&cmd->cs);
+   vn_command_buffer_base_fini(&cmd->base);
+   vk_free(&cmd_vk->pool->alloc, cmd);
+}
+
+static const struct vk_command_buffer_ops vn_cmd_ops = {
+   .destroy = vn_cmd_destroy,
+};
 
 VkResult
 vn_AllocateCommandBuffers(VkDevice device,
@@ -844,7 +839,7 @@ vn_AllocateCommandBuffers(VkDevice device,
    struct vn_device *dev = vn_device_from_handle(device);
    struct vn_command_pool *pool =
       vn_command_pool_from_handle(pAllocateInfo->commandPool);
-   const VkAllocationCallbacks *alloc = &pool->allocator;
+   const VkAllocationCallbacks *alloc = &pool->base.vk.alloc;
 
    for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; i++) {
       struct vn_command_buffer *cmd =
@@ -854,8 +849,7 @@ vn_AllocateCommandBuffers(VkDevice device,
          for (uint32_t j = 0; j < i; j++) {
             cmd = vn_command_buffer_from_handle(pCommandBuffers[j]);
             vn_cs_encoder_fini(&cmd->cs);
-            list_del(&cmd->head);
-            vn_object_base_fini(&cmd->base);
+            vn_command_buffer_base_fini(&cmd->base);
             vk_free(alloc, cmd);
          }
          memset(pCommandBuffers, 0,
@@ -863,23 +857,19 @@ vn_AllocateCommandBuffers(VkDevice device,
          return vn_error(dev->instance, VK_ERROR_OUT_OF_HOST_MEMORY);
       }
 
-      vn_object_base_init(&cmd->base, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                          &dev->base);
-      cmd->pool = pool;
-      cmd->level = pAllocateInfo->level;
-      cmd->state = VN_COMMAND_BUFFER_STATE_INITIAL;
+      vn_command_buffer_base_init(&cmd->base, &pool->base, &vn_cmd_ops,
+                                  pAllocateInfo->level);
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INITIAL;
       vn_cs_encoder_init(&cmd->cs, dev->instance,
                          VN_CS_ENCODER_STORAGE_SHMEM_POOL, 16 * 1024);
 
-      list_inithead(&cmd->builder.query_batches);
-
-      list_addtail(&cmd->head, &pool->command_buffers);
+      list_inithead(&cmd->builder.query_records);
 
       VkCommandBuffer cmd_handle = vn_command_buffer_to_handle(cmd);
       pCommandBuffers[i] = cmd_handle;
    }
 
-   vn_async_vkAllocateCommandBuffers(dev->instance, device, pAllocateInfo,
+   vn_async_vkAllocateCommandBuffers(dev->primary_ring, device, pAllocateInfo,
                                      pCommandBuffers);
 
    return VK_SUCCESS;
@@ -894,9 +884,9 @@ vn_FreeCommandBuffers(VkDevice device,
    VN_TRACE_FUNC();
    struct vn_device *dev = vn_device_from_handle(device);
    struct vn_command_pool *pool = vn_command_pool_from_handle(commandPool);
-   const VkAllocationCallbacks *alloc = &pool->allocator;
+   const VkAllocationCallbacks *alloc = &pool->base.vk.alloc;
 
-   vn_async_vkFreeCommandBuffers(dev->instance, device, commandPool,
+   vn_async_vkFreeCommandBuffers(dev->primary_ring, device, commandPool,
                                  commandBufferCount, pCommandBuffers);
 
    for (uint32_t i = 0; i < commandBufferCount; i++) {
@@ -906,17 +896,9 @@ vn_FreeCommandBuffers(VkDevice device,
       if (!cmd)
          continue;
 
+      vn_cmd_reset(cmd);
       vn_cs_encoder_fini(&cmd->cs);
-      list_del(&cmd->head);
-
-      if (cmd->builder.present_src_images)
-         vk_free(alloc, cmd->builder.present_src_images);
-
-      list_for_each_entry_safe(struct vn_command_buffer_query_batch, batch,
-                               &cmd->builder.query_batches, head)
-         vn_cmd_query_batch_pop(cmd, batch);
-
-      vn_object_base_fini(&cmd->base);
+      vn_command_buffer_base_fini(&cmd->base);
       vk_free(alloc, cmd);
    }
 }
@@ -928,11 +910,11 @@ vn_ResetCommandBuffer(VkCommandBuffer commandBuffer,
    VN_TRACE_FUNC();
    struct vn_command_buffer *cmd =
       vn_command_buffer_from_handle(commandBuffer);
-   struct vn_instance *instance = cmd->pool->device->instance;
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
 
    vn_cmd_reset(cmd);
 
-   vn_async_vkResetCommandBuffer(instance, commandBuffer, flags);
+   vn_async_vkResetCommandBuffer(dev->primary_ring, commandBuffer, flags);
 
    return VK_SUCCESS;
 }
@@ -941,6 +923,7 @@ struct vn_command_buffer_begin_info {
    VkCommandBufferBeginInfo begin;
    VkCommandBufferInheritanceInfo inheritance;
    VkCommandBufferInheritanceConditionalRenderingInfoEXT conditional_rendering;
+   VkRenderingInputAttachmentIndexInfo riai;
 
    bool has_inherited_pass;
    bool in_render_pass;
@@ -957,7 +940,7 @@ vn_fix_command_buffer_begin_info(struct vn_command_buffer *cmd,
       return begin_info;
 
    const bool is_cmd_secondary =
-      cmd->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+      cmd->base.vk.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY;
    const bool has_continue =
       begin_info->flags & VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
    const bool has_renderpass =
@@ -996,7 +979,8 @@ vn_fix_command_buffer_begin_info(struct vn_command_buffer *cmd,
       local->has_inherited_pass = true;
    }
 
-   /* Per spec, about VkCommandBufferInheritanceRenderingInfo:
+   /* Per spec, about VkCommandBufferInheritanceRenderingInfo and
+    * VkRenderingAttachmentLocationInfo:
     *
     * If VkCommandBufferInheritanceInfo::renderPass is not VK_NULL_HANDLE, or
     * VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT is not specified in
@@ -1014,7 +998,13 @@ vn_fix_command_buffer_begin_info(struct vn_command_buffer *cmd,
             sizeof(VkCommandBufferInheritanceConditionalRenderingInfoEXT));
          pnext = &local->conditional_rendering;
          break;
+      case VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO:
+         memcpy(&local->riai, src,
+                sizeof(VkRenderingInputAttachmentIndexInfo));
+         pnext = &local->riai;
+         break;
       case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO:
+      case VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO:
       default:
          break;
       }
@@ -1040,7 +1030,8 @@ vn_BeginCommandBuffer(VkCommandBuffer commandBuffer,
    VN_TRACE_FUNC();
    struct vn_command_buffer *cmd =
       vn_command_buffer_from_handle(commandBuffer);
-   struct vn_instance *instance = cmd->pool->device->instance;
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
+   struct vn_instance *instance = dev->instance;
    size_t cmd_size;
 
    /* reset regardless of VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT */
@@ -1052,13 +1043,15 @@ vn_BeginCommandBuffer(VkCommandBuffer commandBuffer,
 
    cmd_size = vn_sizeof_vkBeginCommandBuffer(commandBuffer, pBeginInfo);
    if (!vn_cs_encoder_reserve(&cmd->cs, cmd_size)) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return vn_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
+   cmd->builder.is_simultaneous =
+      pBeginInfo->flags & VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
    vn_encode_vkBeginCommandBuffer(&cmd->cs, 0, commandBuffer, pBeginInfo);
 
-   cmd->state = VN_COMMAND_BUFFER_STATE_RECORDING;
+   cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_RECORDING;
 
    const VkCommandBufferInheritanceInfo *inheritance_info =
       pBeginInfo->pInheritanceInfo;
@@ -1092,32 +1085,28 @@ vn_BeginCommandBuffer(VkCommandBuffer commandBuffer,
 static void
 vn_cmd_submit(struct vn_command_buffer *cmd)
 {
-   struct vn_instance *instance = cmd->pool->device->instance;
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
 
-   if (cmd->state != VN_COMMAND_BUFFER_STATE_RECORDING)
+   if (cmd->base.vk.state != MESA_VK_COMMAND_BUFFER_STATE_RECORDING)
       return;
 
    vn_cs_encoder_commit(&cmd->cs);
    if (vn_cs_encoder_get_fatal(&cmd->cs)) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       vn_cs_encoder_reset(&cmd->cs);
       return;
    }
 
-   if (vn_instance_ring_submit(instance, &cmd->cs) != VK_SUCCESS) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   if (vn_cs_encoder_needs_roundtrip(&cmd->cs))
+      vn_ring_roundtrip(dev->primary_ring);
+
+   if (vn_ring_submit_command_simple(dev->primary_ring, &cmd->cs) !=
+       VK_SUCCESS) {
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return;
    }
 
    vn_cs_encoder_reset(&cmd->cs);
-   cmd->draw_cmd_batched = 0;
-}
-
-static inline void
-vn_cmd_count_draw_and_submit_on_batch_limit(struct vn_command_buffer *cmd)
-{
-   if (++cmd->draw_cmd_batched >= vn_env.draw_cmd_batch_limit)
-      vn_cmd_submit(cmd);
 }
 
 VkResult
@@ -1126,25 +1115,26 @@ vn_EndCommandBuffer(VkCommandBuffer commandBuffer)
    VN_TRACE_FUNC();
    struct vn_command_buffer *cmd =
       vn_command_buffer_from_handle(commandBuffer);
-   struct vn_instance *instance = cmd->pool->device->instance;
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
+   struct vn_instance *instance = dev->instance;
    size_t cmd_size;
 
-   if (cmd->state != VN_COMMAND_BUFFER_STATE_RECORDING)
+   if (cmd->base.vk.state != MESA_VK_COMMAND_BUFFER_STATE_RECORDING)
       return vn_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
 
    cmd_size = vn_sizeof_vkEndCommandBuffer(commandBuffer);
    if (!vn_cs_encoder_reserve(&cmd->cs, cmd_size)) {
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return vn_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
 
    vn_encode_vkEndCommandBuffer(&cmd->cs, 0, commandBuffer);
 
    vn_cmd_submit(cmd);
-   if (cmd->state == VN_COMMAND_BUFFER_STATE_INVALID)
+   if (cmd->base.vk.state == MESA_VK_COMMAND_BUFFER_STATE_INVALID)
       return vn_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   cmd->state = VN_COMMAND_BUFFER_STATE_EXECUTABLE;
+   cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_EXECUTABLE;
 
    return VK_SUCCESS;
 }
@@ -1253,12 +1243,32 @@ vn_CmdBindDescriptorSets(VkCommandBuffer commandBuffer,
 }
 
 void
+vn_CmdBindDescriptorSets2(
+   VkCommandBuffer commandBuffer,
+   const VkBindDescriptorSetsInfo *pBindDescriptorSetsInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdBindDescriptorSets2, commandBuffer,
+                  pBindDescriptorSetsInfo);
+}
+
+void
 vn_CmdBindIndexBuffer(VkCommandBuffer commandBuffer,
                       VkBuffer buffer,
                       VkDeviceSize offset,
                       VkIndexType indexType)
 {
    VN_CMD_ENQUEUE(vkCmdBindIndexBuffer, commandBuffer, buffer, offset,
+                  indexType);
+}
+
+void
+vn_CmdBindIndexBuffer2(VkCommandBuffer commandBuffer,
+                       VkBuffer buffer,
+                       VkDeviceSize offset,
+                       VkDeviceSize size,
+                       VkIndexType indexType)
+{
+   VN_CMD_ENQUEUE(vkCmdBindIndexBuffer2, commandBuffer, buffer, offset, size,
                   indexType);
 }
 
@@ -1282,9 +1292,6 @@ vn_CmdDraw(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdDraw, commandBuffer, vertexCount, instanceCount,
                   firstVertex, firstInstance);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -1315,9 +1322,6 @@ vn_CmdDrawIndexed(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdDrawIndexed, commandBuffer, indexCount, instanceCount,
                   firstIndex, vertexOffset, firstInstance);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -1329,9 +1333,6 @@ vn_CmdDrawIndirect(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdDrawIndirect, commandBuffer, buffer, offset, drawCount,
                   stride);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -1343,9 +1344,6 @@ vn_CmdDrawIndexedIndirect(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdDrawIndexedIndirect, commandBuffer, buffer, offset,
                   drawCount, stride);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -1359,9 +1357,6 @@ vn_CmdDrawIndirectCount(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdDrawIndirectCount, commandBuffer, buffer, offset,
                   countBuffer, countBufferOffset, maxDrawCount, stride);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -1376,9 +1371,6 @@ vn_CmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdDrawIndexedIndirectCount, commandBuffer, buffer,
                   offset, countBuffer, countBufferOffset, maxDrawCount,
                   stride);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -1479,37 +1471,6 @@ vn_CmdCopyBufferToImage2(
                   pCopyBufferToImageInfo);
 }
 
-static bool
-vn_needs_prime_blit(VkImage src_image, VkImageLayout src_image_layout)
-{
-   if (src_image_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR &&
-       VN_PRESENT_SRC_INTERNAL_LAYOUT != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
-
-      /* sanity check */
-      ASSERTED const struct vn_image *img = vn_image_from_handle(src_image);
-      assert(img->wsi.is_wsi && img->wsi.is_prime_blit_src);
-      return true;
-   }
-
-   return false;
-}
-
-static void
-vn_transition_prime_layout(struct vn_command_buffer *cmd, VkBuffer dst_buffer)
-{
-   const VkBufferMemoryBarrier buf_barrier = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-      .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-      .srcQueueFamilyIndex = cmd->pool->queue_family_index,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT,
-      .buffer = dst_buffer,
-      .size = VK_WHOLE_SIZE,
-   };
-   vn_cmd_encode_memory_barriers(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1,
-                                 &buf_barrier, 0, NULL);
-}
-
 void
 vn_CmdCopyImageToBuffer(VkCommandBuffer commandBuffer,
                         VkImage srcImage,
@@ -1518,18 +1479,8 @@ vn_CmdCopyImageToBuffer(VkCommandBuffer commandBuffer,
                         uint32_t regionCount,
                         const VkBufferImageCopy *pRegions)
 {
-   struct vn_command_buffer *cmd =
-      vn_command_buffer_from_handle(commandBuffer);
-
-   bool prime_blit = vn_needs_prime_blit(srcImage, srcImageLayout);
-   if (prime_blit)
-      srcImageLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-
    VN_CMD_ENQUEUE(vkCmdCopyImageToBuffer, commandBuffer, srcImage,
                   srcImageLayout, dstBuffer, regionCount, pRegions);
-
-   if (prime_blit)
-      vn_transition_prime_layout(cmd, dstBuffer);
 }
 
 void
@@ -1537,19 +1488,8 @@ vn_CmdCopyImageToBuffer2(
    VkCommandBuffer commandBuffer,
    const VkCopyImageToBufferInfo2 *pCopyImageToBufferInfo)
 {
-   struct vn_command_buffer *cmd =
-      vn_command_buffer_from_handle(commandBuffer);
-   struct VkCopyImageToBufferInfo2 copy_info = *pCopyImageToBufferInfo;
-
-   bool prime_blit =
-      vn_needs_prime_blit(copy_info.srcImage, copy_info.srcImageLayout);
-   if (prime_blit)
-      copy_info.srcImageLayout = VN_PRESENT_SRC_INTERNAL_LAYOUT;
-
-   VN_CMD_ENQUEUE(vkCmdCopyImageToBuffer2, commandBuffer, &copy_info);
-
-   if (prime_blit)
-      vn_transition_prime_layout(cmd, copy_info.dstBuffer);
+   VN_CMD_ENQUEUE(vkCmdCopyImageToBuffer2, commandBuffer,
+                  pCopyImageToBufferInfo);
 }
 
 void
@@ -1636,7 +1576,7 @@ vn_CmdSetEvent(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdSetEvent, commandBuffer, event, stageMask);
 
-   vn_feedback_event_cmd_record(commandBuffer, event, stageMask, VK_EVENT_SET,
+   vn_event_feedback_cmd_record(commandBuffer, event, stageMask, VK_EVENT_SET,
                                 false);
 }
 
@@ -1670,10 +1610,9 @@ vn_CmdSetEvent2(VkCommandBuffer commandBuffer,
 
    VN_CMD_ENQUEUE(vkCmdSetEvent2, commandBuffer, event, pDependencyInfo);
 
-   VkPipelineStageFlags2 src_stage_mask =
+   const VkPipelineStageFlags2 src_stage_mask =
       vn_dependency_info_collect_src_stage_mask(pDependencyInfo);
-
-   vn_feedback_event_cmd_record(commandBuffer, event, src_stage_mask,
+   vn_event_feedback_cmd_record(commandBuffer, event, src_stage_mask,
                                 VK_EVENT_SET, true);
 }
 
@@ -1684,7 +1623,7 @@ vn_CmdResetEvent(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdResetEvent, commandBuffer, event, stageMask);
 
-   vn_feedback_event_cmd_record(commandBuffer, event, stageMask,
+   vn_event_feedback_cmd_record(commandBuffer, event, stageMask,
                                 VK_EVENT_RESET, false);
 }
 
@@ -1694,7 +1633,7 @@ vn_CmdResetEvent2(VkCommandBuffer commandBuffer,
                   VkPipelineStageFlags2 stageMask)
 {
    VN_CMD_ENQUEUE(vkCmdResetEvent2, commandBuffer, event, stageMask);
-   vn_feedback_event_cmd_record(commandBuffer, event, stageMask,
+   vn_event_feedback_cmd_record(commandBuffer, event, stageMask,
                                 VK_EVENT_RESET, true);
 }
 
@@ -1794,34 +1733,51 @@ vn_CmdBeginQuery(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdBeginQuery, commandBuffer, queryPool, query, flags);
 }
 
-static inline void
-vn_cmd_add_query_feedback(VkCommandBuffer cmd_handle,
-                          VkQueryPool pool_handle,
-                          uint32_t query)
+static inline uint32_t
+vn_cmd_get_query_count(VkCommandBuffer cmd_handle)
+{
+   /* Per 1.3.255 spec "If queries are used while executing a render pass
+    * instance that has multiview enabled, the query uses N consecutive
+    * query indices in the query pool (starting at query) where N is the
+    * number of bits set in the view mask in the subpass the query is used
+    * in."
+    */
+   struct vn_command_buffer *cmd = vn_command_buffer_from_handle(cmd_handle);
+   return cmd->builder.in_render_pass && cmd->builder.view_mask
+             ? util_bitcount(cmd->builder.view_mask)
+             : 1;
+}
+
+static void
+vn_cmd_record_query(VkCommandBuffer cmd_handle,
+                    VkQueryPool pool_handle,
+                    uint32_t query,
+                    uint32_t query_count,
+                    bool copy)
 {
    struct vn_command_buffer *cmd = vn_command_buffer_from_handle(cmd_handle);
+   struct vn_command_pool *cmd_pool = vn_cmd_pool(cmd);
+   struct vn_device *dev = vn_device_from_vk(cmd->base.vk.pool->base.device);
+   struct vn_query_pool *query_pool = vn_query_pool_from_handle(pool_handle);
 
-   /* Outside the render pass instance, vkCmdCopyQueryPoolResults can be
-    * directly appended. Otherwise, defer the copy cmd until outside.
-    */
-   if (!cmd->builder.in_render_pass) {
-      vn_feedback_query_cmd_record(cmd_handle, pool_handle, query, 1, true);
+   if (unlikely(VN_PERF(NO_QUERY_FEEDBACK)))
+      return;
+
+   if (unlikely(!query_pool->fb_buf)) {
+      if (vn_query_feedback_buffer_init_once(dev, query_pool) != VK_SUCCESS) {
+         cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
+         return;
+      }
+   }
+
+   struct vn_cmd_query_record *record = vn_cmd_pool_alloc_query_record(
+      cmd_pool, query_pool, query, query_count, copy);
+   if (!record) {
+      cmd->base.vk.state = MESA_VK_COMMAND_BUFFER_STATE_INVALID;
       return;
    }
 
-   struct vn_query_pool *pool = vn_query_pool_from_handle(pool_handle);
-   if (!pool->feedback)
-      return;
-
-   /* Per 1.3.255 spec "If queries are used while executing a render pass
-    * instance that has multiview enabled, the query uses N consecutive query
-    * indices in the query pool (starting at query) where N is the number of
-    * bits set in the view mask in the subpass the query is used in."
-    */
-   const uint32_t query_count =
-      cmd->builder.view_mask ? util_bitcount(cmd->builder.view_mask) : 1;
-   if (!vn_cmd_query_batch_push(cmd, pool, query, query_count))
-      cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
+   list_addtail(&record->head, &cmd->builder.query_records);
 }
 
 void
@@ -1831,7 +1787,8 @@ vn_CmdEndQuery(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdEndQuery, commandBuffer, queryPool, query);
 
-   vn_cmd_add_query_feedback(commandBuffer, queryPool, query);
+   const uint32_t query_count = vn_cmd_get_query_count(commandBuffer);
+   vn_cmd_record_query(commandBuffer, queryPool, query, query_count, true);
 }
 
 void
@@ -1843,8 +1800,8 @@ vn_CmdResetQueryPool(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdResetQueryPool, commandBuffer, queryPool, firstQuery,
                   queryCount);
 
-   vn_feedback_query_cmd_record(commandBuffer, queryPool, firstQuery,
-                                queryCount, false);
+   vn_cmd_record_query(commandBuffer, queryPool, firstQuery, queryCount,
+                       false);
 }
 
 void
@@ -1856,7 +1813,8 @@ vn_CmdWriteTimestamp(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdWriteTimestamp, commandBuffer, pipelineStage,
                   queryPool, query);
 
-   vn_cmd_add_query_feedback(commandBuffer, queryPool, query);
+   const uint32_t query_count = vn_cmd_get_query_count(commandBuffer);
+   vn_cmd_record_query(commandBuffer, queryPool, query, query_count, true);
 }
 
 void
@@ -1868,7 +1826,8 @@ vn_CmdWriteTimestamp2(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdWriteTimestamp2, commandBuffer, stage, queryPool,
                   query);
 
-   vn_cmd_add_query_feedback(commandBuffer, queryPool, query);
+   const uint32_t query_count = vn_cmd_get_query_count(commandBuffer);
+   vn_cmd_record_query(commandBuffer, queryPool, query, query_count, true);
 }
 
 void
@@ -1896,6 +1855,13 @@ vn_CmdPushConstants(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdPushConstants, commandBuffer, layout, stageFlags,
                   offset, size, pValues);
+}
+
+void
+vn_CmdPushConstants2(VkCommandBuffer commandBuffer,
+                     const VkPushConstantsInfo *pPushConstantsInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdPushConstants2, commandBuffer, pPushConstantsInfo);
 }
 
 void
@@ -1978,13 +1944,10 @@ vn_CmdExecuteCommands(VkCommandBuffer commandBuffer,
 
    struct vn_command_buffer *primary_cmd =
       vn_command_buffer_from_handle(commandBuffer);
-   if (primary_cmd->builder.in_render_pass) {
-      for (uint32_t i = 0; i < commandBufferCount; i++) {
-         struct vn_command_buffer *secondary_cmd =
-            vn_command_buffer_from_handle(pCommandBuffers[i]);
-         assert(secondary_cmd->builder.in_render_pass);
-         vn_cmd_merge_batched_query_feedback(primary_cmd, secondary_cmd);
-      }
+   for (uint32_t i = 0; i < commandBufferCount; i++) {
+      struct vn_command_buffer *secondary_cmd =
+         vn_command_buffer_from_handle(pCommandBuffers[i]);
+      vn_cmd_merge_query_records(primary_cmd, secondary_cmd);
    }
 }
 
@@ -2008,11 +1971,11 @@ vn_CmdDispatchBase(VkCommandBuffer commandBuffer,
 }
 
 void
-vn_CmdSetLineStippleEXT(VkCommandBuffer commandBuffer,
-                        uint32_t lineStippleFactor,
-                        uint16_t lineStipplePattern)
+vn_CmdSetLineStipple(VkCommandBuffer commandBuffer,
+                     uint32_t lineStippleFactor,
+                     uint16_t lineStipplePattern)
 {
-   VN_CMD_ENQUEUE(vkCmdSetLineStippleEXT, commandBuffer, lineStippleFactor,
+   VN_CMD_ENQUEUE(vkCmdSetLineStipple, commandBuffer, lineStippleFactor,
                   lineStipplePattern);
 }
 
@@ -2036,7 +1999,8 @@ vn_CmdEndQueryIndexedEXT(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdEndQueryIndexedEXT, commandBuffer, queryPool, query,
                   index);
 
-   vn_cmd_add_query_feedback(commandBuffer, queryPool, query);
+   const uint32_t query_count = vn_cmd_get_query_count(commandBuffer);
+   vn_cmd_record_query(commandBuffer, queryPool, query, query_count, true);
 }
 
 void
@@ -2087,9 +2051,6 @@ vn_CmdDrawIndirectByteCountEXT(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdDrawIndirectByteCountEXT, commandBuffer, instanceCount,
                   firstInstance, counterBuffer, counterBufferOffset,
                   counterOffset, vertexStride);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -2263,9 +2224,6 @@ vn_CmdDrawMultiEXT(VkCommandBuffer commandBuffer,
 {
    VN_CMD_ENQUEUE(vkCmdDrawMultiEXT, commandBuffer, drawCount, pVertexInfo,
                   instanceCount, firstInstance, stride);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
@@ -2280,46 +2238,64 @@ vn_CmdDrawMultiIndexedEXT(VkCommandBuffer commandBuffer,
    VN_CMD_ENQUEUE(vkCmdDrawMultiIndexedEXT, commandBuffer, drawCount,
                   pIndexInfo, instanceCount, firstInstance, stride,
                   pVertexOffset);
-
-   vn_cmd_count_draw_and_submit_on_batch_limit(
-      vn_command_buffer_from_handle(commandBuffer));
 }
 
 void
-vn_CmdPushDescriptorSetKHR(VkCommandBuffer commandBuffer,
-                           VkPipelineBindPoint pipelineBindPoint,
-                           VkPipelineLayout layout,
-                           uint32_t set,
-                           uint32_t descriptorWriteCount,
-                           const VkWriteDescriptorSet *pDescriptorWrites)
+vn_CmdPushDescriptorSet(VkCommandBuffer commandBuffer,
+                        VkPipelineBindPoint pipelineBindPoint,
+                        VkPipelineLayout layout,
+                        uint32_t set,
+                        uint32_t descriptorWriteCount,
+                        const VkWriteDescriptorSet *pDescriptorWrites)
 {
-   if (vn_should_sanitize_descriptor_set_writes(descriptorWriteCount,
-                                                pDescriptorWrites, layout)) {
-      struct vn_command_buffer *cmd =
-         vn_command_buffer_from_handle(commandBuffer);
-      struct vn_update_descriptor_sets *update =
-         vn_update_descriptor_sets_parse_writes(
-            descriptorWriteCount, pDescriptorWrites, &cmd->pool->allocator,
-            layout);
-      if (!update) {
-         cmd->state = VN_COMMAND_BUFFER_STATE_INVALID;
-         return;
-      }
+   const uint32_t img_info_count = vn_descriptor_set_count_write_images(
+      descriptorWriteCount, pDescriptorWrites);
 
-      VN_CMD_ENQUEUE(vkCmdPushDescriptorSetKHR, commandBuffer,
-                     pipelineBindPoint, layout, set, update->write_count,
-                     update->writes);
+   STACK_ARRAY(VkWriteDescriptorSet, writes, descriptorWriteCount);
+   STACK_ARRAY(VkDescriptorImageInfo, img_infos, img_info_count);
+   struct vn_descriptor_set_writes local = {
+      .writes = writes,
+      .img_infos = img_infos,
+   };
+   pDescriptorWrites = vn_descriptor_set_get_writes(
+      descriptorWriteCount, pDescriptorWrites, layout, &local);
 
-      vk_free(&cmd->pool->allocator, update);
-   } else {
-      VN_CMD_ENQUEUE(vkCmdPushDescriptorSetKHR, commandBuffer,
-                     pipelineBindPoint, layout, set, descriptorWriteCount,
-                     pDescriptorWrites);
-   }
+   VN_CMD_ENQUEUE(vkCmdPushDescriptorSet, commandBuffer, pipelineBindPoint,
+                  layout, set, descriptorWriteCount, pDescriptorWrites);
+
+   STACK_ARRAY_FINISH(writes);
+   STACK_ARRAY_FINISH(img_infos);
 }
 
 void
-vn_CmdPushDescriptorSetWithTemplateKHR(
+vn_CmdPushDescriptorSet2(VkCommandBuffer commandBuffer,
+                         const VkPushDescriptorSetInfo *pPushDescriptorSetInfo)
+{
+   const uint32_t write_count = pPushDescriptorSetInfo->descriptorWriteCount;
+   const VkWriteDescriptorSet *desc_writes =
+      pPushDescriptorSetInfo->pDescriptorWrites;
+   const uint32_t img_info_count =
+      vn_descriptor_set_count_write_images(write_count, desc_writes);
+
+   STACK_ARRAY(VkWriteDescriptorSet, writes, write_count);
+   STACK_ARRAY(VkDescriptorImageInfo, img_infos, img_info_count);
+   struct vn_descriptor_set_writes local = {
+      .writes = writes,
+      .img_infos = img_infos,
+   };
+   desc_writes = vn_descriptor_set_get_writes(
+      write_count, desc_writes, pPushDescriptorSetInfo->layout, &local);
+
+   VkPushDescriptorSetInfo info = *pPushDescriptorSetInfo;
+   info.pDescriptorWrites = desc_writes;
+   VN_CMD_ENQUEUE(vkCmdPushDescriptorSet2, commandBuffer, &info);
+
+   STACK_ARRAY_FINISH(writes);
+   STACK_ARRAY_FINISH(img_infos);
+}
+
+void
+vn_CmdPushDescriptorSetWithTemplate(
    VkCommandBuffer commandBuffer,
    VkDescriptorUpdateTemplate descriptorUpdateTemplate,
    VkPipelineLayout layout,
@@ -2329,16 +2305,108 @@ vn_CmdPushDescriptorSetWithTemplateKHR(
    struct vn_descriptor_update_template *templ =
       vn_descriptor_update_template_from_handle(descriptorUpdateTemplate);
 
-   mtx_lock(&templ->mutex);
+   STACK_ARRAY(VkWriteDescriptorSet, writes, templ->entry_count);
+   STACK_ARRAY(VkDescriptorImageInfo, img_infos, templ->img_info_count);
+   STACK_ARRAY(VkDescriptorBufferInfo, buf_infos, templ->buf_info_count);
+   STACK_ARRAY(VkBufferView, bview_handles, templ->bview_count);
+   STACK_ARRAY(VkWriteDescriptorSetInlineUniformBlock, iubs,
+               templ->iub_count);
+   STACK_ARRAY(VkWriteDescriptorSetAccelerationStructureKHR, accels,
+               templ->accel_count);
+   struct vn_descriptor_set_update update = {
+      .writes = writes,
+      .img_infos = img_infos,
+      .buf_infos = buf_infos,
+      .bview_handles = bview_handles,
+      .iubs = iubs,
+      .accels = accels,
+   };
+   vn_descriptor_set_fill_update_with_template(templ, VK_NULL_HANDLE, pData,
+                                               &update);
 
-   struct vn_update_descriptor_sets *update =
-      vn_update_descriptor_set_with_template_locked(templ, VK_NULL_HANDLE,
-                                                    pData);
-   VN_CMD_ENQUEUE(vkCmdPushDescriptorSetKHR, commandBuffer,
-                  templ->pipeline_bind_point, layout, set,
-                  update->write_count, update->writes);
+   VN_CMD_ENQUEUE(vkCmdPushDescriptorSet, commandBuffer,
+                  templ->push.pipeline_bind_point, layout, set,
+                  update.write_count, update.writes);
 
-   mtx_unlock(&templ->mutex);
+   STACK_ARRAY_FINISH(writes);
+   STACK_ARRAY_FINISH(img_infos);
+   STACK_ARRAY_FINISH(buf_infos);
+   STACK_ARRAY_FINISH(bview_handles);
+   STACK_ARRAY_FINISH(iubs);
+   STACK_ARRAY_FINISH(accels);
+}
+
+void
+vn_CmdPushDescriptorSetWithTemplate2(VkCommandBuffer commandBuffer,
+                                     const VkPushDescriptorSetWithTemplateInfo
+                                        *pPushDescriptorSetWithTemplateInfo)
+{
+   struct vn_descriptor_update_template *templ =
+      vn_descriptor_update_template_from_handle(
+         pPushDescriptorSetWithTemplateInfo->descriptorUpdateTemplate);
+
+   STACK_ARRAY(VkWriteDescriptorSet, writes, templ->entry_count);
+   STACK_ARRAY(VkDescriptorImageInfo, img_infos, templ->img_info_count);
+   STACK_ARRAY(VkDescriptorBufferInfo, buf_infos, templ->buf_info_count);
+   STACK_ARRAY(VkBufferView, bview_handles, templ->bview_count);
+   STACK_ARRAY(VkWriteDescriptorSetInlineUniformBlock, iubs,
+               templ->iub_count);
+   STACK_ARRAY(VkWriteDescriptorSetAccelerationStructureKHR, accels,
+               templ->accel_count);
+   struct vn_descriptor_set_update update = {
+      .writes = writes,
+      .img_infos = img_infos,
+      .buf_infos = buf_infos,
+      .bview_handles = bview_handles,
+      .iubs = iubs,
+      .accels = accels,
+   };
+   vn_descriptor_set_fill_update_with_template(
+      templ, VK_NULL_HANDLE, pPushDescriptorSetWithTemplateInfo->pData,
+      &update);
+
+   /* Per spec:
+    *
+    * If stageFlags specifies a subset of all stages corresponding to one or
+    * more pipeline bind points, the binding operation still affects all
+    * stages corresponding to the given pipeline bind point(s) as if the
+    * equivalent original version of this command had been called with the
+    * same parameters.
+    *
+    * So we just need to pick a single stage belonging to the pipeline type.
+    */
+   VkShaderStageFlags stage_flags;
+   switch (templ->push.pipeline_bind_point) {
+   case VK_PIPELINE_BIND_POINT_GRAPHICS:
+      stage_flags = VK_SHADER_STAGE_ALL_GRAPHICS;
+      break;
+   case VK_PIPELINE_BIND_POINT_COMPUTE:
+      stage_flags = VK_SHADER_STAGE_COMPUTE_BIT;
+      break;
+   case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:
+      stage_flags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+      break;
+   default:
+      UNREACHABLE("bad pipeline bind point in the template");
+      break;
+   }
+   const VkPushDescriptorSetInfo info = {
+      .sType = VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO,
+      .pNext = pPushDescriptorSetWithTemplateInfo->pNext,
+      .stageFlags = stage_flags,
+      .layout = pPushDescriptorSetWithTemplateInfo->layout,
+      .set = pPushDescriptorSetWithTemplateInfo->set,
+      .descriptorWriteCount = update.write_count,
+      .pDescriptorWrites = update.writes,
+   };
+   VN_CMD_ENQUEUE(vkCmdPushDescriptorSet2, commandBuffer, &info);
+
+   STACK_ARRAY_FINISH(writes);
+   STACK_ARRAY_FINISH(img_infos);
+   STACK_ARRAY_FINISH(buf_infos);
+   STACK_ARRAY_FINISH(bview_handles);
+   STACK_ARRAY_FINISH(iubs);
+   STACK_ARRAY_FINISH(accels);
 }
 
 void
@@ -2353,4 +2421,364 @@ vn_CmdSetVertexInputEXT(
                   vertexBindingDescriptionCount, pVertexBindingDescriptions,
                   vertexAttributeDescriptionCount,
                   pVertexAttributeDescriptions);
+}
+
+void
+vn_CmdSetAlphaToCoverageEnableEXT(VkCommandBuffer commandBuffer,
+                                  VkBool32 alphaToCoverageEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetAlphaToCoverageEnableEXT, commandBuffer,
+                  alphaToCoverageEnable);
+}
+
+void
+vn_CmdSetAlphaToOneEnableEXT(VkCommandBuffer commandBuffer,
+                             VkBool32 alphaToOneEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetAlphaToOneEnableEXT, commandBuffer,
+                  alphaToOneEnable);
+}
+
+void
+vn_CmdSetColorBlendAdvancedEXT(
+   VkCommandBuffer commandBuffer,
+   uint32_t firstAttachment,
+   uint32_t attachmentCount,
+   const VkColorBlendAdvancedEXT *pColorBlendAdvanced)
+{
+   VN_CMD_ENQUEUE(vkCmdSetColorBlendAdvancedEXT, commandBuffer,
+                  firstAttachment, attachmentCount, pColorBlendAdvanced);
+}
+
+void
+vn_CmdSetColorBlendEnableEXT(VkCommandBuffer commandBuffer,
+                             uint32_t firstAttachment,
+                             uint32_t attachmentCount,
+                             const VkBool32 *pColorBlendEnables)
+{
+   VN_CMD_ENQUEUE(vkCmdSetColorBlendEnableEXT, commandBuffer, firstAttachment,
+                  attachmentCount, pColorBlendEnables);
+}
+
+void
+vn_CmdSetColorBlendEquationEXT(
+   VkCommandBuffer commandBuffer,
+   uint32_t firstAttachment,
+   uint32_t attachmentCount,
+   const VkColorBlendEquationEXT *pColorBlendEquations)
+{
+   VN_CMD_ENQUEUE(vkCmdSetColorBlendEquationEXT, commandBuffer,
+                  firstAttachment, attachmentCount, pColorBlendEquations);
+}
+
+void
+vn_CmdSetColorWriteMaskEXT(VkCommandBuffer commandBuffer,
+                           uint32_t firstAttachment,
+                           uint32_t attachmentCount,
+                           const VkColorComponentFlags *pColorWriteMasks)
+{
+   VN_CMD_ENQUEUE(vkCmdSetColorWriteMaskEXT, commandBuffer, firstAttachment,
+                  attachmentCount, pColorWriteMasks);
+}
+
+void
+vn_CmdSetConservativeRasterizationModeEXT(
+   VkCommandBuffer commandBuffer,
+   VkConservativeRasterizationModeEXT conservativeRasterizationMode)
+{
+   VN_CMD_ENQUEUE(vkCmdSetConservativeRasterizationModeEXT, commandBuffer,
+                  conservativeRasterizationMode);
+}
+
+void
+vn_CmdSetDepthClampEnableEXT(VkCommandBuffer commandBuffer,
+                             VkBool32 depthClampEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetDepthClampEnableEXT, commandBuffer,
+                  depthClampEnable);
+}
+
+void
+vn_CmdSetDepthClipEnableEXT(VkCommandBuffer commandBuffer,
+                            VkBool32 depthClipEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetDepthClipEnableEXT, commandBuffer, depthClipEnable);
+}
+
+void
+vn_CmdSetDepthClipNegativeOneToOneEXT(VkCommandBuffer commandBuffer,
+                                      VkBool32 negativeOneToOne)
+{
+   VN_CMD_ENQUEUE(vkCmdSetDepthClipNegativeOneToOneEXT, commandBuffer,
+                  negativeOneToOne);
+}
+
+void
+vn_CmdSetExtraPrimitiveOverestimationSizeEXT(
+   VkCommandBuffer commandBuffer, float extraPrimitiveOverestimationSize)
+{
+   VN_CMD_ENQUEUE(vkCmdSetExtraPrimitiveOverestimationSizeEXT, commandBuffer,
+                  extraPrimitiveOverestimationSize);
+}
+
+void
+vn_CmdSetLineRasterizationModeEXT(
+   VkCommandBuffer commandBuffer,
+   VkLineRasterizationMode lineRasterizationMode)
+{
+   VN_CMD_ENQUEUE(vkCmdSetLineRasterizationModeEXT, commandBuffer,
+                  lineRasterizationMode);
+}
+
+void
+vn_CmdSetLineStippleEnableEXT(VkCommandBuffer commandBuffer,
+                              VkBool32 stippledLineEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetLineStippleEnableEXT, commandBuffer,
+                  stippledLineEnable);
+}
+
+void
+vn_CmdSetLogicOpEnableEXT(VkCommandBuffer commandBuffer,
+                          VkBool32 logicOpEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetLogicOpEnableEXT, commandBuffer, logicOpEnable);
+}
+
+void
+vn_CmdSetPolygonModeEXT(VkCommandBuffer commandBuffer,
+                        VkPolygonMode polygonMode)
+{
+   VN_CMD_ENQUEUE(vkCmdSetPolygonModeEXT, commandBuffer, polygonMode);
+}
+
+void
+vn_CmdSetProvokingVertexModeEXT(VkCommandBuffer commandBuffer,
+                                VkProvokingVertexModeEXT provokingVertexMode)
+{
+   VN_CMD_ENQUEUE(vkCmdSetProvokingVertexModeEXT, commandBuffer,
+                  provokingVertexMode);
+}
+
+void
+vn_CmdSetRasterizationSamplesEXT(VkCommandBuffer commandBuffer,
+                                 VkSampleCountFlagBits rasterizationSamples)
+{
+   VN_CMD_ENQUEUE(vkCmdSetRasterizationSamplesEXT, commandBuffer,
+                  rasterizationSamples);
+}
+
+void
+vn_CmdSetRasterizationStreamEXT(VkCommandBuffer commandBuffer,
+                                uint32_t rasterizationStream)
+{
+   VN_CMD_ENQUEUE(vkCmdSetRasterizationStreamEXT, commandBuffer,
+                  rasterizationStream);
+}
+
+void
+vn_CmdSetSampleLocationsEnableEXT(VkCommandBuffer commandBuffer,
+                                  VkBool32 sampleLocationsEnable)
+{
+   VN_CMD_ENQUEUE(vkCmdSetSampleLocationsEnableEXT, commandBuffer,
+                  sampleLocationsEnable);
+}
+
+void
+vn_CmdSetSampleMaskEXT(VkCommandBuffer commandBuffer,
+                       VkSampleCountFlagBits samples,
+                       const VkSampleMask *pSampleMask)
+{
+   VN_CMD_ENQUEUE(vkCmdSetSampleMaskEXT, commandBuffer, samples, pSampleMask);
+}
+
+void
+vn_CmdSetTessellationDomainOriginEXT(VkCommandBuffer commandBuffer,
+                                     VkTessellationDomainOrigin domainOrigin)
+{
+   VN_CMD_ENQUEUE(vkCmdSetTessellationDomainOriginEXT, commandBuffer,
+                  domainOrigin);
+}
+
+void
+vn_CmdSetFragmentShadingRateKHR(
+   VkCommandBuffer commandBuffer,
+   const VkExtent2D *pFragmentSize,
+   const VkFragmentShadingRateCombinerOpKHR combinerOps[2])
+{
+   VN_CMD_ENQUEUE(vkCmdSetFragmentShadingRateKHR, commandBuffer,
+                  pFragmentSize, combinerOps);
+}
+
+void
+vn_CmdSetSampleLocationsEXT(
+   VkCommandBuffer commandBuffer,
+   const VkSampleLocationsInfoEXT *pSampleLocationsInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdSetSampleLocationsEXT, commandBuffer,
+                  pSampleLocationsInfo);
+}
+
+void
+vn_CmdSetRenderingAttachmentLocations(
+   VkCommandBuffer commandBuffer,
+   const VkRenderingAttachmentLocationInfo *pLocationInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdSetRenderingAttachmentLocations, commandBuffer,
+                  pLocationInfo);
+}
+
+void
+vn_CmdSetRenderingInputAttachmentIndices(
+   VkCommandBuffer commandBuffer,
+   const VkRenderingInputAttachmentIndexInfo *pInputAttachmentIndexInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdSetRenderingInputAttachmentIndices, commandBuffer,
+                  pInputAttachmentIndexInfo);
+}
+
+void
+vn_CmdBuildAccelerationStructuresIndirectKHR(
+   VkCommandBuffer commandBuffer,
+   uint32_t infoCount,
+   const VkAccelerationStructureBuildGeometryInfoKHR *pInfos,
+   const VkDeviceAddress *pIndirectDeviceAddresses,
+   const uint32_t *pIndirectStrides,
+   const uint32_t *const *ppMaxPrimitiveCounts)
+{
+   VN_CMD_ENQUEUE(vkCmdBuildAccelerationStructuresIndirectKHR, commandBuffer,
+                  infoCount, pInfos, pIndirectDeviceAddresses,
+                  pIndirectStrides, ppMaxPrimitiveCounts);
+}
+
+void
+vn_CmdBuildAccelerationStructuresKHR(
+   VkCommandBuffer commandBuffer,
+   uint32_t infoCount,
+   const VkAccelerationStructureBuildGeometryInfoKHR *pInfos,
+   const VkAccelerationStructureBuildRangeInfoKHR *const *ppBuildRangeInfos)
+{
+   VN_CMD_ENQUEUE(vkCmdBuildAccelerationStructuresKHR, commandBuffer,
+                  infoCount, pInfos, ppBuildRangeInfos);
+}
+
+void
+vn_CmdCopyAccelerationStructureKHR(
+   VkCommandBuffer commandBuffer,
+   const VkCopyAccelerationStructureInfoKHR *pInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdCopyAccelerationStructureKHR, commandBuffer, pInfo);
+}
+
+void
+vn_CmdCopyAccelerationStructureToMemoryKHR(
+   VkCommandBuffer commandBuffer,
+   const VkCopyAccelerationStructureToMemoryInfoKHR *pInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdCopyAccelerationStructureToMemoryKHR, commandBuffer,
+                  pInfo);
+}
+
+void
+vn_CmdCopyMemoryToAccelerationStructureKHR(
+   VkCommandBuffer commandBuffer,
+   const VkCopyMemoryToAccelerationStructureInfoKHR *pInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdCopyMemoryToAccelerationStructureKHR, commandBuffer,
+                  pInfo);
+}
+
+void
+vn_CmdWriteAccelerationStructuresPropertiesKHR(
+   VkCommandBuffer commandBuffer,
+   uint32_t accelerationStructureCount,
+   const VkAccelerationStructureKHR *pAccelerationStructures,
+   VkQueryType queryType,
+   VkQueryPool queryPool,
+   uint32_t firstQuery)
+{
+   /* Per spec:
+    *
+    * VUID-vkCmdWriteAccelerationStructuresPropertiesKHR-renderpass
+    * This command must only be called outside of a render pass instance
+    *
+    * So no need to consider view mask impact on query count.
+    */
+   VN_CMD_ENQUEUE(vkCmdWriteAccelerationStructuresPropertiesKHR,
+                  commandBuffer, accelerationStructureCount,
+                  pAccelerationStructures, queryType, queryPool, firstQuery);
+
+   vn_cmd_record_query(commandBuffer, queryPool, firstQuery,
+                       accelerationStructureCount, true);
+}
+
+void
+vn_CmdSetRayTracingPipelineStackSizeKHR(VkCommandBuffer commandBuffer,
+                                        uint32_t pipelineStackSize)
+{
+   VN_CMD_ENQUEUE(vkCmdSetRayTracingPipelineStackSizeKHR, commandBuffer,
+                  pipelineStackSize);
+}
+
+void
+vn_CmdTraceRaysIndirectKHR(
+   VkCommandBuffer commandBuffer,
+   const VkStridedDeviceAddressRegionKHR *pRaygenShaderBindingTable,
+   const VkStridedDeviceAddressRegionKHR *pMissShaderBindingTable,
+   const VkStridedDeviceAddressRegionKHR *pHitShaderBindingTable,
+   const VkStridedDeviceAddressRegionKHR *pCallableShaderBindingTable,
+   VkDeviceAddress indirectDeviceAddress)
+{
+   VN_CMD_ENQUEUE(vkCmdTraceRaysIndirectKHR, commandBuffer,
+                  pRaygenShaderBindingTable, pMissShaderBindingTable,
+                  pHitShaderBindingTable, pCallableShaderBindingTable,
+                  indirectDeviceAddress);
+}
+
+void
+vn_CmdTraceRaysKHR(
+   VkCommandBuffer commandBuffer,
+   const VkStridedDeviceAddressRegionKHR *pRaygenShaderBindingTable,
+   const VkStridedDeviceAddressRegionKHR *pMissShaderBindingTable,
+   const VkStridedDeviceAddressRegionKHR *pHitShaderBindingTable,
+   const VkStridedDeviceAddressRegionKHR *pCallableShaderBindingTable,
+   uint32_t width,
+   uint32_t height,
+   uint32_t depth)
+{
+   VN_CMD_ENQUEUE(vkCmdTraceRaysKHR, commandBuffer, pRaygenShaderBindingTable,
+                  pMissShaderBindingTable, pHitShaderBindingTable,
+                  pCallableShaderBindingTable, width, height, depth);
+}
+
+void
+vn_CmdTraceRaysIndirect2KHR(VkCommandBuffer commandBuffer,
+                            VkDeviceAddress indirectDeviceAddress)
+{
+   VN_CMD_ENQUEUE(vkCmdTraceRaysIndirect2KHR, commandBuffer,
+                  indirectDeviceAddress);
+}
+
+void
+vn_CmdSetDepthBias2EXT(VkCommandBuffer commandBuffer,
+                       const VkDepthBiasInfoEXT *pDepthBiasInfo)
+{
+   VN_CMD_ENQUEUE(vkCmdSetDepthBias2EXT, commandBuffer, pDepthBiasInfo);
+}
+
+void
+vn_CmdSetDepthClampRangeEXT(VkCommandBuffer commandBuffer,
+                            VkDepthClampModeEXT depthClampMode,
+                            const VkDepthClampRangeEXT *pDepthClampRange)
+{
+   VN_CMD_ENQUEUE(vkCmdSetDepthClampRangeEXT, commandBuffer, depthClampMode,
+                  pDepthClampRange);
+}
+
+void
+vn_CmdSetAttachmentFeedbackLoopEnableEXT(VkCommandBuffer commandBuffer,
+                                         VkImageAspectFlags aspectMask)
+{
+   VN_CMD_ENQUEUE(vkCmdSetAttachmentFeedbackLoopEnableEXT, commandBuffer,
+                  aspectMask);
 }

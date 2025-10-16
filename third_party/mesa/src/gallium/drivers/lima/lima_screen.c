@@ -27,6 +27,7 @@
 #include "util/ralloc.h"
 #include "util/u_debug.h"
 #include "util/u_screen.h"
+#include "util/xmlconfig.h"
 #include "renderonly/renderonly.h"
 
 #include "drm-uapi/drm_fourcc.h"
@@ -94,212 +95,125 @@ lima_screen_get_device_vendor(struct pipe_screen *pscreen)
    return "ARM";
 }
 
-static int
-lima_screen_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
+static void
+lima_init_shader_caps(struct pipe_screen *screen)
 {
-   switch (param) {
-   case PIPE_CAP_NPOT_TEXTURES:
-   case PIPE_CAP_BLEND_EQUATION_SEPARATE:
-   case PIPE_CAP_ACCELERATED:
-   case PIPE_CAP_UMA:
-   case PIPE_CAP_CLIP_HALFZ:
-   case PIPE_CAP_NATIVE_FENCE_FD:
-   case PIPE_CAP_FRAGMENT_SHADER_TEXTURE_LOD:
-   case PIPE_CAP_TEXTURE_SWIZZLE:
-   case PIPE_CAP_VERTEX_COLOR_UNCLAMPED:
-   case PIPE_CAP_TEXTURE_BARRIER:
-   case PIPE_CAP_SURFACE_SAMPLE_COUNT:
-      return 1;
+   struct pipe_shader_caps *caps =
+      (struct pipe_shader_caps *)&screen->shader_caps[MESA_SHADER_VERTEX];
+
+   caps->max_instructions =
+   caps->max_alu_instructions =
+   caps->max_tex_instructions =
+   caps->max_tex_indirections = 16384; /* need investigate */
+   caps->max_control_flow_depth = 1024;
+   caps->max_inputs = 16; /* attributes */
+   caps->max_outputs = LIMA_MAX_VARYING_NUM; /* varying */
+   /* Mali-400 GP provides space for 304 vec4 uniforms, globals and
+    * temporary variables. */
+   caps->max_const_buffer0_size = 304 * 4 * sizeof(float);
+   caps->max_const_buffers = 1;
+   caps->max_temps = 256; /* need investigate */
+
+   caps = (struct pipe_shader_caps *)&screen->shader_caps[MESA_SHADER_FRAGMENT];
+
+   caps->max_instructions =
+   caps->max_alu_instructions =
+   caps->max_tex_instructions =
+   caps->max_tex_indirections = 16384; /* need investigate */
+   caps->max_inputs = LIMA_MAX_VARYING_NUM - 1; /* varying, minus gl_Position */
+   caps->max_control_flow_depth = 1024;
+   /* The Mali-PP supports a uniform table up to size 32768 total.
+    * However, indirect access to an uniform only supports indices up
+    * to 8192 (a 2048 vec4 array). To prevent indices bigger than that,
+    * limit max const buffer size to 8192 for now. */
+   caps->max_const_buffer0_size = 2048 * 4 * sizeof(float);
+   caps->max_const_buffers = 1;
+   caps->max_sampler_views =
+   caps->max_texture_samplers = 16; /* need investigate */
+   caps->max_temps = 256; /* need investigate */
+   caps->indirect_const_addr = true;
+}
+
+static void
+lima_init_screen_caps(struct pipe_screen *screen)
+{
+   struct pipe_caps *caps = (struct pipe_caps *)&screen->caps;
+
+   u_init_pipe_screen_caps(screen, 1);
+
+   caps->npot_textures = true;
+   caps->blend_equation_separate = true;
+   caps->uma = true;
+   caps->clip_halfz = true;
+   caps->native_fence_fd = true;
+   caps->fragment_shader_texture_lod = true;
+   caps->texture_swizzle = true;
+   caps->vertex_color_unclamped = true;
+   caps->texture_barrier = true;
+   caps->surface_sample_count = true;
 
    /* not clear supported */
-   case PIPE_CAP_FS_COORD_ORIGIN_UPPER_LEFT:
-   case PIPE_CAP_FS_COORD_ORIGIN_LOWER_LEFT:
-   case PIPE_CAP_FS_COORD_PIXEL_CENTER_INTEGER:
-   case PIPE_CAP_FS_COORD_PIXEL_CENTER_HALF_INTEGER:
-      return 1;
+   caps->fs_coord_origin_upper_left = true;
+   caps->fs_coord_origin_lower_left = true;
+   caps->fs_coord_pixel_center_integer = true;
+   caps->fs_coord_pixel_center_half_integer = true;
 
-   case PIPE_CAP_FS_POSITION_IS_SYSVAL:
-   case PIPE_CAP_FS_POINT_IS_SYSVAL:
-   case PIPE_CAP_FS_FACE_IS_INTEGER_SYSVAL:
-      return 1;
+   caps->fs_position_is_sysval = true;
+   caps->fs_point_is_sysval = true;
+   caps->fs_face_is_integer_sysval = true;
 
-   case PIPE_CAP_TEXTURE_HALF_FLOAT_LINEAR:
-      return 1;
+   caps->texture_half_float_linear = true;
 
-   case PIPE_CAP_MAX_TEXTURE_2D_SIZE:
-      return 1 << (LIMA_MAX_MIP_LEVELS - 1);
-   case PIPE_CAP_MAX_TEXTURE_3D_LEVELS:
-   case PIPE_CAP_MAX_TEXTURE_CUBE_LEVELS:
-      return LIMA_MAX_MIP_LEVELS;
+   caps->max_texture_2d_size = 1 << (LIMA_MAX_MIP_LEVELS - 1);
+   caps->max_texture_3d_levels =
+   caps->max_texture_cube_levels = LIMA_MAX_MIP_LEVELS;
 
-   case PIPE_CAP_VENDOR_ID:
-      return 0x13B5;
+   caps->vendor_id = 0x13B5;
 
-   case PIPE_CAP_VIDEO_MEMORY:
-      return 0;
+   caps->video_memory = 0;
 
-   case PIPE_CAP_PCI_GROUP:
-   case PIPE_CAP_PCI_BUS:
-   case PIPE_CAP_PCI_DEVICE:
-   case PIPE_CAP_PCI_FUNCTION:
-      return 0;
+   caps->pci_group =
+   caps->pci_bus =
+   caps->pci_device =
+   caps->pci_function = 0;
 
-   case PIPE_CAP_TEXTURE_TRANSFER_MODES:
-   case PIPE_CAP_SHAREABLE_SHADERS:
-      return 0;
+   caps->texture_transfer_modes = 0;
 
-   case PIPE_CAP_ALPHA_TEST:
-      return 1;
+   caps->shareable_shaders = false;
 
-   case PIPE_CAP_FLATSHADE:
-   case PIPE_CAP_TWO_SIDED_COLOR:
-   case PIPE_CAP_CLIP_PLANES:
-      return 0;
+   caps->alpha_test = true;
 
-   case PIPE_CAP_FRAGMENT_SHADER_DERIVATIVES:
-      return 1;
+   caps->flatshade = false;
+   caps->two_sided_color = false;
+   caps->clip_planes = 0;
+
+   caps->fragment_shader_derivatives = true;
 
    /* Mali4x0 PP doesn't have a swizzle for load_input, so use POT-aligned
     * varyings to avoid unnecessary movs for vec3 and precision downgrade
     * in case if this vec3 is coordinates for a sampler
     */
-   case PIPE_CAP_PREFER_POT_ALIGNED_VARYINGS:
-      return 1;
+   caps->prefer_pot_aligned_varyings = true;
 
-   case PIPE_CAP_MAX_DUAL_SOURCE_RENDER_TARGETS:
-      return 1;
+   caps->max_dual_source_render_targets = true;
 
-   default:
-      return u_pipe_screen_get_param_defaults(pscreen, param);
-   }
-}
+   caps->min_line_width =
+   caps->min_line_width_aa =
+   caps->min_point_size =
+   caps->min_point_size_aa = 1;
 
-static float
-lima_screen_get_paramf(struct pipe_screen *pscreen, enum pipe_capf param)
-{
-   switch (param) {
-   case PIPE_CAPF_MIN_LINE_WIDTH:
-   case PIPE_CAPF_MIN_LINE_WIDTH_AA:
-   case PIPE_CAPF_MIN_POINT_SIZE:
-   case PIPE_CAPF_MIN_POINT_SIZE_AA:
-      return 1;
-   case PIPE_CAPF_POINT_SIZE_GRANULARITY:
-   case PIPE_CAPF_LINE_WIDTH_GRANULARITY:
-      return 0.1;
-   case PIPE_CAPF_MAX_LINE_WIDTH:
-   case PIPE_CAPF_MAX_LINE_WIDTH_AA:
-   case PIPE_CAPF_MAX_POINT_SIZE:
-   case PIPE_CAPF_MAX_POINT_SIZE_AA:
-      return 100.0f;
-   case PIPE_CAPF_MAX_TEXTURE_ANISOTROPY:
-      return 16.0f;
-   case PIPE_CAPF_MAX_TEXTURE_LOD_BIAS:
-      return 15.0f;
+   caps->point_size_granularity =
+   caps->line_width_granularity = 0.1;
 
-   default:
-      return 0.0f;
-   }
-}
+   caps->max_line_width =
+   caps->max_line_width_aa =
+   caps->max_point_size =
+   caps->max_point_size_aa = 100.0f;
 
-static int
-get_vertex_shader_param(struct lima_screen *screen,
-                        enum pipe_shader_cap param)
-{
-   switch (param) {
-   case PIPE_SHADER_CAP_MAX_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_ALU_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_TEX_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_TEX_INDIRECTIONS:
-      return 16384; /* need investigate */
+   caps->anisotropic_filter = true;
+   caps->max_texture_anisotropy = 16.0f;
 
-   case PIPE_SHADER_CAP_MAX_CONTROL_FLOW_DEPTH:
-      return 1024;
-
-   case PIPE_SHADER_CAP_MAX_INPUTS:
-      return 16; /* attributes */
-
-   case PIPE_SHADER_CAP_MAX_OUTPUTS:
-      return LIMA_MAX_VARYING_NUM; /* varying */
-
-   /* Mali-400 GP provides space for 304 vec4 uniforms, globals and
-    * temporary variables. */
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFER0_SIZE:
-      return 304 * 4 * sizeof(float);
-
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
-      return 1;
-
-   case PIPE_SHADER_CAP_MAX_TEMPS:
-      return 256; /* need investigate */
-
-   default:
-      return 0;
-   }
-}
-
-static int
-get_fragment_shader_param(struct lima_screen *screen,
-                          enum pipe_shader_cap param)
-{
-   switch (param) {
-   case PIPE_SHADER_CAP_MAX_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_ALU_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_TEX_INSTRUCTIONS:
-   case PIPE_SHADER_CAP_MAX_TEX_INDIRECTIONS:
-      return 16384; /* need investigate */
-
-   case PIPE_SHADER_CAP_MAX_INPUTS:
-      return LIMA_MAX_VARYING_NUM - 1; /* varying, minus gl_Position */
-
-   case PIPE_SHADER_CAP_MAX_CONTROL_FLOW_DEPTH:
-      return 1024;
-
-   /* The Mali-PP supports a uniform table up to size 32768 total.
-    * However, indirect access to an uniform only supports indices up
-    * to 8192 (a 2048 vec4 array). To prevent indices bigger than that,
-    * limit max const buffer size to 8192 for now. */
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFER0_SIZE:
-      return 2048 * 4 * sizeof(float);
-
-   case PIPE_SHADER_CAP_MAX_CONST_BUFFERS:
-      return 1;
-
-   case PIPE_SHADER_CAP_MAX_SAMPLER_VIEWS:
-   case PIPE_SHADER_CAP_MAX_TEXTURE_SAMPLERS:
-      return 16; /* need investigate */
-
-   case PIPE_SHADER_CAP_MAX_TEMPS:
-      return 256; /* need investigate */
-
-   case PIPE_SHADER_CAP_INDIRECT_INPUT_ADDR:
-   case PIPE_SHADER_CAP_INDIRECT_CONST_ADDR:
-      return 1;
-
-   case PIPE_SHADER_CAP_INDIRECT_TEMP_ADDR:
-   case PIPE_SHADER_CAP_INDIRECT_OUTPUT_ADDR:
-      return 0;
-
-   default:
-      return 0;
-   }
-}
-
-static int
-lima_screen_get_shader_param(struct pipe_screen *pscreen,
-                             enum pipe_shader_type shader,
-                             enum pipe_shader_cap param)
-{
-   struct lima_screen *screen = lima_screen(pscreen);
-
-   switch (shader) {
-   case PIPE_SHADER_FRAGMENT:
-      return get_fragment_shader_param(screen, param);
-   case PIPE_SHADER_VERTEX:
-      return get_vertex_shader_param(screen, param);
-
-   default:
-      return 0;
-   }
+   caps->max_texture_lod_bias = 15.0f;
 }
 
 static bool
@@ -432,14 +346,6 @@ lima_screen_is_format_supported(struct pipe_screen *pscreen,
       return lima_format_texel_supported(format);
 
    return true;
-}
-
-static const void *
-lima_screen_get_compiler_options(struct pipe_screen *pscreen,
-                                 enum pipe_shader_ir ir,
-                                 enum pipe_shader_type shader)
-{
-   return lima_program_get_compiler_options(shader);
 }
 
 static bool
@@ -673,6 +579,9 @@ lima_screen_create(int fd, const struct pipe_screen_config *config,
    lima_plb_pp_stream_cache_size = MAX2(128 * 1024 * lima_ctx_num_plb,
                                         lima_plb_pp_stream_cache_size);
 
+   driParseConfigFiles(config->options, config->options_info, 0,
+                       "lima", NULL, NULL, NULL, 0, NULL, 0);
+
    if (!lima_screen_query_info(screen))
       goto err_out0;
 
@@ -692,11 +601,9 @@ lima_screen_create(int fd, const struct pipe_screen_config *config,
    screen->pp_buffer->cacheable = false;
 
    /* fs program for clear buffer?
-    * const0 1 0 0 -1.67773, mov.v0 $0 ^const0.xxxx, stop
     */
    static const uint32_t pp_clear_program[] = {
-      0x00020425, 0x0000000c, 0x01e007cf, 0xb0000000,
-      0x000005f5, 0x00000000, 0x00000000, 0x00000000,
+      PP_CLEAR_PROGRAM
    };
    memcpy(lima_bo_map(screen->pp_buffer) + pp_clear_program_offset,
           pp_clear_program, sizeof(pp_clear_program));
@@ -732,17 +639,16 @@ lima_screen_create(int fd, const struct pipe_screen_config *config,
    pp_frame_rsw[9] = screen->pp_buffer->va + pp_clear_program_offset;
    pp_frame_rsw[13] = 0x00000100;
 
+   for (unsigned i = 0; i <= MESA_SHADER_COMPUTE; i++)
+      screen->base.nir_options[i] = lima_program_get_compiler_options(i);
+
    screen->base.destroy = lima_screen_destroy;
    screen->base.get_screen_fd = lima_screen_get_fd;
    screen->base.get_name = lima_screen_get_name;
    screen->base.get_vendor = lima_screen_get_vendor;
    screen->base.get_device_vendor = lima_screen_get_device_vendor;
-   screen->base.get_param = lima_screen_get_param;
-   screen->base.get_paramf = lima_screen_get_paramf;
-   screen->base.get_shader_param = lima_screen_get_shader_param;
    screen->base.context_create = lima_context_create;
    screen->base.is_format_supported = lima_screen_is_format_supported;
-   screen->base.get_compiler_options = lima_screen_get_compiler_options;
    screen->base.query_dmabuf_modifiers = lima_screen_query_dmabuf_modifiers;
    screen->base.is_dmabuf_modifier_supported = lima_screen_is_dmabuf_modifier_supported;
    screen->base.get_disk_shader_cache = lima_get_disk_shader_cache;
@@ -750,6 +656,9 @@ lima_screen_create(int fd, const struct pipe_screen_config *config,
    lima_resource_screen_init(screen);
    lima_fence_screen_init(screen);
    lima_disk_cache_init(screen);
+
+   lima_init_shader_caps(&screen->base);
+   lima_init_screen_caps(&screen->base);
 
    slab_create_parent(&screen->transfer_pool, sizeof(struct lima_transfer), 16);
 

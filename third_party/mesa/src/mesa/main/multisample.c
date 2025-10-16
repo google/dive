@@ -53,7 +53,7 @@ _mesa_SampleCoverage(GLclampf value, GLboolean invert)
       return;
 
    FLUSH_VERTICES(ctx, 0, GL_MULTISAMPLE_BIT);
-   ctx->NewDriverState |= ST_NEW_SAMPLE_STATE;
+   ST_SET_STATE(ctx->NewDriverState, ST_NEW_SAMPLE_STATE);
    ctx->Multisample.SampleCoverageValue = value;
    ctx->Multisample.SampleCoverageInvert = invert;
 }
@@ -89,7 +89,8 @@ get_sample_position(struct gl_context *ctx,
 {
    struct st_context *st = st_context(ctx);
 
-   st_validate_state(st, ST_PIPELINE_UPDATE_FB_STATE_MASK);
+   ST_PIPELINE_UPDATE_FB_STATE_MASK(mask);
+   st_validate_state(st, mask);
 
    if (ctx->pipe->get_sample_position)
       ctx->pipe->get_sample_position(ctx->pipe,
@@ -155,7 +156,7 @@ sample_maski(struct gl_context *ctx, GLuint index, GLbitfield mask)
       return;
 
    FLUSH_VERTICES(ctx, 0, 0);
-   ctx->NewDriverState |= ST_NEW_SAMPLE_STATE;
+   ST_SET_STATE(ctx->NewDriverState, ST_NEW_SAMPLE_STATE);
    ctx->Multisample.SampleMaskValue = mask;
 }
 
@@ -193,7 +194,7 @@ min_sample_shading(struct gl_context *ctx, GLclampf value)
       return;
 
    FLUSH_VERTICES(ctx, 0, GL_MULTISAMPLE_BIT);
-   ctx->NewDriverState |= ctx->DriverFlags.NewSampleShading;
+   ST_SET_STATES(ctx->NewDriverState, ctx->DriverFlags.NewSampleShading);
    ctx->Multisample.MinSampleShadingValue = value;
 }
 
@@ -231,8 +232,7 @@ _mesa_MinSampleShading(GLclampf value)
  */
 GLenum
 _mesa_check_sample_count(struct gl_context *ctx, GLenum target,
-                         GLenum internalFormat, GLsizei samples,
-                         GLsizei storageSamples)
+                         GLenum internalFormat, GLsizei samples)
 {
    /* Section 4.4 (Framebuffer objects), page 198 of the OpenGL ES 3.0.0
     * specification says:
@@ -248,69 +248,17 @@ _mesa_check_sample_count(struct gl_context *ctx, GLenum target,
       return GL_INVALID_OPERATION;
    }
 
-   if (ctx->Extensions.AMD_framebuffer_multisample_advanced &&
-       target == GL_RENDERBUFFER) {
-      if (!_mesa_is_depth_or_stencil_format(internalFormat)) {
-         /* From the AMD_framebuffer_multisample_advanced spec:
-          *
-          *    "An INVALID_OPERATION error is generated if <internalformat>
-          *     is a color format and <storageSamples> is greater than
-          *     the implementation-dependent limit MAX_COLOR_FRAMEBUFFER_-
-          *     STORAGE_SAMPLES_AMD."
-          */
-         if (samples > ctx->Const.MaxColorFramebufferSamples)
-            return GL_INVALID_OPERATION;
-
-         /* From the AMD_framebuffer_multisample_advanced spec:
-          *
-          *    "An INVALID_OPERATION error is generated if <internalformat>
-          *     is a color format and <storageSamples> is greater than
-          *     the implementation-dependent limit MAX_COLOR_FRAMEBUFFER_-
-          *     STORAGE_SAMPLES_AMD."
-          */
-         if (storageSamples > ctx->Const.MaxColorFramebufferStorageSamples)
-            return GL_INVALID_OPERATION;
-
-         /* From the AMD_framebuffer_multisample_advanced spec:
-          *
-          *    "An INVALID_OPERATION error is generated if <storageSamples> is
-          *     greater than <samples>."
-          */
-         if (storageSamples > samples)
-            return GL_INVALID_OPERATION;
-
-         /* Color renderbuffer sample counts are now fully validated
-          * according to AMD_framebuffer_multisample_advanced.
-          */
-         return GL_NO_ERROR;
-      } else {
-         /* From the AMD_framebuffer_multisample_advanced spec:
-          *
-          *    "An INVALID_OPERATION error is generated if <internalformat> is
-          *     a depth or stencil format and <storageSamples> is not equal to
-          *     <samples>."
-          */
-         if (storageSamples != samples)
-            return GL_INVALID_OPERATION;
-      }
-   } else {
-      /* If the extension is unsupported, it's not possible to set
-       * storageSamples differently.
-       */
-      assert(samples == storageSamples);
-   }
-
    /* If ARB_internalformat_query is supported, then treat its highest
     * returned sample count as the absolute maximum for this format; it is
     * allowed to exceed MAX_SAMPLES.
     *
     * From the ARB_internalformat_query spec:
     *
-    * "If <samples is greater than the maximum number of samples supported
+    * "If <samples> is greater than the maximum number of samples supported
     * for <internalformat> then the error INVALID_OPERATION is generated."
     */
-   if (ctx->Extensions.ARB_internalformat_query) {
-      GLint buffer[16] = {-1};
+   if (_mesa_has_internalformat_query(ctx)) {
+      GLint buffer[MAX_SAMPLES] = {-1};
       GLint limit;
 
       st_QueryInternalFormat(ctx, target, internalFormat,
@@ -374,13 +322,74 @@ _mesa_check_sample_count(struct gl_context *ctx, GLenum target,
       ? GL_INVALID_VALUE : GL_NO_ERROR;
 }
 
+/**
+ * Helper for checking a requested sample count against the limit
+ * for a particular (target, internalFormat) pair. The limit imposed,
+ * and the error generated, both depend on which extensions are supported.
+ *
+ * Returns a GL error enum, or GL_NO_ERROR if the requested sample count is
+ * acceptable.
+ */
+GLenum
+_mesa_check_storage_sample_count(struct gl_context *ctx, GLenum internalFormat,
+                                 GLsizei samples, GLsizei storageSamples)
+{
+   assert(_mesa_has_AMD_framebuffer_multisample_advanced(ctx));
+
+   if (!_mesa_is_depth_or_stencil_format(internalFormat)) {
+      /* From the AMD_framebuffer_multisample_advanced spec:
+      *
+      *    "An INVALID_OPERATION error is generated if <internalformat>
+      *     is a color format and <storageSamples> is greater than
+      *     the implementation-dependent limit MAX_COLOR_FRAMEBUFFER_-
+      *     STORAGE_SAMPLES_AMD."
+      */
+      if (samples > ctx->Const.MaxColorFramebufferSamples)
+         return GL_INVALID_OPERATION;
+
+      /* From the AMD_framebuffer_multisample_advanced spec:
+      *
+      *    "An INVALID_OPERATION error is generated if <internalformat>
+      *     is a color format and <storageSamples> is greater than
+      *     the implementation-dependent limit MAX_COLOR_FRAMEBUFFER_-
+      *     STORAGE_SAMPLES_AMD."
+      */
+      if (storageSamples > ctx->Const.MaxColorFramebufferStorageSamples)
+         return GL_INVALID_OPERATION;
+
+      /* From the AMD_framebuffer_multisample_advanced spec:
+      *
+      *    "An INVALID_OPERATION error is generated if <storageSamples> is
+      *     greater than <samples>."
+      */
+      if (storageSamples > samples)
+         return GL_INVALID_OPERATION;
+
+      /* Color renderbuffer sample counts are now fully validated
+      * according to AMD_framebuffer_multisample_advanced.
+      */
+      return GL_NO_ERROR;
+   } else {
+      /* From the AMD_framebuffer_multisample_advanced spec:
+      *
+      *    "An INVALID_OPERATION error is generated if <internalformat> is
+      *     a depth or stencil format and <storageSamples> is not equal to
+      *     <samples>."
+      */
+      if (storageSamples != samples)
+         return GL_INVALID_OPERATION;
+   }
+
+   return GL_NO_ERROR;
+}
+
 void GLAPIENTRY
 _mesa_AlphaToCoverageDitherControlNV_no_error(GLenum mode)
 {
    GET_CURRENT_CONTEXT(ctx);
 
    FLUSH_VERTICES(ctx, 0, GL_MULTISAMPLE_BIT);
-   ctx->NewDriverState |= ST_NEW_BLEND;
+   ST_SET_STATE(ctx->NewDriverState, ST_NEW_BLEND);
    ctx->Multisample.SampleAlphaToCoverageDitherControl = mode;
 }
 
@@ -390,7 +399,7 @@ _mesa_AlphaToCoverageDitherControlNV(GLenum mode)
    GET_CURRENT_CONTEXT(ctx);
 
    FLUSH_VERTICES(ctx, 0, GL_MULTISAMPLE_BIT);
-   ctx->NewDriverState |= ST_NEW_BLEND;
+   ST_SET_STATE(ctx->NewDriverState, ST_NEW_BLEND);
    switch (mode) {
       case GL_ALPHA_TO_COVERAGE_DITHER_DEFAULT_NV:
       case GL_ALPHA_TO_COVERAGE_DITHER_ENABLE_NV:
@@ -409,7 +418,8 @@ _mesa_GetProgrammableSampleCaps(struct gl_context *ctx, const struct gl_framebuf
    struct st_context *st = st_context(ctx);
    struct pipe_screen *screen = ctx->pipe->screen;
 
-   st_validate_state(st, ST_PIPELINE_UPDATE_FB_STATE_MASK);
+   ST_PIPELINE_UPDATE_FB_STATE_MASK(mask);
+   st_validate_state(st, mask);
 
    *outBits = 4;
    *outWidth = 1;

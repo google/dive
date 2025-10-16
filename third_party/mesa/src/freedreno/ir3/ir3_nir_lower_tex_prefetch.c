@@ -1,35 +1,29 @@
 /*
  * Copyright © 2019 Igalia S.L.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "ir3_nir.h"
+
+#include "util/u_vector.h"
 
 /**
  * A pass which detects tex instructions which are candidate to be executed
  * prior to FS shader start, and change them to nir_texop_tex_prefetch.
  */
 
+typedef struct {
+   nir_tex_instr *tex;
+   enum ir3_bary bary;
+} tex_prefetch_candidate;
+
+typedef struct {
+   struct u_vector candidates;
+   uint32_t per_bary_candidates[IJ_COUNT];
+} ir3_prefetch_state;
+
 static int
-coord_offset(nir_def *ssa)
+coord_offset(nir_def *ssa, gl_system_value *bary_type)
 {
    nir_instr *parent_instr = ssa->parent_instr;
 
@@ -45,7 +39,7 @@ coord_offset(nir_def *ssa)
       if (alu->op != nir_op_vec2)
          return -1;
 
-      int base_src_offset = coord_offset(alu->src[0].src.ssa);
+      int base_src_offset = coord_offset(alu->src[0].src.ssa, bary_type);
       if (base_src_offset < 0)
          return -1;
 
@@ -53,7 +47,7 @@ coord_offset(nir_def *ssa)
 
       /* NOTE it might be possible to support more than 2D? */
       for (int i = 1; i < 2; i++) {
-         int nth_src_offset = coord_offset(alu->src[i].src.ssa);
+         int nth_src_offset = coord_offset(alu->src[i].src.ssa, bary_type);
          if (nth_src_offset < 0)
             return -1;
          int nth_offset = nth_src_offset + alu->src[i].swizzle[0];
@@ -78,21 +72,27 @@ coord_offset(nir_def *ssa)
       return -1;
 
    nir_intrinsic_instr *interp =
-      nir_instr_as_intrinsic(input->src[0].ssa->parent_instr);
+      nir_def_as_intrinsic(input->src[0].ssa);
 
-   if (interp->intrinsic != nir_intrinsic_load_barycentric_pixel)
+   if (interp->intrinsic != nir_intrinsic_load_barycentric_pixel &&
+       interp->intrinsic != nir_intrinsic_load_barycentric_sample &&
+       interp->intrinsic != nir_intrinsic_load_barycentric_centroid)
       return -1;
 
-   /* interpolation modes such as noperspective aren't covered by the other
+   /* interpolation modes such as flat aren't covered by the other
     * test, we need to explicitly check for them here.
     */
    unsigned interp_mode = nir_intrinsic_interp_mode(interp);
-   if (interp_mode != INTERP_MODE_NONE && interp_mode != INTERP_MODE_SMOOTH)
+   if (interp_mode != INTERP_MODE_NONE && interp_mode != INTERP_MODE_SMOOTH &&
+       interp_mode != INTERP_MODE_NOPERSPECTIVE)
       return -1;
 
    /* we also need a const input offset: */
    if (!nir_src_is_const(input->src[1]))
       return -1;
+
+   if (bary_type)
+      *bary_type = ir3_nir_intrinsic_barycentric_sysval(interp);
 
    unsigned base = nir_src_as_uint(input->src[1]) + nir_intrinsic_base(input);
    unsigned comp = nir_intrinsic_component(input);
@@ -101,11 +101,13 @@ coord_offset(nir_def *ssa)
 }
 
 int
-ir3_nir_coord_offset(nir_def *ssa)
+ir3_nir_coord_offset(nir_def *ssa, gl_system_value *bary_type)
 {
 
    assert(ssa->num_components == 2);
-   return coord_offset(ssa);
+   if (bary_type)
+      *bary_type = SYSTEM_VALUE_MAX;
+   return coord_offset(ssa, bary_type);
 }
 
 static bool
@@ -154,7 +156,7 @@ ok_tex_samp(nir_tex_instr *tex)
 }
 
 static bool
-lower_tex_prefetch_block(nir_block *block)
+lower_tex_prefetch_block(nir_block *block, ir3_prefetch_state *state)
 {
    bool progress = false;
 
@@ -176,7 +178,8 @@ lower_tex_prefetch_block(nir_block *block)
          continue;
 
       /* only prefetch for simple 2d tex fetch case */
-      if (tex->sampler_dim != GLSL_SAMPLER_DIM_2D || tex->is_array)
+      if (tex->sampler_dim != GLSL_SAMPLER_DIM_2D || tex->is_array ||
+          tex->is_sparse)
          continue;
 
       if (!ok_tex_samp(tex))
@@ -186,8 +189,14 @@ lower_tex_prefetch_block(nir_block *block)
       /* First source should be the sampling coordinate. */
       nir_tex_src *coord = &tex->src[idx];
 
-      if (ir3_nir_coord_offset(coord->src.ssa) >= 0) {
-         tex->op = nir_texop_tex_prefetch;
+      gl_system_value bary_type;
+      if (ir3_nir_coord_offset(coord->src.ssa, &bary_type) >= 0) {
+         enum ir3_bary bary = bary_type - SYSTEM_VALUE_BARYCENTRIC_PERSP_PIXEL;
+         state->per_bary_candidates[bary]++;
+
+         tex_prefetch_candidate *candidate = u_vector_add(&state->candidates);
+         candidate->tex = tex;
+         candidate->bary = bary;
 
          progress |= true;
       }
@@ -197,7 +206,7 @@ lower_tex_prefetch_block(nir_block *block)
 }
 
 static bool
-lower_tex_prefetch_func(nir_function_impl *impl)
+lower_tex_prefetch_func(nir_function_impl *impl, ir3_prefetch_state *state)
 {
    /* Only instructions in the the outer-most block are considered eligible for
     * pre-dispatch, because they need to be move-able to the beginning of the
@@ -219,22 +228,21 @@ lower_tex_prefetch_func(nir_function_impl *impl)
       }
    }
 
-   bool progress = lower_tex_prefetch_block(block);
+   bool progress = lower_tex_prefetch_block(block, state);
 
-   if (progress) {
-      nir_metadata_preserve(impl,
-                            nir_metadata_block_index | nir_metadata_dominance);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool
-ir3_nir_lower_tex_prefetch(nir_shader *shader)
+ir3_nir_lower_tex_prefetch(nir_shader *shader,
+                           enum ir3_bary *prefetch_bary_type)
 {
    bool progress = false;
 
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
+
+   ir3_prefetch_state state = {};
+   u_vector_init(&state.candidates, 4, sizeof(tex_prefetch_candidate));
 
    nir_foreach_function (function, shader) {
       /* Only texture sampling instructions inside the main function
@@ -243,8 +251,36 @@ ir3_nir_lower_tex_prefetch(nir_shader *shader)
       if (!function->impl || !function->is_entrypoint)
          continue;
 
-      progress |= lower_tex_prefetch_func(function->impl);
+      progress |= lower_tex_prefetch_func(function->impl, &state);
    }
+
+   if (progress) {
+      /* We cannot prefetch tex ops that use different interpolation modes,
+       * so we have to choose a single mode to prefetch. We select the
+       * interpolation mode that would allow us to prefetch the most tex ops.
+       */
+      uint32_t max_tex_with_bary = 0;
+      uint32_t chosen_bary = 0;
+      for (int i = 0; i < IJ_COUNT; i++) {
+         if (state.per_bary_candidates[i] > max_tex_with_bary) {
+            max_tex_with_bary = state.per_bary_candidates[i];
+            chosen_bary = i;
+         }
+      }
+
+      tex_prefetch_candidate *candidate;
+      u_vector_foreach(candidate, &state.candidates) {
+         if (candidate->bary == chosen_bary) {
+            candidate->tex->op = nir_texop_tex_prefetch;
+         }
+      }
+
+      *prefetch_bary_type = chosen_bary;
+   } else {
+      *prefetch_bary_type = IJ_COUNT;
+   }
+
+   u_vector_finish(&state.candidates);
 
    return progress;
 }

@@ -31,7 +31,7 @@
 #include "util/ralloc.h"
 #include "util/u_debug.h"
 
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX
 #include <syslog.h>
 #include "util/u_process.h"
 #endif
@@ -67,8 +67,35 @@ static const struct debug_control mesa_log_control_options[] = {
    { NULL, 0 },
 };
 
+static inline const char *
+level_to_str(enum mesa_log_level l)
+{
+   switch (l) {
+   case MESA_LOG_ERROR: return "error";
+   case MESA_LOG_WARN: return "warning";
+   case MESA_LOG_INFO: return "info";
+   case MESA_LOG_DEBUG: return "debug";
+   case MESA_NUM_LOG_LEVELS:
+      break;
+   }
+
+   UNREACHABLE("bad mesa_log_level");
+}
+
+static enum mesa_log_level
+level_from_str(const char *str)
+{
+   for (unsigned l = 0; l < MESA_NUM_LOG_LEVELS; l++) {
+      if (strcmp(level_to_str(l), str) == 0)
+         return l;
+   }
+
+   return MESA_NUM_LOG_LEVELS;
+}
+
 static uint32_t mesa_log_control;
 static FILE *mesa_log_file;
+static enum mesa_log_level mesa_max_log_level;
 
 static void
 mesa_log_init_once(void)
@@ -91,10 +118,15 @@ mesa_log_init_once(void)
 #endif
    }
 
+   mesa_max_log_level = MESA_DEFAULT_LOG_LEVEL;
+   const char *log_level = os_get_option("MESA_LOG_LEVEL");
+   if (log_level != NULL)
+      mesa_max_log_level = level_from_str(log_level);
+
    mesa_log_file = stderr;
 
 #if !DETECT_OS_WINDOWS
-   if (geteuid() == getuid()) {
+   if (__normal_user()) {
       const char *log_file = os_get_option("MESA_LOG_FILE");
       if (log_file) {
          FILE *fp = fopen(log_file, "w");
@@ -106,7 +138,7 @@ mesa_log_init_once(void)
    }
 #endif
 
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX
    if (mesa_log_control & MESA_LOG_CONTROL_SYSLOG)
       openlog(util_get_process_name(), LOG_NDELAY | LOG_PID, LOG_USER);
 #endif
@@ -119,17 +151,46 @@ mesa_log_init(void)
    call_once(&once, mesa_log_init_once);
 }
 
-static inline const char *
-level_to_str(enum mesa_log_level l)
+static void
+mesa_warn_invalid_level_once(void)
 {
-   switch (l) {
-   case MESA_LOG_ERROR: return "error";
-   case MESA_LOG_WARN: return "warning";
-   case MESA_LOG_INFO: return "info";
-   case MESA_LOG_DEBUG: return "debug";
+   const char *log_level = os_get_option("MESA_LOG_LEVEL");
+   mesa_logw("Invalid log level: \"%s\"", log_level);
+}
+
+static void
+mesa_warn_invalid_level(void)
+{
+   static once_flag once = ONCE_FLAG_INIT;
+   call_once(&once, mesa_warn_invalid_level_once);
+}
+
+void
+mesa_log_if_debug(enum mesa_log_level level, const char *outputString)
+{
+   static int debug = -1;
+
+   /* Init the local 'debug' var once. */
+   if (debug == -1) {
+      const char *env = getenv("MESA_DEBUG");
+      bool silent = env && strstr(env, "silent") != NULL;
+#ifndef NDEBUG
+      /* in debug builds, print messages unless MESA_DEBUG="silent" */
+      if (silent)
+         debug = 0;
+      else
+         debug = 1;
+#else
+      /* in release builds, print messages if any MESA_DEBUG value other than
+       * MESA_DEBUG="silent" is set
+       */
+      debug = env && !silent;
+#endif
    }
 
-   unreachable("bad mesa_log_level");
+   /* Now only print the string if we're required to do so. */
+   if (debug)
+      mesa_log(level, "Mesa", "%s", outputString);
 }
 
 enum logger_vasnprintf_affix {
@@ -232,7 +293,7 @@ logger_file(enum mesa_log_level level,
       free(msg);
 }
 
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX
 
 static inline int
 level_to_syslog(enum mesa_log_level l)
@@ -242,9 +303,11 @@ level_to_syslog(enum mesa_log_level l)
    case MESA_LOG_WARN: return LOG_WARNING;
    case MESA_LOG_INFO: return LOG_INFO;
    case MESA_LOG_DEBUG: return LOG_DEBUG;
+   case MESA_NUM_LOG_LEVELS:
+      break;
    }
 
-   unreachable("bad mesa_log_level");
+   UNREACHABLE("bad mesa_log_level");
 }
 
 static void
@@ -263,7 +326,7 @@ logger_syslog(enum mesa_log_level level,
       free(msg);
 }
 
-#endif /* DETECT_OS_UNIX */
+#endif /* DETECT_OS_POSIX */
 
 #if DETECT_OS_ANDROID
 
@@ -275,9 +338,11 @@ level_to_android(enum mesa_log_level l)
    case MESA_LOG_WARN: return ANDROID_LOG_WARN;
    case MESA_LOG_INFO: return ANDROID_LOG_INFO;
    case MESA_LOG_DEBUG: return ANDROID_LOG_DEBUG;
+   case MESA_NUM_LOG_LEVELS:
+      break;
    }
 
-   unreachable("bad mesa_log_level");
+   UNREACHABLE("bad mesa_log_level");
 }
 
 static void
@@ -364,7 +429,7 @@ mesa_log_v(enum mesa_log_level level, const char *tag, const char *format,
                   va_list va);
    } loggers[] = {
       { MESA_LOG_CONTROL_FILE, logger_file },
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX
       { MESA_LOG_CONTROL_SYSLOG, logger_syslog },
 #endif
 #if DETECT_OS_ANDROID
@@ -377,6 +442,17 @@ mesa_log_v(enum mesa_log_level level, const char *tag, const char *format,
 
    mesa_log_init();
 
+   if (unlikely(mesa_max_log_level >= MESA_NUM_LOG_LEVELS)) {
+      /* Set to the default since this function will call back into mesa_log()
+       * and we don't want to recurse back into the once.
+       */
+      mesa_max_log_level = MESA_DEFAULT_LOG_LEVEL;
+      mesa_warn_invalid_level();
+   }
+
+   if (level > mesa_max_log_level)
+      return;
+
    for (uint32_t i = 0; i < ARRAY_SIZE(loggers); i++) {
       if (mesa_log_control & loggers[i].bit) {
          va_list copy;
@@ -385,6 +461,23 @@ mesa_log_v(enum mesa_log_level level, const char *tag, const char *format,
          va_end(copy);
       }
    }
+}
+
+void
+_mesa_log(const char *fmtString, ...)
+{
+   char s[MAX_LOG_MESSAGE_LENGTH];
+   va_list args;
+   va_start(args, fmtString);
+   vsnprintf(s, MAX_LOG_MESSAGE_LENGTH, fmtString, args);
+   va_end(args);
+   mesa_log_if_debug(MESA_LOG_INFO, s);
+}
+
+void
+_mesa_log_direct(const char *string)
+{
+   mesa_log_if_debug(MESA_LOG_INFO, string);
 }
 
 struct log_stream *

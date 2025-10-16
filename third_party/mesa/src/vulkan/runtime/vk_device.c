@@ -23,18 +23,23 @@
 
 #include "vk_device.h"
 
+#include "vk_alloc.h"
 #include "vk_common_entrypoints.h"
+#include "vk_fence.h"
 #include "vk_instance.h"
 #include "vk_log.h"
 #include "vk_physical_device.h"
 #include "vk_queue.h"
+#include "vk_semaphore.h"
 #include "vk_sync.h"
 #include "vk_sync_timeline.h"
 #include "vk_util.h"
+#include "util/compiler.h"
 #include "util/u_debug.h"
 #include "util/hash_table.h"
 #include "util/perf/cpu_trace.h"
 #include "util/ralloc.h"
+#include "util/timespec.h"
 
 static enum vk_device_timeline_mode
 get_timeline_mode(struct vk_physical_device *physical_device)
@@ -85,6 +90,42 @@ collect_enabled_features(struct vk_device *device,
    vk_set_physical_device_features(&device->enabled_features, pCreateInfo->pNext);
 }
 
+static VkResult
+vk_device_memory_report_init(struct vk_device *device,
+                             const VkDeviceCreateInfo *pCreateInfo)
+{
+   struct vk_device_memory_report *mem_reports = NULL;
+   uint32_t count = 0;
+
+   vk_foreach_struct_const(pnext, pCreateInfo->pNext) {
+      if (pnext->sType == VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT)
+         count++;
+   }
+
+   if (!count)
+      return VK_SUCCESS;
+
+   mem_reports = vk_alloc(&device->alloc, sizeof(*mem_reports) * count,
+                          8, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+   if (!mem_reports)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+   count = 0;
+   vk_foreach_struct_const(pnext, pCreateInfo->pNext) {
+      if (pnext->sType == VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT) {
+         const struct VkDeviceDeviceMemoryReportCreateInfoEXT *report = (void *)pnext;
+         mem_reports[count].callback = report->pfnUserCallback;
+         mem_reports[count].data = report->pUserData;
+         count++;
+      }
+   }
+
+   device->memory_report_count = count;
+   device->memory_reports = mem_reports;
+
+   return VK_SUCCESS;
+}
+
 VkResult
 vk_device_init(struct vk_device *device,
                struct vk_physical_device *physical_device,
@@ -127,7 +168,7 @@ vk_device_init(struct vk_device *device,
                           "%s not supported",
                           pCreateInfo->ppEnabledExtensionNames[i]);
 
-#ifdef ANDROID
+#ifdef ANDROID_STRICT
       if (!vk_android_allowed_device_extensions.extensions[idx])
          return vk_errorf(physical_device, VK_ERROR_EXTENSION_NOT_PRESENT,
                           "%s not supported",
@@ -149,7 +190,7 @@ vk_device_init(struct vk_device *device,
 
    list_inithead(&device->queues);
 
-   device->drm_fd = -1;
+   device->mem_cache = NULL;
 
    device->timeline_mode = get_timeline_mode(physical_device);
 
@@ -164,25 +205,73 @@ vk_device_init(struct vk_device *device,
       break;
 
    case VK_DEVICE_TIMELINE_MODE_ASSISTED:
-      if (debug_get_bool_option("MESA_VK_ENABLE_SUBMIT_THREAD", false)) {
-         device->submit_mode = VK_QUEUE_SUBMIT_MODE_THREADED;
+      if (os_get_option("MESA_VK_ENABLE_SUBMIT_THREAD")) {
+         if (debug_get_bool_option("MESA_VK_ENABLE_SUBMIT_THREAD", false)) {
+            device->submit_mode = VK_QUEUE_SUBMIT_MODE_THREADED;
+         } else {
+            device->submit_mode = VK_QUEUE_SUBMIT_MODE_IMMEDIATE;
+         }
       } else {
          device->submit_mode = VK_QUEUE_SUBMIT_MODE_THREADED_ON_DEMAND;
       }
       break;
 
    default:
-      unreachable("Invalid timeline mode");
+      UNREACHABLE("Invalid timeline mode");
    }
 
-#ifdef ANDROID
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
    mtx_init(&device->swapchain_private_mtx, mtx_plain);
    device->swapchain_private = NULL;
-#endif /* ANDROID */
+#endif /* VK_USE_PLATFORM_ANDROID_KHR */
 
    simple_mtx_init(&device->trace_mtx, mtx_plain);
 
+   vk_foreach_struct_const (ext, pCreateInfo->pNext) {
+      switch (ext->sType) {
+      case VK_STRUCTURE_TYPE_DEVICE_PIPELINE_BINARY_INTERNAL_CACHE_CONTROL_KHR: {
+         const VkDevicePipelineBinaryInternalCacheControlKHR *cache_control = (const void *)ext;
+         if (cache_control->disableInternalCache)
+            device->disable_internal_cache = true;
+         break;
+      }
+      default:
+         break;
+      }
+   }
+
+   if (device->enabled_extensions.KHR_calibrated_timestamps ||
+       device->enabled_extensions.EXT_calibrated_timestamps) {
+      /* sorted by preference */
+      const VkTimeDomainKHR calibrate_domains[] = {
+         VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR,
+         VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR,
+      };
+      for (uint32_t i = 0; i < ARRAY_SIZE(calibrate_domains); i++) {
+         const VkTimeDomainKHR domain = calibrate_domains[i];
+         uint64_t ts;
+         if (vk_device_get_timestamp(NULL, domain, &ts) == VK_SUCCESS) {
+            device->calibrate_time_domain = domain;
+            break;
+         }
+      }
+
+      assert(device->calibrate_time_domain != VK_TIME_DOMAIN_DEVICE_KHR);
+      device->device_time_domain_period =
+         (uint64_t)ceilf(device->physical->properties.timestampPeriod);
+   }
+
+   result = vk_device_memory_report_init(device, pCreateInfo);
+   if (result != VK_SUCCESS)
+      return result;
+
    return VK_SUCCESS;
+}
+
+static void
+vk_device_memory_report_finish(struct vk_device *device)
+{
+   vk_free(&device->alloc, device->memory_reports);
 }
 
 void
@@ -191,15 +280,19 @@ vk_device_finish(struct vk_device *device)
    /* Drivers should tear down their own queues */
    assert(list_is_empty(&device->queues));
 
+   if (device->sync)
+      device->sync->finalize(device->sync);
+
+   vk_device_memory_report_finish(device);
    vk_memory_trace_finish(device);
 
-#ifdef ANDROID
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
    if (device->swapchain_private) {
       hash_table_foreach(device->swapchain_private, entry)
          util_sparse_array_finish(entry->data);
       ralloc_free(device->swapchain_private);
    }
-#endif /* ANDROID */
+#endif /* VK_USE_PLATFORM_ANDROID_KHR */
 
    simple_mtx_destroy(&device->trace_mtx);
 
@@ -537,6 +630,254 @@ vk_common_DeviceWaitIdle(VkDevice _device)
    return VK_SUCCESS;
 }
 
+VkResult
+vk_device_copy_semaphore_payloads(struct vk_device *device,
+                                  uint32_t wait_semaphore_count,
+                                  const VkSemaphoreSubmitInfo *wait_semaphores,
+                                  uint32_t signal_semaphore_count,
+                                  const VkSemaphoreSubmitInfo *signal_semaphores,
+                                  uint32_t fence_count,
+                                  const VkFence *fences)
+{
+   if (device->copy_sync_payloads == NULL)
+      return VK_ERROR_FEATURE_NOT_PRESENT;
+
+   STACK_ARRAY(struct vk_sync_wait, waits, wait_semaphore_count);
+   STACK_ARRAY(struct vk_sync_timeline_point *, wait_points,
+               wait_semaphore_count);
+   STACK_ARRAY(struct vk_sync *, resets, wait_semaphore_count);
+   STACK_ARRAY(struct vk_sync_signal, signals,
+               signal_semaphore_count + fence_count);
+   STACK_ARRAY(struct vk_sync_timeline_point *, signal_points,
+               signal_semaphore_count + fence_count);
+   uint32_t wait_count = 0, reset_count = 0, signal_count = 0;
+   VkResult result = VK_SUCCESS;
+
+   for (uint32_t i = 0; i < wait_semaphore_count; i++) {
+      VK_FROM_HANDLE(vk_semaphore, semaphore, wait_semaphores[i].semaphore);
+
+      struct vk_sync_wait wait = {
+         .sync = vk_semaphore_get_active_sync(semaphore),
+         .stage_mask = wait_semaphores[i].stageMask,
+         .wait_value = semaphore->type == VK_SEMAPHORE_TYPE_TIMELINE ?
+                       wait_semaphores[i].value : 0,
+      };
+      struct vk_sync_timeline_point *wait_point = NULL;
+      VkResult result = vk_sync_wait_unwrap(device, &wait, &wait_point);
+      if (unlikely(result != VK_SUCCESS))
+         goto fail;
+
+      if (wait.sync == NULL)
+         continue;
+
+      wait_points[wait_count] = wait_point;
+      waits[wait_count] = wait;
+      wait_count++;
+   }
+
+   for (uint32_t i = 0; i < signal_semaphore_count; i++) {
+      VK_FROM_HANDLE(vk_semaphore, semaphore, signal_semaphores[i].semaphore);
+
+      if (semaphore->type == VK_SEMAPHORE_TYPE_TIMELINE &&
+          signal_semaphores[i].value == 0) {
+         result = vk_errorf(device, VK_ERROR_UNKNOWN,
+                            "Tried to signal a timeline with value 0");
+         goto fail;
+      }
+
+      struct vk_sync_signal signal = {
+         .sync = vk_semaphore_get_active_sync(semaphore),
+         .stage_mask = signal_semaphores[i].stageMask,
+         .signal_value = semaphore->type == VK_SEMAPHORE_TYPE_TIMELINE ?
+                         signal_semaphores[i].value : 0,
+      };
+      struct vk_sync_timeline_point *signal_point = NULL;
+      VkResult result = vk_sync_signal_unwrap(device, &signal, &signal_point);
+      if (unlikely(result != VK_SUCCESS))
+         goto fail;
+
+      signal_points[signal_count] = signal_point;
+      signals[signal_count] = signal;
+      signal_count++;
+   }
+
+   for (uint32_t i = 0; i < fence_count; i++) {
+      VK_FROM_HANDLE(vk_fence, fence, fences[i]);
+
+      struct vk_sync_signal signal = {
+         .sync = vk_fence_get_active_sync(fence),
+         .stage_mask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+      };
+      struct vk_sync_timeline_point *signal_point = NULL;
+      VkResult result = vk_sync_signal_unwrap(device, &signal, &signal_point);
+      if (unlikely(result != VK_SUCCESS))
+         goto fail;
+
+      /* Timeline fences aren't a thing */
+      assert(signal_point == NULL);
+
+      signal_points[signal_count] = signal_point;
+      signals[signal_count] = signal;
+      signal_count++;
+   }
+
+   if (wait_count == 0) {
+      /* Nothing to wait on.  Just signal everything */
+      result = vk_sync_signal_many(device, signal_count, signals);
+      if (result != VK_SUCCESS)
+         goto fail;
+   } else if (signal_count > 0) {
+      /* Wait for time points to materialize */
+      result = vk_sync_wait_many(device, wait_count, waits,
+                                 VK_SYNC_WAIT_PENDING, UINT64_MAX);
+      if (result != VK_SUCCESS)
+         goto fail;
+
+      /* Now do the copy */
+      result = device->copy_sync_payloads(device, wait_count, waits,
+                                          signal_count, signals);
+      if (result != VK_SUCCESS)
+         goto fail;
+   }
+
+   /* Reset any syncs which were waited on but not signaled */
+   for (uint32_t i = 0; i < wait_count; i++) {
+      bool was_signaled = false;
+      for (uint32_t j = 0; j < signal_count; j++) {
+         if (signals[j].sync == waits[i].sync) {
+            was_signaled = true;
+            break;
+         }
+      }
+
+      if (!was_signaled)
+         resets[reset_count++] = waits[i].sync;
+   }
+
+   if (reset_count > 0) {
+      result = vk_sync_reset_many(device, reset_count, resets);
+      if (result != VK_SUCCESS)
+         goto fail;
+   }
+
+   /* Reset any temporary semaphores we waited on */
+   for (uint32_t i = 0; i < wait_semaphore_count; i++) {
+      VK_FROM_HANDLE(vk_semaphore, semaphore, wait_semaphores[i].semaphore);
+
+      vk_semaphore_reset_temporary(device, semaphore);
+   }
+
+   /* Install time points */
+   for (uint32_t i = 0; i < signal_count; i++) {
+      if (signal_points[i] == NULL)
+         continue;
+
+      vk_sync_timeline_point_install(device, signal_points[i]);
+
+      /* Installing the point consumes our reference */
+      signal_points[i] = NULL;
+   }
+
+fail:
+
+   for (uint32_t i = 0; i < signal_count; i++) {
+      if (signal_points[i] != NULL)
+         vk_sync_timeline_point_unref(device, signal_points[i]);
+   }
+
+   STACK_ARRAY_FINISH(waits);
+   STACK_ARRAY_FINISH(wait_points);
+   STACK_ARRAY_FINISH(resets);
+   STACK_ARRAY_FINISH(signals);
+   STACK_ARRAY_FINISH(signal_points);
+
+   return result;
+}
+
+VkResult
+vk_device_get_timestamp(struct vk_device *device, VkTimeDomainKHR domain,
+                        uint64_t *timestamp)
+{
+   if (domain == VK_TIME_DOMAIN_DEVICE_KHR) {
+      assert(device && device->get_timestamp);
+      return device->get_timestamp(device, timestamp);
+   }
+
+   /* device is not used for host time domains */
+#ifndef _WIN32
+   clockid_t clockid;
+   struct timespec ts;
+
+   switch (domain) {
+   case VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR:
+      clockid = CLOCK_MONOTONIC;
+      break;
+   case VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR:
+      /* The "RAW" clocks on Linux are called "FAST" on FreeBSD */
+#if defined(CLOCK_MONOTONIC_RAW)
+      clockid = CLOCK_MONOTONIC_RAW;
+      break;
+#elif defined(CLOCK_MONOTONIC_FAST)
+      clockid = CLOCK_MONOTONIC_FAST;
+      break;
+#else
+      FALLTHROUGH;
+#endif
+   default:
+      goto fail;
+   }
+
+   if (clock_gettime(clockid, &ts) < 0)
+      goto fail;
+
+   *timestamp = (uint64_t)ts.tv_sec * NSEC_PER_SEC + ts.tv_nsec;
+   return VK_SUCCESS;
+
+fail:
+#endif /* _WIN32 */
+   return VK_ERROR_FEATURE_NOT_PRESENT;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL
+vk_common_GetCalibratedTimestampsKHR(
+   VkDevice _device, uint32_t timestampCount,
+   const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
+   uint64_t *pMaxDeviation)
+{
+   VK_FROM_HANDLE(vk_device, device, _device);
+   uint64_t begin, end;
+   VkResult result;
+
+   /* collect timestamps as tight as possible */
+   result =
+      vk_device_get_timestamp(device, device->calibrate_time_domain, &begin);
+   for (uint32_t i = 0; i < timestampCount; i++) {
+      const VkTimeDomainKHR domain = pTimestampInfos[i].timeDomain;
+      if (domain == device->calibrate_time_domain)
+         pTimestamps[i] = begin;
+      else
+         result |= vk_device_get_timestamp(device, domain, &pTimestamps[i]);
+   }
+   result |=
+      vk_device_get_timestamp(device, device->calibrate_time_domain, &end);
+
+   if (result != VK_SUCCESS)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+   uint64_t max_clock_period = 0;
+   for (uint32_t i = 0; i < timestampCount; i++) {
+      const VkTimeDomainKHR domain = pTimestampInfos[i].timeDomain;
+      const uint64_t period = domain == VK_TIME_DOMAIN_DEVICE_KHR
+         ? device->device_time_domain_period
+         : domain != device->calibrate_time_domain ? 1 : 0;
+      max_clock_period = MAX2(max_clock_period, period);
+   }
+
+   *pMaxDeviation = vk_time_max_deviation(begin, end, max_clock_period);
+
+   return VK_SUCCESS;
+}
+
 #ifndef _WIN32
 
 uint64_t
@@ -557,530 +898,3 @@ vk_clock_gettime(clockid_t clock_id)
 }
 
 #endif //!_WIN32
-
-#define CORE_FEATURE(feature) features->feature = core->feature
-
-bool
-vk_get_physical_device_core_1_1_feature_ext(struct VkBaseOutStructure *ext,
-                                            const VkPhysicalDeviceVulkan11Features *core)
-{
-
-   switch (ext->sType) {
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES: {
-      VkPhysicalDevice16BitStorageFeatures *features = (void *)ext;
-      CORE_FEATURE(storageBuffer16BitAccess);
-      CORE_FEATURE(uniformAndStorageBuffer16BitAccess);
-      CORE_FEATURE(storagePushConstant16);
-      CORE_FEATURE(storageInputOutput16);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES: {
-      VkPhysicalDeviceMultiviewFeatures *features = (void *)ext;
-      CORE_FEATURE(multiview);
-      CORE_FEATURE(multiviewGeometryShader);
-      CORE_FEATURE(multiviewTessellationShader);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES: {
-      VkPhysicalDeviceProtectedMemoryFeatures *features = (void *)ext;
-      CORE_FEATURE(protectedMemory);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES: {
-      VkPhysicalDeviceSamplerYcbcrConversionFeatures *features = (void *) ext;
-      CORE_FEATURE(samplerYcbcrConversion);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES: {
-      VkPhysicalDeviceShaderDrawParametersFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderDrawParameters);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES: {
-      VkPhysicalDeviceVariablePointersFeatures *features = (void *)ext;
-      CORE_FEATURE(variablePointersStorageBuffer);
-      CORE_FEATURE(variablePointers);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
-      vk_copy_struct_guts(ext, (void *)core, sizeof(*core));
-      return true;
-
-   default:
-      return false;
-   }
-}
-
-bool
-vk_get_physical_device_core_1_2_feature_ext(struct VkBaseOutStructure *ext,
-                                            const VkPhysicalDeviceVulkan12Features *core)
-{
-
-   switch (ext->sType) {
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES: {
-      VkPhysicalDevice8BitStorageFeatures *features = (void *)ext;
-      CORE_FEATURE(storageBuffer8BitAccess);
-      CORE_FEATURE(uniformAndStorageBuffer8BitAccess);
-      CORE_FEATURE(storagePushConstant8);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES: {
-      VkPhysicalDeviceBufferDeviceAddressFeatures *features = (void *)ext;
-      CORE_FEATURE(bufferDeviceAddress);
-      CORE_FEATURE(bufferDeviceAddressCaptureReplay);
-      CORE_FEATURE(bufferDeviceAddressMultiDevice);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES: {
-      VkPhysicalDeviceDescriptorIndexingFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderInputAttachmentArrayDynamicIndexing);
-      CORE_FEATURE(shaderUniformTexelBufferArrayDynamicIndexing);
-      CORE_FEATURE(shaderStorageTexelBufferArrayDynamicIndexing);
-      CORE_FEATURE(shaderUniformBufferArrayNonUniformIndexing);
-      CORE_FEATURE(shaderSampledImageArrayNonUniformIndexing);
-      CORE_FEATURE(shaderStorageBufferArrayNonUniformIndexing);
-      CORE_FEATURE(shaderStorageImageArrayNonUniformIndexing);
-      CORE_FEATURE(shaderInputAttachmentArrayNonUniformIndexing);
-      CORE_FEATURE(shaderUniformTexelBufferArrayNonUniformIndexing);
-      CORE_FEATURE(shaderStorageTexelBufferArrayNonUniformIndexing);
-      CORE_FEATURE(descriptorBindingUniformBufferUpdateAfterBind);
-      CORE_FEATURE(descriptorBindingSampledImageUpdateAfterBind);
-      CORE_FEATURE(descriptorBindingStorageImageUpdateAfterBind);
-      CORE_FEATURE(descriptorBindingStorageBufferUpdateAfterBind);
-      CORE_FEATURE(descriptorBindingUniformTexelBufferUpdateAfterBind);
-      CORE_FEATURE(descriptorBindingStorageTexelBufferUpdateAfterBind);
-      CORE_FEATURE(descriptorBindingUpdateUnusedWhilePending);
-      CORE_FEATURE(descriptorBindingPartiallyBound);
-      CORE_FEATURE(descriptorBindingVariableDescriptorCount);
-      CORE_FEATURE(runtimeDescriptorArray);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES: {
-      VkPhysicalDeviceShaderFloat16Int8Features *features = (void *)ext;
-      CORE_FEATURE(shaderFloat16);
-      CORE_FEATURE(shaderInt8);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES: {
-      VkPhysicalDeviceHostQueryResetFeatures *features = (void *)ext;
-      CORE_FEATURE(hostQueryReset);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES: {
-      VkPhysicalDeviceImagelessFramebufferFeatures *features = (void *)ext;
-      CORE_FEATURE(imagelessFramebuffer);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES: {
-      VkPhysicalDeviceScalarBlockLayoutFeatures *features =(void *)ext;
-      CORE_FEATURE(scalarBlockLayout);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES: {
-      VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures *features = (void *)ext;
-      CORE_FEATURE(separateDepthStencilLayouts);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES: {
-      VkPhysicalDeviceShaderAtomicInt64Features *features = (void *)ext;
-      CORE_FEATURE(shaderBufferInt64Atomics);
-      CORE_FEATURE(shaderSharedInt64Atomics);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES: {
-      VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderSubgroupExtendedTypes);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES: {
-      VkPhysicalDeviceTimelineSemaphoreFeatures *features = (void *) ext;
-      CORE_FEATURE(timelineSemaphore);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES: {
-      VkPhysicalDeviceUniformBufferStandardLayoutFeatures *features = (void *)ext;
-      CORE_FEATURE(uniformBufferStandardLayout);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES: {
-      VkPhysicalDeviceVulkanMemoryModelFeatures *features = (void *)ext;
-      CORE_FEATURE(vulkanMemoryModel);
-      CORE_FEATURE(vulkanMemoryModelDeviceScope);
-      CORE_FEATURE(vulkanMemoryModelAvailabilityVisibilityChains);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
-      vk_copy_struct_guts(ext, (void *)core, sizeof(*core));
-      return true;
-
-   default:
-      return false;
-   }
-}
-
-bool
-vk_get_physical_device_core_1_3_feature_ext(struct VkBaseOutStructure *ext,
-                                            const VkPhysicalDeviceVulkan13Features *core)
-{
-   switch (ext->sType) {
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES: {
-      VkPhysicalDeviceDynamicRenderingFeatures *features = (void *)ext;
-      CORE_FEATURE(dynamicRendering);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ROBUSTNESS_FEATURES: {
-      VkPhysicalDeviceImageRobustnessFeatures *features = (void *)ext;
-      CORE_FEATURE(robustImageAccess);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES: {
-      VkPhysicalDeviceInlineUniformBlockFeatures *features = (void *)ext;
-      CORE_FEATURE(inlineUniformBlock);
-      CORE_FEATURE(descriptorBindingInlineUniformBlockUpdateAfterBind);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES: {
-      VkPhysicalDeviceMaintenance4Features *features = (void *)ext;
-      CORE_FEATURE(maintenance4);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES: {
-      VkPhysicalDevicePipelineCreationCacheControlFeatures *features = (void *)ext;
-      CORE_FEATURE(pipelineCreationCacheControl);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIVATE_DATA_FEATURES: {
-      VkPhysicalDevicePrivateDataFeatures *features = (void *)ext;
-      CORE_FEATURE(privateData);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES: {
-      VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderDemoteToHelperInvocation);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES: {
-      VkPhysicalDeviceShaderIntegerDotProductFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderIntegerDotProduct);
-      return true;
-   };
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_TERMINATE_INVOCATION_FEATURES: {
-      VkPhysicalDeviceShaderTerminateInvocationFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderTerminateInvocation);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES: {
-      VkPhysicalDeviceSubgroupSizeControlFeatures *features = (void *)ext;
-      CORE_FEATURE(subgroupSizeControl);
-      CORE_FEATURE(computeFullSubgroups);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES: {
-      VkPhysicalDeviceSynchronization2Features *features = (void *)ext;
-      CORE_FEATURE(synchronization2);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES: {
-      VkPhysicalDeviceTextureCompressionASTCHDRFeatures *features = (void *)ext;
-      CORE_FEATURE(textureCompressionASTC_HDR);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ZERO_INITIALIZE_WORKGROUP_MEMORY_FEATURES: {
-      VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeatures *features = (void *)ext;
-      CORE_FEATURE(shaderZeroInitializeWorkgroupMemory);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
-      vk_copy_struct_guts(ext, (void *)core, sizeof(*core));
-      return true;
-
-   default:
-      return false;
-   }
-}
-
-#undef CORE_FEATURE
-
-#define CORE_RENAMED_PROPERTY(ext_property, core_property) \
-   memcpy(&properties->ext_property, &core->core_property, sizeof(core->core_property))
-
-#define CORE_PROPERTY(property) CORE_RENAMED_PROPERTY(property, property)
-
-bool
-vk_get_physical_device_core_1_1_property_ext(struct VkBaseOutStructure *ext,
-                                             const VkPhysicalDeviceVulkan11Properties *core)
-{
-   switch (ext->sType) {
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES: {
-      VkPhysicalDeviceIDProperties *properties = (void *)ext;
-      CORE_PROPERTY(deviceUUID);
-      CORE_PROPERTY(driverUUID);
-      CORE_PROPERTY(deviceLUID);
-      CORE_PROPERTY(deviceNodeMask);
-      CORE_PROPERTY(deviceLUIDValid);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES: {
-      VkPhysicalDeviceMaintenance3Properties *properties = (void *)ext;
-      CORE_PROPERTY(maxPerSetDescriptors);
-      CORE_PROPERTY(maxMemoryAllocationSize);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES: {
-      VkPhysicalDeviceMultiviewProperties *properties = (void *)ext;
-      CORE_PROPERTY(maxMultiviewViewCount);
-      CORE_PROPERTY(maxMultiviewInstanceIndex);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_POINT_CLIPPING_PROPERTIES: {
-      VkPhysicalDevicePointClippingProperties *properties = (void *) ext;
-      CORE_PROPERTY(pointClippingBehavior);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_PROPERTIES: {
-      VkPhysicalDeviceProtectedMemoryProperties *properties = (void *)ext;
-      CORE_PROPERTY(protectedNoFault);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES: {
-      VkPhysicalDeviceSubgroupProperties *properties = (void *)ext;
-      CORE_PROPERTY(subgroupSize);
-      CORE_RENAMED_PROPERTY(supportedStages,
-                                    subgroupSupportedStages);
-      CORE_RENAMED_PROPERTY(supportedOperations,
-                                    subgroupSupportedOperations);
-      CORE_RENAMED_PROPERTY(quadOperationsInAllStages,
-                                    subgroupQuadOperationsInAllStages);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES:
-      vk_copy_struct_guts(ext, (void *)core, sizeof(*core));
-      return true;
-
-   default:
-      return false;
-   }
-}
-
-bool
-vk_get_physical_device_core_1_2_property_ext(struct VkBaseOutStructure *ext,
-                                             const VkPhysicalDeviceVulkan12Properties *core)
-{
-   switch (ext->sType) {
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES: {
-      VkPhysicalDeviceDepthStencilResolveProperties *properties = (void *)ext;
-      CORE_PROPERTY(supportedDepthResolveModes);
-      CORE_PROPERTY(supportedStencilResolveModes);
-      CORE_PROPERTY(independentResolveNone);
-      CORE_PROPERTY(independentResolve);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES: {
-      VkPhysicalDeviceDescriptorIndexingProperties *properties = (void *)ext;
-      CORE_PROPERTY(maxUpdateAfterBindDescriptorsInAllPools);
-      CORE_PROPERTY(shaderUniformBufferArrayNonUniformIndexingNative);
-      CORE_PROPERTY(shaderSampledImageArrayNonUniformIndexingNative);
-      CORE_PROPERTY(shaderStorageBufferArrayNonUniformIndexingNative);
-      CORE_PROPERTY(shaderStorageImageArrayNonUniformIndexingNative);
-      CORE_PROPERTY(shaderInputAttachmentArrayNonUniformIndexingNative);
-      CORE_PROPERTY(robustBufferAccessUpdateAfterBind);
-      CORE_PROPERTY(quadDivergentImplicitLod);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindSamplers);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindUniformBuffers);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindStorageBuffers);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindSampledImages);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindStorageImages);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindInputAttachments);
-      CORE_PROPERTY(maxPerStageUpdateAfterBindResources);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindSamplers);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindUniformBuffers);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindUniformBuffersDynamic);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindStorageBuffers);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindStorageBuffersDynamic);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindSampledImages);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindStorageImages);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindInputAttachments);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES: {
-      VkPhysicalDeviceDriverProperties *properties = (void *) ext;
-      CORE_PROPERTY(driverID);
-      CORE_PROPERTY(driverName);
-      CORE_PROPERTY(driverInfo);
-      CORE_PROPERTY(conformanceVersion);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES: {
-      VkPhysicalDeviceSamplerFilterMinmaxProperties *properties = (void *)ext;
-      CORE_PROPERTY(filterMinmaxImageComponentMapping);
-      CORE_PROPERTY(filterMinmaxSingleComponentFormats);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES : {
-      VkPhysicalDeviceFloatControlsProperties *properties = (void *)ext;
-      CORE_PROPERTY(denormBehaviorIndependence);
-      CORE_PROPERTY(roundingModeIndependence);
-      CORE_PROPERTY(shaderDenormFlushToZeroFloat16);
-      CORE_PROPERTY(shaderDenormPreserveFloat16);
-      CORE_PROPERTY(shaderRoundingModeRTEFloat16);
-      CORE_PROPERTY(shaderRoundingModeRTZFloat16);
-      CORE_PROPERTY(shaderSignedZeroInfNanPreserveFloat16);
-      CORE_PROPERTY(shaderDenormFlushToZeroFloat32);
-      CORE_PROPERTY(shaderDenormPreserveFloat32);
-      CORE_PROPERTY(shaderRoundingModeRTEFloat32);
-      CORE_PROPERTY(shaderRoundingModeRTZFloat32);
-      CORE_PROPERTY(shaderSignedZeroInfNanPreserveFloat32);
-      CORE_PROPERTY(shaderDenormFlushToZeroFloat64);
-      CORE_PROPERTY(shaderDenormPreserveFloat64);
-      CORE_PROPERTY(shaderRoundingModeRTEFloat64);
-      CORE_PROPERTY(shaderRoundingModeRTZFloat64);
-      CORE_PROPERTY(shaderSignedZeroInfNanPreserveFloat64);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_PROPERTIES: {
-      VkPhysicalDeviceTimelineSemaphoreProperties *properties = (void *) ext;
-      CORE_PROPERTY(maxTimelineSemaphoreValueDifference);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES:
-      vk_copy_struct_guts(ext, (void *)core, sizeof(*core));
-      return true;
-
-   default:
-      return false;
-   }
-}
-
-bool
-vk_get_physical_device_core_1_3_property_ext(struct VkBaseOutStructure *ext,
-                                             const VkPhysicalDeviceVulkan13Properties *core)
-{
-   switch (ext->sType) {
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_PROPERTIES: {
-      VkPhysicalDeviceInlineUniformBlockProperties *properties = (void *)ext;
-      CORE_PROPERTY(maxInlineUniformBlockSize);
-      CORE_PROPERTY(maxPerStageDescriptorInlineUniformBlocks);
-      CORE_PROPERTY(maxPerStageDescriptorUpdateAfterBindInlineUniformBlocks);
-      CORE_PROPERTY(maxDescriptorSetInlineUniformBlocks);
-      CORE_PROPERTY(maxDescriptorSetUpdateAfterBindInlineUniformBlocks);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES: {
-      VkPhysicalDeviceMaintenance4Properties *properties = (void *)ext;
-      CORE_PROPERTY(maxBufferSize);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_PROPERTIES: {
-      VkPhysicalDeviceShaderIntegerDotProductProperties *properties = (void *)ext;
-
-#define IDP_PROPERTY(x) CORE_PROPERTY(integerDotProduct##x)
-      IDP_PROPERTY(8BitUnsignedAccelerated);
-      IDP_PROPERTY(8BitSignedAccelerated);
-      IDP_PROPERTY(8BitMixedSignednessAccelerated);
-      IDP_PROPERTY(4x8BitPackedUnsignedAccelerated);
-      IDP_PROPERTY(4x8BitPackedSignedAccelerated);
-      IDP_PROPERTY(4x8BitPackedMixedSignednessAccelerated);
-      IDP_PROPERTY(16BitUnsignedAccelerated);
-      IDP_PROPERTY(16BitSignedAccelerated);
-      IDP_PROPERTY(16BitMixedSignednessAccelerated);
-      IDP_PROPERTY(32BitUnsignedAccelerated);
-      IDP_PROPERTY(32BitSignedAccelerated);
-      IDP_PROPERTY(32BitMixedSignednessAccelerated);
-      IDP_PROPERTY(64BitUnsignedAccelerated);
-      IDP_PROPERTY(64BitSignedAccelerated);
-      IDP_PROPERTY(64BitMixedSignednessAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating8BitUnsignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating8BitSignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating8BitMixedSignednessAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating4x8BitPackedUnsignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating4x8BitPackedSignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating4x8BitPackedMixedSignednessAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating16BitUnsignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating16BitSignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating16BitMixedSignednessAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating32BitUnsignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating32BitSignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating32BitMixedSignednessAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating64BitUnsignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating64BitSignedAccelerated);
-      IDP_PROPERTY(AccumulatingSaturating64BitMixedSignednessAccelerated);
-#undef IDP_PROPERTY
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES: {
-      VkPhysicalDeviceSubgroupSizeControlProperties *properties = (void *)ext;
-      CORE_PROPERTY(minSubgroupSize);
-      CORE_PROPERTY(maxSubgroupSize);
-      CORE_PROPERTY(maxComputeWorkgroupSubgroups);
-      CORE_PROPERTY(requiredSubgroupSizeStages);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXEL_BUFFER_ALIGNMENT_PROPERTIES: {
-      VkPhysicalDeviceTexelBufferAlignmentProperties *properties = (void *)ext;
-      CORE_PROPERTY(storageTexelBufferOffsetAlignmentBytes);
-      CORE_PROPERTY(storageTexelBufferOffsetSingleTexelAlignment);
-      CORE_PROPERTY(uniformTexelBufferOffsetAlignmentBytes);
-      CORE_PROPERTY(uniformTexelBufferOffsetSingleTexelAlignment);
-      return true;
-   }
-
-   case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES:
-      vk_copy_struct_guts(ext, (void *)core, sizeof(*core));
-      return true;
-
-   default:
-      return false;
-   }
-}
-
-#undef CORE_RENAMED_PROPERTY
-#undef CORE_PROPERTY
-

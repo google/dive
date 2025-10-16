@@ -288,7 +288,11 @@ llvmpipe_fs_variant_linear_llvm(struct llvmpipe_context *lp,
       LLVMAddFunction(gallivm->module, func_name, func_type);
    LLVMSetFunctionCallConv(function, LLVMCCallConv);
 
+   lp_function_add_debug_info(gallivm, function, func_type);
+
    variant->linear_function = function;
+   variant->linear_function_name = MALLOC(strlen(func_name)+1);
+   strcpy(variant->linear_function_name, func_name);
 
    /* XXX: need to propagate noalias down into color param now we are
     * passing a pointer-to-pointer?
@@ -299,8 +303,10 @@ llvmpipe_fs_variant_linear_llvm(struct llvmpipe_context *lp,
       }
    }
 
-   if (variant->gallivm->cache->data_size)
+   if (variant->gallivm->cache->data_size) {
+      gallivm_stub_func(gallivm, function);
       return;
+   }
 
    LLVMValueRef context_ptr = LLVMGetParam(function, 0);
    LLVMValueRef x = LLVMGetParam(function, 1);
@@ -321,6 +327,11 @@ llvmpipe_fs_variant_linear_llvm(struct llvmpipe_context *lp,
    LLVMBuilderRef builder = gallivm->builder;
 
    LLVMPositionBuilderAtEnd(builder, block);
+
+   if (gallivm->di_function) {
+      LLVMSetCurrentDebugLocation2(
+         gallivm->builder, LLVMDIBuilderCreateDebugLocation(gallivm->context, 0, 0, gallivm->di_function, NULL));
+   }
 
    struct lp_build_context bld;
    lp_build_context_init(&bld, gallivm, fs_type);

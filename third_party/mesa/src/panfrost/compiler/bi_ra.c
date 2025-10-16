@@ -1,27 +1,10 @@
 /*
- * Copyright (C) 2020 Collabora Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright (C) 2020,2025 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
  *
  * Authors (Collabora):
  *      Alyssa Rosenzweig <alyssa.rosenzweig@collabora.com>
+ *      Eric R. Smith <eric.smith@collabora.com>
  */
 
 #include "util/u_memory.h"
@@ -454,7 +437,7 @@ bi_allocate_registers(bi_context *ctx, bool *success, bool full_regs)
                   : (BITFIELD64_MASK(16) | (BITFIELD64_MASK(16) << 48));
 
    /* To test spilling, mimic a small register file */
-   if (bifrost_debug & BIFROST_DBG_SPILL && !ctx->inputs->is_blend)
+   if (bifrost_debug & BIFROST_DBG_SPILL && !ctx->inputs->is_blend && (bifrost_debug & BIFROST_DBG_NOSSARA))
       default_affinity &= BITFIELD64_MASK(48) << 8;
 
    bi_foreach_instr_global(ctx, ins) {
@@ -485,10 +468,12 @@ bi_allocate_registers(bi_context *ctx, bool *success, bool full_regs)
        * be in R60. Otherwise coverage mask writes do not work with
        * early-ZS with pixel-frequency-shading (this combination of
        * settings is legal if depth/stencil writes are disabled).
+       * Allowing a FAU index also seems to work on Valhall, at least.
        */
       if (ins->op == BI_OPCODE_ATEST) {
-         assert(bi_is_ssa(ins->src[0]));
-         l->solutions[ins->src[0].value] = 60;
+         assert(bi_is_ssa(ins->src[0]) || ins->src[0].type == BI_INDEX_FAU);
+         if (bi_is_ssa(ins->src[0]))
+            l->solutions[ins->src[0].value] = 60;
       }
    }
 
@@ -548,7 +533,7 @@ bi_reg_from_index(bi_context *ctx, struct lcra_state *l, bi_index index)
    /* LCRA didn't bother solving this index (how lazy!) */
    signed solution = l->solutions[index.value];
    if (solution < 0) {
-      assert(!is_offset);
+      assert(0 && "no solution for index");
       return index;
    }
 
@@ -611,8 +596,7 @@ static signed
 bi_choose_spill_node(bi_context *ctx, struct lcra_state *l)
 {
    /* Pick a node satisfying bi_spill_register's preconditions */
-   BITSET_WORD *no_spill =
-      calloc(sizeof(BITSET_WORD), BITSET_WORDS(l->node_count));
+   BITSET_WORD *no_spill = BITSET_CALLOC(l->node_count);
 
    bi_foreach_instr_global(ctx, ins) {
       bi_foreach_dest(ins, d) {
@@ -630,7 +614,7 @@ bi_choose_spill_node(bi_context *ctx, struct lcra_state *l)
       }
    }
 
-   unsigned best_benefit = 0.0;
+   unsigned best_benefit = 0;
    signed best_node = -1;
 
    if (nodearray_is_sparse(&l->linear[l->spill_node])) {
@@ -704,10 +688,11 @@ bi_tls_ptr(bool hi)
    return bi_fau(BIR_FAU_TLS_PTR, hi);
 }
 
-static bi_instr *
+bi_instr *
 bi_load_tl(bi_builder *b, unsigned bits, bi_index src, unsigned offset)
 {
    if (b->shader->arch >= 9) {
+      assert(offset < 0x8000);  /* valhall has 16 bit signed offset */
       return bi_load_to(b, bits, src, bi_tls_ptr(false), bi_tls_ptr(true),
                         BI_SEG_TL, offset);
    } else {
@@ -716,10 +701,11 @@ bi_load_tl(bi_builder *b, unsigned bits, bi_index src, unsigned offset)
    }
 }
 
-static void
+void
 bi_store_tl(bi_builder *b, unsigned bits, bi_index src, unsigned offset)
 {
    if (b->shader->arch >= 9) {
+      assert(offset < 0x8000);  /* valhall has 16 bit signed offset */
       bi_store(b, bits, src, bi_tls_ptr(false), bi_tls_ptr(true), BI_SEG_TL,
                offset);
    } else {
@@ -727,13 +713,49 @@ bi_store_tl(bi_builder *b, unsigned bits, bi_index src, unsigned offset)
    }
 }
 
-/* Once we've chosen a spill node, spill it and returns bytes spilled */
+static void
+bi_compute_reg_alignment(bi_context *ctx)
+{
+   unsigned idx;
+   unsigned count;
+   ctx->reg_alignment = rzalloc_array(ctx, uint8_t, ctx->ssa_alloc);
+   bi_foreach_instr_global(ctx, I) {
+      bi_foreach_ssa_dest(I, d) {
+         idx = I->dest[d].value;
+         count = bi_count_write_registers(I, d);
+         if (count == 3) count = 4;
+         assert(idx < ctx->ssa_alloc);
+         ctx->reg_alignment[idx] = MAX2(count*4, ctx->reg_alignment[idx]);
+      }
+      bi_foreach_ssa_src(I, s) {
+         idx = I->src[s].value;
+         count = bi_count_read_index(I, I->src[s]);
+         if (count == 3) count = 4;
+         assert(idx < ctx->ssa_alloc);
+         ctx->reg_alignment[idx] = MAX2(count*4, ctx->reg_alignment[idx]);
+      }
+   }
+}
+
+/* Once we've chosen a spill node, spill it and return new (aligned) offset */
 
 static unsigned
 bi_spill_register(bi_context *ctx, bi_index index, uint32_t offset)
 {
    bi_builder b = {.shader = ctx};
+   unsigned alignment = 4;
    unsigned channels = 0;
+
+   /* first figure out the alignment we will need, based on the
+    * maximum count we see
+    */
+   if (ctx->arch >= 9) {
+      if (!ctx->reg_alignment)
+         bi_compute_reg_alignment(ctx);
+      assert(index.value < ctx->ssa_alloc);
+      alignment = ctx->reg_alignment[index.value];
+   }
+   offset = ALIGN_POT(offset, alignment);
 
    /* Spill after every store, fill before every load */
    bi_foreach_instr_global_safe(ctx, I) {
@@ -752,7 +774,6 @@ bi_spill_register(bi_context *ctx, bi_index index, uint32_t offset)
 
          b.cursor = bi_after_instr(I);
          bi_store_tl(&b, bits, tmp, offset + 4 * extra);
-
          ctx->spills++;
          channels = MAX2(channels, extra + count);
       }
@@ -770,7 +791,7 @@ bi_spill_register(bi_context *ctx, bi_index index, uint32_t offset)
       }
    }
 
-   return (channels * 4);
+   return offset + (channels * 4);
 }
 
 /*
@@ -869,7 +890,8 @@ bi_is_tied(const bi_instr *I)
 {
    return (I->op == BI_OPCODE_TEXC || I->op == BI_OPCODE_TEXC_DUAL ||
            I->op == BI_OPCODE_ATOM_RETURN_I32 || I->op == BI_OPCODE_AXCHG_I32 ||
-           I->op == BI_OPCODE_ACMPXCHG_I32) &&
+           I->op == BI_OPCODE_ACMPXCHG_I32 || I->op == BI_OPCODE_AXCHG_I64 ||
+           I->op == BI_OPCODE_ACMPXCHG_I64) &&
           !bi_is_null(I->src[0]);
 }
 
@@ -882,6 +904,10 @@ bi_is_tied(const bi_instr *I)
 static void
 bi_coalesce_tied(bi_context *ctx)
 {
+   if (ctx->reg_alignment) {
+      ralloc_free(ctx->reg_alignment);
+      ctx->reg_alignment = NULL;
+   }
    bi_foreach_instr_global(ctx, I) {
       if (!bi_is_tied(I))
          continue;
@@ -944,6 +970,7 @@ bi_out_of_ssa(bi_context *ctx)
 {
    bi_index zero = bi_fau(BIR_FAU_IMMEDIATE | 0, false);
    unsigned first_reg = ctx->ssa_alloc;
+   bool allow_propagate;
 
    /* Trivially lower phis */
    bi_foreach_block(ctx, block) {
@@ -967,16 +994,28 @@ bi_out_of_ssa(bi_context *ctx)
             assert(!I->src[i].neg);
             assert(I->src[i].swizzle == BI_SWIZZLE_H01);
 
-            /* MOV of immediate needs lowering on Valhall */
-            if (ctx->arch >= 9 && I->src[i].type == BI_INDEX_CONSTANT)
+            if (I->src[i].memory)
+               /* spilled register, need to un-spill */
+               bi_load_tl(&b, 32, reg, I->src[i].value);
+            else if (ctx->arch >= 9 && I->src[i].type == BI_INDEX_CONSTANT)
+               /* MOV of immediate needs lowering on Valhall */
                bi_iadd_imm_i32_to(&b, reg, zero, I->src[i].value);
             else
                bi_mov_i32_to(&b, reg, I->src[i]);
          }
 
          /* Replace the phi with a move */
+         allow_propagate = true;
          bi_builder b = bi_init_builder(ctx, bi_before_instr(I));
-         bi_mov_i32_to(&b, I->dest[0], reg);
+         if (I->dest[0].memory) {
+            /* dest was spilled to memory */
+            bi_store_tl(&b, 32, reg, I->dest[0].value);
+            allow_propagate = false;
+         } else if (ctx->arch >= 9 && reg.type == BI_INDEX_CONSTANT)
+            /* MOV of immediate needs lowering on Valhall */
+            bi_iadd_imm_i32_to(&b, I->dest[0], zero, reg.value);
+         else
+            bi_mov_i32_to(&b, I->dest[0], reg);
          bi_remove_instruction(I);
 
          /* Propagate that move within the block. The destination
@@ -985,7 +1024,7 @@ bi_out_of_ssa(bi_context *ctx)
           * possible in the next pass.
           */
          bi_foreach_instr_in_block_rev(block, prop) {
-            if (prop->op == BI_OPCODE_PHI)
+            if (prop->op == BI_OPCODE_PHI || !allow_propagate)
                break;
 
             bi_foreach_src(prop, s) {
@@ -1002,10 +1041,8 @@ bi_out_of_ssa(bi_context *ctx)
     * algorithm is quadratic. This will go away when we go out of SSA after
     * RA.
     */
-   BITSET_WORD *used =
-      calloc(sizeof(BITSET_WORD), BITSET_WORDS(ctx->ssa_alloc));
-   BITSET_WORD *multiple_uses =
-      calloc(sizeof(BITSET_WORD), BITSET_WORDS(ctx->ssa_alloc));
+   BITSET_WORD *used = BITSET_CALLOC(ctx->ssa_alloc);
+   BITSET_WORD *multiple_uses = BITSET_CALLOC(ctx->ssa_alloc);
 
    bi_foreach_instr_global(ctx, I) {
       bi_foreach_ssa_src(I, s) {
@@ -1081,13 +1118,48 @@ bi_register_allocate(bi_context *ctx)
    struct lcra_state *l = NULL;
    bool success = false;
 
-   unsigned iter_count = 1000; /* max iterations */
-
+   unsigned iter_count = 0;
+   unsigned max_iters = 2000;
    /* Number of bytes of memory we've spilled into */
    unsigned spill_count = ctx->info.tls_size;
 
    if (ctx->arch >= 9)
       va_lower_split_64bit(ctx);
+
+   /* get estimate of register demand (must be done in SSA form)
+    * and do a preliminary spill; this doesn't have to be perfect,
+    * since register allocation can spill too, but RA is really slow
+    * so the closer we get to having enough registers free, the better
+    */
+   if (!(bifrost_debug & BIFROST_DBG_NOSSARA)) {
+      unsigned regs_to_use =
+         ((bifrost_debug & BIFROST_DBG_SPILL) && !ctx->inputs->is_blend) ? 16 : BI_MAX_REGS;
+      bool verbose = bifrost_debug & BIFROST_DBG_VERBOSE;
+
+      bi_compute_liveness_ssa(ctx);
+      if (verbose) {
+         bi_print_shader(ctx, stdout);
+      }
+      unsigned register_demand = bi_calc_register_demand(ctx);
+      if (register_demand > regs_to_use) {
+         /* spill registers if we can */
+         if (ctx->inputs->is_blend)
+            UNREACHABLE("Blend shaders may not spill");
+
+         spill_count = bi_spill_ssa(ctx, regs_to_use, spill_count);
+         /* By default, we use packed TLS addressing on Valhall.
+          * We cannot cross 16 byte boundaries with packed TLS
+          * addressing. Align to ensure this doesn't happen. This
+          * could be optimized a bit.
+          */
+         if (ctx->arch >= 9)
+            spill_count = ALIGN_POT(spill_count, 16);
+         if (verbose) {
+            printf("\nspill_registers=%d\n", spill_count);
+            bi_print_shader(ctx, stdout);
+         }
+      }
+   }
 
    /* Lower tied operands. SSA is broken from here on. */
    unsigned first_reg = bi_out_of_ssa(ctx);
@@ -1108,31 +1180,23 @@ bi_register_allocate(bi_context *ctx)
    }
 
    /* Otherwise, use the register file and spill until we succeed */
-   while (!success && ((iter_count--) > 0)) {
+   while (!success && ((iter_count++) < max_iters)) {
       l = bi_allocate_registers(ctx, &success, true);
 
       if (success) {
-         ctx->info.work_reg_count = 64;
+         ctx->info.work_reg_count = BI_MAX_REGS;
       } else {
          signed spill_node = bi_choose_spill_node(ctx, l);
          lcra_free(l);
          l = NULL;
 
          if (spill_node == -1)
-            unreachable("Failed to choose spill node\n");
+            UNREACHABLE("Failed to choose spill node\n");
 
          if (ctx->inputs->is_blend)
-            unreachable("Blend shaders may not spill");
+            UNREACHABLE("Blend shaders may not spill");
 
-         /* By default, we use packed TLS addressing on Valhall.
-          * We cannot cross 16 byte boundaries with packed TLS
-          * addressing. Align to ensure this doesn't happen. This
-          * could be optimized a bit.
-          */
-         if (ctx->arch >= 9)
-            spill_count = ALIGN_POT(spill_count, 16);
-
-         spill_count +=
+         spill_count =
             bi_spill_register(ctx, bi_get_index(spill_node), spill_count);
 
          /* In case the spill affected an instruction with tied
@@ -1145,6 +1209,8 @@ bi_register_allocate(bi_context *ctx)
    assert(success);
    assert(l != NULL);
 
+   if (ctx->arch >= 9)
+      spill_count = ALIGN_POT(spill_count, 16);
    ctx->info.tls_size = spill_count;
    bi_install_registers(ctx, l);
 

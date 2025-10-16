@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_instr_tex.h"
@@ -383,7 +363,7 @@ TexInstr::set_tex_param(const std::string& token)
       set_resource_offset(VirtualValue::from_string(token.substr(3))->as_register());
    else {
       std::cerr << "Token '" << token << "': ";
-      unreachable("Unknown token in tex param");
+      UNREACHABLE("Unknown token in tex param");
    }
 }
 
@@ -635,13 +615,12 @@ TexInstr::emit_buf_txf(nir_tex_instr *tex, Inputs& src, Shader& shader)
          shader.emit_instruction(ir);
       }
 
-      ir->set_alu_flag(alu_last_instr);
       shader.emit_instruction(
          new AluInstr(op2_or_int,
                       dst[3],
                       tmp_w,
                       vf.uniform(buf_sel + 1, 0, R600_BUFFER_INFO_CONST_BUFFER),
-                      AluInstr::last_write));
+                      AluInstr::write));
    }
 
    return true;
@@ -677,19 +656,17 @@ TexInstr::emit_tex_txs(nir_tex_instr *tex,
    if (tex->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
       if (shader.chip_class() >= ISA_CC_EVERGREEN) {
          shader.emit_instruction(new QueryBufferSizeInstr(
-            dest, {0, 7, 7, 7}, tex->sampler_index + R600_MAX_CONST_BUFFERS));
+            dest, {0, 7, 7, 7}, tex->texture_index + R600_MAX_CONST_BUFFERS));
       } else {
-         int id = 2 * tex->sampler_index + (512 + R600_BUFFER_INFO_OFFSET / 16) + 1;
+         int id = 2 * tex->texture_index + (512 + R600_BUFFER_INFO_OFFSET / 16) + 1;
          auto src = vf.uniform(id, 1, R600_BUFFER_INFO_CONST_BUFFER);
-         shader.emit_instruction(
-            new AluInstr(op1_mov, dest[0], src, AluInstr::last_write));
+         shader.emit_instruction(new AluInstr(op1_mov, dest[0], src, AluInstr::write));
          shader.set_flag(Shader::sh_uses_tex_buffer);
       }
    } else {
 
       auto src_lod = vf.temp_register();
-      shader.emit_instruction(
-         new AluInstr(op1_mov, src_lod, src.lod, AluInstr::last_write));
+      shader.emit_instruction(new AluInstr(op1_mov, src_lod, src.lod, AluInstr::write));
 
       RegisterVec4 src_coord(src_lod, src_lod, src_lod, src_lod, pin_free);
 
@@ -711,7 +688,7 @@ TexInstr::emit_tex_txs(nir_tex_instr *tex,
                                    tex->texture_index & 3,
                                    R600_BUFFER_INFO_CONST_BUFFER);
 
-         auto alu = new AluInstr(op1_mov, dest[2], src_loc, AluInstr::last_write);
+         auto alu = new AluInstr(op1_mov, dest[2], src_loc, AluInstr::write);
          shader.emit_instruction(alu);
          shader.set_flag(Shader::sh_txs_cube_array_comp);
       }
@@ -765,9 +742,6 @@ TexInstr::prepare_source(nir_tex_instr *tex, const Inputs& inputs, Shader& shade
       ir = new AluInstr(op, src_coord[i], src[i], AluInstr::write);
       shader.emit_instruction(ir);
    }
-
-   if (ir)
-      ir->set_alu_flag(alu_last_instr);
 
    return src_coord;
 }
@@ -850,7 +824,7 @@ TexInstr::Inputs::Inputs(const nir_tex_instr& instr, ValueFactory& vf):
       case nir_tex_src_projector:
       case nir_tex_src_min_lod:
       default:
-         unreachable("unsupported texture input type");
+         UNREACHABLE("unsupported texture input type");
       }
    }
 
@@ -887,7 +861,7 @@ TexInstr::Inputs::get_opcode(const nir_tex_instr& instr) -> Opcode
    case nir_texop_texture_samples:
       return TexInstr::get_nsamples;
    default:
-      unreachable("unsupported texture input opcode");
+      UNREACHABLE("unsupported texture input opcode");
    }
 }
 
@@ -895,8 +869,6 @@ bool
 TexInstr::emit_tex_lod(nir_tex_instr *tex, Inputs& src, Shader& shader)
 {
    auto& vf = shader.value_factory();
-   auto sampler = get_sampler_id(tex->sampler_index, src.sampler_deref);
-   assert(!sampler.indirect && "Indirect sampler selection not yet supported");
 
    auto dst = shader.value_factory().dest_vec4(tex->def, pin_group);
 
@@ -909,8 +881,6 @@ TexInstr::emit_tex_lod(nir_tex_instr *tex, Inputs& src, Shader& shader)
       ir = new AluInstr(op1_mov, src_coord[i], src.coord[i], AluInstr::write);
       shader.emit_instruction(ir);
    }
-   if (ir)
-      ir->set_alu_flag(alu_last_instr);
 
    auto irt = new TexInstr(TexInstr::get_tex_lod,
                            dst,
@@ -1166,7 +1136,6 @@ LowerTexToBackend::finalize(nir_tex_instr *tex,
 {
    nir_tex_instr_add_src(tex, nir_tex_src_backend1, backend1);
    nir_tex_instr_add_src(tex, nir_tex_src_backend2, backend2);
-   nir_tex_instr_remove_src(tex, nir_tex_src_coord);
 
    static const nir_tex_src_type cleanup[] = {nir_tex_src_coord,
                                               nir_tex_src_lod,

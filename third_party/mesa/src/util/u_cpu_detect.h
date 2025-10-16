@@ -49,18 +49,6 @@
 extern "C" {
 #endif
 
-enum cpu_family {
-   CPU_UNKNOWN,
-
-   CPU_AMD_ZEN1_ZEN2,
-   CPU_AMD_ZEN_HYGON,
-   CPU_AMD_ZEN3,
-   CPU_AMD_ZEN_NEXT,
-   CPU_AMD_LAST,
-
-   CPU_S390X,
-};
-
 typedef uint32_t util_affinity_mask[UTIL_MAX_CPUS / 32];
 
 struct util_cpu_caps_t {
@@ -81,15 +69,10 @@ struct util_cpu_caps_t {
     */
    int16_t max_cpus;
 
-   enum cpu_family family;
-
    /* Feature flags */
    int x86_cpu_type;
    unsigned cacheline;
 
-   unsigned has_intel:1;
-   unsigned has_mmx:1;
-   unsigned has_mmx2:1;
    unsigned has_sse:1;
    unsigned has_sse2:1;
    unsigned has_sse3:1;
@@ -101,14 +84,13 @@ struct util_cpu_caps_t {
    unsigned has_avx2:1;
    unsigned has_f16c:1;
    unsigned has_fma:1;
-   unsigned has_3dnow:1;
-   unsigned has_3dnow_ext:1;
-   unsigned has_xop:1;
    unsigned has_altivec:1;
    unsigned has_vsx:1;
    unsigned has_daz:1;
    unsigned has_neon:1;
    unsigned has_msa:1;
+   unsigned has_lsx:1;
+   unsigned has_lasx:1;
 
    unsigned has_avx512f:1;
    unsigned has_avx512dq:1;

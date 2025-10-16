@@ -1051,8 +1051,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                           [event_node_index] = parent_node_index;
     }
     else if ((opcode == CP_INDIRECT_BUFFER_PFE || opcode == CP_INDIRECT_BUFFER_PFD ||
-              opcode == CP_INDIRECT_BUFFER_CHAIN || opcode == CP_COND_INDIRECT_BUFFER_PFE ||
-              opcode == CP_SET_CTXSWITCH_IB))
+              opcode == CP_INDIRECT_BUFFER_CHAIN || opcode == CP_SET_AMBLE))
     {
         m_cur_ib_packet_node_index = packet_node_index;
     }
@@ -1091,25 +1090,28 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
         {
             // This is emitted at the beginning of the render pass if tiled rendering mode is
             // disabled
-        case RM6_BYPASS:
+        case RM6_DIRECT_RENDER:
             desc = "Direct Rendering Pass";
             break;
             // This is emitted at the beginning of the binning pass, although the binning pass
             // could be missing even in tiled rendering mode
-        case RM6_BINNING:
-            desc = "Binning Pass";
+        case RM6_BIN_VISIBILITY:
+            desc = "Binning Visibility Pass";
+            break;
+        case RM6_BIN_DIRECT:
+            desc = "Binning Direct Pass";
             break;
             // This is emitted at the beginning of the tiled rendering pass
-        case RM6_GMEM:
+        case RM6_BIN_RENDER_START:
             desc = "Tile Rendering Pass";
             break;
             // This is emitted at the end of the tiled rendering pass
-        case RM6_ENDVIS:
-            // Should be paired with RM6_GMEM only if RM6_BINNING exist
+        case RM6_BIN_END_OF_DRAWS:
+            // Should be paired with RM6_BIN_RENDER_START only if RM6_BIN_VISIBILITY exist
             add_child = false;
             break;
             // This is emitted at the beginning of the resolve pass
-        case RM6_RESOLVE:
+        case RM6_BIN_RESOLVE:
             desc = "Resolve Pass";
             break;
             // This is emitted for each dispatch
@@ -1117,8 +1119,8 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
             desc = "Compute Dispatch";
             break;
         // This seems to be the end of Resolve Pass
-        case RM6_YIELD:
-            // should be paired with RM6_RESOLVE
+        case RM6_BIN_RENDER_END:
+            // should be paired with RM6_BIN_RESOLVE
             add_child = false;
             break;
             // TODO(wangra): Might need to handle following markers
@@ -1157,7 +1159,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
             m_render_marker_index = AddNode(NodeType::kRenderMarkerNode, std::move(desc), 0);
 
-            if (marker == RM6_BINNING)
+            if (marker == RM6_BIN_VISIBILITY)
             {
                 m_tracking_first_tile_pass_start = true;
                 m_command_hierarchy
@@ -1165,7 +1167,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                              CommandHierarchy::kFirstTilePassOnly);
             }
 
-            if ((marker == RM6_GMEM) || (marker == RM6_RESOLVE))
+            if ((marker == RM6_BIN_RENDER_START) || (marker == RM6_BIN_RESOLVE))
             {
                 m_command_hierarchy.AddToFilterExcludeIndexList(m_render_marker_index,
                                                                 CommandHierarchy::kBinningPassOnly);
@@ -1179,7 +1181,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                     .AddToFilterExcludeIndexList(m_render_marker_index,
                                                  CommandHierarchy::kBinningAndFirstTilePass);
                 }
-                if (m_tracking_first_tile_pass_start && (marker == RM6_RESOLVE))
+                if (m_tracking_first_tile_pass_start && (marker == RM6_BIN_RESOLVE))
                 {
                     m_tracking_first_tile_pass_start = false;
                 }
@@ -1843,12 +1845,12 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
     {
         kTex,
         kShader,
-        kIbo
+        kUAV
     };
     StateBlockCat cat;
     const bool    is_compute = (packet.bitfields0.STATE_BLOCK == SB6_CS_TEX) ||
                             (packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER) ||
-                            (packet.bitfields0.STATE_BLOCK == SB6_CS_IBO);
+                            (packet.bitfields0.STATE_BLOCK == SB6_CS_UAV);
     switch (packet.bitfields0.STATE_BLOCK)
     {
     case SB6_VS_TEX:
@@ -1867,9 +1869,9 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
     case SB6_CS_SHADER:
         cat = StateBlockCat::kShader;
         break;
-    case SB6_IBO:
-    case SB6_CS_IBO:
-        cat = StateBlockCat::kIbo;
+    case SB6_UAV:
+    case SB6_CS_UAV:
+        cat = StateBlockCat::kUAV;
         break;
     default:
         DIVE_ASSERT(false);
@@ -1960,13 +1962,13 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager 
         }
         else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
             AppendSharps("A6XX_UBO", bindless ? 16 : sizeof(A6XX_UBO));
-        else if (packet.bitfields0.STATE_TYPE == ST6_IBO)
+        else if (packet.bitfields0.STATE_TYPE == ST6_UAV)
         {
             DIVE_ASSERT(packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER);
             AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
         }
         break;
-    case StateBlockCat::kIbo:
+    case StateBlockCat::kUAV:
         if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
             AppendSharps("A6XX_TEX_CONST", bindless ? 16 : sizeof(A6XX_TEX_CONST));
         else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
@@ -2015,10 +2017,8 @@ void CommandHierarchyCreator::AppendMemRegNodes(const IMemoryManager &mem_manage
     AddChild(CommandHierarchy::kAllEventTopology, packet_node_index, reg_node_index);
 
     // Add memory data values
-    uint64_t ext_src_addr = ((uint64_t)packet.bitfields2.SRC_HI << 32) |
-                            (uint64_t)packet.bitfields1.SRC;
     AddConstantsToPacketNode<uint32_t>(mem_manager,
-                                       ext_src_addr,
+                                       packet.SRC,
                                        packet_node_index,
                                        packet.bitfields0.CNT,
                                        submit_index,
@@ -2055,10 +2055,8 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager &m
     // Cache group node index and address
     for (uint32_t i = 0; i < array_size; ++i)
     {
-        uint64_t ib_addr = ((uint64_t)packet.ARRAY[i].bitfields2.ADDR_HI << 32) |
-                           (uint64_t)packet.ARRAY[i].bitfields1.ADDR_LO;
         m_group_info[i].m_group_node_index = children[i];
-        m_group_info[i].m_group_addr = ib_addr;
+        m_group_info[i].m_group_addr = packet.ARRAY[i].ADDR;
     }
 
     m_group_info_size = array_size;

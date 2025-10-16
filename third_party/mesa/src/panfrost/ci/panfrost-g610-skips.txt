@@ -1,0 +1,4 @@
+# Slow tests (>= 30s)
+dEQP-VK.api.external.fence.sync_fd.export_multiple_times_temporary
+dEQP-VK.api.external.semaphore.sync_fd.export_multiple_times_temporary
+dEQP-VK.wsi.wayland.swapchain.simulate_oom.image_extent

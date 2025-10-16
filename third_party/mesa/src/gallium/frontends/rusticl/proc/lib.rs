@@ -1,3 +1,6 @@
+// Copyright 2023 Red Hat.
+// SPDX-License-Identifier: MIT
+
 extern crate proc_macro;
 use proc_macro::Delimiter;
 use proc_macro::TokenStream;
@@ -7,7 +10,7 @@ use proc_macro::TokenTree::Punct;
 
 /// Macro for generating the C API stubs for normal functions
 #[proc_macro_attribute]
-pub fn cl_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn cl_entrypoint(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut name = None;
     let mut args = None;
     let mut ret_type = None;
@@ -102,7 +105,7 @@ pub fn cl_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut res: TokenStream = if ret_type == "()" {
         // trivial case: return the `Err(err)` as is
         format!(
-            "pub extern \"C\" fn cl_{name}(
+            "pub unsafe extern \"C\" fn {attr}(
                 {args}
             ) -> cl_int {{
                 match {name}({arg_names_str}) {{
@@ -116,7 +119,7 @@ pub fn cl_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // which return an object do have the `errcode_ret: *mut cl_int` argument last, so we can
         // just make use of this here.
         format!(
-            "pub extern \"C\" fn cl_{name}(
+            "pub unsafe extern \"C\" fn {attr}(
                 {args}
                 errcode_ret: *mut cl_int,
             ) -> {ret_type} {{
@@ -190,7 +193,7 @@ pub fn cl_info_entrypoint(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let mut res: TokenStream = format!(
-        "pub extern \"C\" fn {attr}(
+        "pub unsafe extern \"C\" fn {attr}(
             input: {name},
             {args}
             param_name: {arg},

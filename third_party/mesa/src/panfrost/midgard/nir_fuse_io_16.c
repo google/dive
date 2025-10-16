@@ -35,7 +35,7 @@ bool nir_fuse_io_16(nir_shader *shader);
 static bool
 nir_src_is_f2fmp(nir_src *use)
 {
-   nir_instr *parent = use->parent_instr;
+   nir_instr *parent = nir_src_parent_instr(use);
 
    if (parent->type != nir_instr_type_alu)
       return false;
@@ -71,7 +71,7 @@ nir_fuse_io_16(nir_shader *shader)
             bool valid = true;
 
             nir_foreach_use_including_if(src, &intr->def)
-               valid &= !src->is_if && nir_src_is_f2fmp(src);
+               valid &= !nir_src_is_if(src) && nir_src_is_f2fmp(src);
 
             if (!valid)
                continue;
@@ -82,14 +82,13 @@ nir_fuse_io_16(nir_shader *shader)
 
             /* The f2f32(f2fmp(x)) will cancel by opt_algebraic */
             nir_def *conv = nir_f2f32(&b, &intr->def);
-            nir_def_rewrite_uses_after(&intr->def, conv, conv->parent_instr);
+            nir_def_rewrite_uses_after(&intr->def, conv);
 
             progress |= true;
          }
       }
 
-      nir_metadata_preserve(impl,
-                            nir_metadata_block_index | nir_metadata_dominance);
+      nir_progress(true, impl, nir_metadata_control_flow);
    }
 
    return progress;

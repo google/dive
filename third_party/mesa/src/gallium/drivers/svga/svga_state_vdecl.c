@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2022 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "util/u_inlines.h"
 #include "pipe/p_defines.h"
@@ -45,7 +27,6 @@ emit_hw_vs_vdecl(struct svga_context *svga, uint64_t dirty)
    const struct pipe_vertex_element *ve = svga->curr.velems->velem;
    SVGA3dVertexDecl decls[SVGA3D_INPUTREG_MAX];
    unsigned buffer_indexes[SVGA3D_INPUTREG_MAX];
-   unsigned i;
    unsigned neg_bias = 0;
 
    assert(svga->curr.velems->count >=
@@ -66,7 +47,7 @@ emit_hw_vs_vdecl(struct svga_context *svga, uint64_t dirty)
     * confusion.
     */
 
-   for (i = 0; i < svga->curr.velems->count; i++) {
+   for (unsigned i = 0; i < svga->curr.velems->count; i++) {
       const struct pipe_vertex_buffer *vb =
          &svga->curr.vb[ve[i].vertex_buffer_index];
       struct svga_buffer *buffer;
@@ -85,7 +66,7 @@ emit_hw_vs_vdecl(struct svga_context *svga, uint64_t dirty)
       }
    }
 
-   for (i = 0; i < svga->curr.velems->count; i++) {
+   for (unsigned i = 0; i < svga->curr.velems->count; i++) {
       const struct pipe_vertex_buffer *vb =
          &svga->curr.vb[ve[i].vertex_buffer_index];
       unsigned usage, index;
@@ -95,7 +76,7 @@ emit_hw_vs_vdecl(struct svga_context *svga, uint64_t dirty)
          continue;
 
       buffer = svga_buffer(vb->buffer.resource);
-      svga_generate_vdecl_semantics( i, &usage, &index );
+      svga_generate_vdecl_semantics(i, &usage, &index);
 
       /* SVGA_NEW_VELEMENT
        */
@@ -109,9 +90,9 @@ emit_hw_vs_vdecl(struct svga_context *svga, uint64_t dirty)
        * for the negative index bias.
        */
       decls[i].array.offset = (vb->buffer_offset
-                           + ve[i].src_offset
-			   + neg_bias * ve[i].src_stride
-			   - buffer->uploaded.start);
+                               + ve[i].src_offset
+                               + neg_bias * ve[i].src_stride
+                               - buffer->uploaded.start);
 
       assert(decls[i].array.offset >= 0);
 
@@ -130,7 +111,7 @@ emit_hw_vs_vdecl(struct svga_context *svga, uint64_t dirty)
                              svga->curr.num_vertex_buffers,
                              svga->curr.vb);
 
-   svga_hwtnl_set_index_bias( svga->hwtnl, -(int) neg_bias );
+   svga_hwtnl_set_index_bias(svga->hwtnl, -(int) neg_bias);
    return PIPE_OK;
 }
 
@@ -143,18 +124,18 @@ emit_hw_vdecl(struct svga_context *svga, uint64_t dirty)
    if (svga->state.sw.need_swtnl)
       return PIPE_OK; /* Do not emit during swtnl */
 
-   return emit_hw_vs_vdecl( svga, dirty );
+   return emit_hw_vs_vdecl(svga, dirty);
 }
 
 
 struct svga_tracked_state svga_hw_vdecl =
 {
    "hw vertex decl state (hwtnl version)",
-   ( SVGA_NEW_NEED_SWTNL |
-     SVGA_NEW_VELEMENT |
-     SVGA_NEW_VBUFFER |
-     SVGA_NEW_RAST |
-     SVGA_NEW_FS |
-     SVGA_NEW_VS ),
+   (SVGA_NEW_NEED_SWTNL |
+    SVGA_NEW_VELEMENT |
+    SVGA_NEW_VBUFFER |
+    SVGA_NEW_RAST |
+    SVGA_NEW_FS |
+    SVGA_NEW_VS),
    emit_hw_vdecl
 };

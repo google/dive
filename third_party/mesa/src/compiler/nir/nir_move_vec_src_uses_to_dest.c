@@ -50,10 +50,10 @@ ssa_def_dominates_instr(nir_def *def, nir_instr *instr)
 {
    if (instr->index <= def->parent_instr->index) {
       return false;
-   } else if (def->parent_instr->block == instr->block) {
+   } else if (nir_def_block(def) == instr->block) {
       return def->parent_instr->index < instr->index;
    } else {
-      return nir_block_dominates(def->parent_instr->block, instr->block);
+      return nir_block_dominates(nir_def_block(def), instr->block);
    }
 }
 
@@ -82,10 +82,11 @@ move_vec_src_uses_to_dest_block(nir_block *block, bool skip_const_srcs)
        */
       if (list_is_singular(&vec->def.uses)) {
          nir_src *src = list_first_entry(&vec->def.uses, nir_src, use_link);
-         nir_instr *use_instr = src->parent_instr;
+         nir_instr *use_instr = nir_src_parent_instr(src);
          if (use_instr->type == nir_instr_type_intrinsic) {
             nir_intrinsic_instr *intr = nir_instr_as_intrinsic(use_instr);
-            if (intr->intrinsic == nir_intrinsic_store_output)
+            if (intr->intrinsic == nir_intrinsic_store_output ||
+                intr->intrinsic == nir_intrinsic_store_per_view_output)
                return false;
          }
       }
@@ -121,18 +122,18 @@ move_vec_src_uses_to_dest_block(nir_block *block, bool skip_const_srcs)
          }
 
          nir_foreach_use_safe(use, vec->src[i].src.ssa) {
-            if (use->parent_instr == &vec->instr)
+            if (nir_src_parent_instr(use) == &vec->instr)
                continue;
 
             /* We need to dominate the use if we are going to rewrite it */
-            if (!ssa_def_dominates_instr(&vec->def, use->parent_instr))
+            if (!ssa_def_dominates_instr(&vec->def, nir_src_parent_instr(use)))
                continue;
 
             /* For now, we'll just rewrite ALU instructions */
-            if (use->parent_instr->type != nir_instr_type_alu)
+            if (nir_src_parent_instr(use)->type != nir_instr_type_alu)
                continue;
 
-            nir_alu_instr *use_alu = nir_instr_as_alu(use->parent_instr);
+            nir_alu_instr *use_alu = nir_instr_as_alu(nir_src_parent_instr(use));
 
             /* Figure out which source we're actually looking at */
             nir_alu_src *use_alu_src = exec_node_data(nir_alu_src, use, src);
@@ -186,8 +187,7 @@ nir_move_vec_src_uses_to_dest_impl(nir_shader *shader, nir_function_impl *impl,
       progress |= move_vec_src_uses_to_dest_block(block, skip_const_srcs);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
+   nir_progress(true, impl, nir_metadata_control_flow);
 
    return progress;
 }

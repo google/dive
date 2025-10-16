@@ -35,10 +35,10 @@
  *
  * but not:
  *
- * - GLSL 4.30's new packed mode (enabled by PIPE_CAP_LOAD_CONSTBUF) where
+ * - GLSL 4.30's new packed mode (enabled by pipe_caps.load_constbuf) where
  *   vec3 arrays are packed tightly.
  *
- * - PackedDriverUniformStorage in GL (enabled by PIPE_CAP_PACKED_UNIFORMS)
+ * - PackedDriverUniformStorage in GL (enabled by pipe_caps.packed_uniforms)
  *   combined with nir_lower_uniforms_to_ubo, where values in the default
  *   uniform block are packed tightly.
  *
@@ -77,7 +77,7 @@ create_load(nir_builder *b, nir_def *block, nir_def *offset,
             unsigned bit_size, unsigned num_components)
 {
    nir_def *def = nir_load_ubo_vec4(b, num_components, bit_size, block, offset);
-   return nir_instr_as_intrinsic(def->parent_instr);
+   return nir_def_as_intrinsic(def);
 }
 
 static nir_def *

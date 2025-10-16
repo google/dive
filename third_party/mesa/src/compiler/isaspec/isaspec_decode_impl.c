@@ -180,37 +180,6 @@ struct decode_state {
 	char *errors[4];
 };
 
-void
-isa_print(struct isa_print_state *state, const char *fmt, ...)
-{
-	char *buffer;
-	va_list args;
-	int ret;
-
-	va_start(args, fmt);
-	ret = vasprintf(&buffer, fmt, args);
-	va_end(args);
-
-	if (ret != -1) {
-		const size_t len = strlen(buffer);
-
-		for (size_t i = 0; i < len; i++) {
-			const char c = buffer[i];
-
-			fputc(c, state->out);
-			state->line_column++;
-
-			if (c == '\n') {
-				state->line_column = 0;
-			}
-		}
-
-		free(buffer);
-
-		return;
-	}
-}
-
 static void display(struct decode_scope *scope);
 static void decode_error(struct decode_state *state, const char *fmt, ...) _util_printf_format(2,3);
 
@@ -548,7 +517,7 @@ resolve_field(struct decode_scope *scope, const char *field_name, size_t field_n
 }
 
 /* This is also used from generated expr functions */
-uint64_t
+static uint64_t
 isa_decode_field(struct decode_scope *scope, const char *field_name)
 {
 	bitmask_t val;
@@ -561,7 +530,7 @@ isa_decode_field(struct decode_scope *scope, const char *field_name)
 	return bitmask_to_uint64_t(val);
 }
 
-uint32_t
+static uint32_t
 isa_get_gpu_id(struct decode_scope *scope)
 {
 	return scope->state->options->gpu_id;
@@ -690,6 +659,16 @@ display_field(struct decode_scope *scope, const char *field_name)
 			isa_print(print, "%u", (unsigned)val);
 		}
 		break;
+	case TYPE_BOOL_INV: {
+		if (field->display) {
+			if (!val) {
+				isa_print(print, "%s", field->display);
+			}
+		} else {
+			isa_print(print, "%u", (unsigned)!val);
+		}
+		break;
+	}
 	case TYPE_ENUM:
 		display_enum_field(scope, field, v);
 		break;
@@ -927,7 +906,7 @@ decode_bitset(void *out, struct decode_scope *scope)
 	}
 }
 
-void
+static void
 isa_decode_bitset(void *out, const struct isa_bitset **bitsets, struct decode_scope *scope, bitmask_t val)
 {
 	struct decode_state *state = scope->state;
@@ -965,10 +944,17 @@ static int
 cmp_entrypoints(const void *_a, const void *_b)
 {
 	const struct isa_entrypoint *a = _a, *b = _b;
+
+	/* For stable output, if we have multiple entrypoints with the same
+	 * offset, sort them by string name:
+	 */
+	if (a->offset == b->offset)
+		return strcmp(a->name, b->name);
+
 	return (int)a->offset - (int)b->offset;
 }
 
-void
+static void
 isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *options)
 {
 	const struct isa_decode_options default_options = {
@@ -1027,7 +1013,7 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 	ralloc_free(state);
 }
 
-bool
+static bool
 isa_decode(void *out, void *bin, const struct isa_decode_options *options)
 {
 	struct decode_state *state = rzalloc_size(NULL, sizeof(*state));

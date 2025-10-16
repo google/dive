@@ -3,6 +3,7 @@
 
 #include "util/format/u_formats.h"
 #include "util/u_blitter.h"
+#include "util/u_framebuffer.h"
 
 #include "nv30/nv30_screen.h"
 #include "nv30/nv30_state.h"
@@ -98,6 +99,8 @@ struct nv30_context {
       unsigned dirty_samplers;
    } fragprog;
 
+   struct pipe_surface *fb_cbufs[PIPE_MAX_COLOR_BUFS];
+   struct pipe_surface *fb_zsbuf;
    struct pipe_framebuffer_state framebuffer;
    struct pipe_blend_color blend_colour;
    struct pipe_stencil_ref stencil_ref;
@@ -188,12 +191,11 @@ nv40_verttex_sampler_states_bind(struct pipe_context *pipe,
 
 void
 nv40_verttex_set_sampler_views(struct pipe_context *pipe, unsigned nr,
-                               bool take_ownership,
                                struct pipe_sampler_view **views);
 
 void
 nv30_fragtex_set_sampler_views(struct pipe_context *pipe,
-                               unsigned nr, bool take_ownership,
+                               unsigned nr,
                                struct pipe_sampler_view **views);
 
 void

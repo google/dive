@@ -20,7 +20,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <nouveau.h>
+#include "nouveau_winsys.h"
 
 #include "pipe/p_defines.h"
 #include "vl/vl_video_buffer.h"
@@ -32,7 +32,7 @@ struct nouveau_vp3_video_buffer {
    struct pipe_resource *resources[VL_NUM_COMPONENTS];
    struct pipe_sampler_view *sampler_view_planes[VL_NUM_COMPONENTS];
    struct pipe_sampler_view *sampler_view_components[VL_NUM_COMPONENTS];
-   struct pipe_surface *surfaces[VL_NUM_COMPONENTS * 2];
+   struct pipe_surface surfaces[VL_NUM_COMPONENTS * 2];
 };
 
 #define SLICE_SIZE 0x200

@@ -1,27 +1,7 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "sfn_instr_controlflow.h"
@@ -70,6 +50,9 @@ ControlFlowInstr::do_print(std::ostream& os) const
    case cf_endif:
       os << "ENDIF";
       break;
+   case cf_gds:
+      os << "GDS";
+      break;
    case cf_loop_begin:
       os << "LOOP_BEGIN";
       break;
@@ -85,9 +68,41 @@ ControlFlowInstr::do_print(std::ostream& os) const
    case cf_wait_ack:
       os << "WAIT_ACK";
       break;
+   case cf_alu:
+      os << "ALU";
+      break;
+   case cf_alu_push_before:
+      os << "ALU_PUSH_BEFORE";
+      break;
+   case cf_alu_pop_after:
+      os << "ALU_POP_AFTER";
+      break;
+   case cf_alu_pop2_after:
+      os << "ALU_POP2_AFTER";
+      break;
+   case cf_pop:
+      os << "GDS";
+      break;
+   case cf_push:
+      os << "GDS";
+      break;
+   case cf_tex:
+      os << "TEX";
+      break;
+   case cf_vtx:
+      os << "VTX";
+      break;
    default:
-      unreachable("Unknown CF type");
+      UNREACHABLE("Unknown CF type");
    }
+}
+
+void
+ControlFlowInstr::promote_alu_cf(CFType new_type)
+{
+   assert(m_type == cf_alu);
+   assert(new_type == cf_alu_push_before);
+   m_type = new_type;
 }
 
 Instr::Pointer
@@ -154,7 +169,7 @@ IfInstr::is_equal_to(const IfInstr& rhs) const
 
 uint32_t IfInstr::slots() const
 {
-   /* If we hava a literal value in the predicate evaluation, then
+   /* If we have a literal value in the predicate evaluation, then
     * we need at most two alu slots, otherwise it's just one. */
    for (auto s : m_predicate->sources())
       if (s->as_literal())

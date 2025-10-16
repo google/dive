@@ -34,11 +34,13 @@
 #include <stdio.h>
 #include <GL/glx.h>
 #include "main/errors.h"
+#include "dispatch.h"
+#include "mesa/glapi/glapi/glapi.h"
 
 
 /* Some debugging info.  */
 
-#ifdef DEBUG
+#if MESA_DEBUG
 #include <ctype.h>
 
 int debug_xfonts = 0;
@@ -95,7 +97,7 @@ dump_bitmap(unsigned int width, unsigned int height, GLubyte * bitmap)
       putchar('\n');
    }
 }
-#endif /* DEBUG */
+#endif /* MESA_DEBUG */
 
 
 /* Implementation.  */
@@ -261,22 +263,22 @@ glXUseXFont(Font font, int first, int count, int listbase)
 #endif
 
    /* Save the current packing mode for bitmaps.  */
-   glGetIntegerv(GL_UNPACK_SWAP_BYTES, &swapbytes);
-   glGetIntegerv(GL_UNPACK_LSB_FIRST, &lsbfirst);
-   glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowlength);
-   glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skiprows);
-   glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skippixels);
-   glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
+   CALL_GetIntegerv(GET_DISPATCH(), (GL_UNPACK_SWAP_BYTES, &swapbytes));
+   CALL_GetIntegerv(GET_DISPATCH(), (GL_UNPACK_LSB_FIRST, &lsbfirst));
+   CALL_GetIntegerv(GET_DISPATCH(), (GL_UNPACK_ROW_LENGTH, &rowlength));
+   CALL_GetIntegerv(GET_DISPATCH(), (GL_UNPACK_SKIP_ROWS, &skiprows));
+   CALL_GetIntegerv(GET_DISPATCH(), (GL_UNPACK_SKIP_PIXELS, &skippixels));
+   CALL_GetIntegerv(GET_DISPATCH(), (GL_UNPACK_ALIGNMENT, &alignment));
 
    /* Enforce a standard packing mode which is compatible with
       fill_bitmap() from above.  This is actually the default mode,
       except for the (non)alignment.  */
-   glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
-   glPixelStorei(GL_UNPACK_LSB_FIRST, GL_FALSE);
-   glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-   glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-   glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_SWAP_BYTES, GL_FALSE));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_LSB_FIRST, GL_FALSE));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_ROW_LENGTH, 0));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_SKIP_ROWS, 0));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_SKIP_PIXELS, 0));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_ALIGNMENT, 1));
 
    pixmap = XCreatePixmap(dpy, win, 10, 10, 1);
    values.foreground = BlackPixel(dpy, DefaultScreen(dpy));
@@ -286,7 +288,7 @@ glXUseXFont(Font font, int first, int count, int listbase)
    gc = XCreateGC(dpy, pixmap, valuemask, &values);
    XFreePixmap(dpy, pixmap);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    if (debug_xfonts)
       dump_font_struct(fs);
 #endif
@@ -310,7 +312,7 @@ glXUseXFont(Font font, int first, int count, int listbase)
 	 valid = 1;
       }
 
-#ifdef DEBUG
+#if MESA_DEBUG
       if (debug_xfonts) {
 	 char s[7];
 	 sprintf(s, isprint(c) ? "%c> " : "\\%03o> ", c);
@@ -338,14 +340,14 @@ glXUseXFont(Font font, int first, int count, int listbase)
       bm_width = (width + 7) / 8;
       bm_height = height;
 
-      glNewList(list, GL_COMPILE);
+      CALL_NewList(GET_DISPATCH(), (list, GL_COMPILE));
       if (valid && (bm_width > 0) && (bm_height > 0)) {
 
 	 memset(bm, '\0', bm_width * bm_height);
 	 fill_bitmap(dpy, win, gc, bm_width, bm_height, x, y, c, bm);
 
-	 glBitmap(width, height, x0, y0, dx, dy, bm);
-#ifdef DEBUG
+	 CALL_Bitmap(GET_DISPATCH(), (width, height, x0, y0, dx, dy, bm));
+#if MESA_DEBUG
 	 if (debug_xfonts) {
 	    printf("width/height = %u/%u\n", width, height);
 	    printf("bm_width/bm_height = %u/%u\n", bm_width, bm_height);
@@ -354,9 +356,9 @@ glXUseXFont(Font font, int first, int count, int listbase)
 #endif
       }
       else {
-	 glBitmap(0, 0, 0.0, 0.0, dx, dy, NULL);
+	 CALL_Bitmap(GET_DISPATCH(), (0, 0, 0.0, 0.0, dx, dy, NULL));
       }
-      glEndList();
+      CALL_EndList(GET_DISPATCH(), ());
    }
 
    free(bm);
@@ -364,10 +366,10 @@ glXUseXFont(Font font, int first, int count, int listbase)
    XFreeGC(dpy, gc);
 
    /* Restore saved packing modes.  */
-   glPixelStorei(GL_UNPACK_SWAP_BYTES, swapbytes);
-   glPixelStorei(GL_UNPACK_LSB_FIRST, lsbfirst);
-   glPixelStorei(GL_UNPACK_ROW_LENGTH, rowlength);
-   glPixelStorei(GL_UNPACK_SKIP_ROWS, skiprows);
-   glPixelStorei(GL_UNPACK_SKIP_PIXELS, skippixels);
-   glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_SWAP_BYTES, swapbytes));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_LSB_FIRST, lsbfirst));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_ROW_LENGTH, rowlength));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_SKIP_ROWS, skiprows));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_SKIP_PIXELS, skippixels));
+   CALL_PixelStorei(GET_DISPATCH(), (GL_UNPACK_ALIGNMENT, alignment));
 }

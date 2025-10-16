@@ -2470,9 +2470,8 @@ nvc0_hw_sm_get_program(struct nvc0_screen *screen)
    if (!prog)
       return NULL;
 
-   prog->type = PIPE_SHADER_COMPUTE;
+   prog->type = MESA_SHADER_COMPUTE;
    prog->translated = true;
-   prog->parm_size = 12;
 
    if (screen->base.class_3d >= GM107_3D_CLASS) {
       prog->code = (uint32_t *)gm107_read_hw_sm_counters_code;
@@ -2542,7 +2541,6 @@ nvc0_hw_sm_end_query(struct nvc0_context *nvc0, struct nvc0_hw_query *hq)
    struct nvc0_program *old = nvc0->compprog;
    struct pipe_grid_info info = {};
    uint32_t mask;
-   uint32_t input[3];
    const uint block[3] = { 32, is_nve4 ? 4 : 1, 1 };
    const uint grid[3] = { screen->mp_count, screen->gpc_count, 1 };
    unsigned c, i;
@@ -2586,8 +2584,6 @@ nvc0_hw_sm_end_query(struct nvc0_context *nvc0, struct nvc0_hw_query *hq)
       info.block[i] = block[i];
       info.grid[i] = grid[i];
    }
-   info.pc = 0;
-   info.input = input;
    pipe->launch_grid(pipe, &info);
    pipe->bind_compute_state(pipe, old);
 

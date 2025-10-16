@@ -21,9 +21,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-from valhall import immediates, instructions, typesize
+import sys
+from valhall import valhall_parse_isa
 from mako.template import Template
 from mako import exceptions
+
+(instructions, immediates, enums, typesize, safe_name) = valhall_parse_isa()
 
 SKIP = set([
         # Extra conversions
@@ -54,9 +57,6 @@ SKIP = set([
         "RSHIFT_OR.i64",
         "LSHIFT_XOR.i64",
         "RSHIFT_XOR.i64",
-        "ATOM.i64",
-        "ATOM_RETURN.i64",
-        "ATOM1_RETURN.i64",
 
         # CLPER widens
         "CLPER.s32",
@@ -85,8 +85,6 @@ SKIP = set([
         "NOT_OLD.i64",
 
         # TODO
-        "IDP.v4s8",
-        "IDP.v4u8",
         "FATAN_ASSIST.f32",
         "SEG_ADD.u64",
         "TEX_DUAL",
@@ -118,8 +116,6 @@ valhall_opcodes[BI_NUM_OPCODES] = {
     name = op.name
     if name == 'BRANCHZ':
         name = 'BRANCHZ.i16'
-    elif name == 'CUBEFACE2':
-        name = 'CUBEFACE2_V9'
 
     sr_control = 0
 

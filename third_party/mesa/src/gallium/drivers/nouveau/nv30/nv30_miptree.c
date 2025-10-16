@@ -248,7 +248,7 @@ nv30_blit(struct pipe_context *pipe,
 
    /* XXX turn off occlusion queries */
 
-   util_blitter_save_vertex_buffer_slot(nv30->blitter, nv30->vtxbuf);
+   util_blitter_save_vertex_buffers(nv30->blitter, nv30->vtxbuf, nv30->num_vtxbufs);
    util_blitter_save_vertex_elements(nv30->blitter, nv30->vertex);
    util_blitter_save_vertex_shader(nv30->blitter, nv30->vertprog.program);
    util_blitter_save_rasterizer(nv30->blitter, nv30->rast);
@@ -268,7 +268,7 @@ nv30_blit(struct pipe_context *pipe,
                      nv30->fragprog.num_textures, nv30->fragprog.textures);
    util_blitter_save_render_condition(nv30->blitter, nv30->render_cond_query,
                                       nv30->render_cond_cond, nv30->render_cond_mode);
-   util_blitter_blit(nv30->blitter, &info);
+   util_blitter_blit(nv30->blitter, &info, NULL);
 }
 
 void
@@ -541,7 +541,7 @@ nv30_miptree_from_handle(struct pipe_screen *pscreen,
    return &mt->base.base;
 }
 
-struct pipe_surface *
+static struct pipe_surface *
 nv30_miptree_surface_new(struct pipe_context *pipe,
                          struct pipe_resource *pt,
                          const struct pipe_surface *tmpl)
@@ -549,41 +549,45 @@ nv30_miptree_surface_new(struct pipe_context *pipe,
    struct nv30_miptree *mt = nv30_miptree(pt); /* guaranteed */
    struct nv30_surface *ns;
    struct pipe_surface *ps;
-   struct nv30_miptree_level *lvl = &mt->level[tmpl->u.tex.level];
+   struct nv30_miptree_level *lvl = &mt->level[tmpl->level];
 
    ns = CALLOC_STRUCT(nv30_surface);
    if (!ns)
       return NULL;
    ps = &ns->base;
 
-   pipe_reference_init(&ps->reference, 1);
    pipe_resource_reference(&ps->texture, pt);
    ps->context = pipe;
    ps->format = tmpl->format;
-   ps->u.tex.level = tmpl->u.tex.level;
-   ps->u.tex.first_layer = tmpl->u.tex.first_layer;
-   ps->u.tex.last_layer = tmpl->u.tex.last_layer;
+   ps->level = tmpl->level;
+   ps->first_layer = tmpl->first_layer;
+   ps->last_layer = tmpl->last_layer;
 
-   ns->width = u_minify(pt->width0, ps->u.tex.level);
-   ns->height = u_minify(pt->height0, ps->u.tex.level);
-   ns->depth = ps->u.tex.last_layer - ps->u.tex.first_layer + 1;
-   ns->offset = layer_offset(pt, ps->u.tex.level, ps->u.tex.first_layer);
+   ns->width = u_minify(pt->width0, ps->level);
+   ns->height = u_minify(pt->height0, ps->level);
+   ns->depth = ps->last_layer - ps->first_layer + 1;
+   ns->offset = layer_offset(pt, ps->level, ps->first_layer);
    if (mt->swizzled)
       ns->pitch = 4096; /* random, just something the hw won't reject.. */
    else
       ns->pitch = lvl->pitch;
 
-   /* comment says there are going to be removed, but they're used by the st */
-   ps->width = ns->width;
-   ps->height = ns->height;
    return ps;
 }
 
-void
+static void
 nv30_miptree_surface_del(struct pipe_context *pipe, struct pipe_surface *ps)
 {
-   struct nv30_surface *ns = nv30_surface(ps);
+   FREE(ps);
+}
 
-   pipe_resource_reference(&ps->texture, NULL);
-   FREE(ns);
+void
+nv30_framebuffer_init(struct pipe_context *pctx,
+                      const struct pipe_framebuffer_state *fb,
+                      struct pipe_surface **cbufs,
+                      struct pipe_surface **zsbuf)
+{
+   return nv_framebuffer_init(pctx, fb, cbufs, zsbuf,
+                              nv30_miptree_surface_new,
+                              nv30_miptree_surface_del);
 }

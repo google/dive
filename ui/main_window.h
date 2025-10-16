@@ -68,6 +68,7 @@ class GfxrVulkanCommandFilter;
 class QGroupBox;
 class QSortFilterProxyModel;
 class QAbstractProxyModel;
+class FrameTabView;
 
 enum class EventMode;
 
@@ -122,6 +123,7 @@ signals:
     void FileLoaded();
     void PendingPerfCounterResults(const QString &file_name);
     void PendingGpuTimingResults(const QString &file_name);
+    void PendingScreenshot(const QString &file_name);
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
@@ -137,6 +139,7 @@ public slots:
     void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
     void OnPendingPerfCounterResults(const QString &file_name);
     void OnPendingGpuTimingResults(const QString &file_name);
+    void OnPendingScreenshot(const QString &file_name);
 
 private slots:
     void OnCommandViewModeChange(const QString &string);
@@ -317,6 +320,8 @@ private:
     int                                m_perf_counter_view_tab_index;
     GpuTimingTabView                  *m_gpu_timing_tab_view;
     int                                m_gpu_timing_view_tab_index;
+    FrameTabView                      *m_frame_tab_view;
+    int                                m_frame_view_tab_index;
 #if defined(ENABLE_CAPTURE_BUFFERS)
     BufferView *m_buffer_view;
 #endif

@@ -1154,4 +1154,28 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
     return absl::OkStatus();
 }
 
+absl::Status AndroidDevice::TriggerScreenCapture(
+const std::filesystem::path &on_device_screenshot_dir)
+{
+    // If the path segment has an extension, it is invalid for a directory name.
+    if (on_device_screenshot_dir.has_extension())
+    {
+        return absl::InvalidArgumentError(
+        absl::
+        StrFormat("Invalid screenshot directory '%s'. Path appears to contain a file extension "
+                  "and must be a directory.",
+                  on_device_screenshot_dir.string()));
+    }
+
+    std::filesystem::path full_capture_path = std::filesystem::path(Dive::kDeviceCapturePath) /
+                                              on_device_screenshot_dir /
+                                              Dive::kCaptureScreenshotFile;
+
+    std::string on_device_capture_screen_shot = full_capture_path.string();
+
+    absl::Status ret = m_adb.Run(
+    absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+    return ret;
+}
+
 }  // namespace Dive

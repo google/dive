@@ -2641,13 +2641,13 @@ void MainWindow::DisconnectAllTabs()
 
     QObject::disconnect(m_analyze_dig,
                         &AnalyzeDialog::OnDisplayPerfCounterResults,
-                        m_perf_counter_model,
-                        &PerfCounterModel::OnPerfCounterResultsGenerated);
+                        this,
+                        &MainWindow::OnPendingPerfCounterResults);
 
     QObject::disconnect(m_analyze_dig,
                         &AnalyzeDialog::OnDisplayGpuTimingResults,
-                        m_gpu_timing_model,
-                        &GpuTimingModel::OnGpuTimingResultsGenerated);
+                        this,
+                        &MainWindow::OnPendingGpuTimingResults);
 
     // Temporarily set the model to nullptr and clear selection/current index
     // before loading new data. This forces a clean break.
@@ -2855,13 +2855,13 @@ void MainWindow::ConnectDiveFileTabs()
     // Dialogs
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayPerfCounterResults,
-                     m_perf_counter_model,
-                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+                     this,
+                     &MainWindow::OnPendingPerfCounterResults);
 
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayGpuTimingResults,
-                     m_gpu_timing_model,
-                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+                     this,
+                     &MainWindow::OnPendingGpuTimingResults);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2959,13 +2959,13 @@ void MainWindow::ConnectAdrenoRdFileTabs()
     // Dialogs
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayPerfCounterResults,
-                     m_perf_counter_model,
-                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+                     this,
+                     &MainWindow::OnPendingPerfCounterResults);
 
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayGpuTimingResults,
-                     m_gpu_timing_model,
-                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+                     this,
+                     &MainWindow::OnPendingGpuTimingResults);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3041,13 +3041,13 @@ void MainWindow::ConnectGfxrFileTabs()
     // Dialogs
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayPerfCounterResults,
-                     m_perf_counter_model,
-                     &PerfCounterModel::OnPerfCounterResultsGenerated);
+                     this,
+                     &MainWindow::OnPendingPerfCounterResults);
 
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::OnDisplayGpuTimingResults,
-                     m_gpu_timing_model,
-                     &GpuTimingModel::OnGpuTimingResultsGenerated);
+                     this,
+                     &MainWindow::OnPendingGpuTimingResults);
 
     // Correlate calls
     QObject::connect(m_command_hierarchy_view->selectionModel(),
@@ -3067,7 +3067,7 @@ void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
 {
     const std::string file_path_std_str = file_path.toStdString();
     const char       *file_path_str = file_path_std_str.c_str();
-    if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ false))
+    if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ true))
     {
         return;
     }

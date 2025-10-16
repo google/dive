@@ -14,8 +14,12 @@
  limitations under the License.
 */
 
+#include <memory>
 #include <QWidget>
 #include <QtWidgets>
+
+class QTimer;
+class QElapsedTimer;
 
 class OverlayWidget : public QWidget
 {
@@ -36,17 +40,26 @@ class Overlay : public OverlayWidget
 {
 public:
     Overlay(QWidget* parent = nullptr);
+    ~Overlay();
 
     // Set message to be displayed on the overlay
-    void SetMessage(const QString& message);
+    void SetMessage(const QString& message, bool timed = false);
 
     // Update the size of the overlay widget
     void UpdateSize(const QRect& rect);
+
+private slots:
+    void OnUpdate();
 
 protected:
     void paintEvent(QPaintEvent* paint_event) Q_DECL_OVERRIDE;
 
 private:
+    // Timer for UI refreshing.
+    QTimer* m_timer = nullptr;
+    // Elapsed time since last timed message / event.
+    std::unique_ptr<QElapsedTimer> m_elapsed_timer;
+
     QString m_message;
     QRect   m_overlay_rect;
 };

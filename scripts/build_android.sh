@@ -19,7 +19,7 @@ PROJECT_ROOT="${PROJECT_ROOT%/*}/.."
 readonly PROJECT_ROOT="$(readlink -f ${PROJECT_ROOT})"
 readonly BUILD_DIR_ROOT=${PROJECT_ROOT}/build_android
 readonly SRC_DIR=${PROJECT_ROOT}
-BUILD_TYPE=(Debug Release)
+BUILD_TYPE=(Debug)
 readonly START_TIME=`date +%r`
 
 if [ $# -ne 0 ]; then

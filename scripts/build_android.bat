@@ -15,7 +15,7 @@
 @echo off
 setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
-set BUILD_TYPE=Debug Release
+set BUILD_TYPE=Debug
 set SRC_DIR=%PROJECT_ROOT%
 set GFXR_ROOT_DIR=%PROJECT_ROOT%\\third_party\\gfxreconstruct\\android
 set startTime=%time%

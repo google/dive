@@ -98,8 +98,8 @@ scripts\build_android.bat Debug
 
 This script will:
 - Build the debug version of the libraries under `build_android` folder.
-  - To build release version, replace parameter with `Release`. 
-  - To build both versions, do not pass a parameter.
+  - Not recommended to build the `Release` version as it is unable to support PM4 capture.
+  - If no parameter is passed, it will default to `Debug` version.
 - Trigger gradle to rebuild gfxreconstruct binaries under `third_party/gfxreconstruct/android/...` and copy them to under `build_android`.
 - Place the relevant files under `install` in preparation for deployment to the Android device.
 

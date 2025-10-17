@@ -69,6 +69,7 @@ class QGroupBox;
 class QSortFilterProxyModel;
 class QAbstractProxyModel;
 class FrameTabView;
+class QScrollArea;
 
 enum class EventMode;
 
@@ -254,6 +255,7 @@ private:
     QAction       *m_about_action;
     QAction       *m_shortcuts_action;
     QToolBar      *m_file_tool_bar;
+    QScrollArea   *m_file_tool_bar_scroll_area;
     TraceDialog   *m_trace_dig;
     AnalyzeDialog *m_analyze_dig;
 

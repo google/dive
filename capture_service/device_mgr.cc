@@ -1171,7 +1171,7 @@ const std::filesystem::path &on_device_screenshot_dir)
                                               on_device_screenshot_dir /
                                               Dive::kCaptureScreenshotFile;
 
-    std::string on_device_capture_screen_shot = full_capture_path.string();
+    std::string on_device_capture_screen_shot = full_capture_path.generic_string();
 
     absl::Status ret = m_adb.Run(
     absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));

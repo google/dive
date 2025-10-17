@@ -110,12 +110,24 @@ namespace
 
 std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
 {
-    std::vector<std::filesystem::path> search_paths{
-        std::filesystem::path{ "./install" },
-        std::filesystem::path{ "../../build_android/Release/bin" },
-        std::filesystem::path{ "../../install" },
-        std::filesystem::path{ "./" },
-    };
+    std::vector<std::filesystem::path>    search_paths;
+    absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
+    if (ret.ok())
+    {
+        const auto &exe_dir = *ret;
+        search_paths.push_back(exe_dir / "install");
+        search_paths.push_back(exe_dir);
+    }
+    else
+    {
+        qDebug() << "Could not determine executable directory: " << ret.status().message().data()
+                 << ". Search will not include executable-relative paths.";
+    }
+
+    search_paths.push_back(std::filesystem::path{ "./install" });
+    search_paths.push_back(std::filesystem::path{ "../../build_android/Release/bin" });
+    search_paths.push_back(std::filesystem::path{ "../../install" });
+    search_paths.push_back(std::filesystem::path{ "./" });
 
     for (const auto &p : search_paths)
     {

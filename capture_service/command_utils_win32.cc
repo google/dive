@@ -175,7 +175,7 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
 absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
 {
     wchar_t buffer[4096];
-    DWORD   length = GetModuleFileNameW(nullptr, buffer, sizeof(buffer));
+    DWORD   length = GetModuleFileNameW(nullptr, buffer, std::size(buffer));
     if (length > 0)
     {
         return std::filesystem::path(buffer).parent_path();

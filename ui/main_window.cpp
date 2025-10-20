@@ -1479,7 +1479,7 @@ void MainWindow::OnFileLoaded()
 void MainWindow::OnOpenFile()
 {
     QString supported_files = QStringLiteral(
-    "Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
+    "Supported Files (*.rd *.gfxr);;Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
     QString file_name = QFileDialog::getOpenFileName(this,
                                                      "Open Document",
                                                      Settings::Get()->ReadLastFilePath(),

@@ -2685,6 +2685,16 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnGfxrFilterModeChange()));
 
+    QObject::disconnect(m_analyze_dig,
+                        &AnalyzeDialog::OnDisplayPerfCounterResults,
+                        this,
+                        &MainWindow::OnPendingPerfCounterResults);
+
+    QObject::disconnect(m_analyze_dig,
+                        &AnalyzeDialog::OnDisplayGpuTimingResults,
+                        this,
+                        &MainWindow::OnPendingGpuTimingResults);
+
     // Temporarily set the model to nullptr and clear selection/current index
     // before loading new data. This forces a clean break.
     m_command_hierarchy_view->setModel(nullptr);
@@ -2991,6 +3001,17 @@ void MainWindow::ConnectAdrenoRdFileTabs()
                      m_buffer_view,
                      SLOT(OnEventSelected(uint64_t)));
 #endif
+
+    // Dialogs
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     this,
+                     &MainWindow::OnPendingPerfCounterResults);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     this,
+                     &MainWindow::OnPendingGpuTimingResults);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3062,6 +3083,17 @@ void MainWindow::ConnectGfxrFileTabs()
                      &QPushButton::clicked,
                      m_command_hierarchy_view,
                      &DiveTreeView::gotoNextEvent);
+
+    // Dialogs
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     this,
+                     &MainWindow::OnPendingPerfCounterResults);
+
+    QObject::connect(m_analyze_dig,
+                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     this,
+                     &MainWindow::OnPendingGpuTimingResults);
 
     // Correlate calls
     QObject::connect(m_command_hierarchy_view->selectionModel(),

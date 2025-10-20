@@ -494,6 +494,9 @@ absl::Status AndroidDevice::CleanupDevice()
 
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
+
+    // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
+    // `debug.openxr.enable_frame_delimiter`
     Adb().Run("shell setprop openxr.enable_frame_delimiter false").IgnoreError();
     Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false").IgnoreError();
 
@@ -554,6 +557,11 @@ absl::Status AndroidDevice::CleanupDevice()
     .IgnoreError();
     Adb()
     .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
+    .IgnoreError();
+
+    // cleanup for profiling plugin
+    Adb()
+    .Run(absl::StrFormat("shell rm -rf -- %s/%s", kTargetPath, kProfilingPluginFolderName))
     .IgnoreError();
 
     LOGD("Cleanup device %s done\n", m_serial.c_str());

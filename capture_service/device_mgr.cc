@@ -32,6 +32,7 @@ limitations under the License.
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
+#include "common/defer.h"
 #include "remote_files.h"
 
 namespace Dive
@@ -493,6 +494,8 @@ absl::Status AndroidDevice::CleanupDevice()
 
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
+    Adb().Run("shell setprop openxr.enable_frame_delimiter false").IgnoreError();
+    Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false").IgnoreError();
 
     if (m_original_state.m_root_access_requested)
     {
@@ -536,7 +539,22 @@ absl::Status AndroidDevice::CleanupDevice()
     Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
     Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
 
+    // clean up for gfxr renderdoc capture
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
+
+    // clean up for gfxr replay app
+    Adb()
+    .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default", kGfxrReplayAppName))
+    .IgnoreError();
+    Adb().Run(absl::StrFormat("uninstall %s", kGfxrReplayAppName)).IgnoreError();
+
+    // cleanup for gfxr PM4 capture
+    Adb()
+    .Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
+    .IgnoreError();
+    Adb()
+    .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
+    .IgnoreError();
 
     LOGD("Cleanup device %s done\n", m_serial.c_str());
     return absl::OkStatus();
@@ -747,7 +765,22 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
 {
     const AdbSession &adb = m_device->Adb();
-
+    Defer             cleanup([&]() {
+        LOGD("RunReplayGfxrScript(): CLEANUP\n");
+        if (settings.run_type == GfxrReplayOptions::kPm4Dump)
+        {
+            adb.Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
+            .IgnoreError();
+            adb
+            .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
+            .IgnoreError();
+        }
+        else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
+        {
+            UnsetSystemProperty(adb, kReplayCreateRenderDocCapture).IgnoreError();
+            DisableVulkanLayer(adb).IgnoreError();
+        }
+    });
     LOGD("RunReplayGfxrScript(): SETUP\n");
     std::filesystem::path parse_remote_capture = settings.remote_capture_path;
 
@@ -865,20 +898,6 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         }
     }
 
-    LOGD("RunReplayGfxrScript(): CLEANUP\n");
-    if (settings.run_type == GfxrReplayOptions::kPm4Dump)
-    {
-        std::string cmd = absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName);
-        m_device->Adb().Run(cmd).IgnoreError();
-        cmd = absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName);
-        m_device->Adb().Run(cmd).IgnoreError();
-    }
-    else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
-    {
-        UnsetSystemProperty(adb, kReplayCreateRenderDocCapture).IgnoreError();
-        DisableVulkanLayer(adb).IgnoreError();
-    }
-
     return absl::OkStatus();
 }
 
@@ -893,6 +912,11 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     std::string remote_profiling_dir = absl::StrFormat("%s/%s",
                                                        kTargetPath,
                                                        kProfilingPluginFolderName);
+    Defer       cleanup([&]() {
+        LOGD("RunReplayProfilingBinary(): CLEANUP\n");
+        std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
+        m_device->Adb().Run(clean_cmd).IgnoreError();
+    });
 
     std::string binary_path_on_device = absl::StrFormat("%s/%s",
                                                         remote_profiling_dir,
@@ -935,10 +959,6 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     LOGI("RunReplayProfilingBinary(): .csv file %s downloaded to %s\n",
          csv_remote_file_path.c_str(),
          settings.local_download_dir.c_str());
-
-    LOGD("RunReplayProfilingBinary(): CLEANUP\n");
-    std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
-    RETURN_IF_ERROR(m_device->Adb().Run(clean_cmd));
 
     return absl::OkStatus();
 }

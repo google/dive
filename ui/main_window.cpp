@@ -548,6 +548,7 @@ MainWindow::MainWindow()
     CreateMenus();
     CreateStatusBar();
     CreateShortcuts();
+    m_file_tool_bar_scroll_area = new QScrollArea(this);
     CreateToolBars();
     UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
 
@@ -2049,32 +2050,38 @@ void MainWindow::CreateMenus()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::CreateToolBars()
 {
-    m_file_tool_bar = addToolBar(tr("&File"));
+    // Create the capture button for the toolbar
+    QToolButton *capture_button = new QToolButton(this);
+    capture_button->setPopupMode(QToolButton::InstantPopup);
+    capture_button->setMenu(m_capture_menu);
+    capture_button->setIcon(QIcon(":/images/capture.png"));
+
+    m_file_tool_bar = new QToolBar(this);
+    m_file_tool_bar->setMovable(false);
     m_file_tool_bar->addAction(m_open_action);
     m_file_tool_bar->addAction(m_save_action);
-#ifndef NDEBUG
+    m_file_tool_bar->addWidget(capture_button);
+    m_file_tool_bar->addAction(m_analyze_action);
     m_file_tool_bar->addSeparator();
     for (int i = 0; i < MaxRecentFiles; ++i)
         m_file_tool_bar->addAction(m_recent_file_actions[i]);
-#endif
 
-    m_file_tool_bar->addSeparator();
+    m_file_tool_bar->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    m_file_tool_bar->setMinimumSize(m_file_tool_bar->sizeHint());
 
-    QToolButton *m_capture_button = new QToolButton();
-    m_capture_button->setPopupMode(QToolButton::InstantPopup);
-    m_capture_button->setMenu(m_capture_menu);
-    m_capture_button->setIcon(QIcon(":/images/capture.png"));
+    m_file_tool_bar_scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_file_tool_bar_scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_file_tool_bar_scroll_area->setFixedHeight(m_file_tool_bar->sizeHint().height() +
+                                                QStyle::PM_ScrollBarExtent);
+    m_file_tool_bar_scroll_area->setWidgetResizable(false);
+    m_file_tool_bar_scroll_area->setWidget(m_file_tool_bar);
 
-    m_file_tool_bar->addWidget(m_capture_button);
-
-    m_file_tool_bar->addSeparator();
-
-    QToolButton *m_analyze_button = new QToolButton();
-    m_analyze_button->setIcon(QIcon(":/images/analyze.png"));
-    m_analyze_button->setPopupMode(QToolButton::DelayedPopup);
-    connect(m_analyze_button, &QToolButton::clicked, m_analyze_action, &QAction::trigger);
-
-    m_file_tool_bar->addWidget(m_analyze_button);
+    // Create a toolbar holder for the scrollable toolbar. This is needed so the scrollable toolbar
+    // can be added directly to the main window with addToolBar.
+    QToolBar *tool_bar_holder = addToolBar(tr("&File"));
+    tool_bar_holder->addWidget(m_file_tool_bar_scroll_area);
+    tool_bar_holder->setOrientation(Qt::Horizontal);
+    m_file_tool_bar->setOrientation(Qt::Horizontal);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2223,6 +2230,33 @@ void MainWindow::UpdateRecentFileActions(QStringList recent_files)
         {
             m_recent_file_actions[j]->setVisible(false);
         }
+    }
+
+    if (m_file_tool_bar)
+    {
+        // Force the QToolBar to recalculate its minimum size hint based on the new, visible text.
+        // This causes the scroll area to expand.
+        m_file_tool_bar->updateGeometry();
+
+        // Since we explicitly set minimum size in CreateToolBars(),
+        // ensure the constraint is reset to the new calculated size.
+        m_file_tool_bar->setMinimumSize(m_file_tool_bar->sizeHint());
+    }
+
+    if (m_file_tool_bar_scroll_area)
+    {
+        // Tell the QScrollArea to resize its viewport based on the new size of the toolbar.
+        m_file_tool_bar_scroll_area->updateGeometry();
+
+        // Force the QScrollArea's maximum height to be correct for the new content size.
+        if (m_file_tool_bar)
+        {
+            m_file_tool_bar_scroll_area->setFixedHeight(m_file_tool_bar->sizeHint().height() +
+                                                        QStyle::PM_ScrollBarExtent);
+        }
+
+        // Force the parent layouts (the holder toolbar) to be notified of the size change.
+        m_file_tool_bar_scroll_area->adjustSize();
     }
 }
 

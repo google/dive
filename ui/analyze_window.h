@@ -55,6 +55,17 @@ class AnalyzeDialog : public QDialog
         QString          description;
     };
 
+    // Describes all files associated with a GFXR file, does not guarantee existence
+    struct ReplayArtifactsPaths
+    {
+        std::filesystem::path gfxr;
+        // TODO: std::filesystem::path gfxa;
+        std::filesystem::path perf_counter_csv;
+        std::filesystem::path gpu_timing_csv;
+        std::filesystem::path pm4_rd;
+        std::filesystem::path renderdoc_rdc;
+    };
+
     Q_OBJECT
 
     enum class ReplayStatusUpdateCode : int
@@ -73,6 +84,9 @@ class AnalyzeDialog : public QDialog
         kStartPm4Replay,
         kStartGpuTimeReplay,
         kStartPerfCounterReplay,
+
+        // Deleting replay artifacts associated with currently opened GFXR file
+        kDeletingReplayArtifacts,
     };
 
 public:
@@ -90,6 +104,7 @@ private slots:
     void OnReplay();
     void OnOverlayMessage(const QString &message);
     void OnDisableOverlay();
+    void OnDeleteReplayArtifacts();
 
 signals:
     void ReplayStatusUpdated(int status_code, const QString &error_message);
@@ -110,6 +125,7 @@ private:
     void                        UpdateSelectedMetricsList();
     std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
                                                  const std::string &suffix) const;
+    ReplayArtifactsPaths        GetReplayFilesLocalPaths(const std::string &gfxr_stem) const;
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
@@ -129,6 +145,7 @@ private:
     void ExecuteStatusUpdate();
 
     void ReplayImpl();
+    void DeleteReplayArtifactsImpl();
 
     QLabel      *m_metrics_list_label;
     QListWidget *m_metrics_list;
@@ -168,6 +185,9 @@ private:
 
     QHBoxLayout *m_replay_warning_layout;
     QLabel      *m_replay_warning_label;
+
+    QHBoxLayout *m_delete_replay_artifacts_layout;
+    QPushButton *m_delete_replay_artifacts_button;
 
     QHBoxLayout *m_button_layout;
     QPushButton *m_replay_button;

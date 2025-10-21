@@ -163,12 +163,18 @@ QWidget                                                            *parent) :
 
     // Replay Warning
     m_replay_warning_layout = new QHBoxLayout();
-    m_replay_warning_label = new QLabel(tr("⚠ Initiating replay will clear any temporary "
-                                           "artifacts produced by previous replays. Please save "
-                                           "them manually in a different folder before proceeding, "
-                                           "if those artifacts are desired."));
+    m_replay_warning_label = new QLabel(
+    tr("⚠ Initiating replay will continue to use any temporary "
+       "artifacts produced by previous replays, potentially overwritting them. Please save "
+       "them manually in a different folder before proceeding, "
+       "if those artifacts are desired."));
     m_replay_warning_label->setWordWrap(true);
     m_replay_warning_layout->addWidget(m_replay_warning_label);
+
+    // Delete replay artifacts
+    m_delete_replay_artifacts_layout = new QHBoxLayout();
+    m_delete_replay_artifacts_button = new QPushButton("&Delete Previous Replay Artifacts", this);
+    m_delete_replay_artifacts_layout->addWidget(m_delete_replay_artifacts_button);
 
     // Left Panel Layout
     m_left_panel_layout = new QVBoxLayout();
@@ -188,6 +194,7 @@ QWidget                                                            *parent) :
     m_right_panel_layout->addLayout(m_gpu_time_layout);
     m_right_panel_layout->addLayout(m_frame_count_layout);
     m_right_panel_layout->addLayout(m_replay_warning_layout);
+    m_right_panel_layout->addLayout(m_delete_replay_artifacts_layout);
     m_right_panel_layout->addLayout(m_button_layout);
 
     // Main Layout
@@ -228,6 +235,10 @@ QWidget                                                            *parent) :
                      &AnalyzeDialog::OnDeviceListRefresh);
     QObject::connect(m_open_files_button, &QPushButton::clicked, this, &AnalyzeDialog::OnOpenFile);
     QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
+    QObject::connect(m_delete_replay_artifacts_button,
+                     &QPushButton::clicked,
+                     this,
+                     &AnalyzeDialog::OnDeleteReplayArtifacts);
 
     QObject::connect(this,
                      &AnalyzeDialog::ReplayStatusUpdated,
@@ -588,6 +599,28 @@ std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_st
 }
 
 //--------------------------------------------------------------------------------------------------
+AnalyzeDialog::ReplayArtifactsPaths AnalyzeDialog::GetReplayFilesLocalPaths(
+const std::string &gfxr_stem) const
+{
+    ReplayArtifactsPaths artifacts = {};
+
+    assert(!gfxr_stem.empty());
+
+    if (m_local_capture_file_directory.empty())
+    {
+        qDebug() << "GetReplayFilesLocalPaths() error: m_local_capture_file_directory empty";
+        return artifacts;
+    }
+
+    artifacts.gfxr = GetFullLocalPath(gfxr_stem, Dive::kGfxrSuffix);
+    artifacts.perf_counter_csv = GetFullLocalPath(gfxr_stem, Dive::kProfilingMetricsCsvSuffix);
+    artifacts.gpu_timing_csv = GetFullLocalPath(gfxr_stem, Dive::kGpuTimingCsvSuffix);
+    artifacts.pm4_rd = GetFullLocalPath(gfxr_stem, Dive::kPm4RdSuffix);
+    artifacts.renderdoc_rdc = GetFullLocalPath(gfxr_stem, Dive::kRenderDocRdcSuffix);
+    return artifacts;
+}
+
+//--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
                                          const std::string   &remote_gfxr_file)
 {
@@ -681,6 +714,21 @@ void AnalyzeDialog::OnReplay()
 }
 
 //--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::OnDeleteReplayArtifacts()
+{
+    if (m_replay_active.valid())
+    {
+        qDebug() << "Cannot call OnDeleteReplayArtifacts() during active replay";
+        return;
+    }
+
+    m_replay_active = std::async([=]() {
+        DeleteReplayArtifactsImpl();
+        UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
+    });
+}
+
+//--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString &error_message)
 {
     // Cast from qt known type.
@@ -743,6 +791,9 @@ void AnalyzeDialog::ExecuteStatusUpdate()
         case ReplayStatusUpdateCode::kStartPerfCounterReplay:
             SetReplayButton("Replaying with perf counter settings...", false);
             OverlayMessage("Replaying with perf counter settings...");
+            break;
+        case ReplayStatusUpdateCode::kDeletingReplayArtifacts:
+            OverlayMessage("Deleting temporary artifacts...");
             break;
         }
     }
@@ -811,21 +862,9 @@ void AnalyzeDialog::ReplayImpl()
     }
     m_local_capture_file_directory = ret2.value();
 
-    // Delete any temporary artifacts from previous runs
-    std::filesystem::path gfxr_filename_stem = std::filesystem::path(remote_file.value()).stem();
-    std::filesystem::path perf_counter_csv = GetFullLocalPath(gfxr_filename_stem.string(),
-                                                              Dive::kProfilingMetricsCsvSuffix);
-    std::filesystem::path gpu_timing_csv = GetFullLocalPath(gfxr_filename_stem.string(),
-                                                            Dive::kGpuTimingCsvSuffix);
-    std::filesystem::path pm4_rd = GetFullLocalPath(gfxr_filename_stem.string(),
-                                                    Dive::kPm4RdSuffix);
-    std::filesystem::path renderdoc_rdc = GetFullLocalPath(gfxr_filename_stem.string(),
-                                                           Dive::kRenderDocRdcSuffix);
-    qDebug() << "Attempting to delete temporary artifacts from previous runs...";
-    AttemptDeletingTemporaryLocalFile(perf_counter_csv);
-    AttemptDeletingTemporaryLocalFile(gpu_timing_csv);
-    AttemptDeletingTemporaryLocalFile(pm4_rd);
-    // Keep RenderDoc file since it's not part of the "Dive file"
+    // Get names of temporary artifacts
+    ReplayArtifactsPaths local_artifacts = GetReplayFilesLocalPaths(
+    std::filesystem::path(remote_file.value()).stem().string());
 
     // Get info on which variants of replay to initiate runs for
     bool dump_pm4_run_enabled = m_dump_pm4_box->isChecked();
@@ -877,9 +916,11 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
-        qDebug() << "Loading perf counter data: " << perf_counter_csv.string().c_str();
+        qDebug() << "Loading perf counter data: "
+                 << local_artifacts.perf_counter_csv.string().c_str();
 
-        emit OnDisplayPerfCounterResults(QString::fromStdString(perf_counter_csv.string()));
+        emit OnDisplayPerfCounterResults(
+        QString::fromStdString(local_artifacts.perf_counter_csv.string()));
     }
     else
     {
@@ -897,8 +938,9 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
-        qDebug() << "Loading gpu timing data: " << gpu_timing_csv.string().c_str();
-        emit OnDisplayGpuTimingResults(QString::fromStdString(gpu_timing_csv.string()));
+        qDebug() << "Loading gpu timing data: " << local_artifacts.gpu_timing_csv.string().c_str();
+        emit OnDisplayGpuTimingResults(
+        QString::fromStdString(local_artifacts.gpu_timing_csv.string()));
     }
     else
     {
@@ -916,8 +958,40 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
-        qDebug() << "RenderDoc capture saved to: " << renderdoc_rdc.string().c_str();
+        qDebug() << "RenderDoc capture saved to: "
+                 << local_artifacts.renderdoc_rdc.string().c_str();
     }
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::DeleteReplayArtifactsImpl()
+{
+    qDebug() << "Attempting to delete replay artifacts from previous runs...";
+    UpdateReplayStatus(ReplayStatusUpdateCode::kDeletingReplayArtifacts);
+
+    absl::StatusOr<std::string> ret = GetCaptureFileDirectory();
+    if (!ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Failed to get local capture directory: ",
+                                           ret.status().message());
+        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
+        qDebug() << "Failed to get local capture directory";
+        return;
+    }
+    m_local_capture_file_directory = ret.value();
+
+    std::filesystem::path gfxr_parse = m_selected_capture_file_string.toStdString();
+    ReplayArtifactsPaths  local_artifacts = GetReplayFilesLocalPaths(gfxr_parse.stem().string());
+
+    if (local_artifacts.gfxr.empty())
+    {
+        qDebug() << "Could not obtain names for replay artifacts";
+        return;
+    }
+
+    AttemptDeletingTemporaryLocalFile(local_artifacts.perf_counter_csv);
+    AttemptDeletingTemporaryLocalFile(local_artifacts.gpu_timing_csv);
+    AttemptDeletingTemporaryLocalFile(local_artifacts.pm4_rd);
 }

@@ -17,18 +17,17 @@
 #include <QStringList>
 #include <QDebug>
 
-constexpr std::array<Dive::Stats::Type, 10> kMiscStats = {
-    Dive::Stats::kNumBinningPasses,
-    Dive::Stats::kNumTilingPasses,
-    Dive::Stats::kWaitMemWrites,
-    Dive::Stats::kWaitForIdle,
-    Dive::Stats::kWaitForMe,
-    Dive::Stats::kTotalResolves,
-    Dive::Stats::kGmemToSysmemResolves,
-    Dive::Stats::kGmemToSysmemAndClearGmemResolves,
-    Dive::Stats::kClearGmemResolves,
-    Dive::Stats::kSysmemToGmemResolves
-};
+constexpr std::array<Dive::Stats::Type, 11> kMiscStats = { Dive::Stats::kNumBinningPasses,
+                                                           Dive::Stats::kNumTilingPasses,
+                                                           Dive::Stats::kWaitMemWrites,
+                                                           Dive::Stats::kWaitForIdle,
+                                                           Dive::Stats::kWaitForMe,
+                                                           Dive::Stats::kTotalResolves,
+                                                           Dive::Stats::kColorSysMemToGmemResolves,
+                                                           Dive::Stats::kColorGmemToSysMemResolves,
+                                                           Dive::Stats::kDepthSysMemToGmemResolves,
+                                                           Dive::Stats::kDepthGmemToSysMemResolves,
+                                                           Dive::Stats::kClearGmemResolves };
 
 constexpr std::array<const char *, Dive::Stats::kNumStats> kStatDescriptions = [] {
     std::array<const char *, Dive::Stats::kNumStats> arr{};

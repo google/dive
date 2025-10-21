@@ -1,25 +1,7 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
  * Copyright © 2018 Google, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -34,6 +16,7 @@
 #include "fd6_program.h"
 #include "fdl/fd6_format_table.h"
 #include "freedreno_context.h"
+#include "freedreno_gpu_event.h"
 #include "ir3_gallium.h"
 
 struct fd_ringbuffer;
@@ -121,28 +104,34 @@ struct fd6_state {
 };
 
 static inline void
-fd6_state_emit(struct fd6_state *state, struct fd_ringbuffer *ring)
+fd6_state_emit(struct fd6_state *state, fd_cs &cs)
 {
    if (!state->num_groups)
       return;
 
-   OUT_PKT7(ring, CP_SET_DRAW_STATE, 3 * state->num_groups);
+   fd_pkt7 pkt(cs, CP_SET_DRAW_STATE, 3 * state->num_groups);
+
    for (unsigned i = 0; i < state->num_groups; i++) {
       struct fd6_state_group *g = &state->groups[i];
-      unsigned n = g->stateobj ? fd_ringbuffer_size(g->stateobj) / 4 : 0;
 
       assert((g->enable_mask & ~ENABLE_ALL) == 0);
 
-      if (n == 0) {
-         OUT_RING(ring, CP_SET_DRAW_STATE__0_COUNT(0) |
-                        CP_SET_DRAW_STATE__0_DISABLE | g->enable_mask |
-                        CP_SET_DRAW_STATE__0_GROUP_ID(g->group_id));
-         OUT_RING(ring, 0x00000000);
-         OUT_RING(ring, 0x00000000);
+      if (g->stateobj) {
+         unsigned n = fd_ringbuffer_size(g->stateobj) / 4;
+
+         pkt.add(CP_SET_DRAW_STATE__0(i,
+            .count = n,
+            .group_id = g->group_id,
+            .dword = g->enable_mask,
+         ));
+         pkt.add(g->stateobj, 0, NULL);
       } else {
-         OUT_RING(ring, CP_SET_DRAW_STATE__0_COUNT(n) | g->enable_mask |
-                        CP_SET_DRAW_STATE__0_GROUP_ID(g->group_id));
-         OUT_RB(ring, g->stateobj);
+         pkt.add(CP_SET_DRAW_STATE__0(i,
+            .disable = true,
+            .group_id = g->group_id,
+            .dword = g->enable_mask,
+         ));
+         pkt.add(CP_SET_DRAW_STATE__ADDR(i));
       }
 
       if (g->stateobj)
@@ -216,73 +205,93 @@ fd6_emit_get_prog(struct fd6_emit *emit)
    return emit->prog;
 }
 
-static inline unsigned
-fd6_event_write(struct fd_batch *batch, struct fd_ringbuffer *ring,
-                enum vgt_event_type evt, bool timestamp)
+template <chip CHIP>
+static inline void
+__event_write(fd_cs &cs, enum fd_gpu_event event,
+              enum event_write_src esrc, enum event_write_dst edst,
+              uint32_t val, struct fd_bo *bo, uint32_t offset)
 {
+   struct fd_gpu_event_info info = fd_gpu_events<CHIP>[event];
+   unsigned len = info.needs_seqno ? 4 : 1;
+
+   if ((CHIP == A7XX) && (event == FD_RB_DONE))
+      len--;
+
+   fd_pkt7 pkt(cs, CP_EVENT_WRITE, len);
+
+   if (CHIP == A6XX) {
+      pkt.add(CP_EVENT_WRITE_0_EVENT(info.raw_event) |
+               COND(info.needs_seqno, CP_EVENT_WRITE_0_TIMESTAMP));
+   } else if (CHIP == A7XX) {
+      pkt.add(CP_EVENT_WRITE7_0_EVENT(info.raw_event) |
+              CP_EVENT_WRITE7_0_WRITE_SRC(esrc) |
+              CP_EVENT_WRITE7_0_WRITE_DST(edst) |
+              COND(info.needs_seqno, CP_EVENT_WRITE7_0_WRITE_ENABLED));
+   }
+
+   if (info.needs_seqno) {
+      pkt.add(CP_EVENT_WRITE_ADDR(
+         .bo = bo,
+         .bo_offset = offset,
+      )); /* ADDR_LO/HI */
+      if (len == 4)
+         pkt.add(val);
+   }
+}
+
+template <chip CHIP>
+static inline void
+fd6_record_ts(fd_cs &cs, struct fd_bo *bo, uint32_t offset)
+{
+   __event_write<CHIP>(cs, FD_RB_DONE, EV_WRITE_ALWAYSON, EV_DST_RAM, 0, bo, offset);
+}
+
+template <chip CHIP>
+static inline void
+fd6_fence_write(fd_cs &cs, uint32_t val, struct fd_bo *bo, uint32_t offset)
+{
+   __event_write<CHIP>(cs, FD_CACHE_CLEAN, EV_WRITE_USER_32B, EV_DST_RAM, val, bo, offset);
+}
+
+template <chip CHIP>
+static inline unsigned
+fd6_event_write(struct fd_context *ctx, fd_cs &cs, enum fd_gpu_event event)
+{
+   struct fd6_context *fd6_ctx = fd6_context(ctx);
+   struct fd_gpu_event_info info = fd_gpu_events<CHIP>[event];
    unsigned seqno = 0;
 
-   OUT_PKT7(ring, CP_EVENT_WRITE, timestamp ? 4 : 1);
-   OUT_RING(ring, CP_EVENT_WRITE_0_EVENT(evt));
-   if (timestamp) {
-      struct fd6_context *fd6_ctx = fd6_context(batch->ctx);
+   if (info.needs_seqno) {
+      struct fd6_context *fd6_ctx = fd6_context(ctx);
       seqno = ++fd6_ctx->seqno;
-      OUT_RELOC(ring, control_ptr(fd6_ctx, seqno)); /* ADDR_LO/HI */
-      OUT_RING(ring, seqno);
    }
+
+   __event_write<CHIP>(cs, event, EV_WRITE_USER_32B, EV_DST_RAM, seqno,
+                       control_ptr(fd6_ctx, seqno));
 
    return seqno;
 }
 
+template <chip CHIP>
 static inline void
-fd6_cache_inv(struct fd_batch *batch, struct fd_ringbuffer *ring)
+fd6_cache_inv(struct fd_context *ctx, fd_cs &cs)
 {
-   fd6_event_write(batch, ring, PC_CCU_INVALIDATE_COLOR, false);
-   fd6_event_write(batch, ring, PC_CCU_INVALIDATE_DEPTH, false);
-   fd6_event_write(batch, ring, CACHE_INVALIDATE, false);
+   fd6_event_write<CHIP>(ctx, cs, FD_CCU_INVALIDATE_COLOR);
+   fd6_event_write<CHIP>(ctx, cs, FD_CCU_INVALIDATE_DEPTH);
+   fd6_event_write<CHIP>(ctx, cs, FD_CACHE_INVALIDATE);
 }
 
+template <chip CHIP>
 static inline void
-fd6_cache_flush(struct fd_batch *batch, struct fd_ringbuffer *ring)
+fd6_emit_blit(struct fd_context *ctx, fd_cs &cs)
 {
-   struct fd6_context *fd6_ctx = fd6_context(batch->ctx);
-   unsigned seqno;
-
-   seqno = fd6_event_write(batch, ring, RB_DONE_TS, true);
-
-   OUT_PKT7(ring, CP_WAIT_REG_MEM, 6);
-   OUT_RING(ring, CP_WAIT_REG_MEM_0_FUNCTION(WRITE_EQ) |
-                     CP_WAIT_REG_MEM_0_POLL(POLL_MEMORY));
-   OUT_RELOC(ring, control_ptr(fd6_ctx, seqno));
-   OUT_RING(ring, CP_WAIT_REG_MEM_3_REF(seqno));
-   OUT_RING(ring, CP_WAIT_REG_MEM_4_MASK(~0));
-   OUT_RING(ring, CP_WAIT_REG_MEM_5_DELAY_LOOP_CYCLES(16));
-
-   seqno = fd6_event_write(batch, ring, CACHE_FLUSH_TS, true);
-
-   OUT_PKT7(ring, CP_WAIT_MEM_GTE, 4);
-   OUT_RING(ring, CP_WAIT_MEM_GTE_0_RESERVED(0));
-   OUT_RELOC(ring, control_ptr(fd6_ctx, seqno));
-   OUT_RING(ring, CP_WAIT_MEM_GTE_3_REF(seqno));
-}
-
-static inline void
-fd6_emit_blit(struct fd_batch *batch, struct fd_ringbuffer *ring)
-{
-   emit_marker6(ring, 7);
-   fd6_event_write(batch, ring, BLIT, false);
-   emit_marker6(ring, 7);
-}
-
-static inline void
-fd6_emit_lrz_flush(struct fd_ringbuffer *ring)
-{
-   OUT_PKT7(ring, CP_EVENT_WRITE, 1);
-   OUT_RING(ring, LRZ_FLUSH);
+   emit_marker6<CHIP>(cs, 7);
+   fd6_event_write<CHIP>(ctx, cs, FD_BLIT);
+   emit_marker6<CHIP>(cs, 7);
 }
 
 static inline bool
-fd6_geom_stage(gl_shader_stage type)
+fd6_geom_stage(mesa_shader_stage type)
 {
    switch (type) {
    case MESA_SHADER_VERTEX:
@@ -295,18 +304,18 @@ fd6_geom_stage(gl_shader_stage type)
    case MESA_SHADER_KERNEL:
       return false;
    default:
-      unreachable("bad shader type");
+      UNREACHABLE("bad shader type");
    }
 }
 
-static inline uint32_t
-fd6_stage2opcode(gl_shader_stage type)
+static inline enum adreno_pm4_type3_packets
+fd6_stage2opcode(mesa_shader_stage type)
 {
    return fd6_geom_stage(type) ? CP_LOAD_STATE6_GEOM : CP_LOAD_STATE6_FRAG;
 }
 
 static inline enum a6xx_state_block
-fd6_stage2shadersb(gl_shader_stage type)
+fd6_stage2shadersb(mesa_shader_stage type)
 {
    switch (type) {
    case MESA_SHADER_VERTEX:
@@ -323,7 +332,7 @@ fd6_stage2shadersb(gl_shader_stage type)
    case MESA_SHADER_KERNEL:
       return SB6_CS_SHADER;
    default:
-      unreachable("bad shader type");
+      UNREACHABLE("bad shader type");
       return (enum a6xx_state_block)~0;
    }
 }
@@ -340,38 +349,51 @@ fd6_gl2spacing(enum gl_tess_spacing spacing)
       return TESS_FRACTIONAL_EVEN;
    case TESS_SPACING_UNSPECIFIED:
    default:
-      unreachable("spacing must be specified");
+      UNREACHABLE("spacing must be specified");
    }
 }
 
 template <chip CHIP, fd6_pipeline_type PIPELINE>
-void fd6_emit_3d_state(struct fd_ringbuffer *ring,
-                       struct fd6_emit *emit) assert_dt;
+void fd6_emit_3d_state(fd_cs &cs, struct fd6_emit *emit) assert_dt;
 
 struct fd6_compute_state;
 template <chip CHIP>
-void fd6_emit_cs_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
-                       struct fd6_compute_state *cs) assert_dt;
-
-void fd6_emit_ccu_cntl(struct fd_ringbuffer *ring, struct fd_screen *screen, bool gmem);
+void fd6_emit_cs_state(struct fd_context *ctx, fd_cs &cs,
+                       struct fd6_compute_state *cp) assert_dt;
 
 template <chip CHIP>
-void fd6_emit_restore(struct fd_batch *batch, struct fd_ringbuffer *ring);
+void fd6_emit_ccu_cntl(fd_cs &cs, struct fd_screen *screen, bool gmem);
+
+template <chip CHIP>
+void fd6_emit_static_regs(fd_cs &cs, struct fd_context *ctx);
+
+template <chip CHIP>
+void fd6_emit_restore(fd_cs &cs, struct fd_batch *batch);
 
 void fd6_emit_init_screen(struct pipe_screen *pscreen);
 
+template <chip CHIP>
 static inline void
-fd6_emit_ib(struct fd_ringbuffer *ring, struct fd_ringbuffer *target)
+fd6_emit_ib(fd_cs &cs, struct fd_ringbuffer *target)
 {
-   emit_marker6(ring, 6);
-   __OUT_IB5(ring, target);
-   emit_marker6(ring, 6);
-}
+   if (target->cur == target->start)
+      return;
 
-#define WRITE(reg, val)                                                        \
-   do {                                                                        \
-      OUT_PKT4(ring, reg, 1);                                                  \
-      OUT_RING(ring, val);                                                     \
-   } while (0)
+   unsigned count = fd_ringbuffer_cmd_count(target);
+
+   emit_marker6<CHIP>(cs, 6);
+
+   for (unsigned i = 0; i < count; i++) {
+      uint32_t dwords;
+
+      fd_pkt7(cs, CP_INDIRECT_BUFFER, 3)
+         .add(target, i, &dwords)
+         .add(A5XX_CP_INDIRECT_BUFFER_2(.ib_size = dwords));
+
+      assert(dwords > 0);
+   }
+
+   emit_marker6<CHIP>(cs, 6);
+}
 
 #endif /* FD6_EMIT_H */

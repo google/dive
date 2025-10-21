@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2013 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2013 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -92,7 +74,7 @@ emit_shader(struct fd_ringbuffer *ring, const struct ir3_shader_variant *so)
 
 void
 fd3_program_emit(struct fd_ringbuffer *ring, struct fd3_emit *emit, int nr,
-                 struct pipe_surface **bufs)
+                 struct pipe_surface *bufs)
 {
    const struct ir3_shader_variant *vp, *fp;
    const struct ir3_info *vsi, *fsi;
@@ -185,7 +167,7 @@ fd3_program_emit(struct fd_ringbuffer *ring, struct fd3_emit *emit, int nr,
     * format, so it's just treated like red
     */
    for (i = 0; i < nr; i++)
-      if (util_format_is_alpha(pipe_surface_format(bufs[i])))
+      if (util_format_is_alpha(pipe_surface_format(&bufs[i])))
          color_regid[i] += 3;
 
    /* we could probably divide this up into things that need to be
@@ -337,7 +319,7 @@ fd3_program_emit(struct fd_ringbuffer *ring, struct fd3_emit *emit, int nr,
          COND(color_regid[i] & HALF_REG_ID, A3XX_SP_FS_MRT_REG_HALF_PRECISION);
 
       if (i < nr) {
-         enum pipe_format fmt = pipe_surface_format(bufs[i]);
+         enum pipe_format fmt = pipe_surface_format(&bufs[i]);
          mrt_reg |=
             COND(util_format_is_pure_uint(fmt), A3XX_SP_FS_MRT_REG_UINT) |
             COND(util_format_is_pure_sint(fmt), A3XX_SP_FS_MRT_REG_SINT);

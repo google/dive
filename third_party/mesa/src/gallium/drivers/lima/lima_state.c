@@ -187,17 +187,13 @@ lima_delete_vertex_elements_state(struct pipe_context *pctx, void *hwcso)
 static void
 lima_set_vertex_buffers(struct pipe_context *pctx,
                         unsigned count,
-                        unsigned unbind_num_trailing_slots,
-                        bool take_ownership,
                         const struct pipe_vertex_buffer *vb)
 {
    struct lima_context *ctx = lima_context(pctx);
    struct lima_context_vertex_buffer *so = &ctx->vertex_buffers;
 
    util_set_vertex_buffers_mask(so->vb, &so->enabled_mask,
-                                vb, count,
-                                unbind_num_trailing_slots,
-                                take_ownership);
+                                vb, count);
    so->count = util_last_bit(so->enabled_mask);
 
    ctx->dirty |= LIMA_CONTEXT_DIRTY_VERTEX_BUFF;
@@ -266,19 +262,8 @@ lima_set_stencil_ref(struct pipe_context *pctx,
 }
 
 static void
-lima_set_clip_state(struct pipe_context *pctx,
-                    const struct pipe_clip_state *clip)
-{
-   struct lima_context *ctx = lima_context(pctx);
-   ctx->clip = *clip;
-
-   ctx->dirty |= LIMA_CONTEXT_DIRTY_CLIP;
-}
-
-static void
 lima_set_constant_buffer(struct pipe_context *pctx,
-                         enum pipe_shader_type shader, uint index,
-                         bool pass_reference,
+                         mesa_shader_stage shader, uint index,
                          const struct pipe_constant_buffer *cb)
 {
    struct lima_context *ctx = lima_context(pctx);
@@ -322,7 +307,7 @@ lima_sampler_state_delete(struct pipe_context *pctx, void *sstate)
 
 static void
 lima_sampler_states_bind(struct pipe_context *pctx,
-                        enum pipe_shader_type shader, unsigned start,
+                        mesa_shader_stage shader, unsigned start,
                         unsigned nr, void **hwcso)
 {
    struct lima_context *ctx = lima_context(pctx);
@@ -383,10 +368,9 @@ lima_sampler_view_destroy(struct pipe_context *pctx,
 
 static void
 lima_set_sampler_views(struct pipe_context *pctx,
-                      enum pipe_shader_type shader,
+                      mesa_shader_stage shader,
                       unsigned start, unsigned nr,
                        unsigned unbind_num_trailing_slots,
-                       bool take_ownership,
                       struct pipe_sampler_view **views)
 {
    struct lima_context *ctx = lima_context(pctx);
@@ -400,12 +384,7 @@ lima_set_sampler_views(struct pipe_context *pctx,
       if (views[i])
          new_nr = i + 1;
 
-      if (take_ownership) {
-         pipe_sampler_view_reference(&lima_tex->textures[i], NULL);
-         lima_tex->textures[i] = views[i];
-      } else {
-         pipe_sampler_view_reference(&lima_tex->textures[i], views[i]);
-      }
+      pipe_sampler_view_reference(&lima_tex->textures[i], views[i]);
    }
 
    for (; i < lima_tex->num_textures; i++) {
@@ -434,7 +413,6 @@ lima_state_init(struct lima_context *ctx)
    ctx->base.set_scissor_states = lima_set_scissor_states;
    ctx->base.set_blend_color = lima_set_blend_color;
    ctx->base.set_stencil_ref = lima_set_stencil_ref;
-   ctx->base.set_clip_state = lima_set_clip_state;
 
    ctx->base.set_vertex_buffers = lima_set_vertex_buffers;
    ctx->base.set_constant_buffer = lima_set_constant_buffer;
@@ -461,6 +439,8 @@ lima_state_init(struct lima_context *ctx)
 
    ctx->base.create_sampler_view = lima_create_sampler_view;
    ctx->base.sampler_view_destroy = lima_sampler_view_destroy;
+   ctx->base.sampler_view_release = u_default_sampler_view_release;
+   ctx->base.resource_release = u_default_resource_release;
    ctx->base.set_sampler_views = lima_set_sampler_views;
 
    ctx->base.set_sample_mask = lima_set_sample_mask;
@@ -472,5 +452,5 @@ lima_state_fini(struct lima_context *ctx)
    struct lima_context_vertex_buffer *so = &ctx->vertex_buffers;
 
    util_set_vertex_buffers_mask(so->vb, &so->enabled_mask, NULL,
-                                0, ARRAY_SIZE(so->vb), false);
+                                0);
 }

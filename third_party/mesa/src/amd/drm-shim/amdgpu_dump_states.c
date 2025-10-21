@@ -150,6 +150,8 @@ amdgpu_dump_dev_info(int fd)
       FAMILY(GC_11_0_1),
       FAMILY(GC_10_3_6),
       FAMILY(GC_10_3_7),
+      FAMILY(GC_11_5_0),
+      FAMILY(GC_12_0_0),
    /* clang-format on */
 #undef FAMILY
    };
@@ -377,6 +379,7 @@ amdgpu_dump_hw_ips(int fd)
       printf("   .ib_size_alignment = %u,\n", info.ib_size_alignment);
       printf("   .available_rings = 0x%x,\n", info.available_rings);
       printf("   .ip_discovery_version = 0x%04x,\n", info.ip_discovery_version);
+      printf("   .userq_num_slots = 0x%x,\n", info.userq_num_slots);
       printf("},\n");
    }
 }

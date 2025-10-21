@@ -1,6 +1,7 @@
 .softpipe-rules:
   stage: software-renderer
   rules:
+    - !reference [.test, rules]
     - !reference [.gl-rules, rules]
     - changes: &softpipe_file_list
       - src/gallium/drivers/softpipe/**/*
@@ -8,8 +9,11 @@
       when: on_success
 
 .softpipe-test:
+  tags:
+    - $FDO_RUNNER_JOB_PRIORITY_TAG_X86_64
   variables:
     GPU_VERSION: softpipe
+    DRIVER_NAME: softpipe
     LIBGL_ALWAYS_SOFTWARE: "true"
     FLAKES_CHANNEL: "#mesa-swrast-ci"
     GALLIUM_DRIVER: "softpipe"
@@ -21,5 +25,3 @@
     - .softpipe-test
     # this must be last to avoid breaking dependency rules
     - .softpipe-rules
-  variables:
-    DEQP_EXPECTED_RENDERER: softpipe

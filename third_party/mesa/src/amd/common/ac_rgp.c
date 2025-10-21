@@ -22,7 +22,7 @@
 
 #define SQTT_FILE_MAGIC_NUMBER  0x50303042
 #define SQTT_FILE_VERSION_MAJOR 1
-#define SQTT_FILE_VERSION_MINOR 5
+#define SQTT_FILE_VERSION_MINOR 6
 
 #define SQTT_GPU_NAME_MAX_SIZE 256
 #define SQTT_MAX_NUM_SE        32
@@ -36,6 +36,7 @@ enum sqtt_version
    SQTT_VERSION_2_3 = 0x6, /* GFX9 */
    SQTT_VERSION_2_4 = 0x7, /* GFX10+ */
    SQTT_VERSION_3_2 = 0xb, /* GFX11+ */
+   SQTT_VERSION_3_3 = 0xc, /* GFX12+ */
 };
 
 /**
@@ -79,9 +80,9 @@ struct sqtt_file_chunk_header {
 struct sqtt_file_header_flags {
    union {
       struct {
-         int32_t is_semaphore_queue_timing_etw : 1;
-         int32_t no_queue_semaphore_timestamps : 1;
-         int32_t reserved : 30;
+         uint32_t is_semaphore_queue_timing_etw : 1;
+         uint32_t no_queue_semaphore_timestamps : 1;
+         uint32_t reserved : 30;
       };
 
       uint32_t value;
@@ -263,6 +264,8 @@ enum sqtt_gfxip_level
    SQTT_GFXIP_LEVEL_GFXIP_10_1 = 0x7,
    SQTT_GFXIP_LEVEL_GFXIP_10_3 = 0x9,
    SQTT_GFXIP_LEVEL_GFXIP_11_0 = 0xc,
+   SQTT_GFXIP_LEVEL_GFXIP_11_5 = 0xd,
+   SQTT_GFXIP_LEVEL_GFXIP_12 = 0x10,
 };
 
 enum sqtt_memory_type
@@ -354,8 +357,12 @@ static enum sqtt_gfxip_level ac_gfx_level_to_sqtt_gfxip_level(enum amd_gfx_level
       return SQTT_GFXIP_LEVEL_GFXIP_10_3;
    case GFX11:
       return SQTT_GFXIP_LEVEL_GFXIP_11_0;
+   case GFX11_5:
+      return SQTT_GFXIP_LEVEL_GFXIP_11_5;
+   case GFX12:
+      return SQTT_GFXIP_LEVEL_GFXIP_12;
    default:
-      unreachable("Invalid gfx level");
+      UNREACHABLE("Invalid gfx level");
    }
 }
 
@@ -387,7 +394,7 @@ static enum sqtt_memory_type ac_vram_type_to_sqtt_memory_type(uint32_t vram_type
    case AMD_VRAM_TYPE_LPDDR5:
       return SQTT_MEMORY_TYPE_LPDDR5;
    default:
-      unreachable("Invalid vram type");
+      UNREACHABLE("Invalid vram type");
    }
 }
 
@@ -431,7 +438,7 @@ static void ac_sqtt_fill_asic_info(const struct radeon_info *rad_info,
    chunk->shader_engines = rad_info->max_se;
    chunk->compute_unit_per_shader_engine = rad_info->min_good_cu_per_sa * rad_info->max_sa_per_se;
    chunk->simd_per_compute_unit = rad_info->num_simd_per_compute_unit;
-   chunk->wavefronts_per_simd = rad_info->max_wave64_per_simd;
+   chunk->wavefronts_per_simd = rad_info->max_waves_per_simd;
 
    chunk->minimum_vgpr_alloc = rad_info->min_wave64_vgpr_alloc;
    chunk->vgpr_alloc_granularity = rad_info->wave64_vgpr_alloc_granularity * (has_wave32 ? 2 : 1);
@@ -700,9 +707,12 @@ static enum sqtt_version ac_gfx_level_to_sqtt_version(enum amd_gfx_level gfx_lev
    case GFX10_3:
       return SQTT_VERSION_2_4;
    case GFX11:
+   case GFX11_5:
       return SQTT_VERSION_3_2;
+   case GFX12:
+      return SQTT_VERSION_3_3;
    default:
-      unreachable("Invalid gfx level");
+      UNREACHABLE("Invalid gfx level");
    }
 }
 
@@ -720,7 +730,7 @@ static void ac_sqtt_fill_sqtt_desc(const struct radeon_info *info,
       ac_gfx_level_to_sqtt_version(info->gfx_level);
    chunk->shader_engine_index = shader_engine_index;
    chunk->v1.instrumentation_spec_version = 1;
-   chunk->v1.instrumentation_api_version = 0;
+   chunk->v1.instrumentation_api_version = 5;
    chunk->v1.compute_unit_index = compute_unit_index;
 }
 
@@ -844,6 +854,8 @@ enum elf_gfxip_level
    EF_AMDGPU_MACH_AMDGCN_GFX1010 = 0x033,
    EF_AMDGPU_MACH_AMDGCN_GFX1030 = 0x036,
    EF_AMDGPU_MACH_AMDGCN_GFX1100 = 0x041,
+   EF_AMDGPU_MACH_AMDGCN_GFX1150 = 0x043,
+   EF_AMDGPU_MACH_AMDGCN_GFX1200 = 0x04e,
 };
 
 static enum elf_gfxip_level ac_gfx_level_to_elf_gfxip_level(enum amd_gfx_level gfx_level)
@@ -859,8 +871,12 @@ static enum elf_gfxip_level ac_gfx_level_to_elf_gfxip_level(enum amd_gfx_level g
       return EF_AMDGPU_MACH_AMDGCN_GFX1030;
    case GFX11:
       return EF_AMDGPU_MACH_AMDGCN_GFX1100;
+   case GFX11_5:
+      return EF_AMDGPU_MACH_AMDGCN_GFX1150;
+   case GFX12:
+      return EF_AMDGPU_MACH_AMDGCN_GFX1200;
    default:
-      unreachable("Invalid gfx level");
+      UNREACHABLE("Invalid gfx level");
    }
 }
 
@@ -924,7 +940,7 @@ static void ac_sqtt_dump_spm(const struct ac_spm_trace *spm_trace,
    spm_data_ptr += 32;
 
    /* SPM timestamps. */
-   uint32_t sample_size_in_qwords = sample_size_in_bytes / sizeof(uint64_t);
+   uint64_t sample_size_in_qwords = sample_size_in_bytes / sizeof(uint64_t);
    uint64_t *timestamp_ptr = (uint64_t *)spm_data_ptr;
 
    for (uint32_t s = 0; s < num_samples; s++) {
@@ -1105,7 +1121,30 @@ ac_sqtt_dump_data(const struct radeon_info *rad_info, struct ac_sqtt_trace *sqtt
       /* Queue event. */
       list_for_each_entry_safe(struct rgp_queue_event_record, record,
                                &rgp_queue_event->record, list) {
-         fwrite(record, sizeof(struct sqtt_queue_event_record), 1, output);
+         struct sqtt_queue_event_record queue_event = {
+            .event_type = record->event_type,
+            .sqtt_cb_id = record->sqtt_cb_id,
+            .frame_index = record->frame_index,
+            .queue_info_index = record->queue_info_index,
+            .submit_sub_index = record->submit_sub_index,
+            .api_id = record->api_id,
+            .cpu_timestamp = record->cpu_timestamp,
+         };
+
+         switch (queue_event.event_type)
+         case SQTT_QUEUE_TIMING_EVENT_CMDBUF_SUBMIT: {
+            queue_event.gpu_timestamps[0] = *record->gpu_timestamps[0];
+            queue_event.gpu_timestamps[1] = *record->gpu_timestamps[1];
+            break;
+         case SQTT_QUEUE_TIMING_EVENT_PRESENT:
+            queue_event.gpu_timestamps[0] = *record->gpu_timestamps[0];
+            break;
+         default:
+            /* GPU timestamps are ignored for other queue events. */
+            break;
+         }
+
+         fwrite(&queue_event, sizeof(struct sqtt_queue_event_record), 1, output);
       }
       file_offset += (rgp_queue_event->record_count *
                       sizeof(struct sqtt_queue_event_record));
@@ -1168,6 +1207,7 @@ ac_dump_rgp_capture(const struct radeon_info *info, struct ac_sqtt_trace *sqtt_t
                     const struct ac_spm_trace *spm_trace)
 {
 #if !defined(USE_LIBELF)
+   fprintf(stderr, "RGP capture can't be saved: libelf was not enabled during build\n");
    return -1;
 #else
    char filename[2048];

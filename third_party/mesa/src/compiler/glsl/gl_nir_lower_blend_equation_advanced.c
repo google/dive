@@ -216,9 +216,9 @@ satv3(nir_builder *b, nir_def *c)
 static nir_variable *
 add_temp_var(nir_builder *b, char *name, const struct glsl_type *type)
 {
-   nir_variable *var = rzalloc(b->shader, nir_variable);
+   nir_variable *var = nir_variable_create_zeroed(b->shader);
    var->type = type;
-   var->name = ralloc_strdup(var, name);
+   nir_variable_set_name(b->shader, var, name);
    var->data.mode = nir_var_function_temp;
    nir_function_impl_add_variable(b->impl, var);
 
@@ -414,7 +414,7 @@ calc_blend_result(nir_builder *b,
          set_lum(b, factor, dst_rgb, src_rgb);
          break;
       case BLEND_NONE:
-         unreachable("not real cases");
+         UNREACHABLE("not real cases");
       }
 
       if (val)
@@ -489,8 +489,7 @@ gl_nir_lower_blend_equation_advanced(nir_shader *sh, bool coherent)
    nir_function_impl *impl = nir_shader_get_entrypoint(sh);
 
    if (sh->info.fs.advanced_blend_modes == 0) {
-      nir_metadata_preserve(impl, nir_metadata_all);
-      return false;
+      return nir_no_progress(impl);
    }
 
    sh->info.fs.uses_sample_shading = true;
@@ -511,7 +510,7 @@ gl_nir_lower_blend_equation_advanced(nir_shader *sh, bool coherent)
                                             glsl_uint_type(),
                                             "gl_AdvancedBlendModeMESA");
    mode->data.how_declared = nir_var_hidden;
-   mode->state_slots = rzalloc_array(mode, nir_state_slot, 1);
+   mode->state_slots = rzalloc_array(sh, nir_state_slot, 1);
    mode->num_state_slots = 1;
    mode->state_slots[0].tokens[0] = STATE_ADVANCED_BLENDING_MODE;
 
@@ -575,13 +574,13 @@ gl_nir_lower_blend_equation_advanced(nir_shader *sh, bool coherent)
       }
    }
 
-   nir_metadata_preserve(impl, nir_metadata_none);
+   nir_progress(true, impl, nir_metadata_none);
 
    /* Remove any dead writes before assigning location to __blend_fb_fetch
     * otherwise they will be unable to be removed.
     */
-   NIR_PASS_V(sh, nir_split_var_copies);
-   NIR_PASS_V(sh, nir_opt_dead_write_vars);
+   NIR_PASS(_, sh, nir_split_var_copies);
+   NIR_PASS(_, sh, nir_opt_dead_write_vars);
 
    nir_foreach_variable_with_modes(var, sh, nir_var_shader_out) {
       if (strcmp(var->name, "__blend_fb_fetch") == 0) {

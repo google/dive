@@ -1,4 +1,5 @@
 /*
+ * Copyright © 2023 Valve Corporation
  * Copyright © 2015 Broadcom
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -143,7 +144,7 @@ project_src(nir_builder *b, nir_tex_instr *tex)
                                  nir_channel(b, unprojected, 1));
             break;
          default:
-            unreachable("bad texture coord count for array");
+            UNREACHABLE("bad texture coord count for array");
             break;
          }
       }
@@ -194,16 +195,9 @@ lower_offset(nir_builder *b, nir_tex_instr *tex)
 
    if (tex->is_array) {
       /* The offset is not applied to the array index */
-      if (tex->coord_components == 2) {
-         offset_coord = nir_vec2(b, nir_channel(b, offset_coord, 0),
-                                 nir_channel(b, coord, 1));
-      } else if (tex->coord_components == 3) {
-         offset_coord = nir_vec3(b, nir_channel(b, offset_coord, 0),
-                                 nir_channel(b, offset_coord, 1),
-                                 nir_channel(b, coord, 2));
-      } else {
-         unreachable("Invalid number of components");
-      }
+      unsigned a = tex->coord_components - 1;
+      offset_coord = nir_vector_insert_imm(b, offset_coord,
+                                           nir_channel(b, coord, a), a);
    }
 
    nir_src_rewrite(&tex->src[coord_index].src, offset_coord);
@@ -247,6 +241,77 @@ lower_rect_tex_scale(nir_builder *b, nir_tex_instr *tex)
 }
 
 static void
+lower_1d(nir_builder *b, nir_tex_instr *tex)
+{
+   b->cursor = nir_before_instr(&tex->instr);
+
+   nir_def *coords = nir_steal_tex_src(tex, nir_tex_src_coord);
+   nir_def *offset = nir_steal_tex_src(tex, nir_tex_src_offset);
+   nir_def *ddx = nir_steal_tex_src(tex, nir_tex_src_ddx);
+   nir_def *ddy = nir_steal_tex_src(tex, nir_tex_src_ddy);
+
+   /* Add in 2D sources to become a 2D operation */
+   tex->sampler_dim = GLSL_SAMPLER_DIM_2D;
+
+   if (coords) {
+      /* We want to fetch texel 0 along the Y-axis. To do so, we sample at 0.5
+       * to get texel 0 with correct handling of wrap modes.
+       */
+      nir_def *y = nir_imm_floatN_t(b, tex->op == nir_texop_txf ? 0.0 : 0.5,
+                                    coords->bit_size);
+
+      tex->coord_components++;
+
+      if (tex->is_array && tex->op != nir_texop_lod) {
+         assert(tex->coord_components == 3);
+
+         nir_def *x = nir_channel(b, coords, 0);
+         nir_def *idx = nir_channel(b, coords, 1);
+         coords = nir_vec3(b, x, y, idx);
+      } else {
+         assert(tex->coord_components == 2);
+         coords = nir_vec2(b, coords, y);
+      }
+
+      nir_tex_instr_add_src(tex, nir_tex_src_coord, coords);
+   }
+
+   if (offset) {
+      nir_tex_instr_add_src(tex, nir_tex_src_offset,
+                            nir_pad_vector_imm_int(b, offset, 0, 2));
+   }
+
+   if (ddx || ddy) {
+      nir_tex_instr_add_src(tex, nir_tex_src_ddx,
+                            nir_pad_vector_imm_int(b, ddx, 0, 2));
+
+      nir_tex_instr_add_src(tex, nir_tex_src_ddy,
+                            nir_pad_vector_imm_int(b, ddy, 0, 2));
+   }
+
+   /* Handle destination component mismatch for txs. */
+   if (tex->op == nir_texop_txs) {
+      b->cursor = nir_after_instr(&tex->instr);
+
+      nir_def *dst;
+      if (tex->is_array) {
+         assert(tex->def.num_components == 2);
+         tex->def.num_components = 3;
+
+         /* For array, we take .xz to skip the newly added height */
+         dst = nir_channels(b, &tex->def, (1 << 0) | (1 << 2));
+      } else {
+         assert(tex->def.num_components == 1);
+         tex->def.num_components = 2;
+
+         dst = nir_channel(b, &tex->def, 0);
+      }
+
+      nir_def_rewrite_uses_after(&tex->def, dst);
+   }
+}
+
+static void
 lower_lod(nir_builder *b, nir_tex_instr *tex, nir_def *lod)
 {
    assert(tex->op == nir_texop_tex || tex->op == nir_texop_txb);
@@ -257,7 +322,7 @@ lower_lod(nir_builder *b, nir_tex_instr *tex, nir_def *lod)
    /* If we have a bias, add it in */
    nir_def *bias = nir_steal_tex_src(tex, nir_tex_src_bias);
    if (bias)
-      lod = nir_fadd(b, lod, bias);
+      lod = nir_fadd(b, lod, nir_f2fN(b, bias, lod->bit_size));
 
    /* If we have a minimum LOD, clamp LOD accordingly */
    nir_def *min_lod = nir_steal_tex_src(tex, nir_tex_src_min_lod);
@@ -281,8 +346,7 @@ lower_zero_lod(nir_builder *b, nir_tex_instr *tex)
    b->cursor = nir_before_instr(&tex->instr);
 
    if (tex->op == nir_texop_lod) {
-      nir_def_rewrite_uses(&tex->def, nir_imm_int(b, 0));
-      nir_instr_remove(&tex->instr);
+      nir_def_replace(&tex->def, nir_imm_int(b, 0));
       return;
    }
 
@@ -313,6 +377,7 @@ sample_plane(nir_builder *b, nir_tex_instr *tex, int plane,
 
    plane_tex->texture_index = tex->texture_index;
    plane_tex->sampler_index = tex->sampler_index;
+   plane_tex->can_speculate = tex->can_speculate;
 
    nir_def_init(&plane_tex->instr, &plane_tex->def, 4,
                 tex->def.bit_size);
@@ -376,6 +441,16 @@ convert_yuv_to_rgb(nir_builder *b, nir_tex_instr *tex,
    nir_def *m0 = nir_f2fN(b, nir_build_imm(b, 4, 32, m->v[0]), bit_size);
    nir_def *m1 = nir_f2fN(b, nir_build_imm(b, 4, 32, m->v[1]), bit_size);
    nir_def *m2 = nir_f2fN(b, nir_build_imm(b, 4, 32, m->v[2]), bit_size);
+
+   if (options->lower_sx10_external & (1u << texture_index)) {
+      m0 = nir_fmul_imm(b, m0, 65535.0f / 1023.0f);
+      m1 = nir_fmul_imm(b, m1, 65535.0f / 1023.0f);
+      m2 = nir_fmul_imm(b, m2, 65535.0f / 1023.0f);
+   } else if (options->lower_sx12_external & (1u << texture_index)) {
+      m0 = nir_fmul_imm(b, m0, 65535.0f / 4095.0f);
+      m1 = nir_fmul_imm(b, m1, 65535.0f / 4095.0f);
+      m2 = nir_fmul_imm(b, m2, 65535.0f / 4095.0f);
+   }
 
    nir_def *result =
       nir_ffma(b, y, m0, nir_ffma(b, u, m1, nir_ffma(b, v, m2, offset)));
@@ -866,16 +941,21 @@ lower_tex_to_txd(nir_builder *b, nir_tex_instr *tex)
    txd->is_array = tex->is_array;
    txd->is_shadow = tex->is_shadow;
    txd->is_new_style_shadow = tex->is_new_style_shadow;
+   txd->can_speculate = tex->can_speculate;
 
    /* reuse existing srcs */
    for (unsigned i = 0; i < tex->num_srcs; i++) {
       txd->src[i].src = nir_src_for_ssa(tex->src[i].src.ssa);
       txd->src[i].src_type = tex->src[i].src_type;
    }
-   int coord = nir_tex_instr_src_index(tex, nir_tex_src_coord);
-   assert(coord >= 0);
-   nir_def *dfdx = nir_fddx(b, tex->src[coord].src.ssa);
-   nir_def *dfdy = nir_fddy(b, tex->src[coord].src.ssa);
+   int coord_idx = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+   assert(coord_idx >= 0);
+   nir_def *coord = tex->src[coord_idx].src.ssa;
+   /* don't take the derivative of the array index */
+   if (tex->is_array)
+      coord = nir_channels(b, coord, nir_component_mask(coord->num_components - 1));
+   nir_def *dfdx = nir_ddx(b, coord);
+   nir_def *dfdy = nir_ddy(b, coord);
    txd->src[tex->num_srcs] = nir_tex_src_for_ssa(nir_tex_src_ddx, dfdx);
    txd->src[tex->num_srcs + 1] = nir_tex_src_for_ssa(nir_tex_src_ddy, dfdy);
 
@@ -883,8 +963,7 @@ lower_tex_to_txd(nir_builder *b, nir_tex_instr *tex)
                 tex->def.num_components,
                 tex->def.bit_size);
    nir_builder_instr_insert(b, &txd->instr);
-   nir_def_rewrite_uses(&tex->def, &txd->def);
-   nir_instr_remove(&tex->instr);
+   nir_def_replace(&tex->def, &txd->def);
    return txd;
 }
 
@@ -904,27 +983,27 @@ lower_txb_to_txl(nir_builder *b, nir_tex_instr *tex)
    txl->is_array = tex->is_array;
    txl->is_shadow = tex->is_shadow;
    txl->is_new_style_shadow = tex->is_new_style_shadow;
+   txl->can_speculate = tex->can_speculate;
 
    /* reuse all but bias src */
-   for (int i = 0; i < 2; i++) {
+   for (int i = 0; i < tex->num_srcs; i++) {
       if (tex->src[i].src_type != nir_tex_src_bias) {
          txl->src[i].src = nir_src_for_ssa(tex->src[i].src.ssa);
          txl->src[i].src_type = tex->src[i].src_type;
       }
    }
-   nir_def *lod = nir_get_texture_lod(b, txl);
+   nir_def *lod = nir_get_texture_lod(b, tex);
 
    int bias_idx = nir_tex_instr_src_index(tex, nir_tex_src_bias);
    assert(bias_idx >= 0);
-   lod = nir_fadd(b, nir_channel(b, lod, 1), tex->src[bias_idx].src.ssa);
+   lod = nir_fadd(b, lod, tex->src[bias_idx].src.ssa);
    txl->src[tex->num_srcs - 1] = nir_tex_src_for_ssa(nir_tex_src_lod, lod);
 
    nir_def_init(&txl->instr, &txl->def,
                 tex->def.num_components,
                 tex->def.bit_size);
    nir_builder_instr_insert(b, &txl->instr);
-   nir_def_rewrite_uses(&tex->def, &txl->def);
-   nir_instr_remove(&tex->instr);
+   nir_def_replace(&tex->def, &txl->def);
    return txl;
 }
 
@@ -1008,8 +1087,7 @@ swizzle_tg4_broadcom(nir_builder *b, nir_tex_instr *tex)
    unsigned swiz[4] = { 2, 3, 1, 0 };
    nir_def *swizzled = nir_swizzle(b, &tex->def, swiz, 4);
 
-   nir_def_rewrite_uses_after(&tex->def, swizzled,
-                              swizzled->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, swizzled);
 }
 
 static void
@@ -1046,8 +1124,7 @@ swizzle_result(nir_builder *b, nir_tex_instr *tex, const uint8_t swizzle[4])
       }
    }
 
-   nir_def_rewrite_uses_after(&tex->def, swizzled,
-                              swizzled->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, swizzled);
 }
 
 static void
@@ -1068,8 +1145,7 @@ linearize_srgb_result(nir_builder *b, nir_tex_instr *tex)
                               nir_channel(b, rgb, 2),
                               nir_channel(b, &tex->def, 3));
 
-   nir_def_rewrite_uses_after(&tex->def, result,
-                              result->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, result);
 }
 
 /**
@@ -1125,7 +1201,7 @@ lower_tex_packing(nir_builder *b, nir_tex_instr *tex,
             break;
          }
          default:
-            unreachable("wrong dest_size");
+            UNREACHABLE("wrong dest_size");
          }
          break;
 
@@ -1138,7 +1214,7 @@ lower_tex_packing(nir_builder *b, nir_tex_instr *tex,
          break;
 
       default:
-         unreachable("unknown base type");
+         UNREACHABLE("unknown base type");
       }
       break;
    }
@@ -1149,28 +1225,8 @@ lower_tex_packing(nir_builder *b, nir_tex_instr *tex,
       break;
    }
 
-   nir_def_rewrite_uses_after(&tex->def, color,
-                              color->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, color);
    return true;
-}
-
-static bool
-sampler_index_lt(nir_tex_instr *tex, unsigned max)
-{
-   assert(nir_tex_instr_src_index(tex, nir_tex_src_sampler_deref) == -1);
-
-   unsigned sampler_index = tex->sampler_index;
-
-   int sampler_offset_idx =
-      nir_tex_instr_src_index(tex, nir_tex_src_sampler_offset);
-   if (sampler_offset_idx >= 0) {
-      if (!nir_src_is_const(tex->src[sampler_offset_idx].src))
-         return false;
-
-      sampler_index += nir_src_as_uint(tex->src[sampler_offset_idx].src);
-   }
-
-   return sampler_index < max;
 }
 
 static bool
@@ -1199,6 +1255,7 @@ lower_tg4_offsets(nir_builder *b, nir_tex_instr *tex)
       tex_copy->texture_index = tex->texture_index;
       tex_copy->sampler_index = tex->sampler_index;
       tex_copy->backend_flags = tex->backend_flags;
+      tex_copy->can_speculate = tex->can_speculate;
 
       for (unsigned j = 0; j < tex->num_srcs; ++j) {
          tex_copy->src[j].src = nir_src_for_ssa(tex->src[j].src.ssa);
@@ -1227,8 +1284,7 @@ lower_tg4_offsets(nir_builder *b, nir_tex_instr *tex)
    dest[4] = nir_get_scalar(residency, 0);
 
    nir_def *res = nir_vec_scalars(b, dest, tex->def.num_components);
-   nir_def_rewrite_uses(&tex->def, res);
-   nir_instr_remove(&tex->instr);
+   nir_def_replace(&tex->def, res);
 
    return true;
 }
@@ -1273,8 +1329,7 @@ nir_lower_txs_lod(nir_builder *b, nir_tex_instr *tex)
       minified = nir_vec(b, comp, dest_size);
    }
 
-   nir_def_rewrite_uses_after(&tex->def, minified,
-                              minified->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, minified);
    return true;
 }
 
@@ -1293,7 +1348,7 @@ nir_lower_txs_cube_array(nir_builder *b, nir_tex_instr *tex)
                    nir_idiv(b, nir_channel(b, size, 2),
                             nir_imm_int(b, 6)));
 
-   nir_def_rewrite_uses_after(&tex->def, size, size->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, size);
 }
 
 /* Adjust the sample index according to AMD FMASK (fragment mask).
@@ -1330,7 +1385,9 @@ nir_lower_ms_txf_to_fragment_fetch(nir_builder *b, nir_tex_instr *tex)
    fmask_fetch->sampler_dim = tex->sampler_dim;
    fmask_fetch->is_array = tex->is_array;
    fmask_fetch->texture_non_uniform = tex->texture_non_uniform;
+   fmask_fetch->offset_non_uniform = tex->offset_non_uniform;
    fmask_fetch->dest_type = nir_type_uint32;
+   fmask_fetch->can_speculate = tex->can_speculate;
    nir_def_init(&fmask_fetch->instr, &fmask_fetch->def, 1, 32);
 
    fmask_fetch->num_srcs = 0;
@@ -1347,13 +1404,15 @@ nir_lower_ms_txf_to_fragment_fetch(nir_builder *b, nir_tex_instr *tex)
    /* Obtain new sample index. */
    int ms_index = nir_tex_instr_src_index(tex, nir_tex_src_ms_index);
    assert(ms_index >= 0);
-   nir_src sample = tex->src[ms_index].src;
+   nir_def *sample = tex->src[ms_index].src.ssa;
    nir_def *new_sample = nir_ubfe(b, &fmask_fetch->def,
-                                  nir_ishl_imm(b, sample.ssa, 2), nir_imm_int(b, 3));
+                                  nir_u2u32(b, nir_ishl_imm(b, sample, 2)),
+                                  nir_imm_int(b, 3));
 
    /* Update instruction. */
    tex->op = nir_texop_fragment_fetch_amd;
-   nir_src_rewrite(&tex->src[ms_index].src, new_sample);
+   nir_src_rewrite(&tex->src[ms_index].src,
+                   nir_u2uN(b, new_sample, sample->bit_size));
 }
 
 static void
@@ -1384,8 +1443,8 @@ nir_lower_lod_zero_width(nir_builder *b, nir_tex_instr *tex)
       nir_def *coord = nir_channel(b, tex->src[coord_index].src.ssa, i);
 
       /* Compute the sum of the absolute values of derivatives. */
-      nir_def *dfdx = nir_fddx(b, coord);
-      nir_def *dfdy = nir_fddy(b, coord);
+      nir_def *dfdx = nir_ddx(b, coord);
+      nir_def *dfdy = nir_ddy(b, coord);
       nir_def *fwidth = nir_fadd(b, nir_fabs(b, dfdx), nir_fabs(b, dfdy));
 
       /* Check if the sum is 0. */
@@ -1400,7 +1459,43 @@ nir_lower_lod_zero_width(nir_builder *b, nir_tex_instr *tex)
    nir_def *def =
       nir_vec2(b, nir_channel(b, &tex->def, 0), adjusted_lod);
 
-   nir_def_rewrite_uses_after(&tex->def, def, def->parent_instr);
+   nir_def_rewrite_uses_after(&tex->def, def);
+}
+
+static void
+lower_sampler_lod_bias(nir_builder *b, nir_tex_instr *tex)
+{
+   b->cursor = nir_before_instr(&tex->instr);
+   nir_def *bias = nir_build_texture_query(b, tex, nir_texop_lod_bias, 1,
+                                           nir_type_float16, false, false);
+
+   if (tex->op == nir_texop_txd) {
+      /* For txd, the computed level-of-detail is log2(rho) where rho should
+       * scale proportionally to all derivatives. Scale derivatives by
+       * exp2(bias) to get LOD = log2(exp2(bias) * rho) = bias + log2(rho).
+       */
+      nir_def *ddx = nir_f2f32(b, nir_steal_tex_src(tex, nir_tex_src_ddx));
+      nir_def *ddy = nir_f2f32(b, nir_steal_tex_src(tex, nir_tex_src_ddy));
+      nir_def *scale = nir_fexp2(b, nir_f2f32(b, bias));
+
+      nir_tex_instr_add_src(tex, nir_tex_src_ddx, nir_fmul(b, ddx, scale));
+      nir_tex_instr_add_src(tex, nir_tex_src_ddy, nir_fmul(b, ddy, scale));
+   } else if (tex->op == nir_texop_tex) {
+      /* Unbiased textures need their opcode fixed up */
+      tex->op = nir_texop_txb;
+      nir_tex_instr_add_src(tex, nir_tex_src_bias, bias);
+   } else {
+      /* Otherwise, add to the appropriate source (if one exists) */
+      nir_tex_src_type src =
+         tex->op == nir_texop_txl ? nir_tex_src_lod : nir_tex_src_bias;
+
+      nir_def *orig = nir_steal_tex_src(tex, src);
+      if (orig) {
+         bias = nir_fadd(b, bias, nir_f2f16(b, orig));
+      }
+
+      nir_tex_instr_add_src(tex, src, bias);
+   }
 }
 
 static bool
@@ -1452,12 +1547,12 @@ nir_lower_tex_block(nir_block *block, nir_builder *b,
       /* mask of src coords to saturate (clamp): */
       unsigned sat_mask = 0;
       /* ignore saturate for txf ops: these don't use samplers and can't GL_CLAMP */
-      if (nir_tex_instr_need_sampler(tex)) {
-         if ((1 << tex->sampler_index) & options->saturate_r)
+      if (nir_tex_instr_need_sampler(tex) && tex->sampler_index < 32) {
+         if ((1u << tex->sampler_index) & options->saturate_r)
             sat_mask |= (1 << 2); /* .z */
-         if ((1 << tex->sampler_index) & options->saturate_t)
+         if ((1u << tex->sampler_index) & options->saturate_t)
             sat_mask |= (1 << 1); /* .y */
-         if ((1 << tex->sampler_index) & options->saturate_s)
+         if ((1u << tex->sampler_index) & options->saturate_s)
             sat_mask |= (1 << 0); /* .x */
       }
 
@@ -1493,15 +1588,22 @@ nir_lower_tex_block(nir_block *block, nir_builder *b,
          progress = true;
       }
 
+      if (tex->sampler_dim == GLSL_SAMPLER_DIM_1D &&
+          (options->lower_1d || (tex->is_shadow && options->lower_1d_shadow))) {
+         lower_1d(b, tex);
+         progress = true;
+      }
+
       unsigned texture_index = tex->texture_index;
-      uint32_t texture_mask = 1u << texture_index;
+      uint32_t texture_mask;
       int tex_index = nir_tex_instr_src_index(tex, nir_tex_src_texture_deref);
       if (tex_index >= 0) {
          nir_deref_instr *deref = nir_src_as_deref(tex->src[tex_index].src);
          nir_variable *var = nir_deref_instr_get_variable(deref);
          texture_index = var ? var->data.binding : 0;
          texture_mask = var && texture_index < 32 ? (1u << texture_index) : 0u;
-      }
+      } else
+         texture_mask = texture_index < 32 ? (1u << texture_index) : 0u;
 
       if (texture_mask & options->lower_y_uv_external) {
          lower_y_uv_external(b, tex, options, texture_index);
@@ -1553,17 +1655,17 @@ nir_lower_tex_block(nir_block *block, nir_builder *b,
          progress = true;
       }
 
-      if ((1 << tex->texture_index) & options->lower_yu_yv_external) {
+      if (texture_mask & options->lower_yu_yv_external) {
          lower_yu_yv_external(b, tex, options, texture_index);
          progress = true;
       }
 
-      if ((1 << tex->texture_index) & options->lower_yv_yu_external) {
+      if (texture_mask & options->lower_yv_yu_external) {
          lower_yv_yu_external(b, tex, options, texture_index);
          progress = true;
       }
 
-      if ((1 << tex->texture_index) & options->lower_y41x_external) {
+      if (texture_mask & options->lower_y41x_external) {
          lower_y41x_external(b, tex, options, texture_index);
          progress = true;
       }
@@ -1594,8 +1696,6 @@ nir_lower_tex_block(nir_block *block, nir_builder *b,
 
       const bool has_min_lod =
          nir_tex_instr_src_index(tex, nir_tex_src_min_lod) >= 0;
-      const bool has_offset =
-         nir_tex_instr_src_index(tex, nir_tex_src_offset) >= 0;
 
       if (tex->op == nir_texop_txb && tex->is_shadow && has_min_lod &&
           options->lower_txb_shadow_clamp) {
@@ -1610,20 +1710,24 @@ nir_lower_tex_block(nir_block *block, nir_builder *b,
          progress |= lower_tex_packing(b, tex, options);
       }
 
+      /* Although tg4 takes a sampler, it ignores the LOD bias. */
+      if (options->lower_sampler_lod_bias &&
+          nir_tex_instr_need_sampler(tex) && tex->op != nir_texop_tg4) {
+         lower_sampler_lod_bias(b, tex);
+         progress = true;
+      }
+
       if (tex->op == nir_texop_txd &&
           (options->lower_txd ||
+           (options->lower_txd_clamp && has_min_lod) ||
            (options->lower_txd_shadow && tex->is_shadow) ||
-           (options->lower_txd_shadow_clamp && tex->is_shadow && has_min_lod) ||
-           (options->lower_txd_offset_clamp && has_offset && has_min_lod) ||
-           (options->lower_txd_clamp_bindless_sampler && has_min_lod &&
-            nir_tex_instr_src_index(tex, nir_tex_src_sampler_handle) != -1) ||
-           (options->lower_txd_clamp_if_sampler_index_not_lt_16 &&
-            has_min_lod && !sampler_index_lt(tex, 16)) ||
            (options->lower_txd_cube_map &&
             tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE) ||
            (options->lower_txd_3d &&
             tex->sampler_dim == GLSL_SAMPLER_DIM_3D) ||
-           (options->lower_txd_array && tex->is_array))) {
+           (options->lower_txd_array && tex->is_array) ||
+           (options->lower_txd_cb &&
+            options->lower_txd_cb(tex, options->lower_txd_data)))) {
          lower_gradient(b, tex);
          progress = true;
          continue;
@@ -1710,8 +1814,7 @@ nir_lower_tex_impl(nir_function_impl *impl,
       progress |= nir_lower_tex_block(block, &builder, options, compiler_options);
    }
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
+   nir_progress(true, impl, nir_metadata_control_flow);
    return progress;
 }
 

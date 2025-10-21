@@ -29,7 +29,7 @@
 
 #define CASE(instr, expected)                                                  \
    do {                                                                        \
-      uint64_t _value = va_pack_instr(instr);                                  \
+      uint64_t _value = va_pack_instr(instr, 10);                              \
       if (_value != expected) {                                                \
          fprintf(stderr, "Got %" PRIx64 ", expected %" PRIx64 "\n", _value,    \
                  (uint64_t)expected);                                          \
@@ -306,7 +306,7 @@ TEST_F(ValhallPacking, LdVarBufImmF16)
 TEST_F(ValhallPacking, LeaBufImm)
 {
    CASE(bi_lea_buf_imm_to(b, bi_register(4), bi_discard(bi_register(59))),
-        0x005e840400000d7b);
+        0x005e84040000007b);
 }
 
 TEST_F(ValhallPacking, StoreSegment)

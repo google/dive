@@ -78,14 +78,14 @@ i915_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
    /*
     * Map vertex buffers
     */
-   for (i = 0; i < i915->nr_vertex_buffers; i++) {
-      const void *buf = i915->vertex_buffers[i].is_user_buffer
-                           ? i915->vertex_buffers[i].buffer.user
+   for (i = 0; i < draw->pt.nr_vertex_buffers; i++) {
+      const void *buf = draw->pt.vertex_buffer[i].is_user_buffer
+                           ? draw->pt.vertex_buffer[i].buffer.user
                            : NULL;
       if (!buf) {
-         if (!i915->vertex_buffers[i].buffer.resource)
+         if (!draw->pt.vertex_buffer[i].buffer.resource)
             continue;
-         buf = i915_buffer(i915->vertex_buffers[i].buffer.resource)->data;
+         buf = i915_buffer(draw->pt.vertex_buffer[i].buffer.resource)->data;
       }
       draw_set_mapped_vertex_buffer(draw, i, buf, ~0);
    }
@@ -100,25 +100,25 @@ i915_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
       draw_set_indexes(draw, (uint8_t *)mapped_indices, info->index_size, ~0);
    }
 
-   if (i915->constants[PIPE_SHADER_VERTEX])
+   if (i915->constants[MESA_SHADER_VERTEX])
       draw_set_mapped_constant_buffer(
-         draw, PIPE_SHADER_VERTEX, 0,
-         i915_buffer(i915->constants[PIPE_SHADER_VERTEX])->data,
-         (i915->current.num_user_constants[PIPE_SHADER_VERTEX] * 4 *
+         draw, MESA_SHADER_VERTEX, 0,
+         i915_buffer(i915->constants[MESA_SHADER_VERTEX])->data,
+         (i915->current.num_user_constants[MESA_SHADER_VERTEX] * 4 *
           sizeof(float)));
    else
-      draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 0, NULL, 0);
+      draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 0, NULL, 0);
 
    /*
     * Do the drawing
     */
-   draw_vbo(i915->draw, info, drawid_offset, NULL, draws, num_draws, 0);
+   draw_vbo(draw, info, drawid_offset, NULL, draws, num_draws, 0);
 
    /*
     * unmap vertex/index buffers
     */
-   for (i = 0; i < i915->nr_vertex_buffers; i++) {
-      draw_set_mapped_vertex_buffer(i915->draw, i, NULL, 0);
+   for (i = 0; i < draw->pt.nr_vertex_buffers; i++) {
+      draw_set_mapped_vertex_buffer(draw, i, NULL, 0);
    }
    if (mapped_indices)
       draw_set_indexes(draw, NULL, 0, 0);
@@ -127,7 +127,7 @@ i915_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info,
     * Instead of flushing on every state change, we flush once here
     * when we fire the vbo.
     */
-   draw_flush(i915->draw);
+   draw_flush(draw);
 }
 
 /*
@@ -152,12 +152,16 @@ i915_destroy(struct pipe_context *pipe)
       i915->iws->batchbuffer_destroy(i915->batch);
 
    /* unbind framebuffer */
+   i915_framebuffer_init(pipe, NULL, i915->fb_cbufs, &i915->fb_zsbuf);
    util_unreference_framebuffer_state(&i915->framebuffer);
 
    /* unbind constant buffers */
-   for (i = 0; i < PIPE_SHADER_TYPES; i++) {
+   for (i = 0; i < MESA_SHADER_STAGES; i++) {
       pipe_resource_reference(&i915->constants[i], NULL);
    }
+
+   slab_destroy(&i915->texture_transfer_pool);
+   slab_destroy(&i915->transfer_pool);
 
    FREE(i915);
 }

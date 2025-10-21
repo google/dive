@@ -36,11 +36,13 @@ from mako.template import Template
 
 from vk_extensions import get_all_required, filter_api
 
-def str_removeprefix(s, prefix):
-    if s.startswith(prefix):
-        return s[len(prefix):]
-    return s
-
+# Some extensions have been promoted to core, their properties are renamed
+# in the following hashtable.
+# The hashtable takes the form:
+# (VkPhysicalDevice{PropertyStruct}, PropertyName): RenamedPropertyName
+# Drivers just have to fill the RenamedPropertyName field in their struct
+# vk_properties, the runtime will expose the data with the original/right
+# name to consumers.
 RENAMED_PROPERTIES = {
     ("DrmPropertiesEXT", "hasPrimary"): "drmHasPrimary",
     ("DrmPropertiesEXT", "primaryMajor"): "drmPrimaryMajor",
@@ -58,8 +60,14 @@ RENAMED_PROPERTIES = {
     ("SubgroupProperties", "quadOperationsInAllStages"): "subgroupQuadOperationsInAllStages",
 }
 
+OUT_ARRAYS = {
+    'pCopySrcLayouts': 'copySrcLayoutCount',
+    'pCopyDstLayouts': 'copyDstLayoutCount',
+    'pLayeredApis': 'layeredApiCount',
+}
+OUT_ARRAY_COUNTS = OUT_ARRAYS.values()
+
 SPECIALIZED_PROPERTY_STRUCTS = [
-    "HostImageCopyPropertiesEXT",
 ]
 
 @dataclass
@@ -90,10 +98,39 @@ class PropertyStruct:
     c_type: str
     s_type: str
     name: str
+    guard: str
     properties: typing.List[Property]
 
-def copy_property(dst, src, decl, length="1"):
-    assert "*" not in decl
+ARRAY_COPY_TEMPLATE = Template("""
+         if (${dst_ptr} != NULL) {
+            uint32_t count = MIN2(${dst_count}, ${src_count});
+            for (uint32_t i = 0; i < count; i++)
+               ${dst_ptr}[i] = ${src_ptr}[i];
+            ${dst_count} = count;
+         } else {
+            ${dst_count} = ${src_count};
+         }
+""")
+
+def copy_property(dst_prefix, dst_name, src_prefix, src_name, decl, setter=False):
+    if not setter:
+       if src_name in OUT_ARRAY_COUNTS:
+           assert dst_name in OUT_ARRAY_COUNTS
+           # Skip these as we'll fill them out along with the data
+           return ""
+       elif src_name in OUT_ARRAYS:
+           assert dst_name in OUT_ARRAYS
+
+           return ARRAY_COPY_TEMPLATE.render(
+               dst_ptr=dst_prefix + dst_name,
+               dst_count=dst_prefix + OUT_ARRAYS[dst_name],
+               src_ptr=src_prefix + src_name,
+               src_count=src_prefix + OUT_ARRAYS[src_name]
+           )
+
+    assert "*" not in decl or setter
+    dst = dst_prefix + dst_name
+    src = src_prefix + src_name
 
     if "[" in decl:
         return "memcpy(%s, %s, sizeof(%s));" % (dst, src, dst)
@@ -105,6 +142,11 @@ TEMPLATE_H = Template(COPYRIGHT + """
 #ifndef VK_PROPERTIES_H
 #define VK_PROPERTIES_H
 
+#include "vulkan/vulkan.h"
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+#include "vulkan/vk_android_native_buffer.h"
+#endif /* VK_USE_PLATFORM_ANDROID_KHR */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -115,12 +157,16 @@ struct vk_properties {
 % endfor
 };
 
+void
+vk_set_physical_device_properties_struct(struct vk_properties *all_properties,
+                                         const VkBaseInStructure *pProperties);
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif
-""", output_encoding="utf-8")
+""")
 
 TEMPLATE_C = Template(COPYRIGHT + """
 /* This file generated from ${filename}, don"t edit directly. */
@@ -138,59 +184,76 @@ vk_common_GetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevice,
    VK_FROM_HANDLE(vk_physical_device, pdevice, physicalDevice);
 
 % for prop in pdev_properties:
-   ${copy_property("pProperties->properties." + prop.name, "pdevice->properties." + prop.actual_name, prop.decl)}
+   ${copy_property("pProperties->properties.", prop.name, "pdevice->properties.", prop.actual_name, prop.decl)}
 % endfor
 
-   vk_foreach_struct(ext, pProperties) {
-      switch (ext->sType) {
+   vk_foreach_struct(ext, pProperties->pNext) {
+      switch ((int32_t)ext->sType) {
 % for property_struct in property_structs:
+% if property_struct.guard != None:
+#ifdef ${property_struct.guard}
+% endif
 % if property_struct.name not in SPECIALIZED_PROPERTY_STRUCTS:
       case ${property_struct.s_type}: {
          ${property_struct.c_type} *properties = (void *)ext;
 % for prop in property_struct.properties:
-         ${copy_property("properties->" + prop.name, "pdevice->properties." + prop.actual_name, prop.decl, "pdevice->properties." + prop.length)}
+         ${copy_property("properties->", prop.name, "pdevice->properties.", prop.actual_name, prop.decl)}
 % endfor
          break;
       }
+% if property_struct.guard != None:
+#endif /* ${property_struct.guard} */
+% endif
 % endif
 % endfor
 
-      /* Specialized propery handling defined in vk_physical_device_properties_gen.py */
-
-      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES_EXT: {
-         VkPhysicalDeviceHostImageCopyPropertiesEXT *properties = (void *)ext;
-
-         if (properties->pCopySrcLayouts) {
-            uint32_t written_layout_count = MIN2(properties->copySrcLayoutCount,
-                                                 pdevice->properties.copySrcLayoutCount);
-            memcpy(properties->pCopySrcLayouts, pdevice->properties.pCopySrcLayouts,
-                   sizeof(VkImageLayout) * written_layout_count);
-            properties->copySrcLayoutCount = written_layout_count;
-         } else {
-            properties->copySrcLayoutCount = pdevice->properties.copySrcLayoutCount;
-         }
-
-         if (properties->pCopyDstLayouts) {
-            uint32_t written_layout_count = MIN2(properties->copyDstLayoutCount,
-                                                 pdevice->properties.copyDstLayoutCount);
-            memcpy(properties->pCopyDstLayouts, pdevice->properties.pCopyDstLayouts,
-                   sizeof(VkImageLayout) * written_layout_count);
-            properties->copyDstLayoutCount = written_layout_count;
-         } else {
-            properties->copyDstLayoutCount = pdevice->properties.copyDstLayoutCount;
-         }
-
-         memcpy(properties->optimalTilingLayoutUUID, pdevice->properties.optimalTilingLayoutUUID, VK_UUID_SIZE);
-         properties->identicalMemoryTypeRequirements = pdevice->properties.identicalMemoryTypeRequirements;
-         break;
-      }
+      /* Specialized property handling defined in vk_physical_device_properties_gen.py */
 
       default:
          break;
       }
    }
 }
-""", output_encoding="utf-8")
+
+void
+vk_set_physical_device_properties_struct(struct vk_properties *all_properties,
+                                         const VkBaseInStructure *pProperties)
+{
+   switch ((int32_t)pProperties->sType) {
+      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2: {
+         const VkPhysicalDeviceProperties *properties = &((const VkPhysicalDeviceProperties2 *)pProperties)->properties;
+% for prop in pdev_properties:
+         ${copy_property("all_properties->", prop.actual_name, "properties->", prop.name, prop.decl, True)}
+% endfor
+         break;
+      }
+
+% for property_struct in property_structs:
+% if property_struct.guard != None:
+#ifdef ${property_struct.guard}
+% endif
+% if property_struct.name not in SPECIALIZED_PROPERTY_STRUCTS:
+      case ${property_struct.s_type}: {
+         const ${property_struct.c_type} *properties = (const ${property_struct.c_type} *)pProperties;
+% for prop in property_struct.properties:
+         ${copy_property("all_properties->", prop.actual_name, "properties->", prop.name, prop.decl, True)}
+% endfor
+         break;
+      }
+% if property_struct.guard != None:
+#endif /* ${property_struct.guard} */
+% endif
+% endif
+% endfor
+
+      /* Don't assume anything with this struct type, and just copy things over */
+
+      default:
+         break;
+      }
+}
+
+""")
 
 def get_pdev_properties(doc, struct_name):
     _type = doc.find(".types/type[@name=\"VkPhysicalDevice%s\"]" % struct_name)
@@ -214,16 +277,19 @@ def get_property_structs(doc, api, beta):
 
     # parse all struct types where structextends VkPhysicalDeviceProperties2
     for _type in doc.findall("./types/type[@category=\"struct\"]"):
+        full_name = _type.attrib.get("name")
+
         if _type.attrib.get("structextends") != "VkPhysicalDeviceProperties2":
             continue
 
-        full_name = _type.attrib["name"]
         if full_name not in required:
             continue
 
-        # Skip extensions with a define for now
         guard = required[full_name].guard
-        if guard is not None and (guard != "VK_ENABLE_BETA_EXTENSIONS" or not beta):
+        if (guard is not None
+            # Skip beta extensions if not enabled
+            and (guard != "VK_ENABLE_BETA_EXTENSIONS" or beta != "true")
+            and not guard.startswith("VK_USE_PLATFORM")):
             continue
 
         # find Vulkan structure type
@@ -231,7 +297,7 @@ def get_property_structs(doc, api, beta):
             if "STRUCTURE_TYPE" in str(elem.attrib):
                 s_type = elem.attrib.get("values")
 
-        name = str_removeprefix(full_name, "VkPhysicalDevice")
+        name = full_name.removeprefix("VkPhysicalDevice")
 
         # collect a list of properties
         properties = []
@@ -248,7 +314,8 @@ def get_property_structs(doc, api, beta):
             else:
                 properties.append(Property(p, name))
 
-        property_struct = PropertyStruct(c_type=full_name, s_type=s_type, name=name, properties=properties)
+        property_struct = PropertyStruct(c_type=full_name, s_type=s_type,
+            name=name, properties=properties, guard=guard)
         property_structs[property_struct.c_type] = property_struct
 
     return property_structs.values()
@@ -316,9 +383,9 @@ def main():
     }
 
     try:
-        with open(args.out_c, "wb") as f:
+        with open(args.out_c, "w", encoding='utf-8') as f:
             f.write(TEMPLATE_C.render(**environment))
-        with open(args.out_h, "wb") as f:
+        with open(args.out_h, "w", encoding='utf-8') as f:
             f.write(TEMPLATE_H.render(**environment))
     except Exception:
         # In the event there"s an error, this uses some helpers from mako

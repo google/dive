@@ -63,8 +63,6 @@ _mesa_register_file_name(gl_register_file f)
       return "UNIFORM";
    case PROGRAM_ADDRESS:
       return "ADDR";
-   case PROGRAM_SYSTEM_VALUE:
-      return "SYSVAL";
    case PROGRAM_UNDEFINED:
       return "UNDEFINED";
    default:
@@ -81,7 +79,7 @@ _mesa_register_file_name(gl_register_file f)
  * Return ARB_v/f_prog-style input attrib string.
  */
 static const char *
-arb_input_attrib_string(GLuint index, GLenum progType)
+arb_input_attrib_string(GLuint index, unsigned stage)
 {
    /*
     * These strings should match the VERT_ATTRIB_x and VARYING_SLOT_x tokens.
@@ -195,12 +193,12 @@ arb_input_attrib_string(GLuint index, GLenum progType)
    assert(strcmp(fragAttribs[VARYING_SLOT_TEX0], "fragment.texcoord[0]") == 0);
    assert(strcmp(fragAttribs[VARYING_SLOT_VAR0+15], "fragment.varying[15]") == 0);
 
-   if (progType == GL_VERTEX_PROGRAM_ARB) {
+   if (stage == MESA_SHADER_VERTEX) {
       assert(index < ARRAY_SIZE(vertAttribs));
       return vertAttribs[index];
    }
    else {
-      assert(progType == GL_FRAGMENT_PROGRAM_ARB);
+      assert(stage == MESA_SHADER_FRAGMENT);
       assert(index < ARRAY_SIZE(fragAttribs));
       return fragAttribs[index];
    }
@@ -217,8 +215,7 @@ _mesa_print_vp_inputs(GLbitfield inputs)
    printf("VP Inputs 0x%x: \n", inputs);
    while (inputs) {
       GLint attr = ffs(inputs) - 1;
-      const char *name = arb_input_attrib_string(attr,
-                                                 GL_VERTEX_PROGRAM_ARB);
+      const char *name = arb_input_attrib_string(attr, MESA_SHADER_VERTEX);
       printf("  %d: %s\n", attr, name);
       inputs &= ~(1 << attr);
    }
@@ -235,8 +232,7 @@ _mesa_print_fp_inputs(GLbitfield inputs)
    printf("FP Inputs 0x%x: \n", inputs);
    while (inputs) {
       GLint attr = ffs(inputs) - 1;
-      const char *name = arb_input_attrib_string(attr,
-                                                 GL_FRAGMENT_PROGRAM_ARB);
+      const char *name = arb_input_attrib_string(attr, MESA_SHADER_FRAGMENT);
       printf("  %d: %s\n", attr, name);
       inputs &= ~(1 << attr);
    }
@@ -248,7 +244,7 @@ _mesa_print_fp_inputs(GLbitfield inputs)
  * Return ARB_v/f_prog-style output attrib string.
  */
 static const char *
-arb_output_attrib_string(GLuint index, GLenum progType)
+arb_output_attrib_string(GLuint index, unsigned stage)
 {
    /*
     * These strings should match the VARYING_SLOT_x and FRAG_RESULT_x tokens.
@@ -341,12 +337,12 @@ arb_output_attrib_string(GLuint index, GLenum progType)
    assert(strcmp(vertResults[VARYING_SLOT_VAR0], "result.varying[0]") == 0);
    assert(strcmp(fragResults[FRAG_RESULT_DATA0], "result.color[0]") == 0);
 
-   if (progType == GL_VERTEX_PROGRAM_ARB) {
+   if (stage == MESA_SHADER_VERTEX) {
       assert(index < ARRAY_SIZE(vertResults));
       return vertResults[index];
    }
    else {
-      assert(progType == GL_FRAGMENT_PROGRAM_ARB);
+      assert(stage == MESA_SHADER_FRAGMENT);
       assert(index < ARRAY_SIZE(fragResults));
       return fragResults[index];
    }
@@ -380,10 +376,10 @@ reg_string(gl_register_file f, GLint index, gl_prog_print_mode mode,
    case PROG_PRINT_ARB:
       switch (f) {
       case PROGRAM_INPUT:
-         sprintf(str, "%s", arb_input_attrib_string(index, prog->Target));
+         sprintf(str, "%s", arb_input_attrib_string(index, prog->info.stage));
          break;
       case PROGRAM_OUTPUT:
-         sprintf(str, "%s", arb_output_attrib_string(index, prog->Target));
+         sprintf(str, "%s", arb_output_attrib_string(index, prog->info.stage));
          break;
       case PROGRAM_TEMPORARY:
          sprintf(str, "temp%d", index);
@@ -393,9 +389,6 @@ reg_string(gl_register_file f, GLint index, gl_prog_print_mode mode,
          break;
       case PROGRAM_UNIFORM: /* extension */
          sprintf(str, "uniform[%s%d]", addr, index);
-         break;
-      case PROGRAM_SYSTEM_VALUE:
-         sprintf(str, "sysvalue[%s%d]", addr, index);
          break;
       case PROGRAM_STATE_VAR:
          {
@@ -737,21 +730,24 @@ _mesa_fprint_program_opt(FILE *f,
 {
    GLuint i, indent = 0;
 
-   switch (prog->Target) {
-   case GL_VERTEX_PROGRAM_ARB:
+   switch (prog->info.stage) {
+   case MESA_SHADER_VERTEX:
       if (mode == PROG_PRINT_ARB)
          fprintf(f, "!!ARBvp1.0\n");
       else
          fprintf(f, "# Vertex Program/Shader %u\n", prog->Id);
       break;
-   case GL_FRAGMENT_PROGRAM_ARB:
+   case MESA_SHADER_FRAGMENT:
       if (mode == PROG_PRINT_ARB)
          fprintf(f, "!!ARBfp1.0\n");
       else
          fprintf(f, "# Fragment Program/Shader %u\n", prog->Id);
       break;
-   case GL_GEOMETRY_PROGRAM_NV:
+   case MESA_SHADER_GEOMETRY:
       fprintf(f, "# Geometry Shader\n");
+      break;
+   default:
+      break;
    }
 
    for (i = 0; i < prog->arb.NumInstructions; i++) {

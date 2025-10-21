@@ -105,7 +105,9 @@ struct vc4_screen {
         bool has_perfmon_ioctl;
         bool has_syncobj;
 
+#ifdef USE_VC4_SIMULATOR
         struct vc4_simulator_file *sim_file;
+#endif
 };
 
 static inline struct vc4_screen *
@@ -118,10 +120,9 @@ struct pipe_screen *vc4_screen_create(int fd,
                                       const struct pipe_screen_config *config,
                                       struct renderonly *ro);
 
-const void *
+const struct nir_shader_compiler_options *
 vc4_screen_get_compiler_options(struct pipe_screen *pscreen,
-                                enum pipe_shader_ir ir,
-                                enum pipe_shader_type shader);
+                                mesa_shader_stage shader);
 
 void
 vc4_fence_screen_init(struct vc4_screen *screen);

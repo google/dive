@@ -1,7 +1,11 @@
 # Copyright © 2020-2021 Collabora, Ltd.
 # Author: Antonio Caggiano <antonio.caggiano@collabora.com>
-#
 # SPDX-License-Identifier: MIT
+
+intel_tracepoint_android_opts = []
+if with_platform_android
+  intel_tracepoint_android_opts += '--android'
+endif
 
 intel_tracepoint_files = custom_target(
   'intel_tracepoints.[ch]',
@@ -15,6 +19,7 @@ intel_tracepoint_files = custom_target(
     '--utrace-hdr', '@OUTPUT0@',
     '--perfetto-hdr', '@OUTPUT1@',
     '--utrace-src', '@OUTPUT2@',
+    intel_tracepoint_android_opts,
   ],
   depend_files : u_trace_py,
 )
@@ -30,6 +35,7 @@ endif
 
 idep_intel_driver_ds_headers = declare_dependency(
   sources : intel_tracepoint_files[0],
+  dependencies: [idep_intel_dev_wa, idep_intel_dev_info_gen],
   include_directories : [inc_include, inc_intel],
 )
 
@@ -38,7 +44,7 @@ libintel_driver_ds = static_library(
   sources : ['intel_driver_ds.cc', intel_tracepoint_files],
   include_directories : [inc_src, inc_include, inc_intel],
   link_with : [libintel_perf, libintel_common],
-  dependencies : [libintel_driver_ds_deps, idep_intel_dev],
+  dependencies : [libintel_driver_ds_deps, idep_intel_dev, idep_intel_blorp],
   gnu_symbol_visibility : 'hidden',
 )
 

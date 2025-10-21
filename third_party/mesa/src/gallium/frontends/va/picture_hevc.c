@@ -26,8 +26,35 @@
  **************************************************************************/
 
 #include "util/macros.h"
-#include "vl/vl_zscan.h"
+#include "util/u_qsort.h"
+#include "util/vl_rbsp.h"
+#include "util/vl_zscan_data.h"
 #include "va_private.h"
+
+struct ref_cmp {
+   bool asc;
+   int32_t *poc;
+};
+
+static int ref_cmp(const uint8_t *a, const uint8_t *b, struct ref_cmp *ctx)
+{
+   int32_t pa = ctx->poc[*a];
+   int32_t pb = ctx->poc[*b];
+   if (pa == pb)
+      return 0;
+   if (pa > pb)
+      return ctx->asc ? 1 : -1;
+   return ctx->asc ? -1 : 1;
+}
+
+static void vlVaSortRefPicSet(vlVaContext *context, uint8_t *refs, uint8_t num_refs, bool asc)
+{
+   struct ref_cmp ctx = {
+      .asc = asc,
+      .poc = context->desc.h265.PicOrderCntVal,
+   };
+   util_qsort_r(refs, num_refs, sizeof(uint8_t), (void*)ref_cmp, &ctx);
+}
 
 void vlVaHandlePictureParameterBufferHEVC(vlVaDriver *drv, vlVaContext *context, vlVaBuffer *buf)
 {
@@ -182,8 +209,11 @@ void vlVaHandlePictureParameterBufferHEVC(vlVaDriver *drv, vlVaContext *context,
       }
       context->desc.h265.IsLongTerm[i] = ((hevc->ReferenceFrames[i].flags & VA_PICTURE_HEVC_LONG_TERM_REFERENCE) != 0) ? 1 : 0;
    }
-   context->desc.h265.pps->st_rps_bits = hevc->st_rps_bits;
-   context->desc.h265.UseStRpsBits = true;
+   vlVaSortRefPicSet(context, context->desc.h265.RefPicSetStCurrBefore, context->desc.h265.NumPocStCurrBefore, false);
+   vlVaSortRefPicSet(context, context->desc.h265.RefPicSetStCurrAfter, context->desc.h265.NumPocStCurrAfter, true);
+   context->desc.h265.LtCurrDone = context->desc.h265.NumPocLtCurr < 2;
+
+   context->desc.h265.NumShortTermPictureSliceHeaderBits = hevc->st_rps_bits;
 
    context->desc.h265.slice_parameter.slice_count = 0;
    context->desc.h265.slice_parameter.slice_info_present = false;
@@ -227,47 +257,250 @@ void vlVaHandleSliceParameterBufferHEVC(vlVaContext *context, vlVaBuffer *buf)
 {
    VASliceParameterBufferHEVC *h265 = buf->data;
 
-   assert(buf->size >= sizeof(VASliceParameterBufferHEVC) && buf->num_elements == 1);
+   for (uint32_t buffer_idx = 0; buffer_idx < buf->num_elements; buffer_idx++, h265++) {
+      uint32_t slice_index = context->desc.h265.slice_parameter.slice_count + buffer_idx;
 
-   switch(h265->LongSliceFlags.fields.slice_type) {
-   /* Depending on slice_type, only update relevant reference */
-   case 0: /* HEVC_SLICE_B */
-      for (int j = 0 ; j < 15 ; j++)
-         context->desc.h265.RefPicList[1][j] = h265->RefPicList[1][j];
-      FALLTHROUGH;
-   case 1: /* HEVC_SLICE_P */
-      for (int j = 0 ; j < 15 ; j++)
-         context->desc.h265.RefPicList[0][j] = h265->RefPicList[0][j];
-      FALLTHROUGH;
-   default:
-      break;
+      const size_t max_pipe_hevc_slices = ARRAY_SIZE(context->desc.h265.slice_parameter.slice_data_offset);
+      assert(slice_index < max_pipe_hevc_slices);
+      if (slice_index >= max_pipe_hevc_slices) {
+         static bool warn_once = true;
+         if (warn_once) {
+            fprintf(stderr, "Warning: Number of slices (%d) provided exceed driver's max supported (%d), stop handling remaining slices.\n",
+               slice_index + 1, (int)max_pipe_hevc_slices);
+            warn_once = false;
+         }
+         return;
+      }
+
+      switch(h265->LongSliceFlags.fields.slice_type) {
+      /* Depending on slice_type, only update relevant reference */
+      case 0: /* HEVC_SLICE_B */
+         for (int j = 0 ; j < 15 ; j++)
+            context->desc.h265.RefPicList[1][j] = h265->RefPicList[1][j];
+         FALLTHROUGH;
+      case 1: /* HEVC_SLICE_P */
+         for (int j = 0 ; j < 15 ; j++)
+            context->desc.h265.RefPicList[0][j] = h265->RefPicList[0][j];
+         FALLTHROUGH;
+      default:
+         break;
+      }
+
+      context->desc.h265.slice_parameter.slice_info_present = true;
+      context->desc.h265.slice_parameter.slice_data_size[slice_index] = h265->slice_data_size;
+      context->desc.h265.slice_parameter.slice_data_offset[slice_index] = h265->slice_data_offset;
+
+      switch (h265->slice_data_flag) {
+      case VA_SLICE_DATA_FLAG_ALL:
+         context->desc.h265.slice_parameter.slice_data_flag[slice_index] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_WHOLE;
+         break;
+      case VA_SLICE_DATA_FLAG_BEGIN:
+         context->desc.h265.slice_parameter.slice_data_flag[slice_index] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_BEGIN;
+         break;
+      case VA_SLICE_DATA_FLAG_MIDDLE:
+         context->desc.h265.slice_parameter.slice_data_flag[slice_index] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_MIDDLE;
+         break;
+      case VA_SLICE_DATA_FLAG_END:
+         context->desc.h265.slice_parameter.slice_data_flag[slice_index] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_END;
+         break;
+      default:
+         break;
+      }
    }
-   context->desc.h265.UseRefPicList = true;
+   context->desc.h265.slice_parameter.slice_count += buf->num_elements;
+}
 
-   ASSERTED const size_t max_pipe_hevc_slices = ARRAY_SIZE(context->desc.h265.slice_parameter.slice_data_offset);
-   assert(context->desc.h265.slice_parameter.slice_count < max_pipe_hevc_slices);
+void vlVaDecoderHEVCBitstreamHeader(vlVaContext *context, vlVaBuffer *buf)
+{
+   struct pipe_h265_picture_desc *pic = &context->desc.h265;
+   struct pipe_h265_pps *pps = pic->pps;
+   struct pipe_h265_sps *sps = pic->pps->sps;
 
-   context->desc.h265.slice_parameter.slice_info_present = true;
-   context->desc.h265.slice_parameter.slice_data_size[context->desc.h265.slice_parameter.slice_count] = h265->slice_data_size;
-   context->desc.h265.slice_parameter.slice_data_offset[context->desc.h265.slice_parameter.slice_count] = h265->slice_data_offset;
+   /* Only need to parse slice header if the LtCurr order is unknown */
+   if (pic->LtCurrDone)
+      return;
 
-   switch (h265->slice_data_flag) {
-   case VA_SLICE_DATA_FLAG_ALL:
-      context->desc.h265.slice_parameter.slice_data_flag[context->desc.h265.slice_parameter.slice_count] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_WHOLE;
-      break;
-   case VA_SLICE_DATA_FLAG_BEGIN:
-      context->desc.h265.slice_parameter.slice_data_flag[context->desc.h265.slice_parameter.slice_count] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_BEGIN;
-      break;
-   case VA_SLICE_DATA_FLAG_MIDDLE:
-      context->desc.h265.slice_parameter.slice_data_flag[context->desc.h265.slice_parameter.slice_count] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_MIDDLE;
-      break;
-   case VA_SLICE_DATA_FLAG_END:
-      context->desc.h265.slice_parameter.slice_data_flag[context->desc.h265.slice_parameter.slice_count] = PIPE_SLICE_BUFFER_PLACEMENT_TYPE_END;
-      break;
-   default:
-      break;
+   struct vl_vlc vlc;
+   vl_vlc_init(&vlc, 1, (const void * const*)&buf->data, &buf->size);
+   vl_vlc_eatbits(&vlc, 1);
+   unsigned nal_unit_type = vl_vlc_get_uimsbf(&vlc, 6);
+   vl_vlc_eatbits(&vlc, 9);
+
+   struct vl_rbsp rbsp;
+   vl_rbsp_init(&rbsp, &vlc, ~0, true);
+
+   unsigned first_slice_segment_in_pic_flag = vl_rbsp_u(&rbsp, 1);
+
+   if (nal_unit_type >= PIPE_H265_NAL_BLA_W_LP && nal_unit_type <= PIPE_H265_NAL_RSV_IRAP_VCL23)
+      vl_rbsp_u(&rbsp, 1); /* no_output_of_prior_pics_flag */
+
+   vl_rbsp_ue(&rbsp); /* slice_pic_parameter_set_id */
+
+   if (!first_slice_segment_in_pic_flag) {
+      if (pps->dependent_slice_segments_enabled_flag &&
+          vl_rbsp_u(&rbsp, 1)) /* dependent_slice_segment_flag */
+         return;
+      unsigned ctb_size = 1 <<
+         (sps->log2_min_luma_coding_block_size_minus3 + 3 +
+          sps->log2_diff_max_min_luma_coding_block_size);
+      unsigned size_in_ctbs =
+         DIV_ROUND_UP(pps->sps->pic_width_in_luma_samples, ctb_size) *
+         DIV_ROUND_UP(pps->sps->pic_height_in_luma_samples, ctb_size);
+      vl_rbsp_u(&rbsp, util_logbase2(size_in_ctbs - 1) + 1); /* slice_segment_address */
    }
 
-   /* assert(buf->num_elements == 1) above; */
-   context->desc.h265.slice_parameter.slice_count++;
+   for (uint8_t i = 0; i < pps->num_extra_slice_header_bits; i++)
+      vl_rbsp_u(&rbsp, 1);
+
+   unsigned slice_type = vl_rbsp_ue(&rbsp);
+
+   if (pps->output_flag_present_flag)
+      vl_rbsp_u(&rbsp, 1); /* pic_output_flag */
+
+   if (sps->separate_colour_plane_flag)
+      vl_rbsp_u(&rbsp, 2); /* colour_plane_id */
+
+   struct {
+      uint32_t poc;
+      bool msb;
+   } ltr_tmp[8];
+   uint8_t ltr_idx = 0;
+
+   unsigned max_poc = 1 << (sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
+   unsigned num_long_term_sps = 0;
+
+   if (nal_unit_type != PIPE_H265_NAL_IDR_W_RADL && nal_unit_type != PIPE_H265_NAL_IDR_N_LP) {
+      vl_rbsp_u(&rbsp, sps->log2_max_pic_order_cnt_lsb_minus4 + 4); /* slice_pic_order_cnt_lsb */
+      if (!vl_rbsp_u(&rbsp, 1)) { /* short_term_ref_pic_set_sps_flag */
+         for (unsigned i = 0; i < pic->NumShortTermPictureSliceHeaderBits; i++)
+            vl_rbsp_u(&rbsp, 1);
+      } else if (sps->num_short_term_ref_pic_sets > 1) {
+          vl_rbsp_u(&rbsp, util_logbase2_ceil(sps->num_short_term_ref_pic_sets)); /* short_term_ref_pic_set_idx */
+      }
+      if (sps->long_term_ref_pics_present_flag) {
+         if (sps->num_long_term_ref_pics_sps > 0)
+            num_long_term_sps = vl_rbsp_ue(&rbsp);
+         unsigned num_long_term_pics = vl_rbsp_ue(&rbsp);
+         unsigned prev_delta = 0;
+         for (unsigned i = 0; i < (num_long_term_sps + num_long_term_pics); i++) {
+            unsigned poc = 0;
+            unsigned used_by_curr_pic_lt_flag = 0;
+            if (i < num_long_term_sps) {
+               if (sps->num_long_term_ref_pics_sps > 1)
+                  vl_rbsp_u(&rbsp, util_logbase2_ceil(sps->num_long_term_ref_pics_sps)); /* lt_idx_sps[i] */
+            } else {
+               poc = vl_rbsp_u(&rbsp, sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
+               used_by_curr_pic_lt_flag = vl_rbsp_u(&rbsp, 1);
+            }
+            unsigned delta_poc_msb_present_flag = vl_rbsp_u(&rbsp, 1);
+            if (delta_poc_msb_present_flag) {
+               unsigned delta = vl_rbsp_ue(&rbsp);
+               if (i && i != num_long_term_sps)
+                  delta += prev_delta;
+               poc += pic->CurrPicOrderCntVal - delta * max_poc - (pic->CurrPicOrderCntVal % max_poc);
+               prev_delta = delta;
+            }
+            if (used_by_curr_pic_lt_flag && ltr_idx < 8) {
+               ltr_tmp[ltr_idx].poc = poc;
+               ltr_tmp[ltr_idx++].msb = delta_poc_msb_present_flag;
+            }
+         }
+         if (sps->sps_temporal_mvp_enabled_flag)
+            vl_rbsp_u(&rbsp, 1); /* temporal_mvp_enable */
+      }
+   }
+
+   /* We don't know how many SPS LTRs are used, but we do know how many LTRs
+    * from slice header are used, so derive the SPS LTRs this way. */
+   if (pic->NumPocLtCurr >= ltr_idx)
+      num_long_term_sps = pic->NumPocLtCurr - ltr_idx;
+   else
+      num_long_term_sps = 0;
+
+   /* We know the POCs for all LTRs from slice header, fill the LTR ref pic
+    * set with them. */
+   for (uint8_t i = 0; i < ltr_idx; i++) {
+      for (uint8_t j = 0; j < sizeof(pic->PicOrderCntVal); ++j) {
+         uint32_t refpoc = pic->PicOrderCntVal[j];
+         if ((ltr_tmp[i].msb && ltr_tmp[i].poc == refpoc) ||
+             (!ltr_tmp[i].msb && ltr_tmp[i].poc == refpoc % max_poc)) {
+            pic->RefPicSetLtCurr[i + num_long_term_sps] = j;
+            break;
+         }
+      }
+   }
+
+   /* If there are no SPS LTRs, the complete LtCurr set was built above. */
+   if (!num_long_term_sps) {
+      pic->LtCurrDone = true;
+      return;
+   }
+
+   if (sps->sample_adaptive_offset_enabled_flag) {
+       vl_rbsp_u(&rbsp, 1); /* slice_sao_luma_flag */
+       if (sps->chroma_format_idc)
+          vl_rbsp_u(&rbsp, 1); /* slice_sao_chroma_flag */
+   }
+
+   unsigned ltr_start = pic->NumPocStCurrBefore + pic->NumPocStCurrAfter;
+   unsigned ref_pic_list_modification_flag_l0 = 0, ref_pic_list_modification_flag_l1 = 0;
+
+   if (slice_type == PIPE_H265_SLICE_TYPE_P || slice_type == PIPE_H265_SLICE_TYPE_B) {
+      unsigned num_ref_idx_active_override_flag = vl_rbsp_u(&rbsp, 1);
+      unsigned num_ref_idx_l0_active_minus1 = 0, num_ref_idx_l1_active_minus1 = 0;
+      if (num_ref_idx_active_override_flag) {
+         num_ref_idx_l0_active_minus1 = vl_rbsp_ue(&rbsp);
+         if (slice_type == PIPE_H265_SLICE_TYPE_B)
+            num_ref_idx_l1_active_minus1 = vl_rbsp_ue(&rbsp);
+      }
+      if (pps->lists_modification_present_flag) {
+         unsigned num_bits = util_logbase2_ceil(ltr_start + pic->NumPocLtCurr);
+         unsigned num_ref_l0_minus1 = num_ref_idx_active_override_flag ?
+            num_ref_idx_l0_active_minus1 : pps->num_ref_idx_l0_default_active_minus1;
+         ref_pic_list_modification_flag_l0 = vl_rbsp_u(&rbsp, 1);
+         if (ref_pic_list_modification_flag_l0) {
+            for (unsigned i = 0; i <= num_ref_l0_minus1; i++) {
+               unsigned idx = vl_rbsp_u(&rbsp, num_bits);
+               if (idx >= ltr_start && idx < ltr_start + num_long_term_sps)
+                  pic->RefPicSetLtCurr[idx - ltr_start] = pic->RefPicList[0][i];
+            }
+         }
+         if (slice_type == PIPE_H265_SLICE_TYPE_B) {
+            unsigned num_ref_l1_minus1 = num_ref_idx_active_override_flag ?
+               num_ref_idx_l1_active_minus1 : pps->num_ref_idx_l1_default_active_minus1;
+            ref_pic_list_modification_flag_l1 = vl_rbsp_u(&rbsp, 1);
+            if (ref_pic_list_modification_flag_l1) {
+               for (unsigned i = 0; i <= num_ref_l1_minus1; i++) {
+                  unsigned idx = vl_rbsp_u(&rbsp, num_bits);
+                  if (idx >= ltr_start && idx < ltr_start + num_long_term_sps)
+                     pic->RefPicSetLtCurr[idx - ltr_start] = pic->RefPicList[1][i];
+               }
+            }
+         }
+      }
+      /* If no modification is used, we can use the RefPicList directly. */
+      if (!ref_pic_list_modification_flag_l0) {
+         for (unsigned i = 0; i < pic->NumPocLtCurr; i++) {
+            uint8_t idx = pic->RefPicList[0][i + ltr_start];
+            if (i < num_long_term_sps) {
+               assert(idx != 0xff);
+               pic->RefPicSetLtCurr[i] = idx;
+            } else {
+               assert(idx == pic->RefPicSetLtCurr[i]);
+            }
+         }
+         pic->LtCurrDone = true;
+      } else if (slice_type == PIPE_H265_SLICE_TYPE_B && !ref_pic_list_modification_flag_l1) {
+         for (unsigned i = 0; i < pic->NumPocLtCurr; i++) {
+            uint8_t idx = pic->RefPicList[1][i + ltr_start];
+            if (i < num_long_term_sps) {
+               assert(idx != 0xff);
+               pic->RefPicSetLtCurr[i] = idx;
+            } else {
+               assert(idx == pic->RefPicSetLtCurr[i]);
+            }
+         }
+         pic->LtCurrDone = true;
+      }
+   }
 }

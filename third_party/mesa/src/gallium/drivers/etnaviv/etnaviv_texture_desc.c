@@ -41,6 +41,8 @@
 
 #include <drm_fourcc.h>
 
+#define TEXTURE_DESC_SIZE 256
+
 struct etna_sampler_state_desc {
    struct pipe_sampler_state base;
    uint32_t SAMP_CTRL0;
@@ -64,7 +66,7 @@ struct etna_sampler_view_desc {
    uint32_t SAMP_CTRL1;
 
    struct pipe_resource *res;
-   struct etna_reloc DESC_ADDR;
+   struct etna_reloc DESC_ADDR[2];  /* [0] = seamless disabled, [1] = seamless enabled */
    struct etna_sampler_ts ts;
 };
 
@@ -72,6 +74,14 @@ static inline struct etna_sampler_view_desc *
 etna_sampler_view_desc(struct pipe_sampler_view *view)
 {
    return (struct etna_sampler_view_desc *)view;
+}
+
+static inline
+uint32_t etna_lod_to_fixp58(float f)
+{
+   f = CLAMP(f, -16.0f, 15.0f + (255.0f / 256.0f));
+
+   return etna_float_to_fixp88(f);
 }
 
 static void *
@@ -93,11 +103,13 @@ etna_create_sampler_state_desc(struct pipe_context *pipe,
       VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_MIN(translate_texture_filter(ss->min_img_filter)) |
       VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_MIP(translate_texture_mipfilter(ss->min_mip_filter)) |
       VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_MAG(translate_texture_filter(ss->mag_img_filter)) |
+      COND(ss->compare_mode, VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_COMPARE_ENABLE) |
+      VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_COMPARE_FUNC(translate_texture_compare(ss->compare_func)) |
       VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_UNK21;
       /* no ROUND_UV bit? */
    cs->SAMP_CTRL1 = VIVS_NTE_DESCRIPTOR_SAMP_CTRL1_UNK1;
-   uint32_t min_lod_fp8 = MIN2(etna_float_to_fixp88(ss->min_lod), 0xfff);
-   uint32_t max_lod_fp8 = MIN2(etna_float_to_fixp88(ss->max_lod), 0xfff);
+   uint32_t min_lod_fp8 = etna_lod_to_fixp58(ss->min_lod);
+   uint32_t max_lod_fp8 = etna_lod_to_fixp58(ss->max_lod);
    uint32_t max_lod_min = ss->min_img_filter != ss->mag_img_filter ? 4 : 0;
 
    cs->SAMP_LOD_MINMAX =
@@ -158,13 +170,13 @@ etna_create_sampler_view_desc(struct pipe_context *pctx, struct pipe_resource *p
    if (util_format_is_srgb(so->format))
       sv->SAMP_CTRL1 |= VIVS_NTE_DESCRIPTOR_SAMP_CTRL1_SRGB;
 
-   /* Create texture descriptor */
-   u_suballocator_alloc(&ctx->tex_desc_allocator, 256, 64,
+   /* Create two texture descriptors: one with seamless cube map disabled, one enabled */
+   u_suballocator_alloc(&ctx->tex_desc_allocator, TEXTURE_DESC_SIZE * 2, 64,
                         &suballoc_offset, &sv->res);
    if (!sv->res)
       goto error;
 
-   uint32_t *buf = etna_bo_map(etna_resource(sv->res)->bo) + suballoc_offset;
+   uint32_t *buf = etna_bo_map(etna_buffer_resource(sv->res)->bo) + suballoc_offset;
 
    /** GC7000 needs the size of the BASELOD level */
    uint32_t base_width = u_minify(res->base.width0, sv->base.u.tex.first_level);
@@ -189,6 +201,11 @@ etna_create_sampler_view_desc(struct pipe_context *pctx, struct pipe_resource *p
       break;
    default:
       break;
+   }
+
+   if (so->format == PIPE_FORMAT_S8X24_UINT) {
+      sv->SAMP_CTRL0_MASK &= ~VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_DEPTH_STENCIL_MODE__MASK;
+      sv->SAMP_CTRL0 |= VIVS_NTE_DESCRIPTOR_SAMP_CTRL0_DEPTH_STENCIL_MODE_STENCIL;
    }
 
 #define DESC_SET(x, y) buf[(TEXDESC_##x)>>2] = (y)
@@ -221,9 +238,19 @@ etna_create_sampler_view_desc(struct pipe_context *pctx, struct pipe_resource *p
       DESC_SET(LOD_ADDR(lod), etna_bo_gpu_va(res->bo) + res->levels[lod].offset);
 #undef DESC_SET
 
-   sv->DESC_ADDR.bo = etna_resource(sv->res)->bo;
-   sv->DESC_ADDR.offset = suballoc_offset;
-   sv->DESC_ADDR.flags = ETNA_RELOC_READ;
+   /* Copy first descriptor and enable seamless cube map. */
+   uint32_t *seamless = buf + (TEXTURE_DESC_SIZE / sizeof(uint32_t));
+   memcpy(seamless, buf, TEXTURE_DESC_SIZE);
+   seamless[(TEXDESC_CONFIG1) >> 2] |= VIVS_TE_SAMPLER_CONFIG1_SEAMLESS_CUBE_MAP;
+
+   /* Setup relocations for both descriptors. */
+   sv->DESC_ADDR[0].bo = etna_buffer_resource(sv->res)->bo;
+   sv->DESC_ADDR[0].offset = suballoc_offset;
+   sv->DESC_ADDR[0].flags = ETNA_RELOC_READ;
+
+   sv->DESC_ADDR[1].bo = etna_buffer_resource(sv->res)->bo;
+   sv->DESC_ADDR[1].offset = suballoc_offset + TEXTURE_DESC_SIZE;
+   sv->DESC_ADDR[1].flags = ETNA_RELOC_READ;
 
    return &sv->base;
 
@@ -314,14 +341,17 @@ etna_emit_texture_desc(struct etna_context *ctx)
       }
    }
 
-   if (unlikely(dirty & ETNA_DIRTY_SAMPLER_VIEWS)) {
+   if (unlikely(dirty & (ETNA_DIRTY_SAMPLERS | ETNA_DIRTY_SAMPLER_VIEWS))) {
       /* Set texture descriptors */
       for (int x = 0; x < PIPE_MAX_SAMPLERS; ++x) {
          if ((1 << x) & ctx->dirty_sampler_views) {
             if ((1 << x) & active_samplers) {
+               struct etna_sampler_state_desc *ss = etna_sampler_state_desc(ctx->sampler[x]);
                struct etna_sampler_view_desc *sv = etna_sampler_view_desc(ctx->sampler_view[x]);
+               struct etna_reloc *desc_addr = ss->base.seamless_cube_map ?
+                                              &sv->DESC_ADDR[1] : &sv->DESC_ADDR[0];
                etna_sampler_view_update_descriptor(ctx, stream, sv);
-               etna_set_state_reloc(stream, VIVS_NTE_DESCRIPTOR_ADDR(x), &sv->DESC_ADDR);
+               etna_set_state_reloc(stream, VIVS_NTE_DESCRIPTOR_ADDR(x), desc_addr);
             } else if ((1 << x) & ctx->prev_active_samplers){
                /* dummy texture descriptors for unused samplers */
                etna_set_state_reloc(stream, VIVS_NTE_DESCRIPTOR_ADDR(x),
@@ -362,7 +392,8 @@ etna_texture_desc_init(struct pipe_context *pctx)
    ctx->base.delete_sampler_state = etna_delete_sampler_state_desc;
    ctx->base.create_sampler_view = etna_create_sampler_view_desc;
    ctx->base.sampler_view_destroy = etna_sampler_view_desc_destroy;
+   ctx->base.sampler_view_release = u_default_sampler_view_release;
+   ctx->base.resource_release = u_default_resource_release;
    ctx->emit_texture_state = etna_emit_texture_desc;
    ctx->ts_for_sampler_view = etna_ts_for_sampler_view_state;
 }
-

@@ -64,77 +64,21 @@ pan_to_bytemask(unsigned bytes, unsigned mask)
    }
 
    default:
-      unreachable("Invalid register mode");
+      UNREACHABLE("Invalid register mode");
    }
-}
-
-void
-pan_block_add_successor(pan_block *block, pan_block *successor)
-{
-   assert(block);
-   assert(successor);
-
-   /* Cull impossible edges */
-   if (block->unconditional_jumps)
-      return;
-
-   for (unsigned i = 0; i < ARRAY_SIZE(block->successors); ++i) {
-      if (block->successors[i]) {
-         if (block->successors[i] == successor)
-            return;
-         else
-            continue;
-      }
-
-      block->successors[i] = successor;
-      _mesa_set_add(successor->predecessors, block);
-      return;
-   }
-
-   unreachable("Too many successors");
-}
-
-/* Prints a NIR ALU type in Bifrost-style ".f32" ".i8" etc */
-
-void
-pan_print_alu_type(nir_alu_type t, FILE *fp)
-{
-   unsigned size = nir_alu_type_get_type_size(t);
-   nir_alu_type base = nir_alu_type_get_base_type(t);
-
-   switch (base) {
-   case nir_type_int:
-      fprintf(fp, ".i");
-      break;
-   case nir_type_uint:
-      fprintf(fp, ".u");
-      break;
-   case nir_type_bool:
-      fprintf(fp, ".b");
-      break;
-   case nir_type_float:
-      fprintf(fp, ".f");
-      break;
-   default:
-      fprintf(fp, ".unknown");
-      break;
-   }
-
-   fprintf(fp, "%u", size);
 }
 
 /* Could optimize with a better data structure if anyone cares, TODO: profile */
 
 unsigned
-pan_lookup_pushed_ubo(struct panfrost_ubo_push *push, unsigned ubo,
-                      unsigned offs)
+pan_lookup_pushed_ubo(struct pan_ubo_push *push, unsigned ubo, unsigned offs)
 {
-   struct panfrost_ubo_word word = {.ubo = ubo, .offset = offs};
+   struct pan_ubo_word word = {.ubo = ubo, .offset = offs};
 
    for (unsigned i = 0; i < push->count; ++i) {
       if (memcmp(push->words + i, &word, sizeof(word)) == 0)
          return i;
    }
 
-   unreachable("UBO not pushed");
+   UNREACHABLE("UBO not pushed");
 }

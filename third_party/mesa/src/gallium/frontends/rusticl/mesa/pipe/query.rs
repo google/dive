@@ -1,3 +1,6 @@
+// Copyright 2023 Dr. David Alan Gilbert.
+// SPDX-License-Identifier: MIT
+
 use crate::pipe::context::*;
 
 use mesa_rust_gen::*;
@@ -25,7 +28,7 @@ where
     PipeQueryGen<Q>: QueryResultTrait,
 {
     // The external interface to create a new query
-    pub fn new(ctx: &PipeContext) -> Option<PipeQuery<<Self as QueryResultTrait>::ResType>> {
+    pub fn new(ctx: &PipeContext) -> Option<PipeQuery<'_, <Self as QueryResultTrait>::ResType>> {
         PipeQuery::<<Self as QueryResultTrait>::ResType>::new(ctx, Q)
     }
 }
@@ -60,7 +63,7 @@ impl<'a, R> PipeQuery<'a, R> {
     }
 }
 
-impl<'a, R> Drop for PipeQuery<'a, R> {
+impl<R> Drop for PipeQuery<'_, R> {
     fn drop(&mut self) {
         // SAFETY: we are the only owner of that valid pointer
         unsafe {

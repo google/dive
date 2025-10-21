@@ -42,16 +42,20 @@ ir3_asm_assemble(struct ir3_compiler *c, FILE *in)
    kernel->base.local_size[1] = v->local_size[1];
    kernel->base.local_size[2] = v->local_size[2];
    kernel->base.num_bufs = kernel->info.num_bufs;
+   memcpy(kernel->base.buf_types, kernel->info.buf_types,
+          sizeof(kernel->base.buf_sizes));
    memcpy(kernel->base.buf_sizes, kernel->info.buf_sizes,
           sizeof(kernel->base.buf_sizes));
    memcpy(kernel->base.buf_addr_regs, kernel->info.buf_addr_regs,
           sizeof(kernel->base.buf_addr_regs));
+   memcpy(kernel->base.buf_init_data, kernel->info.buf_init_data,
+          sizeof(kernel->base.buf_init_data));
 
    unsigned sz = v->info.size;
 
-   v->bo = fd_bo_new(c->dev, sz, 0, "%s", ir3_shader_stage(v));
+   v->bo = fd_bo_new(c->dev, sz, FD_BO_NOMAP, "%s", ir3_shader_stage(v));
 
-   memcpy(fd_bo_map(v->bo), kernel->bin, sz);
+   fd_bo_upload(v->bo, kernel->bin, 0, sz);
 
    /* Always include shaders in kernel crash dumps. */
    fd_bo_mark_for_dump(v->bo);

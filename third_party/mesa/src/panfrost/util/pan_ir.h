@@ -27,26 +27,8 @@
 #include <stdint.h>
 #include "compiler/nir/nir.h"
 #include "util/hash_table.h"
+#include "util/shader_stats.h"
 #include "util/u_dynarray.h"
-
-/* On Valhall, the driver gives the hardware a table of resource tables.
- * Resources are addressed as the index of the table together with the index of
- * the resource within the table. For simplicity, we put one type of resource
- * in each table and fix the numbering of the tables.
- *
- * This numbering is arbitrary. It is a software ABI between the
- * Gallium driver and the Valhall compiler.
- */
-enum pan_resource_table {
-   PAN_TABLE_UBO = 0,
-   PAN_TABLE_ATTRIBUTE,
-   PAN_TABLE_ATTRIBUTE_BUFFER,
-   PAN_TABLE_SAMPLER,
-   PAN_TABLE_TEXTURE,
-   PAN_TABLE_IMAGE,
-
-   PAN_NUM_RESOURCE_TABLES
-};
 
 /* Indices for named (non-XFB) varyings that are present. These are packed
  * tightly so they correspond to a bitfield present (P) indexed by (1 <<
@@ -97,33 +79,37 @@ enum { PAN_VERTEX_ID = 16, PAN_INSTANCE_ID = 17, PAN_MAX_ATTRIBUTE };
 /* Architectural invariants (Midgard and Bifrost): UBO must be <= 2^16 bytes so
  * an offset to a word must be < 2^16. There are less than 2^8 UBOs */
 
-struct panfrost_ubo_word {
+struct pan_ubo_word {
    uint16_t ubo;
    uint16_t offset;
 };
 
-struct panfrost_ubo_push {
+struct pan_ubo_push {
    unsigned count;
-   struct panfrost_ubo_word words[PAN_MAX_PUSH];
+   struct pan_ubo_word words[PAN_MAX_PUSH];
 };
 
 /* Helper for searching the above. Note this is O(N) to the number of pushed
  * constants, do not run in the draw call hot path */
 
-unsigned pan_lookup_pushed_ubo(struct panfrost_ubo_push *push, unsigned ubo,
+unsigned pan_lookup_pushed_ubo(struct pan_ubo_push *push, unsigned ubo,
                                unsigned offs);
 
-struct panfrost_compile_inputs {
-   struct util_debug_callback *debug;
-
+struct pan_compile_inputs {
    unsigned gpu_id;
+   uint32_t gpu_variant;
    bool is_blend, is_blit;
    struct {
       unsigned nr_samples;
       uint64_t bifrost_blend_desc;
    } blend;
    bool no_idvs;
-   bool no_ubo_to_push;
+   uint32_t view_mask;
+
+   nir_variable_mode robust2_modes;
+
+   /* Mask of UBOs that may be moved to push constants */
+   uint32_t pushable_ubos;
 
    /* Used on Valhall.
     *
@@ -135,10 +121,23 @@ struct panfrost_compile_inputs {
     */
    uint32_t fixed_varying_mask;
 
+   /* Settings to move constants into the FAU. */
+   struct {
+      uint32_t *values;
+      /* In multiples of 32bit. */
+      uint32_t max_amount;
+      /* In multiples of 32bit. */
+      uint32_t offset;
+   } fau_consts;
+
    union {
       struct {
          uint32_t rt_conv[8];
       } bifrost;
+      struct {
+         /* Use LD_VAR_BUF[_IMM] instead of LD_VAR[_IMM] to load varyings. */
+         bool use_ld_var_buf;
+      } valhall;
    };
 };
 
@@ -197,21 +196,32 @@ struct bifrost_shader_info {
 
 struct midgard_shader_info {
    unsigned first_tag;
+   union {
+      struct {
+         bool reads_raw_vertex_id;
+      } vs;
+   };
 };
 
 struct pan_shader_info {
-   gl_shader_stage stage;
+   mesa_shader_stage stage;
    unsigned work_reg_count;
    unsigned tls_size;
    unsigned wls_size;
 
+   struct pan_stats stats, stats_idvs_varying;
+
    /* Bit mask of preloaded registers */
    uint64_t preload;
+
+   uint32_t fau_consts_count;
+   uint32_t fau_consts[128];
 
    union {
       struct {
          bool reads_frag_coord;
          bool reads_point_coord;
+         bool reads_primitive_id;
          bool reads_face;
          bool can_discard;
          bool writes_depth;
@@ -287,6 +297,9 @@ struct pan_shader_info {
    /* Floating point controls that the driver should try to honour */
    bool ftz_fp16, ftz_fp32;
 
+   /* True if the shader contains a shader_clock instruction. */
+   bool has_shader_clk_instr;
+
    unsigned sampler_count;
    unsigned texture_count;
    unsigned ubo_count;
@@ -299,13 +312,22 @@ struct pan_shader_info {
       struct pan_shader_varying input[PAN_MAX_VARYINGS];
       unsigned output_count;
       struct pan_shader_varying output[PAN_MAX_VARYINGS];
+
+      /* Bitfield of noperspective varyings, starting at VARYING_SLOT_VAR0 */
+      uint32_t noperspective;
+
+      /* Bitfield of special varyings. */
+      uint32_t fixed_varyings;
    } varyings;
 
    /* UBOs to push to Register Mapped Uniforms (Midgard) or Fast Access
     * Uniforms (Bifrost) */
-   struct panfrost_ubo_push push;
+   struct pan_ubo_push push;
 
    uint32_t ubo_mask;
+
+   /* Quirk for GPUs that does not support auto32 types. */
+   bool quirk_no_auto32;
 
    union {
       struct bifrost_shader_info bifrost;
@@ -313,81 +335,7 @@ struct pan_shader_info {
    };
 };
 
-typedef struct pan_block {
-   /* Link to next block. Must be first for mir_get_block */
-   struct list_head link;
-
-   /* List of instructions emitted for the current block */
-   struct list_head instructions;
-
-   /* Index of the block in source order */
-   unsigned name;
-
-   /* Control flow graph */
-   struct pan_block *successors[2];
-   struct set *predecessors;
-   bool unconditional_jumps;
-
-   /* In liveness analysis, these are live masks (per-component) for
-    * indices for the block. Scalar compilers have the luxury of using
-    * simple bit fields, but for us, liveness is a vector idea. */
-   uint16_t *live_in;
-   uint16_t *live_out;
-} pan_block;
-
-struct pan_instruction {
-   struct list_head link;
-};
-
-#define pan_foreach_instr_in_block_rev(block, v)                               \
-   list_for_each_entry_rev(struct pan_instruction, v, &block->instructions,    \
-                           link)
-
-#define pan_foreach_successor(blk, v)                                          \
-   pan_block *v;                                                               \
-   pan_block **_v;                                                             \
-   for (_v = (pan_block **)&blk->successors[0], v = *_v;                       \
-        v != NULL && _v < (pan_block **)&blk->successors[2]; _v++, v = *_v)
-
-#define pan_foreach_predecessor(blk, v)                                        \
-   struct set_entry *_entry_##v;                                               \
-   struct pan_block *v;                                                        \
-   for (_entry_##v = _mesa_set_next_entry(blk->predecessors, NULL),            \
-       v = (struct pan_block *)(_entry_##v ? _entry_##v->key : NULL);          \
-        _entry_##v != NULL;                                                    \
-        _entry_##v = _mesa_set_next_entry(blk->predecessors, _entry_##v),      \
-       v = (struct pan_block *)(_entry_##v ? _entry_##v->key : NULL))
-
-static inline pan_block *
-pan_exit_block(struct list_head *blocks)
-{
-   pan_block *last = list_last_entry(blocks, pan_block, link);
-   assert(!last->successors[0] && !last->successors[1]);
-   return last;
-}
-
-typedef void (*pan_liveness_update)(uint16_t *, void *, unsigned max);
-
-void pan_liveness_gen(uint16_t *live, unsigned node, unsigned max,
-                      uint16_t mask);
-void pan_liveness_kill(uint16_t *live, unsigned node, unsigned max,
-                       uint16_t mask);
-bool pan_liveness_get(uint16_t *live, unsigned node, uint16_t max);
-
-void pan_compute_liveness(struct list_head *blocks, unsigned temp_count,
-                          pan_liveness_update callback);
-
-void pan_free_liveness(struct list_head *blocks);
-
 uint16_t pan_to_bytemask(unsigned bytes, unsigned mask);
-
-void pan_block_add_successor(pan_block *block, pan_block *successor);
-
-/* IR indexing */
-#define PAN_IS_REG (1)
-
-/* IR printing helpers */
-void pan_print_alu_type(nir_alu_type t, FILE *fp);
 
 /* NIR passes to do some backend-specific lowering */
 
@@ -396,16 +344,35 @@ void pan_print_alu_type(nir_alu_type t, FILE *fp);
 #define PAN_WRITEOUT_S 4
 #define PAN_WRITEOUT_2 8
 
+/* Specify the mediump lowering behavior for pan_nir_collect_varyings */
+enum pan_mediump_vary {
+   /* Always assign a 32-bit format to mediump varyings */
+   PAN_MEDIUMP_VARY_32BIT,
+   /* Assign a 16-bit format to varyings with smooth interpolation, and a
+    * 32-bit format to varyings with flat interpolation */
+   PAN_MEDIUMP_VARY_SMOOTH_16BIT,
+};
+
 bool pan_nir_lower_zs_store(nir_shader *nir);
 bool pan_nir_lower_store_component(nir_shader *shader);
 
-bool pan_nir_lower_64bit_intrin(nir_shader *shader);
+bool pan_nir_lower_vertex_id(nir_shader *shader);
+
+bool pan_nir_lower_image_ms(nir_shader *shader);
+
+bool pan_nir_lower_frag_coord_zw(nir_shader *shader);
+bool pan_nir_lower_noperspective_vs(nir_shader *shader);
+bool pan_nir_lower_noperspective_fs(nir_shader *shader);
 
 bool pan_lower_helper_invocation(nir_shader *shader);
 bool pan_lower_sample_pos(nir_shader *shader);
 bool pan_lower_xfb(nir_shader *nir);
 
-void pan_nir_collect_varyings(nir_shader *s, struct pan_shader_info *info);
+bool pan_lower_image_index(nir_shader *shader, unsigned vs_img_attrib_offset);
+
+uint32_t pan_nir_collect_noperspective_varyings_fs(nir_shader *s);
+void pan_nir_collect_varyings(nir_shader *s, struct pan_shader_info *info,
+                              enum pan_mediump_vary mediump);
 
 /*
  * Helper returning the subgroup size. Generally, this is equal to the number of
@@ -425,36 +392,37 @@ pan_subgroup_size(unsigned arch)
       return 1;
 }
 
-/* Architectural maximums, since this register may be not implemented
- * by a given chip. G31 is actually 512 instead of 768 but it doesn't
- * really matter. */
-
+/*
+ * Helper extracting the table from a given handle of Valhall descriptor model.
+ */
 static inline unsigned
-panfrost_max_thread_count(unsigned arch, unsigned work_reg_count)
+pan_res_handle_get_table(unsigned handle)
 {
-   switch (arch) {
-   /* Midgard */
-   case 4:
-   case 5:
-      if (work_reg_count > 8)
-         return 64;
-      else if (work_reg_count > 4)
-         return 128;
-      else
-         return 256;
+   unsigned table = handle >> 24;
 
-   /* Bifrost, first generation */
-   case 6:
-      return 384;
+   assert(table < 64);
+   return table;
+}
 
-   /* Bifrost, second generation (G31 is 512 but it doesn't matter) */
-   case 7:
-      return work_reg_count > 32 ? 384 : 768;
+/*
+ * Helper returning the index from a given handle of Valhall descriptor model.
+ */
+static inline unsigned
+pan_res_handle_get_index(unsigned handle)
+{
+   return handle & BITFIELD_MASK(24);
+}
 
-   /* Valhall (for completeness) */
-   default:
-      return work_reg_count > 32 ? 512 : 1024;
-   }
+/*
+ * Helper creating an handle for Valhall descriptor model.
+ */
+static inline unsigned
+pan_res_handle(unsigned table, unsigned index)
+{
+   assert(table < 64);
+   assert(index < (1u << 24));
+
+   return (table << 24) | index;
 }
 
 #endif

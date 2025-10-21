@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2009-2015 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2009-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 
 #include "svga_cmd.h"
@@ -31,6 +13,8 @@
 #include "util/u_debug_stack.h"
 #include "util/u_debug_flush.h"
 #include "util/u_hash_table.h"
+#include "util/u_bitmask.h"
+#include "util/u_atomic.h"
 #include "pipebuffer/pb_buffer.h"
 #include "pipebuffer/pb_validate.h"
 
@@ -74,11 +58,11 @@ struct vmw_buffer_relocation
 
    union {
       struct {
-	 struct SVGAGuestPtr *where;
+         struct SVGAGuestPtr *where;
       } region;
       struct {
-	 SVGAMobId *id;
-	 uint32 *offset_into_mob;
+         SVGAMobId *id;
+         uint32 *offset_into_mob;
       } mob;
    };
 };
@@ -98,7 +82,7 @@ struct vmw_svga_winsys_context
    struct vmw_winsys_screen *vws;
    struct hash_table *hash;
 
-#ifdef DEBUG
+#if MESA_DEBUG
    bool must_flush;
    struct debug_stack_frame must_flush_stack[VMW_MUST_FLUSH_STACK];
    struct debug_flush_ctx *fctx;
@@ -118,7 +102,7 @@ struct vmw_svga_winsys_context
       uint32_t staged;
       uint32_t reserved;
    } surface;
-   
+
    struct {
       struct vmw_buffer_relocation relocs[VMW_REGION_RELOCS];
       uint32_t size;
@@ -144,6 +128,11 @@ struct vmw_svga_winsys_context
    uint64_t seen_surfaces;
    uint64_t seen_regions;
    uint64_t seen_mobs;
+
+   int32_t refcount;
+
+   /* Bitmask of userspace managed surfaces */
+   struct util_bitmask *surface_id_bm;
 
    /**
     * Whether this context should fail to reserve more commands, not because it
@@ -211,28 +200,29 @@ vmw_swc_flush(struct svga_winsys_context *swc,
    }
 
    assert(ret == PIPE_OK);
-   if(ret == PIPE_OK) {
-   
+   if (ret == PIPE_OK) {
       /* Apply relocations */
-      for(i = 0; i < vswc->region.used; ++i) {
+      for (i = 0; i < vswc->region.used; ++i) {
          struct vmw_buffer_relocation *reloc = &vswc->region.relocs[i];
          struct SVGAGuestPtr ptr;
 
-         if(!vmw_gmr_bufmgr_region_ptr(reloc->buffer, &ptr))
+         if (!vmw_dma_bufmgr_region_ptr(reloc->buffer, &ptr))
             assert(0);
 
          ptr.offset += reloc->offset;
 
-	 if (reloc->is_mob) {
-	    if (reloc->mob.id)
-	       *reloc->mob.id = ptr.gmrId;
-	    if (reloc->mob.offset_into_mob)
-	       *reloc->mob.offset_into_mob = ptr.offset;
-	    else {
-	       assert(ptr.offset == 0);
-	    }
-	 } else
-	    *reloc->region.where = ptr;
+         if (reloc->is_mob) {
+            if (reloc->mob.id) {
+               *reloc->mob.id = ptr.gmrId;
+            }
+            if (reloc->mob.offset_into_mob) {
+               *reloc->mob.offset_into_mob = ptr.offset;
+            } else {
+               assert(ptr.offset == 0);
+            }
+         } else {
+            *reloc->region.where = ptr;
+         }
       }
 
       if (vswc->command.used || pfence != NULL)
@@ -254,7 +244,7 @@ vmw_swc_flush(struct svga_winsys_context *swc,
    vswc->command.used = 0;
    vswc->command.reserved = 0;
 
-   for(i = 0; i < vswc->surface.used + vswc->surface.staged; ++i) {
+   for (i = 0; i < vswc->surface.used + vswc->surface.staged; ++i) {
       struct vmw_ctx_validate_item *isurf = &vswc->surface.items[i];
       if (isurf->referenced)
          p_atomic_dec(&isurf->vsurf->validated);
@@ -265,7 +255,7 @@ vmw_swc_flush(struct svga_winsys_context *swc,
    vswc->surface.used = 0;
    vswc->surface.reserved = 0;
 
-   for(i = 0; i < vswc->shader.used + vswc->shader.staged; ++i) {
+   for (i = 0; i < vswc->shader.used + vswc->shader.staged; ++i) {
       struct vmw_ctx_validate_item *ishader = &vswc->shader.items[i];
       if (ishader->referenced)
          p_atomic_dec(&ishader->vshader->validated);
@@ -278,7 +268,7 @@ vmw_swc_flush(struct svga_winsys_context *swc,
    vswc->region.used = 0;
    vswc->region.reserved = 0;
 
-#ifdef DEBUG
+#if MESA_DEBUG
    vswc->must_flush = false;
    debug_flush_flush(vswc->fctx);
 #endif
@@ -294,7 +284,7 @@ vmw_swc_flush(struct svga_winsys_context *swc,
       vswc->base.imported_fence_fd = -1;
    }
 
-   if(pfence)
+   if (pfence)
       vmw_fence_reference(vswc->vws, pfence, fence);
 
    vmw_fence_reference(vswc->vws, &fence, NULL);
@@ -309,9 +299,9 @@ vmw_swc_reserve(struct svga_winsys_context *swc,
 {
    struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
 
-#ifdef DEBUG
+#if MESA_DEBUG
    /* Check if somebody forgot to check the previous failure */
-   if(vswc->must_flush) {
+   if (vswc->must_flush) {
       debug_printf("Forgot to flush:\n");
       debug_backtrace_dump(vswc->must_flush_stack, VMW_MUST_FLUSH_STACK);
       assert(!vswc->must_flush);
@@ -320,15 +310,15 @@ vmw_swc_reserve(struct svga_winsys_context *swc,
 #endif
 
    assert(nr_bytes <= vswc->command.size);
-   if(nr_bytes > vswc->command.size)
+   if (nr_bytes > vswc->command.size)
       return NULL;
 
-   if(vswc->preemptive_flush ||
+   if (vswc->preemptive_flush ||
       vswc->command.used + nr_bytes > vswc->command.size ||
       vswc->surface.used + nr_relocs > vswc->surface.size ||
       vswc->shader.used + nr_relocs > vswc->shader.size ||
       vswc->region.used + nr_relocs > vswc->region.size) {
-#ifdef DEBUG
+#if MESA_DEBUG
       vswc->must_flush = true;
       debug_backtrace_capture(vswc->must_flush_stack, 1,
                               VMW_MUST_FLUSH_STACK);
@@ -340,7 +330,7 @@ vmw_swc_reserve(struct svga_winsys_context *swc,
    assert(vswc->surface.used + nr_relocs <= vswc->surface.size);
    assert(vswc->shader.used + nr_relocs <= vswc->shader.size);
    assert(vswc->region.used + nr_relocs <= vswc->region.size);
-   
+
    vswc->command.reserved = nr_bytes;
    vswc->surface.reserved = nr_relocs;
    vswc->surface.staged = 0;
@@ -348,7 +338,7 @@ vmw_swc_reserve(struct svga_winsys_context *swc,
    vswc->shader.staged = 0;
    vswc->region.reserved = nr_relocs;
    vswc->region.staged = 0;
-   
+
    return vswc->command.buffer + vswc->command.used;
 }
 
@@ -361,15 +351,15 @@ vmw_swc_get_command_buffer_size(struct svga_winsys_context *swc)
 
 static void
 vmw_swc_context_relocation(struct svga_winsys_context *swc,
-			   uint32 *cid)
+                           uint32 *cid)
 {
    *cid = swc->cid;
 }
 
 static bool
 vmw_swc_add_validate_buffer(struct vmw_svga_winsys_context *vswc,
-			    struct pb_buffer *pb_buf,
-			    unsigned flags)
+                            struct pb_buffer *pb_buf,
+                            unsigned flags)
 {
    ASSERTED enum pipe_error ret;
    unsigned translated_flags;
@@ -407,13 +397,13 @@ vmw_swc_region_relocation(struct svga_winsys_context *swc,
    ++vswc->region.staged;
 
    if (vmw_swc_add_validate_buffer(vswc, reloc->buffer, flags)) {
-      vswc->seen_regions += reloc->buffer->size;
+      vswc->seen_regions += reloc->buffer->base.size;
       if ((swc->hints & SVGA_HINT_FLAG_CAN_PRE_FLUSH) &&
           vswc->seen_regions >= VMW_GMR_POOL_SIZE/5)
          vswc->preemptive_flush = true;
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    if (!(flags & SVGA_RELOC_INTERNAL))
       debug_flush_cb_reference(vswc->fctx, vmw_debug_flush_buf(buffer));
 #endif
@@ -421,11 +411,11 @@ vmw_swc_region_relocation(struct svga_winsys_context *swc,
 
 static void
 vmw_swc_mob_relocation(struct svga_winsys_context *swc,
-		       SVGAMobId *id,
-		       uint32 *offset_into_mob,
-		       struct svga_winsys_buffer *buffer,
-		       uint32 offset,
-		       unsigned flags)
+                       SVGAMobId *id,
+                       uint32 *offset_into_mob,
+                       struct svga_winsys_buffer *buffer,
+                       uint32 offset,
+                       unsigned flags)
 {
    struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
    struct vmw_buffer_relocation *reloc;
@@ -449,7 +439,7 @@ vmw_swc_mob_relocation(struct svga_winsys_context *swc,
    }
 
    if (vmw_swc_add_validate_buffer(vswc, pb_buffer, flags)) {
-      vswc->seen_mobs += pb_buffer->size;
+      vswc->seen_mobs += pb_buffer->base.size;
 
       if ((swc->hints & SVGA_HINT_FLAG_CAN_PRE_FLUSH) &&
           vswc->seen_mobs >=
@@ -457,7 +447,7 @@ vmw_swc_mob_relocation(struct svga_winsys_context *swc,
          vswc->preemptive_flush = true;
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    if (!(flags & SVGA_RELOC_INTERNAL))
       debug_flush_cb_reference(vswc->fctx, vmw_debug_flush_buf(buffer));
 #endif
@@ -491,9 +481,9 @@ vmw_swc_surface_clear_reference(struct svga_winsys_context *swc,
 
 static void
 vmw_swc_surface_only_relocation(struct svga_winsys_context *swc,
-				uint32 *where,
-				struct vmw_svga_winsys_surface *vsurf,
-				unsigned flags)
+                                uint32 *where,
+                                struct vmw_svga_winsys_surface *vsurf,
+                                unsigned flags)
 {
    struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
    struct vmw_ctx_validate_item *isrf;
@@ -571,10 +561,10 @@ vmw_swc_surface_relocation(struct svga_winsys_context *swc,
 
 static void
 vmw_swc_shader_relocation(struct svga_winsys_context *swc,
-			  uint32 *shid,
-			  uint32 *mobid,
-			  uint32 *offset,
-			  struct svga_winsys_gb_shader *shader,
+                          uint32 *shid,
+                          uint32 *mobid,
+                          uint32 *offset,
+                          struct svga_winsys_gb_shader *shader,
                           unsigned flags)
 {
    struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
@@ -582,7 +572,7 @@ vmw_swc_shader_relocation(struct svga_winsys_context *swc,
    struct vmw_svga_winsys_shader *vshader;
    struct vmw_ctx_validate_item *ishader;
 
-   if(!shader) {
+   if (!shader) {
       *shid = SVGA3D_INVALID_ID;
       return;
    }
@@ -613,7 +603,7 @@ vmw_swc_shader_relocation(struct svga_winsys_context *swc,
 
    if (vshader->buf)
       vmw_swc_mob_relocation(swc, mobid, offset, vshader->buf,
-			     0, SVGA_RELOC_READ);
+                             0, SVGA_RELOC_READ);
 }
 
 static void
@@ -661,27 +651,40 @@ vmw_swc_destroy(struct svga_winsys_context *swc)
    struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
    unsigned i;
 
-   for(i = 0; i < vswc->surface.used; ++i) {
+   for (i = 0; i < vswc->surface.used; ++i) {
       struct vmw_ctx_validate_item *isurf = &vswc->surface.items[i];
       if (isurf->referenced)
          p_atomic_dec(&isurf->vsurf->validated);
       vmw_svga_winsys_surface_reference(&isurf->vsurf, NULL);
    }
 
-   for(i = 0; i < vswc->shader.used; ++i) {
+   for (i = 0; i < vswc->shader.used; ++i) {
       struct vmw_ctx_validate_item *ishader = &vswc->shader.items[i];
       if (ishader->referenced)
          p_atomic_dec(&ishader->vshader->validated);
       vmw_svga_winsys_shader_reference(&ishader->vshader, NULL);
    }
 
+   if (vmw_has_userspace_surface(vswc->vws))
+      util_bitmask_destroy(vswc->surface_id_bm);
    _mesa_hash_table_destroy(vswc->hash, NULL);
    pb_validate_destroy(vswc->validate);
    vmw_ioctl_context_destroy(vswc->vws, swc->cid);
-#ifdef DEBUG
+   if (vswc->vws->swc == swc)
+      vswc->vws->swc = NULL;
+#if MESA_DEBUG
    debug_flush_ctx_destroy(vswc->fctx);
 #endif
    FREE(vswc);
+}
+
+void
+vmw_swc_unref(struct svga_winsys_context *swc)
+{
+   struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
+   if (p_atomic_dec_zero(&vswc->refcount)) {
+      vmw_swc_destroy(swc);
+   }
 }
 
 /**
@@ -779,10 +782,10 @@ vmw_svga_winsys_context_create(struct svga_winsys_screen *sws)
    struct vmw_svga_winsys_context *vswc;
 
    vswc = CALLOC_STRUCT(vmw_svga_winsys_context);
-   if(!vswc)
+   if (!vswc)
       return NULL;
 
-   vswc->base.destroy = vmw_swc_destroy;
+   vswc->base.destroy = vmw_swc_unref;
    vswc->base.reserve = vmw_swc_reserve;
    vswc->base.get_command_buffer_size = vmw_swc_get_command_buffer_size;
    vswc->base.surface_relocation = vmw_swc_surface_relocation;
@@ -822,20 +825,47 @@ vmw_svga_winsys_context_create(struct svga_winsys_screen *sws)
    vswc->region.size = VMW_REGION_RELOCS;
 
    vswc->validate = pb_validate_create();
-   if(!vswc->validate)
+   if (!vswc->validate)
       goto out_no_validate;
 
    vswc->hash = util_hash_table_create_ptr_keys();
    if (!vswc->hash)
       goto out_no_hash;
 
-#ifdef DEBUG
+   if (vmw_has_userspace_surface(vws)) {
+      if (!(vswc->surface_id_bm = util_bitmask_create()))
+         goto out_no_user_srf;
+      /**
+       * First id assigned is 0 which is invalid for surface id. Consume the
+       * first id.
+       */
+      vmw_swc_surface_add_userspace_id(&vswc->base);
+   }
+
+   /**
+    * The context refcount is initialized to 2, one reference is for the context
+    * itself and the other is for vws screen. One unref is done when context
+    * destroy is called and the other when the either vws screen is destroyed
+    * or it initializes another context.
+    * This ensures that a screen always has access to its last created context.
+    * The vws screen needs this context to submit surface commands for userspace
+    * managed surfaces.
+    */
+   p_atomic_set(&vswc->refcount, 1);
+   if (vws->swc)
+      vmw_swc_unref(vws->swc);
+   vws->swc = &vswc->base;
+   p_atomic_inc(&vswc->refcount);
+
+#if MESA_DEBUG
    vswc->fctx = debug_flush_ctx_create(true, VMW_DEBUG_FLUSH_STACK);
 #endif
 
    vswc->base.force_coherent = vws->force_coherent;
    return &vswc->base;
 
+out_no_user_srf:
+   _mesa_hash_table_destroy(vswc->hash, NULL);
 out_no_hash:
    pb_validate_destroy(vswc->validate);
 out_no_validate:
@@ -843,4 +873,19 @@ out_no_validate:
 out_no_context:
    FREE(vswc);
    return NULL;
+}
+
+void
+vmw_swc_surface_clear_userspace_id(struct svga_winsys_context *swc,
+                                   uint32 sid)
+{
+   struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
+   util_bitmask_clear(vswc->surface_id_bm, sid);
+}
+
+uint32_t
+vmw_swc_surface_add_userspace_id(struct svga_winsys_context *swc)
+{
+   struct vmw_svga_winsys_context *vswc = vmw_svga_winsys_context(swc);
+   return util_bitmask_add(vswc->surface_id_bm);
 }

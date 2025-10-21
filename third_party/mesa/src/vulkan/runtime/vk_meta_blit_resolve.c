@@ -52,7 +52,7 @@ vk_image_sampler_dim(const struct vk_image *image)
       else
          return GLSL_SAMPLER_DIM_2D;
    case VK_IMAGE_TYPE_3D: return GLSL_SAMPLER_DIM_3D;
-   default: unreachable("Invalid image type");
+   default: UNREACHABLE("Invalid image type");
    }
 }
 
@@ -70,7 +70,7 @@ aspect_to_tex_binding(VkImageAspectFlagBits aspect)
    case VK_IMAGE_ASPECT_COLOR_BIT: return BLIT_DESC_BINDING_COLOR;
    case VK_IMAGE_ASPECT_DEPTH_BIT: return BLIT_DESC_BINDING_DEPTH;
    case VK_IMAGE_ASPECT_STENCIL_BIT: return BLIT_DESC_BINDING_STENCIL;
-   default: unreachable("Unsupported aspect");
+   default: UNREACHABLE("Unsupported aspect");
    }
 }
 
@@ -98,9 +98,7 @@ compute_off_scale(uint32_t src_level_size,
       *dst1_out = dst0;
 
       /* Flip the source region */
-      uint32_t tmp = src0;
-      src0 = src1;
-      src1 = tmp;
+      SWAP(src0, src1);
    }
 
    double src_region_size = (double)src1 - (double)src0;
@@ -131,7 +129,7 @@ build_tex_resolve(nir_builder *b, nir_deref_instr *t,
                   VkSampleCountFlagBits samples,
                   VkResolveModeFlagBits resolve_mode)
 {
-   nir_def *accum = nir_txf_ms_deref(b, t, coord, nir_imm_int(b, 0));
+   nir_def *accum = nir_txf_ms(b, coord, nir_imm_int(b, 0), .texture_deref = t);
    if (resolve_mode == VK_RESOLVE_MODE_SAMPLE_ZERO_BIT)
       return accum;
 
@@ -139,7 +137,7 @@ build_tex_resolve(nir_builder *b, nir_deref_instr *t,
       glsl_get_sampler_result_type(t->type);
 
    for (unsigned i = 1; i < samples; i++) {
-      nir_def *val = nir_txf_ms_deref(b, t, coord, nir_imm_int(b, i));
+      nir_def *val = nir_txf_ms(b, coord, nir_imm_int(b, i), .texture_deref = t);
       switch (resolve_mode) {
       case VK_RESOLVE_MODE_AVERAGE_BIT:
          assert(base_type == GLSL_TYPE_FLOAT);
@@ -158,7 +156,7 @@ build_tex_resolve(nir_builder *b, nir_deref_instr *t,
             accum = nir_fmin(b, accum, val);
             break;
          default:
-            unreachable("Invalid sample result type");
+            UNREACHABLE("Invalid sample result type");
          }
          break;
 
@@ -174,12 +172,12 @@ build_tex_resolve(nir_builder *b, nir_deref_instr *t,
             accum = nir_fmax(b, accum, val);
             break;
          default:
-            unreachable("Invalid sample result type");
+            UNREACHABLE("Invalid sample result type");
          }
          break;
 
       default:
-         unreachable("Unsupported resolve mode");
+         UNREACHABLE("Unsupported resolve mode");
       }
    }
 
@@ -263,7 +261,7 @@ build_blit_shader(const struct vk_meta_blit_key *key)
       switch (aspect) {
       case VK_IMAGE_ASPECT_COLOR_BIT:
          tex_name = "color_tex";
-         if (vk_format_is_int(key->dst_format))
+         if (vk_format_is_sint(key->dst_format))
             base_type = GLSL_TYPE_INT;
          else if (vk_format_is_uint(key->dst_format))
             base_type = GLSL_TYPE_UINT;
@@ -291,7 +289,7 @@ build_blit_shader(const struct vk_meta_blit_key *key)
          out_comps = 1;
          break;
       default:
-         unreachable("Unsupported aspect");
+         UNREACHABLE("Unsupported aspect");
       }
 
       const bool is_array = key->dim != GLSL_SAMPLER_DIM_3D;
@@ -305,7 +303,8 @@ build_blit_shader(const struct vk_meta_blit_key *key)
 
       nir_def *val;
       if (resolve_mode == VK_RESOLVE_MODE_NONE) {
-         val = nir_txl_deref(b, t, s, src_coord, nir_imm_float(b, 0));
+         val = nir_txl(b, src_coord, nir_imm_float(b, 0),
+                       .texture_deref = t, .sampler_deref = s);
       } else {
          val = build_tex_resolve(b, t, nir_f2u32(b, src_coord),
                                  key->src_samples, resolve_mode);
@@ -315,8 +314,8 @@ build_blit_shader(const struct vk_meta_blit_key *key)
       if (key->stencil_as_discard) {
          assert(key->aspects == VK_IMAGE_ASPECT_STENCIL_BIT);
          nir_def *stencil_bit = nir_channel(b, z_xform, 3);
-         nir_discard_if(b, nir_ieq(b, nir_iand(b, val, stencil_bit),
-                                      nir_imm_int(b, 0)));
+         nir_demote_if(b, nir_ieq(b, nir_iand(b, val, stencil_bit),
+                                     nir_imm_int(b, 0)));
       } else {
          const struct glsl_type *out_type =
             glsl_vector_type(base_type, out_comps);
@@ -336,7 +335,7 @@ get_blit_pipeline_layout(struct vk_device *device,
                          struct vk_meta_device *meta,
                          VkPipelineLayout *layout_out)
 {
-   const char key[] = "vk-meta-blit-pipeline-layout";
+   enum vk_meta_object_key_type key = VK_META_OBJECT_KEY_BLIT;
 
    const VkDescriptorSetLayoutBinding bindings[] = {{
       .binding = BLIT_DESC_BINDING_SAMPLER,
@@ -362,6 +361,7 @@ get_blit_pipeline_layout(struct vk_device *device,
 
    const VkDescriptorSetLayoutCreateInfo desc_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
       .bindingCount = ARRAY_SIZE(bindings),
       .pBindings = bindings,
    };
@@ -373,7 +373,7 @@ get_blit_pipeline_layout(struct vk_device *device,
    };
 
    return vk_meta_get_pipeline_layout(device, meta, &desc_info, &push_range,
-                                      key, sizeof(key), layout_out);
+                                      &key, sizeof(key), layout_out);
 }
 
 static VkResult
@@ -413,6 +413,9 @@ get_blit_pipeline(struct vk_device *device,
    if (key->aspects & VK_IMAGE_ASPECT_COLOR_BIT) {
       render.color_attachment_count = 1;
       render.color_attachment_formats[0] = key->dst_format;
+      render.color_attachment_write_masks[0] =
+         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
    }
    if (key->aspects & VK_IMAGE_ASPECT_DEPTH_BIT) {
       ds_info.depthTestEnable = VK_TRUE;
@@ -466,7 +469,7 @@ get_blit_sampler(struct vk_device *device,
    } key;
 
    memset(&key, 0, sizeof(key));
-   key.key_type = VK_META_OBJECT_KEY_BLIT_SAMPLER;
+   key.key_type = VK_META_OBJECT_KEY_BLIT;
    key.filter = filter;
 
    VkSampler from_cache = vk_meta_lookup_sampler(meta, &key, sizeof(key));
@@ -547,6 +550,7 @@ do_blit(struct vk_command_buffer *cmd,
       const VkImageViewCreateInfo src_view_info = {
          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
          .pNext = &src_view_usage,
+         .flags = VK_IMAGE_VIEW_CREATE_DRIVER_INTERNAL_BIT_MESA,
          .image = vk_image_to_handle(src_image),
          .viewType = vk_image_sampled_view_type(src_image),
          .format = src_format,
@@ -613,6 +617,7 @@ do_blit(struct vk_command_buffer *cmd,
       const VkImageViewCreateInfo dst_view_info = {
          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
          .pNext = &dst_view_usage,
+         .flags = VK_IMAGE_VIEW_CREATE_DRIVER_INTERNAL_BIT_MESA,
          .image = vk_image_to_handle(dst_image),
          .viewType = vk_image_sampled_view_type(dst_image),
          .format = dst_format,
@@ -730,7 +735,7 @@ vk_meta_blit_image(struct vk_command_buffer *cmd,
 
    struct vk_meta_blit_key key;
    memset(&key, 0, sizeof(key));
-   key.key_type = VK_META_OBJECT_KEY_BLIT_PIPELINE;
+   key.key_type = VK_META_OBJECT_KEY_BLIT;
    key.src_samples = src_image->samples;
    key.dim = vk_image_sampler_dim(src_image);
    key.dst_format = dst_format;
@@ -757,31 +762,48 @@ vk_meta_blit_image(struct vk_command_buffer *cmd,
                         &dst_rect.y0, &dst_rect.y1,
                         &push.y_off, &push.y_scale);
 
+      VkImageSubresourceLayers src_subres = regions[r].srcSubresource;
+      src_subres.layerCount =
+         vk_image_subresource_layer_count(src_image, &src_subres);
+
+      VkImageSubresourceLayers dst_subres = regions[r].dstSubresource;
+      dst_subres.layerCount =
+         vk_image_subresource_layer_count(dst_image, &dst_subres);
+
       uint32_t dst_layer_count;
       if (src_image->image_type == VK_IMAGE_TYPE_3D) {
+         /* We need to fixup to handle the 3D-->2D Array case */
+         unsigned dst_z_or_layer_offsets[] = {
+            regions[r].dstOffsets[0].z,
+            regions[r].dstOffsets[1].z
+         };
+
+         if (dst_image->image_type != VK_IMAGE_TYPE_3D) {
+            /* baseArrayLayer applied outside so we just need the count */
+            dst_z_or_layer_offsets[0] = 0;
+            dst_z_or_layer_offsets[1] = dst_subres.layerCount;
+         }
+
          uint32_t layer0, layer1;
          compute_off_scale(src_extent.depth,
                            regions[r].srcOffsets[0].z,
                            regions[r].srcOffsets[1].z,
-                           regions[r].dstOffsets[0].z,
-                           regions[r].dstOffsets[1].z,
+                           dst_z_or_layer_offsets[0],
+                           dst_z_or_layer_offsets[1],
                            &layer0, &layer1,
                            &push.z_off, &push.z_scale);
          dst_rect.layer = layer0;
          dst_layer_count = layer1 - layer0;
       } else {
-         assert(regions[r].srcSubresource.layerCount ==
-                regions[r].dstSubresource.layerCount);
-         dst_layer_count = regions[r].dstSubresource.layerCount;
-         push.arr_delta = regions[r].dstSubresource.baseArrayLayer -
-                          regions[r].srcSubresource.baseArrayLayer;
+         assert(src_subres.layerCount == dst_subres.layerCount);
+         dst_layer_count = dst_subres.layerCount;
+         push.arr_delta = dst_subres.baseArrayLayer -
+                          src_subres.baseArrayLayer;
       }
 
       do_blit(cmd, meta,
-              src_image, src_format, src_image_layout,
-              regions[r].srcSubresource,
-              dst_image, dst_format, dst_image_layout,
-              regions[r].dstSubresource,
+              src_image, src_format, src_image_layout, src_subres,
+              dst_image, dst_format, dst_image_layout, dst_subres,
               sampler, &key, &push, &dst_rect, dst_layer_count);
    }
 }
@@ -816,7 +838,7 @@ vk_meta_resolve_image(struct vk_command_buffer *cmd,
 {
    struct vk_meta_blit_key key;
    memset(&key, 0, sizeof(key));
-   key.key_type = VK_META_OBJECT_KEY_BLIT_PIPELINE;
+   key.key_type = VK_META_OBJECT_KEY_BLIT;
    key.dim = vk_image_sampler_dim(src_image);
    key.src_samples = src_image->samples;
    key.resolve_mode = resolve_mode;
@@ -837,13 +859,19 @@ vk_meta_resolve_image(struct vk_command_buffer *cmd,
          .y1 = regions[r].dstOffset.y + regions[r].extent.height,
       };
 
+      VkImageSubresourceLayers src_subres = regions[r].srcSubresource;
+      src_subres.layerCount =
+         vk_image_subresource_layer_count(src_image, &src_subres);
+
+      VkImageSubresourceLayers dst_subres = regions[r].dstSubresource;
+      dst_subres.layerCount =
+         vk_image_subresource_layer_count(dst_image, &dst_subres);
+
       do_blit(cmd, meta,
-              src_image, src_format, src_image_layout,
-              regions[r].srcSubresource,
-              dst_image, dst_format, dst_image_layout,
-              regions[r].dstSubresource,
+              src_image, src_format, src_image_layout, src_subres,
+              dst_image, dst_format, dst_image_layout, dst_subres,
               VK_NULL_HANDLE, &key, &push, &dst_rect,
-              regions[r].dstSubresource.layerCount);
+              dst_subres.layerCount);
    }
 }
 

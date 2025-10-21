@@ -30,23 +30,38 @@
 extern "C" {
 #endif
 
-/* Matches hardware Pixel Kill enum on Bifrost and Valhall */
-enum pan_earlyzs {
-   PAN_EARLYZS_FORCE_EARLY = 0,
-   PAN_EARLYZS_WEAK_EARLY = 2,
-   PAN_EARLYZS_FORCE_LATE = 3
-};
-
 /* Early-ZS pair. */
 struct pan_earlyzs_state {
    /* Z/S test and update */
-   enum pan_earlyzs update : 2;
+   unsigned update : 2;
 
    /* Pixel kill */
-   enum pan_earlyzs kill : 2;
+   unsigned kill : 2;
+
+   /* True if the shader read-only ZS optimization should be enabled */
+   bool shader_readonly_zs : 1;
 
    /* So it fits in a byte */
-   unsigned padding : 4;
+   unsigned padding : 3;
+};
+
+/* ZS tilebuf read access */
+enum pan_earlyzs_zs_tilebuf_read {
+   /* The ZS tile buffer is not read */
+   PAN_EARLYZS_ZS_TILEBUF_NOT_READ = 0,
+
+   /* The ZS tile buffer is read but the read-only optimization must be
+    * disabled
+    */
+   PAN_EARLYZS_ZS_TILEBUF_READ_NO_OPT,
+
+   /* The ZS tile buffer is read and the read-only optimization can be
+    * enabled
+    */
+   PAN_EARLYZS_ZS_TILEBUF_READ_OPT,
+
+   /* Number of ZS read modes */
+   PAN_EARLYZS_ZS_TILEBUF_MODE_COUNT,
 };
 
 /* Internal lookup table. Users should treat as an opaque structure and only
@@ -54,7 +69,7 @@ struct pan_earlyzs_state {
  * for definition of the arrays.
  */
 struct pan_earlyzs_lut {
-   struct pan_earlyzs_state states[2][2][2];
+   struct pan_earlyzs_state states[2][2][2][PAN_EARLYZS_ZS_TILEBUF_MODE_COUNT];
 };
 
 /*
@@ -63,14 +78,17 @@ struct pan_earlyzs_lut {
  */
 static inline struct pan_earlyzs_state
 pan_earlyzs_get(struct pan_earlyzs_lut lut, bool writes_zs_or_oq,
-                bool alpha_to_coverage, bool zs_always_passes)
+                bool alpha_to_coverage, bool zs_always_passes,
+                enum pan_earlyzs_zs_tilebuf_read zs_read)
 {
-   return lut.states[writes_zs_or_oq][alpha_to_coverage][zs_always_passes];
+   return lut.states[writes_zs_or_oq][alpha_to_coverage][zs_always_passes]
+                    [zs_read];
 }
 
 struct pan_shader_info;
 
-struct pan_earlyzs_lut pan_earlyzs_analyze(const struct pan_shader_info *s);
+struct pan_earlyzs_lut pan_earlyzs_analyze(const struct pan_shader_info *s,
+                                           unsigned arch);
 
 #ifdef __cplusplus
 } /* extern C */

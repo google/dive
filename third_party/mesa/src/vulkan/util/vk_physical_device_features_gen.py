@@ -32,12 +32,7 @@ import xml.etree.ElementTree as et
 
 import mako
 from mako.template import Template
-from vk_extensions import get_all_required, filter_api
-
-def str_removeprefix(s, prefix):
-    if s.startswith(prefix):
-        return s[len(prefix):]
-    return s
+from vk_extensions import Requirements, get_all_required, filter_api
 
 RENAMED_FEATURES = {
     # See https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/17272#note_1446477 for details
@@ -48,6 +43,8 @@ RENAMED_FEATURES = {
 
     ('CooperativeMatrixFeaturesNV', 'cooperativeMatrix'): 'cooperativeMatrixNV',
     ('CooperativeMatrixFeaturesNV', 'cooperativeMatrixRobustBufferAccess'): 'cooperativeMatrixRobustBufferAccessNV',
+
+    ('DeviceGeneratedCommandsFeaturesNV', 'deviceGeneratedCommands'): 'deviceGeneratedCommandsNV',
 }
 
 KNOWN_ALIASES = [
@@ -110,6 +107,38 @@ KNOWN_ALIASES = [
     (['Vulkan13Features', 'DynamicRenderingFeatures'], ['dynamicRendering']),
     (['Vulkan13Features', 'ShaderIntegerDotProductFeatures'], ['shaderIntegerDotProduct']),
     (['Vulkan13Features', 'Maintenance4Features'], ['maintenance4']),
+    (['Vulkan14Features', 'GlobalPriorityQueryFeatures'], ['globalPriorityQuery']),
+    (
+        ['Vulkan14Features', 'ShaderSubgroupRotateFeatures'],
+        ['shaderSubgroupRotate', 'shaderSubgroupRotateClustered'],
+    ),
+    (['Vulkan14Features', 'ShaderFloatControls2Features'], ['shaderFloatControls2']),
+    (['Vulkan14Features', 'ShaderExpectAssumeFeatures'], ['shaderExpectAssume']),
+    (
+        ['Vulkan14Features', 'LineRasterizationFeatures'],
+        [
+            'rectangularLines',
+            'bresenhamLines',
+            'smoothLines',
+            'stippledRectangularLines',
+            'stippledBresenhamLines',
+            'stippledSmoothLines',
+        ],
+    ),
+    (
+        ['Vulkan14Features', 'VertexAttributeDivisorFeatures'],
+        [
+            'vertexAttributeInstanceRateDivisor',
+            'vertexAttributeInstanceRateZeroDivisor',
+        ],
+    ),
+    (['Vulkan14Features', 'IndexTypeUint8Features'], ['indexTypeUint8']),
+    (['Vulkan14Features', 'DynamicRenderingLocalReadFeatures'], ['dynamicRenderingLocalRead']),
+    (['Vulkan14Features', 'Maintenance5Features'], ['maintenance5']),
+    (['Vulkan14Features', 'Maintenance6Features'], ['maintenance6']),
+    (['Vulkan14Features', 'PipelineProtectedAccessFeatures'], ['pipelineProtectedAccess']),
+    (['Vulkan14Features', 'PipelineRobustnessFeatures'], ['pipelineRobustness']),
+    (['Vulkan14Features', 'HostImageCopyFeatures'], ['hostImageCopy']),
 ]
 
 for (feature_structs, features) in KNOWN_ALIASES:
@@ -120,13 +149,27 @@ for (feature_structs, features) in KNOWN_ALIASES:
             RENAMED_FEATURES[rename] = flag
 
 def get_renamed_feature(c_type, feature):
-    return RENAMED_FEATURES.get((str_removeprefix(c_type, 'VkPhysicalDevice'), feature), feature)
+    return RENAMED_FEATURES.get((c_type.removeprefix('VkPhysicalDevice'), feature), feature)
 
 @dataclass
 class FeatureStruct:
+    reqs: Requirements
     c_type: str
     s_type: str
     features: typing.List[str]
+    guard: str
+
+    def condition(self, physical_dev):
+        conds = []
+        if self.reqs.core_version:
+            conds.append(physical_dev + '->properties.apiVersion >= ' +
+                         self.reqs.core_version.c_vk_version())
+        for ext in self.reqs.extensions:
+            conds.append(physical_dev + '->supported_extensions.' +
+                         ext.name[3:])
+        if not conds:
+            return None
+        return '(' + ' || '.join(conds) + ')'
 
 TEMPLATE_H = Template(COPYRIGHT + """
 /* This file generated from ${filename}, don't edit directly. */
@@ -156,7 +199,7 @@ vk_set_physical_device_features_1_0(struct vk_features *all_features,
 #endif
 
 #endif
-""", output_encoding='utf-8')
+""")
 
 TEMPLATE_C = Template(COPYRIGHT + """
 /* This file generated from ${filename}, don't edit directly. */
@@ -195,16 +238,32 @@ vk_physical_device_check_device_features(struct vk_physical_device *physical_dev
    };
 
 % for f in feature_structs:
+% if f.guard != None:
+#ifdef ${f.guard}
+% endif
    ${f.c_type} supported_${f.c_type} = { .pNext = NULL };
+% if f.guard != None:
+#endif
+% endif
 % endfor
 
    vk_foreach_struct_const(features, pCreateInfo->pNext) {
       VkBaseOutStructure *supported = NULL;
       switch (features->sType) {
 % for f in feature_structs:
+% if f.guard != None:
+#ifdef ${f.guard}
+% endif
       case ${f.s_type}:
+% if f.condition("physical_device") is not None:
+         if (!${f.condition("physical_device")})
+            break;
+% endif
          supported = (VkBaseOutStructure *) &supported_${f.c_type};
          break;
+% if f.guard != None:
+#endif
+% endif
 % endfor
       default:
          break;
@@ -214,8 +273,16 @@ vk_physical_device_check_device_features(struct vk_physical_device *physical_dev
       if (!supported)
          continue;
 
+      /* Ignore duplicated structs instead of failing to create the device. */
+      if (supported->sType != 0) {
+         vk_logw(VK_LOG_OBJS(physical_device),
+                 "WARNING: Duplicate sType %s in the device creation chain.\\n",
+                 vk_StructureType_to_str(features->sType));
+         continue;
+      }
+
       /* Check for cycles in the list */
-      if (supported->pNext != NULL || supported->sType != 0)
+      if (supported->pNext != NULL)
          return VK_ERROR_UNKNOWN;
 
       supported->sType = features->sType;
@@ -251,7 +318,14 @@ vk_physical_device_check_device_features(struct vk_physical_device *physical_dev
         break;
       }
 % for f in feature_structs:
+% if f.guard != None:
+#ifdef ${f.guard}
+% endif
       case ${f.s_type}: {
+% if f.condition("physical_device") is not None:
+         if (!${f.condition("physical_device")})
+            break;
+% endif
          const ${f.c_type} *a = &supported_${f.c_type};
          const ${f.c_type} *b = (const void *) features;
 % for flag in f.features:
@@ -261,6 +335,9 @@ vk_physical_device_check_device_features(struct vk_physical_device *physical_dev
 % endfor
          break;
       }
+% if f.guard != None:
+#endif
+% endif
 % endfor
       default:
          break;
@@ -282,6 +359,9 @@ vk_common_GetPhysicalDeviceFeatures2(VkPhysicalDevice physicalDevice,
    vk_foreach_struct(ext, pFeatures) {
       switch (ext->sType) {
 % for f in feature_structs:
+% if f.guard != None:
+#ifdef ${f.guard}
+% endif
       case ${f.s_type}: {
          ${f.c_type} *features = (void *) ext;
 % for flag in f.features:
@@ -290,6 +370,9 @@ vk_common_GetPhysicalDeviceFeatures2(VkPhysicalDevice physicalDevice,
          break;
       }
 
+% if f.guard != None:
+#endif
+% endif
 % endfor
       default:
          break;
@@ -310,6 +393,9 @@ vk_set_physical_device_features(struct vk_features *all_features,
       }
 
 % for f in feature_structs:
+% if f.guard != None:
+#ifdef ${f.guard}
+% endif
       case ${f.s_type}: {
          const ${f.c_type} *features = (const void *) ext;
 % for flag in f.features:
@@ -319,6 +405,9 @@ vk_set_physical_device_features(struct vk_features *all_features,
          break;
       }
 
+% if f.guard != None:
+#endif
+% endif
 % endfor
       default:
          break;
@@ -335,7 +424,7 @@ vk_set_physical_device_features_1_0(struct vk_features *all_features,
       all_features->${flag} = true;
 % endfor
 }
-""", output_encoding='utf-8')
+""")
 
 def get_pdev_features(doc):
     _type = doc.find(".types/type[@name='VkPhysicalDeviceFeatures']")
@@ -365,9 +454,11 @@ def get_feature_structs(doc, api, beta):
         if _type.attrib['name'] not in required:
             continue
 
-        # Skip extensions with a define for now
-        guard = required[_type.attrib['name']].guard
-        if guard is not None and (guard != "VK_ENABLE_BETA_EXTENSIONS" or not beta):
+        reqs = required[_type.attrib['name']]
+        # Skip extensions with a define that isn't a platform define for now
+        guard = reqs.guard
+        if guard is not None and ((guard != "VK_ENABLE_BETA_EXTENSIONS" or beta != "true") and
+                                 (not guard.startswith("VK_USE_PLATFORM"))):
             continue
 
         # find Vulkan structure type
@@ -391,7 +482,7 @@ def get_feature_structs(doc, api, beta):
                 assert p.find('./type').text == 'VkBool32'
                 flags.append(m_name)
 
-        feature_struct = FeatureStruct(c_type=_type.attrib.get('name'), s_type=s_type, features=flags)
+        feature_struct = FeatureStruct(reqs=reqs, c_type=_type.attrib.get('name'), s_type=s_type, features=flags, guard=guard)
         feature_structs[feature_struct.c_type] = feature_struct
 
     return feature_structs.values()
@@ -421,12 +512,12 @@ def get_feature_structs_from_xml(xml_files, beta, api='vulkan'):
             if renamed_flag not in features:
                 features[renamed_flag] = f.c_type
             else:
-                a = str_removeprefix(features[renamed_flag], 'VkPhysicalDevice')
-                b = str_removeprefix(f.c_type, 'VkPhysicalDevice')
+                a = features[renamed_flag].removeprefix('VkPhysicalDevice')
+                b = f.c_type.removeprefix('VkPhysicalDevice')
                 if (a, flag) not in RENAMED_FEATURES or (b, flag) not in RENAMED_FEATURES:
                     diagnostics.append(f'{a} and {b} both define {flag}')
 
-            unused_renames.pop((str_removeprefix(f.c_type, 'VkPhysicalDevice'), flag), None)
+            unused_renames.pop((f.c_type.removeprefix('VkPhysicalDevice'), flag), None)
 
     for rename in unused_renames:
         diagnostics.append(f'unused rename {rename}')
@@ -457,9 +548,9 @@ def main():
     }
 
     try:
-        with open(args.out_c, 'wb') as f:
+        with open(args.out_c, 'w', encoding='utf-8') as f:
             f.write(TEMPLATE_C.render(**environment))
-        with open(args.out_h, 'wb') as f:
+        with open(args.out_h, 'w', encoding='utf-8') as f:
             f.write(TEMPLATE_H.render(**environment))
     except Exception:
         # In the event there's an error, this uses some helpers from mako

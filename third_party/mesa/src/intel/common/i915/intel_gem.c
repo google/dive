@@ -27,6 +27,9 @@
 #include "i915/intel_engine.h"
 
 #include "drm-uapi/i915_drm.h"
+#include "drm-uapi/dma-buf.h"
+
+#include <fcntl.h>
 
 bool
 i915_gem_create_context(int fd, uint32_t *context_id)
@@ -135,6 +138,12 @@ i915_gem_create_context_engines(int fd,
          .value = flags & INTEL_GEM_CREATE_CONTEXT_EXT_RECOVERABLE_FLAG,
       },
    };
+   struct drm_i915_gem_context_create_ext_setparam low_latency_param = {
+      .param = {
+         .param = I915_CONTEXT_PARAM_LOW_LATENCY,
+         .value = flags & INTEL_GEM_CREATE_CONTEXT_EXT_LOW_LATENCY_FLAG,
+      }
+   };
    struct drm_i915_gem_context_create_ext create = {
       .flags = I915_CONTEXT_CREATE_FLAGS_USE_EXTENSIONS,
    };
@@ -164,7 +173,23 @@ i915_gem_create_context_engines(int fd,
                              &protected_param.base);
    }
 
-   if (intel_ioctl(fd, DRM_IOCTL_I915_GEM_CONTEXT_CREATE_EXT, &create) == -1)
+   if (flags & INTEL_GEM_CREATE_CONTEXT_EXT_LOW_LATENCY_FLAG) {
+      intel_i915_gem_add_ext(&create.extensions,
+                             I915_CONTEXT_CREATE_EXT_SETPARAM,
+                             &low_latency_param.base);
+   }
+
+   int ret;
+   bool retry;
+   do {
+      ret = intel_ioctl(fd, DRM_IOCTL_I915_GEM_CONTEXT_CREATE_EXT, &create);
+      retry = ret == -1 && errno == EIO &&
+              (flags & INTEL_GEM_CREATE_CONTEXT_EXT_PROTECTED_FLAG);
+      if (retry)
+         usleep(1000);
+   } while (retry);
+
+   if (ret)
       return false;
 
    *context_id = create.ctx_id;
@@ -253,10 +278,12 @@ i915_gem_supports_protected_context(int fd)
    bool ret;
 
    errno = 0;
-   if (!i915_gem_get_param(fd, I915_PARAM_PXP_STATUS, &val) && (errno == ENODEV))
-      return false;
-   else
+   if (!i915_gem_get_param(fd, I915_PARAM_PXP_STATUS, &val)) {
+      if (errno == ENODEV)
+         return false;
+   } else {
       return (val > 0);
+   }
 
    /* failed without ENODEV, so older kernels require a creation test */
    ret = i915_gem_create_context_ext(fd,
@@ -284,4 +311,56 @@ i915_gem_can_render_on_fd(int fd)
 {
    int val;
    return intel_gem_get_param(fd, I915_PARAM_CHIPSET_ID, &val) && val > 0;
+}
+
+bool
+i915_gem_supports_dma_buf_sync_file(int fd)
+{
+   uint32_t handle = 0;
+   int err = 0, dma_buf_fd = -1;
+
+   struct drm_i915_gem_create gem_create = {
+      .size = 64 << 10,
+   };
+   if (intel_ioctl(fd, DRM_IOCTL_I915_GEM_CREATE, &gem_create))
+      return false;
+
+   handle = gem_create.handle;
+
+   struct drm_prime_handle handle_to_fd = {
+      .handle = handle,
+      .flags = DRM_CLOEXEC | DRM_RDWR,
+   };
+   err = intel_ioctl(fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &handle_to_fd);
+   if (err)
+      goto fail;
+
+   dma_buf_fd = handle_to_fd.fd;
+
+   struct dma_buf_export_sync_file export = {
+      .flags = DMA_BUF_SYNC_RW,
+      .fd = -1,
+   };
+   err = intel_ioctl(dma_buf_fd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &export);
+   if (err)
+      goto fail;
+
+   struct dma_buf_import_sync_file import = {
+      .flags = DMA_BUF_SYNC_RW,
+      .fd = export.fd,
+   };
+   err = intel_ioctl(dma_buf_fd, DMA_BUF_IOCTL_IMPORT_SYNC_FILE, &import);
+   close(export.fd);
+
+fail:
+   if (dma_buf_fd >= 0)
+      close(dma_buf_fd);
+
+   if (handle != 0) {
+      struct drm_gem_close gem_close = { .handle = handle };
+      err = intel_ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+      assert(err == 0);
+   }
+
+   return !err;
 }

@@ -23,88 +23,18 @@
 
 #include "anv_private.h"
 
-#include "compiler/brw_compiler.h"
-#include "compiler/brw_nir.h"
-#include "compiler/spirv/nir_spirv.h"
+#include "compiler/intel_nir.h"
+#include "compiler/brw/brw_compiler.h"
+#include "compiler/brw/brw_nir.h"
+#include "compiler/nir/nir.h"
+#include "compiler/nir/nir_builder.h"
 #include "dev/intel_debug.h"
+#include "intel/compiler/intel_nir.h"
 #include "util/macros.h"
 
 #include "vk_nir.h"
 
 #include "anv_internal_kernels.h"
-
-#include "shaders/gfx9_generated_draws_spv.h"
-#include "shaders/gfx11_generated_draws_spv.h"
-#include "shaders/query_copy_compute_spv.h"
-#include "shaders/query_copy_fragment_spv.h"
-#include "shaders/memcpy_compute_spv.h"
-
-static bool
-lower_vulkan_descriptors_instr(nir_builder *b, nir_intrinsic_instr *intrin,
-                               void *cb_data)
-{
-   if (intrin->intrinsic != nir_intrinsic_load_vulkan_descriptor)
-      return false;
-
-   nir_instr *res_index_instr = intrin->src[0].ssa->parent_instr;
-   assert(res_index_instr->type == nir_instr_type_intrinsic);
-   nir_intrinsic_instr *res_index_intrin =
-      nir_instr_as_intrinsic(res_index_instr);
-   assert(res_index_intrin->intrinsic == nir_intrinsic_vulkan_resource_index);
-
-   b->cursor = nir_after_instr(&intrin->instr);
-
-   const struct anv_internal_kernel_bind_map *bind_map = cb_data;
-   uint32_t binding = nir_intrinsic_binding(res_index_intrin);
-   assert(binding < bind_map->num_bindings);
-
-   nir_def *desc_value = NULL;
-   if (bind_map->bindings[binding].push_constant) {
-      desc_value =
-         nir_vec2(b,
-                  nir_imm_int(b, binding),
-                  nir_imm_int(b, 0));
-   } else {
-      int push_constant_binding = -1;
-      for (uint32_t i = 0; i < bind_map->num_bindings; i++) {
-         if (bind_map->bindings[i].push_constant) {
-            push_constant_binding = i;
-            break;
-         }
-      }
-      assert(push_constant_binding != -1);
-
-      desc_value =
-         nir_load_ubo(b, 1, 64,
-                      nir_imm_int(b, push_constant_binding),
-                      nir_imm_int(b,
-                                  bind_map->bindings[binding].address_offset),
-                      .align_mul = 8,
-                      .align_offset = 0,
-                      .range_base = 0,
-                      .range = ~0);
-      desc_value =
-         nir_vec4(b,
-                  nir_unpack_64_2x32_split_x(b, desc_value),
-                  nir_unpack_64_2x32_split_y(b, desc_value),
-                  nir_imm_int(b, 0),
-                  nir_imm_int(b, 0));
-   }
-
-   nir_def_rewrite_uses(&intrin->def, desc_value);
-
-   return true;
-}
-
-static bool
-lower_vulkan_descriptors(nir_shader *shader,
-                         const struct anv_internal_kernel_bind_map *bind_map)
-{
-   return nir_shader_intrinsics_pass(shader, lower_vulkan_descriptors_instr,
-                                       nir_metadata_block_index |
-                                       nir_metadata_dominance,
-                                       (void *)bind_map);
-}
 
 static bool
 lower_base_workgroup_id(nir_builder *b, nir_intrinsic_instr *intrin,
@@ -118,77 +48,62 @@ lower_base_workgroup_id(nir_builder *b, nir_intrinsic_instr *intrin,
    return true;
 }
 
-static bool
-lower_load_ubo_to_uniforms(nir_builder *b, nir_intrinsic_instr *intrin,
-                           void *cb_data)
+static void
+check_sends(struct genisa_stats *stats, unsigned send_count)
 {
-   if (intrin->intrinsic != nir_intrinsic_load_ubo)
-      return false;
-
-   b->cursor = nir_instr_remove(&intrin->instr);
-
-   nir_def_rewrite_uses(
-      &intrin->def,
-      nir_load_uniform(b,
-                       intrin->def.num_components,
-                       intrin->def.bit_size,
-                       intrin->src[1].ssa,
-                       .base = 0,
-                       .range = intrin->def.num_components *
-                                intrin->def.bit_size / 8));
-
-   return true;
+   assert(stats->spill_count == 0);
+   assert(stats->fill_count == 0);
+   assert(stats->send_messages == send_count);
 }
 
-static struct anv_shader_bin *
-compile_upload_spirv(struct anv_device *device,
-                     gl_shader_stage stage,
-                     const void *hash_key,
-                     uint32_t hash_key_size,
-                     const struct anv_internal_kernel_bind_map *bind_map,
-                     const uint32_t *spirv_source,
-                     uint32_t spirv_source_size,
-                     uint32_t sends_count_expectation)
+static struct anv_shader_internal *
+compile_shader(struct anv_device *device,
+               enum anv_internal_kernel_name shader_name,
+               mesa_shader_stage stage,
+               const char *name,
+               const void *hash_key,
+               uint32_t hash_key_size,
+               uint32_t sends_count_expectation)
 {
-   struct spirv_to_nir_options spirv_options = {
-      .caps = {
-         .int64 = true,
-      },
-      .ubo_addr_format = nir_address_format_32bit_index_offset,
-      .ssbo_addr_format = nir_address_format_64bit_global_32bit_offset,
-      .environment = NIR_SPIRV_VULKAN,
-      .create_library = false,
-   };
    const nir_shader_compiler_options *nir_options =
-      device->physical->compiler->nir_options[stage];
+      &device->physical->compiler->nir_options[stage];
 
-   nir_shader* nir =
-      vk_spirv_to_nir(&device->vk, spirv_source, spirv_source_size * 4,
-                      stage, "main", 0, NULL, &spirv_options,
-                      nir_options, NULL);
+   nir_builder b = nir_builder_init_simple_shader(stage, nir_options,
+                                                  "%s", name);
 
-   assert(nir != NULL);
+   uint32_t uniform_size =
+      anv_genX(device->info, call_internal_shader)(&b, shader_name);
 
-   nir->info.internal = true;
+   nir_shader *nir = b.shader;
 
-   NIR_PASS_V(nir, nir_lower_vars_to_ssa);
-   NIR_PASS_V(nir, nir_opt_cse);
-   NIR_PASS_V(nir, nir_opt_gcm, true);
-   NIR_PASS_V(nir, nir_opt_peephole_select, 1, false, false);
+   NIR_PASS(_, nir, nir_lower_vars_to_ssa);
+   NIR_PASS(_, nir, nir_opt_cse);
+   NIR_PASS(_, nir, nir_opt_gcm, true);
 
-   NIR_PASS_V(nir, nir_lower_variable_initializers, ~0);
+   nir_opt_peephole_select_options peephole_select_options = {
+      .limit = 1,
+   };
+   NIR_PASS(_, nir, nir_opt_peephole_select, &peephole_select_options);
 
-   NIR_PASS_V(nir, nir_split_var_copies);
-   NIR_PASS_V(nir, nir_split_per_member_structs);
+   NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
+
+   NIR_PASS(_, nir, nir_split_var_copies);
+   NIR_PASS(_, nir, nir_split_per_member_structs);
+
+   if (stage == MESA_SHADER_COMPUTE) {
+      nir->info.workgroup_size[0] = 16;
+      nir->info.workgroup_size[1] = 1;
+      nir->info.workgroup_size[2] = 1;
+   }
 
    struct brw_compiler *compiler = device->physical->compiler;
    struct brw_nir_compiler_opts opts = {};
    brw_preprocess_nir(compiler, nir, &opts);
 
-   NIR_PASS_V(nir, nir_propagate_invariant, false);
+   NIR_PASS(_, nir, nir_propagate_invariant, false);
 
    if (stage == MESA_SHADER_FRAGMENT) {
-      NIR_PASS_V(nir, nir_lower_input_attachments,
+      NIR_PASS(_, nir, nir_lower_input_attachments,
                  &(nir_input_attachment_options) {
                     .use_fragcoord_sysval = true,
                     .use_layer_id_sysval = true,
@@ -197,125 +112,233 @@ compile_upload_spirv(struct anv_device *device,
       nir_lower_compute_system_values_options options = {
          .has_base_workgroup_id = true,
          .lower_cs_local_id_to_index = true,
-         .lower_workgroup_id_to_index = true,
+         .lower_workgroup_id_to_index = mesa_shader_stage_is_mesh(stage),
       };
-      NIR_PASS_V(nir, nir_lower_compute_system_values, &options);
-      NIR_PASS_V(nir, nir_shader_intrinsics_pass, lower_base_workgroup_id,
-                 nir_metadata_block_index | nir_metadata_dominance, NULL);
+      NIR_PASS(_, nir, nir_lower_compute_system_values, &options);
+      NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_base_workgroup_id,
+                 nir_metadata_control_flow, NULL);
    }
 
+   /* Reset sizes before gathering information */
+   nir->global_mem_size = 0;
+   nir->scratch_size = 0;
+   nir->info.shared_size = 0;
    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
 
-   /* Do vectorizing here. For some reason when trying to do it in the back
-    * this just isn't working.
-    */
-   nir_load_store_vectorize_options options = {
-      .modes = nir_var_mem_ubo | nir_var_mem_ssbo,
-      .callback = brw_nir_should_vectorize_mem,
-      .robust_modes = (nir_variable_mode)0,
-   };
-   NIR_PASS_V(nir, nir_opt_load_store_vectorize, &options);
-
-   NIR_PASS_V(nir, lower_vulkan_descriptors, bind_map);
-
-   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ubo,
-              nir_address_format_32bit_index_offset);
-   NIR_PASS_V(nir, nir_lower_explicit_io, nir_var_mem_ssbo,
-              nir_address_format_64bit_global_32bit_offset);
-
-   NIR_PASS_V(nir, nir_copy_prop);
-   NIR_PASS_V(nir, nir_opt_constant_folding);
-   NIR_PASS_V(nir, nir_opt_dce);
-
-   if (stage == MESA_SHADER_COMPUTE) {
-      NIR_PASS_V(nir, nir_shader_intrinsics_pass, lower_load_ubo_to_uniforms,
-                 nir_metadata_block_index | nir_metadata_dominance,
-                 NULL);
-      NIR_PASS_V(nir, brw_nir_lower_cs_intrinsics);
-      nir->num_uniforms = bind_map->push_data_size;
-   }
+   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_constant_folding);
+   NIR_PASS(_, nir, nir_opt_dce);
 
    union brw_any_prog_key key;
    memset(&key, 0, sizeof(key));
 
    union brw_any_prog_data prog_data;
    memset(&prog_data, 0, sizeof(prog_data));
-   prog_data.base.nr_params = nir->num_uniforms / 4;
 
-   brw_nir_analyze_ubo_ranges(compiler, nir, NULL, prog_data.base.ubo_ranges);
+   if (stage == MESA_SHADER_COMPUTE) {
+      NIR_PASS(_, nir, brw_nir_lower_cs_intrinsics,
+                 device->info, &prog_data.cs);
+   }
+
+   /* Do vectorizing here. For some reason when trying to do it in the back
+    * this just isn't working.
+    */
+   nir_load_store_vectorize_options options = {
+      .modes = nir_var_mem_ubo | nir_var_mem_ssbo | nir_var_mem_global,
+      .callback = brw_nir_should_vectorize_mem,
+      .robust_modes = (nir_variable_mode)0,
+   };
+   NIR_PASS(_, nir, nir_opt_load_store_vectorize, &options);
+
+   nir->num_uniforms = uniform_size;
+
+   void *temp_ctx = ralloc_context(NULL);
+
+   prog_data.base.nr_params = nir->num_uniforms / 4;
+   prog_data.base.param = rzalloc_array(temp_ctx, uint32_t, prog_data.base.nr_params);
+
+   brw_nir_analyze_ubo_ranges(compiler, nir, prog_data.base.ubo_ranges);
 
    const unsigned *program;
    if (stage == MESA_SHADER_FRAGMENT) {
-      struct brw_compile_stats stats[3];
+      struct genisa_stats stats[3];
       struct brw_compile_fs_params params = {
          .base = {
             .nir = nir,
             .log_data = device,
             .debug_flag = DEBUG_WM,
             .stats = stats,
+            .mem_ctx = temp_ctx,
          },
          .key = &key.wm,
          .prog_data = &prog_data.wm,
       };
       program = brw_compile_fs(compiler, &params);
 
-      unsigned stat_idx = 0;
-      if (prog_data.wm.dispatch_8) {
-         assert(stats[stat_idx].spills == 0);
-         assert(stats[stat_idx].fills == 0);
-         assert(stats[stat_idx].sends == sends_count_expectation);
-         stat_idx++;
-      }
-      if (prog_data.wm.dispatch_16) {
-         assert(stats[stat_idx].spills == 0);
-         assert(stats[stat_idx].fills == 0);
-         assert(stats[stat_idx].sends == sends_count_expectation);
-         stat_idx++;
-      }
-      if (prog_data.wm.dispatch_32) {
-         assert(stats[stat_idx].spills == 0);
-         assert(stats[stat_idx].fills == 0);
-         assert(stats[stat_idx].sends == sends_count_expectation * 2);
-         stat_idx++;
+      if (!INTEL_DEBUG(DEBUG_SHADER_PRINT)) {
+         unsigned stat_idx = 0;
+         if (prog_data.wm.dispatch_8) {
+            check_sends(&stats[stat_idx++], sends_count_expectation);
+         }
+         if (prog_data.wm.dispatch_16) {
+            check_sends(&stats[stat_idx++], sends_count_expectation);
+         }
+         if (prog_data.wm.dispatch_32) {
+            check_sends(&stats[stat_idx++], sends_count_expectation *
+                                            (device->info->ver < 20 ? 2 : 1));
+         }
       }
    } else {
-      struct brw_compile_stats stats;
+      struct genisa_stats stats;
       struct brw_compile_cs_params params = {
          .base = {
             .nir = nir,
             .stats = &stats,
             .log_data = device,
             .debug_flag = DEBUG_CS,
+            .mem_ctx = temp_ctx,
          },
          .key = &key.cs,
          .prog_data = &prog_data.cs,
       };
       program = brw_compile_cs(compiler, &params);
 
-      assert(stats.spills == 0);
-      assert(stats.fills == 0);
-      assert(stats.sends == sends_count_expectation);
+      if (!INTEL_DEBUG(DEBUG_SHADER_PRINT)) {
+         check_sends(&stats, sends_count_expectation);
+      }
    }
 
-   struct anv_pipeline_bind_map dummy_bind_map;
-   memset(&dummy_bind_map, 0, sizeof(dummy_bind_map));
+   assert(prog_data.base.total_scratch == 0);
+   assert(program != NULL);
+   struct anv_shader_internal *kernel = NULL;
+   if (program == NULL)
+      goto exit;
 
-   struct anv_push_descriptor_info push_desc_info = {};
+   struct anv_pipeline_bind_map empty_bind_map = {};
+   struct anv_push_descriptor_info empty_push_desc_info = {};
+   struct anv_shader_upload_params upload_params = {
+      .stage               = nir->info.stage,
+      .key_data            = hash_key,
+      .key_size            = hash_key_size,
+      .kernel_data         = program,
+      .kernel_size         = prog_data.base.program_size,
+      .prog_data           = &prog_data.base,
+      .prog_data_size      = sizeof(prog_data),
+      .bind_map            = &empty_bind_map,
+      .push_desc_info      = &empty_push_desc_info,
+   };
 
-   struct anv_shader_bin *kernel =
-      anv_device_upload_kernel(device,
-                               device->internal_cache,
-                               nir->info.stage,
-                               hash_key, hash_key_size, program,
-                               prog_data.base.program_size,
-                               &prog_data.base, sizeof(prog_data),
-                               NULL, 0, NULL, &dummy_bind_map,
-                               &push_desc_info,
-                               0 /* dynamic_push_values */);
+   kernel = anv_device_upload_kernel(device, device->internal_cache, &upload_params);
 
+exit:
+   ralloc_free(temp_ctx);
    ralloc_free(nir);
 
    return kernel;
+}
+
+VkResult
+anv_device_get_internal_shader(struct anv_device *device,
+                               enum anv_internal_kernel_name name,
+                               struct anv_shader_internal **out_bin)
+{
+   const struct {
+      struct {
+         char name[40];
+      } key;
+
+      mesa_shader_stage stage;
+
+      uint32_t        send_count;
+   } internal_kernels[] = {
+      [ANV_INTERNAL_KERNEL_GENERATED_DRAWS] = {
+         .key        = {
+            .name    = "anv-generated-indirect-draws",
+         },
+         .stage      = MESA_SHADER_FRAGMENT,
+         .send_count =  (device->info->ver == 9 ?
+                         /* 1 load +
+                          * 4 stores +
+                          * 2 * (2 loads + 2 stores) +
+                          * 3 stores
+                          */
+                         16 :
+                         /* 1 load +
+                          * 2 * (2 loads + 3 stores) +
+                          * 3 stores
+                          */
+                         14) +
+         /* 3 loads + 3 stores */
+         (intel_needs_workaround(device->info, 16011107343) ? 6 : 0) +
+         /* 3 loads + 3 stores */
+         (intel_needs_workaround(device->info, 22018402687) ? 6 : 0),
+      },
+      [ANV_INTERNAL_KERNEL_COPY_QUERY_RESULTS_COMPUTE] = {
+         .key        = {
+            .name    = "anv-copy-query-compute",
+         },
+         .stage      = MESA_SHADER_COMPUTE,
+         .send_count = device->info->verx10 >= 125 ?
+                       9 /* 4 loads + 4 stores + 1 EOT */ :
+                       8 /* 3 loads + 4 stores + 1 EOT */,
+      },
+      [ANV_INTERNAL_KERNEL_COPY_QUERY_RESULTS_FRAGMENT] = {
+         .key        = {
+            .name    = "anv-copy-query-fragment",
+         },
+         .stage      = MESA_SHADER_FRAGMENT,
+         .send_count = 8 /* 3 loads + 4 stores + 1 EOT */,
+      },
+      [ANV_INTERNAL_KERNEL_MEMCPY_COMPUTE] = {
+         .key        = {
+            .name    = "anv-memcpy-compute",
+         },
+         .stage      = MESA_SHADER_COMPUTE,
+         .send_count = device->info->verx10 >= 125 ?
+                       10 /* 5 loads (1 pull constants) + 4 stores + 1 EOT */ :
+                       9 /* 4 loads + 4 stores + 1 EOT */,
+      },
+   };
+
+   struct anv_shader_internal *bin =
+      p_atomic_read(&device->internal_kernels[name]);
+   if (bin != NULL) {
+      *out_bin = bin;
+      return VK_SUCCESS;
+   }
+
+   bin =
+      anv_device_search_for_kernel(device,
+                                   device->internal_cache,
+                                   &internal_kernels[name].key,
+                                   sizeof(internal_kernels[name].key),
+                                   NULL);
+   if (bin != NULL) {
+      p_atomic_set(&device->internal_kernels[name], bin);
+      *out_bin = bin;
+      return VK_SUCCESS;
+   }
+
+   bin = compile_shader(device,
+                        name,
+                        internal_kernels[name].stage,
+                        internal_kernels[name].key.name,
+                        &internal_kernels[name].key,
+                        sizeof(internal_kernels[name].key),
+                        internal_kernels[name].send_count);
+   if (bin == NULL)
+      return vk_errorf(device, VK_ERROR_OUT_OF_HOST_MEMORY,
+                       "Unable to compiler internal kernel");
+
+   /* The cache already has a reference and it's not going anywhere so
+    * there is no need to hold a second reference.
+    */
+   anv_shader_internal_unref(device, bin);
+
+   p_atomic_set(&device->internal_kernels[name], bin);
+
+   *out_bin = bin;
+   return VK_SUCCESS;
 }
 
 VkResult
@@ -326,167 +349,6 @@ anv_device_init_internal_kernels(struct anv_device *device)
                                    true /* wants_dc_cache */,
                                    false /* needs_slm */);
    device->internal_kernels_l3_config = intel_get_l3_config(device->info, w);
-
-   const struct {
-      struct {
-         char name[40];
-      } key;
-
-      gl_shader_stage stage;
-
-      const uint32_t *spirv_data;
-      uint32_t        spirv_size;
-
-      uint32_t        send_count;
-
-      struct anv_internal_kernel_bind_map bind_map;
-   } internal_kernels[] = {
-      [ANV_INTERNAL_KERNEL_GENERATED_DRAWS] = {
-         .key        = {
-            .name    = "anv-generated-indirect-draws",
-         },
-         .stage      = MESA_SHADER_FRAGMENT,
-         .spirv_data = device->info->ver >= 11 ?
-                       gfx11_generated_draws_spv_source :
-                       gfx9_generated_draws_spv_source,
-         .spirv_size = device->info->ver >= 11 ?
-                       ARRAY_SIZE(gfx11_generated_draws_spv_source) :
-                       ARRAY_SIZE(gfx9_generated_draws_spv_source),
-         .send_count = device->info->ver >= 11 ?
-                       11 /* 2 * (2 loads + 3 stores) + 1 store */ :
-                       17 /* 2 * (2 loads + 6 stores) + 1 store */,
-         .bind_map   = {
-            .num_bindings = 4,
-            .bindings     = {
-               {
-                  .address_offset = offsetof(struct anv_generated_indirect_params,
-                                             indirect_data_addr),
-               },
-               {
-                  .address_offset = offsetof(struct anv_generated_indirect_params,
-                                             generated_cmds_addr),
-               },
-               {
-                  .address_offset = offsetof(struct anv_generated_indirect_params,
-                                             draw_ids_addr),
-               },
-               {
-                  .push_constant = true,
-               },
-            },
-            .push_data_size = sizeof(struct anv_generated_indirect_params),
-         },
-      },
-      [ANV_INTERNAL_KERNEL_COPY_QUERY_RESULTS_COMPUTE] = {
-         .key        = {
-            .name    = "anv-copy-query-compute",
-         },
-         .stage      = MESA_SHADER_COMPUTE,
-         .spirv_data = query_copy_compute_spv_source,
-         .spirv_size = ARRAY_SIZE(query_copy_compute_spv_source),
-         .send_count = device->info->verx10 >= 125 ?
-                       9 /* 4 loads + 4 stores + 1 EOT */ :
-                       8 /* 3 loads + 4 stores + 1 EOT */,
-         .bind_map   = {
-            .num_bindings = 3,
-            .bindings     = {
-               {
-                  .address_offset = offsetof(struct anv_query_copy_params,
-                                             query_data_addr),
-               },
-               {
-                  .address_offset = offsetof(struct anv_query_copy_params,
-                                             destination_addr),
-               },
-               {
-                  .push_constant = true,
-               },
-            },
-            .push_data_size = sizeof(struct anv_query_copy_params),
-         },
-      },
-      [ANV_INTERNAL_KERNEL_COPY_QUERY_RESULTS_FRAGMENT] = {
-         .key        = {
-            .name    = "anv-copy-query-fragment",
-         },
-         .stage      = MESA_SHADER_FRAGMENT,
-         .spirv_data = query_copy_fragment_spv_source,
-         .spirv_size = ARRAY_SIZE(query_copy_fragment_spv_source),
-         .send_count = 8 /* 3 loads + 4 stores + 1 EOT */,
-         .bind_map   = {
-            .num_bindings = 3,
-            .bindings     = {
-               {
-                  .address_offset = offsetof(struct anv_query_copy_params,
-                                             query_data_addr),
-               },
-               {
-                  .address_offset = offsetof(struct anv_query_copy_params,
-                                             destination_addr),
-               },
-               {
-                  .push_constant = true,
-               },
-            },
-            .push_data_size = sizeof(struct anv_query_copy_params),
-         },
-      },
-      [ANV_INTERNAL_KERNEL_MEMCPY_COMPUTE] = {
-         .key        = {
-            .name    = "anv-memcpy-compute",
-         },
-         .stage      = MESA_SHADER_COMPUTE,
-         .spirv_data = memcpy_compute_spv_source,
-         .spirv_size = ARRAY_SIZE(memcpy_compute_spv_source),
-         .send_count = device->info->verx10 >= 125 ?
-                       10 /* 5 loads (1 pull constants) + 4 stores + 1 EOT */ :
-                       9 /* 4 loads + 4 stores + 1 EOT */,
-         .bind_map   = {
-            .num_bindings = 3,
-            .bindings     = {
-               {
-                  .address_offset = offsetof(struct anv_memcpy_params,
-                                             src_addr),
-               },
-               {
-                  .address_offset = offsetof(struct anv_memcpy_params,
-                                             dst_addr),
-               },
-               {
-                  .push_constant = true,
-               },
-            },
-            .push_data_size = sizeof(struct anv_memcpy_params),
-         },
-      },
-   };
-
-   for (uint32_t i = 0; i < ARRAY_SIZE(internal_kernels); i++) {
-      device->internal_kernels[i] =
-         anv_device_search_for_kernel(device,
-                                      device->internal_cache,
-                                      &internal_kernels[i].key,
-                                      sizeof(internal_kernels[i].key),
-                                      NULL);
-      if (device->internal_kernels[i] == NULL) {
-         device->internal_kernels[i] =
-            compile_upload_spirv(device,
-                                 internal_kernels[i].stage,
-                                 &internal_kernels[i].key,
-                                 sizeof(internal_kernels[i].key),
-                                 &internal_kernels[i].bind_map,
-                                 internal_kernels[i].spirv_data,
-                                 internal_kernels[i].spirv_size,
-                                 internal_kernels[i].send_count);
-      }
-      if (device->internal_kernels[i] == NULL)
-         return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
-
-      /* The cache already has a reference and it's not going anywhere so
-       * there is no need to hold a second reference.
-       */
-      anv_shader_bin_unref(device, device->internal_kernels[i]);
-   }
 
    return VK_SUCCESS;
 }

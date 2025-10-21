@@ -155,8 +155,28 @@ _mesa_update_valid_to_render_state(struct gl_context *ctx)
          /* If drawing to integer-valued color buffers, there must be an
           * active fragment shader (GL_EXT_texture_integer).
           */
-         if (ctx->DrawBuffer->_IntegerBuffers)
+         if (ctx->DrawBuffer->_IntegerDrawBuffers)
             return;
+      }
+   }
+
+   /**
+    * OVR_multiview
+
+      INVALID_OPERATION is generated if a rendering command is issued and the the
+      number of views in the current draw framebuffer is not equal to the number
+      of views declared in the currently bound program.
+    */
+   struct gl_program *vp = ctx->_Shader->CurrentProgram[MESA_SHADER_VERTEX];
+   if (vp) {
+      unsigned num_views = util_bitcount(vp->info.view_mask);
+      for (int i = 0; i < ctx->DrawBuffer->_NumColorDrawBuffers; i++) {
+         gl_buffer_index buf = ctx->DrawBuffer->_ColorDrawBufferIndexes[i];
+         if (buf != BUFFER_NONE) {
+            struct gl_renderbuffer *rb = ctx->DrawBuffer->Attachment[buf].Renderbuffer;
+            if (rb && rb->rtt_numviews != num_views)
+               return;
+         }
       }
    }
 
@@ -214,7 +234,7 @@ _mesa_update_valid_to_render_state(struct gl_context *ctx)
        * However GL_EXT_float_blend removes this text.
        */
       if (!ctx->Extensions.EXT_float_blend &&
-          (ctx->DrawBuffer->_FP32Buffers & ctx->Color.BlendEnabled))
+          (ctx->DrawBuffer->_FP32DrawBuffers & ctx->Color.BlendEnabled))
          return;
       break;
 
@@ -241,7 +261,7 @@ _mesa_update_valid_to_render_state(struct gl_context *ctx)
       break;
 
    default:
-      unreachable("Invalid API value in _mesa_update_valid_to_render_state");
+      UNREACHABLE("Invalid API value in _mesa_update_valid_to_render_state");
    }
 
    /* From the GL_NV_fill_rectangle spec:
@@ -446,11 +466,11 @@ _mesa_update_valid_to_render_state(struct gl_context *ctx)
       mask &= ~(1 << GL_PATCHES);
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    if (shader->Flags & GLSL_LOG) {
       struct gl_program **prog = shader->CurrentProgram;
 
-      for (unsigned i = 0; i < MESA_SHADER_STAGES; i++) {
+      for (unsigned i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
 	 if (prog[i] == NULL || prog[i]->_Used)
 	    continue;
 
@@ -466,7 +486,7 @@ _mesa_update_valid_to_render_state(struct gl_context *ctx)
 	 _mesa_append_uniforms_to_file(prog[i]);
       }
 
-      for (unsigned i = 0; i < MESA_SHADER_STAGES; i++) {
+      for (unsigned i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
 	 if (prog[i] != NULL)
 	    prog[i]->_Used = GL_TRUE;
       }

@@ -230,7 +230,7 @@ lower_image_cast_instr(nir_builder *b, nir_intrinsic_instr *intr, void *_data)
          nir_type_int : nir_type_float);
 
    if (intr->intrinsic == nir_intrinsic_image_deref_load) {
-      nir_def_rewrite_uses_after(value, new_value, new_value->parent_instr);
+      nir_def_rewrite_uses_after(value, new_value);
       nir_intrinsic_set_dest_type(intr, alu_type);
    } else {
       nir_src_rewrite(&intr->src[3], new_value);
@@ -248,12 +248,12 @@ bool
 d3d12_lower_image_casts(nir_shader *s, struct d3d12_image_format_conversion_info_arr *info)
 {
    bool progress = nir_shader_intrinsics_pass(s, lower_image_cast_instr,
-                                              nir_metadata_block_index | nir_metadata_dominance,
+                                              nir_metadata_control_flow,
                                               info);
 
    if (progress) {
       nir_foreach_image_variable(var, s) {
-         if (var->data.driver_location < info->n_images && info->image_format_conversion[var->data.driver_location].emulated_format != PIPE_FORMAT_NONE) {
+         if ((var->data.driver_location < info->n_images) && info->image_format_conversion[var->data.driver_location].emulated_format != PIPE_FORMAT_NONE) {
             var->data.image.format = info->image_format_conversion[var->data.driver_location].emulated_format;
          }
       }

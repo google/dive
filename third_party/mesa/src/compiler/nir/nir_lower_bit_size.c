@@ -48,6 +48,39 @@ convert_to_bit_size(nir_builder *bld, nir_def *src,
    return nir_convert_to_bit_size(bld, src, type, bit_size);
 }
 
+static nir_def *
+before_conversion(nir_builder *bld, nir_alu_type type, unsigned bit_size, nir_def *def, nir_op op)
+{
+   /* Filtering in opcode of instruction where the LSB of the output are not affected by the MSB of the inputs */
+   switch (op) {
+   case nir_op_iadd:
+   case nir_op_iadd3:
+   case nir_op_iand:
+   case nir_op_imad:
+   case nir_op_imul:
+   case nir_op_ior:
+   case nir_op_ishl:
+   case nir_op_isub:
+   case nir_op_ixor:
+   case nir_op_mov:
+      break;
+   default:
+      return NULL;
+   }
+   if (def->parent_instr->type != nir_instr_type_alu) {
+      return NULL;
+   }
+   nir_alu_instr *alu_instr = nir_def_as_alu(def);
+   if (alu_instr->op != nir_type_conversion_op((nir_alu_type)(type | bit_size),
+                                               (nir_alu_type)(type | def->bit_size),
+                                               nir_rounding_mode_undef) ||
+       alu_instr->src[0].src.ssa->bit_size != bit_size) {
+      return NULL;
+   }
+   /* Handle potential swizzling with 'nir_ssa_for_alu_src' which will be adding a move if needed */
+   return nir_ssa_for_alu_src(bld, alu_instr, 0);
+}
+
 static void
 lower_alu_instr(nir_builder *bld, nir_alu_instr *alu, unsigned bit_size)
 {
@@ -62,15 +95,22 @@ lower_alu_instr(nir_builder *bld, nir_alu_instr *alu, unsigned bit_size)
       nir_def *src = nir_ssa_for_alu_src(bld, alu, i);
 
       nir_alu_type type = nir_op_infos[op].input_types[i];
-      if (nir_alu_type_get_type_size(type) == 0)
-         src = convert_to_bit_size(bld, src, type, bit_size);
+      if (nir_alu_type_get_type_size(type) == 0) {
+         nir_def *src_before_conversion = before_conversion(bld, type, bit_size, src, op);
+         if (src_before_conversion) {
+            src = src_before_conversion;
+         } else {
+            src = convert_to_bit_size(bld, src, type, bit_size);
+         }
+      }
 
       if (i == 1 && (op == nir_op_ishl || op == nir_op_ishr || op == nir_op_ushr ||
                      op == nir_op_bitz || op == nir_op_bitz8 || op == nir_op_bitz16 ||
                      op == nir_op_bitz32 || op == nir_op_bitnz || op == nir_op_bitnz8 ||
                      op == nir_op_bitnz16 || op == nir_op_bitnz32)) {
-         assert(util_is_power_of_two_nonzero(dst_bit_size));
-         src = nir_iand(bld, src, nir_imm_int(bld, dst_bit_size - 1));
+         unsigned src0_bit_size = alu->src[0].src.ssa->bit_size;
+         assert(util_is_power_of_two_nonzero(src0_bit_size));
+         src = nir_iand(bld, src, nir_imm_int(bld, src0_bit_size - 1));
       }
 
       srcs[i] = src;
@@ -111,6 +151,14 @@ lower_alu_instr(nir_builder *bld, nir_alu_instr *alu, unsigned bit_size)
          assert(op == nir_op_uadd_carry);
          lowered_dst = nir_ushr_imm(bld, lowered_dst, dst_bit_size);
       }
+   } else if (op == nir_op_bitfield_reverse) {
+      lowered_dst = nir_bitfield_reverse(bld, srcs[0]);
+
+      /* We need to shift down to the original bit size, else we would just
+       * always return 0.
+       */
+      assert(bit_size > dst_bit_size);
+      lowered_dst = nir_ushr_imm(bld, lowered_dst, bit_size - dst_bit_size);
    } else {
       lowered_dst = nir_build_alu_src_arr(bld, op, srcs);
    }
@@ -131,10 +179,22 @@ lower_intrinsic_instr(nir_builder *b, nir_intrinsic_instr *intrin,
                       unsigned bit_size)
 {
    switch (intrin->intrinsic) {
+   case nir_intrinsic_ballot:
+   case nir_intrinsic_ballot_relaxed: {
+      b->cursor = nir_before_instr(&intrin->instr);
+
+      nir_alu_type type = nir_type_uint;
+      if (intrin->src[0].ssa->bit_size == 1)
+         type = nir_type_bool;
+
+      nir_def *new_src = nir_convert_to_bit_size(b, intrin->src[0].ssa,
+                                                 type, bit_size);
+      nir_src_rewrite(&intrin->src[0], new_src);
+      break;
+   }
+
    case nir_intrinsic_read_invocation:
    case nir_intrinsic_read_first_invocation:
-   case nir_intrinsic_vote_feq:
-   case nir_intrinsic_vote_ieq:
    case nir_intrinsic_shuffle:
    case nir_intrinsic_shuffle_xor:
    case nir_intrinsic_shuffle_up:
@@ -150,10 +210,10 @@ lower_intrinsic_instr(nir_builder *b, nir_intrinsic_instr *intrin,
       assert(old_bit_size < bit_size);
 
       nir_alu_type type = nir_type_uint;
-      if (nir_intrinsic_has_reduction_op(intrin))
+      if (old_bit_size == 1)
+         type = nir_type_bool;
+      else if (nir_intrinsic_has_reduction_op(intrin))
          type = nir_op_infos[nir_intrinsic_reduction_op(intrin)].input_types[0];
-      else if (intrin->intrinsic == nir_intrinsic_vote_feq)
-         type = nir_type_float;
 
       b->cursor = nir_before_instr(&intrin->instr);
       nir_intrinsic_instr *new_intrin =
@@ -163,17 +223,11 @@ lower_intrinsic_instr(nir_builder *b, nir_intrinsic_instr *intrin,
                                                  type, bit_size);
       new_intrin->src[0] = nir_src_for_ssa(new_src);
 
-      if (intrin->intrinsic == nir_intrinsic_vote_feq ||
-          intrin->intrinsic == nir_intrinsic_vote_ieq) {
-         /* These return a Boolean; it's always 1-bit */
-         assert(new_intrin->def.bit_size == 1);
-      } else {
-         /* These return the same bit size as the source; we need to adjust
-          * the size and then we'll have to emit a down-cast.
-          */
-         assert(intrin->src[0].ssa->bit_size == intrin->def.bit_size);
-         new_intrin->def.bit_size = bit_size;
-      }
+      /* These return the same bit size as the source; we need to adjust
+       * the size and then we'll have to emit a down-cast.
+       */
+      assert(intrin->src[0].ssa->bit_size == intrin->def.bit_size);
+      new_intrin->def.bit_size = bit_size;
 
       nir_builder_instr_insert(b, &new_intrin->instr);
 
@@ -187,12 +241,12 @@ lower_intrinsic_instr(nir_builder *b, nir_intrinsic_instr *intrin,
           */
          switch (nir_intrinsic_reduction_op(intrin)) {
          case nir_op_imin: {
-            int64_t int_max = (1ull << (old_bit_size - 1)) - 1;
+            int64_t int_max = u_intN_max(old_bit_size);
             res = nir_imin(b, res, nir_imm_intN_t(b, int_max, bit_size));
             break;
          }
          case nir_op_imax: {
-            int64_t int_min = -(int64_t)(1ull << (old_bit_size - 1));
+            int64_t int_min = u_intN_min(old_bit_size);
             res = nir_imax(b, res, nir_imm_intN_t(b, int_min, bit_size));
             break;
          }
@@ -201,16 +255,32 @@ lower_intrinsic_instr(nir_builder *b, nir_intrinsic_instr *intrin,
          }
       }
 
-      if (intrin->intrinsic != nir_intrinsic_vote_feq &&
-          intrin->intrinsic != nir_intrinsic_vote_ieq)
-         res = nir_u2uN(b, res, old_bit_size);
+      res = nir_convert_to_bit_size(b, res, type, old_bit_size);
 
       nir_def_rewrite_uses(&intrin->def, res);
       break;
    }
 
+   case nir_intrinsic_vote_feq:
+   case nir_intrinsic_vote_ieq: {
+      /* These return a Boolean; it's always 1-bit */
+      assert(intrin->def.bit_size == 1);
+
+      nir_alu_type type = nir_type_uint;
+      if (intrin->intrinsic == nir_intrinsic_vote_feq)
+         type = nir_type_float;
+      else if (intrin->src[0].ssa->bit_size == 1)
+         type = nir_type_bool;
+
+      b->cursor = nir_before_instr(&intrin->instr);
+      nir_def *new_src = nir_convert_to_bit_size(b, intrin->src[0].ssa,
+                                                 type, bit_size);
+      nir_src_rewrite(&intrin->src[0], new_src);
+      break;
+   }
+
    default:
-      unreachable("Unsupported instruction");
+      UNREACHABLE("Unsupported instruction");
    }
 }
 
@@ -233,8 +303,7 @@ lower_phi_instr(nir_builder *b, nir_phi_instr *phi, unsigned bit_size,
    b->cursor = nir_after_instr(&last_phi->instr);
 
    nir_def *new_dest = nir_u2uN(b, &phi->def, old_bit_size);
-   nir_def_rewrite_uses_after(&phi->def, new_dest,
-                              new_dest->parent_instr);
+   nir_def_rewrite_uses_after(&phi->def, new_dest);
 }
 
 static bool
@@ -270,20 +339,13 @@ lower_impl(nir_function_impl *impl,
             break;
 
          default:
-            unreachable("Unsupported instruction type");
+            UNREACHABLE("Unsupported instruction type");
          }
          progress = true;
       }
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool
@@ -331,8 +393,7 @@ split_phi(nir_builder *b, nir_phi_instr *phi)
 
    b->cursor = nir_after_phis(nir_cursor_current_block(b->cursor));
    nir_def *merged = nir_pack_64_2x32_split(b, &lowered[0]->def, &lowered[1]->def);
-   nir_def_rewrite_uses(&phi->def, merged);
-   nir_instr_remove(&phi->instr);
+   nir_def_replace(&phi->def, merged);
 }
 
 static bool
@@ -354,7 +415,6 @@ bool
 nir_lower_64bit_phis(nir_shader *shader)
 {
    return nir_shader_instructions_pass(shader, lower_64bit_phi_instr,
-                                       nir_metadata_block_index |
-                                          nir_metadata_dominance,
+                                       nir_metadata_control_flow,
                                        NULL);
 }

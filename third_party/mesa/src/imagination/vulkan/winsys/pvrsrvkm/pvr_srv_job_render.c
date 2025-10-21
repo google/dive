@@ -36,7 +36,6 @@
 #include "fw-api/pvr_rogue_fwif_rf.h"
 #include "pvr_csb.h"
 #include "pvr_job_render.h"
-#include "pvr_private.h"
 #include "pvr_srv.h"
 #include "pvr_srv_bo.h"
 #include "pvr_srv_bridge.h"
@@ -46,8 +45,10 @@
 #include "pvr_srv_sync_prim.h"
 #include "pvr_types.h"
 #include "pvr_winsys.h"
+#include "util/compiler.h"
 #include "util/log.h"
 #include "util/macros.h"
+#include "util/os_file.h"
 #include "util/u_math.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
@@ -128,7 +129,7 @@ VkResult pvr_srv_winsys_free_list_create(
                                          grow_num_pages,
                                          grow_threshold,
                                          parent_handle,
-#if defined(DEBUG)
+#if MESA_DEBUG
                                          PVR_SRV_TRUE /* free_list_check */,
 #else
                                          PVR_SRV_FALSE /* free_list_check */,
@@ -251,7 +252,7 @@ static uint64_t pvr_rogue_get_cr_multisamplectl_val(uint32_t samples,
 
          break;
       default:
-         unreachable("Unsupported number of samples");
+         UNREACHABLE("Unsupported number of samples");
       }
    }
 
@@ -299,8 +300,8 @@ static uint32_t pvr_rogue_get_ppp_screen_val(uint32_t width, uint32_t height)
    uint32_t val;
 
    pvr_csb_pack (&val, CR_PPP_SCREEN, state) {
-      state.pixxmax = width;
-      state.pixymax = height;
+      state.pixxmax = width - 1;
+      state.pixymax = height - 1;
    }
 
    return val;
@@ -682,7 +683,7 @@ static void pvr_srv_geometry_cmd_ext_stream_load(
       (const uint32_t *)((uint8_t *)stream + ext_stream_offset);
    struct rogue_fwif_ta_regs *const regs = &cmd->regs;
 
-   struct PVRX(KMD_STREAM_EXTHDR_GEOM0) header0;
+   struct ROGUE_KMD_STREAM_EXTHDR_GEOM0 header0;
 
    header0 = pvr_csb_unpack(ext_stream_ptr, KMD_STREAM_EXTHDR_GEOM0);
    ext_stream_ptr += pvr_cmd_length(KMD_STREAM_EXTHDR_GEOM0);
@@ -865,7 +866,7 @@ static void pvr_srv_fragment_cmd_ext_stream_load(
       (const uint32_t *)((uint8_t *)stream + ext_stream_offset);
    struct rogue_fwif_3d_regs *const regs = &cmd->regs;
 
-   struct PVRX(KMD_STREAM_EXTHDR_FRAG0) header0;
+   struct ROGUE_KMD_STREAM_EXTHDR_FRAG0 header0;
 
    header0 = pvr_csb_unpack(ext_stream_ptr, KMD_STREAM_EXTHDR_FRAG0);
    ext_stream_ptr += pvr_cmd_length(KMD_STREAM_EXTHDR_FRAG0);
@@ -921,6 +922,9 @@ pvr_srv_fragment_cmd_init(struct rogue_fwif_cmd_3d *cmd,
 
    if (state->flags.has_spm_scratch_buffer)
       cmd->flags |= ROGUE_FWIF_RENDERFLAGS_SPMSCRATCHBUFFER;
+
+   if (state->flags.disable_pixel_merging)
+      cmd->flags |= ROGUE_FWIF_RENDERFLAGS_DISABLE_PIXELMERGE;
 }
 
 VkResult pvr_srv_winsys_render_submit(
@@ -986,7 +990,7 @@ VkResult pvr_srv_winsys_render_submit(
          to_srv_sync(submit_info->geometry.wait);
 
       if (srv_wait_sync->fd >= 0) {
-         in_geom_fd = dup(srv_wait_sync->fd);
+         in_geom_fd = os_dupfd_cloexec(srv_wait_sync->fd);
          if (in_geom_fd == -1) {
             return vk_errorf(NULL,
                              VK_ERROR_OUT_OF_HOST_MEMORY,
@@ -1001,7 +1005,7 @@ VkResult pvr_srv_winsys_render_submit(
          to_srv_sync(submit_info->fragment.wait);
 
       if (srv_wait_sync->fd >= 0) {
-         in_frag_fd = dup(srv_wait_sync->fd);
+         in_frag_fd = os_dupfd_cloexec(srv_wait_sync->fd);
          if (in_frag_fd == -1) {
             return vk_errorf(NULL,
                              VK_ERROR_OUT_OF_HOST_MEMORY,

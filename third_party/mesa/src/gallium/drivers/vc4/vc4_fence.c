@@ -38,6 +38,7 @@
 #include <fcntl.h>
 
 #include "util/os_file.h"
+#include "util/perf/cpu_trace.h"
 #include "util/u_inlines.h"
 
 #include "vc4_screen.h"
@@ -65,7 +66,8 @@ vc4_fence_reference(struct pipe_screen *pscreen,
         struct vc4_fence *f = vc4_fence(pf);
         struct vc4_fence *old = *p;
 
-        if (pipe_reference(&(*p)->reference, &f->reference)) {
+        if (pipe_reference(old ? &old->reference : NULL,
+                           f ?  &f->reference : NULL)) {
                 if (old->fd >= 0)
                         close(old->fd);
                 free(old);
@@ -81,6 +83,8 @@ vc4_fence_finish(struct pipe_screen *pscreen,
 {
         struct vc4_screen *screen = vc4_screen(pscreen);
         struct vc4_fence *f = vc4_fence(pf);
+
+        MESA_TRACE_FUNC();
 
         if (f->fd >= 0)
                 return sync_wait(f->fd, timeout_ns / 1000000) == 0;
@@ -117,10 +121,14 @@ vc4_fence_create_fd(struct pipe_context *pctx, struct pipe_fence_handle **pf,
 
 static void
 vc4_fence_server_sync(struct pipe_context *pctx,
-                      struct pipe_fence_handle *pfence)
+                      struct pipe_fence_handle *pfence,
+                      uint64_t value)
 {
         struct vc4_context *vc4 = vc4_context(pctx);
         struct vc4_fence *fence = vc4_fence(pfence);
+        assert(!value);
+
+        MESA_TRACE_FUNC();
 
         if (fence->fd >= 0)
                 sync_accumulate("vc4", &vc4->in_fence_fd, fence->fd);
@@ -130,6 +138,8 @@ static int
 vc4_fence_get_fd(struct pipe_screen *screen, struct pipe_fence_handle *pfence)
 {
         struct vc4_fence *fence = vc4_fence(pfence);
+
+        MESA_TRACE_FUNC();
 
         return os_dupfd_cloexec(fence->fd);
 }

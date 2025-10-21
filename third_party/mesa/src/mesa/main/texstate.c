@@ -445,7 +445,7 @@ tex_combine_translate_mode(GLenum envMode, GLenum mode)
    case GL_MODULATE_SIGNED_ADD_ATI: return TEXENV_MODE_MODULATE_SIGNED_ADD_ATI;
    case GL_MODULATE_SUBTRACT_ATI: return TEXENV_MODE_MODULATE_SUBTRACT_ATI;
    default:
-      unreachable("Invalid TexEnv Combine mode");
+      UNREACHABLE("Invalid TexEnv Combine mode");
    }
 }
 
@@ -469,7 +469,7 @@ tex_combine_translate_source(GLenum src)
    case GL_ZERO: return TEXENV_SRC_ZERO;
    case GL_ONE: return TEXENV_SRC_ONE;
    default:
-      unreachable("Invalid TexEnv Combine argument source");
+      UNREACHABLE("Invalid TexEnv Combine argument source");
    }
 }
 
@@ -483,7 +483,7 @@ tex_combine_translate_operand(GLenum operand)
    case GL_SRC_ALPHA: return TEXENV_OPR_ALPHA;
    case GL_ONE_MINUS_SRC_ALPHA: return TEXENV_OPR_ONE_MINUS_ALPHA;
    default:
-      unreachable("Invalid TexEnv Combine argument source");
+      UNREACHABLE("Invalid TexEnv Combine argument source");
    }
 }
 
@@ -541,7 +541,7 @@ update_tex_combine(struct gl_context *ctx,
    }
    else {
       const struct gl_texture_object *texObj = texUnit->_Current;
-      GLenum format = texObj->Image[0][texObj->Attrib.BaseLevel]->_BaseFormat;
+      GLenum format = _mesa_base_tex_image(texObj)->_BaseFormat;
 
       if (format == GL_DEPTH_COMPONENT || format == GL_DEPTH_STENCIL_EXT) {
          format = texObj->Attrib.DepthMode;
@@ -704,6 +704,8 @@ update_single_program_texture(struct gl_context *ctx, struct gl_program *prog,
     * Mesa implements this by creating a hidden texture object with a pixel of
     * that value.
     */
+   if (MESA_DEBUG_FLAGS & DEBUG_FALLBACK_TEXTURE)
+      _mesa_debug(NULL, "Using fallback texture for target %u\n", target_index);
    texObj = _mesa_get_fallback_texture(ctx, target_index, !!(prog->ShadowSamplers & BITFIELD_BIT(unit)));
    assert(texObj);
 
@@ -732,7 +734,7 @@ update_program_texture_state(struct gl_context *ctx, struct gl_program **prog,
 {
    int i;
 
-   for (i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       GLbitfield mask;
       GLuint s;
 
@@ -891,7 +893,7 @@ fix_missing_textures_for_atifs(struct gl_context *ctx,
 GLbitfield
 _mesa_update_texture_state(struct gl_context *ctx)
 {
-   struct gl_program *prog[MESA_SHADER_STAGES];
+   struct gl_program *prog[MESA_SHADER_MESH_STAGES];
    int i;
    int old_max_unit = ctx->Texture._MaxEnabledTexImageUnit;
    BITSET_DECLARE(enabled_texture_units, MAX_COMBINED_TEXTURE_IMAGE_UNITS);

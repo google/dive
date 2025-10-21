@@ -43,10 +43,16 @@ mir_is_ubo(midgard_instruction *ins)
 }
 
 static bool
-mir_is_direct_aligned_ubo(midgard_instruction *ins)
+mir_is_pushable_ubo(compiler_context *ctx, midgard_instruction *ins)
 {
-   return mir_is_ubo(ins) && !(ins->constants.u32[0] & 0xF) &&
-          (ins->src[1] == ~0) && (ins->src[2] == ~0);
+   if (!mir_is_ubo(ins))
+      return false;
+
+   unsigned ubo = midgard_unpack_ubo_index_imm(ins->load_store);
+
+   return !(ins->constants.u32[0] & 0xF) &&
+          (ins->src[1] == ~0) && (ins->src[2] == ~0) &&
+          (ctx->inputs->pushable_ubos & BITFIELD_BIT(ubo));
 }
 
 /* Represents use data for a single UBO */
@@ -74,13 +80,22 @@ mir_analyze_ranges(compiler_context *ctx)
    res.blocks = calloc(res.nr_blocks, sizeof(struct mir_ubo_block));
 
    mir_foreach_instr_global(ctx, ins) {
-      if (!mir_is_direct_aligned_ubo(ins))
+      if (!mir_is_pushable_ubo(ctx, ins))
          continue;
 
       unsigned ubo = midgard_unpack_ubo_index_imm(ins->load_store);
       unsigned offset = ins->constants.u32[0] / 16;
 
       assert(ubo < res.nr_blocks);
+
+      /* Blend constants are always loaded from the sysval UBO in blend shaders,
+       * do not push them. */
+      if (ctx->stage == MESA_SHADER_FRAGMENT) {
+         /* PAN_UBO_SYSVALS from the gallium driver */
+         unsigned sysval_ubo = 1;
+         if(ubo == sysval_ubo && offset == 0)
+            continue;
+      }
 
       if (offset < MAX_UBO_QWORDS)
          BITSET_SET(res.blocks[ubo].uses, offset);
@@ -94,7 +109,7 @@ mir_analyze_ranges(compiler_context *ctx)
  * sophisticated. Select from the last UBO first to prioritize sysvals. */
 
 static void
-mir_pick_ubo(struct panfrost_ubo_push *push, struct mir_ubo_analysis *analysis,
+mir_pick_ubo(struct pan_ubo_push *push, struct mir_ubo_analysis *analysis,
              unsigned max_qwords)
 {
    unsigned max_words = MIN2(PAN_MAX_PUSH, max_qwords * 4);
@@ -109,7 +124,7 @@ mir_pick_ubo(struct panfrost_ubo_push *push, struct mir_ubo_analysis *analysis,
             return;
 
          for (unsigned offs = 0; offs < 4; ++offs) {
-            struct panfrost_ubo_word word = {
+            struct pan_ubo_word word = {
                .ubo = ubo,
                .offset = (vec4 * 16) + (offs * 4),
             };
@@ -187,7 +202,7 @@ mir_estimate_pressure(compiler_context *ctx)
    mir_foreach_block(ctx, _block) {
       midgard_block *block = (midgard_block *)_block;
       uint16_t *live =
-         mem_dup(block->base.live_out, ctx->temp_count * sizeof(uint16_t));
+         mem_dup(block->live_out, ctx->temp_count * sizeof(uint16_t));
 
       mir_foreach_instr_in_block_rev(block, ins) {
          unsigned count = mir_count_live(live, ctx->temp_count);
@@ -238,8 +253,7 @@ static BITSET_WORD *
 mir_special_indices(compiler_context *ctx)
 {
    mir_compute_temp_count(ctx);
-   BITSET_WORD *bset =
-      calloc(BITSET_WORDS(ctx->temp_count), sizeof(BITSET_WORD));
+   BITSET_WORD *bset = BITSET_CALLOC(ctx->temp_count);
 
    mir_foreach_instr_global(ctx, ins) {
       /* Look for special instructions */
@@ -265,7 +279,7 @@ mir_special_indices(compiler_context *ctx)
 void
 midgard_promote_uniforms(compiler_context *ctx)
 {
-   if (ctx->inputs->no_ubo_to_push) {
+   if (!ctx->inputs->pushable_ubos) {
       /* If nothing is pushed, all UBOs need to be uploaded
        * conventionally */
       ctx->ubo_mask = ~0;
@@ -293,7 +307,7 @@ midgard_promote_uniforms(compiler_context *ctx)
       unsigned ubo = midgard_unpack_ubo_index_imm(ins->load_store);
       unsigned qword = ins->constants.u32[0] / 16;
 
-      if (!mir_is_direct_aligned_ubo(ins)) {
+      if (!mir_is_pushable_ubo(ctx, ins)) {
          if (ins->src[1] == ~0)
             ctx->ubo_mask |= BITSET_BIT(ubo);
          else
@@ -336,7 +350,7 @@ midgard_promote_uniforms(compiler_context *ctx)
 
          uint16_t rounded = mir_round_bytemask_up(mir_bytemask(ins), type_size);
          mir_set_bytemask(&mov, rounded);
-         mir_insert_instruction_before(ctx, ins, mov);
+         mir_insert_instruction_before(ctx, ins, &mov);
       } else {
          mir_rewrite_index_src(ctx, ins->dest, promoted);
       }

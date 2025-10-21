@@ -1,24 +1,6 @@
 /*
  * Copyright © 2018-2019 Igalia S.L.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "compiler/nir/nir_builder.h"
@@ -155,16 +137,17 @@ scalarize_load(nir_intrinsic_instr *intrinsic, nir_builder *b)
 
    nir_def *descriptor = intrinsic->src[0].ssa;
    nir_def *offset = intrinsic->src[1].ssa;
-   nir_def *new_offset = intrinsic->src[2].ssa;
-   unsigned comp_size = intrinsic->def.bit_size / 8;
+   nir_def *record = nir_channel(b, offset, 0);
+   nir_def *record_offset = nir_channel(b, offset, 1);
+
    for (unsigned i = 0; i < intrinsic->def.num_components; i++) {
       results[i] =
-         nir_load_ssbo_ir3(b, 1, intrinsic->def.bit_size, descriptor,
-                           nir_iadd_imm(b, offset, i * comp_size),
-                           nir_iadd_imm(b, new_offset, i),
-                           .access = nir_intrinsic_access(intrinsic),
-                           .align_mul = nir_intrinsic_align_mul(intrinsic),
-                           .align_offset = nir_intrinsic_align_offset(intrinsic));
+         nir_load_uav_ir3(b, 1, intrinsic->def.bit_size, descriptor,
+                          nir_vec2(b, record, 
+                                   nir_iadd_imm(b, record_offset, i)),
+                          .access = nir_intrinsic_access(intrinsic),
+                          .align_mul = nir_intrinsic_align_mul(intrinsic),
+                          .align_offset = nir_intrinsic_align_offset(intrinsic));
    }
 
    nir_def *result = nir_vec(b, results, intrinsic->def.num_components);
@@ -189,6 +172,16 @@ lower_offset_for_ssbo(nir_intrinsic_instr *intrinsic, nir_builder *b,
        (!has_dest && intrinsic->src[0].ssa->bit_size == 16))
       shift = 1;
 
+   /* for 8-bit ssbo access, offset is in 8-bit words instead of dwords */
+   if ((has_dest && intrinsic->def.bit_size == 8) ||
+       (!has_dest && intrinsic->src[0].ssa->bit_size == 8))
+      shift = 0;
+
+   if ((has_dest && intrinsic->def.bit_size == 64) ||
+       (!has_dest && intrinsic->src[0].ssa->bit_size == 64)) {
+      shift = 1;
+   }
+
    /* Here we create a new intrinsic and copy over all contents from the old
     * one. */
 
@@ -201,16 +194,6 @@ lower_offset_for_ssbo(nir_intrinsic_instr *intrinsic, nir_builder *b,
    new_intrinsic = nir_intrinsic_instr_create(b->shader, ir3_ssbo_opcode);
 
    nir_def *offset = intrinsic->src[offset_src_idx].ssa;
-
-   /* Since we don't have value range checking, we first try to propagate
-    * the division by 4 ('offset >> 2') into another bit-shift instruction that
-    * possibly defines the offset. If that's the case, we emit a similar
-    * instructions adjusting (merging) the shift value.
-    *
-    * Here we use the convention that shifting right is negative while shifting
-    * left is positive. So 'x / 4' ~ 'x >> 2' or 'x << -2'.
-    */
-   nir_def *new_offset = ir3_nir_try_propagate_bit_shift(b, offset, -shift);
 
    /* The new source that will hold the dword-offset is always the last
     * one for every intrinsic.
@@ -232,21 +215,30 @@ lower_offset_for_ssbo(nir_intrinsic_instr *intrinsic, nir_builder *b,
 
    new_intrinsic->num_components = intrinsic->num_components;
 
-   /* If we managed to propagate the division by 4, just use the new offset
-    * register and don't emit the SHR.
+   int cur_shift = nir_intrinsic_offset_shift(intrinsic);
+   int extra_shift = shift - cur_shift;
+
+   /* TODO if the intrinsic has a BASE, we have to be careful when inserting a
+    * right shift as the offset may be negative. So we'd have to add the BASE to
+    * the offset before shifting. For now, as our input intrinsics don't support
+    * BASE, we don't have to implement this yet.
     */
-   if (new_offset)
-      offset = new_offset;
-   else
-      offset = nir_ushr_imm(b, offset, shift);
+   assert(!nir_intrinsic_has_base(intrinsic));
+
+   if (extra_shift > 0) {
+      offset = nir_ushr_imm(b, offset, extra_shift);
+   } else {
+      offset = nir_ishl_imm(b, offset, -extra_shift);
+   }
 
    /* Insert the new intrinsic right before the old one. */
    nir_builder_instr_insert(b, &new_intrinsic->instr);
 
    /* Replace the last source of the new intrinsic by the result of
-    * the offset divided by 4.
+    * the offset shifted to the correct unit.
     */
    nir_src_rewrite(target_src, offset);
+   nir_intrinsic_set_offset_shift(new_intrinsic, shift);
 
    if (has_dest) {
       /* Replace the uses of the original destination by that
@@ -257,12 +249,6 @@ lower_offset_for_ssbo(nir_intrinsic_instr *intrinsic, nir_builder *b,
 
    /* Finally remove the original intrinsic. */
    nir_instr_remove(&intrinsic->instr);
-
-   if (new_intrinsic->intrinsic == nir_intrinsic_load_ssbo_ir3 &&
-       (nir_intrinsic_access(new_intrinsic) & ACCESS_CAN_REORDER) &&
-       ir3_bindless_resource(new_intrinsic->src[0]) &&
-       new_intrinsic->num_components > 1)
-      scalarize_load(new_intrinsic, b);
 
    return true;
 }
@@ -287,6 +273,15 @@ lower_io_offsets_block(nir_block *block, nir_builder *b, void *mem_ctx)
          progress |= lower_offset_for_ssbo(intr, b, (unsigned)ir3_intrinsic,
                                            offset_src_idx);
       }
+
+      if (intr->intrinsic == nir_intrinsic_load_uav_ir3 &&
+          (nir_intrinsic_access(intr) & ACCESS_CAN_REORDER) &&
+          ir3_bindless_resource(intr->src[0]) &&
+          intr->num_components > 1) {
+         b->cursor = nir_before_instr(instr);
+         scalarize_load(intr, b);
+         progress = true;
+      }
    }
 
    return progress;
@@ -303,12 +298,7 @@ lower_io_offsets_func(nir_function_impl *impl)
       progress |= lower_io_offsets_block(block, &b, mem_ctx);
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl,
-                            nir_metadata_block_index | nir_metadata_dominance);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool
@@ -322,4 +312,51 @@ ir3_nir_lower_io_offsets(nir_shader *shader)
    }
 
    return progress;
+}
+
+uint32_t
+ir3_nir_max_imm_offset(nir_intrinsic_instr *intrin, const void *data)
+{
+   const struct ir3_compiler *compiler = data;
+
+   if (!compiler->has_ssbo_imm_offsets)
+      return 0;
+
+   switch (intrin->intrinsic) {
+   case nir_intrinsic_load_ssbo_ir3:
+      if ((nir_intrinsic_access(intrin) & ACCESS_CAN_REORDER) &&
+          !(compiler->options.storage_8bit && intrin->def.bit_size == 8))
+         return 255; /* isam.v */
+      return 127;    /* ldib.b */
+   case nir_intrinsic_store_ssbo_ir3:
+      return 127; /* stib.b */
+   default:
+      return 0;
+   }
+}
+
+bool
+ir3_nir_allow_base_offset_wrap(nir_intrinsic_instr *intrin, const void *data)
+{
+   return true;
+}
+
+unsigned
+ir3_nir_max_offset_shift(nir_intrinsic_instr *intr, const void *data)
+{
+   nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
+   assert(util_bitcount(deref->modes) == 1);
+
+   switch (deref->modes) {
+   case nir_var_mem_ssbo:
+      /* SSBO accesses can be up to dword shifted for 32-bit accesses. Request
+       * that we always try to align up to that, so that vectorization can try
+       * to build accesses across bit sizes.  We'll legalize the shift for the
+       * actual access size at the end.
+       */
+      return 2;
+
+   default:
+      return 0;
+   }
 }

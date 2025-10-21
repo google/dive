@@ -26,7 +26,7 @@
 #define SHADER_INFO_H
 
 #include "util/bitset.h"
-#include "util/sha1/sha1.h"
+#include "util/mesa-blake3.h"
 #include "shader_enums.h"
 #include <stdint.h>
 
@@ -37,98 +37,6 @@ extern "C" {
 #define MAX_XFB_BUFFERS        4
 #define MAX_INLINABLE_UNIFORMS 4
 
-struct spirv_supported_capabilities {
-   bool address;
-   bool amd_fragment_mask;
-   bool amd_gcn_shader;
-   bool amd_image_gather_bias_lod;
-   bool amd_image_read_write_lod;
-   bool amd_shader_ballot;
-   bool amd_shader_explicit_vertex_parameter;
-   bool amd_trinary_minmax;
-   bool atomic_storage;
-   bool demote_to_helper_invocation;
-   bool derivative_group;
-   bool descriptor_array_dynamic_indexing;
-   bool descriptor_array_non_uniform_indexing;
-   bool descriptor_indexing;
-   bool device_group;
-   bool draw_parameters;
-   bool float_controls;
-   bool float16_atomic_add;
-   bool float16_atomic_min_max;
-   bool float16;
-   bool float32_atomic_add;
-   bool float32_atomic_min_max;
-   bool float64_atomic_add;
-   bool float64_atomic_min_max;
-   bool float64;
-   bool fragment_barycentric;
-   bool fragment_density;
-   bool fragment_fully_covered;
-   bool fragment_shader_pixel_interlock;
-   bool fragment_shader_sample_interlock;
-   bool fragment_shading_rate;
-   bool generic_pointers;
-   bool geometry_streams;
-   bool groups;
-   bool image_atomic_int64;
-   bool image_ms_array;
-   bool image_read_without_format;
-   bool image_write_without_format;
-   bool int16;
-   bool int64_atomics;
-   bool int64;
-   bool int8;
-   bool integer_functions2;
-   bool kernel_image_read_write;
-   bool kernel_image;
-   bool kernel;
-   bool linkage;
-   bool literal_sampler;
-   bool mesh_shading_nv;
-   bool mesh_shading;
-   bool min_lod;
-   bool multiview;
-   bool per_view_attributes_nv;
-   bool physical_storage_buffer_address;
-   bool post_depth_coverage;
-   bool printf;
-   bool ray_cull_mask;
-   bool ray_query;
-   bool ray_tracing;
-   bool ray_traversal_primitive_culling;
-   bool ray_tracing_position_fetch;
-   bool runtime_descriptor_array;
-   bool shader_clock;
-   bool shader_enqueue;
-   bool shader_viewport_index_layer;
-   bool shader_viewport_mask_nv;
-   bool sparse_residency;
-   bool stencil_export;
-   bool storage_16bit;
-   bool storage_8bit;
-   bool storage_image_ms;
-   bool subgroup_arithmetic;
-   bool subgroup_ballot;
-   bool subgroup_basic;
-   bool subgroup_dispatch;
-   bool subgroup_quad;
-   bool subgroup_rotate;
-   bool subgroup_shuffle;
-   bool subgroup_uniform_control_flow;
-   bool subgroup_vote;
-   bool tessellation;
-   bool transform_feedback;
-   bool variable_pointers;
-   bool vk_memory_model_device_scope;
-   bool vk_memory_model;
-   bool workgroup_memory_explicit_layout;
-
-   bool intel_subgroup_shuffle;
-   bool intel_subgroup_buffer_block_io;
-};
-
 typedef struct shader_info {
    const char *name;
 
@@ -138,16 +46,20 @@ typedef struct shader_info {
    /* Shader is internal, and should be ignored by things like NIR_DEBUG=print */
    bool internal;
 
-   /* SHA1 of the original source, used by shader detection in drivers. */
-   uint8_t source_sha1[SHA1_DIGEST_LENGTH];
+   /* BLAKE3 of the original source, used by shader detection in drivers. */
+   blake3_hash source_blake3;
 
    /** The shader stage, such as MESA_SHADER_VERTEX. */
-   gl_shader_stage stage:8;
+   mesa_shader_stage stage:8;
 
-   /** The shader stage in a non SSO linked program that follows this stage,
-     * such as MESA_SHADER_FRAGMENT.
-     */
-   gl_shader_stage next_stage:8;
+   /* If the shader is linked, this is the previous shader, else MESA_SHADER_NONE. */
+   mesa_shader_stage prev_stage:8;
+
+   /* If the shader is linked, this is the next shader, else MESA_SHADER_NONE. */
+   mesa_shader_stage next_stage:8;
+
+   /* Whether the previous stage has XFB if the shader is linked (prev_stage != NONE). */
+   bool prev_stage_has_xfb;
 
    /* Number of textures used by this shader */
    uint8_t num_textures;
@@ -166,12 +78,20 @@ typedef struct shader_info {
 
    /* Which inputs are actually read */
    uint64_t inputs_read;
+   /* Which inputs occupy 2 slots. */
+   uint64_t dual_slot_inputs;
    /* Which outputs are actually written */
    uint64_t outputs_written;
    /* Which outputs are actually read */
    uint64_t outputs_read;
    /* Which system values are actually read */
    BITSET_DECLARE(system_values_read, SYSTEM_VALUE_MAX);
+
+   /* If known_interpolation_qualifiers is set, bitsets mapping locations to
+    * interpolation qualifiers perspective/linear/flat.
+    */
+   uint64_t perspective_varyings;
+   uint64_t linear_varyings;
 
    /* Which I/O is per-primitive, for read/written information combine with
     * the fields above.
@@ -181,6 +101,8 @@ typedef struct shader_info {
 
    /* Which I/O is per-view */
    uint64_t per_view_outputs;
+   /* Enabled view mask, for per-view outputs */
+   uint32_t view_mask;
 
    /* Which 16-bit inputs and outputs are used corresponding to
     * VARYING_SLOT_VARn_16BIT.
@@ -189,7 +111,8 @@ typedef struct shader_info {
    uint16_t outputs_written_16bit;
    uint16_t outputs_read_16bit;
    uint16_t inputs_read_indirectly_16bit;
-   uint16_t outputs_accessed_indirectly_16bit;
+   uint16_t outputs_read_indirectly_16bit;
+   uint16_t outputs_written_indirectly_16bit;
 
    /* Which patch inputs are actually read */
    uint32_t patch_inputs_read;
@@ -201,11 +124,13 @@ typedef struct shader_info {
    /* Which inputs are read indirectly (subset of inputs_read) */
    uint64_t inputs_read_indirectly;
    /* Which outputs are read or written indirectly */
-   uint64_t outputs_accessed_indirectly;
+   uint64_t outputs_read_indirectly;
+   uint64_t outputs_written_indirectly;
    /* Which patch inputs are read indirectly (subset of patch_inputs_read) */
-   uint64_t patch_inputs_read_indirectly;
+   uint32_t patch_inputs_read_indirectly;
    /* Which patch outputs are read or written indirectly */
-   uint64_t patch_outputs_accessed_indirectly;
+   uint32_t patch_outputs_read_indirectly;
+   uint32_t patch_outputs_written_indirectly;
 
    /** Bitfield of which textures are used */
    BITSET_DECLARE(textures_used, 128);
@@ -224,7 +149,7 @@ typedef struct shader_info {
    BITSET_DECLARE(msaa_images, 64);
 
    /* SPV_KHR_float_controls: execution mode for floating point ops */
-   uint16_t float_controls_execution_mode;
+   uint32_t float_controls_execution_mode;
 
    /**
     * Size of shared variables accessed by compute/task/mesh shaders.
@@ -247,13 +172,38 @@ typedef struct shader_info {
     */
    uint16_t workgroup_size[3];
 
-   enum gl_subgroup_size subgroup_size;
    uint8_t num_subgroups;
+
+   /* The value reported in gl_SubgroupSize.
+    * Must be a power of two between 1 and 128
+    * or 0 if still unknown.
+    */
+   uint8_t api_subgroup_size;
+
+   /* The maximum subgroup size dispatched by the hw.
+    * Must be a power of two between 1 and 128.
+    * Must not be larger than api_subgroup_size,
+    * (unless api_subgroup_size is 0).
+    */
+   uint8_t max_subgroup_size;
+
+   /* The minimum subgroup size dispatched by the hw.
+    * Must be a power of two between 1 and 128.
+    * Must not be larger than max_subgroup_size.
+    */
+   uint8_t min_subgroup_size;
+
+   /* api_subgroup_size must appear to be uniform in
+    * the current stage for a whole draw.
+    * There is no equivalent for dispatches,
+    * because it would be required to be true.
+    */
+   bool api_subgroup_size_draw_uniform:1;
 
    /**
     * Uses subgroup intrinsics which can communicate across a quad.
     */
-   bool uses_wide_subgroup_intrinsics;
+   bool uses_wide_subgroup_intrinsics:1;
 
    /* Transform feedback buffer strides in dwords, max. 1K - 4. */
    uint8_t xfb_stride[MAX_XFB_BUFFERS];
@@ -273,16 +223,6 @@ typedef struct shader_info {
    /* Whether texture size, levels, or samples is queried. */
    bool uses_resource_info_query:1;
 
-   /**
-    * True if this shader uses the fddx/fddy opcodes.
-    *
-    * Note that this does not include the "fine" and "coarse" variants.
-    */
-   bool uses_fddx_fddy:1;
-
-   /** Has divergence analysis ever been run? */
-   bool divergence_analysis_run:1;
-
    /* Bitmask of bit-sizes used with ALU instructions. */
    uint8_t bit_sizes_float;
    uint8_t bit_sizes_int;
@@ -292,6 +232,11 @@ typedef struct shader_info {
 
    /* Whether or not separate shader objects were used */
    bool separate_shader:1;
+
+   /* Whether perspective_varyings/linear_varyings can be trusted. This depends
+    * on what this shader was linked with, as well as the API.
+    */
+   bool known_interpolation_qualifiers:1;
 
    /** Was this shader linked with any transform feedback varyings? */
    bool has_transform_feedback_varyings:1;
@@ -339,6 +284,27 @@ typedef struct shader_info {
    bool workgroup_size_variable:1;
 
    /**
+    * Whether the shader uses printf instructions.
+    */
+   bool uses_printf:1;
+
+   /**
+    * VK_KHR_shader_maximal_reconvergence
+    */
+   bool maximally_reconverges:1;
+
+   /* Use ACO instead of LLVM on AMD. */
+   bool use_aco_amd:1;
+
+   /**
+    * Whether image intrinsics have been lowered to global intrinsics
+    *
+    * This is potentially useful on some implementation that need to know that
+    * an image barrier needs to include global barriers due to the lowering.
+    */
+   bool use_lowered_image_to_global:1;
+
+   /**
      * Set if this shader uses legacy (DX9 or ARB assembly) math rules.
      *
      * From the ARB_fragment_program specification:
@@ -362,6 +328,18 @@ typedef struct shader_info {
      */
    bool use_legacy_math_rules;
 
+   /*
+    * Arrangement of invocations used to calculate derivatives in
+    * compute/task/mesh shaders.  From KHR_compute_shader_derivatives.
+    */
+   enum gl_derivative_group derivative_group:2;
+
+   /* Assume that data races do not happen. If this isn't set, data races
+    * read/write undefined values, but do not cause undefined behaviour. This
+    * is set when the Vulkan memory model is used.
+    */
+   bool assume_no_data_races:1;
+
    union {
       struct {
          /* Which inputs are doubles */
@@ -374,6 +352,9 @@ typedef struct shader_info {
           */
          uint8_t blit_sgprs_amd:4;
 
+         /* Software TES executing as HW VS */
+         bool tes_agx:1;
+
          /* True if the shader writes position in window space coordinates pre-transform */
          bool window_space_position:1;
 
@@ -383,10 +364,10 @@ typedef struct shader_info {
 
       struct {
          /** The output primitive type */
-         uint16_t output_primitive;
+         enum mesa_prim output_primitive;
 
          /** The input primitive type */
-         uint16_t input_primitive;
+         enum mesa_prim input_primitive;
 
          /** The maximum number of vertices the geometry shader might write. */
          uint16_t vertices_out;
@@ -406,24 +387,41 @@ typedef struct shader_info {
 
       struct {
          bool uses_discard:1;
-         bool uses_demote:1;
          bool uses_fbfetch_output:1;
          bool fbfetch_coherent:1;
          bool color_is_dual_source:1;
 
          /**
-          * True if this fragment shader requires helper invocations.  This
-          * can be caused by the use of ALU derivative ops, texture
-          * instructions which do implicit derivatives, and the use of quad
-          * subgroup operations.
+          * True if this fragment shader requires full quad invocations. This
+          * forces the shader to always behave as-if quad groups start with
+          * four active invocations, even if there are no derivatives or quad
+          * operations. Because helper invocations cannot have side effects,
+          * this mainly impacts subgroup operations such as ballot().
           */
-         bool needs_quad_helper_invocations:1;
+         bool require_full_quads:1;
 
          /**
-          * True if this fragment shader requires helper invocations for
-          * all subgroup operations, not just quad ops and derivatives.
+          * Whether the derivative group must be equivalent to the quad group.
           */
-         bool needs_all_helper_invocations:1;
+         bool quad_derivatives:1;
+
+         /**
+          * True if this fragment shader requires helper invocations used by
+          * coarse derivatives. This can be caused by the use of ALU
+          * derivative ops, texture instructions which do implicit
+          * derivatives, the use of quad subgroup operations or if the shader
+          * requires full quads.
+          */
+         bool needs_coarse_quad_helper_invocations:1;
+
+         /**
+          * True if this fragment shader requires helper invocations for all
+          * four fragments in the quad. This can be caused by all the same
+          * things as needs_coarse_quad_helper_invocations, except that coarse
+          * derivatives don't count as they usually only use 3 out of the 4
+          * fragments in a quad.
+          */
+         bool needs_full_quad_helper_invocations:1;
 
          /**
           * Whether any inputs are declared with the "sample" qualifier.
@@ -510,18 +508,27 @@ typedef struct shader_info {
       struct {
          uint16_t workgroup_size_hint[3];
 
-         uint8_t user_data_components_amd:3;
-
-         /*
-          * Arrangement of invocations used to calculate derivatives in a compute
-          * shader.  From NV_compute_shader_derivatives.
-          */
-         enum gl_derivative_group derivative_group:2;
+         uint8_t user_data_components_amd:4;
 
          /*
           * If the shader might run with shared mem on top of `shared_size`.
           */
          bool has_variable_shared_mem:1;
+
+         /**
+          * If the shader has any use of a cooperative matrix. From
+          * SPV_KHR_cooperative_matrix.
+          */
+         bool has_cooperative_matrix:1;
+
+         /**
+          * Number of bytes of shared imageblock memory per thread. Currently,
+          * this requires that the workgroup size is 32x32x1 and that
+          * shared_size = 0. These requirements could be lifted in the future.
+          * However, there is no current OpenGL/Vulkan API support for
+          * imageblocks. This is only used internally to accelerate blit/copy.
+          */
+         uint8_t image_block_size_per_thread_agx;
 
          /**
           * pointer size is:
@@ -554,14 +561,38 @@ typedef struct shader_info {
          bool point_mode:1;
 
          /* Bit mask of TCS per-vertex inputs (VS outputs) that are used
+          * with a vertex index that is equal to the invocation id.
+          *
+          * Not mutually exclusive with tcs_cross_invocation_inputs_read, i.e.
+          * both input[0] and input[invocation_id] can be present.
+          */
+         uint64_t tcs_same_invocation_inputs_read;
+
+         /* Bit mask of TCS per-vertex inputs (VS outputs) that are read
           * with a vertex index that is NOT the invocation id
           */
          uint64_t tcs_cross_invocation_inputs_read;
 
-         /* Bit mask of TCS per-vertex outputs that are used
+         /* Bit mask of TCS per-vertex outputs that are read
           * with a vertex index that is NOT the invocation id
           */
          uint64_t tcs_cross_invocation_outputs_read;
+
+         /* Bit mask of TCS per-vertex outputs that are written
+          * with a vertex index that is NOT the invocation id
+          */
+         uint64_t tcs_cross_invocation_outputs_written;
+
+         /* Bit mask of TCS per-vertex outputs that are read by TES. */
+         uint64_t tcs_outputs_read_by_tes;
+
+         /* Bit mask of TCS per-patch outputs that are read by TES. */
+         uint32_t tcs_patch_outputs_read_by_tes;
+
+         /* Bit mask of TCS per-vertex 16-bit outputs that are read by TES.
+          * (VARYING_SLOT_VAR0_16BIT + 0..15)
+          */
+         uint16_t tcs_outputs_read_by_tes_16bit;
       } tess;
 
       /* Applies to MESH and TASK. */
@@ -579,7 +610,7 @@ typedef struct shader_info {
 
          uint16_t max_vertices_out;
          uint16_t max_primitives_out;
-         uint16_t primitive_type;  /* GL_POINTS, GL_LINES or GL_TRIANGLES. */
+         enum mesa_prim primitive_type; /* POINTS, LINES or TRIANGLES. */
 
          /* TODO: remove this when we stop supporting NV_mesh_shader. */
          bool nv;

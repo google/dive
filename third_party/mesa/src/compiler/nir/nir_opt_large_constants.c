@@ -65,7 +65,7 @@ read_const_values(nir_const_value *dst, const void *src,
       break;
 
    default:
-      unreachable("Invalid bit size");
+      UNREACHABLE("Invalid bit size");
    }
 }
 
@@ -106,7 +106,7 @@ write_const_values(void *dst, const nir_const_value *src,
       break;
 
    default:
-      unreachable("Invalid bit size");
+      UNREACHABLE("Invalid bit size");
    }
 }
 
@@ -548,15 +548,12 @@ nir_opt_large_constants(nir_shader *shader,
             if (info->is_small) {
                b.cursor = nir_after_instr(&intrin->instr);
                nir_def *val = build_small_constant_load(&b, deref, info, size_align);
-               nir_def_rewrite_uses(&intrin->def, val);
-               nir_instr_remove(&intrin->instr);
+               nir_def_replace(&intrin->def, val);
                nir_deref_instr_remove_if_unused(deref);
             } else if (info->is_constant) {
                b.cursor = nir_after_instr(&intrin->instr);
                nir_def *val = build_constant_load(&b, deref, size_align);
-               nir_def_rewrite_uses(&intrin->def,
-                                    val);
-               nir_instr_remove(&intrin->instr);
+               nir_def_replace(&intrin->def, val);
                nir_deref_instr_remove_if_unused(deref);
             }
             break;
@@ -594,7 +591,5 @@ nir_opt_large_constants(nir_shader *shader,
 
    ralloc_free(var_infos);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   return true;
+   return nir_progress(true, impl, nir_metadata_control_flow);
 }

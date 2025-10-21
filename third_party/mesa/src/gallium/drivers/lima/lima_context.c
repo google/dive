@@ -76,7 +76,7 @@ lima_ctx_buff_alloc(struct lima_context *ctx, enum lima_ctx_buff buff,
 
    cbs->size = align(size, 0x40);
 
-   u_upload_alloc(ctx->uploader, 0, cbs->size, 0x40, &cbs->offset,
+   u_upload_alloc_ref(ctx->uploader, 0, cbs->size, 0x40, &cbs->offset,
                   &cbs->res, &ret);
 
    return ret;
@@ -114,10 +114,10 @@ lima_invalidate_resource(struct pipe_context *pctx, struct pipe_resource *prsc)
       return;
 
    struct lima_job *job = entry->data;
-   if (job->key.zsbuf && (job->key.zsbuf->texture == prsc))
+   if (job->key.zsbuf.texture && (job->key.zsbuf.texture == prsc))
       job->resolve &= ~(PIPE_CLEAR_DEPTH | PIPE_CLEAR_STENCIL);
 
-   if (job->key.cbuf && (job->key.cbuf->texture == prsc))
+   if (job->key.cbuf.texture && (job->key.cbuf.texture == prsc))
       job->resolve &= ~PIPE_CLEAR_COLOR0;
 
    _mesa_hash_table_remove_key(ctx->write_jobs, prsc);

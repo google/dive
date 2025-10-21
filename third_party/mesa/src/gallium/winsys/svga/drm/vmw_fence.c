@@ -1,27 +1,10 @@
-/**********************************************************
- * Copyright 2009-2015 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2009-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <libsync.h>
 
 #include "util/u_memory.h"
@@ -139,7 +122,7 @@ vmw_fences_signal(struct pb_fence_ops *fence_ops,
    if (!has_emitted) {
       emitted = ops->last_emitted;
       if (emitted - signaled > (1 << 30))
-	emitted = signaled;
+        emitted = signaled;
    }
 
    if (signaled == ops->last_signaled && emitted == ops->last_emitted)
@@ -251,8 +234,8 @@ void vmw_fence_destroy(struct vmw_fence *vfence)
  */
 void
 vmw_fence_reference(struct vmw_winsys_screen *vws,
-		    struct pipe_fence_handle **ptr,
-		    struct pipe_fence_handle *fence)
+                    struct pipe_fence_handle **ptr,
+                    struct pipe_fence_handle *fence)
 {
    if (*ptr) {
       struct vmw_fence *vfence = vmw_fence(*ptr);
@@ -294,8 +277,8 @@ vmw_fence_reference(struct vmw_winsys_screen *vws,
  */
 int
 vmw_fence_signalled(struct vmw_winsys_screen *vws,
-		   struct pipe_fence_handle *fence,
-		   unsigned flag)
+                   struct pipe_fence_handle *fence,
+                   unsigned flag)
 {
    struct vmw_fence *vfence;
    int32_t vflags = SVGA_FENCE_FLAG_EXEC;
@@ -343,9 +326,9 @@ vmw_fence_signalled(struct vmw_winsys_screen *vws,
  */
 int
 vmw_fence_finish(struct vmw_winsys_screen *vws,
-		 struct pipe_fence_handle *fence,
-		 uint64_t timeout,
-		 unsigned flag)
+                 struct pipe_fence_handle *fence,
+                 uint64_t timeout,
+                 unsigned flag)
 {
    struct vmw_fence *vfence;
    int32_t vflags = SVGA_FENCE_FLAG_EXEC;
@@ -378,8 +361,8 @@ vmw_fence_finish(struct vmw_winsys_screen *vws,
       int32_t prev = old;
 
       do {
-	 old = prev;
-	 prev = p_atomic_cmpxchg(&vfence->signalled, old, old | vflags);
+         old = prev;
+         prev = p_atomic_cmpxchg(&vfence->signalled, old, old | vflags);
       } while (prev != old);
    }
 
@@ -477,12 +460,12 @@ vmw_fence_ops_destroy(struct pb_fence_ops *ops)
  * Returns NULL on failure.
  */
 struct pb_fence_ops *
-vmw_fence_ops_create(struct vmw_winsys_screen *vws) 
+vmw_fence_ops_create(struct vmw_winsys_screen *vws)
 {
    struct vmw_fence_ops *ops;
 
    ops = CALLOC_STRUCT(vmw_fence_ops);
-   if(!ops)
+   if (!ops)
       return NULL;
 
    (void) mtx_init(&ops->mutex, mtx_plain);

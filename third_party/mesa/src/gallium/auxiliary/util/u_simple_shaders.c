@@ -71,16 +71,16 @@ util_make_vertex_passthrough_shader(struct pipe_context *pipe,
 
 void *
 util_make_vertex_passthrough_shader_with_so(struct pipe_context *pipe,
-                                    unsigned num_attribs,
-                                    const enum tgsi_semantic *semantic_names,
-                                    const unsigned *semantic_indexes,
-                                    bool window_space, bool layered,
-				    const struct pipe_stream_output_info *so)
+                                            unsigned num_attribs,
+                                            const enum tgsi_semantic *semantic_names,
+                                            const unsigned *semantic_indexes,
+                                            bool window_space, bool layered,
+                                            const struct pipe_stream_output_info *so)
 {
    struct ureg_program *ureg;
    unsigned i;
 
-   ureg = ureg_create( PIPE_SHADER_VERTEX );
+   ureg = ureg_create( MESA_SHADER_VERTEX );
    if (!ureg)
       return NULL;
 
@@ -261,7 +261,7 @@ util_make_fragment_tex_shader(struct pipe_context *pipe,
 
    assert((stype == TGSI_RETURN_TYPE_FLOAT) == (dtype == TGSI_RETURN_TYPE_FLOAT));
 
-   ureg = ureg_create( PIPE_SHADER_FRAGMENT );
+   ureg = ureg_create( MESA_SHADER_FRAGMENT );
    if (!ureg)
       return NULL;
    
@@ -320,7 +320,7 @@ util_make_fs_blit_zs(struct pipe_context *pipe, unsigned zs_mask,
    struct ureg_src depth_sampler, stencil_sampler, coord;
    struct ureg_dst depth, stencil, tmp;
 
-   ureg = ureg_create(PIPE_SHADER_FRAGMENT);
+   ureg = ureg_create(MESA_SHADER_FRAGMENT);
    if (!ureg)
       return NULL;
 
@@ -410,7 +410,7 @@ util_make_fragment_passthrough_shader(struct pipe_context *pipe,
 void *
 util_make_empty_fragment_shader(struct pipe_context *pipe)
 {
-   struct ureg_program *ureg = ureg_create(PIPE_SHADER_FRAGMENT);
+   struct ureg_program *ureg = ureg_create(MESA_SHADER_FRAGMENT);
    if (!ureg)
       return NULL;
 
@@ -434,7 +434,7 @@ util_make_fragment_cloneinput_shader(struct pipe_context *pipe, int num_cbufs,
 
    assert(num_cbufs <= PIPE_MAX_COLOR_BUFS);
 
-   ureg = ureg_create( PIPE_SHADER_FRAGMENT );
+   ureg = ureg_create( MESA_SHADER_FRAGMENT );
    if (!ureg)
       return NULL;
 
@@ -734,7 +734,7 @@ util_make_fs_msaa_resolve(struct pipe_context *pipe,
    struct ureg_dst out, tmp_sum, tmp_coord, tmp;
    unsigned i;
 
-   ureg = ureg_create(PIPE_SHADER_FRAGMENT);
+   ureg = ureg_create(MESA_SHADER_FRAGMENT);
    if (!ureg)
       return NULL;
 
@@ -802,7 +802,7 @@ util_make_fs_msaa_resolve_bilinear(struct pipe_context *pipe,
    struct ureg_dst tmp_coord[4], tmp_sum[4], weights;
    unsigned i, c;
 
-   ureg = ureg_create(PIPE_SHADER_FRAGMENT);
+   ureg = ureg_create(MESA_SHADER_FRAGMENT);
    if (!ureg)
       return NULL;
 
@@ -928,7 +928,7 @@ util_make_geometry_passthrough_shader(struct pipe_context *pipe,
 
    unsigned i;
 
-   ureg = ureg_create(PIPE_SHADER_GEOMETRY);
+   ureg = ureg_create(MESA_SHADER_GEOMETRY);
    if (!ureg)
       return NULL;
 
@@ -998,7 +998,7 @@ util_make_fs_pack_color_zs(struct pipe_context *pipe,
    bool z24_is_high = zs_format == PIPE_FORMAT_S8_UINT_Z24_UNORM ||
                       zs_format == PIPE_FORMAT_X8Z24_UNORM;
 
-   ureg = ureg_create(PIPE_SHADER_FRAGMENT);
+   ureg = ureg_create(MESA_SHADER_FRAGMENT);
    if (!ureg)
       return NULL;
 
@@ -1151,7 +1151,7 @@ util_make_tess_ctrl_passthrough_shader(struct pipe_context *pipe,
    struct ureg_dst dst[PIPE_MAX_SHADER_OUTPUTS];
    struct ureg_src src[PIPE_MAX_SHADER_INPUTS];
 
-   ureg = ureg_create(PIPE_SHADER_TESS_CTRL);
+   ureg = ureg_create(MESA_SHADER_TESS_CTRL);
 
    if (!ureg)
       return NULL;
@@ -1313,16 +1313,19 @@ util_make_fs_stencil_blit(struct pipe_context *pipe, bool msaa_src, bool has_txq
 }
 
 void *
-util_make_fs_clear_all_cbufs(struct pipe_context *pipe)
+util_make_fs_clear_color(struct pipe_context *pipe, bool write_all_cbufs)
 {
-   static const char text[] =
+   static const char text_templ[] =
       "FRAG\n"
-      "PROPERTY FS_COLOR0_WRITES_ALL_CBUFS 1\n"
+      "PROPERTY FS_COLOR0_WRITES_ALL_CBUFS %u\n"
       "DCL OUT[0], COLOR[0]\n"
       "DCL CONST[0][0]\n"
 
       "MOV OUT[0], CONST[0][0]\n"
       "END\n";
+   char text[1000];
+
+   snprintf(text, ARRAY_SIZE(text), text_templ, write_all_cbufs);
 
    struct tgsi_token tokens[1000];
    struct pipe_shader_state state = { 0 };

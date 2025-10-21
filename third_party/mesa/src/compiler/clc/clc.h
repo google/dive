@@ -50,20 +50,31 @@ enum clc_spirv_version {
 };
 
 struct clc_optional_features {
+   bool extended_bit_ops;
    bool fp16;
    bool fp64;
    bool int64;
    bool images;
+   bool images_depth;
+   bool images_gl_depth;
+   bool images_gl_msaa;
+   bool images_mipmap;
+   bool images_mipmap_writes;
    bool images_read_write;
+   bool images_unorm_int_2_101010;
    bool images_write_3d;
    bool integer_dot_product;
    bool intel_subgroups;
+   bool kernel_clock;
    /* OpenCL core subgroups */
    bool subgroups;
    /* OpenCL extension cl_khr_subgroups, which requires independent forward
     * progress
     */
    bool subgroups_ifp;
+   bool subgroups_shuffle;
+   bool subgroups_shuffle_relative;
+   bool subgroups_ballot;
 };
 
 struct clc_compile_args {
@@ -76,12 +87,18 @@ struct clc_compile_args {
    /* SPIRV version to target. */
    enum clc_spirv_version spirv_version;
    struct clc_optional_features features;
+   bool use_llvm_spirv_target;
 
    /* Allowed extensions SPIRV extensions the OpenCL->SPIRV translation can
     * enable. A pointer to a NULL terminated array of strings, allow any
     * extension if NULL.
     */
    const char * const *allowed_spirv_extensions;
+
+   /* Indicate that the input file tries to be compatible with C code. This
+    * means that for example the bit-field clang extension is enabled.
+    */
+   bool c_compatible;
 
    unsigned address_bits;
 };
@@ -160,6 +177,7 @@ struct clc_kernel_info {
 enum clc_spec_constant_type {
    CLC_SPEC_CONSTANT_UNKNOWN,
    CLC_SPEC_CONSTANT_BOOL,
+   CLC_SPEC_CONSTANT_HALF,
    CLC_SPEC_CONSTANT_FLOAT,
    CLC_SPEC_CONSTANT_DOUBLE,
    CLC_SPEC_CONSTANT_INT8,
@@ -202,10 +220,14 @@ void clc_libclc_serialize(struct clc_libclc *lib, void **serialized, size_t *siz
 void clc_libclc_free_serialized(void *serialized);
 struct clc_libclc *clc_libclc_deserialize(const void *serialized, size_t size);
 
+/* Forward declare */
+struct set;
+
 bool
 clc_compile_c_to_spir(const struct clc_compile_args *args,
                       const struct clc_logger *logger,
-                      struct clc_binary *out_spir);
+                      struct clc_binary *out_spir,
+                      struct set *dependencies);
 
 void
 clc_free_spir(struct clc_binary *spir);
@@ -221,7 +243,8 @@ clc_free_spirv(struct clc_binary *spirv);
 bool
 clc_compile_c_to_spirv(const struct clc_compile_args *args,
                        const struct clc_logger *logger,
-                       struct clc_binary *out_spirv);
+                       struct clc_binary *out_spirv,
+                       struct set *dependencies);
 
 bool
 clc_link_spirv(const struct clc_linker_args *args,
@@ -266,6 +289,13 @@ clc_specialize_spirv(const struct clc_binary *in_spirv,
                      const struct clc_parsed_spirv *parsed_data,
                      const struct clc_spirv_specialization_consts *consts,
                      struct clc_binary *out_spirv);
+
+enum clc_debug_flags {
+   CLC_DEBUG_DUMP_SPIRV = 1 << 0,
+   CLC_DEBUG_DUMP_LLVM = 1 << 1,
+   CLC_DEBUG_VERBOSE = 1 << 2,
+};
+uint64_t clc_debug_flags(void);
 
 #ifdef __cplusplus
 }

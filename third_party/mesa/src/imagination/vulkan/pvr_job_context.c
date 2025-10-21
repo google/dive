@@ -29,22 +29,21 @@
 #include <vulkan/vulkan.h>
 
 #include "hwdef/rogue_hw_utils.h"
+#include "pco_uscgen_programs.h"
 #include "pvr_bo.h"
-#include "pvr_cdm_load_sr.h"
 #include "pvr_common.h"
 #include "pvr_csb.h"
+#include "pvr_device.h"
 #include "pvr_job_context.h"
+#include "pvr_macros.h"
+#include "pvr_pass.h"
 #include "pvr_pds.h"
-#include "pvr_private.h"
 #include "pvr_transfer_frag_store.h"
 #include "pvr_types.h"
-#include "pvr_uscgen.h"
-#include "pvr_vdm_load_sr.h"
-#include "pvr_vdm_store_sr.h"
+#include "pvr_usc.h"
 #include "pvr_winsys.h"
 #include "util/macros.h"
 #include "util/os_file.h"
-#include "util/u_dynarray.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
 
@@ -140,10 +139,10 @@ static VkResult pvr_pds_pt_store_program_create_and_upload(
       pvr_gpu_upload_pds(device,
                          data_buffer,
                          program.stream_out_terminate_pds_data_size,
-                         PVRX(TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE),
+                         ROGUE_TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE,
                          code_buffer,
                          program.stream_out_terminate_pds_code_size,
-                         PVRX(TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE),
+                         ROGUE_TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE,
                          cache_line_size,
                          pds_upload_out);
 
@@ -213,10 +212,10 @@ static VkResult pvr_pds_pt_resume_program_create_and_upload(
       pvr_gpu_upload_pds(device,
                          data_buffer,
                          program.stream_out_init_pds_data_size,
-                         PVRX(TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE),
+                         ROGUE_TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE,
                          code_buffer,
                          program.stream_out_init_pds_code_size,
-                         PVRX(TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE),
+                         ROGUE_TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE,
                          cache_line_size,
                          pds_upload_out);
 
@@ -277,6 +276,7 @@ pvr_render_job_pt_programs_cleanup(struct pvr_device *device,
 }
 
 static void pvr_pds_ctx_sr_program_setup(
+   uint32_t core_count,
    bool cc_enable,
    uint64_t usc_program_upload_offset,
    uint8_t usc_temps,
@@ -285,22 +285,27 @@ static void pvr_pds_ctx_sr_program_setup(
 {
    /* The PDS task is the same for stores and loads. */
    *program_out = (struct pvr_pds_shared_storing_program){
-		.cc_enable = cc_enable,
-		.doutw_control = {
-			.dest_store = PDS_UNIFIED_STORE,
-			.num_const64 = 2,
-			.doutw_data = {
-				[0] = sr_addr.addr,
-				[1] = sr_addr.addr + ROGUE_LLS_SHARED_REGS_RESERVE_SIZE,
-			},
-			.last_instruction = false,
-		},
-	};
+               .cc_enable = cc_enable,
+               .doutw_control = {
+                       .dest_store = PDS_UNIFIED_STORE,
+                       .num_const64 = 2,
+                       .doutw_data = {
+                               [0] = sr_addr.addr,
+                               [1] = sr_addr.addr + ROGUE_LLS_SHARED_REGS_RESERVE_SIZE,
+                       },
+                       .last_instruction = false,
+               },
+       };
+
+   if (core_count > 1) {
+      pvr_finishme(
+         "Handle LLS_USC_SHARED_REGS_BUFFER_SIZE in DOUTW data_control");
+   }
 
    pvr_pds_setup_doutu(&program_out->usc_task.usc_task_control,
                        usc_program_upload_offset,
                        usc_temps,
-                       PVRX(PDSINST_DOUTU_SAMPLE_RATE_INSTANCE),
+                       ROGUE_PDSINST_DOUTU_SAMPLE_RATE_INSTANCE,
                        false);
 }
 
@@ -318,7 +323,7 @@ static VkResult pvr_pds_render_ctx_sr_program_create_and_upload(
    const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
    const uint32_t cache_line_size = rogue_get_slc_cache_line_size(dev_info);
    const uint32_t pds_data_alignment =
-      PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE) / 4U;
+      ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE / 4U;
 
    /* FIXME: pvr_pds_generate_shared_storing_program() doesn't return the data
     * and code size when using the PDS_GENERATE_SIZES mode.
@@ -329,7 +334,8 @@ static VkResult pvr_pds_render_ctx_sr_program_create_and_upload(
    ASSERTED uint32_t *buffer_end;
    uint32_t code_offset;
 
-   pvr_pds_ctx_sr_program_setup(false,
+   pvr_pds_ctx_sr_program_setup(device->pdevice->dev_runtime_info.core_count,
+                                false,
                                 usc_program_upload_offset,
                                 usc_temps,
                                 sr_addr,
@@ -354,10 +360,10 @@ static VkResult pvr_pds_render_ctx_sr_program_create_and_upload(
    return pvr_gpu_upload_pds(device,
                              &staging_buffer[0],
                              program.data_size,
-                             PVRX(VDMCTRL_PDS_STATE1_PDS_DATA_ADDR_ALIGNMENT),
+                             ROGUE_VDMCTRL_PDS_STATE1_PDS_DATA_ADDR_ALIGNMENT,
                              &staging_buffer[code_offset],
                              program.code_size,
-                             PVRX(VDMCTRL_PDS_STATE2_PDS_CODE_ADDR_ALIGNMENT),
+                             ROGUE_VDMCTRL_PDS_STATE2_PDS_CODE_ADDR_ALIGNMENT,
                              cache_line_size,
                              pds_upload_out);
 }
@@ -377,7 +383,7 @@ static VkResult pvr_pds_compute_ctx_sr_program_create_and_upload(
    const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
    const uint32_t cache_line_size = rogue_get_slc_cache_line_size(dev_info);
    const uint32_t pds_data_alignment =
-      PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE) / 4U;
+      ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE / 4U;
 
    /* FIXME: pvr_pds_generate_shared_storing_program() doesn't return the data
     * and code size when using the PDS_GENERATE_SIZES mode.
@@ -388,7 +394,8 @@ static VkResult pvr_pds_compute_ctx_sr_program_create_and_upload(
    uint32_t *buffer_ptr;
    uint32_t code_offset;
 
-   pvr_pds_ctx_sr_program_setup(PVR_HAS_ERN(dev_info, 35421),
+   pvr_pds_ctx_sr_program_setup(device->pdevice->dev_runtime_info.core_count,
+                                PVR_HAS_ERN(dev_info, 35421),
                                 usc_program_upload_offset,
                                 usc_temps,
                                 sr_addr,
@@ -429,20 +436,20 @@ static VkResult pvr_pds_compute_ctx_sr_program_create_and_upload(
    assert((uint32_t)(buffer_ptr - staging_buffer) * sizeof(staging_buffer[0]) <
           ROGUE_PDS_TASK_PROGRAM_SIZE);
 
-   STATIC_ASSERT(PVRX(CR_CDM_CONTEXT_PDS0_DATA_ADDR_ALIGNMENT) ==
-                 PVRX(CR_CDM_CONTEXT_LOAD_PDS0_DATA_ADDR_ALIGNMENT));
+   STATIC_ASSERT(ROGUE_CR_CDM_CONTEXT_PDS0_DATA_ADDR_ALIGNMENT ==
+                 ROGUE_CR_CDM_CONTEXT_LOAD_PDS0_DATA_ADDR_ALIGNMENT);
 
-   STATIC_ASSERT(PVRX(CR_CDM_CONTEXT_PDS0_CODE_ADDR_ALIGNMENT) ==
-                 PVRX(CR_CDM_CONTEXT_LOAD_PDS0_CODE_ADDR_ALIGNMENT));
+   STATIC_ASSERT(ROGUE_CR_CDM_CONTEXT_PDS0_CODE_ADDR_ALIGNMENT ==
+                 ROGUE_CR_CDM_CONTEXT_LOAD_PDS0_CODE_ADDR_ALIGNMENT);
 
    return pvr_gpu_upload_pds(
       device,
       &staging_buffer[0],
       program.data_size,
-      PVRX(CR_CDM_CONTEXT_PDS0_DATA_ADDR_ALIGNMENT),
+      ROGUE_CR_CDM_CONTEXT_PDS0_DATA_ADDR_ALIGNMENT,
       &staging_buffer[code_offset],
       (uint32_t)(buffer_ptr - &staging_buffer[code_offset]),
-      PVRX(CR_CDM_CONTEXT_PDS0_CODE_ADDR_ALIGNMENT),
+      ROGUE_CR_CDM_CONTEXT_PDS0_CODE_ADDR_ALIGNMENT,
       cache_line_size,
       pds_upload_out);
 }
@@ -457,14 +464,15 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
                                           struct rogue_sr_programs *sr_programs)
 {
    const uint64_t store_load_state_bo_size =
-      PVRX(LLS_USC_SHARED_REGS_BUFFER_SIZE) +
+      ROGUE_LLS_USC_SHARED_REGS_BUFFER_SIZE +
       ROGUE_LLS_SHARED_REGS_RESERVE_SIZE;
    const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
    const uint32_t cache_line_size = rogue_get_slc_cache_line_size(dev_info);
    uint64_t usc_store_program_upload_offset;
    uint64_t usc_load_program_upload_offset;
-   const uint8_t *usc_load_sr_code;
-   uint32_t usc_load_sr_code_size;
+   const pco_precomp_data *precomp_data;
+   unsigned store_temps;
+   unsigned load_temps;
    VkResult result;
 
    /* Note that this is being used for both compute and render ctx. There is no
@@ -472,7 +480,7 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
     */
    /* 4 blocks (16 dwords / 64 bytes) in USC to prevent fragmentation. */
    sr_programs->usc.unified_size =
-      DIV_ROUND_UP(64, PVRX(VDMCTRL_PDS_STATE0_USC_UNIFIED_SIZE_UNIT_SIZE));
+      DIV_ROUND_UP(64, ROGUE_VDMCTRL_PDS_STATE0_USC_UNIFIED_SIZE_UNIT_SIZE);
 
    result = pvr_bo_alloc(device,
                          device->heaps.pds_heap,
@@ -483,51 +491,49 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
    if (result != VK_SUCCESS)
       return result;
 
-   /* USC state update: SR state store. */
+   /* We shouldn't need to limit the size of these programs any more, but if
+    * we end up having to, this would be the place to check.
+    */
 
-   assert(sizeof(pvr_vdm_store_sr_code) < ROGUE_USC_TASK_PROGRAM_SIZE);
+   /* USC state update: SR state store. */
+   precomp_data =
+      (pco_precomp_data *)pco_usclib_common[CS_STORE_SR_1024_COMMON];
 
    result = pvr_gpu_upload_usc(device,
-                               pvr_vdm_store_sr_code,
-                               sizeof(pvr_vdm_store_sr_code),
+                               precomp_data->binary,
+                               precomp_data->size_dwords * sizeof(uint32_t),
                                cache_line_size,
                                &sr_programs->usc.store_program_bo);
    if (result != VK_SUCCESS)
       goto err_free_store_load_state_bo;
+
+   store_temps = precomp_data->temps;
 
    usc_store_program_upload_offset =
       sr_programs->usc.store_program_bo->dev_addr.addr -
       device->heaps.usc_heap->base_addr.addr;
 
    /* USC state update: SR state load. */
+   precomp_data = (pco_precomp_data *)pco_usclib_common[CS_LOAD_SR_256_COMMON];
 
-   if (target == PVR_CTX_SR_COMPUTE_TARGET && PVR_HAS_QUIRK(dev_info, 62269)) {
-      STATIC_ASSERT(sizeof(pvr_cdm_load_sr_code) < ROGUE_USC_TASK_PROGRAM_SIZE);
 
-      usc_load_sr_code = pvr_cdm_load_sr_code;
-      usc_load_sr_code_size = sizeof(pvr_cdm_load_sr_code);
-   } else {
-      STATIC_ASSERT(sizeof(pvr_vdm_load_sr_code) < ROGUE_USC_TASK_PROGRAM_SIZE);
-
-      usc_load_sr_code = pvr_vdm_load_sr_code;
-      usc_load_sr_code_size = sizeof(pvr_vdm_load_sr_code);
-   }
+   if (target == PVR_CTX_SR_COMPUTE_TARGET && PVR_HAS_QUIRK(dev_info, 62269))
+      pvr_finishme("Missing support for brn62269");
 
    result = pvr_gpu_upload_usc(device,
-                               usc_load_sr_code,
-                               usc_load_sr_code_size,
+                               precomp_data->binary,
+                               precomp_data->size_dwords * sizeof(uint32_t),
                                cache_line_size,
                                &sr_programs->usc.load_program_bo);
    if (result != VK_SUCCESS)
       goto err_free_usc_store_program_bo;
 
+   load_temps = precomp_data->temps;
+
    usc_load_program_upload_offset =
       sr_programs->usc.load_program_bo->dev_addr.addr -
       device->heaps.usc_heap->base_addr.addr;
 
-   /* FIXME: The number of USC temps should be output alongside
-    * pvr_vdm_store_sr_code rather than hard coded.
-    */
    /* Create and upload the PDS load and store programs. Point them to the
     * appropriate USC load and store programs.
     */
@@ -537,7 +543,7 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
       result = pvr_pds_render_ctx_sr_program_create_and_upload(
          device,
          usc_store_program_upload_offset,
-         8,
+         store_temps,
          sr_programs->store_load_state_bo->vma->dev_addr,
          &sr_programs->pds.store_program);
       if (result != VK_SUCCESS)
@@ -547,7 +553,7 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
       result = pvr_pds_render_ctx_sr_program_create_and_upload(
          device,
          usc_load_program_upload_offset,
-         20,
+         load_temps,
          sr_programs->store_load_state_bo->vma->dev_addr,
          &sr_programs->pds.load_program);
       if (result != VK_SUCCESS)
@@ -561,7 +567,7 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
          device,
          false,
          usc_store_program_upload_offset,
-         8,
+         store_temps,
          sr_programs->store_load_state_bo->vma->dev_addr,
          &sr_programs->pds.store_program);
       if (result != VK_SUCCESS)
@@ -572,7 +578,7 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
          device,
          true,
          usc_load_program_upload_offset,
-         20,
+         load_temps,
          sr_programs->store_load_state_bo->vma->dev_addr,
          &sr_programs->pds.load_program);
       if (result != VK_SUCCESS)
@@ -581,7 +587,7 @@ static VkResult pvr_ctx_sr_programs_setup(struct pvr_device *device,
       break;
 
    default:
-      unreachable("Invalid target.");
+      UNREACHABLE("Invalid target.");
       break;
    }
 
@@ -708,7 +714,7 @@ static void pvr_render_ctx_switch_fini(struct pvr_device *device,
 
 static void
 pvr_rogue_get_vdmctrl_pds_state_words(struct pvr_pds_upload *pds_program,
-                                      enum PVRX(VDMCTRL_USC_TARGET) usc_target,
+                                      enum ROGUE_VDMCTRL_USC_TARGET usc_target,
                                       uint8_t usc_unified_size,
                                       uint32_t *const state0_out,
                                       uint32_t *const state1_out)
@@ -717,22 +723,22 @@ pvr_rogue_get_vdmctrl_pds_state_words(struct pvr_pds_upload *pds_program,
       /* Convert the data size from dwords to bytes. */
       const uint32_t pds_data_size = PVR_DW_TO_BYTES(pds_program->data_size);
 
-      state.dm_target = PVRX(VDMCTRL_DM_TARGET_VDM);
+      state.dm_target = ROGUE_VDMCTRL_DM_TARGET_VDM;
       state.usc_target = usc_target;
       state.usc_common_size = 0;
       state.usc_unified_size = usc_unified_size;
       state.pds_temp_size = 0;
 
-      assert(pds_data_size % PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE) ==
+      assert(pds_data_size % ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE ==
              0);
       state.pds_data_size =
-         pds_data_size / PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE);
+         pds_data_size / ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE;
    };
 
    pvr_csb_pack (state1_out, VDMCTRL_PDS_STATE1, state) {
       state.pds_data_addr = PVR_DEV_ADDR(pds_program->data_offset);
-      state.sd_type = PVRX(VDMCTRL_SD_TYPE_PDS);
-      state.sd_next_type = PVRX(VDMCTRL_SD_TYPE_PDS);
+      state.sd_type = ROGUE_VDMCTRL_SD_TYPE_PDS;
+      state.sd_next_type = ROGUE_VDMCTRL_SD_TYPE_PDS;
    }
 }
 
@@ -748,10 +754,10 @@ pvr_rogue_get_geom_state_stream_out_words(struct pvr_pds_upload *pds_program,
       state.sync = true;
 
       assert(pds_data_size %
-                PVRX(TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE) ==
+                ROGUE_TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE ==
              0);
       state.pds_data_size =
-         pds_data_size / PVRX(TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE);
+         pds_data_size / ROGUE_TA_STATE_STREAM_OUT1_PDS_DATA_SIZE_UNIT_SIZE;
 
       state.pds_temp_size = 0;
    }
@@ -786,7 +792,7 @@ static void pvr_render_ctx_ws_static_state_init(
       q_dst = &static_state->geom_state[i].vdm_ctx_store_task0;
       pvr_csb_pack (q_dst, CR_VDM_CONTEXT_STORE_TASK0, task0) {
          pvr_rogue_get_vdmctrl_pds_state_words(&sr_prog->pds.store_program,
-                                               PVRX(VDMCTRL_USC_TARGET_ANY),
+                                               ROGUE_VDMCTRL_USC_TARGET_ANY,
                                                sr_prog->usc.unified_size,
                                                &task0.pds_state0,
                                                &task0.pds_state1);
@@ -811,7 +817,7 @@ static void pvr_render_ctx_ws_static_state_init(
       q_dst = &static_state->geom_state[i].vdm_ctx_resume_task0;
       pvr_csb_pack (q_dst, CR_VDM_CONTEXT_RESUME_TASK0, task0) {
          pvr_rogue_get_vdmctrl_pds_state_words(&sr_prog->pds.load_program,
-                                               PVRX(VDMCTRL_USC_TARGET_ALL),
+                                               ROGUE_VDMCTRL_USC_TARGET_ALL,
                                                sr_prog->usc.unified_size,
                                                &task0.pds_state0,
                                                &task0.pds_state1);
@@ -867,7 +873,7 @@ VkResult pvr_render_ctx_create(struct pvr_device *device,
    result = pvr_bo_alloc(device,
                          device->heaps.general_heap,
                          vdm_callstack_size,
-                         PVRX(CR_VDM_CALL_STACK_POINTER_ADDR_ALIGNMENT),
+                         ROGUE_CR_VDM_CALL_STACK_POINTER_ADDR_ALIGNMENT,
                          0,
                          &ctx->vdm_callstack_bo);
    if (result != VK_SUCCESS)
@@ -928,11 +934,11 @@ static VkResult pvr_pds_sr_fence_terminate_program_create_and_upload(
    struct pvr_pds_upload *const pds_upload_out)
 {
    const uint32_t pds_data_alignment =
-      PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE) / 4U;
+      ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE / 4U;
    const struct pvr_device_runtime_info *dev_runtime_info =
       &device->pdevice->dev_runtime_info;
    ASSERTED const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
-   uint32_t staging_buffer[PVRX(PDS_TASK_PROGRAM_SIZE) >> 2U];
+   uint32_t staging_buffer[ROGUE_PDS_TASK_PROGRAM_SIZE >> 2U];
    struct pvr_pds_fence_program program = { 0 };
    ASSERTED uint32_t *buffer_end;
    uint32_t code_offset;
@@ -968,10 +974,10 @@ static VkResult pvr_pds_sr_fence_terminate_program_create_and_upload(
    return pvr_gpu_upload_pds(device,
                              staging_buffer,
                              data_size,
-                             PVRX(CR_CDM_TERMINATE_PDS_DATA_ADDR_ALIGNMENT),
+                             ROGUE_CR_CDM_TERMINATE_PDS_DATA_ADDR_ALIGNMENT,
                              &staging_buffer[code_offset],
                              program.code_size,
-                             PVRX(CR_CDM_TERMINATE_PDS_CODE_ADDR_ALIGNMENT),
+                             ROGUE_CR_CDM_TERMINATE_PDS_CODE_ADDR_ALIGNMENT,
                              0,
                              pds_upload_out);
 }
@@ -1018,10 +1024,10 @@ static void pvr_compute_ctx_ws_static_state_init(
       state.temp_size = 0;
 
       assert(store_program_data_size %
-                PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE) ==
+                ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE ==
              0);
       state.data_size = store_program_data_size /
-                        PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE);
+                        ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE;
 
       state.fence = true;
    }
@@ -1054,10 +1060,10 @@ static void pvr_compute_ctx_ws_static_state_init(
       state.temp_size = 0;
 
       assert(fence_terminate_program_data_size %
-                PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE) ==
+                ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE ==
              0);
       state.data_size = fence_terminate_program_data_size /
-                        PVRX(VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE);
+                        ROGUE_VDMCTRL_PDS_STATE0_PDS_DATA_SIZE_UNIT_SIZE;
       state.fence = true;
    }
 
@@ -1206,7 +1212,7 @@ static void pvr_transfer_ctx_ws_create_info_init(
 static VkResult pvr_transfer_eot_shaders_init(struct pvr_device *device,
                                               struct pvr_transfer_ctx *ctx)
 {
-   uint64_t rt_pbe_regs[PVR_TRANSFER_MAX_RENDER_TARGETS];
+   unsigned rt_pbe_regs[PVR_TRANSFER_MAX_RENDER_TARGETS];
 
    /* Setup start indexes of the shared registers that will contain the PBE
     * state words for each render target. These must match the indexes used in
@@ -1220,26 +1226,33 @@ static VkResult pvr_transfer_eot_shaders_init(struct pvr_device *device,
     * indexes and number of shared registers hard coded in
     * pvr_pds_generate_pixel_event().
     */
-   for (uint32_t i = 0; i < ARRAY_SIZE(rt_pbe_regs); i++)
+   for (unsigned i = 0; i < ARRAY_SIZE(rt_pbe_regs); i++)
       rt_pbe_regs[i] = i * PVR_STATE_PBE_DWORDS;
-
-   STATIC_ASSERT(ARRAY_SIZE(rt_pbe_regs) == ARRAY_SIZE(ctx->usc_eot_bos));
 
    for (uint32_t i = 0; i < ARRAY_SIZE(ctx->usc_eot_bos); i++) {
       const uint32_t cache_line_size =
          rogue_get_slc_cache_line_size(&device->pdevice->dev_info);
-      const unsigned rt_count = i + 1;
-      struct util_dynarray eot_bin;
+      struct pvr_eot_props props = {
+         .emit_count = i + 1,
+         .shared_words = true,
+         .state_regs = rt_pbe_regs,
+      };
+      pco_shader *eot;
       VkResult result;
 
-      pvr_uscgen_tq_eot(rt_count, rt_pbe_regs, &eot_bin);
+      eot = pvr_usc_eot(device->pdevice->pco_ctx,
+                        &props,
+                        &device->pdevice->dev_info);
 
       result = pvr_gpu_upload_usc(device,
-                                  util_dynarray_begin(&eot_bin),
-                                  eot_bin.size,
+                                  pco_shader_binary_data(eot),
+                                  pco_shader_binary_size(eot),
                                   cache_line_size,
                                   &ctx->usc_eot_bos[i]);
-      util_dynarray_fini(&eot_bin);
+
+      ctx->usc_eot_usc_temps[i] = pco_shader_data(eot)->common.temps;
+      ralloc_free(eot);
+
       if (result != VK_SUCCESS) {
          for (uint32_t j = 0; j < i; j++)
             pvr_bo_suballoc_free(ctx->usc_eot_bos[j]);

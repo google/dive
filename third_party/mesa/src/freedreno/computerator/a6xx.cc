@@ -25,9 +25,7 @@
 
 #include "util/u_math.h"
 
-#include "adreno_pm4.xml.h"
-#include "adreno_common.xml.h"
-#include "a6xx.xml.h"
+#include "fd6_hw.h"
 
 #include "common/freedreno_dev_info.h"
 
@@ -78,7 +76,7 @@ struct fd6_control {
 };
 
 #define control_ptr(a6xx_backend, member)                                      \
-   (a6xx_backend)->control_mem, offsetof(struct fd6_control, member), 0, 0
+   (a6xx_backend)->control_mem, offsetof(struct fd6_control, member)
 
 struct PACKED fd6_query_sample {
    uint64_t start;
@@ -90,8 +88,7 @@ struct PACKED fd6_query_sample {
 #define query_sample_idx(a6xx_backend, idx, field)                             \
    (a6xx_backend)->query_mem,                                                  \
       (idx * sizeof(struct fd6_query_sample)) +                                \
-         offsetof(struct fd6_query_sample, field),                             \
-      0, 0
+         offsetof(struct fd6_query_sample, field)
 
 /*
  * Backend implementation:
@@ -114,7 +111,25 @@ a6xx_disassemble(struct kernel *kernel, FILE *out)
 
 template<chip CHIP>
 static void
-cs_program_emit(struct fd_ringbuffer *ring, struct kernel *kernel)
+cs_restore_emit(fd_cs &cs, struct a6xx_backend *a6xx_backend)
+{
+   fd_ncrb<CHIP> ncrb(cs, 2 + ARRAY_SIZE(a6xx_backend->info->a6xx.magic_raw));
+
+   ncrb.add(A6XX_SP_PERFCTR_SHADER_MASK(.cs = true));
+   ncrb.add(A6XX_SP_NC_MODE_CNTL_2());
+
+   for (size_t i = 0; i < ARRAY_SIZE(a6xx_backend->info->a6xx.magic_raw); i++) {
+      auto magic_reg = a6xx_backend->info->a6xx.magic_raw[i];
+      if (!magic_reg.reg)
+         break;
+
+      ncrb.add({magic_reg.reg, magic_reg.value});
+   }
+}
+
+template<chip CHIP>
+static void
+cs_program_emit_regs(fd_cs &cs, struct kernel *kernel)
 {
    struct ir3_kernel *ir3_kernel = to_ir3_kernel(kernel);
    struct a6xx_backend *a6xx_backend = to_a6xx_backend(ir3_kernel->backend);
@@ -122,71 +137,62 @@ cs_program_emit(struct fd_ringbuffer *ring, struct kernel *kernel)
    const unsigned *local_size = kernel->local_size;
    const struct ir3_info *i = &v->info;
    enum a6xx_threadsize thrsz = i->double_threadsize ? THREAD128 : THREAD64;
+   fd_crb crb(cs, 25);
 
-   OUT_REG(ring, A6XX_SP_MODE_CONTROL(.constant_demotion_enable = true,
-                                      .isammode = ISAMMODE_GL,
-                                      .shared_consts_enable = false));
+   crb.add(A6XX_SP_MODE_CNTL(
+      .constant_demotion_enable = true,
+      .isammode = ISAMMODE_GL,
+      .shared_consts_enable = false,
+   ));
 
-   OUT_PKT4(ring, REG_A6XX_SP_PERFCTR_ENABLE, 1);
-   OUT_RING(ring, A6XX_SP_PERFCTR_ENABLE_CS);
-
-   OUT_PKT4(ring, REG_A6XX_SP_FLOAT_CNTL, 1);
-   OUT_RING(ring, 0);
-
-   for (size_t i = 0; i < ARRAY_SIZE(a6xx_backend->info->a6xx.magic_raw); i++) {
-      auto magic_reg = a6xx_backend->info->a6xx.magic_raw[i];
-      if (!magic_reg.reg)
-         break;
-
-      OUT_PKT4(ring, magic_reg.reg, 1);
-      OUT_RING(ring, magic_reg.value);
-   }
-
-   OUT_REG(ring, HLSQ_INVALIDATE_CMD(CHIP,
+   crb.add(SP_UPDATE_CNTL(CHIP,
       .vs_state = true,
       .hs_state = true,
       .ds_state = true,
       .gs_state = true,
       .fs_state = true,
       .cs_state = true,
-      .gfx_ibo = true,
+      .gfx_uav = true,
    ));
 
    unsigned constlen = align(v->constlen, 4);
-   OUT_REG(ring, HLSQ_CS_CNTL(CHIP, .constlen = constlen, .enabled = true, ));
+   crb.add(SP_CS_CONST_CONFIG(CHIP, .constlen = constlen, .enabled = true, ));
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_CONFIG, 2);
-   OUT_RING(ring, A6XX_SP_CS_CONFIG_ENABLED |
-                     A6XX_SP_CS_CONFIG_NIBO(kernel->num_bufs) |
-                     A6XX_SP_CS_CONFIG_NTEX(v->num_samp) |
-                     A6XX_SP_CS_CONFIG_NSAMP(v->num_samp)); /* SP_VS_CONFIG */
-   OUT_RING(ring, v->instrlen);                             /* SP_VS_INSTRLEN */
+   crb.add(A6XX_SP_CS_CONFIG(
+      .enabled = true,
+      .ntex = v->num_samp,
+      .nsamp = v->num_samp,
+      .nuav = kernel->num_bufs,
+   ));
+   crb.add(A6XX_SP_CS_INSTR_SIZE(v->instrlen));
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_CTRL_REG0, 1);
-   OUT_RING(ring,
-            A6XX_SP_CS_CTRL_REG0_THREADSIZE(thrsz) |
-               A6XX_SP_CS_CTRL_REG0_FULLREGFOOTPRINT(i->max_reg + 1) |
-               A6XX_SP_CS_CTRL_REG0_HALFREGFOOTPRINT(i->max_half_reg + 1) |
-               COND(v->mergedregs, A6XX_SP_CS_CTRL_REG0_MERGEDREGS) |
-               COND(ir3_kernel->info.early_preamble, A6XX_SP_CS_CTRL_REG0_EARLYPREAMBLE) |
-               A6XX_SP_CS_CTRL_REG0_BRANCHSTACK(ir3_shader_branchstack_hw(v)));
+   crb.add(A6XX_SP_CS_CNTL_0(
+      .halfregfootprint = i->max_half_reg + 1,
+      .fullregfootprint = i->max_reg + 1,
+      .branchstack = ir3_shader_branchstack_hw(v),
+      .threadsize = thrsz,
+      .earlypreamble = v->early_preamble,
+      .mergedregs = v->mergedregs,
+   ));
+
    if (CHIP == A7XX) {
-      OUT_REG(ring, HLSQ_FS_CNTL_0(CHIP, .threadsize = THREAD64));
+      crb.add(SP_PS_WAVE_CNTL(CHIP, .threadsize = THREAD64));
 
-      OUT_REG(ring, HLSQ_CONTROL_2_REG(CHIP, .dword = 0xfcfcfcfc),
-              HLSQ_CONTROL_3_REG(CHIP, .dword = 0xfcfcfcfc),
-              HLSQ_CONTROL_4_REG(CHIP, .dword = 0xfcfcfcfc),
-              HLSQ_CONTROL_5_REG(CHIP, .dword = 0x0000fc00), );
+      crb.add(SP_REG_PROG_ID_0(CHIP, .dword = 0xfcfcfcfc));
+      crb.add(SP_REG_PROG_ID_1(CHIP, .dword = 0xfcfcfcfc));
+      crb.add(SP_REG_PROG_ID_2(CHIP, .dword = 0xfcfcfcfc));
+      crb.add(SP_REG_PROG_ID_3(CHIP, .dword = 0x0000fc00));
    }
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_UNKNOWN_A9B1, 1);
-   OUT_RING(ring, A6XX_SP_CS_UNKNOWN_A9B1_SHARED_SIZE(1) |
-                  A6XX_SP_CS_UNKNOWN_A9B1_UNK6);
+   uint32_t shared_size = MAX2(((int)v->shared_size - 1) / 1024, 1);
+   enum a6xx_const_ram_mode mode =
+      v->constlen > 256 ? CONSTLEN_512 :
+      (v->constlen > 192 ? CONSTLEN_256 :
+      (v->constlen > 128 ? CONSTLEN_192 : CONSTLEN_128));
+   crb.add(A6XX_SP_CS_CNTL_1(.shared_size = shared_size, .constantrammode = mode));
 
    if (CHIP == A6XX && a6xx_backend->info->a6xx.has_lpac) {
-      OUT_PKT4(ring, REG_A6XX_HLSQ_CS_UNKNOWN_B9D0, 1);
-      OUT_RING(ring, A6XX_HLSQ_CS_UNKNOWN_B9D0_SHARED_SIZE(1) |
-                        A6XX_HLSQ_CS_UNKNOWN_B9D0_UNK6);
+      crb.add(HLSQ_CS_CTRL_REG1(CHIP, .shared_size = 1, .constantrammode = mode));
    }
 
    uint32_t local_invocation_id, work_group_id;
@@ -195,55 +201,58 @@ cs_program_emit(struct fd_ringbuffer *ring, struct kernel *kernel)
    work_group_id = ir3_find_sysval_regid(v, SYSTEM_VALUE_WORKGROUP_ID);
 
    if (CHIP == A6XX) {
-      OUT_PKT4(ring, REG_A6XX_HLSQ_CS_CNTL_0, 2);
-      OUT_RING(ring, A6XX_HLSQ_CS_CNTL_0_WGIDCONSTID(work_group_id) |
-                        A6XX_HLSQ_CS_CNTL_0_WGSIZECONSTID(regid(63, 0)) |
-                        A6XX_HLSQ_CS_CNTL_0_WGOFFSETCONSTID(regid(63, 0)) |
-                        A6XX_HLSQ_CS_CNTL_0_LOCALIDREGID(local_invocation_id));
-      OUT_RING(ring, A6XX_HLSQ_CS_CNTL_1_LINEARLOCALIDREGID(regid(63, 0)) |
-                        A6XX_HLSQ_CS_CNTL_1_THREADSIZE(thrsz));
+      crb.add(SP_CS_CONST_CONFIG_0(CHIP,
+         .wgidconstid = work_group_id,
+         .wgsizeconstid = INVALID_REG,
+         .wgoffsetconstid = INVALID_REG,
+         .localidregid = local_invocation_id,
+      ));
+      crb.add(SP_CS_WGE_CNTL(CHIP,
+         .linearlocalidregid = INVALID_REG,
+         .threadsize = thrsz,
+      ));
    } else {
-      enum a7xx_cs_yalign yalign = (local_size[1] % 8 == 0)   ? CS_YALIGN_8
-                                   : (local_size[1] % 4 == 0) ? CS_YALIGN_4
-                                   : (local_size[1] % 2 == 0) ? CS_YALIGN_2
-                                                              : CS_YALIGN_1;
+      unsigned tile_height = (local_size[1] % 8 == 0)   ? 3
+                             : (local_size[1] % 4 == 0) ? 5
+                             : (local_size[1] % 2 == 0) ? 9
+                                                        : 17;
 
-      OUT_REG(ring, A7XX_HLSQ_CS_CNTL_1(.linearlocalidregid = regid(63, 0),
-                                        .threadsize = thrsz,
-                                        .unk11 = true,
-                                        .unk22 = true,
-                                        .yalign = yalign, ));
+      crb.add(SP_CS_WGE_CNTL(CHIP,
+         .linearlocalidregid = INVALID_REG,
+         .threadsize = thrsz,
+         .workgrouprastorderzfirsten = true,
+         .wgtilewidth = 4,
+         .wgtileheight = tile_height,
+      ));
    }
 
    if (CHIP == A7XX || a6xx_backend->info->a6xx.has_lpac) {
-      OUT_PKT4(ring, REG_A6XX_SP_CS_CNTL_0, 1);
-      OUT_RING(ring, A6XX_SP_CS_CNTL_0_WGIDCONSTID(work_group_id) |
-                        A6XX_SP_CS_CNTL_0_WGSIZECONSTID(regid(63, 0)) |
-                        A6XX_SP_CS_CNTL_0_WGOFFSETCONSTID(regid(63, 0)) |
-                        A6XX_SP_CS_CNTL_0_LOCALIDREGID(local_invocation_id));
-      OUT_REG(ring,
-         SP_CS_CNTL_1(CHIP, .linearlocalidregid = regid(63, 0),
-                            .threadsize = thrsz, ));
+      crb.add(A6XX_SP_CS_WIE_CNTL_0(
+         .wgidconstid = work_group_id,
+         .wgsizeconstid = INVALID_REG,
+         .wgoffsetconstid = INVALID_REG,
+         .localidregid = local_invocation_id,
+      ));
+
+      if (CHIP == A7XX) {
+         /* TODO allow the shader to control the tiling */
+         crb.add(SP_CS_WIE_CNTL_1(CHIP,
+            .linearlocalidregid = INVALID_REG,
+            .threadsize = thrsz,
+            .workitemrastorder = WORKITEMRASTORDER_LINEAR,
+         ));
+      } else {
+         crb.add(SP_CS_WIE_CNTL_1(CHIP,
+            .linearlocalidregid = INVALID_REG,
+            .threadsize = thrsz,
+         ));
+      }
    }
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_OBJ_START, 2);
-   OUT_RELOC(ring, v->bo, 0, 0, 0); /* SP_CS_OBJ_START_LO/HI */
+   crb.attach_bo(v->bo);
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_INSTRLEN, 1);
-   OUT_RING(ring, v->instrlen);
-
-   OUT_PKT4(ring, REG_A6XX_SP_CS_OBJ_START, 2);
-   OUT_RELOC(ring, v->bo, 0, 0, 0);
-
-   uint32_t shader_preload_size =
-      MIN2(v->instrlen, a6xx_backend->info->a6xx.instr_cache_size);
-   OUT_PKT7(ring, CP_LOAD_STATE6_FRAG, 3);
-   OUT_RING(ring, CP_LOAD_STATE6_0_DST_OFF(0) |
-                     CP_LOAD_STATE6_0_STATE_TYPE(ST6_SHADER) |
-                     CP_LOAD_STATE6_0_STATE_SRC(SS6_INDIRECT) |
-                     CP_LOAD_STATE6_0_STATE_BLOCK(SB6_CS_SHADER) |
-                     CP_LOAD_STATE6_0_NUM_UNIT(shader_preload_size));
-   OUT_RELOC(ring, v->bo, 0, 0, 0);
+   crb.add(A6XX_SP_CS_BASE(v->bo));
+   crb.add(A6XX_SP_CS_INSTR_SIZE(v->instrlen));
 
    if (v->pvtmem_size > 0) {
       uint32_t per_fiber_size = v->pvtmem_size;
@@ -252,66 +261,83 @@ cs_program_emit(struct fd_ringbuffer *ring, struct kernel *kernel)
       uint32_t total_size = per_sp_size * a6xx_backend->info->num_sp_cores;
 
       struct fd_bo *pvtmem = fd_bo_new(a6xx_backend->dev, total_size, 0, "pvtmem");
-      OUT_PKT4(ring, REG_A6XX_SP_CS_PVT_MEM_PARAM, 4);
-      OUT_RING(ring, A6XX_SP_CS_PVT_MEM_PARAM_MEMSIZEPERITEM(per_fiber_size));
-      OUT_RELOC(ring, pvtmem, 0, 0, 0);
-      OUT_RING(ring, A6XX_SP_CS_PVT_MEM_SIZE_TOTALPVTMEMSIZE(per_sp_size) |
-                     COND(v->pvtmem_per_wave,
-                          A6XX_SP_CS_PVT_MEM_SIZE_PERWAVEMEMLAYOUT));
+      crb.add(A6XX_SP_CS_PVT_MEM_PARAM(.memsizeperitem = per_fiber_size));
+      crb.add(A6XX_SP_CS_PVT_MEM_BASE(pvtmem));
+      crb.add(A6XX_SP_CS_PVT_MEM_SIZE(
+         .totalpvtmemsize = per_sp_size,
+         .perwavememlayout = v->pvtmem_per_wave,
+      ));
 
-      OUT_PKT4(ring, REG_A6XX_SP_CS_PVT_MEM_HW_STACK_OFFSET, 1);
-      OUT_RING(ring, A6XX_SP_CS_PVT_MEM_HW_STACK_OFFSET_OFFSET(per_sp_size));
+      crb.add(A6XX_SP_CS_PVT_MEM_STACK_OFFSET(.offset = per_sp_size));
    }
 }
 
 template<chip CHIP>
 static void
-emit_const(struct fd_ringbuffer *ring, uint32_t regid, uint32_t sizedwords,
-           const uint32_t *dwords)
+cs_program_emit(fd_cs &cs, struct kernel *kernel)
 {
+   struct ir3_kernel *ir3_kernel = to_ir3_kernel(kernel);
+   struct a6xx_backend *a6xx_backend = to_a6xx_backend(ir3_kernel->backend);
+   struct ir3_shader_variant *v = ir3_kernel->v;
+
+   cs_program_emit_regs<CHIP>(cs, kernel);
+
+   uint32_t shader_preload_size =
+      MIN2(v->instrlen, a6xx_backend->info->a6xx.instr_cache_size);
+
+   fd_pkt7(cs, CP_LOAD_STATE6_FRAG, 3)
+      .add(CP_LOAD_STATE6_0(
+         .state_type = ST6_SHADER,
+         .state_src = SS6_INDIRECT,
+         .state_block = SB6_CS_SHADER,
+         .num_unit = shader_preload_size,
+      ))
+      .add(CP_LOAD_STATE6_EXT_SRC_ADDR(v->bo));
+}
+
+template<chip CHIP>
+static void
+emit_const(fd_cs &cs, uint32_t regid, uint32_t sizedwords, const uint32_t *dwords)
+{
+   uint32_t zero[4] = {};
    uint32_t align_sz;
 
    assert((regid % 4) == 0);
 
    align_sz = align(sizedwords, 4);
 
-   OUT_PKT7(ring, CP_LOAD_STATE6_FRAG, 3 + align_sz);
-   OUT_RING(ring, CP_LOAD_STATE6_0_DST_OFF(regid / 4) |
-                     CP_LOAD_STATE6_0_STATE_TYPE(ST6_CONSTANTS) |
-                     CP_LOAD_STATE6_0_STATE_SRC(SS6_DIRECT) |
-                     CP_LOAD_STATE6_0_STATE_BLOCK(SB6_CS_SHADER) |
-                     CP_LOAD_STATE6_0_NUM_UNIT(DIV_ROUND_UP(sizedwords, 4)));
-   OUT_RING(ring, CP_LOAD_STATE6_1_EXT_SRC_ADDR(0));
-   OUT_RING(ring, CP_LOAD_STATE6_2_EXT_SRC_ADDR_HI(0));
-
-   for (uint32_t i = 0; i < sizedwords; i++) {
-      OUT_RING(ring, dwords[i]);
-   }
-
-   /* Zero-pad to multiple of 4 dwords */
-   for (uint32_t i = sizedwords; i < align_sz; i++) {
-      OUT_RING(ring, 0);
-   }
+   fd_pkt7(cs, CP_LOAD_STATE6_FRAG, 3 + align_sz)
+      .add(CP_LOAD_STATE6_0(
+         .dst_off = regid / 4,
+         .state_type = ST6_CONSTANTS,
+         .state_src = SS6_DIRECT,
+         .state_block = SB6_CS_SHADER,
+         .num_unit = DIV_ROUND_UP(sizedwords, 4)
+      ))
+      .add(CP_LOAD_STATE6_EXT_SRC_ADDR())
+      .add(dwords, sizedwords)
+      /* Zero-pad to multiple of 4 dwords */
+      .add(zero, align_sz - sizedwords);
 }
 
 template<chip CHIP>
 static void
-cs_const_emit(struct fd_ringbuffer *ring, struct kernel *kernel,
-              uint32_t grid[3])
+cs_const_emit(fd_cs &cs, struct kernel *kernel, uint32_t grid[3])
 {
    struct ir3_kernel *ir3_kernel = to_ir3_kernel(kernel);
    struct ir3_shader_variant *v = ir3_kernel->v;
 
    const struct ir3_const_state *const_state = ir3_const_state(v);
-   uint32_t base = const_state->offsets.immediate;
-   int size = DIV_ROUND_UP(const_state->immediates_count, 4);
+   uint32_t base = const_state->allocs.max_const_offset_vec4;
+   const struct ir3_imm_const_state *imm_state = &v->imm_state;
+   int size = DIV_ROUND_UP(imm_state->count, 4);
 
    if (ir3_kernel->info.numwg != INVALID_REG) {
       assert((ir3_kernel->info.numwg & 0x3) == 0);
       int idx = ir3_kernel->info.numwg >> 2;
-      const_state->immediates[idx * 4 + 0] = grid[0];
-      const_state->immediates[idx * 4 + 1] = grid[1];
-      const_state->immediates[idx * 4 + 2] = grid[2];
+      imm_state->values[idx * 4 + 0] = grid[0];
+      imm_state->values[idx * 4 + 1] = grid[1];
+      imm_state->values[idx * 4 + 2] = grid[2];
    }
 
    for (int i = 0; i < MAX_BUFS; i++) {
@@ -321,8 +347,8 @@ cs_const_emit(struct fd_ringbuffer *ring, struct kernel *kernel,
 
          uint64_t iova = fd_bo_get_iova(kernel->bufs[i]);
 
-         const_state->immediates[idx * 4 + 1] = iova >> 32;
-         const_state->immediates[idx * 4 + 0] = (iova << 32) >> 32;
+         imm_state->values[idx * 4 + 1] = iova >> 32;
+         imm_state->values[idx * 4 + 0] = (iova << 32) >> 32;
       }
    }
 
@@ -336,86 +362,145 @@ cs_const_emit(struct fd_ringbuffer *ring, struct kernel *kernel,
    size *= 4;
 
    if (size > 0) {
-      emit_const<CHIP>(ring, base, size, const_state->immediates);
+      emit_const<CHIP>(cs, base, size, imm_state->values);
    }
+}
+
+static unsigned
+kernel_num_bufs(struct kernel *kernel, enum kernel_buf_type buf_type)
+{
+   unsigned num_bufs = 0;
+
+   for (unsigned i = 0; i < kernel->num_bufs; i++) {
+      if (kernel->buf_types[i] == buf_type) {
+         num_bufs++;
+      }
+   }
+
+   return num_bufs;
 }
 
 template<chip CHIP>
 static void
-cs_ibo_emit(struct fd_ringbuffer *ring, struct fd_submit *submit,
-            struct kernel *kernel)
+cs_uav_emit(fd_cs &cs, struct fd_device *dev, struct kernel *kernel)
 {
-   struct fd_ringbuffer *state = fd_submit_new_ringbuffer(
-      submit, kernel->num_bufs * 16 * 4, FD_RINGBUFFER_STREAMING);
+   unsigned num_bufs = kernel_num_bufs(kernel, KERNEL_BUF_UAV);
+
+   if (num_bufs == 0) {
+      return;
+   }
+
+   struct fd_bo *state = fd_bo_new(dev, kernel->num_bufs * 16 * 4,
+                                   FD_BO_GPUREADONLY | FD_BO_HINT_COMMAND,
+                                   "tex_desc");
+
+   cs.attach_bo(state);
+
+   uint32_t *buf = (uint32_t *)fd_bo_map(state);
 
    for (unsigned i = 0; i < kernel->num_bufs; i++) {
+      if (kernel->buf_types[i] != KERNEL_BUF_UAV) {
+         continue;
+      }
+
+      cs.attach_bo(kernel->bufs[i]);
+
       /* size is encoded with low 15b in WIDTH and high bits in HEIGHT,
        * in units of elements:
        */
       unsigned sz = kernel->buf_sizes[i];
       unsigned width = sz & MASK(15);
       unsigned height = sz >> 15;
+      uint64_t iova = fd_bo_get_iova(kernel->bufs[i]);
 
-      OUT_RING(state, A6XX_TEX_CONST_0_FMT(FMT6_32_UINT) | A6XX_TEX_CONST_0_TILE_MODE(TILE6_LINEAR));
-      OUT_RING(state, A6XX_TEX_CONST_1_WIDTH(width) | A6XX_TEX_CONST_1_HEIGHT(height));
-      OUT_RING(state, A6XX_TEX_CONST_2_PITCH(0) |
+      uint32_t descriptor[16] = {
+         A6XX_TEX_CONST_0_FMT(FMT6_32_UINT) | A6XX_TEX_CONST_0_TILE_MODE(TILE6_LINEAR),
+         A6XX_TEX_CONST_1_WIDTH(width) | A6XX_TEX_CONST_1_HEIGHT(height),
+         A6XX_TEX_CONST_2_PITCH(0) |
                       A6XX_TEX_CONST_2_STRUCTSIZETEXELS(1) |
-                      A6XX_TEX_CONST_2_TYPE(A6XX_TEX_BUFFER));
-      OUT_RING(state, A6XX_TEX_CONST_3_ARRAY_PITCH(0));
-      OUT_RELOC(state, kernel->bufs[i], 0, 0, 0);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
-      OUT_RING(state, 0x00000000);
+                      A6XX_TEX_CONST_2_TYPE(A6XX_TEX_BUFFER),
+         A6XX_TEX_CONST_3_ARRAY_PITCH(0),
+         (uint32_t)iova,
+         (uint32_t)(iova >> 32),
+      };
+
+      memcpy(buf, descriptor, 16 * 4);
+      buf += 16;
    }
 
-   OUT_PKT7(ring, CP_LOAD_STATE6_FRAG, 3);
-   OUT_RING(ring, CP_LOAD_STATE6_0_DST_OFF(0) |
-                     CP_LOAD_STATE6_0_STATE_TYPE(ST6_IBO) |
-                     CP_LOAD_STATE6_0_STATE_SRC(SS6_INDIRECT) |
-                     CP_LOAD_STATE6_0_STATE_BLOCK(SB6_CS_SHADER) |
-                     CP_LOAD_STATE6_0_NUM_UNIT(kernel->num_bufs));
-   OUT_RB(ring, state);
+   fd_pkt7(cs, CP_LOAD_STATE6_FRAG, 3)
+      .add(CP_LOAD_STATE6_0(
+         .state_type = ST6_UAV,
+         .state_src = SS6_INDIRECT,
+         .state_block = SB6_CS_SHADER,
+         .num_unit = num_bufs,
+      ))
+      .add(CP_LOAD_STATE6_EXT_SRC_ADDR(state));
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_IBO, 2);
-   OUT_RB(ring, state);
+   fd_crb crb(cs, 3);
 
-   OUT_PKT4(ring, REG_A6XX_SP_CS_IBO_COUNT, 1);
-   OUT_RING(ring, kernel->num_bufs);
+   crb.add(SP_CS_UAV_BASE(CHIP, state));
+   crb.add(A6XX_SP_CS_USIZE(num_bufs));
 
-   fd_ringbuffer_del(state);
+   fd_bo_del(state);
+}
+
+static void
+cs_ubo_emit(fd_cs &cs, struct kernel *kernel)
+{
+   unsigned num_bufs = kernel_num_bufs(kernel, KERNEL_BUF_UBO);
+
+   if (num_bufs == 0) {
+      return;
+   }
+
+   for (unsigned i = 0, offset = 0; i < kernel->num_bufs; i++) {
+      if (kernel->buf_types[i] != KERNEL_BUF_UBO) {
+         continue;
+      }
+
+      cs.attach_bo(kernel->bufs[i]);
+
+      unsigned size_vec4s = DIV_ROUND_UP(kernel->buf_sizes[i], 4);
+
+      fd_pkt7(cs, CP_LOAD_STATE6_FRAG, 5)
+         .add(CP_LOAD_STATE6_0(
+            .dst_off = offset,
+            .state_type = ST6_UBO,
+            .state_src = SS6_DIRECT,
+            .state_block = SB6_CS_SHADER,
+            .num_unit = 1,
+         ))
+         .add(CP_LOAD_STATE6_EXT_SRC_ADDR())
+         .add(A6XX_UBO_DESC(0, kernel->bufs[i], 0, size_vec4s));
+
+      offset++;
+   }
 }
 
 template<chip CHIP>
 static inline unsigned
-event_write(struct fd_ringbuffer *ring, struct kernel *kernel,
-            enum vgt_event_type evt, bool timestamp)
+event_write(fd_cs &cs, struct kernel *kernel, enum vgt_event_type evt, bool timestamp)
 {
    unsigned seqno = 0;
+   unsigned len = timestamp ? 4 : 1;
+
+   fd_pkt7 pkt(cs, CP_EVENT_WRITE, len);
 
    if (CHIP == A6XX) {
-      OUT_PKT7(ring, CP_EVENT_WRITE, timestamp ? 4 : 1);
-      OUT_RING(ring, CP_EVENT_WRITE_0_EVENT(evt));
+      pkt.add(CP_EVENT_WRITE_0_EVENT(evt));
    } else {
-      OUT_PKT7(ring, CP_EVENT_WRITE7, timestamp ? 4 : 1);
-      OUT_RING(ring,
-         CP_EVENT_WRITE7_0_EVENT(evt) |
-            COND(timestamp, CP_EVENT_WRITE7_0_WRITE_ENABLED |
-                               CP_EVENT_WRITE7_0_WRITE_SRC(EV_WRITE_USER_32B)));
+      pkt.add(CP_EVENT_WRITE7_0_EVENT(evt) |
+              CP_EVENT_WRITE7_0_WRITE_SRC(EV_WRITE_USER_32B) |
+              COND(timestamp, CP_EVENT_WRITE7_0_WRITE_ENABLED));
    }
 
    if (timestamp) {
       struct ir3_kernel *ir3_kernel = to_ir3_kernel(kernel);
       struct a6xx_backend *a6xx_backend = to_a6xx_backend(ir3_kernel->backend);
       seqno = ++a6xx_backend->seqno;
-      OUT_RELOC(ring, control_ptr(a6xx_backend, seqno)); /* ADDR_LO/HI */
-      OUT_RING(ring, seqno);
+      pkt.add(CP_EVENT_WRITE_ADDR(control_ptr(a6xx_backend, seqno)));
+      pkt.add(seqno);
    }
 
    return seqno;
@@ -423,31 +508,30 @@ event_write(struct fd_ringbuffer *ring, struct kernel *kernel,
 
 template<chip CHIP>
 static inline void
-cache_flush(struct fd_ringbuffer *ring, struct kernel *kernel)
+cache_flush(fd_cs &cs, struct kernel *kernel)
 {
    struct ir3_kernel *ir3_kernel = to_ir3_kernel(kernel);
    struct a6xx_backend *a6xx_backend = to_a6xx_backend(ir3_kernel->backend);
    unsigned seqno;
 
-   seqno = event_write<CHIP>(ring, kernel, RB_DONE_TS, true);
+   seqno = event_write<CHIP>(cs, kernel, RB_DONE_TS, true);
 
-   OUT_PKT7(ring, CP_WAIT_REG_MEM, 6);
-   OUT_RING(ring, CP_WAIT_REG_MEM_0_FUNCTION(WRITE_EQ) |
-                     CP_WAIT_REG_MEM_0_POLL(POLL_MEMORY));
-   OUT_RELOC(ring, control_ptr(a6xx_backend, seqno));
-   OUT_RING(ring, CP_WAIT_REG_MEM_3_REF(seqno));
-   OUT_RING(ring, CP_WAIT_REG_MEM_4_MASK(~0));
-   OUT_RING(ring, CP_WAIT_REG_MEM_5_DELAY_LOOP_CYCLES(16));
+   fd_pkt7(cs, CP_WAIT_REG_MEM, 6)
+      .add(CP_WAIT_REG_MEM_0(.function = WRITE_EQ, .poll = POLL_MEMORY))
+      .add(CP_WAIT_REG_MEM_POLL_ADDR(control_ptr(a6xx_backend, seqno)))
+      .add(CP_WAIT_REG_MEM_3(.ref = seqno))
+      .add(CP_WAIT_REG_MEM_4(.mask = ~0))
+      .add(CP_WAIT_REG_MEM_5(.delay_loop_cycles = 16));
 
    if (CHIP == A6XX) {
-      seqno = event_write<CHIP>(ring, kernel, CACHE_FLUSH_TS, true);
+      seqno = event_write<CHIP>(cs, kernel, CACHE_FLUSH_TS, true);
 
-      OUT_PKT7(ring, CP_WAIT_MEM_GTE, 4);
-      OUT_RING(ring, CP_WAIT_MEM_GTE_0_RESERVED(0));
-      OUT_RELOC(ring, control_ptr(a6xx_backend, seqno));
-      OUT_RING(ring, CP_WAIT_MEM_GTE_3_REF(seqno));
+      fd_pkt7(cs, CP_WAIT_MEM_GTE, 4)
+         .add(CP_WAIT_MEM_GTE_0())
+         .add(CP_WAIT_MEM_GTE_POLL_ADDR(control_ptr(a6xx_backend, seqno)))
+         .add(CP_WAIT_MEM_GTE_3(.ref = seqno));
    } else {
-      event_write<CHIP>(ring, kernel, CACHE_FLUSH7, false);
+      event_write<CHIP>(cs, kernel, CACHE_FLUSH7, false);
    }
 }
 
@@ -458,16 +542,19 @@ a6xx_emit_grid(struct kernel *kernel, uint32_t grid[3],
 {
    struct ir3_kernel *ir3_kernel = to_ir3_kernel(kernel);
    struct a6xx_backend *a6xx_backend = to_a6xx_backend(ir3_kernel->backend);
-   struct fd_ringbuffer *ring = fd_submit_new_ringbuffer(
-      submit, 0,
-      (enum fd_ringbuffer_flags)(FD_RINGBUFFER_PRIMARY | FD_RINGBUFFER_GROWABLE));
+   fd_cs cs(fd_submit_new_ringbuffer(submit, 0,
+      (enum fd_ringbuffer_flags)(FD_RINGBUFFER_PRIMARY | FD_RINGBUFFER_GROWABLE)));
 
-   cs_program_emit<CHIP>(ring, kernel);
-   cs_const_emit<CHIP>(ring, kernel, grid);
-   cs_ibo_emit<CHIP>(ring, submit, kernel);
+   cs.attach_bo(a6xx_backend->control_mem);
 
-   OUT_PKT7(ring, CP_SET_MARKER, 1);
-   OUT_RING(ring, A6XX_CP_SET_MARKER_0_MODE(RM6_COMPUTE));
+   cs_restore_emit<CHIP>(cs, a6xx_backend);
+   cs_program_emit<CHIP>(cs, kernel);
+   cs_const_emit<CHIP>(cs, kernel, grid);
+   cs_uav_emit<CHIP>(cs, a6xx_backend->dev, kernel);
+   cs_ubo_emit(cs, kernel);
+
+   fd_pkt7(cs, CP_SET_MARKER, 1)
+      .add(A6XX_CP_SET_MARKER_0(.mode = RM6_COMPUTE));
 
    const unsigned *local_size = kernel->local_size;
    const unsigned *num_groups = grid;
@@ -479,34 +566,39 @@ a6xx_emit_grid(struct kernel *kernel, uint32_t grid[3],
       work_dim++;
    }
 
-   OUT_REG(ring, HLSQ_CS_NDRANGE_0(CHIP,
-                    .kerneldim = work_dim,
-                    .localsizex = local_size[0] - 1,
-                    .localsizey = local_size[1] - 1,
-                    .localsizez = local_size[2] - 1,
-                 ));
-   if (CHIP == A7XX) {
-      OUT_REG(ring, A7XX_HLSQ_CS_LOCAL_SIZE(.localsizex = local_size[0] - 1,
-                                            .localsizey = local_size[1] - 1,
-                                            .localsizez = local_size[2] - 1, ));
+   with_crb (cs, 11) {
+      crb.add(SP_CS_NDRANGE_0(CHIP,
+         .kerneldim = work_dim,
+         .localsizex = local_size[0] - 1,
+         .localsizey = local_size[1] - 1,
+         .localsizez = local_size[2] - 1,
+      ));
+
+      if (CHIP == A7XX) {
+         crb.add(SP_CS_NDRANGE_7(CHIP,
+            .localsizex = local_size[0] - 1,
+            .localsizey = local_size[1] - 1,
+            .localsizez = local_size[2] - 1,
+         ));
+      }
+
+      crb.add(SP_CS_NDRANGE_1(CHIP,
+         .globalsize_x = local_size[0] * num_groups[0],
+      ));
+      crb.add(SP_CS_NDRANGE_2(CHIP, 0));
+      crb.add(SP_CS_NDRANGE_3(CHIP,
+         .globalsize_y = local_size[1] * num_groups[1],
+      ));
+      crb.add(SP_CS_NDRANGE_4(CHIP, 0));
+      crb.add(SP_CS_NDRANGE_5(CHIP,
+         .globalsize_z = local_size[2] * num_groups[2],
+      ));
+      crb.add(SP_CS_NDRANGE_6(CHIP, 0));
+
+      crb.add(SP_CS_KERNEL_GROUP_X(CHIP, 1));
+      crb.add(SP_CS_KERNEL_GROUP_Y(CHIP, 1));
+      crb.add(SP_CS_KERNEL_GROUP_Z(CHIP, 1));
    }
-
-   OUT_REG(ring, HLSQ_CS_NDRANGE_1(CHIP,
-                    .globalsize_x = local_size[0] * num_groups[0],
-                 ));
-   OUT_REG(ring, HLSQ_CS_NDRANGE_2(CHIP, 0));
-   OUT_REG(ring, HLSQ_CS_NDRANGE_3(CHIP,
-                    .globalsize_y = local_size[1] * num_groups[1],
-                 ));
-   OUT_REG(ring, HLSQ_CS_NDRANGE_4(CHIP, 0));
-   OUT_REG(ring, HLSQ_CS_NDRANGE_5(CHIP,
-                    .globalsize_z = local_size[2] * num_groups[2],
-                 ));
-   OUT_REG(ring, HLSQ_CS_NDRANGE_6(CHIP, 0));
-
-   OUT_REG(ring, HLSQ_CS_KERNEL_GROUP_X(CHIP, 1));
-   OUT_REG(ring, HLSQ_CS_KERNEL_GROUP_Y(CHIP, 1));
-   OUT_REG(ring, HLSQ_CS_KERNEL_GROUP_Z(CHIP, 1));
 
    if (a6xx_backend->num_perfcntrs > 0) {
       a6xx_backend->query_mem = fd_bo_new(
@@ -519,55 +611,55 @@ a6xx_emit_grid(struct kernel *kernel, uint32_t grid[3],
       for (unsigned i = 0; i < a6xx_backend->num_perfcntrs; i++) {
          const struct perfcntr *counter = &a6xx_backend->perfcntrs[i];
 
-         OUT_PKT4(ring, counter->select_reg, 1);
-         OUT_RING(ring, counter->selector);
+         fd_pkt4(cs, 1).add({
+            .reg = counter->select_reg,
+            .value = counter->selector,
+         });
       }
 
-      OUT_PKT7(ring, CP_WAIT_FOR_IDLE, 0);
+      fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
       /* and snapshot the start values: */
       for (unsigned i = 0; i < a6xx_backend->num_perfcntrs; i++) {
          const struct perfcntr *counter = &a6xx_backend->perfcntrs[i];
 
-         OUT_PKT7(ring, CP_REG_TO_MEM, 3);
-         OUT_RING(ring, CP_REG_TO_MEM_0_64B |
-                           CP_REG_TO_MEM_0_REG(counter->counter_reg_lo));
-         OUT_RELOC(ring, query_sample_idx(a6xx_backend, i, start));
+         fd_pkt7(cs, CP_REG_TO_MEM, 3)
+            .add(CP_REG_TO_MEM_0(.reg = counter->counter_reg_lo, ._64b = true))
+            .add(A5XX_CP_REG_TO_MEM_DEST(query_sample_idx(a6xx_backend, i, start)));
       }
    }
 
-   OUT_PKT7(ring, CP_EXEC_CS, 4);
-   OUT_RING(ring, 0x00000000);
-   OUT_RING(ring, CP_EXEC_CS_1_NGROUPS_X(grid[0]));
-   OUT_RING(ring, CP_EXEC_CS_2_NGROUPS_Y(grid[1]));
-   OUT_RING(ring, CP_EXEC_CS_3_NGROUPS_Z(grid[2]));
+   fd_pkt7(cs, CP_EXEC_CS, 4)
+      .add(CP_EXEC_CS_0())
+      .add(CP_EXEC_CS_1(.ngroups_x = grid[0]))
+      .add(CP_EXEC_CS_2(.ngroups_y = grid[1]))
+      .add(CP_EXEC_CS_3(.ngroups_z = grid[2]));
 
-   OUT_PKT7(ring, CP_WAIT_FOR_IDLE, 0);
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    if (a6xx_backend->num_perfcntrs > 0) {
       /* snapshot the end values: */
       for (unsigned i = 0; i < a6xx_backend->num_perfcntrs; i++) {
          const struct perfcntr *counter = &a6xx_backend->perfcntrs[i];
 
-         OUT_PKT7(ring, CP_REG_TO_MEM, 3);
-         OUT_RING(ring, CP_REG_TO_MEM_0_64B |
-                           CP_REG_TO_MEM_0_REG(counter->counter_reg_lo));
-         OUT_RELOC(ring, query_sample_idx(a6xx_backend, i, stop));
+         fd_pkt7(cs, CP_REG_TO_MEM, 3)
+            .add(CP_REG_TO_MEM_0(.reg = counter->counter_reg_lo, ._64b = true))
+            .add(A5XX_CP_REG_TO_MEM_DEST(query_sample_idx(a6xx_backend, i, stop)));
       }
 
       /* and compute the result: */
       for (unsigned i = 0; i < a6xx_backend->num_perfcntrs; i++) {
          /* result += stop - start: */
-         OUT_PKT7(ring, CP_MEM_TO_MEM, 9);
-         OUT_RING(ring, CP_MEM_TO_MEM_0_DOUBLE | CP_MEM_TO_MEM_0_NEG_C);
-         OUT_RELOC(ring, query_sample_idx(a6xx_backend, i, result)); /* dst */
-         OUT_RELOC(ring, query_sample_idx(a6xx_backend, i, result)); /* srcA */
-         OUT_RELOC(ring, query_sample_idx(a6xx_backend, i, stop));   /* srcB */
-         OUT_RELOC(ring, query_sample_idx(a6xx_backend, i, start));  /* srcC */
+         fd_pkt7(cs, CP_MEM_TO_MEM, 9)
+            .add(CP_MEM_TO_MEM_0(.neg_c = true, ._double = true))
+            .add(CP_MEM_TO_MEM_DST(query_sample_idx(a6xx_backend, i, result)))
+            .add(CP_MEM_TO_MEM_SRC_A(query_sample_idx(a6xx_backend, i, result)))
+            .add(CP_MEM_TO_MEM_SRC_B(query_sample_idx(a6xx_backend, i, stop)))
+            .add(CP_MEM_TO_MEM_SRC_C(query_sample_idx(a6xx_backend, i, start)));
       }
    }
 
-   cache_flush<CHIP>(ring, kernel);
+   cache_flush<CHIP>(cs, kernel);
 }
 
 static void
@@ -609,11 +701,14 @@ a6xx_init(struct fd_device *dev, const struct fd_dev_id *dev_id)
       .read_perfcntrs = a6xx_read_perfcntrs,
    };
 
-   struct ir3_compiler_options compiler_options = {};
-   a6xx_backend->compiler = ir3_compiler_create(dev, dev_id, &compiler_options);
+   struct ir3_compiler_options compiler_options = {
+      .disable_cache = true,
+   };
+   a6xx_backend->compiler =
+      ir3_compiler_create(dev, dev_id, fd_dev_info_raw(dev_id), &compiler_options);
    a6xx_backend->dev = dev;
 
-   a6xx_backend->info = fd_dev_info(dev_id);
+   a6xx_backend->info = fd_dev_info_raw(dev_id);
 
    a6xx_backend->control_mem =
       fd_bo_new(dev, 0x1000, 0, "control");

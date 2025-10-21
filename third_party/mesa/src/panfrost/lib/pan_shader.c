@@ -23,99 +23,51 @@
  */
 
 #include "pan_shader.h"
-#include "pan_device.h"
+#include "panfrost/clc/pan_compile.h"
+#include "pan_blend.h"
 #include "pan_format.h"
 
-#if PAN_ARCH <= 5
-#include "panfrost/midgard/midgard_compile.h"
-#else
 #include "panfrost/compiler/bifrost_compile.h"
-#endif
+#include "panfrost/midgard/midgard_compile.h"
 
 const nir_shader_compiler_options *
-GENX(pan_shader_get_compiler_options)(void)
+pan_shader_get_compiler_options(unsigned arch)
 {
-#if PAN_ARCH >= 9
-   return &bifrost_nir_options_v9;
-#elif PAN_ARCH >= 6
-   return &bifrost_nir_options_v6;
-#else
-   return &midgard_nir_options;
-#endif
-}
-
-#if PAN_ARCH >= 6
-static enum mali_register_file_format
-bifrost_blend_type_from_nir(nir_alu_type nir_type)
-{
-   switch (nir_type) {
-   case 0: /* Render target not in use */
-      return 0;
-   case nir_type_float16:
-      return MALI_REGISTER_FILE_FORMAT_F16;
-   case nir_type_float32:
-      return MALI_REGISTER_FILE_FORMAT_F32;
-   case nir_type_int32:
-      return MALI_REGISTER_FILE_FORMAT_I32;
-   case nir_type_uint32:
-      return MALI_REGISTER_FILE_FORMAT_U32;
-   case nir_type_int16:
-      return MALI_REGISTER_FILE_FORMAT_I16;
-   case nir_type_uint16:
-      return MALI_REGISTER_FILE_FORMAT_U16;
+   switch (arch) {
+   case 4:
+   case 5:
+      return &midgard_nir_options;
+   case 6:
+   case 7:
+      return &bifrost_nir_options_v6;
+   case 9:
+   case 10:
+      return &bifrost_nir_options_v9;
+   case 11:
+   case 12:
+   case 13:
+      return &bifrost_nir_options_v11;
    default:
-      unreachable("Unsupported blend shader type for NIR alu type");
-      return 0;
+      assert(!"Unsupported arch");
+      return NULL;
    }
 }
-
-#if PAN_ARCH <= 7
-enum mali_register_file_format
-GENX(pan_fixup_blend_type)(nir_alu_type T_size, enum pipe_format format)
-{
-   const struct util_format_description *desc = util_format_description(format);
-   unsigned size = nir_alu_type_get_type_size(T_size);
-   nir_alu_type T_format = pan_unpacked_type_for_format(desc);
-   nir_alu_type T = nir_alu_type_get_base_type(T_format) | size;
-
-   return bifrost_blend_type_from_nir(T);
-}
-#endif
-#endif
-
-/* This is only needed on Midgard. It's the same on both v4 and v5, so only
- * compile once to avoid the GenXML dependency for calls.
- */
-#if PAN_ARCH == 5
-uint8_t
-pan_raw_format_mask_midgard(enum pipe_format *formats)
-{
-   uint8_t out = 0;
-
-   for (unsigned i = 0; i < 8; i++) {
-      enum pipe_format fmt = formats[i];
-      unsigned wb_fmt = panfrost_blendable_formats_v6[fmt].writeback;
-
-      if (wb_fmt < MALI_COLOR_FORMAT_R8)
-         out |= BITFIELD_BIT(i);
-   }
-
-   return out;
-}
-#endif
 
 void
-GENX(pan_shader_compile)(nir_shader *s, struct panfrost_compile_inputs *inputs,
-                         struct util_dynarray *binary,
-                         struct pan_shader_info *info)
+pan_shader_compile(nir_shader *s, struct pan_compile_inputs *inputs,
+                   struct util_dynarray *binary, struct pan_shader_info *info)
 {
+   unsigned arch = pan_arch(inputs->gpu_id);
+
    memset(info, 0, sizeof(*info));
 
-#if PAN_ARCH >= 6
-   bifrost_compile_shader_nir(s, inputs, binary, info);
-#else
-   midgard_compile_shader_nir(s, inputs, binary, info);
-#endif
+   NIR_PASS(_, s, nir_inline_sysval, nir_intrinsic_load_printf_buffer_size,
+            LIBPAN_PRINTF_BUFFER_SIZE - 8);
+
+   if (arch >= 6)
+      bifrost_compile_shader_nir(s, inputs, binary, info);
+   else
+      midgard_compile_shader_nir(s, inputs, binary, info);
 
    info->stage = s->info.stage;
    info->contains_barrier =
@@ -128,26 +80,30 @@ GENX(pan_shader_compile)(nir_shader *s, struct panfrost_compile_inputs *inputs,
       info->attributes_read_count = util_bitcount64(info->attributes_read);
       info->attribute_count = info->attributes_read_count;
 
-#if PAN_ARCH <= 5
-      bool vertex_id = BITSET_TEST(s->info.system_values_read,
-                                   SYSTEM_VALUE_VERTEX_ID_ZERO_BASE);
-      if (vertex_id)
-         info->attribute_count = MAX2(info->attribute_count, PAN_VERTEX_ID + 1);
+      if (arch <= 5) {
+         if (info->midgard.vs.reads_raw_vertex_id)
+            info->attribute_count =
+               MAX2(info->attribute_count, PAN_VERTEX_ID + 1);
 
-      bool instance_id =
-         BITSET_TEST(s->info.system_values_read, SYSTEM_VALUE_INSTANCE_ID);
-      if (instance_id)
-         info->attribute_count =
-            MAX2(info->attribute_count, PAN_INSTANCE_ID + 1);
-#endif
+         bool instance_id =
+            BITSET_TEST(s->info.system_values_read, SYSTEM_VALUE_INSTANCE_ID);
+         if (instance_id)
+            info->attribute_count =
+               MAX2(info->attribute_count, PAN_INSTANCE_ID + 1);
+      }
 
       info->vs.writes_point_size =
-         s->info.outputs_written & (1 << VARYING_SLOT_PSIZ);
+         s->info.outputs_written & VARYING_BIT_PSIZ;
 
-#if PAN_ARCH >= 9
-      info->varyings.output_count =
-         util_last_bit(s->info.outputs_written >> VARYING_SLOT_VAR0);
-#endif
+      if (arch >= 9) {
+         info->varyings.output_count =
+            util_last_bit(s->info.outputs_written >> VARYING_SLOT_VAR0);
+
+         /* Store the mask of special varyings, in case we need to emit ADs
+          * later. */
+         info->varyings.fixed_varyings =
+            pan_get_fixed_varying_mask(s->info.outputs_written);
+      }
       break;
    case MESA_SHADER_FRAGMENT:
       if (s->info.outputs_written & BITFIELD64_BIT(FRAG_RESULT_DEPTH))
@@ -168,8 +124,7 @@ GENX(pan_shader_compile)(nir_shader *s, struct panfrost_compile_inputs *inputs,
       /* List of reasons we need to execute frag shaders when things
        * are masked off */
 
-      info->fs.sidefx = s->info.writes_memory || s->info.fs.uses_discard ||
-                        s->info.fs.uses_demote;
+      info->fs.sidefx = s->info.writes_memory || s->info.fs.uses_discard;
 
       /* With suitable ZSA/blend, is early-z possible? */
       info->fs.can_early_z = !info->fs.sidefx && !info->fs.writes_depth &&
@@ -184,20 +139,28 @@ GENX(pan_shader_compile)(nir_shader *s, struct panfrost_compile_inputs *inputs,
       /* Requires the same hardware guarantees, so grouped as one bit
        * in the hardware.
        */
-      info->contains_barrier |= s->info.fs.needs_quad_helper_invocations;
+      info->contains_barrier |= s->info.fs.needs_coarse_quad_helper_invocations;
 
       info->fs.reads_frag_coord =
-         (s->info.inputs_read & (1 << VARYING_SLOT_POS)) ||
+         (s->info.inputs_read & VARYING_BIT_POS) ||
          BITSET_TEST(s->info.system_values_read, SYSTEM_VALUE_FRAG_COORD);
+      info->fs.reads_primitive_id =
+         (s->info.inputs_read & VARYING_BIT_PRIMITIVE_ID) ||
+         BITSET_TEST(s->info.system_values_read, SYSTEM_VALUE_PRIMITIVE_ID);
       info->fs.reads_point_coord =
-         s->info.inputs_read & (1 << VARYING_SLOT_PNTC);
+         s->info.inputs_read & VARYING_BIT_PNTC;
       info->fs.reads_face =
-         (s->info.inputs_read & (1 << VARYING_SLOT_FACE)) ||
+         (s->info.inputs_read & VARYING_BIT_FACE) ||
          BITSET_TEST(s->info.system_values_read, SYSTEM_VALUE_FRONT_FACE);
-#if PAN_ARCH >= 9
-      info->varyings.output_count =
-         util_last_bit(s->info.outputs_read >> VARYING_SLOT_VAR0);
-#endif
+      if (arch >= 9) {
+         info->varyings.input_count =
+            util_last_bit(s->info.inputs_read >> VARYING_SLOT_VAR0);
+
+         /* Store the mask of special varyings, in case we need to emit ADs
+          * later. */
+         info->varyings.fixed_varyings =
+            pan_get_fixed_varying_mask(s->info.inputs_read);
+      }
       break;
    default:
       /* Everything else treated as compute */
@@ -217,11 +180,22 @@ GENX(pan_shader_compile)(nir_shader *s, struct panfrost_compile_inputs *inputs,
    info->ftz_fp16 = nir_is_denorm_flush_to_zero(execution_mode, 16);
    info->ftz_fp32 = nir_is_denorm_flush_to_zero(execution_mode, 32);
 
-#if PAN_ARCH >= 6
-   /* This is "redundant" information, but is needed in a draw-time hot path */
-   for (unsigned i = 0; i < ARRAY_SIZE(info->bifrost.blend); ++i) {
-      info->bifrost.blend[i].format =
-         bifrost_blend_type_from_nir(info->bifrost.blend[i].type);
+   if (arch >= 9) {
+      /* Valhall hardware doesn't have a "flush FP16, preserve FP32" mode, and
+       * we don't advertise independent FP16/FP32 denorm modes in panvk, but
+       * it's still possible to have shaders that don't specify any denorm mode
+       * for FP32. In that case, default to flush FP32. */
+      if (info->ftz_fp16 && !info->ftz_fp32) {
+         assert(!nir_is_denorm_preserve(execution_mode, 32));
+         info->ftz_fp32 = true;
+      }
    }
-#endif
+
+   if (arch >= 6) {
+      /* This is "redundant" information, but is needed in a draw-time hot path */
+      for (unsigned i = 0; i < ARRAY_SIZE(info->bifrost.blend); ++i) {
+         info->bifrost.blend[i].format =
+            pan_blend_type_from_nir(info->bifrost.blend[i].type);
+      }
+   }
 }

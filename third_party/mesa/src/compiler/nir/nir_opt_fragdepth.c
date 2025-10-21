@@ -31,8 +31,8 @@
  * this value to gl_FragDepth, the store instruction is removed.
  */
 
-static bool
-ssa_def_is_source_depth(nir_def *def)
+bool
+nir_def_is_frag_coord_z(nir_def *def)
 {
    nir_scalar scalar = nir_scalar_resolved(def, 0);
    nir_instr *instr = scalar.def->parent_instr;
@@ -40,11 +40,15 @@ ssa_def_is_source_depth(nir_def *def)
       return false;
 
    nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
-   if (intrin->intrinsic != nir_intrinsic_load_frag_coord)
+   switch (intrin->intrinsic) {
+   case nir_intrinsic_load_frag_coord:
+      /* Depth is gl_FragCoord.z */
+      return scalar.comp == 2;
+   case nir_intrinsic_load_frag_coord_z:
+      return true;
+   default:
       return false;
-
-   /* Depth is gl_FragCoord.z */
-   return scalar.comp == 2;
+   }
 }
 
 bool
@@ -93,7 +97,7 @@ nir_opt_fragdepth(nir_shader *shader)
             /* This isn't the only write: give up on this optimization */
             goto end;
          } else {
-            if (ssa_def_is_source_depth(intrin->src[data_src].ssa)) {
+            if (nir_def_is_frag_coord_z(intrin->src[data_src].ssa)) {
                /* We're writing gl_FragCoord.z in gl_FragDepth: remember
                 * intrin so we can try to remove it later. */
                store_intrin = intrin;
@@ -111,11 +115,8 @@ nir_opt_fragdepth(nir_shader *shader)
        */
       nir_instr_remove(&store_intrin->instr);
 
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance |
-                                     nir_metadata_loop_analysis |
-                                     nir_metadata_instr_index);
-      progress = true;
+      progress = nir_progress(true, impl,
+                              nir_metadata_control_flow | nir_metadata_loop_analysis | nir_metadata_instr_index);
    }
 
 end:

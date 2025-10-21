@@ -53,7 +53,7 @@ vlVaQueryConfigProfiles(VADriverContextP ctx, VAProfile *profile_list, int *num_
    *num_profiles = 0;
 
    pscreen = VL_VA_PSCREEN(ctx);
-   for (p = PIPE_VIDEO_PROFILE_MPEG2_SIMPLE; p <= PIPE_VIDEO_PROFILE_AV1_MAIN; ++p) {
+   for (p = PIPE_VIDEO_PROFILE_MPEG2_SIMPLE; p < PIPE_VIDEO_PROFILE_MAX; ++p) {
       if (u_reduce_video_profile(p) == PIPE_VIDEO_FORMAT_MPEG4 && !debug_get_option_mpeg4())
          continue;
 
@@ -141,6 +141,11 @@ static unsigned int get_screen_supported_va_rt_formats(struct pipe_screen *pscre
                                           entrypoint))
       supported_rt_formats |= VA_RT_FORMAT_YUV420_10BPP;
 
+   if (pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_P012,
+                                          profile,
+                                          entrypoint))
+      supported_rt_formats |= VA_RT_FORMAT_YUV420_12;
+
    if (pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_Y8_400_UNORM,
                                           profile,
                                           entrypoint))
@@ -162,16 +167,34 @@ static unsigned int get_screen_supported_va_rt_formats(struct pipe_screen *pscre
    if (pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R8G8B8A8_UNORM,
                                           profile,
                                           entrypoint) ||
-       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R8G8B8A8_UINT,
+       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_B8G8R8A8_UNORM,
                                           profile,
                                           entrypoint) ||
        pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R8G8B8X8_UNORM,
                                           profile,
                                           entrypoint) ||
-       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R8G8B8X8_UINT,
+       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_B8G8R8X8_UNORM,
+                                          profile,
+                                          entrypoint) ||
+       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_A8R8G8B8_UNORM,
                                           profile,
                                           entrypoint))
       supported_rt_formats |= VA_RT_FORMAT_RGB32;
+
+   if (pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R10G10B10A2_UNORM,
+                                          profile,
+                                          entrypoint) ||
+       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_B10G10R10A2_UNORM,
+                                          profile,
+                                          entrypoint) ||
+       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R10G10B10X2_UNORM,
+                                          profile,
+                                          entrypoint) ||
+       pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_B10G10R10X2_UNORM,
+                                          profile,
+                                          entrypoint))
+      supported_rt_formats |= VA_RT_FORMAT_RGB32_10;
+
    if (pscreen->is_video_format_supported(pscreen, PIPE_FORMAT_R8_G8_B8_UNORM,
                                           profile,
                                           entrypoint))
@@ -207,6 +230,40 @@ vlVaGetConfigAttributes(VADriverContextP ctx, VAProfile profile, VAEntrypoint en
                                                        ProfileToPipe(profile),
                                                        PIPE_VIDEO_ENTRYPOINT_BITSTREAM);
             break;
+         case VAConfigAttribMaxPictureWidth:
+         {
+            value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_BITSTREAM,
+                                             PIPE_VIDEO_CAP_MAX_WIDTH);
+            value = value ? value : VA_ATTRIB_NOT_SUPPORTED;
+         } break;
+         case VAConfigAttribMaxPictureHeight:
+         {
+            value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_BITSTREAM,
+                                             PIPE_VIDEO_CAP_MAX_HEIGHT);
+            value = value ? value : VA_ATTRIB_NOT_SUPPORTED;
+         } break;
+#if VA_CHECK_VERSION(1, 21, 0)
+         case VAConfigAttribDecJPEG:
+         {
+            VAConfigAttribValDecJPEG attr_jpeg = { .value = 0 };
+            /* Check if ROI Decode is supported */
+            int supportsCropDec =
+                  pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                           PIPE_VIDEO_ENTRYPOINT_BITSTREAM,
+                                           PIPE_VIDEO_CAP_ROI_CROP_DEC);
+            if (supportsCropDec <= 0)
+               value = VA_ATTRIB_NOT_SUPPORTED;
+            else {
+               attr_jpeg.bits.crop = 1;
+               value = attr_jpeg.value;
+            }
+         } break;
+#endif
+         case VAConfigAttribDecProcessing:
+            value = 1;
+            break;
          default:
             value = VA_ATTRIB_NOT_SUPPORTED;
             break;
@@ -235,6 +292,7 @@ vlVaGetConfigAttributes(VADriverContextP ctx, VAProfile profile, VAEntrypoint en
             value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
                                              PIPE_VIDEO_ENTRYPOINT_ENCODE,
                                              PIPE_VIDEO_CAP_MAX_TEMPORAL_LAYERS);
+            assert(value <= 4);
             if (value > 0) {
                value -= 1;
                value |= (1 << 8);   /* temporal_layer_bitrate_control_flag */
@@ -243,11 +301,12 @@ vlVaGetConfigAttributes(VADriverContextP ctx, VAProfile profile, VAEntrypoint en
          case VAConfigAttribEncPackedHeaders:
             value = VA_ENC_PACKED_HEADER_NONE;
             if ((u_reduce_video_profile(ProfileToPipe(profile)) == PIPE_VIDEO_FORMAT_MPEG4_AVC))
-               value |= VA_ENC_PACKED_HEADER_SEQUENCE;
-            if ((u_reduce_video_profile(ProfileToPipe(profile)) == PIPE_VIDEO_FORMAT_HEVC))
-               value |= VA_ENC_PACKED_HEADER_SEQUENCE;
+               value |= ENC_PACKED_HEADERS_H264;
+            else if ((u_reduce_video_profile(ProfileToPipe(profile)) == PIPE_VIDEO_FORMAT_HEVC))
+               value |= ENC_PACKED_HEADERS_HEVC;
             else if (u_reduce_video_profile(ProfileToPipe(profile)) == PIPE_VIDEO_FORMAT_AV1)
-               value |= (VA_ENC_PACKED_HEADER_SEQUENCE | VA_ENC_PACKED_HEADER_PICTURE);
+               value |= ENC_PACKED_HEADERS_AV1;
+
             break;
          case VAConfigAttribEncMaxSlices:
          {
@@ -306,6 +365,20 @@ vlVaGetConfigAttributes(VADriverContextP ctx, VAProfile profile, VAEntrypoint en
             value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
                                              PIPE_VIDEO_ENTRYPOINT_ENCODE,
                                              PIPE_VIDEO_CAP_ENC_SUPPORTS_MAX_FRAME_SIZE);
+            value = value ? value : VA_ATTRIB_NOT_SUPPORTED;
+         } break;
+         case VAConfigAttribMaxPictureWidth:
+         {
+            value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_ENCODE,
+                                             PIPE_VIDEO_CAP_MAX_WIDTH);
+            value = value ? value : VA_ATTRIB_NOT_SUPPORTED;
+         } break;
+         case VAConfigAttribMaxPictureHeight:
+         {
+            value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_ENCODE,
+                                             PIPE_VIDEO_CAP_MAX_HEIGHT);
             value = value ? value : VA_ATTRIB_NOT_SUPPORTED;
          } break;
 #if VA_CHECK_VERSION(1, 12, 0)
@@ -466,6 +539,57 @@ vlVaGetConfigAttributes(VADriverContextP ctx, VAProfile profile, VAEntrypoint en
                value = encode_tile_support;
          } break;
 #endif
+#if VA_CHECK_VERSION(1, 21, 0)
+         case VAConfigAttribEncMaxTileRows:
+         {
+            int max_tile_rows = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_ENCODE,
+                                             PIPE_VIDEO_CAP_ENC_MAX_TILE_ROWS);
+            if (max_tile_rows <= 0)
+               value = VA_ATTRIB_NOT_SUPPORTED;
+            else
+               value = max_tile_rows;
+         } break;
+         case VAConfigAttribEncMaxTileCols:
+         {
+            int max_tile_cols = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_ENCODE,
+                                             PIPE_VIDEO_CAP_ENC_MAX_TILE_COLS);
+            if (max_tile_cols <= 0)
+               value = VA_ATTRIB_NOT_SUPPORTED;
+            else
+               value = max_tile_cols;
+         } break;
+#endif
+         case VAConfigAttribEncIntraRefresh:
+         {
+            int ir_support = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_ENCODE,
+                                             PIPE_VIDEO_CAP_ENC_INTRA_REFRESH);
+            if (ir_support <= 0)
+               value = VA_ATTRIB_NOT_SUPPORTED;
+            else
+               value = ir_support;
+         } break;
+
+         case VAConfigAttribEncROI:
+         {
+            union pipe_enc_cap_roi roi_pipe_caps = { 0 };
+            roi_pipe_caps.value = pscreen->get_video_param(pscreen, ProfileToPipe(profile),
+                                             PIPE_VIDEO_ENTRYPOINT_ENCODE,
+                                             PIPE_VIDEO_CAP_ENC_ROI);
+            if (roi_pipe_caps.value <= 0)
+               value = VA_ATTRIB_NOT_SUPPORTED;
+            else
+            {
+               VAConfigAttribValEncROI roi_va_caps = { 0 };
+               roi_va_caps.bits.num_roi_regions = roi_pipe_caps.bits.num_roi_regions;
+               roi_va_caps.bits.roi_rc_priority_support = roi_pipe_caps.bits.roi_rc_priority_support;
+               roi_va_caps.bits.roi_rc_qp_delta_support = roi_pipe_caps.bits.roi_rc_qp_delta_support;
+               value = roi_va_caps.value;
+            }
+         } break;
+
          default:
             value = VA_ATTRIB_NOT_SUPPORTED;
             break;
@@ -526,9 +650,7 @@ vlVaCreateConfig(VADriverContextP ctx, VAProfile profile, VAEntrypoint entrypoin
                                                                 config->entrypoint);
       for (int i = 0; i < num_attribs; i++) {
          if (attrib_list[i].type == VAConfigAttribRTFormat) {
-            if (attrib_list[i].value & supported_rt_formats) {
-               config->rt_format = attrib_list[i].value;
-            } else {
+            if (!(attrib_list[i].value & supported_rt_formats)) {
                FREE(config);
                return VA_STATUS_ERROR_UNSUPPORTED_RT_FORMAT;
             }
@@ -538,10 +660,6 @@ vlVaCreateConfig(VADriverContextP ctx, VAProfile profile, VAEntrypoint entrypoin
             return VA_STATUS_ERROR_INVALID_VALUE;
          }
       }
-
-      /* Default value if not specified in the input attributes. */
-      if (!config->rt_format)
-         config->rt_format = supported_rt_formats;
 
       mtx_lock(&drv->mutex);
       *config_id = handle_table_add(drv->htab, config);
@@ -619,31 +737,26 @@ vlVaCreateConfig(VADriverContextP ctx, VAProfile profile, VAEntrypoint entrypoin
          }
       }
       if (attrib_list[i].type == VAConfigAttribRTFormat) {
-         if (attrib_list[i].value & supported_rt_formats) {
-            config->rt_format = attrib_list[i].value;
-         } else {
+         if (!(attrib_list[i].value & supported_rt_formats)) {
             FREE(config);
             return VA_STATUS_ERROR_UNSUPPORTED_RT_FORMAT;
          }
       }
       if (attrib_list[i].type == VAConfigAttribEncPackedHeaders) {
+         uint32_t attrib_value = attrib_list[i].value;
          if (config->entrypoint != PIPE_VIDEO_ENTRYPOINT_ENCODE ||
-             (((attrib_list[i].value != 0)) &&
-              ((attrib_list[i].value != 1) || u_reduce_video_profile(ProfileToPipe(profile))
-               != PIPE_VIDEO_FORMAT_MPEG4_AVC) &&
-              ((attrib_list[i].value != 1) || u_reduce_video_profile(ProfileToPipe(profile))
-               != PIPE_VIDEO_FORMAT_HEVC) &&
-              ((attrib_list[i].value != 3) || u_reduce_video_profile(ProfileToPipe(profile))
-               != PIPE_VIDEO_FORMAT_AV1))) {
+             (((attrib_value != 0)) &&
+              ((attrib_value & ENC_PACKED_HEADERS_H264) != attrib_value ||
+                  u_reduce_video_profile(ProfileToPipe(profile)) != PIPE_VIDEO_FORMAT_MPEG4_AVC) &&
+              ((attrib_value & ENC_PACKED_HEADERS_HEVC) != attrib_value ||
+                  u_reduce_video_profile(ProfileToPipe(profile)) != PIPE_VIDEO_FORMAT_HEVC) &&
+              ((attrib_value & ENC_PACKED_HEADERS_AV1) != attrib_value ||
+                  u_reduce_video_profile(ProfileToPipe(profile)) != PIPE_VIDEO_FORMAT_AV1))) {
             FREE(config);
             return VA_STATUS_ERROR_INVALID_VALUE;
          }
       }
    }
-
-   /* Default value if not specified in the input attributes. */
-   if (!config->rt_format)
-      config->rt_format = supported_rt_formats;
 
    mtx_lock(&drv->mutex);
    *config_id = handle_table_add(drv->htab, config);
@@ -721,7 +834,9 @@ vlVaQueryConfigAttributes(VADriverContextP ctx, VAConfigID config_id, VAProfile 
 
    *num_attribs = 1;
    attrib_list[0].type = VAConfigAttribRTFormat;
-   attrib_list[0].value = config->rt_format;
+   attrib_list[0].value = get_screen_supported_va_rt_formats(drv->pipe->screen,
+                                                             config->profile,
+                                                             config->entrypoint);
 
    return VA_STATUS_SUCCESS;
 }

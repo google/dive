@@ -9,6 +9,7 @@
 #include "util/u_math.h"
 #include "util/u_inlines.h"
 #include "util/u_dynarray.h"
+#include "util/u_framebuffer.h"
 
 #include "nv50/nv50_winsys.h"
 #include "nv50/nv50_stateobj.h"
@@ -194,6 +195,8 @@ struct nv50_context {
     */
    uint32_t so_used[4];
 
+   struct pipe_surface *fb_cbufs[PIPE_MAX_COLOR_BUFS];
+   struct pipe_surface *fb_zsbuf;
    struct pipe_framebuffer_state framebuffer;
    struct pipe_blend_color blend_colour;
    struct pipe_stencil_ref stencil_ref;
@@ -244,10 +247,10 @@ static inline unsigned
 nv50_context_shader_stage(unsigned pipe)
 {
    switch (pipe) {
-   case PIPE_SHADER_VERTEX: return NV50_SHADER_STAGE_VERTEX;
-   case PIPE_SHADER_FRAGMENT: return NV50_SHADER_STAGE_FRAGMENT;
-   case PIPE_SHADER_GEOMETRY: return NV50_SHADER_STAGE_GEOMETRY;
-   case PIPE_SHADER_COMPUTE: return NV50_SHADER_STAGE_COMPUTE;
+   case MESA_SHADER_VERTEX: return NV50_SHADER_STAGE_VERTEX;
+   case MESA_SHADER_FRAGMENT: return NV50_SHADER_STAGE_FRAGMENT;
+   case MESA_SHADER_GEOMETRY: return NV50_SHADER_STAGE_GEOMETRY;
+   case MESA_SHADER_COMPUTE: return NV50_SHADER_STAGE_COMPUTE;
    default:
       assert(!"invalid/unhandled shader type");
       return 0;
@@ -354,9 +357,9 @@ nv50_cb_push(struct nouveau_context *nv,
 
 /* nv50_vbo.c */
 void nv50_draw_vbo(struct pipe_context *, const struct pipe_draw_info *, unsigned,
-                   const struct pipe_draw_indirect_info *indirect,
-                   const struct pipe_draw_start_count_bias *draws,
-                   unsigned num_draws);
+                           const struct pipe_draw_indirect_info *indirect,
+                           const struct pipe_draw_start_count_bias *draws,
+                           unsigned num_draws);
 
 void *
 nv50_vertex_state_create(struct pipe_context *pipe,
@@ -405,5 +408,8 @@ nv98_video_buffer_create(struct pipe_context *pipe,
 /* nv50_compute.c */
 void
 nv50_launch_grid(struct pipe_context *, const struct pipe_grid_info *);
+void
+nv50_launch_grid_with_input(struct pipe_context *, const struct pipe_grid_info *,
+                            const void *input, uint32_t input_size);
 
 #endif

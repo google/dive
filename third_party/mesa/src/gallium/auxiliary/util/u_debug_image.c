@@ -35,7 +35,7 @@
 #include <stdio.h>
 
 
-#ifdef DEBUG
+#if MESA_DEBUG
 
 /**
  * Dump an image to .ppm file.
@@ -112,19 +112,19 @@ debug_dump_surface(struct pipe_context *pipe,
     * to be done here:
     */
    texture = surface->texture;
-
-   data = pipe_texture_map(pipe, texture, surface->u.tex.level,
-                           surface->u.tex.first_layer,
+   data = pipe_texture_map(pipe, texture, surface->level,
+                           surface->first_layer,
                            PIPE_MAP_READ,
-                           0, 0, surface->width, surface->height, &transfer);
+                           0, 0, pipe_surface_width(surface),
+                           pipe_surface_height(surface), &transfer);
    if (!data)
       return;
 
    debug_dump_image(prefix,
                     texture->format,
                     util_format_get_blocksize(texture->format),
-                    util_format_get_nblocksx(texture->format, surface->width),
-                    util_format_get_nblocksy(texture->format, surface->height),
+                    util_format_get_nblocksx(texture->format, pipe_surface_width(surface)),
+                    util_format_get_nblocksy(texture->format, pipe_surface_height(surface)),
                     transfer->stride,
                     data);
 
@@ -137,18 +137,14 @@ debug_dump_texture(struct pipe_context *pipe,
                    const char *prefix,
                    struct pipe_resource *texture)
 {
-   struct pipe_surface *surface, surf_tmpl;
+   struct pipe_surface surf_tmpl;
 
    if (!texture)
       return;
 
    /* XXX for now, just dump image for layer=0, level=0 */
    u_surface_default_template(&surf_tmpl, texture);
-   surface = pipe->create_surface(pipe, texture, &surf_tmpl);
-   if (surface) {
-      debug_dump_surface(pipe, prefix, surface);
-      pipe->surface_destroy(pipe, surface);
-   }
+   debug_dump_surface(pipe, prefix, &surf_tmpl);
 }
 
 
@@ -192,9 +188,10 @@ debug_dump_surface_bmp(struct pipe_context *pipe,
    struct pipe_resource *texture = surface->texture;
    void *ptr;
 
-   ptr = pipe_texture_map(pipe, texture, surface->u.tex.level,
-                          surface->u.tex.first_layer, PIPE_MAP_READ,
-                          0, 0, surface->width, surface->height, &transfer);
+   ptr = pipe_texture_map(pipe, texture, surface->level,
+                          surface->first_layer, PIPE_MAP_READ,
+                          0, 0, pipe_surface_width(surface),
+                          pipe_surface_height(surface), &transfer);
 
    debug_dump_transfer_bmp(pipe, filename, transfer, ptr);
 

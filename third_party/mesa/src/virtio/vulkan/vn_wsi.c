@@ -10,7 +10,6 @@
 
 #include "vn_wsi.h"
 
-#include "drm-uapi/drm_fourcc.h"
 #include "vk_enum_to_str.h"
 #include "wsi_common_entrypoints.h"
 
@@ -42,18 +41,6 @@
  * can be problematic when the memory is scanned out directly and special
  * requirements (e.g., alignments) must be met.
  *
- * The common WSI support makes other assumptions about the driver to support
- * implicit fencing.  In wsi_create_native_image and wsi_create_prime_image,
- * it assumes wsi_memory_allocate_info can be chained to VkMemoryAllocateInfo.
- * In wsi_common_queue_present, it assumes wsi_memory_signal_submit_info can
- * be chained to VkSubmitInfo.  Finally, in wsi_common_acquire_next_image2, it
- * calls wsi_device::signal_semaphore_for_memory, and
- * wsi_device::signal_fence_for_memory if the driver provides them.
- *
- * Some drivers use wsi_memory_allocate_info to set up implicit fencing.
- * Others use wsi_memory_signal_submit_info to set up implicit IN-fences and
- * use wsi_device::signal_*_for_memory to set up implicit OUT-fences.
- *
  * For venus, implicit fencing is broken (and there is no explicit fencing
  * support yet).  The kernel driver assumes everything is in the same fence
  * context and no synchronization is needed.  It should be fixed for
@@ -70,23 +57,36 @@ vn_wsi_proc_addr(VkPhysicalDevice physicalDevice, const char *pName)
    struct vn_physical_device *physical_dev =
       vn_physical_device_from_handle(physicalDevice);
    return vk_instance_get_proc_addr_unchecked(
-      &physical_dev->instance->base.base, pName);
+      &physical_dev->instance->base.vk, pName);
 }
 
 VkResult
 vn_wsi_init(struct vn_physical_device *physical_dev)
 {
+   /* TODO Drop the workaround for NVIDIA_PROPRIETARY once hw prime buffer
+    * blit path works there.
+    */
+   const bool use_sw_device =
+      !physical_dev->base.vk.supported_extensions
+          .EXT_external_memory_dma_buf ||
+      physical_dev->renderer_driver_id == VK_DRIVER_ID_NVIDIA_PROPRIETARY;
+
    const VkAllocationCallbacks *alloc =
-      &physical_dev->instance->base.base.alloc;
+      &physical_dev->instance->base.vk.alloc;
    VkResult result = wsi_device_init(
       &physical_dev->wsi_device, vn_physical_device_to_handle(physical_dev),
       vn_wsi_proc_addr, alloc, -1, &physical_dev->instance->dri_options,
-      &(struct wsi_device_options){.sw_device = false, .extra_xwayland_image = true});
+      &(struct wsi_device_options){
+         .sw_device = use_sw_device,
+         .extra_xwayland_image = true,
+      });
    if (result != VK_SUCCESS)
       return result;
 
-   physical_dev->wsi_device.supports_modifiers = true;
-   physical_dev->base.base.wsi_device = &physical_dev->wsi_device;
+   physical_dev->wsi_device.supports_scanout = false;
+   physical_dev->wsi_device.supports_modifiers =
+      physical_dev->base.vk.supported_extensions.EXT_image_drm_format_modifier;
+   physical_dev->base.vk.wsi_device = &physical_dev->wsi_device;
 
    return VK_SUCCESS;
 }
@@ -95,8 +95,8 @@ void
 vn_wsi_fini(struct vn_physical_device *physical_dev)
 {
    const VkAllocationCallbacks *alloc =
-      &physical_dev->instance->base.base.alloc;
-   physical_dev->base.base.wsi_device = NULL;
+      &physical_dev->instance->base.vk.alloc;
+   physical_dev->base.vk.wsi_device = NULL;
    wsi_device_finish(&physical_dev->wsi_device, alloc);
 }
 
@@ -107,34 +107,31 @@ vn_wsi_create_image(struct vn_device *dev,
                     const VkAllocationCallbacks *alloc,
                     struct vn_image **out_img)
 {
-   /* TODO This is the legacy path used by wsi_create_native_image when there
-    * is no modifier support.  Instead of forcing linear tiling, we should ask
-    * wsi to use wsi_create_prime_image instead.
-    *
-    * In fact, this is not enough when the image is truely used for scanout by
-    * the host compositor.  There can be requirements we fail to meet.  We
-    * should require modifier support at some point.
-    */
-   const uint64_t modifier = DRM_FORMAT_MOD_LINEAR;
-   const VkImageDrmFormatModifierListCreateInfoEXT mod_list_info = {
-      .sType =
-         VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT,
-      .pNext = create_info->pNext,
-      .drmFormatModifierCount = 1,
-      .pDrmFormatModifiers = &modifier,
-   };
    VkImageCreateInfo local_create_info;
-   if (wsi_info->scanout) {
-      assert(!vk_find_struct_const(
-         create_info->pNext, IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT));
-
+   if (dev->physical_device->renderer_driver_id ==
+          VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA &&
+       (create_info->flags & VK_IMAGE_CREATE_ALIAS_BIT)) {
+      /* See explanation in vn_GetPhysicalDeviceImageFormatProperties2() */
       local_create_info = *create_info;
-      local_create_info.pNext = &mod_list_info;
-      local_create_info.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
+      local_create_info.flags &= ~VK_IMAGE_CREATE_ALIAS_BIT;
       create_info = &local_create_info;
+   }
 
-      if (VN_DEBUG(WSI))
-         vn_log(dev->instance, "forcing scanout image linear");
+   /* Gamescope relies on legacy scanout support when explicit modifier isn't
+    * available and it chains the mesa wsi hint requesting such. Venus doesn't
+    * support legacy scanout with optimal tiling on its own, so venus disables
+    * legacy scanout in favor of prime buffer blit for optimal performance. As
+    * a workaround here, venus can once again force linear tiling when legacy
+    * scanout is requested outside of common wsi.
+    */
+   if (wsi_info->scanout) {
+      if (create_info != &local_create_info) {
+         local_create_info = *create_info;
+         local_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+         create_info = &local_create_info;
+      } else {
+         local_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+      }
    }
 
    struct vn_image *img;
@@ -142,149 +139,113 @@ vn_wsi_create_image(struct vn_device *dev,
    if (result != VK_SUCCESS)
       return result;
 
-   img->wsi.is_wsi = true;
    img->wsi.is_prime_blit_src = wsi_info->blit_src;
-   img->wsi.tiling_override = create_info->tiling;
-
-   if (create_info->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
-      VkDevice dev_handle = vn_device_to_handle(dev);
-      VkImage img_handle = vn_image_to_handle(img);
-
-      VkImageDrmFormatModifierPropertiesEXT props = {
-         .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT,
-      };
-      result = vn_GetImageDrmFormatModifierPropertiesEXT(dev_handle,
-                                                         img_handle, &props);
-      if (result != VK_SUCCESS) {
-         vn_DestroyImage(dev_handle, img_handle, alloc);
-         return result;
-      }
-
-      img->wsi.drm_format_modifier = props.drmFormatModifier;
-   }
 
    *out_img = img;
    return VK_SUCCESS;
 }
 
-VkResult
-vn_wsi_create_image_from_swapchain(
-   struct vn_device *dev,
-   const VkImageCreateInfo *create_info,
-   const VkImageSwapchainCreateInfoKHR *swapchain_info,
-   const VkAllocationCallbacks *alloc,
-   struct vn_image **out_img)
+static uint32_t
+vn_modifier_plane_count(struct vn_physical_device *physical_dev,
+                        VkFormat format,
+                        uint64_t modifier)
 {
-   const struct vn_image *swapchain_img = vn_image_from_handle(
-      wsi_common_get_image(swapchain_info->swapchain, 0));
-   assert(swapchain_img->wsi.is_wsi);
+   VkPhysicalDevice physical_dev_handle =
+      vn_physical_device_to_handle(physical_dev);
 
-   /* must match what the common WSI and vn_wsi_create_image do */
-   VkImageCreateInfo local_create_info = *create_info;
-
-   /* match external memory */
-   const VkExternalMemoryImageCreateInfo local_external_info = {
-      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-      .pNext = local_create_info.pNext,
-      .handleTypes =
-         dev->physical_device->external_memory.renderer_handle_type,
+   VkDrmFormatModifierPropertiesListEXT modifier_list = {
+      .sType = VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT,
+      .pDrmFormatModifierProperties = NULL,
    };
-   local_create_info.pNext = &local_external_info;
+   VkFormatProperties2 format_props = {
+      .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
+      .pNext = &modifier_list,
+   };
+   vn_GetPhysicalDeviceFormatProperties2(physical_dev_handle, format,
+                                         &format_props);
 
-   /* match image tiling */
-   local_create_info.tiling = swapchain_img->wsi.tiling_override;
+   STACK_ARRAY(VkDrmFormatModifierPropertiesEXT, modifier_props,
+               modifier_list.drmFormatModifierCount);
+   if (!modifier_props)
+      return 0;
+   modifier_list.pDrmFormatModifierProperties = modifier_props;
 
-   VkImageDrmFormatModifierListCreateInfoEXT local_mod_info;
-   if (local_create_info.tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
-      local_mod_info = (const VkImageDrmFormatModifierListCreateInfoEXT){
-         .sType =
-            VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT,
-         .pNext = local_create_info.pNext,
-         .drmFormatModifierCount = 1,
-         .pDrmFormatModifiers = &swapchain_img->wsi.drm_format_modifier,
-      };
-      local_create_info.pNext = &local_mod_info;
+   vn_GetPhysicalDeviceFormatProperties2(physical_dev_handle, format,
+                                         &format_props);
+
+   uint32_t plane_count = 0;
+   for (uint32_t i = 0; i < modifier_list.drmFormatModifierCount; i++) {
+      const VkDrmFormatModifierPropertiesEXT *props =
+         &modifier_list.pDrmFormatModifierProperties[i];
+      if (modifier == props->drmFormatModifier) {
+         plane_count = props->drmFormatModifierPlaneCount;
+         break;
+      }
    }
 
-   /* match image usage */
-   if (swapchain_img->wsi.is_prime_blit_src)
-      local_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+   STACK_ARRAY_FINISH(modifier_props);
+   return plane_count;
+}
 
-   create_info = &local_create_info;
+bool
+vn_wsi_validate_image_format_info(struct vn_physical_device *physical_dev,
+                                  const VkPhysicalDeviceImageFormatInfo2 *info)
+{
+   const VkPhysicalDeviceImageDrmFormatModifierInfoEXT *modifier_info =
+      vk_find_struct_const(
+         info->pNext, PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT);
 
-   struct vn_image *img;
-   VkResult result = vn_image_create(dev, create_info, alloc, &img);
-   if (result != VK_SUCCESS)
-      return result;
+   /* force common wsi into choosing DRM_FORMAT_MOD_LINEAR or else fall back
+    * to the legacy path, for which Venus also forces LINEAR for wsi images.
+    */
+   if (VN_PERF(NO_TILED_WSI_IMAGE)) {
+      if (modifier_info &&
+          modifier_info->drmFormatModifier != DRM_FORMAT_MOD_LINEAR) {
+         if (VN_DEBUG(WSI)) {
+            vn_log(physical_dev->instance,
+                   "rejecting non-linear wsi image format modifier %" PRIu64,
+                   modifier_info->drmFormatModifier);
+         }
+         return false;
+      }
+   }
 
-   img->wsi.is_wsi = true;
-   img->wsi.tiling_override = swapchain_img->wsi.tiling_override;
-   img->wsi.drm_format_modifier = swapchain_img->wsi.drm_format_modifier;
+   /* Integration with Xwayland (using virgl-backed gbm) may only use
+    * modifiers for which `memory_plane_count == format_plane_count` with the
+    * distinction defined in the spec for VkDrmFormatModifierPropertiesEXT.
+    *
+    * The spec also states that:
+    *   If an image is non-linear, then the partition of the image’s memory
+    *   into memory planes is implementation-specific and may be unrelated to
+    *   the partition of the image’s content into format planes.
+    *
+    * A modifier like I915_FORMAT_MOD_Y_TILED_CCS with an extra CCS
+    * metadata-only _memory_ plane is not supported by virgl. In general,
+    * since the partition of format planes into memory planes (even when their
+    * counts match) cannot be guarantably known, the safest option is to limit
+    * both plane counts to 1 while virgl may be involved.
+    */
+   if (modifier_info &&
+       !physical_dev->instance->enable_wsi_multi_plane_modifiers &&
+       modifier_info->drmFormatModifier != DRM_FORMAT_MOD_LINEAR) {
+      const uint32_t plane_count = vn_modifier_plane_count(
+         physical_dev, info->format, modifier_info->drmFormatModifier);
+      if (plane_count != 1) {
+         if (VN_DEBUG(WSI)) {
+            vn_log(physical_dev->instance,
+                   "rejecting multi-plane (%u) modifier %" PRIu64
+                   " for wsi image with format %u",
+                   plane_count, modifier_info->drmFormatModifier,
+                   info->format);
+         }
+         return false;
+      }
+   }
 
-   *out_img = img;
-   return VK_SUCCESS;
+   return true;
 }
 
 /* swapchain commands */
-
-VkResult
-vn_CreateSwapchainKHR(VkDevice device,
-                      const VkSwapchainCreateInfoKHR *pCreateInfo,
-                      const VkAllocationCallbacks *pAllocator,
-                      VkSwapchainKHR *pSwapchain)
-{
-   struct vn_device *dev = vn_device_from_handle(device);
-
-   VkResult result =
-      wsi_CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
-   if (VN_DEBUG(WSI) && result == VK_SUCCESS) {
-      vn_log(dev->instance,
-             "swapchain %p: created with surface %p, min count %d, size "
-             "%dx%d, mode %s, old %p",
-             VN_WSI_PTR(*pSwapchain), VN_WSI_PTR(pCreateInfo->surface),
-             pCreateInfo->minImageCount, pCreateInfo->imageExtent.width,
-             pCreateInfo->imageExtent.height,
-             vk_PresentModeKHR_to_str(pCreateInfo->presentMode),
-             VN_WSI_PTR(pCreateInfo->oldSwapchain));
-   }
-
-   return vn_result(dev->instance, result);
-}
-
-void
-vn_DestroySwapchainKHR(VkDevice device,
-                       VkSwapchainKHR swapchain,
-                       const VkAllocationCallbacks *pAllocator)
-{
-   struct vn_device *dev = vn_device_from_handle(device);
-
-   wsi_DestroySwapchainKHR(device, swapchain, pAllocator);
-   if (VN_DEBUG(WSI))
-      vn_log(dev->instance, "swapchain %p: destroyed", VN_WSI_PTR(swapchain));
-}
-
-VkResult
-vn_QueuePresentKHR(VkQueue _queue, const VkPresentInfoKHR *pPresentInfo)
-{
-   VN_TRACE_FUNC();
-   struct vk_queue *queue_vk = vk_queue_from_handle(_queue);
-   struct vn_device *dev = (void *)queue_vk->base.device;
-
-   VkResult result = wsi_common_queue_present(
-      &dev->physical_device->wsi_device, vn_device_to_handle(dev), _queue,
-      queue_vk->queue_family_index, pPresentInfo);
-   if (VN_DEBUG(WSI) && result != VK_SUCCESS) {
-      for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
-         const VkResult r =
-            pPresentInfo->pResults ? pPresentInfo->pResults[i] : result;
-         vn_log(dev->instance, "swapchain %p: presented image %d: %s",
-                VN_WSI_PTR(pPresentInfo->pSwapchains[i]),
-                pPresentInfo->pImageIndices[i], vk_Result_to_str(r));
-      }
-   }
-
-   return vn_result(dev->instance, result);
-}
 
 VkResult
 vn_AcquireNextImage2KHR(VkDevice device,
@@ -303,16 +264,30 @@ vn_AcquireNextImage2KHR(VkDevice device,
              vk_Result_to_str(result));
    }
 
-   /* XXX this relies on implicit sync */
-   if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
-      struct vn_semaphore *sem =
-         vn_semaphore_from_handle(pAcquireInfo->semaphore);
-      if (sem)
-         vn_semaphore_signal_wsi(dev, sem);
+   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+      return vn_error(dev->instance, result);
 
-      struct vn_fence *fence = vn_fence_from_handle(pAcquireInfo->fence);
-      if (fence)
-         vn_fence_signal_wsi(dev, fence);
+   /* XXX this relies on renderer side doing implicit fencing */
+   if (pAcquireInfo->semaphore != VK_NULL_HANDLE) {
+      const VkImportSemaphoreFdInfoKHR info = {
+         .sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR,
+         .semaphore = pAcquireInfo->semaphore,
+         .flags = VK_SEMAPHORE_IMPORT_TEMPORARY_BIT,
+         .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
+         .fd = -1,
+      };
+      result = vn_ImportSemaphoreFdKHR(device, &info);
+   }
+
+   if (result == VK_SUCCESS && pAcquireInfo->fence != VK_NULL_HANDLE) {
+      const VkImportFenceFdInfoKHR info = {
+         .sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_FD_INFO_KHR,
+         .fence = pAcquireInfo->fence,
+         .flags = VK_FENCE_IMPORT_TEMPORARY_BIT,
+         .handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT,
+         .fd = -1,
+      };
+      result = vn_ImportFenceFdKHR(device, &info);
    }
 
    return vn_result(dev->instance, result);

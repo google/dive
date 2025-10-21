@@ -112,11 +112,20 @@ st_convert_sampler(const struct st_context *st,
        /* This is true if wrap modes are using the border color: */
        (sampler->wrap_s | sampler->wrap_t | sampler->wrap_r) & 0x1) {
       GLenum texBaseFormat = _mesa_base_tex_image(texobj)->_BaseFormat;
+
+      /* From OpenGL 4.3 spec, "Combined Depth/Stencil Textures":
+       *
+       *    "The DEPTH_STENCIL_TEXTURE_MODE is ignored for non
+       *     depth/stencil textures.
+       */
+      const bool has_combined_ds = texBaseFormat == GL_DEPTH_STENCIL;
+
       const GLboolean is_integer =
-         texobj->_IsIntegerFormat || texobj->StencilSampling ||
+         texobj->_IsIntegerFormat ||
+         (texobj->StencilSampling && has_combined_ds) ||
          texBaseFormat == GL_STENCIL_INDEX;
 
-      if (texobj->StencilSampling)
+      if (texobj->StencilSampling && has_combined_ds)
          texBaseFormat = GL_STENCIL_INDEX;
 
       if (st->apply_texture_swizzle_to_border_color ||
@@ -204,7 +213,7 @@ st_convert_sampler_from_unit(const struct st_context *st,
  */
 static void
 update_shader_samplers(struct st_context *st,
-                       enum pipe_shader_type shader_stage,
+                       mesa_shader_stage shader_stage,
                        const struct gl_program *prog,
                        struct pipe_sampler_state *samplers,
                        unsigned *out_num_samplers)
@@ -264,6 +273,11 @@ update_shader_samplers(struct st_context *st,
          continue;
 
       switch (st_get_view_format(stObj)) {
+      case PIPE_FORMAT_NV16:
+         if (stObj->pt->format == PIPE_FORMAT_R8_G8B8_422_UNORM)
+            /* no additional views needed */
+            break;
+         FALLTHROUGH;
       case PIPE_FORMAT_NV12:
          if (stObj->pt->format == PIPE_FORMAT_R8_G8B8_420_UNORM)
             /* no additional views needed */
@@ -274,6 +288,9 @@ update_shader_samplers(struct st_context *st,
             /* no additional views needed */
             break;
          FALLTHROUGH;
+      case PIPE_FORMAT_NV61:
+      case PIPE_FORMAT_NV24:
+      case PIPE_FORMAT_NV42:
       case PIPE_FORMAT_P010:
       case PIPE_FORMAT_P012:
       case PIPE_FORMAT_P016:
@@ -309,6 +326,21 @@ update_shader_samplers(struct st_context *st,
          extra = u_bit_scan(&free_slots);
          states[extra] = sampler;
          break;
+      case PIPE_FORMAT_Y10X6_U10X6_V10X6_420_UNORM:
+      case PIPE_FORMAT_Y10X6_U10X6_V10X6_422_UNORM:
+      case PIPE_FORMAT_Y10X6_U10X6_V10X6_444_UNORM:
+      case PIPE_FORMAT_Y12X4_U12X4_V12X4_420_UNORM:
+      case PIPE_FORMAT_Y12X4_U12X4_V12X4_422_UNORM:
+      case PIPE_FORMAT_Y12X4_U12X4_V12X4_444_UNORM:
+      case PIPE_FORMAT_Y16_U16_V16_420_UNORM:
+      case PIPE_FORMAT_Y16_U16_V16_422_UNORM:
+      case PIPE_FORMAT_Y16_U16_V16_444_UNORM:
+         /* we need two additional samplers: */
+         extra = u_bit_scan(&free_slots);
+         states[extra] = sampler;
+         extra = u_bit_scan(&free_slots);
+         states[extra] = sampler;
+         break;
       default:
          break;
       }
@@ -329,7 +361,7 @@ st_update_vertex_samplers(struct st_context *st)
    const struct gl_context *ctx = st->ctx;
 
    update_shader_samplers(st,
-                          PIPE_SHADER_VERTEX,
+                          MESA_SHADER_VERTEX,
                           ctx->VertexProgram._Current,
                           st->state.vert_samplers,
                           &st->state.num_vert_samplers);
@@ -343,7 +375,7 @@ st_update_tessctrl_samplers(struct st_context *st)
 
    if (ctx->TessCtrlProgram._Current) {
       update_shader_samplers(st,
-                             PIPE_SHADER_TESS_CTRL,
+                             MESA_SHADER_TESS_CTRL,
                              ctx->TessCtrlProgram._Current, NULL, NULL);
    }
 }
@@ -356,7 +388,7 @@ st_update_tesseval_samplers(struct st_context *st)
 
    if (ctx->TessEvalProgram._Current) {
       update_shader_samplers(st,
-                             PIPE_SHADER_TESS_EVAL,
+                             MESA_SHADER_TESS_EVAL,
                              ctx->TessEvalProgram._Current, NULL, NULL);
    }
 }
@@ -369,7 +401,7 @@ st_update_geometry_samplers(struct st_context *st)
 
    if (ctx->GeometryProgram._Current) {
       update_shader_samplers(st,
-                             PIPE_SHADER_GEOMETRY,
+                             MESA_SHADER_GEOMETRY,
                              ctx->GeometryProgram._Current, NULL, NULL);
    }
 }
@@ -381,7 +413,7 @@ st_update_fragment_samplers(struct st_context *st)
    const struct gl_context *ctx = st->ctx;
 
    update_shader_samplers(st,
-                          PIPE_SHADER_FRAGMENT,
+                          MESA_SHADER_FRAGMENT,
                           ctx->FragmentProgram._Current,
                           st->state.frag_samplers,
                           &st->state.num_frag_samplers);
@@ -395,7 +427,31 @@ st_update_compute_samplers(struct st_context *st)
 
    if (ctx->ComputeProgram._Current) {
       update_shader_samplers(st,
-                             PIPE_SHADER_COMPUTE,
+                             MESA_SHADER_COMPUTE,
                              ctx->ComputeProgram._Current, NULL, NULL);
+   }
+}
+
+
+void
+st_update_task_samplers(struct st_context *st)
+{
+   const struct gl_context *ctx = st->ctx;
+
+   if (ctx->TaskProgram._Current) {
+      update_shader_samplers(st, MESA_SHADER_TASK,
+                             ctx->TaskProgram._Current, NULL, NULL);
+   }
+}
+
+
+void
+st_update_mesh_samplers(struct st_context *st)
+{
+   const struct gl_context *ctx = st->ctx;
+
+   if (ctx->MeshProgram._Current) {
+      update_shader_samplers(st, MESA_SHADER_MESH,
+                             ctx->MeshProgram._Current, NULL, NULL);
    }
 }

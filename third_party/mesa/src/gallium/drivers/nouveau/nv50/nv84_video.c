@@ -27,7 +27,8 @@
 
 #include "util/format/u_format.h"
 #include "util/u_sampler.h"
-#include "vl/vl_zscan.h"
+#include "util/u_surface.h"
+#include "util/vl_zscan_data.h"
 
 #include "nv50/nv84_video.h"
 
@@ -152,11 +153,12 @@ nv84_decoder_begin_frame_h264(struct pipe_video_codec *decoder,
 {
 }
 
-static void
+static int
 nv84_decoder_end_frame_h264(struct pipe_video_codec *decoder,
                             struct pipe_video_buffer *target,
                             struct pipe_picture_desc *picture)
 {
+   return 0;
 }
 
 static void
@@ -203,7 +205,7 @@ nv84_decoder_begin_frame_mpeg12(struct pipe_video_codec *decoder,
    }
 }
 
-static void
+static int
 nv84_decoder_end_frame_mpeg12(struct pipe_video_codec *decoder,
                               struct pipe_video_buffer *target,
                               struct pipe_picture_desc *picture)
@@ -212,6 +214,7 @@ nv84_decoder_end_frame_mpeg12(struct pipe_video_codec *decoder,
          (struct nv84_decoder *)decoder,
          (struct pipe_mpeg12_picture_desc *)picture,
          (struct nv84_video_buffer *)target);
+   return 0;
 }
 
 static void
@@ -335,7 +338,7 @@ nv84_create_decoder(struct pipe_context *context,
          goto fail;
 
       ret = nouveau_pushbuf_create(screen, &nv50->base, dec->client, dec->bsp_channel,
-                                   4, 32 * 1024, true, &dec->bsp_pushbuf);
+                                   4, 32 * 1024, &dec->bsp_pushbuf);
       if (ret)
          goto fail;
 
@@ -350,7 +353,7 @@ nv84_create_decoder(struct pipe_context *context,
    if (ret)
       goto fail;
    ret = nouveau_pushbuf_create(screen, &nv50->base, dec->client, dec->vp_channel,
-                                4, 32 * 1024, true, &dec->vp_pushbuf);
+                                4, 32 * 1024, &dec->vp_pushbuf);
    if (ret)
       goto fail;
 
@@ -474,7 +477,7 @@ nv84_create_decoder(struct pipe_context *context,
       surf.height = (templ->max_references + 1) * dec->frame_mbs / 4;
       surf.depth = 1;
       surf.base.format = PIPE_FORMAT_B8G8R8A8_UNORM;
-      surf.base.u.tex.level = 0;
+      surf.base.level = 0;
       surf.base.texture = &mip.base.base;
       mip.level[0].tile_mode = 0;
       mip.level[0].pitch = surf.width * 4;
@@ -583,7 +586,7 @@ nv84_video_buffer_sampler_view_components(struct pipe_video_buffer *buffer)
    return buf->sampler_view_components;
 }
 
-static struct pipe_surface **
+static struct pipe_surface *
 nv84_video_buffer_surfaces(struct pipe_video_buffer *buffer)
 {
    struct nv84_video_buffer *buf = (struct nv84_video_buffer *)buffer;
@@ -602,8 +605,6 @@ nv84_video_buffer_destroy(struct pipe_video_buffer *buffer)
       pipe_resource_reference(&buf->resources[i], NULL);
       pipe_sampler_view_reference(&buf->sampler_view_planes[i], NULL);
       pipe_sampler_view_reference(&buf->sampler_view_components[i], NULL);
-      pipe_surface_reference(&buf->surfaces[i * 2], NULL);
-      pipe_surface_reference(&buf->surfaces[i * 2 + 1], NULL);
    }
 
    nouveau_bo_ref(NULL, &buf->interlaced);
@@ -731,18 +732,12 @@ nv84_video_buffer_create(struct pipe_context *pipe,
 
    memset(&surf_templ, 0, sizeof(surf_templ));
    for (j = 0; j < 2; ++j) {
-      surf_templ.format = buffer->resources[j]->format;
-      surf_templ.u.tex.first_layer = surf_templ.u.tex.last_layer = 0;
-      buffer->surfaces[j * 2] =
-         pipe->create_surface(pipe, buffer->resources[j], &surf_templ);
-      if (!buffer->surfaces[j * 2])
-         goto error;
+      u_surface_default_template(&surf_templ, buffer->resources[j]);
+      surf_templ.first_layer = surf_templ.last_layer = 0;
+      buffer->surfaces[j * 2] = surf_templ;
 
-      surf_templ.u.tex.first_layer = surf_templ.u.tex.last_layer = 1;
-      buffer->surfaces[j * 2 + 1] =
-         pipe->create_surface(pipe, buffer->resources[j], &surf_templ);
-      if (!buffer->surfaces[j * 2 + 1])
-         goto error;
+      surf_templ.first_layer = surf_templ.last_layer = 1;
+      buffer->surfaces[j * 2 + 1] = surf_templ;
    }
 
    return &buffer->base;
@@ -831,11 +826,8 @@ nv84_screen_get_video_param(struct pipe_screen *pscreen,
    case PIPE_VIDEO_CAP_MAX_WIDTH:
    case PIPE_VIDEO_CAP_MAX_HEIGHT:
       return 2048;
-   case PIPE_VIDEO_CAP_PREFERED_FORMAT:
+   case PIPE_VIDEO_CAP_PREFERRED_FORMAT:
       return PIPE_FORMAT_NV12;
-   case PIPE_VIDEO_CAP_SUPPORTS_INTERLACED:
-   case PIPE_VIDEO_CAP_PREFERS_INTERLACED:
-      return true;
    case PIPE_VIDEO_CAP_SUPPORTS_PROGRESSIVE:
       return false;
    case PIPE_VIDEO_CAP_MAX_LEVEL:

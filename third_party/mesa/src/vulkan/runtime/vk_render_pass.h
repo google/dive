@@ -23,43 +23,18 @@
 #ifndef VK_RENDER_PASS_H
 #define VK_RENDER_PASS_H
 
+#include "vk_internal_exts.h"
+#include "vk_limits.h"
 #include "vk_object.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * Pseudo-extension struct that may be chained into VkRenderingAttachmentInfo
- * to indicate an initial layout for the attachment.  This is only allowed if
- * all of the following conditions are met:
- *
- *    1. VkRenderingAttachmentInfo::loadOp == LOAD_OP_CLEAR
- *
- *    2. VkRenderingInfo::renderArea is tne entire image view LOD
- *
- *    3. For 3D image attachments, VkRenderingInfo::viewMask == 0 AND
- *       VkRenderingInfo::layerCount references the entire bound image view
- *       OR VkRenderingInfo::viewMask is dense (no holes) and references the
- *       entire bound image view.  (2D and 2D array images have no such
- *       requirement.)
- *
- * If this struct is included in the pNext chain of a
- * VkRenderingAttachmentInfo, the driver is responsible for transitioning the
- * bound region of the image from
- * VkRenderingAttachmentInitialLayoutInfoMESA::initialLayout to
- * VkRenderingAttachmentInfo::imageLayout prior to rendering.
- */
-typedef struct VkRenderingAttachmentInitialLayoutInfoMESA {
-    VkStructureType    sType;
-#define VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INITIAL_LAYOUT_INFO_MESA (VkStructureType)1000044901
-#define VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INITIAL_LAYOUT_INFO_MESA_cast VkRenderingAttachmentInitialLayoutInfoMESA
-    const void*        pNext;
+struct vk_command_buffer;
+struct vk_image;
 
-    /** Initial layout of the attachment */
-    VkImageLayout      initialLayout;
-} VkRenderingAttachmentInitialLayoutInfoMESA;
-
+/***/
 struct vk_subpass_attachment {
    /** VkAttachmentReference2::attachment */
    uint32_t attachment;
@@ -89,18 +64,20 @@ struct vk_subpass_attachment {
     */
    VkImageLayout stencil_layout;
 
-   /** A per-view mask for if this is the last use of this attachment
+   /** A per-view mask for if this is the first or last use of this attachment
     *
     * If the same render pass attachment is used multiple ways within a
-    * subpass, corresponding last_subpass bits will be set in all of them.
+    * subpass, corresponding first/last_subpass bits will be set in all of them.
     * For the non-multiview case, only the first bit is used.
     */
+   uint32_t first_subpass;
    uint32_t last_subpass;
 
    /** Resolve attachment, if any */
    struct vk_subpass_attachment *resolve;
 };
 
+/***/
 struct vk_subpass {
    /** Count of all attachments referenced by this subpass */
    uint32_t attachment_count;
@@ -153,13 +130,27 @@ struct vk_subpass {
    VkExtent2D fragment_shading_rate_attachment_texel_size;
 
    /** Extra VkPipelineCreateFlags for this subpass */
-   VkPipelineCreateFlagBits pipeline_flags;
+   VkPipelineCreateFlagBits2KHR pipeline_flags;
 
    /** VkAttachmentSampleCountInfoAMD for this subpass
     *
     * This is in the pNext chain of pipeline_info and inheritance_info.
     */
    VkAttachmentSampleCountInfoAMD sample_count_info_amd;
+
+   /** VkRenderingInputAttachmentIndexInfo for this subpass
+    *
+    * This is in the pNext chain of pipeline_info and inheritance_info.
+    *
+    * Also returned by vk_get_pipeline_rendering_ial_info() if
+    * VkGraphicsPipelineCreateInfo::renderPass != VK_NULL_HANDLE.
+    */
+   struct {
+      VkRenderingInputAttachmentIndexInfo info;
+      uint32_t colors[MESA_VK_MAX_COLOR_ATTACHMENTS];
+      uint32_t depth;
+      uint32_t stencil;
+   } ial;
 
    /** VkPipelineRenderingCreateInfo for this subpass
     *
@@ -177,8 +168,12 @@ struct vk_subpass {
 
    /** VkMultisampledRenderToSingleSampledInfoEXT for this subpass */
    VkMultisampledRenderToSingleSampledInfoEXT mrtss;
+
+   /** True if legacy dithering is enabled for this subpass. */
+   bool legacy_dithering_enabled;
 };
 
+/***/
 struct vk_render_pass_attachment {
    /** VkAttachmentDescription2::format */
    VkFormat format;
@@ -228,8 +223,12 @@ struct vk_render_pass_attachment {
     * otherwise.
     */
    VkImageLayout final_stencil_layout;
+
+   /** Whether VkExternalFormatANDROID is part of this render pass */
+   bool has_external_format;
 };
 
+/***/
 struct vk_subpass_dependency {
    /** VkSubpassDependency2::dependencyFlags */
    VkDependencyFlags flags;
@@ -256,6 +255,7 @@ struct vk_subpass_dependency {
    int32_t view_offset;
 };
 
+/***/
 struct vk_render_pass {
    struct vk_object_base base;
 
@@ -303,10 +303,26 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(vk_render_pass, base, VkRenderPass,
  * is VK_NULL_HANDLE and there is a VkPipelineRenderingCreateInfo in the pNext
  * chain of VkGraphicsPipelineCreateInfo, it will return that.
  *
- * @param[in]  info  One of the pCreateInfos from vkCreateGraphicsPipelines
+ * :param info: |in|  One of the pCreateInfos from vkCreateGraphicsPipelines
  */
 const VkPipelineRenderingCreateInfo *
 vk_get_pipeline_rendering_create_info(const VkGraphicsPipelineCreateInfo *info);
+
+/** Returns the VkRenderingInputAttachmentIndexInfo for a graphics pipeline
+ *
+ * For render-pass-free drivers, this can be used in the implementation of
+ * vkCreateGraphicsPipelines to get the VkRenderingInputAttachmentIndexInfo.
+ * If VkGraphicsPipelineCreateInfo::renderPass is not VK_NULL_HANDLE, it will
+ * return a representation of the specified subpass as a
+ * VkRenderingInputAttachmentIndexInfo.  If
+ * VkGraphicsPipelineCreateInfo::renderPass
+ * is VK_NULL_HANDLE and there is a VkRenderingInputAttachmentIndexInfo in the
+ * pNext chain of VkGraphicsPipelineCreateInfo, it will return that.
+ *
+ * :param info: |in|  One of the pCreateInfos from vkCreateGraphicsPipelines
+ */
+const VkRenderingInputAttachmentIndexInfo *
+vk_get_pipeline_rendering_ial_info(const VkGraphicsPipelineCreateInfo *info);
 
 /** Returns any extra VkPipelineCreateFlags from the render pass
  *
@@ -322,14 +338,14 @@ vk_get_pipeline_rendering_create_info(const VkGraphicsPipelineCreateInfo *info);
  * If VkGraphicsPipelineCreateInfo::renderPass is VK_NULL_HANDLE, the relevant
  * flags from VkGraphicsPipelineCreateInfo::flags will be returned.
  *
- * @param[in]  info  One of the pCreateInfos from vkCreateGraphicsPipelines
+ * :param info: |in|  One of the pCreateInfos from vkCreateGraphicsPipelines
  */
-VkPipelineCreateFlags
+VkPipelineCreateFlags2KHR
 vk_get_pipeline_rendering_flags(const VkGraphicsPipelineCreateInfo *info);
 
 /** Returns the VkAttachmentSampleCountInfoAMD for a graphics pipeline
  *
- * For render-pass-free drivers, this can be used in the implementaiton of
+ * For render-pass-free drivers, this can be used in the implementation of
  * vkCreateGraphicsPipelines to get the VkAttachmentSampleCountInfoAMD.  If
  * VkGraphicsPipelineCreateInfo::renderPass is not VK_NULL_HANDLE, it will
  * return the sample counts from the specified subpass as a
@@ -337,7 +353,7 @@ vk_get_pipeline_rendering_flags(const VkGraphicsPipelineCreateInfo *info);
  * is VK_NULL_HANDLE and there is a VkAttachmentSampleCountInfoAMD in the pNext
  * chain of VkGraphicsPipelineCreateInfo, it will return that.
  *
- * @param[in]  info  One of the pCreateInfos from vkCreateGraphicsPipelines
+ * :param info: |in|  One of the pCreateInfos from vkCreateGraphicsPipelines
  */
 const VkAttachmentSampleCountInfoAMD *
 vk_get_pipeline_sample_count_info_amd(const VkGraphicsPipelineCreateInfo *info);
@@ -355,8 +371,8 @@ vk_get_pipeline_sample_count_info_amd(const VkGraphicsPipelineCreateInfo *info);
  * is a VkCommandBufferInheritanceRenderingInfo in the pNext chain of
  * VkCommandBufferBeginInfo, it will return that.
  *
- * @param[in]  level       The nesting level of this command buffer
- * @param[in]  pBeginInfo  The pBeginInfo from vkBeginCommandBuffer
+ * :param level:        |in|  The nesting level of this command buffer
+ * :param pBeginInfo:   |in|  The pBeginInfo from vkBeginCommandBuffer
  */
 const VkCommandBufferInheritanceRenderingInfo *
 vk_get_command_buffer_inheritance_rendering_info(
@@ -377,7 +393,7 @@ struct vk_gcbiarr_data {
 /**
  * Constructs a VkRenderingInfo for the inheritance rendering info
  *
- * For render-pass-free drivers, this can be used in the implementaiton of
+ * For render-pass-free drivers, this can be used in the implementation of
  * vkCmdExecuteCommands to get a VkRenderingInfo representing the subpass and
  * framebuffer provided via the inheritance info for a command buffer created
  * with VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT.  The mental model
@@ -386,18 +402,69 @@ struct vk_gcbiarr_data {
  * constructed due to a missing framebuffer or similar, NULL will be
  * returned.
  *
- * @param[in]  level       The nesting level of this command buffer
- * @param[in]  pBeginInfo  The pBeginInfo from vkBeginCommandBuffer
- * @param[out] stack_data  An opaque blob of data which will be overwritten by
- *                         this function, passed in from the caller to avoid
- *                         heap allocations.  It must be at least
- *                         VK_GCBIARR_DATA_SIZE(max_color_rts) bytes.
+ * :param level:        |in|  The nesting level of this command buffer
+ * :param pBeginInfo:   |in|  The pBeginInfo from vkBeginCommandBuffer
+ * :param stack_data:   |out| An opaque blob of data which will be overwritten by
+ *                            this function, passed in from the caller to avoid
+ *                            heap allocations.  It must be at least
+ *                            VK_GCBIARR_DATA_SIZE(max_color_rts) bytes.
  */
 const VkRenderingInfo *
 vk_get_command_buffer_inheritance_as_rendering_resume(
    VkCommandBufferLevel level,
    const VkCommandBufferBeginInfo *pBeginInfo,
    void *stack_data);
+
+const VkRenderingAttachmentLocationInfoKHR *
+vk_get_command_buffer_rendering_attachment_location_info(
+   VkCommandBufferLevel level,
+   const VkCommandBufferBeginInfo *pBeginInfo);
+/**
+ * Return true if the subpass dependency is framebuffer-local.
+ */
+static bool
+vk_subpass_dependency_is_fb_local(const VkSubpassDependency2 *dep,
+                                  VkPipelineStageFlags2 src_stage_mask,
+                                  VkPipelineStageFlags2 dst_stage_mask)
+{
+   if (dep->srcSubpass == VK_SUBPASS_EXTERNAL ||
+       dep->dstSubpass == VK_SUBPASS_EXTERNAL)
+      return true;
+
+  /* This is straight from the Vulkan 1.2 spec, section 7.1.4 "Framebuffer
+   * Region Dependencies":
+   */
+   const VkPipelineStageFlags2 framebuffer_space_stages =
+      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT |
+      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+   const VkPipelineStageFlags2 src_framebuffer_space_stages =
+      framebuffer_space_stages | VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+   const VkPipelineStageFlags2 dst_framebuffer_space_stages =
+      framebuffer_space_stages | VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+
+   /* Check for frambuffer-space dependency. */
+   if ((src_stage_mask & ~src_framebuffer_space_stages) ||
+       (dst_stage_mask & ~dst_framebuffer_space_stages))
+      return false;
+
+   /* Check for framebuffer-local dependency. */
+   return dep->dependencyFlags & VK_DEPENDENCY_BY_REGION_BIT;
+}
+
+uint32_t
+vk_command_buffer_get_attachment_layout(const struct vk_command_buffer *cmd_buffer,
+                                        const struct vk_image *image,
+                                        VkImageLayout *out_layout,
+                                        VkImageLayout *out_stencil_layout);
+
+void
+vk_command_buffer_set_attachment_layout(struct vk_command_buffer *cmd_buffer,
+                                        uint32_t att_idx,
+                                        VkImageLayout layout,
+                                        VkImageLayout stencil_layout);
 
 #ifdef __cplusplus
 }

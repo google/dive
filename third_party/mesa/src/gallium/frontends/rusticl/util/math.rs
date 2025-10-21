@@ -1,7 +1,7 @@
-use std::ops::Add;
-use std::ops::Div;
+// Copyright 2022 Red Hat.
+// SPDX-License-Identifier: MIT
+
 use std::ops::Rem;
-use std::ops::Sub;
 
 pub fn gcd<T>(mut a: T, mut b: T) -> T
 where
@@ -18,34 +18,11 @@ where
     b
 }
 
-pub fn align<T>(val: T, a: T) -> T
-where
-    T: Add<Output = T>,
-    T: Copy,
-    T: Default,
-    T: PartialEq,
-    T: Rem<Output = T>,
-    T: Sub<Output = T>,
-{
-    let tmp = val % a;
-    if tmp == T::default() {
-        val
-    } else {
-        val + (a - tmp)
-    }
-}
-
-pub fn div_round_up<T>(a: T, b: T) -> T
-where
-    T: Copy,
-    T: Add<Output = T>,
-    T: Div<Output = T>,
-    T: Sub<Output = T>,
-{
-    #[allow(clippy::eq_op)]
-    let one = b / b;
-
-    (a + b - one) / b
+#[test]
+fn gcd_test() {
+    assert_eq!(gcd(5, 15), 5);
+    assert_eq!(gcd(7, 15), 1);
+    assert_eq!(gcd(60, 45), 15);
 }
 
 pub struct SetBitIndices<T> {
@@ -54,7 +31,7 @@ pub struct SetBitIndices<T> {
 
 impl<T> SetBitIndices<T> {
     pub fn from_msb(val: T) -> Self {
-        Self { val: val }
+        Self { val }
     }
 }
 
@@ -69,5 +46,11 @@ impl Iterator for SetBitIndices<u32> {
             self.val ^= 1 << pos;
             Some(pos)
         }
+    }
+}
+
+impl ExactSizeIterator for SetBitIndices<u32> {
+    fn len(&self) -> usize {
+        self.val.count_ones() as usize
     }
 }

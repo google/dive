@@ -1,42 +1,18 @@
 /*
  * Copyright © 2020 Google LLC
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "freedreno_layout.h"
 #include "fd_layout_test.h"
-#include "adreno_common.xml.h"
-#include "adreno_pm4.xml.h"
-#include "a6xx.xml.h"
+#include "fd6_hw.h"
 
 #include <stdio.h>
 
 bool
-fdl_test_layout(const struct testcase *testcase, int gpu_id)
+fdl_test_layout(const struct testcase *testcase, const struct fd_dev_id *dev_id)
 {
-   struct fdl_layout layout = {
-      .ubwc = testcase->layout.ubwc,
-      .tile_mode = testcase->layout.tile_mode,
-      .tile_all = testcase->layout.tile_all,
-   };
+   struct fdl_layout layout;
    bool ok = true;
 
    int max_size = MAX2(testcase->layout.width0, testcase->layout.height0);
@@ -46,19 +22,25 @@ fdl_test_layout(const struct testcase *testcase, int gpu_id)
       max_size = u_minify(max_size, 1);
    }
 
-   if (gpu_id >= 600) {
-      fdl6_layout(&layout, testcase->format,
-                  MAX2(testcase->layout.nr_samples, 1), testcase->layout.width0,
-                  MAX2(testcase->layout.height0, 1),
-                  MAX2(testcase->layout.depth0, 1), mip_levels,
-                  MAX2(testcase->array_size, 1), testcase->is_3d, NULL);
+   struct fdl_image_params params = {
+      .format = testcase->format,
+      .nr_samples = MAX2(testcase->layout.nr_samples, 1),
+      .width0 = testcase->layout.width0,
+      .height0 = MAX2(testcase->layout.height0, 1),
+      .depth0 = MAX2(testcase->layout.depth0, 1),
+      .mip_levels = mip_levels,
+      .array_size = MAX2(testcase->array_size, 1),
+      .is_3d = testcase->is_3d,
+      .ubwc = testcase->layout.ubwc,
+      .tile_mode = testcase->layout.tile_mode,
+   };
+
+   if (fd_dev_gen(dev_id) >= 6) {
+      const struct fd_dev_info *dev_info = fd_dev_info_raw(dev_id);
+      fdl6_layout_image(&layout, dev_info, &params, NULL);
    } else {
-      assert(gpu_id >= 500);
-      fdl5_layout(&layout, testcase->format,
-                  MAX2(testcase->layout.nr_samples, 1), testcase->layout.width0,
-                  MAX2(testcase->layout.height0, 1),
-                  MAX2(testcase->layout.depth0, 1), mip_levels,
-                  MAX2(testcase->array_size, 1), testcase->is_3d);
+      assert(fd_dev_gen(dev_id) >= 5);
+      fdl5_layout_image(&layout, &params);
    }
 
    /* fdl lays out UBWC data before the color data, while all we have

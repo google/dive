@@ -3,6 +3,70 @@ Release Notes
 
 The release notes summarize what's new or changed in each Mesa release.
 
+-  :doc:`25.2.4 release notes <relnotes/25.2.4>`
+-  :doc:`25.2.3 release notes <relnotes/25.2.3>`
+-  :doc:`25.2.2 release notes <relnotes/25.2.2>`
+-  :doc:`25.1.9 release notes <relnotes/25.1.9>`
+-  :doc:`25.2.1 release notes <relnotes/25.2.1>`
+-  :doc:`25.1.8 release notes <relnotes/25.1.8>`
+-  :doc:`25.2.0 release notes <relnotes/25.2.0>`
+-  :doc:`25.1.7 release notes <relnotes/25.1.7>`
+-  :doc:`25.1.6 release notes <relnotes/25.1.6>`
+-  :doc:`25.1.5 release notes <relnotes/25.1.5>`
+-  :doc:`25.1.4 release notes <relnotes/25.1.4>`
+-  :doc:`25.1.3 release notes <relnotes/25.1.3>`
+-  :doc:`25.1.2 release notes <relnotes/25.1.2>`
+-  :doc:`25.0.7 release notes <relnotes/25.0.7>`
+-  :doc:`25.1.1 release notes <relnotes/25.1.1>`
+-  :doc:`25.0.6 release notes <relnotes/25.0.6>`
+-  :doc:`25.1.0 release notes <relnotes/25.1.0>`
+-  :doc:`25.0.5 release notes <relnotes/25.0.5>`
+-  :doc:`25.0.4 release notes <relnotes/25.0.4>`
+-  :doc:`25.0.3 release notes <relnotes/25.0.3>`
+-  :doc:`25.0.2 release notes <relnotes/25.0.2>`
+-  :doc:`25.0.1 release notes <relnotes/25.0.1>`
+-  :doc:`25.0.0 release notes <relnotes/25.0.0>`
+-  :doc:`24.3.4 release notes <relnotes/24.3.4>`
+-  :doc:`24.3.3 release notes <relnotes/24.3.3>`
+-  :doc:`24.3.2 release notes <relnotes/24.3.2>`
+-  :doc:`24.3.1 release notes <relnotes/24.3.1>`
+-  :doc:`24.2.8 release notes <relnotes/24.2.8>`
+-  :doc:`24.3.0 release notes <relnotes/24.3.0>`
+-  :doc:`24.2.7 release notes <relnotes/24.2.7>`
+-  :doc:`24.2.6 release notes <relnotes/24.2.6>`
+-  :doc:`24.2.5 release notes <relnotes/24.2.5>`
+-  :doc:`24.2.4 release notes <relnotes/24.2.4>`
+-  :doc:`24.2.3 release notes <relnotes/24.2.3>`
+-  :doc:`24.2.2 release notes <relnotes/24.2.2>`
+-  :doc:`24.1.7 release notes <relnotes/24.1.7>`
+-  :doc:`24.2.1 release notes <relnotes/24.2.1>`
+-  :doc:`24.1.6 release notes <relnotes/24.1.6>`
+-  :doc:`24.2.0 release notes <relnotes/24.2.0>`
+-  :doc:`24.1.5 release notes <relnotes/24.1.5>`
+-  :doc:`24.1.4 release notes <relnotes/24.1.4>`
+-  :doc:`24.1.3 release notes <relnotes/24.1.3>`
+-  :doc:`24.1.2 release notes <relnotes/24.1.2>`
+-  :doc:`24.0.9 release notes <relnotes/24.0.9>`
+-  :doc:`24.1.1 release notes <relnotes/24.1.1>`
+-  :doc:`24.1.0 release notes <relnotes/24.1.0>`
+-  :doc:`24.0.8 release notes <relnotes/24.0.8>`
+-  :doc:`24.0.7 release notes <relnotes/24.0.7>`
+-  :doc:`24.0.6 release notes <relnotes/24.0.6>`
+-  :doc:`24.0.5 release notes <relnotes/24.0.5>`
+-  :doc:`24.0.4 release notes <relnotes/24.0.4>`
+-  :doc:`24.0.3 release notes <relnotes/24.0.3>`
+-  :doc:`24.0.2 release notes <relnotes/24.0.2>`
+-  :doc:`23.3.6 release notes <relnotes/23.3.6>`
+-  :doc:`24.0.1 release notes <relnotes/24.0.1>`
+-  :doc:`24.0.0 release notes <relnotes/24.0.0>`
+-  :doc:`23.3.5 release notes <relnotes/23.3.5>`
+-  :doc:`23.3.4 release notes <relnotes/23.3.4>`
+-  :doc:`23.3.3 release notes <relnotes/23.3.3>`
+-  :doc:`23.3.2 release notes <relnotes/23.3.2>`
+-  :doc:`23.3.1 release notes <relnotes/23.3.1>`
+-  :doc:`23.3.0 release notes <relnotes/23.3.0>`
+-  :doc:`23.2.1 release notes <relnotes/23.2.1>`
+-  :doc:`23.1.9 release notes <relnotes/23.1.9>`
 -  :doc:`23.1.8 release notes <relnotes/23.1.8>`
 -  :doc:`23.1.7 release notes <relnotes/23.1.7>`
 -  :doc:`23.1.6 release notes <relnotes/23.1.6>`
@@ -366,39 +430,105 @@ The release notes summarize what's new or changed in each Mesa release.
 -  :doc:`6.4.1 release notes <relnotes/6.4.1>`
 -  :doc:`6.4 release notes <relnotes/6.4>`
 
-Versions of Mesa prior to 6.4 are summarized in the following
-release notes, or in the `old docs`_.
+.. only:: builder_html
 
--  `6.3.2 release notes <relnotes/6.3.2>`__
--  `6.3.1 release notes <relnotes/6.3.1>`__
--  `6.3 release notes <relnotes/6.3>`__
--  `6.2.1 release notes <relnotes/6.2.1>`__
--  `6.2 release notes <relnotes/6.2>`__
--  `6.1 release notes <relnotes/6.1>`__
--  `6.0.1 release notes <relnotes/6.0.1>`__
--  `6.0 release notes <relnotes/6.0>`__
--  `5.1 release notes <relnotes/5.1>`__
--  `5.0.2 release notes <relnotes/5.0.2>`__
--  `5.0.1 release notes <relnotes/5.0.1>`__
--  `5.0 release notes <relnotes/5.0>`__
--  `4.1 release notes <relnotes/4.1>`__
--  `4.0.3 release notes <relnotes/4.0.3>`__
--  `4.0.2 release notes <relnotes/4.0.2>`__
--  `4.0.1 release notes <relnotes/4.0.1>`__
--  `4.0 release notes <relnotes/4.0>`__
--  `3.5 release notes <relnotes/3.5>`__
--  `3.4.2 release notes <relnotes/3.4.2>`__
--  `3.4.1 release notes <relnotes/3.4.1>`__
--  `3.4 release notes <relnotes/3.4>`__
--  `3.3 release notes <relnotes/3.3>`__
--  `3.2.1 release notes <relnotes/3.2.1>`__
--  `3.2 release notes <relnotes/3.2>`__
--  `3.1 release notes <relnotes/3.1>`__
+   Versions of Mesa prior to 6.4 are summarized in the following
+   release notes, or in the `old docs`_.
+
+   -  `6.3.2 release notes <relnotes/6.3.2>`__
+   -  `6.3.1 release notes <relnotes/6.3.1>`__
+   -  `6.3 release notes <relnotes/6.3>`__
+   -  `6.2.1 release notes <relnotes/6.2.1>`__
+   -  `6.2 release notes <relnotes/6.2>`__
+   -  `6.1 release notes <relnotes/6.1>`__
+   -  `6.0.1 release notes <relnotes/6.0.1>`__
+   -  `6.0 release notes <relnotes/6.0>`__
+   -  `5.1 release notes <relnotes/5.1>`__
+   -  `5.0.2 release notes <relnotes/5.0.2>`__
+   -  `5.0.1 release notes <relnotes/5.0.1>`__
+   -  `5.0 release notes <relnotes/5.0>`__
+   -  `4.1 release notes <relnotes/4.1>`__
+   -  `4.0.3 release notes <relnotes/4.0.3>`__
+   -  `4.0.2 release notes <relnotes/4.0.2>`__
+   -  `4.0.1 release notes <relnotes/4.0.1>`__
+   -  `4.0 release notes <relnotes/4.0>`__
+   -  `3.5 release notes <relnotes/3.5>`__
+   -  `3.4.2 release notes <relnotes/3.4.2>`__
+   -  `3.4.1 release notes <relnotes/3.4.1>`__
+   -  `3.4 release notes <relnotes/3.4>`__
+   -  `3.3 release notes <relnotes/3.3>`__
+   -  `3.2.1 release notes <relnotes/3.2.1>`__
+   -  `3.2 release notes <relnotes/3.2>`__
+   -  `3.1 release notes <relnotes/3.1>`__
 
 .. toctree::
    :maxdepth: 1
    :hidden:
 
+   25.2.4 <relnotes/25.2.4>
+   25.2.3 <relnotes/25.2.3>
+   25.2.2 <relnotes/25.2.2>
+   25.1.9 <relnotes/25.1.9>
+   25.2.1 <relnotes/25.2.1>
+   25.1.8 <relnotes/25.1.8>
+   25.2.0 <relnotes/25.2.0>
+   25.1.7 <relnotes/25.1.7>
+   25.1.6 <relnotes/25.1.6>
+   25.1.5 <relnotes/25.1.5>
+   25.1.4 <relnotes/25.1.4>
+   25.1.3 <relnotes/25.1.3>
+   25.1.2 <relnotes/25.1.2>
+   25.0.7 <relnotes/25.0.7>
+   25.1.1 <relnotes/25.1.1>
+   25.0.6 <relnotes/25.0.6>
+   25.1.0 <relnotes/25.1.0>
+   25.0.5 <relnotes/25.0.5>
+   25.0.4 <relnotes/25.0.4>
+   25.0.3 <relnotes/25.0.3>
+   25.0.2 <relnotes/25.0.2>
+   25.0.1 <relnotes/25.0.1>
+   25.0.0 <relnotes/25.0.0>
+   24.3.4 <relnotes/24.3.4>
+   24.3.3 <relnotes/24.3.3>
+   24.3.2 <relnotes/24.3.2>
+   24.3.1 <relnotes/24.3.1>
+   24.2.8 <relnotes/24.2.8>
+   24.3.0 <relnotes/24.3.0>
+   24.2.7 <relnotes/24.2.7>
+   24.2.6 <relnotes/24.2.6>
+   24.2.5 <relnotes/24.2.5>
+   24.2.4 <relnotes/24.2.4>
+   24.2.3 <relnotes/24.2.3>
+   24.2.2 <relnotes/24.2.2>
+   24.1.7 <relnotes/24.1.7>
+   24.2.1 <relnotes/24.2.1>
+   24.1.6 <relnotes/24.1.6>
+   24.2.0 <relnotes/24.2.0>
+   24.1.5 <relnotes/24.1.5>
+   24.1.4 <relnotes/24.1.4>
+   24.1.3 <relnotes/24.1.3>
+   24.1.2 <relnotes/24.1.2>
+   24.0.9 <relnotes/24.0.9>
+   24.1.1 <relnotes/24.1.1>
+   24.1.0 <relnotes/24.1.0>
+   24.0.8 <relnotes/24.0.8>
+   24.0.7 <relnotes/24.0.7>
+   24.0.6 <relnotes/24.0.6>
+   24.0.5 <relnotes/24.0.5>
+   24.0.4 <relnotes/24.0.4>
+   24.0.3 <relnotes/24.0.3>
+   24.0.2 <relnotes/24.0.2>
+   23.3.6 <relnotes/23.3.6>
+   24.0.1 <relnotes/24.0.1>
+   24.0.0 <relnotes/24.0.0>
+   23.3.5 <relnotes/23.3.5>
+   23.3.4 <relnotes/23.3.4>
+   23.3.3 <relnotes/23.3.3>
+   23.3.2 <relnotes/23.3.2>
+   23.3.1 <relnotes/23.3.1>
+   23.3.0 <relnotes/23.3.0>
+   23.2.1 <relnotes/23.2.1>
+   23.1.9 <relnotes/23.1.9>
    23.1.8 <relnotes/23.1.8>
    23.1.7 <relnotes/23.1.7>
    23.1.6 <relnotes/23.1.6>

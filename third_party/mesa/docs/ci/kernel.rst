@@ -40,29 +40,24 @@ defconfig* made via ``merge_config.sh`` script located at Linux Kernel tree.
 Kconfigs location
 """""""""""""""""
 
-+------------+-----------------------------------------------------+-------------------------------------+
-| Platform   | Mesa CI Kconfig location                            | Linux tree defconfig                |
-+============+=====================================================+=====================================+
-| arm        | kernel/configs/mesa3d-ci_arm.config@gfx-ci/linux    | arch/arm/configs/multi_v7_defconfig |
-+------------+-----------------------------------------------------+-------------------------------------+
-| arm64      | kernel/configs/mesa3d-ci_arm64.config@gfx-ci/linux  | arch/arm64/configs/defconfig        |
-+------------+-----------------------------------------------------+-------------------------------------+
-| x86-64     | kernel/configs/mesa3d-ci_x86_64.config@gfx-ci/linux | arch/x86/configs/x86_64_defconfig   |
-+------------+-----------------------------------------------------+-------------------------------------+
++------------+------------------------------------------------------+-------------------------------------+
+| Platform   | Mesa CI Kconfig location                             | Linux tree defconfig                |
++============+======================================================+=====================================+
+| arm        | kernel/configs/mesa3d-ci_arm.config\@gfx-ci/linux    | arch/arm/configs/multi_v7_defconfig |
++------------+------------------------------------------------------+-------------------------------------+
+| arm64      | kernel/configs/mesa3d-ci_arm64.config\@gfx-ci/linux  | arch/arm64/configs/defconfig        |
++------------+------------------------------------------------------+-------------------------------------+
+| x86-64     | kernel/configs/mesa3d-ci_x86_64.config\@gfx-ci/linux | arch/x86/configs/x86_64_defconfig   |
++------------+------------------------------------------------------+-------------------------------------+
 
 Updating image tags
 -------------------
 
-Every kernel uprev should update 3 image tags, located at two files.
+Every kernel uprev should update the following tag:
 
-:code:`.gitlab-ci/container/gitlab-ci.yml` tag
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-- **KERNEL_URL** for the location of the new kernel
-
-:code:`.gitlab-ci/image-tags.yml` tags
+:code:`.gitlab-ci/image-tags.yml` tag
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-- **KERNEL_ROOTFS_TAG** to rebuild rootfs with the new kernel
-- **DEBIAN_X86_TEST_GL_TAG** to ensure that the new rootfs is being used by the GitLab x86 jobs
+- **KERNEL_TAG** to use the new kernel
 
 Development routine
 -------------------

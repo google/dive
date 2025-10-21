@@ -30,8 +30,8 @@
 #include "util/glheader.h"
 #include "main/enums.h"
 #include "main/mesa_private.h"
-#include "main/dispatch.h"
-#include "glapi/glapi.h"
+#include "dispatch.h"
+#include "glapi/glapi/glapi.h"
 
 #include "vbo_private.h"
 

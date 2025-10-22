@@ -262,6 +262,14 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     {
         split_args.push_back("--enable-gpu-time");
     }
+    if (validated_settings.run_type == GfxrReplayOptions::kRenderDoc)
+    {
+        // Renderdoc introduces some extensions that are preventing the replay.
+        // This change fixed the issue of not being able to capture renderdoc for some gfxr captures
+        // (further investigation is still needed since some of the captures contains memory types
+        // that are not recognizable by renderdoc: b/454090912)
+        split_args.push_back("--remove-unsupported");
+    }
     validated_settings.replay_flags_str = absl::StrJoin(split_args, " ");
 
     LOGI("ValidateGfxrReplaySettings(): Validated replay_flags_str: %s\n",

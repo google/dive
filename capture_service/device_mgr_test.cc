@@ -326,7 +326,7 @@ TEST(ValidateGfxrReplaySettingsTest, RenderDocDefaultsLoopCountToOne)
     expected_rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     expected_rs.run_type = GfxrReplayOptions::kRenderDoc;
     expected_rs.loop_single_frame_count = 1;
-    expected_rs.replay_flags_str = "--loop-single-frame-count 1";
+    expected_rs.replay_flags_str = "--loop-single-frame-count 1 --remove-unsupported";
 
     EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true),
                 IsOkAndHolds(GfxrReplaySettingsEq(expected_rs)));

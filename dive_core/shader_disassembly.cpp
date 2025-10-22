@@ -16,6 +16,7 @@
 
 #include "shader_disassembly.h"
 #include <iostream>
+#include <mutex>
 #include "dive_core/common/memory_manager_base.h"
 #include "pm4_info.h"
 
@@ -109,10 +110,9 @@ Disassembly::Disassembly(const IMemoryManager& mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-void Disassembly::Disassemble()
+void Disassembly::Disassemble() const
 {
-    if (!m_disassembled_data)
-    {
+    std::call_once(m_disassembled_flag, [&]() {
         DisassembledData disassembled_data;
         uint64_t         max_size = m_mem_manager.GetMaxContiguousSize(m_submit_index, m_address);
 
@@ -176,7 +176,7 @@ void Disassembly::Disassemble()
         disassembled_data.m_listing = DisassembleA3XX(data_ptr, max_size, &stats, PRINT_STATS);
         delete[] data_ptr;
         m_disassembled_data = disassembled_data;
-    }
+    });
 }
 
 }  // namespace Dive

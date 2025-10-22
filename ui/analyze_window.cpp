@@ -287,9 +287,10 @@ void AnalyzeDialog::SetSelectedCaptureFile(const QString &filePath)
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
 {
-    QMessageBox msgBox;
-    msgBox.setText(err_msg.c_str());
-    msgBox.exec();
+    auto message_box = new QMessageBox(this);
+    message_box->setAttribute(Qt::WA_DeleteOnClose, true);
+    message_box->setText(err_msg.c_str());
+    message_box->open();
     return;
 }
 

@@ -15,10 +15,113 @@
 */
 
 #include "trace_stats.h"
+
+#include <functional>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <deque>
+
 #include "dive_core/event_state.h"
 
 namespace Dive
 {
+namespace
+{
+
+class ThreadPool
+{
+public:
+    ThreadPool() = default;
+    ThreadPool(const ThreadPool &) = delete;
+    ThreadPool &operator=(const ThreadPool &) = delete;
+    ~ThreadPool() { Stop(); }
+
+    void Run(std::function<void()> &&func)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_tasks.push_back(std::move(func));
+        }
+        m_condition_variable.notify_one();
+    }
+
+    void Start(unsigned int num_workers = 0)
+    {
+        num_workers = (num_workers > 0 ? num_workers : GetDefaultThreadCount());
+
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_running = true;
+        for (unsigned int i = static_cast<unsigned int>(m_workers.size()); i < num_workers; ++i)
+        {
+            m_workers.emplace_back([this]() { this->WorkerImpl(); });
+        }
+    }
+
+    void Stop()
+    {
+        std::deque<std::thread> workers;
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            if (!m_running)
+            {
+                return;
+            }
+            m_running = false;
+            std::swap(workers, m_workers);
+        }
+        m_condition_variable.notify_all();
+        for (std::thread &worker : workers)
+        {
+            worker.join();
+        }
+    }
+
+    static unsigned int SuggestedNumberOfWorkers(unsigned int task_count)
+    {
+        // We are still bottlenecked by the slowest disassembly task.
+        // 4x less worker than disassembly tasks seems be the point of diminishing return.
+        constexpr unsigned int kLoadFactor = 4;
+        return std::min<unsigned int>((task_count + kLoadFactor - 1) / kLoadFactor,
+                                      GetDefaultThreadCount());
+    }
+
+private:
+    std::function<void()> NextTask()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_condition_variable.wait(lock, [this] { return !m_running || !m_tasks.empty(); });
+        if (!m_running || m_tasks.empty())
+        {
+            return {};
+        }
+        std::function<void()> result = m_tasks.front();
+        m_tasks.pop_front();
+        return result;
+    }
+
+    static unsigned int GetDefaultThreadCount()
+    {
+        unsigned int count = std::thread::hardware_concurrency();
+        return (count > 1 ? count - 1 : 1);
+    }
+
+    void WorkerImpl()
+    {
+        while (auto task = NextTask())
+        {
+            task();
+        }
+    }
+
+    bool                              m_running;
+    std::mutex                        m_mutex;
+    std::deque<std::thread>           m_workers;
+    std::deque<std::function<void()>> m_tasks;
+    std::condition_variable           m_condition_variable;
+};
+
+}  // namespace
 
 #define CHECK_AND_TRACK_STATE_1(stats_enum, state)                   \
     if (event_state_it->Is##state##Set() && event_state_it->state()) \
@@ -88,7 +191,8 @@ namespace Dive
     } while (0)
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
+void TraceStats::GatherTraceStats(const Dive::Context         &context,
+                                  const Dive::CaptureMetadata &meta_data,
                                   CaptureStats                &capture_stats)
 {
     capture_stats = CaptureStats();  // Reset any previous stats
@@ -101,6 +205,11 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
     Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
     for (size_t i = 0; i < event_count; ++i)
     {
+        if (context.Cancelled())
+        {
+            capture_stats = CaptureStats();
+            return;
+        }
         const Dive::EventInfo &info = meta_data.m_event_info[i];
 
         if (info.m_render_mode != cur_type)
@@ -227,8 +336,30 @@ void TraceStats::GatherTraceStats(const Dive::CaptureMetadata &meta_data,
 
     stats_list[Dive::Stats::kShaders] = meta_data.m_shaders.size();
 
+    ThreadPool thread_pool;
+    if (meta_data.m_shaders.size() > 0)
+    {
+        auto task_count = static_cast<unsigned int>(meta_data.m_shaders.size());
+        thread_pool.Start(thread_pool.SuggestedNumberOfWorkers(task_count));
+        for (const Dive::Disassembly &disassembly : meta_data.m_shaders)
+        {
+            thread_pool.Run([&context, &disassembly]() {
+                if (context.Cancelled())
+                {
+                    return;
+                }
+                disassembly.EagerEval();
+            });
+        }
+    }
+
     for (const Dive::ShaderReference &ref : capture_stats.m_shader_ref_set)
     {
+        if (context.Cancelled())
+        {
+            capture_stats = CaptureStats();
+            return;
+        }
         if (ref.m_stage == Dive::ShaderStage::kShaderStageVs)
         {
             if (ref.m_enable_mask & static_cast<uint32_t>(Dive::ShaderEnableBitMask::kBINNING))

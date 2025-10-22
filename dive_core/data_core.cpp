@@ -510,12 +510,13 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
                 {
                     // We haven't seen this shader address before, so we need to create the shader
                     // info.
-                    uint32_t    shader_index = (uint32_t)m_capture_metadata.m_shaders.size();
-                    Disassembly shader_info(mem_manager,
-                                            submit_index,
-                                            addr,
-                                            &cur_event_info.m_metadata_log);
-                    m_capture_metadata.m_shaders.push_back(shader_info);
+                    uint32_t shader_index = static_cast<uint32_t>(
+                    m_capture_metadata.m_shaders.size());
+
+                    m_capture_metadata.m_shaders.emplace_back(mem_manager,
+                                                              submit_index,
+                                                              addr,
+                                                              &cur_event_info.m_metadata_log);
                     m_shader_addrs.insert(std::make_pair(addr, shader_index));
 
                     // Add the shader index to the EventInfo

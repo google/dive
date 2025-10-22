@@ -16,6 +16,7 @@
 */
 
 #pragma once
+#include <deque>
 #include <map>
 #include <vector>
 #include "pm4_capture_data.h"
@@ -38,7 +39,8 @@ struct CaptureMetadata
     CommandHierarchy m_command_hierarchy;
 
     // Information about each shader in the capture
-    std::vector<Disassembly> m_shaders;
+    // Note: deque is used here since Disassembly is not copyable nor movable.
+    std::deque<Disassembly> m_shaders;
 
     // Information about each buffer in the capture
     std::vector<BufferInfo> m_buffers;

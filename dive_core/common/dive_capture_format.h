@@ -127,7 +127,6 @@ struct CaptureDataHeader
     {
         kSingleFrame,
         kBeginEndRange,
-        kCrashDump,
     };
     uint16_t    m_major_version  = kCaptureMajorVersion;
     uint16_t    m_minor_version  = kCaptureMinorVersion;
@@ -506,7 +505,7 @@ struct VulkanMetadataBlockHeader
 {
     uint32_t m_major_version : 16;
     uint32_t m_minor_version : 16;
-    uint32_t m_num_metadata;    // Update: Use the |m_reserved0|  as m_num_metadata to counts how many VulkanMetadata in this block. 
+    uint32_t m_num_metadata;    // Update: Use the |m_reserved0|  as m_num_metadata to counts how many VulkanMetadata in this block.
     uint32_t m_reserved1;
     uint32_t m_reserved2;
 };

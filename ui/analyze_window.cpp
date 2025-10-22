@@ -164,10 +164,8 @@ QWidget                                                            *parent) :
     // Replay Warning
     m_replay_warning_layout = new QHBoxLayout();
     m_replay_warning_label = new QLabel(
-    tr("⚠ Initiating replay will continue to use any temporary "
-       "artifacts produced by previous replays, potentially overwritting them. Please save "
-       "them manually in a different folder before proceeding, "
-       "if those artifacts are desired."));
+    tr("⚠ Initiating replay will use and potentially overwrite temporary artifacts from previous "
+       "replays. Save any desired artifacts manually in a separate folder before proceeding."));
     m_replay_warning_label->setWordWrap(true);
     m_replay_warning_layout->addWidget(m_replay_warning_label);
 

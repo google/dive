@@ -43,6 +43,7 @@
 #include "absl/strings/str_cat.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
+#include "dive_core/context.h"
 #include "settings.h"
 #include "overlay.h"
 #include "common/macros.h"
@@ -71,7 +72,7 @@ QWidget                                                            *parent) :
 {
     qDebug() << "AnalyzeDialog created.";
 
-    m_overlay = new Overlay(this);
+    m_overlay = new OverlayHelper(this);
 
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
@@ -196,11 +197,12 @@ QWidget                                                            *parent) :
     m_right_panel_layout->addLayout(m_button_layout);
 
     // Main Layout
-    m_main_layout = new QHBoxLayout(this);
+    m_main_layout = new QHBoxLayout();
     m_main_layout->addLayout(m_left_panel_layout);
     m_main_layout->addLayout(m_right_panel_layout);
 
-    setLayout(m_main_layout);
+    m_overlay->Initialize(m_main_layout);
+    setLayout(m_overlay->GetLayout());
 
     // Connect the name list's selection change to a lambda
     QObject::connect(m_metrics_list,
@@ -255,26 +257,21 @@ AnalyzeDialog::~AnalyzeDialog()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::resizeEvent(QResizeEvent *event)
-{
-    QDialog::resizeEvent(event);
-    m_overlay->UpdateSize(rect());
-}
-
-//--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnOverlayMessage(const QString &message)
 {
-    setDisabled(true);
-    m_overlay->SetMessage(message, /*timed*/ true);
-    if (m_overlay->isHidden())
-        m_overlay->show();
+    m_overlay->SetMessage(message);
+    m_overlay->SetMessageIsTimed();
+    m_overlay->SetMessageCancelFunc([ctx = m_current_context]() {
+        if (!ctx.IsNull())
+        {
+            ctx->Cancel();
+        };
+    });
 }
 
 void AnalyzeDialog::OnDisableOverlay()
 {
-    setDisabled(false);
-    m_overlay->SetMessage(QString());
-    m_overlay->hide();
+    m_overlay->Clear();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -550,6 +547,7 @@ absl::StatusOr<std::string> AnalyzeDialog::GetAssetFile()
 
 //--------------------------------------------------------------------------------------------------
 absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
+const Dive::Context &,
 Dive::AndroidDevice *device,
 const std::string   &local_asset_file_path)
 {
@@ -619,7 +617,8 @@ const std::string &gfxr_stem) const
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
+absl::Status AnalyzeDialog::NormalReplay(const Dive::Context &context,
+                                         Dive::DeviceManager &device_manager,
                                          const std::string   &remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartNormalReplay);
@@ -631,11 +630,12 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
     // Variant-specific config
     replay_settings.loop_single_frame_count = m_frame_count_box->value();
 
-    return device_manager.RunReplayApk(replay_settings);
+    return device_manager.RunReplayApk(context, replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
+absl::Status AnalyzeDialog::Pm4Replay(const Dive::Context &context,
+                                      Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPm4Replay);
@@ -644,11 +644,12 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
     replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
 
-    return device_manager.RunReplayApk(replay_settings);
+    return device_manager.RunReplayApk(context, replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manager,
+absl::Status AnalyzeDialog::PerfCounterReplay(const Dive::Context &context,
+                                              Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPerfCounterReplay);
@@ -660,11 +661,12 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     // Variant-specific config
     replay_settings.metrics = *m_enabled_metrics_vector;
 
-    return device_manager.RunReplayApk(replay_settings);
+    return device_manager.RunReplayApk(context, replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
+absl::Status AnalyzeDialog::GpuTimeReplay(const Dive::Context &context,
+                                          Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartGpuTimeReplay);
@@ -676,11 +678,12 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     // Variant-specific config
     replay_settings.loop_single_frame_count = m_frame_count_box->value();
 
-    return device_manager.RunReplayApk(replay_settings);
+    return device_manager.RunReplayApk(context, replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
+absl::Status AnalyzeDialog::RenderDocReplay(const Dive::Context &context,
+                                            Dive::DeviceManager &device_manager,
                                             const std::string   &remote_gfxr_file)
 {
     SetReplayButton("Replaying with RenderDoc...", false);
@@ -692,7 +695,7 @@ absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
     // Variant-specific config
     // loop count will be set appropriately by ValidateGfxrReplaySettings
 
-    return device_manager.RunReplayApk(replay_settings);
+    return device_manager.RunReplayApk(context, replay_settings);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -704,9 +707,10 @@ void AnalyzeDialog::OnReplay()
     }
 
     OverlayMessage("Replaying...");
+    m_current_context = Dive::SimpleContext::Create();
 
     m_replay_active = std::async([=]() {
-        ReplayImpl();
+        ReplayImpl(m_current_context);
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
 }
@@ -760,6 +764,10 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             SetReplayButton(kDefaultReplayButtonText, true);
             OverlayMessage("Replay done.");
             break;
+        case ReplayStatusUpdateCode::kCancelled:
+            SetReplayButton(kDefaultReplayButtonText, true);
+            OverlayMessage("Replay cancelled.");
+            break;
         case ReplayStatusUpdateCode::kFailure:
             ShowErrorMessage(item.error_message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, true);
@@ -806,12 +814,21 @@ void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status,
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ReplayImpl()
+void AnalyzeDialog::ReplayImpl(const Dive::Context &context)
 {
     Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
     auto                 device = device_manager.GetDevice();
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSetup);
+    if (!device)
+    {
+        for (int i = 0; i < 20 && !context.Cancelled(); ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
+        return;
+    }
 
     // Setup the device
     absl::Status ret = device->SetupDevice();
@@ -820,6 +837,11 @@ void AnalyzeDialog::ReplayImpl()
         std::string err_msg = absl::StrCat("Fail to setup device: ", ret.message());
         UpdateReplayStatus(ReplayStatusUpdateCode::kSetupDeviceFailure, err_msg);
         return;
+    }
+
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
     }
 
     // Get the asset file name
@@ -831,7 +853,9 @@ void AnalyzeDialog::ReplayImpl()
         return;
     }
 
-    absl::StatusOr<std::string> remote_file = PushFilesToDevice(device, asset_file.value());
+    absl::StatusOr<std::string> remote_file = PushFilesToDevice(context,
+                                                                device,
+                                                                asset_file.value());
     if (!remote_file.ok())
     {
         std::string err_msg = absl::StrCat("Failed to deploy replay apk: ",
@@ -840,13 +864,23 @@ void AnalyzeDialog::ReplayImpl()
         return;
     }
 
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
+    }
+
     // Deploying install/gfxr-replay.apk
-    ret = device_manager.DeployReplayApk(m_cur_device);
+    ret = device_manager.DeployReplayApk(context, m_cur_device);
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to push files to device: ", ret.message());
         UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
         return;
+    }
+
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
     }
 
     // Set the download directory to the directory of the current capture file
@@ -872,10 +906,15 @@ void AnalyzeDialog::ReplayImpl()
     bool normal_run_enabled = (!dump_pm4_run_enabled) && (!gpu_time_run_enabled) &&
                               (!perf_counter_run_enabled) && (!renderdoc_run_enabled);
 
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
+    }
+
     // Run only replay with default settings
     if (normal_run_enabled)
     {
-        ret = NormalReplay(device_manager, remote_file.value());
+        ret = NormalReplay(context, device_manager, remote_file.value());
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run normal replay: ", ret.message());
@@ -889,10 +928,15 @@ void AnalyzeDialog::ReplayImpl()
         return;
     }
 
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
+    }
+
     // Run the pm4 replay
     if (dump_pm4_run_enabled)
     {
-        ret = Pm4Replay(device_manager, remote_file.value());
+        ret = Pm4Replay(context, device_manager, remote_file.value());
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run pm4 replay: ", ret.message());
@@ -903,10 +947,15 @@ void AnalyzeDialog::ReplayImpl()
         emit ReloadCapture(m_selected_capture_file_string);
     }
 
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
+    }
+
     // Run the perf counter replay
     if (perf_counter_run_enabled)
     {
-        ret = PerfCounterReplay(device_manager, remote_file.value());
+        ret = PerfCounterReplay(context, device_manager, remote_file.value());
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run perf counter replay: ",
@@ -926,10 +975,15 @@ void AnalyzeDialog::ReplayImpl()
         emit OnDisplayPerfCounterResults("");
     }
 
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
+    }
+
     // Run the gpu_time replay
     if (gpu_time_run_enabled)
     {
-        ret = GpuTimeReplay(device_manager, remote_file.value());
+        ret = GpuTimeReplay(context, device_manager, remote_file.value());
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run gpu_time replay: ", ret.message());
@@ -946,9 +1000,14 @@ void AnalyzeDialog::ReplayImpl()
         emit OnDisplayGpuTimingResults("");
     }
 
+    if (context.Cancelled())
+    {
+        return UpdateReplayStatus(ReplayStatusUpdateCode::kCancelled);
+    }
+
     if (renderdoc_run_enabled)
     {
-        ret = RenderDocReplay(device_manager, remote_file.value());
+        ret = RenderDocReplay(context, device_manager, remote_file.value());
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to run replay with RenderDoc Capture: ",

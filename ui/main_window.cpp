@@ -526,19 +526,15 @@ MainWindow::MainWindow()
     QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
 
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnNewFileOpened,
+                     &AnalyzeDialog::LoadCapture,
                      this,
                      &MainWindow::OnOpenFileFromAnalyzeDialog);
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::ReloadCapture,
-                     this,
-                     &MainWindow::OnOpenFileFromAnalyzeDialog);
-    QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     &AnalyzeDialog::DisplayPerfCounterResults,
                      this,
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     &AnalyzeDialog::DisplayGpuTimingResults,
                      this,
                      &MainWindow::OnPendingGpuTimingResults);
 
@@ -912,6 +908,7 @@ void MainWindow::OnDiveFileLoaded()
     // where gpu timing data will be collected
     m_gpu_timing_tab_view->CollectIndicesFromModel(*m_gfxr_vulkan_command_hierarchy_model,
                                                    QModelIndex());
+    qDebug() << "Done GpuTimingTabView::CollectIndicesFromModel()";
 
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
@@ -1034,6 +1031,7 @@ void MainWindow::OnGfxrFileLoaded()
     // where gpu timing data will be collected
     m_gpu_timing_tab_view->CollectIndicesFromModel(*m_gfxr_vulkan_command_hierarchy_model,
                                                    QModelIndex());
+    qDebug() << "Done GpuTimingTabView::CollectIndicesFromModel()";
 
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
@@ -1423,6 +1421,8 @@ void MainWindow::OnFileLoaded()
 
     // It should return almost immediately, the signal is sent just before async call return.
     auto result = m_loading_result.get();
+
+    qDebug() << "MainWindow::OnFileLoaded(): " << result.file_name.c_str();
 
     std::vector<std::function<void()>> tasks;
     std::swap(tasks, m_loading_pending_task);
@@ -3080,6 +3080,7 @@ void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
     const char       *file_path_str = file_path_std_str.c_str();
     if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ true))
     {
+        qDebug() << "Still loading another file, cannot load: " << file_path_str;
         return;
     }
 }

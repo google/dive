@@ -21,6 +21,7 @@ limitations under the License.
 #include <memory>
 
 #include "../dive_core/common/common.h"
+#include "../dive_core/context.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -40,6 +41,25 @@ namespace Dive
 
 namespace
 {
+
+template<typename Func> class ScopeExit
+{
+public:
+    explicit ScopeExit(Func &&func) :
+        m_func(func)
+    {
+    }
+    ~ScopeExit() { m_func(); }
+
+    ScopeExit(const ScopeExit &) = delete;
+    ScopeExit(ScopeExit &&) = delete;
+    ScopeExit &operator=(const ScopeExit &) = delete;
+    ScopeExit &operator=(ScopeExit &&) = delete;
+
+private:
+    Func m_func;
+};
+template<class Func> ScopeExit(Func &&) -> ScopeExit<Func>;
 
 // adb shell setprop `property` `value`
 absl::Status SetSystemProperty(const AdbSession &adb,
@@ -740,7 +760,7 @@ absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &s
     return m_device.get();
 }
 
-absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
+absl::Status DeviceManager::DeployReplayApk(const Dive::Context &, const std::string &serial)
 {
     LOGD("DeployReplayApk(): starting\n");
 
@@ -770,8 +790,13 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
+absl::Status DeviceManager::RunReplayGfxrScript(const Dive::Context      &context,
+                                                const GfxrReplaySettings &settings) const
 {
+    if (context.Cancelled())
+    {
+        return absl::Status(absl::StatusCode::kCancelled, "cancelled");
+    }
     const AdbSession &adb = m_device->Adb();
     Defer             cleanup([&]() {
         LOGD("RunReplayGfxrScript(): CLEANUP\n");
@@ -843,6 +868,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     // Wait for application to exit
     do
     {
+        if (context.Cancelled())
+        {
+            return absl::Status(absl::StatusCode::kCancelled, "cancelled");
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     } while (m_device->IsProcessRunning(kGfxrReplayAppName));
 
@@ -851,6 +880,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         // Wait for PM4 trace file to be written to.
         do
         {
+            if (context.Cancelled())
+            {
+                return absl::Status(absl::StatusCode::kCancelled, "cancelled");
+            }
             std::this_thread::sleep_for(std::chrono::seconds(1));
         } while (m_device->FileExists(remote_pm4_inprogress_path));
 
@@ -909,8 +942,13 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &settings) const
+absl::Status DeviceManager::RunReplayProfilingBinary(const Dive::Context      &context,
+                                                     const GfxrReplaySettings &settings) const
 {
+    if (context.Cancelled())
+    {
+        return absl::Status(absl::StatusCode::kCancelled, "cancelled");
+    }
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
     std::string copy_cmd = absl::StrFormat("push %s %s",
@@ -944,6 +982,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
                                       metrics_str);
     // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
     LOGD("Profiling binary cmd: %s\n", cmd.c_str());
+    // TODO: make adb run take a context so we don't stuck here waiting for it to finish.
     RETURN_IF_ERROR(m_device->Adb().Run(cmd));
 
     LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
@@ -971,8 +1010,14 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) const
+absl::Status DeviceManager::RunReplayApk(const Dive::Context      &context,
+                                         const GfxrReplaySettings &settings) const
 {
+    if (context.Cancelled())
+    {
+        return absl::Status(absl::StatusCode::kCancelled, "cancelled");
+    }
+
     LOGD("RunReplayApk(): Check settings before run\n");
     absl::StatusOr<Dive::GfxrReplaySettings>
     validated_settings = ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
@@ -983,8 +1028,32 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
 
     LOGD("RunReplayApk(): Attempt to pin GPU clock frequency\n");
     bool trouble_pinning_clock = false;
-    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
-    if (!ret.ok())
+    auto unpin_clock_guard = ScopeExit{ [&]() {
+        LOGD("RunReplayApk(): Attempt to unpin GPU clock frequency\n");
+        if (!trouble_pinning_clock)
+        {
+            auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
+            if (!ret.ok())
+            {
+                LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
+            }
+
+            ret = m_device->UnpinGpuClock();
+            if (!ret.ok())
+            {
+                LOGW("WARNING: Could not unpin GPU clock: %s\n",
+                     std::string(ret.message()).c_str());
+            }
+        }
+
+        if (auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 1"); !ret.ok())
+        {
+            LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
+                 std::string(ret.message()).c_str());
+        }
+    } };
+
+    if (auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0"); !ret.ok())
     {
         LOGW("WARNING: Could not disable the compositor preemption: %s\n",
              std::string(ret.message()).c_str());
@@ -993,8 +1062,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
 
     if (!trouble_pinning_clock)
     {
-        ret = m_device->PinGpuClock(kPinGpuClockMHz);
-        if (!ret.ok())
+        if (auto ret = m_device->PinGpuClock(kPinGpuClockMHz); !ret.ok())
         {
             LOGW("WARNING: Could not pin GPU clock: %s\n", std::string(ret.message()).c_str());
             trouble_pinning_clock = true;
@@ -1005,38 +1073,15 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     absl::Status ret_run;
     if (validated_settings->run_type == GfxrReplayOptions::kPerfCounters)
     {
-        ret_run = RunReplayProfilingBinary(*validated_settings);
+        ret_run = RunReplayProfilingBinary(context, *validated_settings);
     }
     else
     {
-        ret_run = RunReplayGfxrScript(*validated_settings);
+        ret_run = RunReplayGfxrScript(context, *validated_settings);
     }
     if (!ret_run.ok())
     {
         return ret_run;
-    }
-
-    LOGD("RunReplayApk(): Attempt to unpin GPU clock frequency\n");
-    if (!trouble_pinning_clock)
-    {
-        auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
-        if (!ret.ok())
-        {
-            LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
-        }
-
-        ret = m_device->UnpinGpuClock();
-        if (!ret.ok())
-        {
-            LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
-        }
-    }
-
-    ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
-    if (!ret.ok())
-    {
-        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
-             std::string(ret.message()).c_str());
     }
 
     LOGD("RunReplayApk(): Completed successfully\n");

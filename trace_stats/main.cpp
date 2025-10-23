@@ -21,6 +21,7 @@
 #include <set>
 #include <array>
 
+#include "dive_core/context.h"
 #include "dive_core/data_core.h"
 #include "trace_stats.h"
 #include "pm4_info.h"
@@ -75,7 +76,8 @@ int main(int argc, char **argv)
     const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
     Dive::CaptureStats           capture_stats;
     Dive::TraceStats             trace_stats;
-    trace_stats.GatherTraceStats(meta_data, capture_stats);
+
+    trace_stats.GatherTraceStats(Dive::Context::Background(), meta_data, capture_stats);
     trace_stats.PrintTraceStats(capture_stats, *ostream);
 
     return 1;

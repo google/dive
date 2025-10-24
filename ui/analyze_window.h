@@ -55,14 +55,21 @@ class AnalyzeDialog : public QDialog
         QString          description;
     };
 
-    // Describes all files associated with a GFXR file, does not guarantee existence
+    // Describes the presumed filepaths of all files associated with a GFXR file, does not guarantee
+    // their existence.
     struct ReplayArtifactsPaths
     {
+        // <package>_trim_trigger_<id>.gfxr
         std::filesystem::path gfxr;
-        // TODO: std::filesystem::path gfxa;
+        // <package>_asset_file_<id>.gfxr
+        std::filesystem::path gfxa;
+        // <package>_trim_trigger_<id>_profiling_metrics.csv
         std::filesystem::path perf_counter_csv;
+        // <package>_trim_trigger_<id>_gpu_time.csv
         std::filesystem::path gpu_timing_csv;
+        // <package>_trim_trigger_<id>.rd
         std::filesystem::path pm4_rd;
+        // <package>_trim_trigger_<id>_capture.rdc
         std::filesystem::path renderdoc_rdc;
     };
 
@@ -108,10 +115,9 @@ private slots:
 
 signals:
     void ReplayStatusUpdated(int status_code, const QString &error_message);
-    void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(const QString &file_path);
-    void OnDisplayGpuTimingResults(const QString &file_path);
-    void ReloadCapture(const QString &file_path);
+    void LoadCapture(const QString &file_path);
+    void DisplayPerfCounterResults(const QString &file_path);
+    void DisplayGpuTimingResults(const QString &file_path);
     void OverlayMessage(const QString &message);
     void DisableOverlay();
 
@@ -119,13 +125,14 @@ protected:
     virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
 private:
-    void                        ShowErrorMessage(const std::string &message);
-    void                        SetReplayButton(const std::string &message, bool is_enabled);
-    void                        PopulateMetrics();
-    void                        UpdateSelectedMetricsList();
-    std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
-                                                 const std::string &suffix) const;
-    ReplayArtifactsPaths        GetReplayFilesLocalPaths(const std::string &gfxr_stem) const;
+    void                  ShowErrorMessage(const std::string &message);
+    void                  SetReplayButton(const std::string &message, bool is_enabled);
+    void                  PopulateMetrics();
+    void                  UpdateSelectedMetricsList();
+    std::filesystem::path GetFullLocalPath(const std::string &gfxr_stem,
+                                           const std::string &suffix) const;
+    absl::StatusOr<ReplayArtifactsPaths> GetReplayFilesLocalPaths(
+    const std::string &gfxr_stem) const;
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
@@ -206,8 +213,9 @@ private:
     const int             kDefaultFrameCount = 3;
     const std::string     kDefaultReplayButtonText = "Replay";
     std::filesystem::path m_local_capture_file_directory = "";
-    std::future<void>     m_replay_active;
-    Overlay              *m_overlay;
+
+    std::future<void> m_replay_active;
+    Overlay          *m_overlay;
 
     struct StatusUpdateQueueItem
     {

@@ -57,7 +57,10 @@ inline constexpr char kGpuTimingCsvSuffix[] = "_gpu_time.csv";
 inline constexpr char kPm4RdSuffix[] = ".rd";
 inline constexpr char kRenderDocRdcSuffix[] = "_capture.rdc";
 inline constexpr char kGfxrSuffix[] = ".gfxr";
+inline constexpr char kGfxaSuffix[] = ".gfxa";
 inline constexpr char kPngSuffix[] = ".png";
+inline constexpr char kGfxrFileNameSubstr[] = "_trim_trigger_";
+inline constexpr char kGfxaFileNameSubstr[] = "_asset_file_";
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

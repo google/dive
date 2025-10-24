@@ -618,12 +618,15 @@ HandlePointerDecoder<VkDeviceMemory>*                pMemory)
         bool is_importing_android_hardware_buffer = graphics::vulkan_struct_get_pnext<
                                                     VkImportAndroidHardwareBufferInfoANDROID>(
                                                     allocate_info) != nullptr;
-        if (is_importing_android_hardware_buffer)
+        bool using_unsupported_mem_type = (allocate_info->memoryTypeIndex == 8) ||
+                                          is_importing_android_hardware_buffer;
+        if (using_unsupported_mem_type)
         {
-            // Based on testing, imported AHardwareBuffers use memoryTypeIndex 1 but RenderDoc wants
-            // it to be 0. We can't call vkGetImageMemoryRequirements since (apart from dedicated
-            // memory) we don't know which image this memory will be bound to.
-            GFXRECON_LOG_INFO("AHardwareBuffer detected during RenderDoc capture! Overriding "
+            // Based on testing, imported AHardwareBuffers use memoryTypeIndex 1
+            // Some other cases, the app could use mem type 8
+            // but RenderDoc only supports 0. We can't call vkGetImageMemoryRequirements since
+            // (apart from dedicated memory) we don't know which image this memory will be bound to.
+            GFXRECON_LOG_INFO("Unsupported detected during RenderDoc capture! Overriding "
                               "memoryTypeIndex from %u to 0 for memory handle %lu",
                               allocate_info->memoryTypeIndex,
                               *pMemory->GetPointer());

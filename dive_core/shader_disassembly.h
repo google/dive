@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <mutex>
 
 #include "dive_core/common/common.h"
 #include "log.h"
@@ -77,6 +78,8 @@ public:
     }
     uint32_t GetGPRCount() const { return GetData().m_gpr_count; }
 
+    void EagerEval() const { Disassemble(); }
+
 private:
     struct DisassembledData
     {
@@ -86,15 +89,12 @@ private:
         uint32_t                 m_gpr_count;
     };
 
-    void Disassemble();
+    void Disassemble() const;
 
     const DisassembledData& GetData() const
     {
-        if (!m_disassembled_data)
-        {
-            const_cast<Disassembly*>(this)->Disassemble();
-        }
-        return *m_disassembled_data;
+        Disassemble();
+        return m_disassembled_data;
     }
 
     const IMemoryManager& m_mem_manager;
@@ -102,7 +102,8 @@ private:
     uint64_t              m_address;
     ILog*                 m_log;
 
-    std::optional<DisassembledData> m_disassembled_data = std::nullopt;
+    mutable std::once_flag   m_disassembled_flag;
+    mutable DisassembledData m_disassembled_data;
 };
 
 bool Disassemble(const uint8_t*                             shader_memory,

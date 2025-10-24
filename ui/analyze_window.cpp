@@ -461,8 +461,8 @@ void AnalyzeDialog::OnOpenFile()
         const std::string trim_str = "_trim_trigger";
         const std::string asset_str = "_asset_file";
 
-        // Find and replace the "trim_trigger" part of the filename.
-        size_t pos = potential_asset_name.find(trim_str);
+        // Find and replace the last occurrence of "trim_trigger" part of the filename.
+        size_t pos = potential_asset_name.rfind(trim_str);
         if (pos != std::string::npos)
         {
             potential_asset_name.replace(pos, trim_str.length(), asset_str);

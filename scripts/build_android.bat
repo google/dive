@@ -57,53 +57,5 @@ echo Building all the following types: !BUILD_TYPE!
     popd
 ))
 
-pushd !GFXR_ROOT_DIR!
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    echo.
-    echo %%b : Building gfxr android layer
-    set build=%%b
-    
-    echo GFXR_ROOT_DIR: !GFXR_ROOT_DIR!
-    call gradlew layer:assemble!build! replay:assemble!build! --console=verbose -Parm64-v8a
-))
-popd
-
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    if "%%b" == "Release" set build_lowercase=release
-    if "%%b" == "Debug" set build_lowercase=debug
-    echo.
-    echo %%b : Moving gfxr files
-    set build=%%b
-    set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
-
-    set DIVE_INSTALL_DIR=%PROJECT_ROOT%\\install
-
-    echo Extracting gfxr android layer into the dive install directory
-    set GFXR_LAYER_SRC=!GFXR_ROOT_DIR!\\layer\\build\\outputs\\aar\\layer-!build_lowercase!.aar
-    set GFXR_LAYER_DST=!DIVE_INSTALL_DIR!\\gfxr_layer
-    if exist !GFXR_LAYER_DST! rm -rf !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    md !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    tar -xf !GFXR_LAYER_SRC! -C !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    echo Copying gfxr android replay apk into the dive install directory
-    set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
-    xcopy /i !GFXR_REPLAY_SRC!\\replay-*.apk !DIVE_INSTALL_DIR!
-    pushd !DIVE_INSTALL_DIR!
-    if exist gfxr-replay.apk rm gfxr-replay.apk
-    ren replay-*.apk gfxr-replay.apk
-    popd
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    echo Copying gfxrecon.py into the dive install directory
-    set GFXRECON_PY=!GFXR_ROOT_DIR!\\scripts\\gfxrecon.py
-    xcopy !GFXRECON_PY! !DIVE_INSTALL_DIR! /I /Y
-    if not !ERRORLEVEL!==0 exit /b 1
-))
-
 echo Start Time: %startTime%
 echo Finish Time: %time%

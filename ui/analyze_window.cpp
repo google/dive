@@ -915,9 +915,13 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
+    }
+
+    // File could exist from previous runs
+    if (std::filesystem::exists(local_artifacts.perf_counter_csv))
+    {
         qDebug() << "Loading perf counter data: "
                  << local_artifacts.perf_counter_csv.string().c_str();
-
         emit OnDisplayPerfCounterResults(
         QString::fromStdString(local_artifacts.perf_counter_csv.string()));
     }
@@ -937,6 +941,11 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
+    }
+
+    // File could exist from previous runs
+    if (std::filesystem::exists(local_artifacts.gpu_timing_csv))
+    {
         qDebug() << "Loading gpu timing data: " << local_artifacts.gpu_timing_csv.string().c_str();
         emit OnDisplayGpuTimingResults(
         QString::fromStdString(local_artifacts.gpu_timing_csv.string()));

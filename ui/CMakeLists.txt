@@ -70,6 +70,15 @@ if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
   target_link_libraries(${PROJECT_NAME}  stdc++fs)
 endif()
 
+# Add the RPATH to the binary to locate Qt dependencies.
+if(UNIX)
+  set(LOCAL_LIB_RPATH "$ORIGIN/lib")
+  set_target_properties(${PROJECT_NAME} PROPERTIES
+      INSTALL_RPATH "${LOCAL_LIB_RPATH}"
+      BUILD_WITH_INSTALL_RPATH TRUE
+  )
+endif()
+
 # Custom executable name
 set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
 
@@ -99,6 +108,26 @@ file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/renderdoc/)
 
+set(QT_PATH "${CMAKE_SOURCE_DIR}/qt/linux")
+if(UNIX)
+  # Copy Qt libraries
+  add_custom_command(
+      TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              ${QT_PATH}/lib
+              ${CMAKE_CURRENT_BINARY_DIR}/lib
+      COMMENT "Copying qt libraries to build output"
+  )
+  # Copy Qt plugins
+  add_custom_command(
+      TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              ${QT_PATH}/plugins
+              ${CMAKE_CURRENT_BINARY_DIR}/plugins
+      COMMENT "Copying qt plugins to build output"
+  )
+endif()
+
 # Generate license NOTICE file
 include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")
 GenerateThirdPartyLicenseFile("${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/licenses/")
@@ -111,3 +140,8 @@ endif()
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" DESTINATION "${CMAKE_INSTALL_PREFIX}")
 add_dependencies(${PROJECT_NAME} notice_file)
+
+if(UNIX)
+  install(DIRECTORY ${QT_PATH}/lib/ DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+  install(DIRECTORY ${QT_PATH}/plugins/ DESTINATION ${CMAKE_INSTALL_PREFIX}/plugins)
+endif()

@@ -1105,7 +1105,7 @@ void MainWindow::StartTraceStats()
 
     m_async_capture_stats_context = Dive::SimpleContext::Create();
     m_async_capture_stats_state = AsyncCaptureStatsState::kRunning;
-    m_worker->Run([=, context = Dive::Context{ m_async_capture_stats_context }]() {
+    m_worker->Run([=, this, context = Dive::Context{ m_async_capture_stats_context }]() {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         QReadLocker locker(&m_data_core_lock);
@@ -1163,7 +1163,7 @@ void MainWindow::OnLoadFailure(Dive::CaptureData::LoadResult result, const std::
     }
 
     // Do dialog on main thread.
-    QMetaObject::invokeMethod(this, [=]() {
+    QMetaObject::invokeMethod(this, [=, this]() {
         HideOverlay();
         QString error_msg;
         if (result == Dive::CaptureData::LoadResult::kFileIoError)
@@ -1183,7 +1183,7 @@ void MainWindow::OnParseFailure(const std::string &file_name)
 {
 
     // Do dialog on main thread.
-    QMetaObject::invokeMethod(this, [=]() {
+    QMetaObject::invokeMethod(this, [=, this]() {
         HideOverlay();
         QMessageBox::critical(this,
                               QString("Error parsing file"),
@@ -1194,7 +1194,7 @@ void MainWindow::OnParseFailure(const std::string &file_name)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnUnsupportedFile(const std::string &file_name)
 {
-    QMetaObject::invokeMethod(this, [=]() {
+    QMetaObject::invokeMethod(this, [=, this]() {
         QString error_msg = QString("File type not supported!");
         QMessageBox::critical(this,
                               (QString("Unable to open file: ") + file_name.c_str()),
@@ -1285,7 +1285,7 @@ void MainWindow::OnPendingPerfCounterResults(const QString &file_name)
     }
 
     auto file_path = std::filesystem::path(file_name.toStdString());
-    auto task = [=]() {
+    auto task = [=, this]() {
         m_perf_counter_model->OnPerfCounterResultsGenerated(file_path, *m_available_metrics);
         if (!file_path.empty())
         {
@@ -1306,7 +1306,7 @@ void MainWindow::OnPendingGpuTimingResults(const QString &file_name)
     {
         return;
     }
-    auto task = [=]() {
+    auto task = [=, this]() {
         m_gpu_timing_model->OnGpuTimingResultsGenerated(file_name);
         if (!file_name.isEmpty())
         {
@@ -1327,7 +1327,7 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
     {
         return;
     }
-    auto task = [=]() {
+    auto task = [=, this]() {
         m_frame_tab_view->OnCaptureScreenshotLoaded(file_name);
         if (!file_name.isEmpty())
         {
@@ -1381,7 +1381,7 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
 
         if (!asset_file_exists)
         {
-            RunOnUIThread([=]() {
+            RunOnUIThread([=, this]() {
                 HideOverlay();
                 QString title = QString("Unable to open file: %1").arg(file_name.c_str());
                 QString description = QString("Required .gfxa file: %1 not found!")

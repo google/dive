@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(divecli)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 
 if(MSVC)
@@ -32,8 +32,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 file(GLOB HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
-include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include 
-  ${CMAKE_SOURCE_DIR} 
+include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_BINARY_DIR}
   ${LibArchive_INCLUDE_DIRS})
 

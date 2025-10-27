@@ -16,7 +16,7 @@
 
 project(gfxr_decode_ext_lib)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
   set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
@@ -37,8 +37,8 @@ target_include_directories(dive_renderdoc PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../../
 )
 
-# The Android Gradle script invokes its own CMake, starting from gfxrecon-replay's CMakeLists.txt. 
-# This build system is isolated and does not see the gpu_time target defined in the root CMakeLists.txt. 
+# The Android Gradle script invokes its own CMake, starting from gfxrecon-replay's CMakeLists.txt.
+# This build system is isolated and does not see the gpu_time target defined in the root CMakeLists.txt.
 # Add add_subdirectory for gpu_time only when building for Android
 if(ANDROID)
     add_subdirectory(../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time_build)
@@ -78,7 +78,7 @@ target_include_directories(gfxr_decode_ext_lib PUBLIC
 if(WIN32)
   enable_testing()
   include(GoogleTest)
-  add_executable(gfxr_decode_ext_lib_test 
+  add_executable(gfxr_decode_ext_lib_test
     dive_annotation_processor_test.cpp
     dive_block_data_test.cpp
     dive_file_processor_test.cpp

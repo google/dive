@@ -706,7 +706,7 @@ void AnalyzeDialog::OnReplay()
 
     OverlayMessage("Replaying...");
 
-    m_replay_active = std::async([=]() {
+    m_replay_active = std::async([=, this]() {
         ReplayImpl();
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
@@ -721,7 +721,7 @@ void AnalyzeDialog::OnDeleteReplayArtifacts()
         return;
     }
 
-    m_replay_active = std::async([=]() {
+    m_replay_active = std::async([=, this]() {
         DeleteReplayArtifactsImpl();
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });

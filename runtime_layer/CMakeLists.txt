@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(diveRuntimeLayer)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(target_name VkLayer_rt_dive)
 
 set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"

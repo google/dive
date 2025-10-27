@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
   set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
@@ -31,11 +31,11 @@ include_directories(
 
 # ---------------------
 # data_core_wrapper_lib
-add_library(data_core_wrapper_lib 
+add_library(data_core_wrapper_lib
   data_core_wrapper.h
   data_core_wrapper.cpp
 )
-target_link_libraries(data_core_wrapper_lib PUBLIC 
+target_link_libraries(data_core_wrapper_lib PUBLIC
   dive_core
   absl::status
 )
@@ -45,8 +45,8 @@ target_include_directories(data_core_wrapper_lib PUBLIC
 # --------
 # host_cli
 add_executable(host_cli "host_cli_main.cpp")
-target_link_libraries(host_cli PUBLIC 
-  data_core_wrapper_lib 
+target_link_libraries(host_cli PUBLIC
+  data_core_wrapper_lib
   absl::flags
   absl::flags_parse
   absl::status
@@ -74,12 +74,12 @@ function(add_modify_gfxr_test)
       "" "${oneValueArgs}" "${multiValueArgs}"
   )
   add_test(NAME ${arg_NAME}
-    COMMAND ${CMAKE_COMMAND} 
-    -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli> 
-    -DTEST_NAME=${arg_NAME} 
-    -DINPUT_GFXR=${arg_INPUT_GFXR} 
-    -DGOLDEN_FILE=${arg_GOLDEN_FILE} 
-    -DADDITIONAL_ARGUMENTS=${arg_ADDITIONAL_ARGUMENTS} 
+    COMMAND ${CMAKE_COMMAND}
+    -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli>
+    -DTEST_NAME=${arg_NAME}
+    -DINPUT_GFXR=${arg_INPUT_GFXR}
+    -DGOLDEN_FILE=${arg_GOLDEN_FILE}
+    -DADDITIONAL_ARGUMENTS=${arg_ADDITIONAL_ARGUMENTS}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/modify_gfxr_test.cmake
   )
 endfunction()

@@ -129,7 +129,7 @@ signals:
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
     void OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path);
-    void OnOpenFileFromAnalyzeDialog(const QString &file_path);
+    void OnCaptureUpdatedFromAnalyzeDialog(const QString &gfxr_file_path);
     void OnSwitchToShaderTab();
     void OnOpenVulkanDrawCallMenu(const QPoint &pos);
     void OnOpenVulkanCallMenu(const QPoint &pos);

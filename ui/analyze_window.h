@@ -17,6 +17,8 @@
 #include <QDialog>
 #include <future>
 #include <optional>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
 #include "dive_core/available_metrics.h"
@@ -55,24 +57,6 @@ class AnalyzeDialog : public QDialog
         QString          description;
     };
 
-    // Describes the presumed filepaths of all files associated with a GFXR file, does not guarantee
-    // their existence.
-    struct ReplayArtifactsPaths
-    {
-        // <package>_trim_trigger_<id>.gfxr
-        std::filesystem::path gfxr;
-        // <package>_asset_file_<id>.gfxr
-        std::filesystem::path gfxa;
-        // <package>_trim_trigger_<id>_profiling_metrics.csv
-        std::filesystem::path perf_counter_csv;
-        // <package>_trim_trigger_<id>_gpu_time.csv
-        std::filesystem::path gpu_timing_csv;
-        // <package>_trim_trigger_<id>.rd
-        std::filesystem::path pm4_rd;
-        // <package>_trim_trigger_<id>_capture.rdc
-        std::filesystem::path renderdoc_rdc;
-    };
-
     Q_OBJECT
 
     enum class ReplayStatusUpdateCode : int
@@ -102,7 +86,6 @@ public:
     QWidget                                                            *parent = nullptr);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
-    void SetSelectedCaptureFile(const QString &filePath);
 private slots:
     void OnReplayStatusUpdate(int status_code, const QString &error_message);
     void OnDeviceSelected(const QString &);
@@ -115,7 +98,7 @@ private slots:
 
 signals:
     void ReplayStatusUpdated(int status_code, const QString &error_message);
-    void LoadCapture(const QString &file_path);
+    void CaptureUpdated(const QString &file_path);
     void DisplayPerfCounterResults(const QString &file_path);
     void DisplayGpuTimingResults(const QString &file_path);
     void OverlayMessage(const QString &message);
@@ -125,16 +108,10 @@ protected:
     virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
 private:
-    void                  ShowErrorMessage(const std::string &message);
-    void                  SetReplayButton(const std::string &message, bool is_enabled);
-    void                  PopulateMetrics();
-    void                  UpdateSelectedMetricsList();
-    std::filesystem::path GetFullLocalPath(const std::string &gfxr_stem,
-                                           const std::string &suffix) const;
-    absl::StatusOr<ReplayArtifactsPaths> GetReplayFilesLocalPaths(
-    const std::string &gfxr_stem) const;
-    absl::StatusOr<std::string> GetCaptureFileDirectory();
-    absl::StatusOr<std::string> GetAssetFile();
+    void                        ShowErrorMessage(const std::string &message);
+    void                        SetReplayButton(const std::string &message, bool is_enabled);
+    void                        PopulateMetrics();
+    void                        UpdateSelectedMetricsList();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
     absl::Status                NormalReplay(Dive::DeviceManager &device_manager,
@@ -204,14 +181,19 @@ private:
     QVBoxLayout                  *m_right_panel_layout;
     std::vector<Dive::DeviceInfo> m_devices;
     std::string                   m_cur_device;
-    QString                       m_selected_capture_file_string;
-    QVector<CsvItem>             *m_csv_items;
-    std::vector<std::string>     *m_enabled_metrics_vector;
+
+    // Path to local GFXR file that was opened
+    QString m_selected_capture_file_string;
+
+    QVector<CsvItem>                                                   *m_csv_items;
+    std::vector<std::string>                                           *m_enabled_metrics_vector;
     std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> m_available_metrics;
     // Used to store a csv item's key in the enabled metrics vector.
-    const int             kDataRole = Qt::UserRole + 1;
-    const int             kDefaultFrameCount = 3;
-    const std::string     kDefaultReplayButtonText = "Replay";
+    const int         kDataRole = Qt::UserRole + 1;
+    const int         kDefaultFrameCount = 3;
+    const std::string kDefaultReplayButtonText = "Replay";
+
+    // Parent directory of m_selected_capture_file_string
     std::filesystem::path m_local_capture_file_directory = "";
 
     std::future<void> m_replay_active;

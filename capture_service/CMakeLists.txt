@@ -28,6 +28,15 @@ else()
   set(COMMAND_UTILS_SRC "command_utils.cc")
 endif()
 
+add_library(replay_artifacts
+  replay_artifacts.h
+  replay_artifacts.cc
+)
+target_link_libraries(replay_artifacts PUBLIC
+                      absl::status
+                      absl::statusor)
+target_include_directories(replay_artifacts PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
 # Group both cc files in the same target since the public header trace_mgr.h declares both.
 add_library(trace_mgr
@@ -119,4 +128,14 @@ else()
     gtest_main
   )
   gtest_discover_tests(android_trace_mgr_test)
+
+  add_executable(replay_artifacts_test replay_artifacts_test.cc)
+  target_link_libraries(replay_artifacts_test
+    absl::status_matchers
+    replay_artifacts
+    gmock
+    gtest
+    gtest_main
+  )
+  gtest_discover_tests(replay_artifacts_test)
 endif()

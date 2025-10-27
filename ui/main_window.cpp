@@ -526,9 +526,9 @@ MainWindow::MainWindow()
     QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
 
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::LoadCapture,
+                     &AnalyzeDialog::CaptureUpdated,
                      this,
-                     &MainWindow::OnOpenFileFromAnalyzeDialog);
+                     &MainWindow::OnCaptureUpdatedFromAnalyzeDialog);
     QObject::connect(m_analyze_dig,
                      &AnalyzeDialog::DisplayPerfCounterResults,
                      this,
@@ -1584,8 +1584,8 @@ void MainWindow::OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_
         return;
     }
     QString file_path_q_string = QString::fromStdString(file_path);
-    m_analyze_dig->SetSelectedCaptureFile(file_path_q_string);
-    m_analyze_dig->open();
+
+    // TODO UNICORN: make this a signal to analyze dialog? OnFileOpen()?
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3074,13 +3074,16 @@ void MainWindow::ConnectGfxrFileTabs()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
+void MainWindow::OnCaptureUpdatedFromAnalyzeDialog(const QString &gfxr_file_path)
 {
-    const std::string file_path_std_str = file_path.toStdString();
-    const char       *file_path_str = file_path_std_str.c_str();
-    if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ true))
+    const std::string gfxr_file_path_std_str = gfxr_file_path.toStdString();
+    const char       *gfxr_file_path_str = gfxr_file_path_std_str.c_str();
+
+    // If the files are named the same way as the files already open, do not re-load to save time
+
+    if (!LoadFile(gfxr_file_path_str, /*is_temp_file*/ false, /*async*/ true))
     {
-        qDebug() << "Still loading another file, cannot load: " << file_path_str;
+        qDebug() << "Still loading another file, cannot load: " << gfxr_file_path_str;
         return;
     }
 }

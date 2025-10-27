@@ -63,7 +63,7 @@ endif()
 # Use the Widgets module from Qt 5
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
-target_link_libraries(${PROJECT_NAME} network dive_core device_mgr dive_plugin_loader)
+target_link_libraries(${PROJECT_NAME} network dive_core device_mgr dive_plugin_loader replay_artifacts)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)

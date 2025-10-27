@@ -24,7 +24,7 @@
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
 #include "main_window.h"
-#include "version.h"
+#include "common/dive_version.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -94,11 +94,11 @@ int main(int argc, char *argv[])
     // On Windows, users can right-click the .exe and look at Properties/Details.
     if (argc > 1 && strcasecmp(argv[1], "--version") == 0)
     {
-        std::cout << VERSION_PRODUCTNAME << std::endl;
-        std::cout << VERSION_DESCRIPTION << std::endl;
-        std::cout << VERSION_COPYRIGHT << std::endl;
-        std::cout << "Version " << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_REVISION
-                  << "." << VERSION_BUILD << std::endl;
+        std::cout << DIVE_PRODUCT_NAME << std::endl;
+        std::cout << DIVE_PRODUCT_DESCRIPTION << std::endl;
+        std::cout << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
+        std::cout << "Version " << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "."
+                  << DIVE_VERSION_REVISION << std::endl;
         return 0;
     }
 

@@ -18,3 +18,14 @@ limitations under the License.
 #include "common/dive_cmake_generated.h"
 
 #define DIVE_VERSION_SHA1 CMAKE_GENERATED_DIVE_VERSION_SHA1
+
+#define DIVE_VERSION_MAJOR 1
+#define DIVE_VERSION_MINOR 0
+#define DIVE_VERSION_REVISION 1
+
+#define DIVE_PRODUCT_NAME "Dive GPU Profiler"
+#define DIVE_PRODUCT_DESCRIPTION                                                                   \
+    "Dive is a powerful GPU profiler designed to help developers inspect low-level graphics data " \
+    "to understand and optimize their applications. It currently supports AndroidXR devices that " \
+    "use Qualcomm Adreno 7xx series GPUs."
+#define DIVE_COPYRIGHT_DESCRIPTION "Copyright 2025 Google LLC. All rights reserved."

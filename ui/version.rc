@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "version.h"
+#include "common/dive_version.h"
 #define CONCAT2(a, b) a.b
 #define CONCAT4(a, b, c, d) a.b.c.d
 #define STRINGIZE_(x) #x
@@ -31,8 +31,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 1 ICON "images/dive.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION VERSION_MAJOR,VERSION_MINOR,VERSION_REVISION,VERSION_BUILD
- PRODUCTVERSION VERSION_MAJOR,VERSION_MINOR
+ FILEVERSION DIVE_VERSION_MAJOR,DIVE_VERSION_MINOR,DIVE_VERSION_REVISION
+ PRODUCTVERSION DIVE_VERSION_MAJOR,DIVE_VERSION_MINOR
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -48,13 +48,13 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Google LLC"
-            VALUE "FileDescription", VERSION_DESCRIPTION
-            VALUE "FileVersion", STRINGIZE(CONCAT4(VERSION_MAJOR,VERSION_MINOR,VERSION_REVISION,VERSION_BUILD))
+            VALUE "FileDescription", DIVE_PRODUCT_DESCRIPTION
+            VALUE "FileVersion", STRINGIZE(CONCAT4(DIVE_VERSION_MAJOR,DIVE_VERSION_MINOR,DIVE_VERSION_REVISION))
             VALUE "InternalName", "dive_ui.exe"
-            VALUE "LegalCopyright", VERSION_COPYRIGHT
+            VALUE "LegalCopyright", DIVE_COPYRIGHT_DESCRIPTION
             VALUE "OriginalFilename", "dive_ui.exe"
-            VALUE "ProductName", VERSION_PRODUCTNAME
-            VALUE "ProductVersion", STRINGIZE(CONCAT2(VERSION_MAJOR,VERSION_MINOR))
+            VALUE "ProductName", DIVE_PRODUCT_NAME
+            VALUE "ProductVersion", STRINGIZE(CONCAT2(DIVE_VERSION_MAJOR,DIVE_VERSION_MINOR))
         END
     END
     BLOCK "VarFileInfo"

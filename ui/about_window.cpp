@@ -14,6 +14,7 @@
  limitations under the License.
 */
 #include "about_window.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -26,7 +27,8 @@
 #include <QSizePolicy>
 #include <QVBoxLayout>
 #include <sstream>
-#include "version.h"
+
+#include "common/dive_version.h"
 
 // =================================================================================================
 // AboutDialog
@@ -36,13 +38,14 @@ AboutDialog::AboutDialog(QWidget *parent)
 {
     // Build version string
     std::ostringstream os;
-    os << VERSION_PRODUCTNAME << std::endl;
-    os << VERSION_DESCRIPTION << std::endl;
-    os << VERSION_COPYRIGHT << std::endl;
+    os << DIVE_PRODUCT_NAME << std::endl;
+    os << DIVE_PRODUCT_DESCRIPTION << std::endl;
+    os << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
     os << std::endl;
     os << "Version ";
-    os << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_REVISION << "." << VERSION_BUILD;
+    os << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "." << DIVE_VERSION_REVISION;
     m_build_information = new QLabel(os.str().c_str());
+    m_build_information->setWordWrap(true);
 
     // Load third party license information
     m_license_notice = new QPlainTextEdit();

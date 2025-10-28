@@ -78,7 +78,7 @@ absl::Status DisableVulkanLayer(const AdbSession &adb)
 absl::Status EnableVulkanLayer(const AdbSession &adb,
                                std::string_view  app,
                                std::string_view  layer,
-                               std::string_view  layer_app)
+                               std::string_view  layer_app = "")
 {
     // Start with a clean slate
     RETURN_IF_ERROR(DisableVulkanLayer(adb));
@@ -87,14 +87,42 @@ absl::Status EnableVulkanLayer(const AdbSession &adb,
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell settings put global gpu_debug_app %s", app)));
     RETURN_IF_ERROR(
     adb.Run(absl::StrFormat("shell settings put global gpu_debug_layers %s", layer)));
-    RETURN_IF_ERROR(
-    adb.Run(absl::StrFormat("shell settings put global gpu_debug_layer_app %s", layer_app)));
+    if (!layer_app.empty())
+    {
+        RETURN_IF_ERROR(
+        adb.Run(absl::StrFormat("shell settings put global gpu_debug_layer_app %s", layer_app)));
+    }
     return absl::OkStatus();
 }
 
 absl::Status IsAppInstalled(const AdbSession &adb, std::string_view package)
 {
     return adb.Run(absl::StrFormat("shell pm path %s", package));
+}
+
+absl::Status InstallVulkanLayer(const AdbSession &adb,
+                                std::string_view  package,
+                                std::string_view  layer_filename)
+{
+    RETURN_IF_ERROR(
+    adb.Run(absl::StrFormat("push \"%s\" \"%s\"",
+                            ResolveAndroidLibPath(std::string(layer_filename)).generic_string(),
+                            kTargetPath)));
+    RETURN_IF_ERROR(adb.Run(
+    absl::StrFormat("shell run-as %s cp \"%s/%s\" .", package, kTargetPath, layer_filename)));
+    return absl::OkStatus();
+}
+
+absl::Status UninstallVulkanLayer(const AdbSession &adb,
+                                  std::string_view  package,
+                                  std::string_view  layer_filename)
+{
+    absl::Status status;
+    status.Update(
+    adb.Run(absl::StrFormat("shell rm -rf -- \"%s/%s\"", kTargetPath, layer_filename)));
+    status.Update(
+    adb.Run(absl::StrFormat("shell run-as %s rm -rf -- \"%s\"", package, layer_filename)));
+    return status;
 }
 
 }  // namespace
@@ -192,6 +220,10 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
+        if (validated_settings.use_validation_layer)
+        {
+            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+        }
         break;
     }
     case GfxrReplayOptions::kPerfCounters:
@@ -214,6 +246,10 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             // required.
             return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
         }
+        if (validated_settings.use_validation_layer)
+        {
+            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+        }
         break;
     }
     case GfxrReplayOptions::kRenderDoc:
@@ -231,9 +267,32 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
+        if (validated_settings.use_validation_layer)
+        {
+            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+        }
         break;
     }
     case GfxrReplayOptions::kGpuTiming:
+    {
+        if (!validated_settings.metrics.empty())
+        {
+            return absl::InvalidArgumentError(
+            "Cannot use metrics except for kPerfCounters type run");
+        }
+        // value_or(1) since the default used by DiveFileProcessor is 1
+        if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
+        {
+            return absl::InvalidArgumentError(
+            "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
+        }
+        if (validated_settings.use_validation_layer)
+        {
+            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+        }
+        break;
+    }
+    case GfxrReplayOptions::kNormal:
     default:
     {
         if (!validated_settings.metrics.empty())
@@ -794,6 +853,12 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
             UnsetSystemProperty(adb, kReplayCreateRenderDocCapture).IgnoreError();
             DisableVulkanLayer(adb).IgnoreError();
         }
+
+        if (settings.use_validation_layer)
+        {
+            DisableVulkanLayer(adb).IgnoreError();
+            UninstallVulkanLayer(adb, kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+        }
     });
     LOGD("RunReplayGfxrScript(): SETUP\n");
     std::filesystem::path parse_remote_capture = settings.remote_capture_path;
@@ -832,6 +897,16 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
                                           /*app=*/kGfxrReplayAppName,
                                           /*layer=*/kRenderDocCaptureLayerName,
                                           /*layer_app=*/kRenderDocAppName));
+    }
+
+    if (settings.use_validation_layer)
+    {
+        RETURN_IF_ERROR(InstallVulkanLayer(adb,
+                                           /*app=*/kGfxrReplayAppName,
+                                           /*layer_filename=*/kVkValidationLayerLibName));
+        RETURN_IF_ERROR(EnableVulkanLayer(adb,
+                                          /*app=*/kGfxrReplayAppName,
+                                          /*layer=*/kVkValidationLayerName));
     }
 
     LOGD("RunReplayGfxrScript(): RUN\n");

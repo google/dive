@@ -16,6 +16,21 @@
 
 #include "overlay.h"
 
+#include <QTimer>
+#include <QDateTime>
+#include <memory>
+#include <qelapsedtimer.h>
+#include <qobject.h>
+#include <qtimer.h>
+
+namespace
+{
+// Don't add visual clutter if the operation is short.
+constexpr int kOverlayMinElapsedTimeMs = 2000;
+// Update UI once per second so it does not look frozen.
+constexpr int kOverlayUpdateIntervalMs = 1000;
+}  // namespace
+
 //--------------------------------------------------------------------------------------------------
 void OverlayWidget::newParent()
 {
@@ -64,14 +79,41 @@ bool OverlayWidget::event(QEvent* event)
 Overlay::Overlay(QWidget* parent) :
     OverlayWidget(parent)
 {
+    m_timer = new QTimer(this);
+    m_elapsed_timer = std::make_unique<QElapsedTimer>();
+
     setAttribute(Qt::WA_TranslucentBackground);
     hide();
+
+    QObject::connect(m_timer, &QTimer::timeout, this, &Overlay::OnUpdate);
+}
+
+Overlay::~Overlay()
+{
+    // For ~unique_ptr<QElapsedTimer>()
 }
 
 //--------------------------------------------------------------------------------------------------
-void Overlay::SetMessage(const QString& message)
+void Overlay::SetMessage(const QString& message, bool timed)
 {
+    m_elapsed_timer->invalidate();
+    if (message.isEmpty())
+    {
+        m_timer->stop();
+    }
+    else if (timed)
+    {
+        m_elapsed_timer->start();
+        m_timer->start(kOverlayUpdateIntervalMs);
+    }
     m_message = message;
+    update();
+}
+
+//--------------------------------------------------------------------------------------------------
+void Overlay::OnUpdate()
+{
+    update();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -86,6 +128,15 @@ void Overlay::paintEvent(QPaintEvent* paint_event)
 {
     if (m_message.isEmpty())
         return;
+    auto message = m_message;
+    if (m_elapsed_timer->isValid())
+    {
+        auto elapsed = m_elapsed_timer->elapsed();
+        if (elapsed >= kOverlayMinElapsedTimeMs)
+        {
+            message += " (elapsed: " + QString::number(elapsed / 1000) + "s)";
+        }
+    }
 
     QPainter painter(this);
     QFont    font = painter.font();
@@ -93,5 +144,5 @@ void Overlay::paintEvent(QPaintEvent* paint_event)
     painter.setFont(font);
     painter.fillRect(m_overlay_rect, { 100, 100, 100, 128 });
     painter.setPen({ 200, 200, 255 });
-    painter.drawText(rect(), m_message, Qt::AlignHCenter | Qt::AlignVCenter);
+    painter.drawText(rect(), message, Qt::AlignHCenter | Qt::AlignVCenter);
 }

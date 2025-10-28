@@ -15,7 +15,7 @@
 @echo off
 setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
-set BUILD_TYPE=Debug Release
+set BUILD_TYPE=Debug
 set SRC_DIR=%PROJECT_ROOT%
 set GFXR_ROOT_DIR=%PROJECT_ROOT%\\third_party\\gfxreconstruct\\android
 set startTime=%time%
@@ -26,7 +26,6 @@ if "%1"=="Release" set BUILD_TYPE=%1
 if not !BUILD_TYPE!==%1 (
     echo Invalid parameter passed for BUILD_TYPE: %1
     echo Valid options: 'Debug', 'Release'
-    echo To build all types, do not pass a parameter.
     exit /b 1
 )
 :parsingdone

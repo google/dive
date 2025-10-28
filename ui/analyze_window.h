@@ -15,6 +15,8 @@
 */
 
 #include <QDialog>
+#include <future>
+#include <optional>
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
 #include "dive_core/available_metrics.h"
@@ -32,6 +34,7 @@ class QLineEdit;
 class QListWidget;
 class QSpinBox;
 class QTextEdit;
+class Overlay;
 class MainWindow;
 class QCheckBox;
 
@@ -52,7 +55,39 @@ class AnalyzeDialog : public QDialog
         QString          description;
     };
 
+    // Describes all files associated with a GFXR file, does not guarantee existence
+    struct ReplayArtifactsPaths
+    {
+        std::filesystem::path gfxr;
+        // TODO: std::filesystem::path gfxa;
+        std::filesystem::path perf_counter_csv;
+        std::filesystem::path gpu_timing_csv;
+        std::filesystem::path pm4_rd;
+        std::filesystem::path renderdoc_rdc;
+    };
+
     Q_OBJECT
+
+    enum class ReplayStatusUpdateCode : int
+    {
+        // This signals the async process is finished:
+        kDone,
+
+        // End of task status:
+        kSuccess,
+        kFailure,
+        kSetupDeviceFailure,  // Special case where we disable replay button.
+
+        // Individual step of replay:
+        kSetup,
+        kStartNormalReplay,
+        kStartPm4Replay,
+        kStartGpuTimeReplay,
+        kStartPerfCounterReplay,
+
+        // Deleting replay artifacts associated with currently opened GFXR file
+        kDeletingReplayArtifacts,
+    };
 
 public:
     AnalyzeDialog(
@@ -62,17 +97,26 @@ public:
     void UpdateDeviceList(bool isInitialized);
     void SetSelectedCaptureFile(const QString &filePath);
 private slots:
+    void OnReplayStatusUpdate(int status_code, const QString &error_message);
     void OnDeviceSelected(const QString &);
     void OnDeviceListRefresh();
     void OnOpenFile();
     void OnReplay();
+    void OnOverlayMessage(const QString &message);
+    void OnDisableOverlay();
+    void OnDeleteReplayArtifacts();
+
 signals:
+    void ReplayStatusUpdated(int status_code, const QString &error_message);
     void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(
-    const std::filesystem::path                                        &file_path,
-    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
+    void OnDisplayPerfCounterResults(const QString &file_path);
     void OnDisplayGpuTimingResults(const QString &file_path);
     void ReloadCapture(const QString &file_path);
+    void OverlayMessage(const QString &message);
+    void DisableOverlay();
+
+protected:
+    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
 private:
     void                        ShowErrorMessage(const std::string &message);
@@ -81,6 +125,7 @@ private:
     void                        UpdateSelectedMetricsList();
     std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
                                                  const std::string &suffix) const;
+    ReplayArtifactsPaths        GetReplayFilesLocalPaths(const std::string &gfxr_stem) const;
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
@@ -95,6 +140,12 @@ private:
                                               const std::string   &remote_gfxr_file);
     absl::Status                RenderDocReplay(Dive::DeviceManager &device_manager,
                                                 const std::string   &remote_gfxr_file);
+
+    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &error_messge = "");
+    void ExecuteStatusUpdate();
+
+    void ReplayImpl();
+    void DeleteReplayArtifactsImpl();
 
     QLabel      *m_metrics_list_label;
     QListWidget *m_metrics_list;
@@ -135,6 +186,9 @@ private:
     QHBoxLayout *m_replay_warning_layout;
     QLabel      *m_replay_warning_label;
 
+    QHBoxLayout *m_delete_replay_artifacts_layout;
+    QPushButton *m_delete_replay_artifacts_button;
+
     QHBoxLayout *m_button_layout;
     QPushButton *m_replay_button;
 
@@ -152,4 +206,13 @@ private:
     const int             kDefaultFrameCount = 3;
     const std::string     kDefaultReplayButtonText = "Replay";
     std::filesystem::path m_local_capture_file_directory = "";
+    std::future<void>     m_replay_active;
+    Overlay              *m_overlay;
+
+    struct StatusUpdateQueueItem
+    {
+        ReplayStatusUpdateCode status;
+        QString                error_message;
+    };
+    std::vector<StatusUpdateQueueItem> m_status_update_queue;
 };

@@ -78,6 +78,7 @@ absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
     ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
     if (length > 0)
     {
+        buffer[length] = '\0';
         return std::filesystem::path(buffer).parent_path();
     }
     return absl::InternalError("Failed to get executable directory.");

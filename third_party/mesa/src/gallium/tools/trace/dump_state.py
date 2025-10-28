@@ -410,19 +410,19 @@ class Context(Dispatcher):
         sys.stdout.flush()
 
     def _get_stage_state(self, shader):
-        if shader == 'PIPE_SHADER_VERTEX':
+        if shader == 'MESA_SHADER_VERTEX':
             return self._state.vs
-        if shader == 'PIPE_SHADER_TESS_CTRL':
+        if shader == 'MESA_SHADER_TESS_CTRL':
             return self._state.tcs
-        if shader == 'PIPE_SHADER_TESS_EVAL':
+        if shader == 'MESA_SHADER_TESS_EVAL':
             return self._state.tes
-        if shader == 'PIPE_SHADER_GEOMETRY':
+        if shader == 'MESA_SHADER_GEOMETRY':
             return self._state.gs
-        if shader == 'PIPE_SHADER_FRAGMENT':
+        if shader == 'MESA_SHADER_FRAGMENT':
             return self._state.fs
         assert False
 
-    def set_constant_buffer(self, shader, index, take_ownership, constant_buffer):
+    def set_constant_buffer(self, shader, index, constant_buffer):
         self._update(self._get_stage_state(shader).constant_buffer, index, 1, [constant_buffer])
 
     def set_framebuffer_state(self, state):
@@ -454,7 +454,7 @@ class Context(Dispatcher):
     def sampler_view_destroy(self, view):
         pass
 
-    def set_sampler_views(self, shader, start, num, unbind_num_trailing_slots, take_ownership, views):
+    def set_sampler_views(self, shader, start, num, unbind_num_trailing_slots, views):
         # FIXME: Handle non-zero start
         assert start == 0
         self._get_stage_state(shader).sampler_views = views
@@ -471,7 +471,7 @@ class Context(Dispatcher):
         # XXX: deprecated
         self._state.vs.sampler_views = views
 
-    def set_vertex_buffers(self, num_buffers, unbind_num_trailing_slots, take_ownership, buffers):
+    def set_vertex_buffers(self, num_buffers, unbind_num_trailing_slots, buffers):
         self._update(self._state.vertex_buffers, 0, num_buffers, buffers)
 
     def create_vertex_elements_state(self, num_elements, elements):
@@ -729,14 +729,6 @@ class Context(Dispatcher):
     def clear_texture(self, res, level, box, **color):
         pass
 
-    def create_surface(self, resource, surf_tmpl):
-        assert resource is not None
-        surf_tmpl.resource = resource
-        return surf_tmpl
-
-    def surface_destroy(self, surface):
-        self.interpreter.unregister_object(surface)
-
     def create_query(self, query_type, index):
         return query_type
 
@@ -767,7 +759,6 @@ class Interpreter(parser.SimpleTraceDumper):
             ('pipe_screen', 'get_vendor'),
             ('pipe_screen', 'get_device_uuid'),
             ('pipe_screen', 'get_driver_uuid'),
-            ('pipe_screen', 'get_compiler_options'),
             ('pipe_screen', 'get_param'),
             ('pipe_screen', 'get_paramf'),
             ('pipe_screen', 'get_shader_param'),

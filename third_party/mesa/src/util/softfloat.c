@@ -70,25 +70,6 @@
 typedef union { double f; int64_t i; uint64_t u; } di_type;
 typedef union { float f; int32_t i; uint32_t u; } fi_type;
 
-const uint8_t count_leading_zeros8[256] = {
-    8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4,
-    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
 /**
  * \brief Shifts 'a' right by the number of bits given in 'dist', which must be in
  * the range 1 to 63.  If any nonzero bits are shifted off, they are "jammed"
@@ -115,7 +96,7 @@ uint64_t _mesa_short_shift_right_jam64(uint64_t a, uint8_t dist)
  * From softfloat_shiftRightJam64()
  */
 static inline
-uint64_t _mesa_shift_right_jam64(uint64_t a, uint32_t dist)
+uint64_t _mesa_shift_right_jam64(uint64_t a, int32_t dist)
 {
     return
         (dist < 63) ? a >> dist | ((uint64_t) (a << (-dist & 63)) != 0) : (a != 0);
@@ -1358,7 +1339,7 @@ _mesa_float_fma_rtz(float a, float b, float c)
             }
             if (m_64 & 0x8000000000000000) {
                 s = !s;
-                m_64 = -m_64;
+                m_64 = (uint64_t)(-(int64_t)m_64);
             }
         } else {
             m_64 -= _mesa_shift_right_jam64(c_flt_m_64, exp_diff);

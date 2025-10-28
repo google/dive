@@ -31,6 +31,8 @@ enum tu_dynamic_state
    TU_DYNAMIC_STATE_BLEND,
    TU_DYNAMIC_STATE_VERTEX_INPUT,
    TU_DYNAMIC_STATE_PATCH_CONTROL_POINTS,
+   TU_DYNAMIC_STATE_PRIM_MODE_SYSMEM,
+   TU_DYNAMIC_STATE_A7XX_FRAGMENT_SHADING_RATE = TU_DYNAMIC_STATE_PRIM_MODE_SYSMEM,
    TU_DYNAMIC_STATE_COUNT,
 };
 
@@ -47,6 +49,12 @@ struct tu_bandwidth
    uint32_t color_bandwidth_per_sample;
    uint32_t depth_cpp_per_sample;
    uint32_t stencil_cpp_per_sample;
+   bool valid;
+};
+
+struct tu_disable_fs
+{
+   bool disable_fs;
    bool valid;
 };
 
@@ -70,6 +78,10 @@ tu6_shared_constants_enable(const struct tu_pipeline_layout *layout,
           layout->push_constant_size <= (compiler->shared_consts_size * 16);
 }
 
+enum ir3_push_consts_type
+tu_push_consts_type(const struct tu_pipeline_layout *layout,
+                    const struct ir3_compiler *compiler);
+
 struct tu_program_descriptor_linkage
 {
    struct ir3_const_state const_state;
@@ -89,17 +101,61 @@ struct tu_program_state
       struct tu_draw_state vpc_state;
       struct tu_draw_state fs_state;
 
-      uint32_t hs_param_dwords;
-
       struct tu_push_constant_range shared_consts;
 
       struct tu_program_descriptor_linkage link[MESA_SHADER_STAGES];
 
+      char stage_sha1[MESA_SHADER_STAGES][SHA1_DIGEST_STRING_LENGTH];
+
+      unsigned dynamic_descriptor_offsets[MAX_SETS];
+
+      /* With FDM, we control the fragment area by overriding the viewport and
+       * scsissor. In order to have different areas for different views, we
+       * need to have a viewport/scissor per FDM layer. There are various
+       * possible scenarios based on the shader and whether multiview or
+       * per-layer sampling is enabled, that are communicated to the driver
+       * via the struct members below:
+       * 
+       * - The shader writes gl_ViewportIndex, managing multiple viewports in
+       *   a way that may not correspond to FDM layer:
+       *   - Set everything to false. The driver will set shared_scale and
+       *     apply the same scaling to all viewports/scissors.
+       * - Multiview is enabled:
+       *   - Set per_view_viewport.
+       *   - Set fake_single_viewport to splat viewport 0 to all viewports.
+       *       - (Not implemented yet) if the user requests per-view
+       *         viewports, don't set fake_single_viewport and let the user
+       *         set multiple viewports that are transformed independently.
+       * - Multiview is not enabled and per-layer FDM sampling is enabled:
+       *   - Inject code into shader and set per_layer_viewport.
+       *   - Set fake_single_viewport to splat viewport 0 to all viewports.
+       */
+
+      /* Whether the per-view-viewport feature should be enabled in HW. This
+       * implicitly adds gl_ViewIndex to gl_ViewportIndex so that from a HW
+       * point of view (but not necessarily the user's point of view!) there
+       * is a viewport per view.
+       */
       bool per_view_viewport;
+      /* Whether gl_ViewportIndex has been set to gl_Layer, so that from a HW
+       * point of view (but not necessarily the user's point of view!) there
+       * is a viewport per view.
+       */
+      bool per_layer_viewport;
+      /* If per_view_viewport or per_layer_viewport is true and this is true,
+       * the app has provided a single viewport and we need to fake it by
+       * duplicating the viewport across views before transforming each
+       * viewport separately using FDM state.
+       */
+      bool fake_single_viewport;
+
+      bool writes_shading_rate;
+      bool reads_shading_rate;
+      bool uses_ray_intersection;
 };
 
 struct tu_pipeline_executable {
-   gl_shader_stage stage;
+   mesa_shader_stage stage;
 
    struct ir3_info stats;
    bool is_binning;
@@ -132,6 +188,8 @@ struct tu_pipeline
    uint32_t set_state_mask;
    struct tu_draw_state dynamic_state[TU_DYNAMIC_STATE_COUNT];
 
+   BITSET_DECLARE(static_state_mask, MESA_VK_DYNAMIC_GRAPHICS_STATE_ENUM_MAX);
+
    struct {
       bool raster_order_attachment_access;
    } ds;
@@ -147,7 +205,7 @@ struct tu_pipeline
    struct {
       /* If the pipeline sets SINGLE_PRIM_MODE for sysmem. */
       bool sysmem_single_prim_mode;
-      struct tu_draw_state state_sysmem, state_gmem;
+      struct tu_draw_state state_gmem;
    } prim_order;
 
    /* draw states for the pipeline */
@@ -159,6 +217,7 @@ struct tu_pipeline
 
    struct tu_lrz_blend lrz_blend;
    struct tu_bandwidth bandwidth;
+   struct tu_disable_fs disable_fs;
 
    void *executables_mem_ctx;
    /* tu_pipeline_executable */
@@ -181,8 +240,6 @@ struct tu_graphics_lib_pipeline {
       struct tu_shader_key key;
    } shaders[MESA_SHADER_FRAGMENT + 1];
 
-   struct ir3_shader_key ir3_key;
-
    /* Used to stitch together an overall layout for the final pipeline. */
    struct tu_descriptor_set_layout *layouts[MAX_SETS];
    unsigned num_sets;
@@ -200,7 +257,7 @@ struct tu_graphics_pipeline {
     */
    struct vk_sample_locations_state sample_locations;
 
-   bool feedback_loop_color, feedback_loop_ds;
+   VkImageAspectFlags feedback_loops;
    bool feedback_loop_may_involve_textures;
 };
 
@@ -226,7 +283,8 @@ TU_DECL_PIPELINE_DOWNCAST(graphics, TU_PIPELINE_GRAPHICS)
 TU_DECL_PIPELINE_DOWNCAST(graphics_lib, TU_PIPELINE_GRAPHICS_LIB)
 TU_DECL_PIPELINE_DOWNCAST(compute, TU_PIPELINE_COMPUTE)
 
-VkOffset2D tu_fdm_per_bin_offset(VkExtent2D frag_area, VkRect2D bin);
+VkOffset2D tu_fdm_per_bin_offset(VkExtent2D frag_area, VkRect2D bin,
+                                 VkOffset2D common_bin_offset);
 
 template <chip CHIP>
 uint32_t tu_emit_draw_state(struct tu_cmd_buffer *cmd);
@@ -241,7 +299,7 @@ struct tu_pvtmem_config {
 template <chip CHIP>
 void
 tu6_emit_xs_config(struct tu_cs *cs,
-                   gl_shader_stage stage,
+                   mesa_shader_stage stage,
                    const struct ir3_shader_variant *xs);
 
 template <chip CHIP>

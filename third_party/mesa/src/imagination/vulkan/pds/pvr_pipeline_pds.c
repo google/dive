@@ -294,7 +294,7 @@ static uint32_t pvr_encode_direct_write(
 #define RESERVE_32BIT 1U
 #define RESERVE_64BIT 2U
 
-#if defined(DEBUG)
+#if MESA_DEBUG
 #   define pvr_find_constant(usage, words, name) \
       pvr_find_constant2(usage, words, name)
 #   define pvr_get_temps(usage, words, name) pvr_get_temps2(usage, words, name)
@@ -325,7 +325,7 @@ pvr_find_constant2(uint8_t *const_usage, uint8_t words, const char *const_name)
       }
    }
 
-   unreachable("Unexpected: Space cannot be found for constant");
+   UNREACHABLE("Unexpected: Space cannot be found for constant");
    return ~0;
 }
 
@@ -364,7 +364,7 @@ static uint8_t pvr_get_temps2(struct pvr_temp_usage *temps,
       return i;
    }
 
-   unreachable("Unexpected: Space cannot be found for temps");
+   UNREACHABLE("Unexpected: Space cannot be found for temps");
    return PVR_INVALID_TEMP;
 }
 
@@ -459,6 +459,7 @@ void pvr_pds_generate_vertex_primary_program(
    uint32_t write_base_instance_control = ~0;
    uint32_t write_base_vertex_control = ~0;
    uint32_t pvr_write_draw_index_control = ~0;
+   uint32_t write_view_index_control = ~0;
 
    uint32_t ddmad_count = 0;
    uint32_t doutw_count = 0;
@@ -497,6 +498,8 @@ void pvr_pds_generate_vertex_primary_program(
                       PVR_PDS_VERTEX_FLAGS_BASE_VERTEX_REQUIRED);
    pvr_debug_pds_flag(input_program->flags,
                       PVR_PDS_VERTEX_FLAGS_DRAW_INDEX_REQUIRED);
+   pvr_debug_pds_flag(input_program->flags,
+                      PVR_PDS_VERTEX_FLAGS_VIEW_INDEX_REQUIRED);
    pvr_debug(" ");
 
    pvr_init_pds_const_map_entry_write_state(info, &entry_write_state);
@@ -605,6 +608,12 @@ void pvr_pds_generate_vertex_primary_program(
          literal_entry->const_offset = draw_index;
          literal_entry->literal_value = 0;
       }
+   }
+
+   if (input_program->flags & PVR_PDS_VERTEX_FLAGS_VIEW_INDEX_REQUIRED) {
+      doutw_count++;
+      write_view_index_control =
+         pvr_find_constant(const_usage, RESERVE_32BIT, "View index DOUTW Ctrl");
    }
 
    if (input_program->flags & PVR_PDS_VERTEX_FLAGS_DRAW_INDIRECT_VARIANT) {
@@ -741,6 +750,7 @@ void pvr_pds_generate_vertex_primary_program(
    }
 
    for (uint32_t dma = 0; dma < input_program->dma_count; dma++) {
+      struct pvr_const_map_entry_vertex_attribute_stride *stride_entry;
       uint32_t const_base = dma * PVR_PDS_DDMAD_NUM_CONSTS;
       uint32_t control_word;
       struct pvr_const_map_entry_literal32 *literal_entry;
@@ -1011,12 +1021,12 @@ void pvr_pds_generate_vertex_primary_program(
          use_robust_vertex_fetch);
 
       /* DDMAD Const Usage [__XXX---] */
-      literal_entry =
+      stride_entry =
          pvr_prepare_next_pds_const_map_entry(&entry_write_state,
-                                              sizeof(*literal_entry));
-      literal_entry->type = PVR_PDS_CONST_MAP_ENTRY_TYPE_LITERAL32;
-      literal_entry->const_offset = const_base + 3;
-      literal_entry->literal_value = vertex_dma->stride;
+                                              sizeof(*stride_entry));
+      stride_entry->type = PVR_PDS_CONST_MAP_ENTRY_TYPE_VERTEX_ATTRIBUTE_STRIDE;
+      stride_entry->const_offset = const_base + 3;
+      stride_entry->binding_index = vertex_dma->binding_index;
 
       control_word = vertex_dma->size_in_dwords
                      << PVR_ROGUE_PDSINST_DDMAD_FIELDS_SRC3_BSIZE_SHIFT;
@@ -1450,6 +1460,25 @@ void pvr_pds_generate_vertex_primary_program(
       }
    }
 
+   if (input_program->flags & PVR_PDS_VERTEX_FLAGS_VIEW_INDEX_REQUIRED) {
+      bool last_dma = (++running_dma_count == total_dma_count);
+      uint32_t data_mask = (PVR_PTEMP_VIEW_INDEX & 1) ? 0x2 : 0x1;
+
+      PVR_PDS_MODE_TOGGLE(
+         code,
+         instruction,
+         pvr_encode_direct_write(
+            &entry_write_state,
+            last_dma,
+            false,
+            R64_C(write_view_index_control),
+            R64_P(PVR_PTEMP_VIEW_INDEX >> 1),
+            data_mask,
+            input_program->view_index_register,
+            PVR_ROGUE_PDSINST_DOUT_FIELDS_DOUTW_SRC1_DEST_UNIFIED_STORE,
+            dev_info));
+   }
+
    doutu_address_entry =
       pvr_prepare_next_pds_const_map_entry(&entry_write_state,
                                            sizeof(*doutu_address_entry));
@@ -1496,8 +1525,8 @@ void pvr_pds_generate_descriptor_upload_program(
    uint32_t *code_section,
    struct pvr_pds_info *info)
 {
-   unsigned int num_consts64;
-   unsigned int num_consts32;
+   unsigned int num_consts64 = 0;
+   unsigned int num_consts32 = 0;
    unsigned int next_const64;
    unsigned int next_const32;
    unsigned int instruction = 0;
@@ -1516,30 +1545,13 @@ void pvr_pds_generate_descriptor_upload_program(
    num_consts64 = input_program->descriptor_set_count;
    total_dma_count = input_program->descriptor_set_count;
 
-   /* 1 DOUTD for buffer containing address literals. */
-   if (input_program->addr_literal_count > 0) {
+   pvr_init_pds_const_map_entry_write_state(info, &entry_write_state);
+
+   /* 1 DOUTD per compile time buffer: */
+   for (unsigned int index = 0; index < input_program->buffer_count; index++) {
       num_consts32++;
       num_consts64++;
       total_dma_count++;
-   }
-
-   pvr_init_pds_const_map_entry_write_state(info, &entry_write_state);
-
-   for (unsigned int index = 0; index < input_program->buffer_count; index++) {
-      struct pvr_pds_buffer *buffer = &input_program->buffers[index];
-
-      /* This switch statement looks pointless but we want to optimize DMAs
-       * that can be done as a DOUTW.
-       */
-      switch (buffer->type) {
-      default: {
-         /* 1 DOUTD per compile time buffer: */
-         num_consts32++;
-         num_consts64++;
-         total_dma_count++;
-         break;
-      }
-      }
    }
 
    /* DOUTU for the secondary update program requires a 64-bit constant. */
@@ -1551,67 +1563,6 @@ void pvr_pds_generate_descriptor_upload_program(
    /* Start counting constants. */
    next_const64 = 0;
    next_const32 = num_consts64 * 2;
-
-   if (input_program->addr_literal_count > 0) {
-      bool last_dma = (++running_dma_count == total_dma_count);
-      bool halt = last_dma && !input_program->secondary_program_present;
-
-      unsigned int size_in_dwords = input_program->addr_literal_count *
-                                    sizeof(uint64_t) / sizeof(uint32_t);
-      unsigned int destination = input_program->addr_literals[0].destination;
-
-      struct pvr_pds_const_map_entry_addr_literal_buffer
-         *addr_literal_buffer_entry;
-
-      addr_literal_buffer_entry = pvr_prepare_next_pds_const_map_entry(
-         &entry_write_state,
-         sizeof(*addr_literal_buffer_entry));
-
-      addr_literal_buffer_entry->type =
-         PVR_PDS_CONST_MAP_ENTRY_TYPE_ADDR_LITERAL_BUFFER;
-      addr_literal_buffer_entry->size = PVR_DW_TO_BYTES(size_in_dwords);
-      addr_literal_buffer_entry->const_offset = next_const64 * 2;
-
-      for (unsigned int i = 0; i < input_program->addr_literal_count; i++) {
-         struct pvr_pds_const_map_entry_addr_literal *addr_literal_entry;
-
-         /* Check that the destinations for the addr literals are contiguous.
-          * Not supporting non contiguous ranges as that would either require a
-          * single large buffer with wasted memory for DMA, or multiple buffers
-          * to DMA.
-          */
-         if (i > 0) {
-            const uint32_t current_addr_literal_destination =
-               input_program->addr_literals[i].destination;
-            const uint32_t previous_addr_literal_destination =
-               input_program->addr_literals[i - 1].destination;
-
-            /* 2 regs to store 64 bits address. */
-            assert(current_addr_literal_destination ==
-                   previous_addr_literal_destination + 2);
-         }
-
-         addr_literal_entry =
-            pvr_prepare_next_pds_const_map_entry(&entry_write_state,
-                                                 sizeof(*addr_literal_entry));
-
-         addr_literal_entry->type = PVR_PDS_CONST_MAP_ENTRY_TYPE_ADDR_LITERAL;
-         addr_literal_entry->addr_type = input_program->addr_literals[i].type;
-      }
-
-      PVR_PDS_MODE_TOGGLE(code_section,
-                          instruction,
-                          pvr_encode_burst_cs(&entry_write_state,
-                                              last_dma,
-                                              halt,
-                                              next_const32,
-                                              next_const64,
-                                              size_in_dwords,
-                                              destination));
-
-      next_const64++;
-      next_const32++;
-   }
 
    /* For each descriptor set perform a DOUTD. */
    for (unsigned int descriptor_index = 0;
@@ -1630,8 +1581,6 @@ void pvr_pds_generate_descriptor_upload_program(
       descriptor_set_entry->type = PVR_PDS_CONST_MAP_ENTRY_TYPE_DESCRIPTOR_SET;
       descriptor_set_entry->const_offset = next_const64 * 2;
       descriptor_set_entry->descriptor_set = descriptor_set->descriptor_set;
-      descriptor_set_entry->primary = descriptor_set->primary;
-      descriptor_set_entry->offset_in_dwords = descriptor_set->offset_in_dwords;
 
       PVR_PDS_MODE_TOGGLE(code_section,
                           instruction,
@@ -1654,7 +1603,17 @@ void pvr_pds_generate_descriptor_upload_program(
       bool halt = last_dma && !input_program->secondary_program_present;
 
       switch (buffer->type) {
-      case PVR_BUFFER_TYPE_PUSH_CONSTS: {
+      case PVR_BUFFER_TYPE_DYNAMIC:
+      case PVR_BUFFER_TYPE_PUSH_CONSTS:
+      case PVR_BUFFER_TYPE_BLEND_CONSTS:
+      case PVR_BUFFER_TYPE_POINT_SAMPLER:
+      case PVR_BUFFER_TYPE_IA_SAMPLER:
+      case PVR_BUFFER_TYPE_FRONT_FACE_OP:
+      case PVR_BUFFER_TYPE_FS_META:
+      case PVR_BUFFER_TYPE_TILE_BUFFERS:
+      case PVR_BUFFER_TYPE_SPILL_INFO:
+      case PVR_BUFFER_TYPE_SCRATCH_INFO:
+      case PVR_BUFFER_TYPE_SAMPLE_LOCATIONS: {
          struct pvr_const_map_entry_special_buffer *special_buffer_entry;
 
          special_buffer_entry =
@@ -1662,20 +1621,17 @@ void pvr_pds_generate_descriptor_upload_program(
                                                  sizeof(*special_buffer_entry));
          special_buffer_entry->type =
             PVR_PDS_CONST_MAP_ENTRY_TYPE_SPECIAL_BUFFER;
-         special_buffer_entry->buffer_type = PVR_BUFFER_TYPE_PUSH_CONSTS;
-         special_buffer_entry->buffer_index = buffer->source_offset;
-         break;
-      }
-      case PVR_BUFFER_TYPE_DYNAMIC: {
-         struct pvr_const_map_entry_special_buffer *special_buffer_entry;
+         special_buffer_entry->buffer_type = buffer->type;
+         special_buffer_entry->size_in_dwords = buffer->size_in_dwords;
 
-         special_buffer_entry =
-            pvr_prepare_next_pds_const_map_entry(&entry_write_state,
-                                                 sizeof(*special_buffer_entry));
-         special_buffer_entry->type =
-            PVR_PDS_CONST_MAP_ENTRY_TYPE_SPECIAL_BUFFER;
-         special_buffer_entry->buffer_type = PVR_BUFFER_TYPE_DYNAMIC;
-         special_buffer_entry->buffer_index = buffer->source_offset;
+         switch (buffer->type) {
+         case PVR_BUFFER_TYPE_DYNAMIC:
+            special_buffer_entry->data = buffer->desc_set;
+            break;
+
+         default:
+            break;
+         }
          break;
       }
       case PVR_BUFFER_TYPE_COMPILE_TIME: {
@@ -1688,59 +1644,6 @@ void pvr_pds_generate_descriptor_upload_program(
             PVR_PDS_CONST_MAP_ENTRY_TYPE_SPECIAL_BUFFER;
          special_buffer_entry->buffer_type = PVR_BUFFER_TYPE_COMPILE_TIME;
          special_buffer_entry->buffer_index = compile_time_buffer_index++;
-         break;
-      }
-      case PVR_BUFFER_TYPE_BUFFER_LENGTHS: {
-         struct pvr_const_map_entry_special_buffer *special_buffer_entry;
-
-         special_buffer_entry =
-            pvr_prepare_next_pds_const_map_entry(&entry_write_state,
-                                                 sizeof(*special_buffer_entry));
-         special_buffer_entry->type =
-            PVR_PDS_CONST_MAP_ENTRY_TYPE_SPECIAL_BUFFER;
-         special_buffer_entry->buffer_type = PVR_BUFFER_TYPE_BUFFER_LENGTHS;
-         break;
-      }
-      case PVR_BUFFER_TYPE_BLEND_CONSTS: {
-         struct pvr_const_map_entry_special_buffer *special_buffer_entry;
-
-         special_buffer_entry =
-            pvr_prepare_next_pds_const_map_entry(&entry_write_state,
-                                                 sizeof(*special_buffer_entry));
-         special_buffer_entry->type =
-            PVR_PDS_CONST_MAP_ENTRY_TYPE_SPECIAL_BUFFER;
-         special_buffer_entry->buffer_type = PVR_BUFFER_TYPE_BLEND_CONSTS;
-         special_buffer_entry->buffer_index =
-            input_program->blend_constants_used_mask;
-         break;
-      }
-      case PVR_BUFFER_TYPE_UBO: {
-         struct pvr_const_map_entry_constant_buffer *constant_buffer_entry;
-
-         constant_buffer_entry = pvr_prepare_next_pds_const_map_entry(
-            &entry_write_state,
-            sizeof(*constant_buffer_entry));
-         constant_buffer_entry->type =
-            PVR_PDS_CONST_MAP_ENTRY_TYPE_CONSTANT_BUFFER;
-         constant_buffer_entry->buffer_id = buffer->buffer_id;
-         constant_buffer_entry->desc_set = buffer->desc_set;
-         constant_buffer_entry->binding = buffer->binding;
-         constant_buffer_entry->offset = buffer->source_offset;
-         constant_buffer_entry->size_in_dwords = buffer->size_in_dwords;
-         break;
-      }
-      case PVR_BUFFER_TYPE_UBO_ZEROING: {
-         struct pvr_const_map_entry_constant_buffer_zeroing
-            *constant_buffer_entry;
-
-         constant_buffer_entry = pvr_prepare_next_pds_const_map_entry(
-            &entry_write_state,
-            sizeof(*constant_buffer_entry));
-         constant_buffer_entry->type =
-            PVR_PDS_CONST_MAP_ENTRY_TYPE_CONSTANT_BUFFER_ZEROING;
-         constant_buffer_entry->buffer_id = buffer->buffer_id;
-         constant_buffer_entry->offset = buffer->source_offset;
-         constant_buffer_entry->size_in_dwords = buffer->size_in_dwords;
          break;
       }
       }

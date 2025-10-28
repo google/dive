@@ -21,11 +21,56 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "perfetto.h"
+#include "vulkan/runtime/vk_object.h"
+
+#ifndef ANDROID_LIBPERFETTO
+#include <perfetto.h>
+#else
+#include <perfetto/tracing.h>
+#endif
 
 #include "util/hash_table.h"
 #include "util/perf/u_trace.h"
 #include "util/ralloc.h"
+#include "util/set.h"
+
+/**
+ * Struct tracking state during a perfetto packet sequence
+ *
+ * Sometimes perfetto loses state, and starts a new packet sequence to
+ * recover. One common example is when you start perfetto tracing after the
+ * driver is up and running -- all perfetto trace packets had been skipped
+ * until tracing started.
+ *
+ * When we're in a new sequence, we need to detect it (in the form of a new
+ * struct created with was_cleared set), and emit all the driver setup packets
+ * before emitting any tracing that might reference the one-time state
+ * packets.
+ *
+ * Note that incremental state structs are stored in TLS in perfetto, so you
+ * will have more than one per data source, but it also means it's owned for
+ * access by a trace context through tctx.GetIncrementalState().
+ */
+class MesaRenderpassIncrementalState {
+ public:
+   MesaRenderpassIncrementalState()
+   {
+      debug_markers = _mesa_hash_table_create(NULL, _mesa_hash_string,
+                                              _mesa_key_string_equal);
+      named_objects = _mesa_pointer_set_create(NULL);
+   }
+
+   ~MesaRenderpassIncrementalState()
+   {
+      ralloc_free(debug_markers);
+      ralloc_free(named_objects);
+   }
+
+   bool was_cleared = true;
+
+   struct hash_table *debug_markers;
+   struct set *named_objects;
+};
 
 using perfetto::DataSource;
 template <typename DataSourceType, typename DataSourceTraits>
@@ -41,13 +86,10 @@ class MesaRenderpassDataSource
    {
       // Use this callback to apply any custom configuration to your data
       // source based on the TraceConfig in SetupArgs.
-      debug_markers = NULL;
    }
 
    void OnStart(const perfetto::DataSourceBase::StartArgs &) override
    {
-      debug_markers = _mesa_hash_table_create(NULL, _mesa_hash_string,
-                                              _mesa_key_string_equal);
       // This notification can be used to initialize the GPU driver, enable
       // counters, etc. StartArgs will contains the DataSourceDescriptor,
       // which can be extended.
@@ -68,8 +110,6 @@ class MesaRenderpassDataSource
          packet->Finalize();
          ctx.Flush();
       });
-
-      ralloc_free(debug_markers);
    }
 
    /* Emits a clock sync trace event.  Perfetto uses periodic clock events
@@ -82,12 +122,12 @@ class MesaRenderpassDataSource
    static void EmitClockSync(TraceContext &ctx,
                              uint64_t cpu_ts,
                              uint64_t gpu_ts,
+                             uint32_t cpu_clock_id,
                              uint32_t gpu_clock_id)
    {
       auto packet = ctx.NewTracePacket();
 
-      packet->set_timestamp_clock_id(
-         perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
+      packet->set_timestamp_clock_id(cpu_clock_id);
       packet->set_timestamp(cpu_ts);
 
       auto event = packet->set_clock_snapshot();
@@ -95,8 +135,7 @@ class MesaRenderpassDataSource
       {
          auto clock = event->add_clocks();
 
-         clock->set_clock_id(
-            perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
+         clock->set_clock_id(cpu_clock_id);
          clock->set_timestamp(cpu_ts);
       }
 
@@ -120,13 +159,16 @@ class MesaRenderpassDataSource
     */
    uint64_t debug_marker_stage(TraceContext &ctx, const char *name)
    {
-      struct hash_entry *entry = _mesa_hash_table_search(debug_markers, name);
+      auto istate = ctx.GetIncrementalState();
+
+      struct hash_entry *entry =
+         _mesa_hash_table_search(istate->debug_markers, name);
       const uint64_t dynamic_iid_base = 1ull << 32;
 
       if (entry) {
          return dynamic_iid_base + (uint32_t) (uintptr_t) entry->data;
       } else {
-         uint64_t iid = dynamic_iid_base + debug_markers->entries;
+         uint64_t iid = dynamic_iid_base + istate->debug_markers->entries;
 
          auto packet = ctx.NewTracePacket();
          auto interned_data = packet->set_interned_data();
@@ -138,12 +180,61 @@ class MesaRenderpassDataSource
          /* We only track the entry count in entry->data, because the
           * dynamic_iid_base would get lost on 32-bit builds.
           */
-         _mesa_hash_table_insert(debug_markers,
-                                 ralloc_strdup(debug_markers, name),
-                                 (void *) (uintptr_t) debug_markers->entries);
+         _mesa_hash_table_insert(
+            istate->debug_markers, ralloc_strdup(istate->debug_markers, name),
+            (void *) (uintptr_t) istate->debug_markers->entries);
 
          return iid;
       }
+   }
+
+   void EmitSetDebugUtilsObjectNameEXT(TraceContext &ctx,
+                                       const struct vk_object_base *object)
+   {
+      if (object->object_name) {
+         auto packet = ctx.NewTracePacket();
+
+         // NOTE: Perfetto sorts events (at least approximately) by timestamp in
+         // the process of parsing.  The debug names will be getting tracked in
+         // perfetto's hash tables in wall time-ish order (from the CPU), while
+         // references to them from GPU render stages will be happening later,
+         // possibly after an object is renamed from the CPU's perspective.
+         // This appears to be a limitation of perfetto's GPU event protocols.
+         packet->set_timestamp(perfetto::base::GetBootTimeNs().count());
+         packet->set_timestamp_clock_id(perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
+
+         auto api = packet->set_vulkan_api_event();
+         auto object_name = api->set_vk_debug_utils_object_name();
+         object_name->set_vk_device((uint64_t) (uintptr_t) object->device);
+         object_name->set_object((uint64_t) (uintptr_t) object);
+         object_name->set_object_type(object->type);
+         object_name->set_object_name(object->object_name);
+
+         _mesa_set_add(ctx.GetIncrementalState()->named_objects, object);
+      }
+   }
+
+   /* Call this from your driver's vkSetDebugUtilsObjectNameEXT implementation
+    */
+   void
+   SetDebugUtilsObjectNameEXT(TraceContext &ctx,
+                              const VkDebugUtilsObjectNameInfoEXT *pNameInfo)
+   {
+      EmitSetDebugUtilsObjectNameEXT(
+         ctx, vk_object_base_from_u64_handle(pNameInfo->objectHandle,
+                                             pNameInfo->objectType));
+   }
+
+   /* You may call this on any Vulkan object before you emit a trace that would
+    * reference that object, so that the debug object name can be reassociated
+    * with it if we've lost incremental state (or tracing just started after
+    * application launch).
+    */
+   void RefreshSetDebugUtilsObjectNameEXT(TraceContext &ctx,
+                                          const struct vk_object_base *object)
+   {
+      if (!_mesa_set_search(ctx.GetIncrementalState()->named_objects, object))
+         EmitSetDebugUtilsObjectNameEXT(ctx, object);
    }
 
  private:

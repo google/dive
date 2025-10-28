@@ -55,7 +55,13 @@ void
 v3dX(cmd_buffer_emit_depth_bias)(struct v3dv_cmd_buffer *cmd_buffer);
 
 void
+v3dX(cmd_buffer_emit_depth_bounds)(struct v3dv_cmd_buffer *cmd_buffer);
+
+void
 v3dX(cmd_buffer_emit_line_width)(struct v3dv_cmd_buffer *cmd_buffer);
+
+void
+v3dX(cmd_buffer_emit_default_point_size)(struct v3dv_cmd_buffer *cmd_buffer);
 
 void
 v3dX(cmd_buffer_emit_sample_state)(struct v3dv_cmd_buffer *cmd_buffer);
@@ -76,6 +82,11 @@ v3dX(job_emit_binning_prolog)(struct v3dv_job *job,
 
 void
 v3dX(job_emit_enable_double_buffer)(struct v3dv_job *job);
+
+void
+v3dX(job_patch_resume_address)(struct v3dv_job *first_suspend,
+                               struct v3dv_job *suspend,
+                               struct v3dv_job *resume);
 
 void
 v3dX(cmd_buffer_execute_inside_pass)(struct v3dv_cmd_buffer *primary,
@@ -120,22 +131,21 @@ v3dX(cmd_buffer_emit_indexed_indirect)(struct v3dv_cmd_buffer *cmd_buffer,
                                        uint32_t stride);
 
 void
-v3dX(get_hw_clear_color)(const VkClearColorValue *color,
-                         uint32_t internal_type,
-                         uint32_t internal_size,
-                         uint32_t *hw_color);
+v3dX(cmd_buffer_suspend)(struct v3dv_cmd_buffer *cmd_buffer);
+
+struct v3dv_job *
+v3dX(cmd_buffer_prepare_suspend_job_for_submit)(struct v3dv_job *job);
 
 void
-v3dX(cmd_buffer_render_pass_setup_render_target)(struct v3dv_cmd_buffer *cmd_buffer,
-                                                 int rt,
-                                                 uint32_t *rt_bpp,
-                                                 uint32_t *rt_type,
-                                                 uint32_t *rt_clamp);
+v3dX(get_hw_clear_color)(const VkClearColorValue *color,
+                         const struct v3dv_format_plane *format,
+                         uint32_t *hw_color);
 
 /* Used at v3dv_device */
 
 void
-v3dX(pack_sampler_state)(struct v3dv_sampler *sampler,
+v3dX(pack_sampler_state)(const struct v3dv_device *device,
+                         struct v3dv_sampler *sampler,
                          const VkSamplerCreateInfo *pCreateInfo,
                          const VkSamplerCustomBorderColorCreateInfoEXT *bc_info);
 
@@ -143,9 +153,11 @@ void
 v3dX(framebuffer_compute_internal_bpp_msaa)(const struct v3dv_framebuffer *framebuffer,
                                             const struct v3dv_cmd_buffer_attachment_state *attachments,
                                             const struct v3dv_subpass *subpass,
-                                            uint8_t *max_bpp, bool *msaa);
+                                            uint8_t *max_internal_bpp,
+                                            uint8_t *total_color_bpp,
+                                            bool *msaa);
 
-#ifdef DEBUG
+#if MESA_DEBUG
 void
 v3dX(device_check_prepacked_sizes)(void);
 #endif
@@ -308,11 +320,20 @@ v3dX(pipeline_pack_state)(struct v3dv_pipeline *pipeline,
                           const VkPipelineRasterizationStateCreateInfo *rs_info,
                           const VkPipelineRasterizationProvokingVertexStateCreateInfoEXT *pv_info,
                           const VkPipelineRasterizationLineStateCreateInfoEXT *ls_info,
-                          const VkPipelineMultisampleStateCreateInfo *ms_info);
+                          const VkPipelineMultisampleStateCreateInfo *ms_info,
+                          const struct vk_graphics_pipeline_state *state);
 void
 v3dX(pipeline_pack_compile_state)(struct v3dv_pipeline *pipeline,
                                   const VkPipelineVertexInputStateCreateInfo *vi_info,
                                   const VkPipelineVertexInputDivisorStateCreateInfoEXT *vd_info);
+
+bool
+v3dX(pipeline_needs_default_attribute_values)(struct v3dv_pipeline *pipeline);
+
+struct v3dv_bo *
+v3dX(create_default_attribute_values)(struct v3dv_device *device,
+                                      struct v3dv_pipeline *pipeline);
+
 /* Used at v3dv_queue */
 void
 v3dX(job_emit_noop)(struct v3dv_job *job);
@@ -325,3 +346,21 @@ uint32_t v3dX(max_descriptor_bo_size)(void);
 uint32_t v3dX(combined_image_sampler_texture_state_offset)(uint8_t plane);
 
 uint32_t v3dX(combined_image_sampler_sampler_state_offset)(uint8_t plane);
+
+/* General utils */
+
+uint32_t
+v3dX(clamp_for_format_and_type)(uint32_t rt_type,
+                                VkFormat vk_format);
+
+uint32_t
+v3dX(clamp_for_format_and_type)(uint32_t rt_type,
+                                VkFormat vk_format);
+
+void
+v3dX(viewport_compute_xform)(const VkViewport *viewport,
+                             float scale[3],
+                             float translate[3]);
+
+uint32_t
+v3dX(translate_stencil_op)(VkStencilOp op);

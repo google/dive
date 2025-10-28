@@ -39,8 +39,8 @@
 #define __pvr_make_address(addr_u64) PVR_DEV_ADDR(addr_u64)
 /* clang-format on */
 
-#include "csbgen/rogue_cdm.h"
-#include "csbgen/rogue_lls.h"
+#include "csbgen/rogue/cdm.h"
+#include "csbgen/rogue/lls.h"
 
 #undef __pvr_make_address
 #undef __pvr_get_address
@@ -124,7 +124,7 @@ static void rogue_get_isp_scale_xy_from_samples(const uint32_t samples,
       *y_scale_out = 4;
       break;
    default:
-      unreachable("Unsupported number of samples");
+      UNREACHABLE("Unsupported number of samples");
    }
 }
 
@@ -267,12 +267,23 @@ rogue_get_slc_cache_line_size(const struct pvr_device_info *dev_info)
 static inline uint32_t pvr_get_max_user_vertex_output_components(
    const struct pvr_device_info *dev_info)
 {
+   /* Default value based on the minimum value found in all existing cores. */
    const uint32_t uvs_pba_entries =
-      PVR_GET_FEATURE_VALUE(dev_info, uvs_pba_entries, 0U);
-   const uint32_t uvs_banks = PVR_GET_FEATURE_VALUE(dev_info, uvs_banks, 0U);
+      PVR_GET_FEATURE_VALUE(dev_info, uvs_pba_entries, 160U);
 
-   if (uvs_banks <= 8U && uvs_pba_entries == 160U)
+   /* Default value based on the minimum value found in all existing cores. */
+   const uint32_t uvs_banks = PVR_GET_FEATURE_VALUE(dev_info, uvs_banks, 2U);
+
+   if (uvs_banks <= 8U && uvs_pba_entries == 160U) {
+      ASSERTED const uint32_t tpu_parallel_instances =
+         PVR_GET_FEATURE_VALUE(dev_info, tpu_parallel_instances, 1U);
+
+      /* Cores with > 2 ppc support vertex sizes of >= 128 dwords */
+      assert(tpu_parallel_instances <= 2 ||
+             (dev_info->ident.b <= 36 || dev_info->ident.b == 46));
+
       return 64U;
+   }
 
    return 128U;
 }
@@ -306,6 +317,10 @@ rogue_get_cdm_context_resume_buffer_size(const struct pvr_device_info *dev_info)
       const uint32_t cdm_context_resume_buffer_stride =
          ALIGN_POT(ROGUE_LLS_CDM_CONTEXT_RESUME_BUFFER_SIZE, cache_line_size);
 
+      /*
+       * TODO: Optimise buffer size based on the core_count,
+       * not max_num_cores
+       */
       return cdm_context_resume_buffer_stride * max_num_cores;
    }
 
@@ -347,4 +362,143 @@ __rogue_get_param_vf_max(const struct pvr_device_info *dev_info)
 #define rogue_get_param_vf_max_x(dev_info) __rogue_get_param_vf_max(dev_info)
 #define rogue_get_param_vf_max_y(dev_info) __rogue_get_param_vf_max(dev_info)
 
+static inline uint32_t
+rogue_get_max_total_instances(const struct pvr_device_info *dev_info)
+{
+   const uint32_t usc_slots = PVR_GET_FEATURE_VALUE(dev_info, usc_slots, 0U);
+   assert(usc_slots);
+
+   return usc_slots * ROGUE_MAX_INSTANCES_PER_TASK;
+}
+
+static inline uint32_t rogue_get_unified_store_size_per_instance(
+   const struct pvr_device_info *dev_info)
+{
+   const uint32_t unified_store_depth =
+      PVR_GET_FEATURE_VALUE(dev_info, unified_store_depth, 0U);
+   assert(unified_store_depth);
+
+   return unified_store_depth * ROGUE_USC_NUM_UNIFIED_STORE_BANKS;
+}
+
+static inline uint32_t
+rogue_get_min_attr_in_usrm_lines(const struct pvr_device_info *dev_info)
+{
+   const uint32_t unified_store_size_per_instance =
+      rogue_get_unified_store_size_per_instance(dev_info);
+   assert(unified_store_size_per_instance);
+
+   return (unified_store_size_per_instance /
+           ROGUE_USRM_LINE_SIZE_PER_INSTANCE) -
+          ROGUE_RESERVED_USRM_LINES;
+}
+
+static inline uint32_t
+rogue_get_parallel_instances(const struct pvr_device_info *dev_info)
+{
+   return ROGUE_MAX_INSTANCES_PER_TASK / 2;
+}
+
+static inline uint32_t rogue_get_unified_store_temps_per_instance(
+   const struct pvr_device_info *dev_info)
+{
+   return rogue_get_min_attr_in_usrm_lines(dev_info) *
+          ROGUE_USRM_LINE_SIZE_PER_INSTANCE;
+}
+
+static inline uint32_t
+rogue_get_unified_store_total_temps(const struct pvr_device_info *dev_info)
+{
+   return rogue_get_unified_store_temps_per_instance(dev_info) *
+          rogue_get_parallel_instances(dev_info);
+}
+
+static inline uint32_t
+rogue_get_instance_groups_per_slot(const struct pvr_device_info *dev_info)
+{
+   return ROGUE_MAX_INSTANCES_PER_TASK / rogue_get_parallel_instances(dev_info);
+}
+
+static inline uint32_t
+rogue_get_optimal_temps(const struct pvr_device_info *dev_info)
+{
+   const uint32_t usc_slots = PVR_GET_FEATURE_VALUE(dev_info, usc_slots, 0U);
+   assert(usc_slots);
+
+   uint32_t max_temps_full_slot_use =
+      rogue_get_unified_store_temps_per_instance(dev_info) /
+      (rogue_get_instance_groups_per_slot(dev_info) * usc_slots);
+
+   max_temps_full_slot_use &= ~(ROGUE_PDS_US_TEMP_ALLOCATION_GRANULARITY - 1);
+
+   return MAX2(max_temps_full_slot_use, 24U);
+}
+
+static inline uint32_t rogue_get_temps(const struct pvr_device_info *dev_info)
+{
+   uint32_t temps = rogue_get_unified_store_temps_per_instance(dev_info) / 2;
+
+   return MIN2(temps, 248U);
+}
+
+static inline uint32_t
+rogue_max_wg_temps(const struct pvr_device_info *dev_info,
+                   unsigned temps,
+                   unsigned wg_size,
+                   bool has_barrier)
+{
+   assert(wg_size <= rogue_get_max_total_instances(dev_info));
+   if (!wg_size)
+      wg_size = rogue_get_compute_max_work_group_size(dev_info);
+
+   if (wg_size > ROGUE_MAX_INSTANCES_PER_TASK && has_barrier) {
+      /* Number of slots allocated for each workgroup. */
+      unsigned slots_per_wg =
+         DIV_ROUND_UP(wg_size, ROGUE_MAX_INSTANCES_PER_TASK);
+
+      /* Lines of USRM lines available for each slot
+       * (+1 for fragmentation / coarse checking).
+       */
+      unsigned lines_per_slot =
+         rogue_get_min_attr_in_usrm_lines(dev_info) / (slots_per_wg + 1);
+
+      unsigned max_allocs;
+      if (lines_per_slot != 0) {
+         /* Convert lines to USRM allocs. */
+         max_allocs = lines_per_slot * ROGUE_USRM_LINE_SIZE;
+      } else {
+         max_allocs = (rogue_get_min_attr_in_usrm_lines(dev_info) *
+                       ROGUE_USRM_LINE_SIZE) /
+                      (slots_per_wg + 1);
+      }
+
+      /* Convert USRM allocs to temporary registers. */
+      unsigned max_temps_for_barrier =
+         max_allocs * ROGUE_USRM_GRANULARITY_IN_REGISTERS;
+
+      /* Clamp to provided limit */
+      temps = MIN2(temps, max_temps_for_barrier);
+   }
+
+   return temps;
+}
+
+static inline uint32_t
+rogue_num_uscs_per_tile(const struct pvr_device_info *dev_info)
+{
+   if (PVR_HAS_FEATURE(dev_info, tile_per_usc) ||
+       PVR_HAS_FEATURE(dev_info, pbe2_in_xe))
+      return 1;
+
+   return 4;
+}
+
+static inline uint32_t rogue_usc_indexed_pixel_output_index_scale(
+   const struct pvr_device_info *dev_info)
+{
+   if (PVR_HAS_FEATURE(dev_info, tile_per_usc))
+      return 4;
+
+   return 1;
+}
 #endif /* ROGUE_HW_UTILS_H */

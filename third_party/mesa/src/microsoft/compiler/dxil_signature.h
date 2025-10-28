@@ -63,7 +63,7 @@ struct dxil_signature_record {
 };
 
 struct dxil_psv_sem_index_table {
-   uint32_t data[80];
+   uint32_t data[128];
    uint32_t size;
 };
 
@@ -146,6 +146,11 @@ struct dxil_psv_runtime_info_2 {
    uint32_t num_threads_x;
    uint32_t num_threads_y;
    uint32_t num_threads_z;
+};
+
+struct dxil_psv_runtime_info_3 {
+   struct dxil_psv_runtime_info_2 psv2;
+   uint32_t entry_function_name;
 };
 
 struct dxil_mdnode;

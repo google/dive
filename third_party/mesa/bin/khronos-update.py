@@ -13,9 +13,13 @@ def error(msg: str) -> None:
 
 
 class Source:
-    def __init__(self, filename: str, url: typing.Optional[str]):
+    def __init__(self, filename: str, url: typing.Optional[str],
+                 template: typing.Optional[str] = None, remove:
+                 typing.Optional[str] = None):
         self.file = pathlib.Path(filename)
         self.url = url
+        self.template = template
+        self.remove = remove
 
     def sync(self) -> None:
         if self.url is None:
@@ -35,11 +39,54 @@ class Source:
         else:
             content = req.content
 
-        with open(self.file, 'wb') as f:
+        content = str(content, encoding='utf-8')
+        if self.remove is not None:
+            content = content.replace(self.remove, '')
+        if self.template is not None:
+            content = self.template % content
+
+        with open(self.file, 'w') as f:
             f.write(content)
 
         print('Done')
 
+
+VK_ANDROID_NATIVE_BUFFER_TEMPLATE = """\
+/*
+ * MESA: buffer_handle_t is defined by all Mesa builds, even if
+ * one is building for a non-Android target.  This avoids unnecessary
+ * conditionals in driver code.
+ *
+ * We don't need to define buffer_handle_t locally when (__ANDROID__)
+ * or ANDROID are set.  Here's the distinction between the two:
+ *
+ * - AOSP always defines ANDROID, since it just means one is using the
+ *   AOSP tree. It means the build environment is Android, roughly.
+ * - __ANDROID__ is defined by the toolchain.  This typically means the
+ *   build target is Android.
+ *
+ * If the build environment is Android, AOSP can provide common Android
+ * headers, such as <cutils/native_handle.h>.  This allows one to build
+ * and test certain aspects of Android window system code, on the host
+ * system rather the build target.
+ */
+
+#if defined(__ANDROID__) || defined(ANDROID)
+
+#include <cutils/native_handle.h>
+#if ANDROID_API_LEVEL < 28
+/* buffer_handle_t was defined in the deprecated system/window.h */
+typedef const native_handle_t *buffer_handle_t;
+#endif
+
+#else
+
+typedef void *buffer_handle_t;
+
+#endif
+
+%s\
+"""
 
 # a URL of `None` means there is no upstream, because *we* are the upstream
 SOURCES = [
@@ -68,7 +115,7 @@ SOURCES = [
         'api': 'gl',
         'inc_folder': 'GL',
         'sources': [
-            Source('src/mapi/glapi/registry/gl.xml', 'https://github.com/KhronosGroup/OpenGL-Registry/raw/main/xml/gl.xml'),
+            Source('src/mesa/glapi/glapi/registry/gl.xml', 'https://github.com/KhronosGroup/OpenGL-Registry/raw/main/xml/gl.xml'),
             Source('include/GL/glcorearb.h',         'https://github.com/KhronosGroup/OpenGL-Registry/raw/main/api/GL/glcorearb.h'),
             Source('include/GL/glext.h',             'https://github.com/KhronosGroup/OpenGL-Registry/raw/main/api/GL/glext.h'),
             Source('include/GL/glxext.h',            'https://github.com/KhronosGroup/OpenGL-Registry/raw/main/api/GL/glxext.h'),
@@ -77,7 +124,6 @@ SOURCES = [
             Source('include/GL/glx.h',               None),  # FIXME: I don't know what the canonical source is
             Source('include/GL/internal/',           None),
             Source('include/GL/mesa_glinterop.h',    None),
-            Source('include/GL/osmesa.h',            None),
         ],
     },
 
@@ -133,21 +179,18 @@ SOURCES = [
             Source('include/CL/cl_dx9_media_sharing_intel.h',    'https://github.com/KhronosGroup/OpenCL-Headers/raw/main/CL/cl_dx9_media_sharing_intel.h'),
             Source('include/CL/cl_ext_intel.h',                  'https://github.com/KhronosGroup/OpenCL-Headers/raw/main/CL/cl_ext_intel.h'),
             Source('include/CL/cl_va_api_media_sharing_intel.h', 'https://github.com/KhronosGroup/OpenCL-Headers/raw/main/CL/cl_va_api_media_sharing_intel.h'),
-
-            Source('include/CL/cl.hpp',                          'https://github.com/KhronosGroup/OpenCL-CLHPP/raw/5f3cc41df821a3e5988490232082a3e3b82c0283/include/CL/cl.hpp'),
-            Source('include/CL/cl2.hpp',                         'https://github.com/KhronosGroup/OpenCL-CLHPP/raw/main/include/CL/cl2.hpp'),
-            Source('include/CL/opencl.hpp',                      'https://github.com/KhronosGroup/OpenCL-CLHPP/raw/main/include/CL/opencl.hpp'),
         ],
     },
 
     {
         'api': 'spirv',
         'sources': [
-            Source('src/compiler/spirv/spirv.h',                    'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/spirv.h'),
-            Source('src/compiler/spirv/spirv.core.grammar.json',    'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/spirv.core.grammar.json'),
-            Source('src/compiler/spirv/OpenCL.std.h',               'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/OpenCL.std.h'),
-            Source('src/compiler/spirv/GLSL.std.450.h',             'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/GLSL.std.450.h'),
-            Source('src/compiler/spirv/GLSL.ext.AMD.h',             'https://github.com/KhronosGroup/glslang/raw/main/SPIRV/GLSL.ext.AMD.h'),  # FIXME: is this the canonical source?
+            Source('src/compiler/spirv/NonSemanticShaderDebugInfo100.h', 'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/NonSemanticShaderDebugInfo100.h'),
+            Source('src/compiler/spirv/spirv.h',                         'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/spirv.h'),
+            Source('src/compiler/spirv/spirv.core.grammar.json',         'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/spirv.core.grammar.json'),
+            Source('src/compiler/spirv/OpenCL.std.h',                    'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/OpenCL.std.h'),
+            Source('src/compiler/spirv/GLSL.std.450.h',                  'https://github.com/KhronosGroup/SPIRV-Headers/raw/main/include/spirv/unified1/GLSL.std.450.h'),
+            Source('src/compiler/spirv/GLSL.ext.AMD.h',                  'https://github.com/KhronosGroup/glslang/raw/main/SPIRV/GLSL.ext.AMD.h'),  # FIXME: is this the canonical source?
         ],
     },
 
@@ -169,6 +212,7 @@ SOURCES = [
             Source('include/vulkan/vulkan_ios.h',               'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_ios.h'),
             Source('include/vulkan/vulkan_macos.h',             'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_macos.h'),
             Source('include/vulkan/vulkan_metal.h',             'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_metal.h'),
+            Source('include/vulkan/vulkan_ohos.h',              'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_ohos.h'),
             Source('include/vulkan/vulkan_screen.h',            'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_screen.h'),
             Source('include/vulkan/vulkan_vi.h',                'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_vi.h'),
             Source('include/vulkan/vulkan_wayland.h',           'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_wayland.h'),
@@ -176,13 +220,19 @@ SOURCES = [
             Source('include/vulkan/vulkan_xcb.h',               'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_xcb.h'),
             Source('include/vulkan/vulkan_xlib.h',              'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_xlib.h'),
             Source('include/vulkan/vulkan_xlib_xrandr.h',       'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vulkan/vulkan_xlib_xrandr.h'),
-            Source('include/vulkan/vk_android_native_buffer.h', 'https://android.googlesource.com/platform/frameworks/native/+/master/vulkan/include/vulkan/vk_android_native_buffer.h?format=TEXT'),
+            Source('include/vulkan/vk_android_native_buffer.h', 'https://android.googlesource.com/platform/frameworks/native/+/master/vulkan/include/vulkan/vk_android_native_buffer.h?format=TEXT',
+                   template=VK_ANDROID_NATIVE_BUFFER_TEMPLATE, remove='#include <cutils/native_handle.h>\n'),
+            Source('include/vk_video/vulkan_video_codec_av1std.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_av1std.h'),
+            Source('include/vk_video/vulkan_video_codec_av1std_decode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_av1std_decode.h'),
+            Source('include/vk_video/vulkan_video_codec_av1std_encode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_av1std_encode.h'),
             Source('include/vk_video/vulkan_video_codec_h264std.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_h264std.h'),
             Source('include/vk_video/vulkan_video_codec_h264std_decode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_h264std_decode.h'),
             Source('include/vk_video/vulkan_video_codec_h264std_encode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_h264std_encode.h'),
             Source('include/vk_video/vulkan_video_codec_h265std.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_h265std.h'),
             Source('include/vk_video/vulkan_video_codec_h265std_decode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_h265std_decode.h'),
             Source('include/vk_video/vulkan_video_codec_h265std_encode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_h265std_encode.h'),
+            Source('include/vk_video/vulkan_video_codec_vp9std.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_vp9std.h'),
+            Source('include/vk_video/vulkan_video_codec_vp9std_decode.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codec_vp9std_decode.h'),
             Source('include/vk_video/vulkan_video_codecs_common.h', 'https://github.com/KhronosGroup/Vulkan-Headers/raw/main/include/vk_video/vulkan_video_codecs_common.h'),
             Source('include/vulkan/.editorconfig',              None),
         ],

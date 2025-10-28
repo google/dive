@@ -1,8 +1,14 @@
 #pragma once
 
-#include "DriverIncludes.h"
-#include "util/u_debug.h"
+#ifdef __MINGW32__
+#undef WIN32_LEAN_AND_MEAN /* for DEFINE_GUID macro */
+#define _NO_OLDNAMES       /* avoid defining ssize_t */
+#include <stdio.h>         /* for vsnprintf */
+#undef fileno              /* we redefine this in vm_basic_defs.h */
+#endif
 
+#include <windows.h>
+#include "util/u_debug.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,14 +19,14 @@ extern "C" {
 #define ST_DEBUG_TGSI          (1 <<  1)
 
 
-#ifdef DEBUG
+#if MESA_DEBUG
 extern unsigned st_debug;
 #else
 #define st_debug 0
 #endif
 
 
-#ifdef DEBUG
+#if MESA_DEBUG
 void st_debug_parse(void);
 #else
 #define st_debug_parse() ((void)0)

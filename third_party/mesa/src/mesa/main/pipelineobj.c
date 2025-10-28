@@ -45,7 +45,6 @@
 #include "main/transformfeedback.h"
 #include "main/uniforms.h"
 #include "compiler/glsl/glsl_parser_extras.h"
-#include "compiler/glsl/ir_uniform.h"
 #include "program/program.h"
 #include "program/prog_parameter.h"
 #include "util/ralloc.h"
@@ -61,7 +60,7 @@ _mesa_delete_pipeline_object(struct gl_context *ctx,
 {
    unsigned i;
 
-   for (i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       _mesa_reference_program(ctx, &obj->CurrentProgram[i], NULL);
       _mesa_reference_shader_program(ctx, &obj->ReferencedPrograms[i], NULL);
    }
@@ -94,7 +93,7 @@ _mesa_new_pipeline_object(struct gl_context *ctx, GLuint name)
 void
 _mesa_init_pipeline(struct gl_context *ctx)
 {
-   ctx->Pipeline.Objects = _mesa_NewHashTable();
+   _mesa_InitHashTable(&ctx->Pipeline.Objects);
 
    ctx->Pipeline.Current = NULL;
 
@@ -105,7 +104,7 @@ _mesa_init_pipeline(struct gl_context *ctx)
 
 
 /**
- * Callback for deleting a pipeline object.  Called by _mesa_HashDeleteAll().
+ * Callback for deleting a pipeline object.  Called by _mesa_DeleteHashTable().
  */
 static void
 delete_pipelineobj_cb(void *data, void *userData)
@@ -123,10 +122,7 @@ void
 _mesa_free_pipeline_data(struct gl_context *ctx)
 {
    _mesa_reference_pipeline_object(ctx, &ctx->_Shader, NULL);
-
-   _mesa_HashDeleteAll(ctx->Pipeline.Objects, delete_pipelineobj_cb, ctx);
-   _mesa_DeleteHashTable(ctx->Pipeline.Objects);
-
+   _mesa_DeinitHashTable(&ctx->Pipeline.Objects, delete_pipelineobj_cb, ctx);
    _mesa_delete_pipeline_object(ctx, ctx->Pipeline.Default);
 }
 
@@ -145,7 +141,7 @@ _mesa_lookup_pipeline_object(struct gl_context *ctx, GLuint id)
       return NULL;
    else
       return (struct gl_pipeline_object *)
-         _mesa_HashLookupLocked(ctx->Pipeline.Objects, id);
+         _mesa_HashLookupLocked(&ctx->Pipeline.Objects, id);
 }
 
 /**
@@ -155,7 +151,7 @@ static void
 save_pipeline_object(struct gl_context *ctx, struct gl_pipeline_object *obj)
 {
    if (obj->Name > 0) {
-      _mesa_HashInsertLocked(ctx->Pipeline.Objects, obj->Name, obj, true);
+      _mesa_HashInsertLocked(&ctx->Pipeline.Objects, obj->Name, obj);
    }
 }
 
@@ -167,7 +163,7 @@ static void
 remove_pipeline_object(struct gl_context *ctx, struct gl_pipeline_object *obj)
 {
    if (obj->Name > 0) {
-      _mesa_HashRemoveLocked(ctx->Pipeline.Objects, obj->Name);
+      _mesa_HashRemoveLocked(&ctx->Pipeline.Objects, obj->Name);
    }
 }
 
@@ -211,7 +207,7 @@ static void
 use_program_stage(struct gl_context *ctx, GLenum type,
                   struct gl_shader_program *shProg,
                   struct gl_pipeline_object *pipe) {
-   gl_shader_stage stage = _mesa_shader_enum_to_shader_stage(type);
+   mesa_shader_stage stage = _mesa_shader_enum_to_shader_stage(type);
    struct gl_program *prog = NULL;
    if (shProg && shProg->_LinkedShaders[stage])
       prog = shProg->_LinkedShaders[stage]->Program;
@@ -253,6 +249,12 @@ use_program_stages(struct gl_context *ctx, struct gl_shader_program *shProg,
 
    if ((stages & GL_COMPUTE_SHADER_BIT) != 0)
       use_program_stage(ctx, GL_COMPUTE_SHADER, shProg, pipe);
+
+   if ((stages & GL_TASK_SHADER_BIT_EXT) != 0)
+      use_program_stage(ctx, GL_TASK_SHADER_EXT, shProg, pipe);
+
+   if ((stages & GL_MESH_SHADER_BIT_EXT) != 0)
+      use_program_stage(ctx, GL_MESH_SHADER_EXT, shProg, pipe);
 
    pipe->Validated = pipe->UserValidated = false;
 
@@ -320,6 +322,8 @@ _mesa_UseProgramStages(GLuint pipeline, GLbitfield stages, GLuint program)
                           GL_TESS_EVALUATION_SHADER_BIT;
    if (_mesa_has_compute_shaders(ctx))
       any_valid_stages |= GL_COMPUTE_SHADER_BIT;
+   if (_mesa_has_EXT_mesh_shader(ctx))
+      any_valid_stages |= GL_TASK_SHADER_BIT_EXT | GL_MESH_SHADER_BIT_EXT;
 
    if (stages != GL_ALL_SHADER_BITS && (stages & ~any_valid_stages) != 0) {
       _mesa_error(ctx, GL_INVALID_VALUE, "glUseProgramStages(Stages)");
@@ -534,7 +538,7 @@ _mesa_bind_pipeline(struct gl_context *ctx,
                                          ctx->Pipeline.Default);
       }
 
-      for (i = 0; i < MESA_SHADER_STAGES; i++) {
+      for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
          struct gl_program *prog = ctx->_Shader->CurrentProgram[i];
          if (prog) {
             _mesa_program_init_subroutine_defaults(ctx, prog);
@@ -609,7 +613,7 @@ create_program_pipelines(struct gl_context *ctx, GLsizei n, GLuint *pipelines,
    if (!pipelines)
       return;
 
-   _mesa_HashFindFreeKeys(ctx->Pipeline.Objects, pipelines, n);
+   _mesa_HashFindFreeKeys(&ctx->Pipeline.Objects, pipelines, n);
 
    for (i = 0; i < n; i++) {
       struct gl_pipeline_object *obj;
@@ -824,7 +828,7 @@ program_stages_interleaved_illegally(const struct gl_pipeline_object *pipe)
    /* Look for programs bound to stages: A -> B -> A, with any intervening
     * sequence of unrelated programs or empty stages.
     */
-   for (unsigned i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (unsigned i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       struct gl_program *cur = pipe->CurrentProgram[i];
 
       /* Empty stages anywhere in the pipe are OK.  Also we can be confident
@@ -882,7 +886,7 @@ _mesa_validate_program_pipeline(struct gl_context* ctx,
     * bound to the vertex stage also has a fragment shader, the fragment
     * shader must also be bound to the fragment stage.
     */
-   for (i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       if (!program_stages_all_active(pipe, pipe->CurrentProgram[i])) {
          return GL_FALSE;
       }
@@ -943,7 +947,7 @@ _mesa_validate_program_pipeline(struct gl_context* ctx,
     *           applied to the pipeline object via UseProgramStages with the
     *           PROGRAM_SEPARABLE parameter set to FALSE.
     */
-   for (i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       if (pipe->CurrentProgram[i] &&
           !pipe->CurrentProgram[i]->info.separate_shader) {
          pipe->InfoLog = ralloc_asprintf(pipe,
@@ -966,7 +970,7 @@ _mesa_validate_program_pipeline(struct gl_context* ctx,
     *         there is a current program pipeline object, and that object is
     *         empty (no executable code is installed for any stage).
     */
-   for (i = 0; i < MESA_SHADER_STAGES; i++) {
+   for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
       if (pipe->CurrentProgram[i]) {
          program_empty = false;
          break;

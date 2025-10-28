@@ -4,40 +4,6 @@ glx@glx-multi-window-single-context,Fail
 
 glx@glx-swap-pixmap-bad,Fail
 
-# failed to create drawable
-# X Error of failed request:  BadValue (integer parameter out of range for operation)
-#   Major opcode of failed request:  53 (X_CreatePixmap)
-#   Value in failed request:  0x1e
-#   Serial number of failed request:  1177
-#   Current serial number in output stream:  1181
-glx@glx-visuals-depth -pixmap,Crash
-glx@glx-visuals-stencil -pixmap,Crash
-
-# X error 167 (GLXBadFBConfig (9)) was generated, but X error 8 was expected.
-glx@glx_arb_create_context_no_error@no error,Fail
-
-# "X error 2 (non-GLX error (-1)) was generated, but X error 8 was expected."
-glx@glx_arb_create_context_robustness@invalid reset notification strategy,Fail
-
-# X error 167 (GLXBadFBConfig (9)) was generated, but GLXBadProfileARB (13) was expected.
-# Version = 1.2
-# X error 167 (GLXBadFBConfig (9)) was generated, but GLXBadProfileARB (13) was expected.
-# Version = 2.1
-# X error 167 (GLXBadFBConfig (9)) was generated, but GLXBadProfileARB (13) was expected.
-# Version = 3.3
-glx@glx_arb_create_context_es2_profile@invalid opengl es version,Fail
-
-# Xorg has disabled indirect rendering contexts.
-glx@glx_ext_import_context@free context,Fail
-glx@glx_ext_import_context@get context id,Fail
-glx@glx_ext_import_context@get current display,Fail
-glx@glx_ext_import_context@import context- multi process,Fail
-glx@glx_ext_import_context@import context- single process,Fail
-glx@glx_ext_import_context@imported context has same context id,Fail
-glx@glx_ext_import_context@make current- multi process,Fail
-glx@glx_ext_import_context@make current- single process,Fail
-glx@glx_ext_import_context@query context info,Fail
-
 spec@!opengl 1.0@rasterpos,Fail
 
 spec@!opengl 1.0@rasterpos@glsl_vs_gs_linked,Fail
@@ -51,22 +17,6 @@ spec@!opengl 1.1@linestipple@Line strip,Fail
 
 # Fail: nothing rendered.
 spec@!opengl 2.0@vs-point_size-zero,Fail
-
-spec@!opengl 3.2@gl-3.2-adj-prims cull-back pv-first,Fail
-spec@!opengl 3.2@gl-3.2-adj-prims cull-front pv-first,Fail
-spec@!opengl 3.2@gl-3.2-adj-prims line cull-back pv-first,Fail
-spec@!opengl 3.2@gl-3.2-adj-prims line cull-front pv-first,Fail
-spec@!opengl 3.2@gl-3.2-adj-prims pv-first,Fail
-
-# The textures will be initialized by rendering to them using glDrawPixels.
-# gettextureimage-formats failure: format: GL_RGB10_A2, level 1 at pixel(369, 103)
-#  Expected (0.597386, 0.597386, 0.433987, 0.111111)
-# 	 Found (0.792157, 0.792157, 0.466667, 0.443137)
-spec@arb_direct_state_access@gettextureimage-formats init-by-rendering,Fail
-
-# Invalid index for 'vs_input2[1][0]': expected INVALID_INDEX but got 1
-spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex,Fail
-spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex@'vs_input2[1][0]' on GL_PROGRAM_INPUT,Fail
 
 spec@arb_query_buffer_object@qbo,Fail
 spec@arb_query_buffer_object@qbo@query-GL_TIMESTAMP-ASYNC_CPU_READ_AFTER-GL_INT,Fail
@@ -95,9 +45,6 @@ spec@egl 1.4@eglterminate then unbind context,Fail
 spec@egl_chromium_sync_control@conformance,Fail
 # piglit: error: SBC did not change after second SwapBuffers: 0
 spec@egl_chromium_sync_control@conformance@eglGetSyncValuesCHROMIUM_msc_and_sbc_test,Fail
-
-# test binary not built
-spec@egl_ext_protected_content@conformance,Fail
 
 # Failed blit src(0,0;1,1) - dst(0,0;2147483647,2147483647)
 # Failed blit src(0,0;40,40) - dst(0,0;134217727,134217727)
@@ -140,5 +87,23 @@ spec@khr_texture_compression_astc@sliced-3d-miptree-gles srgb-fp@sRGB decode ful
 spec@!opengl 1.1@line-smooth-coverage,Fail
 spec@!opengl 1.1@line-smooth-stipple,Fail
 
-# fails after Debian bookworm update
-spec@arb_viewport_array@display-list,Fail
+# Uprev Piglit in Mesa
+spec@arb_framebuffer_object@execution@msaa-alpha-to-coverage_alpha-to-one,Fail
+spec@arb_framebuffer_object@execution@msaa-alpha-to-coverage_alpha-to-one_write-z,Fail
+spec@arb_framebuffer_object@execution@msaa-alpha-to-coverage,Fail
+spec@ext_external_objects@vk-image-display,Crash
+spec@ext_external_objects@vk-semaphores,Crash
+spec@ext_external_objects@vk-semaphores-2,Crash
+glx@glx-multithread-buffer-busy-tracking-bug,Fail
+
+# failed to create drawable
+# X Error of failed request:  BadValue (integer parameter out of range for operation)
+#   Major opcode of failed request:  53 (X_CreatePixmap)
+#   Value in failed request:  0x1e
+#   Serial number of failed request:  1177
+#   Current serial number in output stream:  1181
+glx@glx-visuals-depth -pixmap,Fail
+glx@glx-visuals-stencil -pixmap,Fail
+
+# New failures with GL CTS 4.6.6.0
+KHR-GL46.direct_state_access.vertex_arrays_vertex_buffers_errors,Fail

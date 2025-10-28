@@ -30,10 +30,9 @@
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 #include "util/u_string.h"
-#include "util/u_dl.h"
-#include "util/u_file.h"
 #include "util/xmlconfig.h"
 #include "util/driconf.h"
+#include "util/perf/cpu_trace.h"
 
 #include <string.h>
 
@@ -41,8 +40,6 @@
 #include <stdlib.h>
 #define PATH_MAX _MAX_PATH
 #endif
-
-#define MODULE_PREFIX "pipe_"
 
 static int (*backends[])(struct pipe_loader_device **, int) = {
 #ifdef HAVE_LIBDRM
@@ -56,12 +53,17 @@ const driOptionDescription gallium_driconf[] = {
 };
 
 int
-pipe_loader_probe(struct pipe_loader_device **devs, int ndev)
+pipe_loader_probe(struct pipe_loader_device **devs, int ndev, bool with_zink)
 {
    int i, n = 0;
 
    for (i = 0; i < ARRAY_SIZE(backends); i++)
       n += backends[i](&devs[n], MAX2(0, ndev - n));
+
+#if defined(HAVE_ZINK) && defined(HAVE_LIBDRM)
+   if (with_zink)
+      n += pipe_loader_drm_zink_probe(&devs[n], MAX2(0, ndev - n));
+#endif
 
    return n;
 }
@@ -154,21 +156,24 @@ pipe_loader_get_driinfo_xml(const char *driver_name)
    unsigned merged_count;
    const driOptionDescription *merged_driconf =
       merge_driconf(driver_driconf, driver_count, &merged_count);
-   free((void *)driver_driconf);
 
    char *xml = driGetOptionsXml(merged_driconf, merged_count);
 
+   free((void *)driver_driconf);
    free((void *)merged_driconf);
 
    return xml;
 }
 
 struct pipe_screen *
-pipe_loader_create_screen_vk(struct pipe_loader_device *dev, bool sw_vk)
+pipe_loader_create_screen_vk(struct pipe_loader_device *dev, bool sw_vk, bool driver_name_is_inferred)
 {
    struct pipe_screen_config config;
 
+   util_cpu_trace_init();
+
    pipe_loader_load_options(dev);
+   config.driver_name_is_inferred = driver_name_is_inferred;
    config.options_info = &dev->option_info;
    config.options = &dev->option_cache;
 
@@ -176,41 +181,7 @@ pipe_loader_create_screen_vk(struct pipe_loader_device *dev, bool sw_vk)
 }
 
 struct pipe_screen *
-pipe_loader_create_screen(struct pipe_loader_device *dev)
+pipe_loader_create_screen(struct pipe_loader_device *dev, bool driver_name_is_inferred)
 {
-   return pipe_loader_create_screen_vk(dev, false);
-}
-
-struct util_dl_library *
-pipe_loader_find_module(const char *driver_name,
-                        const char *library_paths)
-{
-   struct util_dl_library *lib;
-   const char *next;
-   char path[PATH_MAX];
-   int len, ret;
-
-   for (next = library_paths; *next; library_paths = next + 1) {
-      next = strchrnul(library_paths, ':');
-      len = next - library_paths;
-
-      if (len)
-         ret = snprintf(path, sizeof(path), "%.*s/%s%s%s",
-                        len, library_paths,
-                        MODULE_PREFIX, driver_name, UTIL_DL_EXT);
-      else
-         ret = snprintf(path, sizeof(path), "%s%s%s",
-                        MODULE_PREFIX, driver_name, UTIL_DL_EXT);
-
-      if (ret > 0 && ret < sizeof(path) && u_file_access(path, 0) != -1) {
-         lib = util_dl_open(path);
-         if (lib) {
-            return lib;
-         }
-         fprintf(stderr, "ERROR: Failed to load pipe driver at `%s': %s\n",
-                         path, util_dl_error());
-      }
-   }
-
-   return NULL;
+   return pipe_loader_create_screen_vk(dev, false, driver_name_is_inferred);
 }

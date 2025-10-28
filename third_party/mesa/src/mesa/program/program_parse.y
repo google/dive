@@ -128,11 +128,11 @@ static struct asm_instruction *asm_instruction_copy_ctor(
    } while(0)
 %}
 
-%pure-parser
+%define api.pure
 %locations
 %lex-param   { struct asm_parser_state *state }
 %parse-param { struct asm_parser_state *state }
-%error-verbose
+%define parse.error verbose
 
 %union {
    struct asm_instruction *inst;
@@ -302,7 +302,7 @@ program: language optionSequence statementSequence END
 
 language: ARBvp_10
    {
-      if (state->prog->Target != GL_VERTEX_PROGRAM_ARB) {
+      if (state->prog->info.stage != MESA_SHADER_VERTEX) {
          yyerror(& @1, state, "invalid fragment program header");
 
       }
@@ -310,7 +310,7 @@ language: ARBvp_10
    }
    | ARBfp_10
    {
-      if (state->prog->Target != GL_FRAGMENT_PROGRAM_ARB) {
+      if (state->prog->info.stage != MESA_SHADER_FRAGMENT) {
          yyerror(& @1, state, "invalid vertex program header");
       }
       state->mode = ARB_fragment;
@@ -440,7 +440,7 @@ SAMPLE_instruction: SAMPLE_OP maskedDstReg ',' swizzleSrcReg ',' texImageUnit ',
       if ($$ != NULL) {
          const GLbitfield tex_mask = (1U << $6);
          GLbitfield shadow_tex = 0;
-         GLbitfield target_mask = 0;
+         GLbitfield target_mask;
 
 
          $$->Base.TexSrcUnit = $6;
@@ -492,7 +492,7 @@ TXD_instruction: TXD_OP maskedDstReg ',' swizzleSrcReg ',' swizzleSrcReg ',' swi
       if ($$ != NULL) {
          const GLbitfield tex_mask = (1U << $10);
          GLbitfield shadow_tex = 0;
-         GLbitfield target_mask = 0;
+         GLbitfield target_mask;
 
 
          $$->Base.TexSrcUnit = $10;
@@ -2546,9 +2546,10 @@ _mesa_parse_arb_program(struct gl_context *ctx, GLenum target, const GLubyte *st
    GLboolean result = GL_FALSE;
    void *temp;
    struct asm_symbol *sym;
+   unsigned stage = _mesa_program_enum_to_shader_stage(target);
 
    state->ctx = ctx;
-   state->prog->Target = target;
+   state->prog->info.stage = stage;
    state->prog->Parameters = _mesa_new_parameter_list();
 
    /* Make a copy of the program string and force it to be newline and NUL-terminated.
@@ -2570,9 +2571,7 @@ _mesa_parse_arb_program(struct gl_context *ctx, GLenum target, const GLubyte *st
 
    state->st = _mesa_symbol_table_ctor();
 
-   state->limits = (target == GL_VERTEX_PROGRAM_ARB)
-      ? & ctx->Const.Program[MESA_SHADER_VERTEX]
-      : & ctx->Const.Program[MESA_SHADER_FRAGMENT];
+   state->limits = &ctx->Const.Program[stage];
 
    state->MaxTextureImageUnits = ctx->Const.Program[MESA_SHADER_FRAGMENT].MaxTextureImageUnits;
    state->MaxTextureCoordUnits = ctx->Const.MaxTextureCoordUnits;
@@ -2642,16 +2641,6 @@ _mesa_parse_arb_program(struct gl_context *ctx, GLenum target, const GLubyte *st
    state->prog->arb.NumParameters = state->prog->Parameters->NumParameters;
    state->prog->arb.NumAttributes =
       util_bitcount64(state->prog->info.inputs_read);
-
-   /*
-    * Initialize native counts to logical counts.  The device driver may
-    * change them if program is translated into a hardware program.
-    */
-   state->prog->arb.NumNativeInstructions = state->prog->arb.NumInstructions;
-   state->prog->arb.NumNativeTemporaries = state->prog->arb.NumTemporaries;
-   state->prog->arb.NumNativeParameters = state->prog->arb.NumParameters;
-   state->prog->arb.NumNativeAttributes = state->prog->arb.NumAttributes;
-   state->prog->arb.NumNativeAddressRegs = state->prog->arb.NumAddressRegs;
 
    result = GL_TRUE;
 

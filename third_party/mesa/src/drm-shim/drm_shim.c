@@ -30,6 +30,7 @@
 
 /* Prevent glibc from defining open64 when we want to alias it. */
 #undef _FILE_OFFSET_BITS
+#undef _TIME_BITS
 #define _LARGEFILE64_SOURCE
 
 #include <stdbool.h>
@@ -65,6 +66,7 @@ bool drm_shim_debug;
  */
 DIR *fake_dev_dri = (void *)&opendir_set;
 
+REAL_FUNCTION_POINTER(access);
 REAL_FUNCTION_POINTER(close);
 REAL_FUNCTION_POINTER(closedir);
 REAL_FUNCTION_POINTER(dup);
@@ -187,6 +189,8 @@ drm_shim_override_file(const char *contents, const char *path_format, ...)
    override->contents = strdup(contents);
 }
 
+static uint32_t inited = 0;
+
 static void
 destroy_shim(void)
 {
@@ -194,6 +198,10 @@ destroy_shim(void)
    free(render_node_path);
    free(render_node_dirent_name);
    free(subsystem_path);
+
+   render_node_minor = -1;
+   file_overrides_count = 0;
+   p_atomic_set(&inited, 0);
 }
 
 /* Initialization, which will be called from the first general library call
@@ -202,22 +210,17 @@ destroy_shim(void)
 static void
 init_shim(void)
 {
-   static bool inited = false;
    drm_shim_debug = debug_get_bool_option("DRM_SHIM_DEBUG", false);
 
    /* We can't lock this, because we recurse during initialization. */
-   if (inited)
+   if (p_atomic_cmpxchg(&inited, 0, 1))
       return;
-
-   /* This comes first (and we're locked), to make sure we don't recurse
-    * during initialization.
-    */
-   inited = true;
 
    opendir_set = _mesa_set_create(NULL,
                                   _mesa_hash_string,
                                   _mesa_key_string_equal);
 
+   GET_FUNCTION_POINTER(access);
    GET_FUNCTION_POINTER(close);
    GET_FUNCTION_POINTER(closedir);
    GET_FUNCTION_POINTER(dup);
@@ -323,6 +326,22 @@ PUBLIC FILE *fopen(const char *path, const char *mode)
 }
 PUBLIC FILE *fopen64(const char *path, const char *mode)
    __attribute__((alias("fopen")));
+
+/* Intercepts access(render_node_path) to trick drmGetMinorType */
+PUBLIC int access(const char *path, int mode)
+{
+   init_shim();
+
+   if (hide_drm_device_path(path)) {
+      errno = ENOENT;
+      return -1;
+   }
+
+   if (strcmp(path, render_node_path) != 0)
+      return real_access(path, mode);
+
+   return 0;
+}
 
 /* Intercepts open(render_node_path) to redirect it to the simulator. */
 PUBLIC int open(const char *path, int flags, ...)

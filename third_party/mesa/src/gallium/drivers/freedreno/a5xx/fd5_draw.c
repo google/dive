@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2016 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2016 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -48,7 +30,8 @@ draw_impl(struct fd_context *ctx, struct fd_ringbuffer *ring,
 
    fd5_emit_state(ctx, ring, emit);
 
-   if (emit->dirty & (FD_DIRTY_VTXBUF | FD_DIRTY_VTXSTATE))
+   if ((ctx->dirty_shader[MESA_SHADER_VERTEX] & FD_DIRTY_SHADER_PROG) ||
+       (emit->dirty & (FD_DIRTY_VTXBUF | FD_DIRTY_VTXSTATE)))
       fd5_emit_vertex_bufs(ring, emit);
 
    OUT_PKT4(ring, REG_A5XX_VFD_INDEX_OFFSET, 2);
@@ -199,7 +182,7 @@ fd5_clear_lrz(struct fd_batch *batch, struct fd_resource *zsbuf, double depth)
    OUT_RING(ring, A5XX_RB_MRT_BUF_INFO_COLOR_FORMAT(RB5_R16_UNORM) |
                      A5XX_RB_MRT_BUF_INFO_COLOR_TILE_MODE(TILE5_LINEAR) |
                      A5XX_RB_MRT_BUF_INFO_COLOR_SWAP(WZYX));
-   OUT_RING(ring, A5XX_RB_MRT_PITCH(zsbuf->lrz_pitch * 2));
+   OUT_RING(ring, A5XX_RB_MRT_PITCH(zsbuf->lrz_layout.lrz_pitch * 2));
    OUT_RING(ring, A5XX_RB_MRT_ARRAY_PITCH(fd_bo_size(zsbuf->lrz)));
    OUT_RELOC(ring, zsbuf->lrz, 0x1000, 0, 0);
 
@@ -219,8 +202,8 @@ fd5_clear_lrz(struct fd_batch *batch, struct fd_resource *zsbuf, double depth)
    OUT_RING(ring, clear); /* RB_CLEAR_COLOR_DW0 */
 
    OUT_PKT4(ring, REG_A5XX_VSC_RESOLVE_CNTL, 2);
-   OUT_RING(ring, A5XX_VSC_RESOLVE_CNTL_X(zsbuf->lrz_width) |
-                     A5XX_VSC_RESOLVE_CNTL_Y(zsbuf->lrz_height));
+   OUT_RING(ring, A5XX_VSC_RESOLVE_CNTL_X(zsbuf->lrz_layout.lrz_pitch) |
+                     A5XX_VSC_RESOLVE_CNTL_Y(zsbuf->lrz_layout.lrz_height));
    OUT_RING(ring, 0x00000000); // XXX UNKNOWN_0CDE
 
    OUT_PKT4(ring, REG_A5XX_RB_CNTL, 1);
@@ -228,8 +211,8 @@ fd5_clear_lrz(struct fd_batch *batch, struct fd_resource *zsbuf, double depth)
 
    OUT_PKT4(ring, REG_A5XX_RB_RESOLVE_CNTL_1, 2);
    OUT_RING(ring, A5XX_RB_RESOLVE_CNTL_1_X(0) | A5XX_RB_RESOLVE_CNTL_1_Y(0));
-   OUT_RING(ring, A5XX_RB_RESOLVE_CNTL_2_X(zsbuf->lrz_width - 1) |
-                     A5XX_RB_RESOLVE_CNTL_2_Y(zsbuf->lrz_height - 1));
+   OUT_RING(ring, A5XX_RB_RESOLVE_CNTL_2_X(zsbuf->lrz_layout.lrz_pitch - 1) |
+                     A5XX_RB_RESOLVE_CNTL_2_Y(zsbuf->lrz_layout.lrz_height - 1));
 
    fd5_emit_blit(batch, ring);
 }
@@ -243,7 +226,7 @@ fd5_clear(struct fd_context *ctx, enum fd_buffer_mask buffers,
    struct pipe_framebuffer_state *pfb = &ctx->batch->framebuffer;
 
    if ((buffers & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL)) &&
-       is_z32(pfb->zsbuf->format))
+       is_z32(pfb->zsbuf.format))
       return false;
 
    fd5_emit_render_cntl(ctx, true, false);
@@ -252,13 +235,13 @@ fd5_clear(struct fd_context *ctx, enum fd_buffer_mask buffers,
       for (int i = 0; i < pfb->nr_cbufs; i++) {
          union util_color uc = {0};
 
-         if (!pfb->cbufs[i])
+         if (!pfb->cbufs[i].texture)
             continue;
 
          if (!(buffers & (PIPE_CLEAR_COLOR0 << i)))
             continue;
 
-         enum pipe_format pfmt = pfb->cbufs[i]->format;
+         enum pipe_format pfmt = pfb->cbufs[i].format;
 
          // XXX I think RB_CLEAR_COLOR_DWn wants to take into account SWAP??
          union pipe_color_union swapped;
@@ -308,8 +291,8 @@ fd5_clear(struct fd_context *ctx, enum fd_buffer_mask buffers,
       }
    }
 
-   if (pfb->zsbuf && (buffers & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL))) {
-      uint32_t clear = util_pack_z_stencil(pfb->zsbuf->format, depth, stencil);
+   if (pfb->zsbuf.texture && (buffers & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL))) {
+      uint32_t clear = util_pack_z_stencil(pfb->zsbuf.format, depth, stencil);
       uint32_t mask = 0;
 
       if (buffers & FD_BUFFER_DEPTH)
@@ -330,8 +313,8 @@ fd5_clear(struct fd_context *ctx, enum fd_buffer_mask buffers,
 
       fd5_emit_blit(ctx->batch, ring);
 
-      if (pfb->zsbuf && (buffers & FD_BUFFER_DEPTH)) {
-         struct fd_resource *zsbuf = fd_resource(pfb->zsbuf->texture);
+      if (pfb->zsbuf.texture && (buffers & FD_BUFFER_DEPTH)) {
+         struct fd_resource *zsbuf = fd_resource(pfb->zsbuf.texture);
          if (zsbuf->lrz) {
             zsbuf->lrz_valid = true;
             fd5_clear_lrz(ctx->batch, zsbuf, depth);

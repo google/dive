@@ -66,6 +66,8 @@ llvmpipe_flush(struct pipe_context *pipe,
    if (fence && (!*fence))
       *fence = (struct pipe_fence_handle *)lp_fence_create(0);
 
+   llvmpipe_clear_sample_functions_cache(llvmpipe, fence);
+
    /* Enable to dump BMPs of the color/depth buffers each frame */
    if (0) {
       static unsigned frame_no = 1;
@@ -74,12 +76,12 @@ llvmpipe_flush(struct pipe_context *pipe,
 
       for (i = 0; i < llvmpipe->framebuffer.nr_cbufs; i++) {
          snprintf(filename, sizeof(filename), "cbuf%u_%u", i, frame_no);
-         debug_dump_surface_bmp(&llvmpipe->pipe, filename, llvmpipe->framebuffer.cbufs[i]);
+         debug_dump_surface_bmp(&llvmpipe->pipe, filename, &llvmpipe->framebuffer.cbufs[i]);
       }
 
       if (0) {
          snprintf(filename, sizeof(filename), "zsbuf_%u", frame_no);
-         debug_dump_surface_bmp(&llvmpipe->pipe, filename, llvmpipe->framebuffer.zsbuf);
+         debug_dump_surface_bmp(&llvmpipe->pipe, filename, &llvmpipe->framebuffer.zsbuf);
       }
 
       ++frame_no;

@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "draw/draw_context.h"
 #include "draw/draw_vbuf.h"
@@ -98,25 +80,25 @@ svga_swtnl_draw_vbo(struct svga_context *svga,
    }
 
    /* Map constant buffers */
-   for (i = 0; i < ARRAY_SIZE(svga->curr.constbufs[PIPE_SHADER_VERTEX]); ++i) {
-      if (svga->curr.constbufs[PIPE_SHADER_VERTEX][i].buffer == NULL) {
+   for (i = 0; i < ARRAY_SIZE(svga->curr.constbufs[MESA_SHADER_VERTEX]); ++i) {
+      if (svga->curr.constbufs[MESA_SHADER_VERTEX][i].buffer == NULL) {
          continue;
       }
 
       map = pipe_buffer_map(&svga->pipe,
-                            svga->curr.constbufs[PIPE_SHADER_VERTEX][i].buffer,
+                            svga->curr.constbufs[MESA_SHADER_VERTEX][i].buffer,
                             PIPE_MAP_READ |
                             PIPE_MAP_UNSYNCHRONIZED,
                             &cb_transfer[i]);
       assert(map);
       draw_set_mapped_constant_buffer(
-         draw, PIPE_SHADER_VERTEX, i,
+         draw, MESA_SHADER_VERTEX, i,
          map,
-         svga->curr.constbufs[PIPE_SHADER_VERTEX][i].buffer->width0);
+         svga->curr.constbufs[MESA_SHADER_VERTEX][i].buffer->width0);
    }
 
    draw_vbo(draw, info, drawid_offset, indirect, draw_one, 1,
-	    svga->patch_vertices);
+            svga->patch_vertices);
 
    draw_flush(svga->swtnl.draw);
 
@@ -138,8 +120,8 @@ svga_swtnl_draw_vbo(struct svga_context *svga,
       draw_set_indexes(draw, NULL, 0, 0);
    }
 
-   for (i = 0; i < ARRAY_SIZE(svga->curr.constbufs[PIPE_SHADER_VERTEX]); ++i) {
-      if (svga->curr.constbufs[PIPE_SHADER_VERTEX][i].buffer) {
+   for (i = 0; i < ARRAY_SIZE(svga->curr.constbufs[MESA_SHADER_VERTEX]); ++i) {
+      if (svga->curr.constbufs[MESA_SHADER_VERTEX][i].buffer) {
          pipe_buffer_unmap(&svga->pipe, cb_transfer[i]);
       }
    }
@@ -183,8 +165,7 @@ svga_init_swtnl(struct svga_context *svga)
    util_blitter_cache_all_shaders(svga->blitter);
 
    const nir_alu_type bool_type =
-      screen->screen.get_shader_param(&screen->screen, PIPE_SHADER_FRAGMENT,
-                                      PIPE_SHADER_CAP_INTEGERS) ?
+      screen->screen.shader_caps[MESA_SHADER_FRAGMENT].integers ?
       nir_type_bool32 : nir_type_float32;
 
    if (!screen->haveLineSmooth)

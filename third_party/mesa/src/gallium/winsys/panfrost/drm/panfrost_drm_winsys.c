@@ -96,7 +96,7 @@ panfrost_create_kms_dumb_buffer_for_resource(struct pipe_resource *rsc,
    out_handle->type = WINSYS_HANDLE_TYPE_FD;
    out_handle->stride = create_dumb.pitch;
 
-   err = drmPrimeHandleToFD(ro->kms_fd, create_dumb.handle, O_CLOEXEC,
+   err = drmPrimeHandleToFD(ro->kms_fd, create_dumb.handle, DRM_CLOEXEC | DRM_RDWR,
                             (int *)&out_handle->handle);
    if (err < 0) {
       fprintf(stderr, "failed to export dumb buffer: %s\n", strerror(errno));
@@ -119,9 +119,9 @@ free_dumb:
 }
 
 struct pipe_screen *
-panfrost_drm_screen_create(int fd)
+panfrost_drm_screen_create(int fd, const struct pipe_screen_config *config)
 {
-   return u_pipe_screen_lookup_or_create(os_dupfd_cloexec(fd), NULL, NULL,
+   return u_pipe_screen_lookup_or_create(os_dupfd_cloexec(fd), config, NULL,
                                          panfrost_create_screen);
 }
 

@@ -24,15 +24,19 @@
 #include "glspirv.h"
 #include "errors.h"
 #include "shaderobj.h"
+#include "spirv_capabilities.h"
 #include "mtypes.h"
 
 #include "compiler/nir/nir.h"
 #include "compiler/spirv/nir_spirv.h"
+#include "compiler/spirv/spirv_info.h"
 
 #include "program/program.h"
 
 #include "util/u_atomic.h"
 #include "api_exec_decl.h"
+
+#include "pipe/p_screen.h"
 
 void
 _mesa_spirv_module_reference(struct gl_spirv_module **dest,
@@ -119,15 +123,10 @@ _mesa_spirv_shader_binary(struct gl_context *ctx,
 
       ralloc_free(sh->ir);
       sh->ir = NULL;
-      ralloc_free(sh->symbols);
-      sh->symbols = NULL;
    }
 }
 
 /**
- * This is the equivalent to compiler/glsl/linker.cpp::link_shaders()
- * but for SPIR-V programs.
- *
  * This method just creates the gl_linked_shader structs with a reference to
  * the SPIR-V data collected during previous steps.
  *
@@ -143,7 +142,7 @@ _mesa_spirv_link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
 
    for (unsigned i = 0; i < prog->NumShaders; i++) {
       struct gl_shader *shader = prog->Shaders[i];
-      gl_shader_stage shader_type = shader->Stage;
+      mesa_shader_stage shader_type = shader->Stage;
 
       /* We only support one shader per stage. The gl_spirv spec doesn't seem
        * to prevent this, but the way the API is designed, requiring all shaders
@@ -199,7 +198,7 @@ _mesa_spirv_link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
    /* Some shaders have to be linked with some other shaders present. */
    if (!prog->SeparateShader) {
       static const struct {
-         gl_shader_stage a, b;
+         mesa_shader_stage a, b;
       } stage_pairs[] = {
          { MESA_SHADER_GEOMETRY, MESA_SHADER_VERTEX },
          { MESA_SHADER_TESS_EVAL, MESA_SHADER_VERTEX },
@@ -208,8 +207,8 @@ _mesa_spirv_link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
       };
 
       for (unsigned i = 0; i < ARRAY_SIZE(stage_pairs); i++) {
-         gl_shader_stage a = stage_pairs[i].a;
-         gl_shader_stage b = stage_pairs[i].b;
+         mesa_shader_stage a = stage_pairs[i].a;
+         mesa_shader_stage b = stage_pairs[i].b;
          if ((prog->data->linked_stages & ((1 << a) | (1 << b))) == (1 << a)) {
             ralloc_asprintf_append(&prog->data->InfoLog,
                                    "%s shader must be linked with %s shader\n",
@@ -235,7 +234,7 @@ _mesa_spirv_link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
 nir_shader *
 _mesa_spirv_to_nir(struct gl_context *ctx,
                    const struct gl_shader_program *prog,
-                   gl_shader_stage stage,
+                   mesa_shader_stage stage,
                    const nir_shader_compiler_options *options)
 {
    struct gl_linked_shader *linked_shader = prog->_LinkedShaders[stage];
@@ -260,10 +259,13 @@ _mesa_spirv_to_nir(struct gl_context *ctx,
       spec_entries[i].defined_on_module = false;
    }
 
-   const struct spirv_to_nir_options spirv_options = {
+   struct spirv_capabilities spirv_caps;
+   _mesa_fill_supported_spirv_capabilities(&spirv_caps, &ctx->Const,
+                                           &ctx->Extensions);
+
+   struct spirv_to_nir_options spirv_options = {
       .environment = NIR_SPIRV_OPENGL,
-      .subgroup_size = SUBGROUP_SIZE_UNIFORM,
-      .caps = ctx->Const.SpirVCapabilities,
+      .capabilities = &spirv_caps,
       .ubo_addr_format = nir_address_format_32bit_index_offset,
       .ssbo_addr_format = nir_address_format_32bit_index_offset,
 
@@ -273,6 +275,7 @@ _mesa_spirv_to_nir(struct gl_context *ctx,
        */
       .shared_addr_format = nir_address_format_32bit_offset,
 
+      .group_non_uniform_subgroup_size = ctx->screen->caps.shader_subgroup_size,
    };
 
    nir_shader *nir =
@@ -296,6 +299,7 @@ _mesa_spirv_to_nir(struct gl_context *ctx,
    nir_validate_shader(nir, "after spirv_to_nir");
 
    nir->info.separate_shader = linked_shader->Program->info.separate_shader;
+   nir->info.api_subgroup_size_draw_uniform = !mesa_shader_stage_uses_workgroup(stage);
 
    /* Convert some sysvals to input varyings. */
    const struct nir_lower_sysvals_to_varyings_options sysvals_to_varyings = {
@@ -303,17 +307,17 @@ _mesa_spirv_to_nir(struct gl_context *ctx,
       .point_coord = !ctx->Const.GLSLPointCoordIsSysVal,
       .front_face = !ctx->Const.GLSLFrontFacingIsSysVal,
    };
-   NIR_PASS_V(nir, nir_lower_sysvals_to_varyings, &sysvals_to_varyings);
+   NIR_PASS(_, nir, nir_lower_sysvals_to_varyings, &sysvals_to_varyings);
 
    /* We have to lower away local constant initializers right before we
     * inline functions.  That way they get properly initialized at the top
     * of the function and not at the top of its caller.
     */
-   NIR_PASS_V(nir, nir_lower_variable_initializers, nir_var_function_temp);
-   NIR_PASS_V(nir, nir_lower_returns);
-   NIR_PASS_V(nir, nir_inline_functions);
-   NIR_PASS_V(nir, nir_copy_prop);
-   NIR_PASS_V(nir, nir_opt_deref);
+   NIR_PASS(_, nir, nir_lower_variable_initializers, nir_var_function_temp);
+   NIR_PASS(_, nir, nir_lower_returns);
+   NIR_PASS(_, nir, nir_inline_functions);
+   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_deref);
 
    /* Pick off the single entrypoint that we want */
    nir_remove_non_entrypoints(nir);
@@ -323,18 +327,15 @@ _mesa_spirv_to_nir(struct gl_context *ctx,
     * nir_remove_dead_variables and split_per_member_structs below see the
     * corresponding stores.
     */
-   NIR_PASS_V(nir, nir_lower_variable_initializers, ~0);
+   NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
 
    /* Split member structs.  We do this before lower_io_to_temporaries so that
     * it doesn't lower system values to temporaries by accident.
     */
-   NIR_PASS_V(nir, nir_split_var_copies);
-   NIR_PASS_V(nir, nir_split_per_member_structs);
+   NIR_PASS(_, nir, nir_split_var_copies);
+   NIR_PASS(_, nir, nir_split_per_member_structs);
 
-   if (nir->info.stage == MESA_SHADER_VERTEX)
-      nir_remap_dual_slot_attributes(nir, &linked_shader->Program->DualSlotInputs);
-
-   NIR_PASS_V(nir, nir_lower_frexp);
+   NIR_PASS(_, nir, nir_lower_frexp);
 
    return nir;
 }

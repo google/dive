@@ -79,8 +79,8 @@ struct nir_to_dxil_options {
    bool interpolate_at_vertex;
    bool lower_int16;
    bool disable_math_refactoring;
-   bool no_ubo0;
    bool last_ubo_is_not_arrayed;
+   bool advanced_texture_ops;
    unsigned provoking_vertex;
    unsigned num_kernel_globals;
    unsigned input_clip_size;

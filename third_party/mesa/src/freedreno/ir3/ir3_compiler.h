@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2013 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2013 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -42,11 +24,6 @@ struct ir3_ra_reg_set;
 struct ir3_shader;
 
 struct ir3_compiler_options {
-   /* If true, UBO/SSBO accesses are assumed to be bounds-checked as defined by
-    * VK_EXT_robustness2 and optimizations may have to be more conservative.
-    */
-   bool robust_buffer_access2;
-
    /* If true, promote UBOs (except for constant data) to constants using ldc.k
     * in the preamble. The driver should ignore everything in ubo_state except
     * for the constant data UBO, which is excluded because the command pushing
@@ -65,11 +42,20 @@ struct ir3_compiler_options {
    int bindless_fb_read_descriptor;
    int bindless_fb_read_slot;
 
-   /* True if 16-bit descriptors are used for both 16-bit and 32-bit access. */
+   /* True if 16-bit descriptors are available. */
    bool storage_16bit;
+   /* True if 8-bit descriptors are available. */
+   bool storage_8bit;
 
-  /* If base_vertex should be lowered in nir */
-  bool lower_base_vertex;
+   /* If base_vertex should be lowered in nir */
+   bool lower_base_vertex;
+
+   bool shared_push_consts;
+
+   /* "dual_color_blend_by_location" workaround is enabled: */
+   bool dual_color_blend_by_location;
+
+   uint64_t uche_trap_base;
 };
 
 struct ir3_compiler {
@@ -124,6 +110,9 @@ struct ir3_compiler {
    /* on a650, vertex shader <-> tess control io uses LDL/STL */
    bool tess_use_shared;
 
+   /* Whether full and half regs are merged. */
+   bool mergedregs;
+
    /* The maximum number of constants, in vec4's, across the entire graphics
     * pipeline.
     */
@@ -142,6 +131,9 @@ struct ir3_compiler {
 
    /* The maximum number of constants, in vec4's, for compute shaders. */
    uint16_t max_const_compute;
+
+   /* See freedreno_dev_info::compute_lb_size. */
+   uint32_t compute_lb_size;
 
    /* Number of instructions that the shader's base address and length
     * (instrlen divides instruction count by this) must be aligned to.
@@ -203,8 +195,11 @@ struct ir3_compiler {
    /* Whether SSBOs have descriptors for sampling with ISAM */
    bool has_isam_ssbo;
 
-   /* True if 16-bit descriptors are used for both 16-bit and 32-bit access. */
-   bool storage_16bit;
+   /* Whether isam.v is supported to sample multiple components from SSBOs */
+   bool has_isam_v;
+
+   /* Whether isam/stib/ldib have immediate offsets. */
+   bool has_ssbo_imm_offsets;
 
    /* True if getfiberid, getlast.w8, brcst.active, and quad_shuffle
     * instructions are supported which are necessary to support
@@ -212,11 +207,40 @@ struct ir3_compiler {
     */
    bool has_getfiberid;
 
+   /* Whether half register shared->non-shared moves are broken. */
+   bool mov_half_shared_quirk;
+
+   /* Whether movs is supported for subgroupBroadcast. */
+   bool has_movs;
+
+   /* True if the shfl instruction is supported. Needed for subgroup rotate and
+    * (more efficient) shuffle.
+    */
+   bool has_shfl;
+
+   /* True if the bitwise triops (sh[lr][gm]/andg) are supported. */
+   bool has_bitwise_triops;
+
+   /* Number of available predicate registers (p0.c) */
+   uint32_t num_predicates;
+
+   /* True if bitops (and.b, or.b, xor.b, not.b) can write to p0.c */
+   bool bitops_can_write_predicates;
+
+   /* True if braa/brao are available. */
+   bool has_branch_and_or;
+
+   /* True if predt/predf/prede are supported. */
+   bool has_predication;
+   bool predtf_nop_quirk;
+   bool prede_nop_quirk;
+
    /* MAX_COMPUTE_VARIABLE_GROUP_INVOCATIONS_ARB */
    uint32_t max_variable_workgroup_size;
 
    bool has_dp2acc;
    bool has_dp4acc;
+   bool has_compliant_dp4acc;
 
    /* Type to use for 1b nir bools: */
    type_t bool_type;
@@ -245,11 +269,73 @@ struct ir3_compiler {
    uint64_t geom_shared_consts_size_quirk;
 
    bool has_fs_tex_prefetch;
+
+   bool stsc_duplication_quirk;
+
+   bool load_shader_consts_via_preamble;
+   bool load_inline_uniforms_via_preamble_ldgk;
+
+   /* True if there is a scalar ALU capable of executing a subset of
+    * cat2-cat4 instructions with a shared register destination. This also
+    * implies expanded MOV/COV capability when writing to shared registers,
+    * as MOV/COV is now executed on the scalar ALU except when reading from a
+    * normal register, as well as the ability for ldc to write to a shared
+    * register.
+    */
+   bool has_scalar_alu;
+
+   /* True if cat2 instructions can write predicate registers from the scalar
+    * ALU.
+    */
+   bool has_scalar_predicates;
+
+   bool fs_must_have_non_zero_constlen_quirk;
+
+   /* On all generations that support scalar ALU, there is also a copy of the
+    * scalar ALU and some other HW units in HLSQ that can execute preambles
+    * before work is dispatched to the SPs, called "early preamble". We detect
+    * whether the shader can use early preamble in ir3.
+    */
+   bool has_early_preamble;
+
+   /* True if (rptN) is supported for bary.f. */
+   bool has_rpt_bary_f;
+
+   /* True if alias.tex is supported. */
+   bool has_alias_tex;
+
+   /* True if alias.rt is supported. */
+   bool has_alias_rt;
+
+   bool reading_shading_rate_requires_smask_quirk;
+
+   bool cat3_rel_offset_0_quirk;
+
+   struct {
+      /* The number of cycles needed for the result of one ALU operation to be
+       * available to another ALU operation. Only valid when the halfness of the
+       * source and destination match.
+       */
+      unsigned alu_to_alu;
+
+      /* The number of cycles needed for the result of one instruction to be
+       * available to another. Valid for a0.x, a1.x, and p0.c destinations, ALU
+       * to non-ALU dependencies, and ALU to ALU dependencies witch mismatched
+       * halfness.
+       */
+      unsigned non_alu;
+
+      /* The number of cycles from the start of the instruction until a cat3
+       * instruction reads its 3rd src.
+       */
+      unsigned cat3_src2_read;
+   } delay_slots;
 };
 
 void ir3_compiler_destroy(struct ir3_compiler *compiler);
 struct ir3_compiler *ir3_compiler_create(struct fd_device *dev,
                                          const struct fd_dev_id *dev_id,
+                                         const struct fd_dev_info *dev_info,
                                          const struct ir3_compiler_options *options);
 
 void ir3_disk_cache_init(struct ir3_compiler *compiler);
@@ -294,20 +380,25 @@ enum ir3_shader_debug {
    IR3_DBG_SPILLALL = BITFIELD_BIT(12),
    IR3_DBG_NOPREAMBLE = BITFIELD_BIT(13),
    IR3_DBG_SHADER_INTERNAL = BITFIELD_BIT(14),
+   IR3_DBG_FULLSYNC = BITFIELD_BIT(15),
+   IR3_DBG_FULLNOP = BITFIELD_BIT(16),
+   IR3_DBG_NOEARLYPREAMBLE = BITFIELD_BIT(17),
+   IR3_DBG_NODESCPREFETCH = BITFIELD_BIT(18),
+   IR3_DBG_EXPANDRPT = BITFIELD_BIT(19),
+   IR3_DBG_ASM_ROUNDTRIP = BITFIELD_BIT(20),
 
-   /* DEBUG-only options: */
-   IR3_DBG_SCHEDMSGS = BITFIELD_BIT(20),
-   IR3_DBG_RAMSGS = BITFIELD_BIT(21),
-
-   /* Only used for the disk-caching logic: */
-   IR3_DBG_ROBUST_UBO_ACCESS = BITFIELD_BIT(30),
+   /* MESA_DEBUG-only options: */
+   IR3_DBG_SCHEDMSGS = BITFIELD_BIT(21),
+   IR3_DBG_RAMSGS = BITFIELD_BIT(22),
+   IR3_DBG_NOALIASTEX = BITFIELD_BIT(23),
+   IR3_DBG_NOALIASRT = BITFIELD_BIT(24),
 };
 
 extern enum ir3_shader_debug ir3_shader_debug;
 extern const char *ir3_shader_override_path;
 
 static inline bool
-shader_debug_enabled(gl_shader_stage type, bool internal)
+shader_debug_enabled(mesa_shader_stage type, bool internal)
 {
    if (internal)
       return !!(ir3_shader_debug & IR3_DBG_SHADER_INTERNAL);
@@ -343,6 +434,31 @@ ir3_debug_print(struct ir3 *ir, const char *when)
       ir3_print(ir);
    }
 }
+
+/* Return the debug flags that influence shader codegen and should be included
+ * in the hash key. Note that we use a deny list so that we don't accidentally
+ * forget to include new flags.
+ */
+static inline enum ir3_shader_debug
+ir3_shader_debug_hash_key()
+{
+   return (enum ir3_shader_debug)(
+      ir3_shader_debug &
+      ~(IR3_DBG_SHADER_VS | IR3_DBG_SHADER_TCS | IR3_DBG_SHADER_TES |
+        IR3_DBG_SHADER_GS | IR3_DBG_SHADER_FS | IR3_DBG_SHADER_CS |
+        IR3_DBG_DISASM | IR3_DBG_OPTMSGS | IR3_DBG_NOCACHE |
+        IR3_DBG_SHADER_INTERNAL | IR3_DBG_SCHEDMSGS | IR3_DBG_RAMSGS));
+}
+
+/* Returns a pointer to internal static tmp buffer. */
+const char *
+ir3_shader_debug_as_string(void);
+
+void ir3_shader_bisect_init(void);
+bool ir3_shader_bisect_need_shader_key(void);
+void ir3_shader_bisect_dump_id(struct ir3_shader_variant *v);
+bool ir3_shader_bisect_select(struct ir3_shader_variant *v);
+bool ir3_shader_bisect_disasm_select(struct ir3_shader_variant *v);
 
 ENDC;
 

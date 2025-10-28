@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "svga_cmd.h"
 
@@ -117,7 +99,7 @@ svga_destroy(struct pipe_context *pipe)
    svga_texture_transfer_map_upload_destroy(svga);
 
    /* free user's constant buffers */
-   for (shader = 0; shader < PIPE_SHADER_TYPES; ++shader) {
+   for (shader = 0; shader < MESA_SHADER_STAGES; ++shader) {
       for (i = 0; i < ARRAY_SIZE(svga->curr.constbufs[shader]); ++i) {
          pipe_resource_reference(&svga->curr.constbufs[shader][i].buffer, NULL);
       }
@@ -275,6 +257,7 @@ svga_context_create(struct pipe_screen *screen, void *priv, unsigned flags)
    /* Avoid shortcircuiting state with initial value of zero.
     */
    memset(&svga->state.hw_clear, 0xcd, sizeof(svga->state.hw_clear));
+   // but some fields have to be zero/null:
    memset(&svga->state.hw_clear.framebuffer, 0x0,
           sizeof(svga->state.hw_clear.framebuffer));
    memset(&svga->state.hw_clear.rtv, 0, sizeof(svga->state.hw_clear.rtv));
@@ -314,6 +297,8 @@ svga_context_create(struct pipe_screen *screen, void *priv, unsigned flags)
           sizeof(svga->state.hw_draw.enabled_constbufs));
    memset(svga->state.hw_draw.enabled_rawbufs, 0,
           sizeof(svga->state.hw_draw.enabled_rawbufs));
+   memset(svga->state.hw_draw.enabled_raw_shaderbufs, 0,
+          sizeof(svga->state.hw_draw.enabled_raw_shaderbufs));
    memset(svga->state.hw_draw.rawbufs, 0,
           sizeof(svga->state.hw_draw.rawbufs));
    svga->state.hw_draw.ib = NULL;
@@ -324,7 +309,7 @@ svga_context_create(struct pipe_screen *screen, void *priv, unsigned flags)
    svga->state.hw_draw.const0_handle = NULL;
 
    if (svga_have_gl43(svga)) {
-      for (unsigned shader = 0; shader < PIPE_SHADER_TYPES; ++shader) {
+      for (unsigned shader = 0; shader < MESA_SHADER_STAGES; ++shader) {
          for (unsigned i = 0;
               i < ARRAY_SIZE(svga->state.hw_draw.rawbufs[shader]); i++) {
             svga->state.hw_draw.rawbufs[shader][i].srvid = SVGA3D_INVALID_ID;

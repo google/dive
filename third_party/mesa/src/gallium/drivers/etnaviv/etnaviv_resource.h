@@ -51,9 +51,9 @@ struct etna_ts_sw_meta {
       uint32_t comp_format;
       uint64_t clear_value;
       uint32_t seqno;
-      uint32_t flush_seqno;
       uint8_t valid;
-      uint8_t pad[3];
+      uint8_t flushed;
+      uint8_t pad[6];
    } v0;
 };
 
@@ -71,6 +71,7 @@ struct etna_resource_level {
    uint32_t ts_size;
    uint64_t clear_value; /* clear value of resource level (mainly for TS) */
    bool ts_valid;
+   bool ts_flushed;
    uint8_t ts_mode;
    int8_t ts_compress_fmt; /* COLOR_COMPRESSION_FORMAT_* (-1 = disable) */
 
@@ -81,7 +82,6 @@ struct etna_resource_level {
    struct util_dynarray *patch_offsets;
 
    uint32_t seqno;
-   uint32_t flush_seqno;
 };
 
 /* returns TRUE if a is newer than b */
@@ -133,7 +133,7 @@ etna_resource_level_ts_mark_invalid(struct etna_resource_level *lvl)
       lvl->ts_valid = false;
 }
 
-/* returns TRUE if a is older than b */
+/* returns TRUE if lvl has valid, unflushed TS data */
 static inline bool
 etna_resource_level_needs_flush(struct etna_resource_level *lvl)
 {
@@ -141,18 +141,27 @@ etna_resource_level_needs_flush(struct etna_resource_level *lvl)
       return false;
 
    if (unlikely(lvl->ts_meta))
-      return ((int)(lvl->ts_meta->v0.seqno - lvl->ts_meta->v0.flush_seqno) > 0);
+      return !lvl->ts_meta->v0.flushed;
    else
-      return ((int)(lvl->seqno - lvl->flush_seqno) > 0);
+      return !lvl->ts_flushed;
 }
 
 static inline void
 etna_resource_level_mark_flushed(struct etna_resource_level *lvl)
 {
    if (unlikely(lvl->ts_meta))
-      lvl->ts_meta->v0.flush_seqno = lvl->ts_meta->v0.seqno;
+      lvl->ts_meta->v0.flushed = 1;
    else
-      lvl->flush_seqno = lvl->seqno;
+      lvl->ts_flushed = true;
+}
+
+static inline void
+etna_resource_level_mark_unflushed(struct etna_resource_level *lvl)
+{
+   if (unlikely(lvl->ts_meta))
+      lvl->ts_meta->v0.flushed = 0;
+   else
+      lvl->ts_flushed = false;
 }
 
 static inline void
@@ -184,6 +193,16 @@ enum etna_resource_status {
    ETNA_PENDING_READ = 0x02,
 };
 
+struct etna_buffer_resource {
+   struct pipe_resource base;
+
+   /* buffer range that has been initialized */
+   struct util_range valid_buffer_range;
+
+   /* backing storage */
+   struct etna_bo *bo;
+};
+
 struct etna_resource {
    struct pipe_resource base;
    struct renderonly_scanout *scanout;
@@ -200,15 +219,17 @@ struct etna_resource {
 
    struct etna_resource_level levels[ETNA_NUM_LOD];
 
-   /* buffer range that has been initialized */
-   struct util_range valid_buffer_range;
-
    /* for when TE doesn't support the base layout */
    struct pipe_resource *texture;
    /* for when PE doesn't support the base layout */
    struct pipe_resource *render;
    /* frontend flushes resource via an explicit call to flush_resource */
    bool explicit_flush;
+   /* resource is shared outside of the screen */
+   bool shared;
+
+   struct pipe_box *damage;
+   unsigned num_damage;
 };
 
 /* returns TRUE if a is newer than b */
@@ -260,6 +281,10 @@ etna_resource_hw_tileable(bool use_blt, const struct pipe_resource *pres)
           util_format_get_blocksize(pres->format) == 4;
 }
 
+struct etna_resource *
+etna_resource_get_render_compatible(struct pipe_context *pctx,
+                                    struct pipe_resource *prsc);
+
 /* returns TRUE if resource TS buffer is exposed externally */
 static inline bool
 etna_resource_ext_ts(const struct etna_resource *res)
@@ -270,7 +295,15 @@ etna_resource_ext_ts(const struct etna_resource *res)
 static inline struct etna_resource *
 etna_resource(struct pipe_resource *p)
 {
+   assert(p->target != PIPE_BUFFER);
    return (struct etna_resource *)p;
+}
+
+static inline struct etna_buffer_resource *
+etna_buffer_resource(struct pipe_resource *p)
+{
+   assert(p->target == PIPE_BUFFER);
+   return (struct etna_buffer_resource *)p;
 }
 
 void
@@ -290,7 +323,7 @@ resource_written(struct etna_context *ctx, struct pipe_resource *prsc)
 }
 
 enum etna_resource_status
-etna_resource_status(struct etna_context *ctx, struct etna_resource *res);
+etna_resource_status(struct etna_context *ctx, struct pipe_resource *prsc);
 
 /* Allocate Tile Status for an etna resource.
  * Tile status is a cache of the clear status per tile. This means a smaller

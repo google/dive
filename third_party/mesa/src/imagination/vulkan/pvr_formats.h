@@ -28,6 +28,9 @@
 #include <stdint.h>
 #include <vulkan/vulkan.h>
 
+#include "util/format/u_formats.h"
+#include "vk_format.h"
+
 /* This is based on VkClearColorValue which is an array of RGBA, and on the
  * output register usage for the biggest 32 bit 4 component formats which use up
  * all 4 output registers.
@@ -35,6 +38,8 @@
  * packed according to the hardware (the accum format).
  */
 #define PVR_CLEAR_COLOR_ARRAY_SIZE 4
+
+#define PVR_TEX_FORMAT_COUNT (ROGUE_TEXSTATE_IMAGE_WORD0_TEXFORMAT_MAX_SIZE + 1)
 
 enum pvr_pbe_accum_format {
    PVR_PBE_ACCUM_FORMAT_INVALID = 0, /* Explicitly treat 0 as invalid. */
@@ -207,6 +212,60 @@ enum pvr_transfer_pbe_pixel_src {
    PVR_TRANSFER_PBE_PIXEL_SRC_NUM = 54,
 };
 
+/* FIXME: Replace all instances of uint32_t with ROGUE_TEXSTATE_FORMAT or
+ * ROGUE_TEXSTATE_FORMAT_COMPRESSED after the pvr_common cleanup is complete.
+ */
+
+struct pvr_tex_format_description {
+   uint32_t tex_format;
+   enum pipe_format pipe_format_int;
+   enum pipe_format pipe_format_float;
+};
+
+struct pvr_tex_format_compressed_description {
+   uint32_t tex_format;
+   enum pipe_format pipe_format;
+   uint32_t tex_format_simple;
+};
+
+bool pvr_tex_format_is_supported(uint32_t tex_format);
+
+const struct pvr_tex_format_description *
+pvr_get_tex_format_description(uint32_t tex_format);
+
+#define pvr_foreach_supported_tex_format_(format)                             \
+   for (enum ROGUE_TEXSTATE_FORMAT format = 0; format < PVR_TEX_FORMAT_COUNT; \
+        format++)                                                             \
+      if (pvr_tex_format_is_supported(format))
+
+#define pvr_foreach_supported_tex_format(format, desc)     \
+   pvr_foreach_supported_tex_format_ (format)              \
+      for (const struct pvr_tex_format_description *desc = \
+              pvr_get_tex_format_description(format);      \
+           desc;                                           \
+           desc = NULL)
+
+bool pvr_tex_format_compressed_is_supported(uint32_t tex_format);
+
+const struct pvr_tex_format_compressed_description *
+pvr_get_tex_format_compressed_description(uint32_t tex_format);
+
+#define pvr_foreach_supported_tex_format_compressed_(format) \
+   for (enum ROGUE_TEXSTATE_FORMAT_COMPRESSED format = 0;    \
+        format < PVR_TEX_FORMAT_COUNT;                       \
+        format++)                                            \
+      if (pvr_tex_format_compressed_is_supported(format))
+
+#define pvr_foreach_supported_tex_format_compressed(format, desc)     \
+   pvr_foreach_supported_tex_format_compressed_ (format)              \
+      for (const struct pvr_tex_format_compressed_description *desc = \
+              pvr_get_tex_format_compressed_description(format);      \
+           desc;                                                      \
+           desc = NULL)
+
+struct util_format_description;
+const uint8_t *
+pvr_get_format_swizzle_for_tpu(const struct util_format_description *desc);
 const uint8_t *pvr_get_format_swizzle(VkFormat vk_format);
 uint32_t pvr_get_tex_format(VkFormat vk_format);
 uint32_t pvr_get_tex_format_aspect(VkFormat vk_format,
@@ -214,12 +273,77 @@ uint32_t pvr_get_tex_format_aspect(VkFormat vk_format,
 uint32_t pvr_get_pbe_packmode(VkFormat vk_format);
 uint32_t pvr_get_pbe_accum_format(VkFormat vk_format);
 uint32_t pvr_get_pbe_accum_format_size_in_bytes(VkFormat vk_format);
-bool pvr_format_is_pbe_downscalable(VkFormat vk_format);
+bool pvr_format_is_pbe_downscalable(const struct pvr_device_info *dev_info,
+                                    VkFormat vk_format);
 
 void pvr_get_hw_clear_color(VkFormat vk_format,
                             VkClearColorValue value,
                             uint32_t packed_out[static const 4]);
 
 uint32_t pvr_pbe_pixel_num_loads(enum pvr_transfer_pbe_pixel_src pbe_format);
+bool pvr_pbe_pixel_is_norm(enum pvr_transfer_pbe_pixel_src pbe_format);
+uint32_t pvr_pbe_pixel_size(enum pvr_transfer_pbe_pixel_src pbe_format);
+
+static inline bool pvr_vk_format_has_32bit_component(VkFormat vk_format)
+{
+   const struct util_format_description *desc =
+      vk_format_description(vk_format);
+
+   for (uint32_t i = 0; i < desc->nr_channels; i++) {
+      if (desc->channel[i].size == 32U)
+         return true;
+   }
+
+   return false;
+}
+
+static inline bool pvr_vk_format_is_fully_normalized(VkFormat vk_format)
+{
+   const struct util_format_description *desc =
+      vk_format_description(vk_format);
+
+   for (uint32_t i = 0; i < desc->nr_channels; i++) {
+      if (!desc->channel[i].normalized)
+         return false;
+   }
+
+   return true;
+}
+
+static inline uint32_t
+pvr_vk_format_get_common_color_channel_count(VkFormat src_format,
+                                             VkFormat dst_format)
+{
+   const struct util_format_description *dst_desc =
+      vk_format_description(dst_format);
+   const struct util_format_description *src_desc =
+      vk_format_description(src_format);
+   uint32_t count = 0;
+
+   /* Check if destination format is alpha only and source format has alpha
+    * channel.
+    */
+   if (util_format_is_alpha(vk_format_to_pipe_format(dst_format))) {
+      count = 1;
+   } else if (dst_desc->nr_channels <= src_desc->nr_channels) {
+      for (uint32_t i = 0; i < dst_desc->nr_channels; i++) {
+         enum pipe_swizzle swizzle = dst_desc->swizzle[i];
+
+         if (swizzle > PIPE_SWIZZLE_W)
+            continue;
+
+         for (uint32_t j = 0; j < src_desc->nr_channels; j++) {
+            if (src_desc->swizzle[j] == swizzle) {
+               count++;
+               break;
+            }
+         }
+      }
+   } else {
+      count = dst_desc->nr_channels;
+   }
+
+   return count;
+}
 
 #endif /* PVR_FORMATS_H */

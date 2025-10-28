@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2012-2013 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012-2013 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -459,7 +441,7 @@ fd2_clear_fast(struct fd_context *ctx, unsigned buffers,
    struct fd_ringbuffer *ring = batch->draw;
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
    uint32_t color_clear = 0, depth_clear = 0;
-   enum pipe_format format = pipe_surface_format(pfb->cbufs[0]);
+   enum pipe_format format = pipe_surface_format(&pfb->cbufs[0]);
    int depth_size = -1; /* -1: no clear, 0: clear 16-bit, 1: clear 32-bit */
    int color_size = -1;
 
@@ -475,12 +457,12 @@ fd2_clear_fast(struct fd_context *ctx, unsigned buffers,
       if (!(buffers & PIPE_CLEAR_DEPTH))
          return false;
 
-      if ((pfb->zsbuf->format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
-           pfb->zsbuf->format == PIPE_FORMAT_S8_UINT_Z24_UNORM) &&
+      if ((pfb->zsbuf.format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
+           pfb->zsbuf.format == PIPE_FORMAT_S8_UINT_Z24_UNORM) &&
           !(buffers & PIPE_CLEAR_STENCIL))
          return false;
 
-      depth_size = fd_pipe2depth(pfb->zsbuf->format) == DEPTHX_24_8;
+      depth_size = fd_pipe2depth(pfb->zsbuf.format) == DEPTHX_24_8;
    }
 
    assert(color_size >= 0 || depth_size >= 0);
@@ -601,7 +583,7 @@ fd2_clear(struct fd_context *ctx, enum fd_buffer_mask buffers,
 
       if (buffers & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL)) {
          uint32_t clear_mask, depth_clear;
-         switch (fd_pipe2depth(fb->zsbuf->format)) {
+         switch (fd_pipe2depth(fb->zsbuf.format)) {
          case DEPTHX_24_8:
             clear_mask = ((buffers & FD_BUFFER_DEPTH) ? 0xe : 0) |
                          ((buffers & FD_BUFFER_STENCIL) ? 0x1 : 0);
@@ -613,7 +595,7 @@ fd2_clear(struct fd_context *ctx, enum fd_buffer_mask buffers,
             depth_clear = (uint32_t)(0xffffffff * depth);
             break;
          default:
-            unreachable("invalid depth");
+            UNREACHABLE("invalid depth");
             break;
          }
 
@@ -655,8 +637,8 @@ dirty:
                  FD_DIRTY_SAMPLE_MASK | FD_DIRTY_PROG | FD_DIRTY_CONST |
                  FD_DIRTY_BLEND | FD_DIRTY_FRAMEBUFFER | FD_DIRTY_SCISSOR;
 
-   ctx->dirty_shader[PIPE_SHADER_VERTEX] |= FD_DIRTY_SHADER_PROG;
-   ctx->dirty_shader[PIPE_SHADER_FRAGMENT] |=
+   ctx->dirty_shader[MESA_SHADER_VERTEX] |= FD_DIRTY_SHADER_PROG;
+   ctx->dirty_shader[MESA_SHADER_FRAGMENT] |=
       FD_DIRTY_SHADER_PROG | FD_DIRTY_SHADER_CONST;
 
    return true;

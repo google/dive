@@ -153,12 +153,12 @@ lower_intrinsic(lower_state *state, nir_intrinsic_instr *intr)
    case nir_intrinsic_global_atomic_swap:
    case nir_intrinsic_load_global_constant:
    case nir_intrinsic_load_global:
-      /* just assume we that 24b is not sufficient: */
+      /* just assume that 24b is not sufficient: */
       lower_large_src(&intr->src[0], state);
       return;
 
    case nir_intrinsic_store_global:
-      /* just assume we that 24b is not sufficient: */
+      /* just assume that 24b is not sufficient: */
       lower_large_src(&intr->src[1], state);
       return;
 
@@ -216,19 +216,29 @@ nir_lower_amul(nir_shader *shader,
     * disqualified from imul24:
     */
    nir_foreach_variable_in_shader(var, shader) {
+      /* Skip unused vars: */
+      if (var->data.driver_location == ~0)
+         continue;
+
       if (var->data.mode == nir_var_mem_ubo) {
          if (is_large(&state, var)) {
             state.has_large_ubo = true;
             unsigned size = MAX2(1, glsl_array_size(var->type));
-            for (unsigned i = 0; i < size; i++)
-               state.large_ubos[var->data.binding + i] = true;
+            for (unsigned i = 0; i < size; i++) {
+               unsigned idx = var->data.driver_location + i;
+               assert(idx < shader->info.num_ubos);
+               state.large_ubos[idx] = true;
+            }
          }
       } else if (var->data.mode == nir_var_mem_ssbo) {
          if (is_large(&state, var)) {
             state.has_large_ssbo = true;
             unsigned size = MAX2(1, glsl_array_size(var->type));
-            for (unsigned i = 0; i < size; i++)
-               state.large_ssbos[var->data.binding + i] = true;
+            for (unsigned i = 0; i < size; i++) {
+               unsigned idx = var->data.driver_location + i;
+               assert(idx < shader->info.num_ssbos);
+               state.large_ssbos[idx] = true;
+            }
          }
       }
    }
@@ -269,8 +279,7 @@ nir_lower_amul(nir_shader *shader,
          }
       }
 
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                     nir_metadata_dominance);
+      nir_progress(true, impl, nir_metadata_control_flow);
    }
 
    return state.progress;

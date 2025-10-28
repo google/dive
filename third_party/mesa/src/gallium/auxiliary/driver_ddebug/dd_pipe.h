@@ -64,6 +64,7 @@ enum call_type
    CALL_DRAW_VBO,
    CALL_LAUNCH_GRID,
    CALL_RESOURCE_COPY_REGION,
+   CALL_IMAGE_COPY_BUFFER,
    CALL_BLIT,
    CALL_FLUSH_RESOURCE,
    CALL_CLEAR,
@@ -78,6 +79,7 @@ enum call_type
    CALL_TRANSFER_UNMAP,
    CALL_BUFFER_SUBDATA,
    CALL_TEXTURE_SUBDATA,
+   CALL_DRAW_MESH_TASKS,
 };
 
 struct call_resource_copy_region
@@ -88,6 +90,17 @@ struct call_resource_copy_region
    struct pipe_resource *src;
    unsigned src_level;
    struct pipe_box src_box;
+};
+
+struct call_image_copy_buffer
+{
+   struct pipe_resource *dst;
+   struct pipe_resource *src;
+   unsigned buffer_offset;
+   unsigned buffer_stride;
+   unsigned buffer_layer_stride;
+   unsigned level;
+   struct pipe_box box;
 };
 
 struct call_clear
@@ -182,6 +195,7 @@ struct dd_call
       struct call_draw_info draw_vbo;
       struct pipe_grid_info launch_grid;
       struct call_resource_copy_region resource_copy_region;
+      struct call_image_copy_buffer image_copy_buffer;
       struct pipe_blit_info blit;
       struct pipe_resource *flush_resource;
       struct call_clear clear;
@@ -233,12 +247,12 @@ struct dd_draw_state
    struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];
    unsigned so_offsets[PIPE_MAX_SO_BUFFERS];
 
-   struct dd_state *shaders[PIPE_SHADER_TYPES];
-   struct pipe_constant_buffer constant_buffers[PIPE_SHADER_TYPES][PIPE_MAX_CONSTANT_BUFFERS];
-   struct pipe_sampler_view *sampler_views[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
-   struct dd_state *sampler_states[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
-   struct pipe_image_view shader_images[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_IMAGES];
-   struct pipe_shader_buffer shader_buffers[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_BUFFERS];
+   struct dd_state *shaders[MESA_SHADER_MESH_STAGES];
+   struct pipe_constant_buffer constant_buffers[MESA_SHADER_MESH_STAGES][PIPE_MAX_CONSTANT_BUFFERS];
+   struct pipe_sampler_view *sampler_views[MESA_SHADER_MESH_STAGES][PIPE_MAX_SAMPLERS];
+   struct dd_state *sampler_states[MESA_SHADER_MESH_STAGES][PIPE_MAX_SAMPLERS];
+   struct pipe_image_view shader_images[MESA_SHADER_MESH_STAGES][PIPE_MAX_SHADER_IMAGES];
+   struct pipe_shader_buffer shader_buffers[MESA_SHADER_MESH_STAGES][PIPE_MAX_SHADER_BUFFERS];
 
    struct dd_state *velems;
    struct dd_state *rs;
@@ -267,8 +281,8 @@ struct dd_draw_state_copy
     * these variables, which serve as storage.
     */
    struct dd_query render_cond;
-   struct dd_state shaders[PIPE_SHADER_TYPES];
-   struct dd_state sampler_states[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
+   struct dd_state shaders[MESA_SHADER_MESH_STAGES];
+   struct dd_state sampler_states[MESA_SHADER_MESH_STAGES][PIPE_MAX_SAMPLERS];
    struct dd_state velems;
    struct dd_state rs;
    struct dd_state dsa;
@@ -302,6 +316,7 @@ struct dd_context
 
    struct dd_draw_state draw_state;
    unsigned num_draw_calls;
+   unsigned num_vertex_buffers;
 
    struct u_log_context log;
 

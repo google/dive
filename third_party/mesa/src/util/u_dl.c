@@ -29,7 +29,7 @@
 
 #include "detect_os.h"
 
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX_LITE
 #include <dlfcn.h>
 #endif
 #if DETECT_OS_WINDOWS
@@ -38,12 +38,13 @@
 
 #include "u_dl.h"
 #include "u_pointer.h"
+#include "u_string.h"
 
 
 struct util_dl_library *
 util_dl_open(const char *filename)
 {
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX_LITE
    return (struct util_dl_library *)dlopen(filename, RTLD_LAZY | RTLD_LOCAL);
 #elif DETECT_OS_WINDOWS
    return (struct util_dl_library *)LoadLibraryA(filename);
@@ -57,7 +58,7 @@ util_dl_proc
 util_dl_get_proc_address(struct util_dl_library *library,
                          const char *procname)
 {
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX_LITE
    return (util_dl_proc) pointer_to_func(dlsym((void *)library, procname));
 #elif DETECT_OS_WINDOWS
    return (util_dl_proc)GetProcAddress((HMODULE)library, procname);
@@ -66,11 +67,44 @@ util_dl_get_proc_address(struct util_dl_library *library,
 #endif
 }
 
+char *
+util_dl_get_path_from_proc(const void *func_proc)
+{
+#if defined(HAVE_DLADDR)
+   Dl_info info;
+   if (dladdr(func_proc, &info) == 0) {
+      return NULL;
+   }
+
+   return realpath(info.dli_fname, NULL);
+#elif DETECT_OS_WINDOWS
+   HMODULE mod = NULL;
+   GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                      (LPCWSTR)func_proc,
+                      &mod);
+   if (!mod)
+      return NULL;
+
+   WCHAR filename[MAX_PATH];
+   DWORD filename_length = GetModuleFileNameW(mod, filename, ARRAY_SIZE(filename));
+   if (filename_length == 0 || filename_length == ARRAY_SIZE(filename))
+      return NULL;
+
+   WCHAR filename_full[MAX_PATH];
+   DWORD filename_full_length = GetFullPathNameW(filename, ARRAY_SIZE(filename_full), filename_full, NULL);
+   if (filename_full_length == 0 || filename_full_length == ARRAY_SIZE(filename_full))
+      return NULL;
+
+   return strdup_wstr_utf8(filename_full);
+#else
+   return NULL;
+#endif
+}
 
 void
 util_dl_close(struct util_dl_library *library)
 {
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX_LITE
    dlclose((void *)library);
 #elif DETECT_OS_WINDOWS
    FreeLibrary((HMODULE)library);
@@ -83,7 +117,7 @@ util_dl_close(struct util_dl_library *library)
 const char *
 util_dl_error(void)
 {
-#if DETECT_OS_UNIX
+#if DETECT_OS_POSIX_LITE
    return dlerror();
 #elif DETECT_OS_WINDOWS
    return "unknown error";

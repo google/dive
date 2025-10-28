@@ -21,14 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#include "nir.h"
+#include "nir_builder.h"
 #include "nir_deref.h"
-
-struct split_struct_state {
-   void *dead_ctx;
-
-   struct hash_table *var_to_member_map;
-};
 
 static nir_variable *
 find_var_member(struct nir_variable *var, unsigned member,
@@ -181,8 +175,7 @@ nir_split_per_member_structs(nir_shader *shader)
    }
 
    nir_shader_instructions_pass(shader, rewrite_deref_instr,
-                                nir_metadata_block_index |
-                                   nir_metadata_dominance,
+                                nir_metadata_control_flow,
                                 var_to_member_map);
 
    ralloc_free(dead_ctx);

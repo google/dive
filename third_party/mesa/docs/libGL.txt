@@ -85,10 +85,6 @@ This section describes the requirements to make an XFree86 4.0
 libGL.so-compatible hardware driver.  It is not intended for end
 users of libGL.so.
 
-The gl_x86_asm.py and assyntax.h files implement x86-optimized dispatch
-of GL functions. They are not required; C-based dispatch can be used
-instead, with a slight performance penalty.
-
 
 
 Driver loading and binding
@@ -150,15 +146,15 @@ Dispatch Management
 When a GL context is made current, the driver must install its dispatch
 table as the current dispatch table.  This is done by calling
 
-	void _glapi_set_dispatch(struct _glapi_table *dispatch);
+	void _mesa_glapi_set_dispatch(struct _glapi_table *dispatch);
 
 This will install the named dispatch table for the calling thread.
 The current dispatch table for a thread can be obtained by calling
 
-	struct _glapi_table *_glapi_get_dispatch(void);
+	struct _glapi_table *_mesa_glapi_get_dispatch(void);
 
 For higher performance in the common single-thread case, the global
-variable _glapi_Dispatch will point to the current dispatch table.
+variable _mesa_glapi_Dispatch will point to the current dispatch table.
 This variable will be NULL when in multi-thread mode.
 
 

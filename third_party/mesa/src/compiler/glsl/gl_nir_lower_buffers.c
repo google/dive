@@ -24,7 +24,6 @@
 #include "compiler/nir/nir.h"
 #include "compiler/nir/nir_builder.h"
 #include "gl_nir.h"
-#include "ir_uniform.h"
 
 #include "util/compiler.h"
 #include "main/shader_types.h"
@@ -112,15 +111,15 @@ get_block_array_index(nir_builder *b, nir_deref_instr *deref,
     */
 
    if (use_bindings)
-      unreachable("Failed to find the block by binding");
+      UNREACHABLE("Failed to find the block by binding");
    else
-      unreachable("Failed to find the block by name");
+      UNREACHABLE("Failed to find the block by name");
 }
 
 static void
 get_block_index_offset(nir_variable *var,
                        const struct gl_shader_program *shader_program,
-                       gl_shader_stage stage,
+                       mesa_shader_stage stage,
                        unsigned *index, unsigned *offset)
 {
 
@@ -153,9 +152,9 @@ get_block_index_offset(nir_variable *var,
    }
 
    if (use_bindings)
-      unreachable("Failed to find the block by binding");
+      UNREACHABLE("Failed to find the block by binding");
    else
-      unreachable("Failed to find the block by name");
+      UNREACHABLE("Failed to find the block by name");
 }
 
 static bool
@@ -263,9 +262,7 @@ lower_buffer_interface_derefs_impl(nir_function_impl *impl,
                   b.cursor = nir_after_instr(&intrin->instr);
                   intrin->def.bit_size = 32;
                   nir_def *bval = nir_i2b(&b, &intrin->def);
-                  nir_def_rewrite_uses_after(&intrin->def,
-                                                 bval,
-                                                 bval->parent_instr);
+                  nir_def_rewrite_uses_after(&intrin->def, bval);
                   progress = true;
                }
                break;
@@ -296,7 +293,7 @@ lower_buffer_interface_derefs_impl(nir_function_impl *impl,
             }
 
             case nir_intrinsic_copy_deref:
-               unreachable("copy_deref should be lowered by now");
+               UNREACHABLE("copy_deref should be lowered by now");
                break;
 
             default:
@@ -312,14 +309,7 @@ lower_buffer_interface_derefs_impl(nir_function_impl *impl,
       }
    }
 
-   if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
-   }
-
-   return progress;
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool

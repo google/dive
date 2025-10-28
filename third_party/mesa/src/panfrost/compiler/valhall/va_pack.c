@@ -49,7 +49,7 @@ NORETURN static void PRINTFLIKE(2, 3)
    bi_print_instr(I, stderr);
    fprintf(stderr, "\n");
 
-   unreachable("Invalid instruction");
+   UNREACHABLE("Invalid instruction");
 }
 
 /*
@@ -96,6 +96,8 @@ static unsigned
 va_pack_fau_special(const bi_instr *I, enum bir_fau fau)
 {
    switch (fau) {
+   case BIR_FAU_WARP_ID:
+      return VA_FAU_SPECIAL_PAGE_0_WARP_ID;
    case BIR_FAU_ATEST_PARAM:
       return VA_FAU_SPECIAL_PAGE_0_ATEST_DATUM;
    case BIR_FAU_TLS_PTR:
@@ -104,6 +106,10 @@ va_pack_fau_special(const bi_instr *I, enum bir_fau fau)
       return VA_FAU_SPECIAL_PAGE_1_WORKGROUP_LOCAL_POINTER;
    case BIR_FAU_LANE_ID:
       return VA_FAU_SPECIAL_PAGE_3_LANE_ID;
+   case BIR_FAU_CORE_ID:
+      return VA_FAU_SPECIAL_PAGE_3_CORE_ID;
+   case BIR_FAU_SHADER_OUTPUT:
+      return VA_FAU_SPECIAL_PAGE_3_SHADER_OUTPUT;
    case BIR_FAU_PROGRAM_COUNTER:
       return VA_FAU_SPECIAL_PAGE_3_PROGRAM_COUNTER;
    case BIR_FAU_SAMPLE_POS_ARRAY:
@@ -229,9 +235,9 @@ va_pack_widen_f32(const bi_instr *I, enum bi_swizzle swz)
    switch (swz) {
    case BI_SWIZZLE_H01:
       return VA_WIDEN_NONE;
-   case BI_SWIZZLE_H00:
+   case BI_SWIZZLE_H0:
       return VA_WIDEN_H0;
-   case BI_SWIZZLE_H11:
+   case BI_SWIZZLE_H1:
       return VA_WIDEN_H1;
    default:
       invalid_instruction(I, "widen");
@@ -260,11 +266,11 @@ va_pack_widen(const bi_instr *I, enum bi_swizzle swz, enum va_size size)
 {
    if (size == VA_SIZE_8) {
       switch (swz) {
-      case BI_SWIZZLE_H01:
+      case BI_SWIZZLE_B0123:
          return VA_SWIZZLES_8_BIT_B0123;
-      case BI_SWIZZLE_H00:
+      case BI_SWIZZLE_B0101:
          return VA_SWIZZLES_8_BIT_B0101;
-      case BI_SWIZZLE_H11:
+      case BI_SWIZZLE_B2323:
          return VA_SWIZZLES_8_BIT_B2323;
       case BI_SWIZZLE_B0000:
          return VA_SWIZZLES_8_BIT_B0000;
@@ -287,14 +293,26 @@ va_pack_widen(const bi_instr *I, enum bi_swizzle swz, enum va_size size)
          return VA_SWIZZLES_16_BIT_H01;
       case BI_SWIZZLE_H11:
          return VA_SWIZZLES_16_BIT_H11;
-      case BI_SWIZZLE_B0000:
+      case BI_SWIZZLE_B00:
          return VA_SWIZZLES_16_BIT_B00;
-      case BI_SWIZZLE_B1111:
+      case BI_SWIZZLE_B11:
          return VA_SWIZZLES_16_BIT_B11;
-      case BI_SWIZZLE_B2222:
+      case BI_SWIZZLE_B22:
          return VA_SWIZZLES_16_BIT_B22;
-      case BI_SWIZZLE_B3333:
+      case BI_SWIZZLE_B33:
          return VA_SWIZZLES_16_BIT_B33;
+      case BI_SWIZZLE_B01:
+         return VA_SWIZZLES_16_BIT_B01;
+      case BI_SWIZZLE_B20:
+         return VA_SWIZZLES_16_BIT_B20;
+      case BI_SWIZZLE_B02:
+         return VA_SWIZZLES_16_BIT_B02;
+      case BI_SWIZZLE_B31:
+         return VA_SWIZZLES_16_BIT_B31;
+      case BI_SWIZZLE_B13:
+         return VA_SWIZZLES_16_BIT_B13;
+      case BI_SWIZZLE_B23:
+         return VA_SWIZZLES_16_BIT_B23;
       default:
          invalid_instruction(I, "16-bit widen");
       }
@@ -302,17 +320,17 @@ va_pack_widen(const bi_instr *I, enum bi_swizzle swz, enum va_size size)
       switch (swz) {
       case BI_SWIZZLE_H01:
          return VA_SWIZZLES_32_BIT_NONE;
-      case BI_SWIZZLE_H00:
+      case BI_SWIZZLE_H0:
          return VA_SWIZZLES_32_BIT_H0;
-      case BI_SWIZZLE_H11:
+      case BI_SWIZZLE_H1:
          return VA_SWIZZLES_32_BIT_H1;
-      case BI_SWIZZLE_B0000:
+      case BI_SWIZZLE_B0:
          return VA_SWIZZLES_32_BIT_B0;
-      case BI_SWIZZLE_B1111:
+      case BI_SWIZZLE_B1:
          return VA_SWIZZLES_32_BIT_B1;
-      case BI_SWIZZLE_B2222:
+      case BI_SWIZZLE_B2:
          return VA_SWIZZLES_32_BIT_B2;
-      case BI_SWIZZLE_B3333:
+      case BI_SWIZZLE_B3:
          return VA_SWIZZLES_32_BIT_B3;
       default:
          invalid_instruction(I, "32-bit widen");
@@ -326,20 +344,38 @@ static enum va_half_swizzles_8_bit
 va_pack_halfswizzle(const bi_instr *I, enum bi_swizzle swz)
 {
    switch (swz) {
-   case BI_SWIZZLE_B0000:
+   case BI_SWIZZLE_B00:
       return VA_HALF_SWIZZLES_8_BIT_B00;
-   case BI_SWIZZLE_B1111:
-      return VA_HALF_SWIZZLES_8_BIT_B11;
-   case BI_SWIZZLE_B2222:
-      return VA_HALF_SWIZZLES_8_BIT_B22;
-   case BI_SWIZZLE_B3333:
-      return VA_HALF_SWIZZLES_8_BIT_B33;
-   case BI_SWIZZLE_B0011:
+   case BI_SWIZZLE_B10:
+      return VA_HALF_SWIZZLES_8_BIT_B10;
+   case BI_SWIZZLE_B20:
+      return VA_HALF_SWIZZLES_8_BIT_B20;
+   case BI_SWIZZLE_B30:
+      return VA_HALF_SWIZZLES_8_BIT_B30;
+   case BI_SWIZZLE_B01:
       return VA_HALF_SWIZZLES_8_BIT_B01;
-   case BI_SWIZZLE_B2233:
-      return VA_HALF_SWIZZLES_8_BIT_B23;
-   case BI_SWIZZLE_B0022:
+   case BI_SWIZZLE_B11:
+      return VA_HALF_SWIZZLES_8_BIT_B11;
+   case BI_SWIZZLE_B21:
+      return VA_HALF_SWIZZLES_8_BIT_B21;
+   case BI_SWIZZLE_B31:
+      return VA_HALF_SWIZZLES_8_BIT_B31;
+   case BI_SWIZZLE_B02:
       return VA_HALF_SWIZZLES_8_BIT_B02;
+   case BI_SWIZZLE_B12:
+      return VA_HALF_SWIZZLES_8_BIT_B12;
+   case BI_SWIZZLE_B22:
+      return VA_HALF_SWIZZLES_8_BIT_B22;
+   case BI_SWIZZLE_B32:
+      return VA_HALF_SWIZZLES_8_BIT_B32;
+   case BI_SWIZZLE_B03:
+      return VA_HALF_SWIZZLES_8_BIT_B03;
+   case BI_SWIZZLE_B13:
+      return VA_HALF_SWIZZLES_8_BIT_B13;
+   case BI_SWIZZLE_B23:
+      return VA_HALF_SWIZZLES_8_BIT_B23;
+   case BI_SWIZZLE_B33:
+      return VA_HALF_SWIZZLES_8_BIT_B33;
    default:
       invalid_instruction(I, "v2u8 swizzle");
    }
@@ -349,15 +385,13 @@ static enum va_lanes_8_bit
 va_pack_shift_lanes(const bi_instr *I, enum bi_swizzle swz)
 {
    switch (swz) {
-   case BI_SWIZZLE_H01:
-      return VA_LANES_8_BIT_B02;
-   case BI_SWIZZLE_B0000:
+   case BI_SWIZZLE_B00:
       return VA_LANES_8_BIT_B00;
-   case BI_SWIZZLE_B1111:
+   case BI_SWIZZLE_B11:
       return VA_LANES_8_BIT_B11;
-   case BI_SWIZZLE_B2222:
+   case BI_SWIZZLE_B22:
       return VA_LANES_8_BIT_B22;
-   case BI_SWIZZLE_B3333:
+   case BI_SWIZZLE_B33:
       return VA_LANES_8_BIT_B33;
    default:
       invalid_instruction(I, "lane shift");
@@ -370,9 +404,9 @@ va_pack_combine(const bi_instr *I, enum bi_swizzle swz)
    switch (swz) {
    case BI_SWIZZLE_H01:
       return VA_COMBINE_NONE;
-   case BI_SWIZZLE_H00:
+   case BI_SWIZZLE_H0:
       return VA_COMBINE_H0;
-   case BI_SWIZZLE_H11:
+   case BI_SWIZZLE_H1:
       return VA_COMBINE_H1;
    default:
       invalid_instruction(I, "branch lane");
@@ -405,12 +439,12 @@ va_pack_rhadd(const bi_instr *I)
    case BI_ROUND_RTP:
       return BITFIELD_BIT(30); /* rhadd */
    default:
-      unreachable("Invalid round for HADD");
+      UNREACHABLE("Invalid round for HADD");
    }
 }
 
 static uint64_t
-va_pack_alu(const bi_instr *I)
+va_pack_alu(const bi_instr *I, unsigned arch)
 {
    struct va_opcode_info info = valhall_opcodes[I->op];
    uint64_t hex = 0;
@@ -425,6 +459,15 @@ va_pack_alu(const bi_instr *I)
          hex |= 1ull << 24;
       if (I->log)
          hex |= 1ull << 25;
+      break;
+
+   case BI_OPCODE_FLUSH_F32:
+   case BI_OPCODE_FLUSH_V2F16:
+      hex |= I->nan_mode << 8;
+      if (I->ftz)
+         hex |= 1ull << 10;
+      if (I->flush_inf)
+         hex |= 1ull << 11;
       break;
 
    /* Add mux type */
@@ -463,8 +506,8 @@ va_pack_alu(const bi_instr *I)
       break;
 
    case BI_OPCODE_LEA_BUF_IMM:
-      /* Buffer table index */
-      hex |= 0xD << 8;
+      hex |= ((uint64_t)I->table) << 8;
+      hex |= ((uint64_t)I->index) << 12;
       break;
 
    case BI_OPCODE_LEA_ATTR_IMM:
@@ -499,7 +542,10 @@ va_pack_alu(const bi_instr *I)
          hex |= ((uint64_t)I->varying_name) << 12; /* instead of index */
       else if (I->op == BI_OPCODE_LD_VAR_BUF_IMM_F16 ||
                I->op == BI_OPCODE_LD_VAR_BUF_IMM_F32) {
-         hex |= ((uint64_t)I->index) << 16;
+         if (arch >= 11)
+            hex |= ((uint64_t)I->index) << 8;
+         else
+            hex |= ((uint64_t)I->index) << 16;
       } else if (I->op == BI_OPCODE_LD_VAR_IMM ||
                  I->op == BI_OPCODE_LD_VAR_FLAT_IMM) {
          hex |= ((uint64_t)I->table) << 8;
@@ -522,11 +568,20 @@ va_pack_alu(const bi_instr *I)
       hex |= ((uint64_t)I->texture_index) << 20;
       break;
 
+   case BI_OPCODE_WMASK:
+      hex |= ((uint64_t)I->subgroup) << 36;
+      break;
+
    case BI_OPCODE_ZS_EMIT:
       if (I->stencil)
          hex |= (1 << 24);
       if (I->z)
          hex |= (1 << 25);
+      break;
+
+   case BI_OPCODE_LD_TILE:
+      if (I->z_stencil)
+         hex |= (1ull << 36);
       break;
 
    default:
@@ -552,7 +607,7 @@ va_pack_alu(const bi_instr *I)
    bool swap12 = va_swap_12(I->op);
 
    /* First src is staging if we read, skip it when packing sources */
-   unsigned src_offset = bi_opcode_props[I->op].sr_read ? 1 : 0;
+   unsigned src_offset = bi_get_opcode_props(I)->sr_read ? 1 : 0;
 
    for (unsigned i = 0; i < info.nr_srcs; ++i) {
       unsigned logical_i = (swap12 && i == 1) ? 2 : (swap12 && i == 2) ? 1 : i;
@@ -593,16 +648,14 @@ va_pack_alu(const bi_instr *I)
          unsigned offs = (i == 1) ? 26 : 36;
          hex |= (uint64_t)va_pack_widen(I, src.swizzle, src_info.size) << offs;
       } else if (src_info.lane) {
-         unsigned offs =
-            (I->op == BI_OPCODE_MKVEC_V2I8) ? ((i == 0) ? 38 : 36) : 28;
+         unsigned offs = (I->op == BI_OPCODE_MKVEC_V2I8) ?
+            ((i == 0) ? 38 : 36) : ((i == 0) ? 28 : 26);
 
          if (src_info.size == VA_SIZE_16) {
-            hex |= (src.swizzle == BI_SWIZZLE_H11 ? 1 : 0) << offs;
-         } else if (I->op == BI_OPCODE_BRANCHZ_I16) {
-            hex |= ((uint64_t)va_pack_combine(I, src.swizzle) << 37);
+            hex |= (src.swizzle == BI_SWIZZLE_H1 ? 1 : 0) << offs;
          } else {
             pack_assert(I, src_info.size == VA_SIZE_8);
-            unsigned comp = src.swizzle - BI_SWIZZLE_B0000;
+            unsigned comp = src.swizzle - BI_SWIZZLE_B0;
             pack_assert(I, comp < 4);
             hex |= (uint64_t)comp << offs;
          }
@@ -659,6 +712,19 @@ va_pack_byte_offset_8(const bi_instr *I)
       invalid_instruction(I, "byte offset");
 
    return ((uint64_t)offset) << 8;
+}
+
+static uint64_t
+va_pack_gclk(const bi_instr *I)
+{
+   switch (I->source) {
+   case BI_SOURCE_CYCLE_COUNTER:
+      return VA_SOURCE_CYCLE_COUNTER;
+   case BI_SOURCE_SYSTEM_TIMESTAMP:
+      return VA_SOURCE_SYSTEM_TIMESTAMP;
+   }
+
+   invalid_instruction(I, "source");
 }
 
 static uint64_t
@@ -780,7 +846,7 @@ va_pack_register_format(const bi_instr *I)
 }
 
 uint64_t
-va_pack_instr(const bi_instr *I)
+va_pack_instr(const bi_instr *I, unsigned arch)
 {
    struct va_opcode_info info = valhall_opcodes[I->op];
 
@@ -791,7 +857,7 @@ va_pack_instr(const bi_instr *I)
       hex |= ((uint64_t)I->slot << 30);
 
    if (info.sr_count) {
-      bool read = bi_opcode_props[I->op].sr_read;
+      bool read = bi_get_opcode_props(I)->sr_read;
       bi_index sr = read ? I->src[0] : I->dest[0];
 
       unsigned count =
@@ -847,6 +913,37 @@ va_pack_instr(const bi_instr *I)
       hex |= va_pack_store(I);
       break;
 
+   case BI_OPCODE_ATOM1_RETURN_I64:
+      /* Permit omitting the destination for plain ATOM1 */
+      if (!bi_count_write_registers(I, 0)) {
+         hex |= (0x40ull << 40); // fake read
+      }
+
+      /* 64-bit source */
+      va_validate_register_pair(I, 0);
+      hex |= (uint64_t)va_pack_src(I, 0) << 0;
+      hex |= va_pack_byte_offset_8(I);
+      hex |= ((uint64_t)va_pack_atom_opc_1(I)) << 22;
+      break;
+
+   case BI_OPCODE_ACMPXCHG_I64:
+   case BI_OPCODE_AXCHG_I64:
+   case BI_OPCODE_ATOM_I64:
+   case BI_OPCODE_ATOM_RETURN_I64:
+      /* 64-bit source */
+      va_validate_register_pair(I, 1);
+      hex |= (uint64_t)va_pack_src(I, 1) << 0;
+      hex |= va_pack_byte_offset_8(I);
+      hex |= ((uint64_t)va_pack_atom_opc(I)) << 22;
+
+      if (I->op == BI_OPCODE_ATOM_RETURN_I64)
+         hex |= (0xc0ull << 40); // flags
+
+      if (I->atom_opc == BI_ATOM_OPC_ACMPXCHG)
+         hex |= (1 << 26); /* .compare */
+
+      break;
+
    case BI_OPCODE_ATOM1_RETURN_I32:
       /* Permit omitting the destination for plain ATOM1 */
       if (!bi_count_write_registers(I, 0)) {
@@ -860,6 +957,8 @@ va_pack_instr(const bi_instr *I)
       hex |= ((uint64_t)va_pack_atom_opc_1(I)) << 22;
       break;
 
+   case BI_OPCODE_ACMPXCHG_I32:
+   case BI_OPCODE_AXCHG_I32:
    case BI_OPCODE_ATOM_I32:
    case BI_OPCODE_ATOM_RETURN_I32:
       /* 64-bit source */
@@ -892,6 +991,8 @@ va_pack_instr(const bi_instr *I)
       /* Target */
       if (I->branch_offset & 0x7)
          invalid_instruction(I, "unaligned branch");
+      if (I->branch_offset > 2040)
+         invalid_instruction(I, "too large branch-offset");
       hex |= ((I->branch_offset >> 3) << 8);
 
       /* Source 2 - coverage mask */
@@ -904,15 +1005,23 @@ va_pack_instr(const bi_instr *I)
       break;
    }
 
+   case BI_OPCODE_LD_GCLK_U64:
+      hex |= va_pack_gclk(I);
+      break;
+
+   case BI_OPCODE_TEX_GRADIENT:
    case BI_OPCODE_TEX_SINGLE:
    case BI_OPCODE_TEX_FETCH:
    case BI_OPCODE_TEX_GATHER: {
       /* Image to read from */
       hex |= ((uint64_t)va_pack_src(I, 1)) << 0;
 
-      if (I->op == BI_OPCODE_TEX_FETCH && I->shadow)
-         invalid_instruction(I, "TEX_FETCH does not support .shadow");
+      if ((I->op == BI_OPCODE_TEX_FETCH || I->op == BI_OPCODE_TEX_GRADIENT) &&
+          I->shadow)
+         invalid_instruction(I, "texture instruction does not support .shadow");
 
+      if (I->wide_indices)
+         hex |= (1ull << 8);
       if (I->array_enable)
          hex |= (1ull << 10);
       if (I->texel_offset)
@@ -924,6 +1033,17 @@ va_pack_instr(const bi_instr *I)
       if (!bi_is_regfmt_16(I->register_format))
          hex |= (1ull << 46);
 
+      if (I->op == BI_OPCODE_TEX_GRADIENT) {
+         if (I->force_delta_enable)
+            hex |= (1ull << 12);
+         if (I->lod_bias_disable)
+            hex |= (1ull << 13);
+         if (I->lod_clamp_disable)
+            hex |= (1ull << 14);
+         if (I->derivative_enable)
+            hex |= (1ull << 15);
+      }
+
       if (I->op == BI_OPCODE_TEX_SINGLE)
          hex |= ((uint64_t)va_pack_lod_mode(I)) << 13;
 
@@ -934,7 +1054,6 @@ va_pack_instr(const bi_instr *I)
       }
 
       hex |= (I->write_mask << 22);
-      hex |= ((uint64_t)va_pack_register_type(I)) << 26;
       hex |= ((uint64_t)I->dimension) << 28;
 
       break;
@@ -944,7 +1063,7 @@ va_pack_instr(const bi_instr *I)
       if (!info.exact && I->op != BI_OPCODE_NOP)
          invalid_instruction(I, "opcode");
 
-      hex |= va_pack_alu(I);
+      hex |= va_pack_alu(I, arch);
       break;
    }
 
@@ -1080,7 +1199,7 @@ bi_pack_valhall(bi_context *ctx, struct util_dynarray *emission)
          if (I->op == BI_OPCODE_BRANCHZ_I16)
             va_lower_branch_target(ctx, block, I);
 
-         uint64_t hex = va_pack_instr(I);
+         uint64_t hex = va_pack_instr(I, ctx->arch);
          util_dynarray_append(emission, uint64_t, hex);
       }
    }

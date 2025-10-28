@@ -76,6 +76,7 @@ method values:
     Select the vendor that owns the current context.
 """
 
+
 def _eglFunc(name, method, static=None, public=False, inheader=None, prefix="dispatch_", extension=None, retval=None):
     """
     A convenience function to define an entry in the EGL function list.
@@ -85,15 +86,16 @@ def _eglFunc(name, method, static=None, public=False, inheader=None, prefix="dis
     if inheader is None:
         inheader = (not static)
     values = {
-        "method" : method,
-        "prefix" : prefix,
-        "extension" : extension,
-        "retval" : retval,
-        "static" : static,
-        "public" : public,
-        "inheader" : inheader,
+        "method": method,
+        "prefix": prefix,
+        "extension": extension,
+        "retval": retval,
+        "static": static,
+        "public": public,
+        "inheader": inheader,
     }
     return (name, values)
+
 
 EGL_FUNCTIONS = (
     # EGL_VERSION_1_0
@@ -193,19 +195,9 @@ EGL_FUNCTIONS = (
     # EGL_KHR_wait_sync
     _eglFunc("eglWaitSyncKHR",                       "display"),
 
-    # EGL_MESA_drm_image
-    _eglFunc("eglCreateDRMImageMESA",                "display"),
-    _eglFunc("eglExportDRMImageMESA",                "display"),
-
     # EGL_MESA_image_dma_buf_export
     _eglFunc("eglExportDMABUFImageQueryMESA",        "display"),
     _eglFunc("eglExportDMABUFImageMESA",             "display"),
-
-    # EGL_NOK_swap_region
-    _eglFunc("eglSwapBuffersRegionNOK",              "display"),
-
-    # EGL_NV_post_sub_buffer
-    _eglFunc("eglPostSubBufferNV",                   "display"),
 
     # EGL_WL_bind_wayland_display
     _eglFunc("eglCreateWaylandBufferFromImageWL",    "display"),
@@ -246,5 +238,10 @@ EGL_FUNCTIONS = (
     _eglFunc("eglGLInteropQueryDeviceInfoMESA",      "display"),
     _eglFunc("eglGLInteropExportObjectMESA",         "display"),
     _eglFunc("eglGLInteropFlushObjectsMESA",         "display"),
-)
 
+    # EGL_EXT_surface_compression
+    _eglFunc("eglQuerySupportedCompressionRatesEXT", "display"),
+
+    # EGL_EXT_device_persistent_id
+    _eglFunc("eglQueryDeviceBinaryEXT",              "device"),
+)

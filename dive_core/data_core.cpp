@@ -305,25 +305,29 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         {
             // This is emitted at the begining of the render pass if tiled rendering mode is
             // disabled
-        case RM6_BYPASS:
+        case RM6_DIRECT_RENDER:
             m_current_render_mode = RenderModeType::kDirect;
             break;
             // This is emitted at the begining of the binning pass, although the binning pass
             // could be missing even in tiled rendering mode
-        case RM6_BINNING:
-            m_current_render_mode = RenderModeType::kBinning;
+        case RM6_BIN_VISIBILITY:
+            m_current_render_mode = RenderModeType::kBinningVis;
+            break;
+        case RM6_BIN_DIRECT:
+            m_current_render_mode = RenderModeType::kBinningDirect;
             break;
             // This is emitted at the begining of the tiled rendering pass
-        case RM6_GMEM:
+        case RM6_BIN_RENDER_START:
             m_current_render_mode = RenderModeType::kTiled;
             break;
             // This is emitted at the end of the tiled rendering pass
-        case RM6_ENDVIS:
-            // should be paired with RM6_GMEM only if RM6_BINNING exist, end of tiled mode
+        case RM6_BIN_END_OF_DRAWS:
+            // should be paired with RM6_BIN_RENDER_START only if RM6_BIN_VISIBILITY exist, end of
+            // tiled mode
             m_current_render_mode = RenderModeType::kUnknown;
             break;
             // This is emitted at the begining of the resolve pass
-        case RM6_RESOLVE:
+        case RM6_BIN_RESOLVE:
             m_current_render_mode = RenderModeType::kResolve;
             break;
             // This is emitted for each dispatch
@@ -331,8 +335,8 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
             m_current_render_mode = RenderModeType::kDispatch;
             break;
         // This seems to be the end of Resolve Pass
-        case RM6_YIELD:
-            // should be paired with RM6_RESOLVE, end of resolve pass
+        case RM6_BIN_RENDER_END:
+            // should be paired with RM6_BIN_RESOLVE, end of resolve pass
             m_current_render_mode = RenderModeType::kUnknown;
             break;
         case RM6_BLIT2DSCALE:
@@ -371,17 +375,29 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
 
             switch (sync_type)
             {
-            case SyncType::kGmemToSysMemResolve:
-                event_info.m_type = EventInfo::EventType::kGmemToSysmemResolve;
+            case SyncType::kColorSysMemToGmemResolve:
+                event_info.m_type = EventInfo::EventType::kColorSysMemToGmemResolve;
                 break;
-            case SyncType::kGmemToSysMemResolveAndClearGmem:
-                event_info.m_type = EventInfo::EventType::kGmemToSysMemResolveAndClearGmem;
+            case SyncType::kColorGmemToSysMemResolve:
+                event_info.m_type = EventInfo::EventType::kColorGmemToSysMemResolve;
                 break;
-            case SyncType::kClearGmem:
-                event_info.m_type = EventInfo::EventType::kClearGmem;
+            case SyncType::kColorGmemToSysMemResolveAndClear:
+                event_info.m_type = EventInfo::EventType::kColorGmemToSysMemResolveAndClear;
                 break;
-            case SyncType::kSysMemToGmemResolve:
-                event_info.m_type = EventInfo::EventType::kSysmemToGmemResolve;
+            case SyncType::kColorClearGmem:
+                event_info.m_type = EventInfo::EventType::kColorClearGmem;
+                break;
+            case SyncType::kDepthSysMemToGmemResolve:
+                event_info.m_type = EventInfo::EventType::kDepthSysMemToGmemResolve;
+                break;
+            case SyncType::kDepthGmemToSysMemResolve:
+                event_info.m_type = EventInfo::EventType::kDepthGmemToSysMemResolve;
+                break;
+            case SyncType::kDepthGmemToSysMemResolveAndClear:
+                event_info.m_type = EventInfo::EventType::kDepthGmemToSysMemResolveAndClear;
+                break;
+            case SyncType::kDepthClearGmem:
+                event_info.m_type = EventInfo::EventType::kDepthClearGmem;
                 break;
             case SyncType::kWaitMemWrites:
                 event_info.m_type = EventInfo::EventType::kWaitMemWrites;
@@ -391,12 +407,6 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                 break;
             case SyncType::kWaitForMe:
                 event_info.m_type = EventInfo::EventType::kWaitForMe;
-                break;
-            case SyncType::kEventWriteStart:
-                event_info.m_type = EventInfo::EventType::kEventWriteStart;
-                break;
-            case SyncType::kEventWriteEnd:
-                event_info.m_type = EventInfo::EventType::kEventWriteEnd;
                 break;
             default:
                 DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
@@ -542,25 +552,24 @@ void CaptureMetadataCreator::FillInputAssemblyState(EventStateInfo::Iterator eve
 {
     // note that primtive topology is no longer set in the context regs,
     // it is set as part of the drawcall pm4 (see tu_draw_initiator)
-    uint32_t pc_primitive_cntl_reg_offset = GetRegOffsetByName("PC_PRIMITIVE_CNTL_0");
-    if (m_state_tracker.IsRegSet(pc_primitive_cntl_reg_offset))
+    uint32_t vpc_pc_cntl_reg_offset = GetRegOffsetByName("PC_CNTL");
+    if (m_state_tracker.IsRegSet(vpc_pc_cntl_reg_offset))
     {
-        PC_PRIMITIVE_CNTL_0 primitive_raster_cntl;
-        primitive_raster_cntl.u32All = m_state_tracker.GetRegValue(pc_primitive_cntl_reg_offset);
-        event_state_it->SetPrimRestartEnabled(primitive_raster_cntl.bitfields.PRIMITIVE_RESTART ==
-                                              1);
+        VPC_PC_CNTL vpc_pc_cntl;
+        vpc_pc_cntl.u32All = m_state_tracker.GetRegValue(vpc_pc_cntl_reg_offset);
+        event_state_it->SetPrimRestartEnabled(vpc_pc_cntl.bitfields.PRIMITIVE_RESTART == 1);
     }
 }
 
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::FillTessellationState(EventStateInfo::Iterator event_state_it)
 {
-    uint32_t pc_hs_input_size_reg_offset = GetRegOffsetByName("PC_HS_INPUT_SIZE");
-    if (m_state_tracker.IsRegSet(pc_hs_input_size_reg_offset))
+    uint32_t pc_hs_param_reg_offset = GetRegOffsetByName("PC_HS_PARAM_1");
+    if (m_state_tracker.IsRegSet(pc_hs_param_reg_offset))
     {
-        PC_HS_INPUT_SIZE pc_hs_input_size;
-        pc_hs_input_size.u32All = m_state_tracker.GetRegValue(pc_hs_input_size_reg_offset);
-        event_state_it->SetPatchControlPoints(pc_hs_input_size.bitfields.SIZE);
+        PC_HS_PARAM_1 pc_hs_param;
+        pc_hs_param.u32All = m_state_tracker.GetRegValue(pc_hs_param_reg_offset);
+        event_state_it->SetPatchControlPoints(pc_hs_param.bitfields.SIZE);
     }
 }
 
@@ -569,16 +578,16 @@ void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_st
 {
     // Check if viewport is set. Up to 16 of them can be set.
     uint32_t viewport_id = 0;
-    uint32_t viewport_reg_start = GetRegOffsetByName("GRAS_CL_VPORT0_XOFFSET");
+    uint32_t viewport_reg_start = GetRegOffsetByName("GRAS_CL_VIEWPORT0_XOFFSET");
     DIVE_ASSERT(viewport_reg_start != kInvalidRegOffset);
     while (viewport_id < 16 && m_state_tracker.IsRegSet(viewport_reg_start + 6 * viewport_id))
     {
-        GRAS_CL_VPORT_XOFFSET xOffset;
-        GRAS_CL_VPORT_XSCALE  xScale;
-        GRAS_CL_VPORT_YOFFSET yOffset;
-        GRAS_CL_VPORT_YSCALE  yScale;
-        GRAS_CL_VPORT_ZOFFSET zOffset;
-        GRAS_CL_VPORT_ZSCALE  zScale;
+        GRAS_CL_VIEWPORT_XOFFSET xOffset;
+        GRAS_CL_VIEWPORT_XSCALE  xScale;
+        GRAS_CL_VIEWPORT_YOFFSET yOffset;
+        GRAS_CL_VIEWPORT_YSCALE  yScale;
+        GRAS_CL_VIEWPORT_ZOFFSET zOffset;
+        GRAS_CL_VIEWPORT_ZSCALE  zScale;
 
         // Assumption: These are all set together. All-or-nothing.
         uint32_t viewport_reg = viewport_reg_start + 6 * viewport_id;
@@ -644,22 +653,22 @@ void CaptureMetadataCreator::FillRasterizerState(EventStateInfo::Iterator event_
         event_state_it->SetDepthClampEnabled(gras_cl_clip_cntl.bitfields.Z_CLAMP_ENABLE != 1);
     }
 
-    uint32_t pc_raster_cntl_reg_offset = GetRegOffsetByName("PC_RASTER_CNTL");
-    if (m_state_tracker.IsRegSet(pc_raster_cntl_reg_offset))
+    uint32_t vpc_rast_stream_cntl_reg_offset = GetRegOffsetByName("VPC_RAST_STREAM_CNTL");
+    if (m_state_tracker.IsRegSet(vpc_rast_stream_cntl_reg_offset))
     {
-        PC_RASTER_CNTL pc_raster_cntl;
-        pc_raster_cntl.u32All = m_state_tracker.GetRegValue(pc_raster_cntl_reg_offset);
-        event_state_it->SetRasterizerDiscardEnabled(pc_raster_cntl.bitfields.DISCARD == 1);
+        VPC_RAST_STREAM_CNTL vpc_rast_stream_cntl;
+        vpc_rast_stream_cntl.u32All = m_state_tracker.GetRegValue(vpc_rast_stream_cntl_reg_offset);
+        event_state_it->SetRasterizerDiscardEnabled(vpc_rast_stream_cntl.bitfields.DISCARD == 1);
     }
 
     // TODO(wangra): Should we also check VPC_POLYGON_MODE and VPC_POLYGON_MODE2?
     // what is the difference between PC and VPC?
-    uint32_t pc_polygon_mode_reg_offset = GetRegOffsetByName("PC_POLYGON_MODE");
-    if (m_state_tracker.IsRegSet(pc_polygon_mode_reg_offset))
+    uint32_t pc_dgen_rast_cntl_reg_offset = GetRegOffsetByName("PC_DGEN_RAST_CNTL");
+    if (m_state_tracker.IsRegSet(pc_dgen_rast_cntl_reg_offset))
     {
-        PC_POLYGON_MODE pc_polygon_mode;
-        pc_polygon_mode.u32All = m_state_tracker.GetRegValue(pc_polygon_mode_reg_offset);
-        switch (pc_polygon_mode.bitfields.MODE)
+        PC_DGEN_RAST_CNTL pc_dgen_rast_cntl;
+        pc_dgen_rast_cntl.u32All = m_state_tracker.GetRegValue(pc_dgen_rast_cntl_reg_offset);
+        switch (pc_dgen_rast_cntl.bitfields.MODE)
         {
         case POLYMODE6_TRIANGLES:
             event_state_it->SetPolygonMode(VK_POLYGON_MODE_FILL);
@@ -727,12 +736,13 @@ void CaptureMetadataCreator::FillRasterizerState(EventStateInfo::Iterator event_
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::FillMultisamplingState(EventStateInfo::Iterator event_state_it)
 {
-    uint32_t gras_ras_msaa_cntl_reg_offset = GetRegOffsetByName("GRAS_RAS_MSAA_CNTL");
-    if (m_state_tracker.IsRegSet(gras_ras_msaa_cntl_reg_offset))
+    uint32_t gras_sc_ras_msaa_cntl_reg_offset = GetRegOffsetByName("GRAS_SC_RAS_MSAA_CNTL");
+    if (m_state_tracker.IsRegSet(gras_sc_ras_msaa_cntl_reg_offset))
     {
-        GRAS_RAS_MSAA_CNTL gras_ras_msaa_cntl;
-        gras_ras_msaa_cntl.u32All = m_state_tracker.GetRegValue(gras_ras_msaa_cntl_reg_offset);
-        uint32_t ras_samples = 1 << gras_ras_msaa_cntl.bitfields.SAMPLES;
+        GRAS_SC_RAS_MSAA_CNTL gras_sc_ras_msaa_cntl;
+        gras_sc_ras_msaa_cntl.u32All = m_state_tracker.GetRegValue(
+        gras_sc_ras_msaa_cntl_reg_offset);
+        uint32_t ras_samples = 1 << gras_sc_ras_msaa_cntl.bitfields.SAMPLES;
         event_state_it->SetRasterizationSamples((VkSampleCountFlagBits)(ras_samples));
     }
 
@@ -762,27 +772,29 @@ void CaptureMetadataCreator::FillDepthState(EventStateInfo::Iterator event_state
         event_state_it->SetDepthBoundsTestEnabled(rb_depth_cntl.bitfields.Z_BOUNDS_ENABLE == 1);
 
         {
-            uint32_t rb_z_bounds_min_reg_offset = GetRegOffsetByName("RB_Z_BOUNDS_MIN");
-            if (m_state_tracker.IsRegSet(rb_z_bounds_min_reg_offset))
+            uint32_t rb_depth_bound_min_reg_offset = GetRegOffsetByName("RB_DEPTH_BOUND_MIN");
+            if (m_state_tracker.IsRegSet(rb_depth_bound_min_reg_offset))
             {
-                RB_Z_BOUNDS_MIN rb_z_bounds_min;
-                rb_z_bounds_min.u32All = m_state_tracker.GetRegValue(rb_z_bounds_min_reg_offset);
-                event_state_it->SetMinDepthBounds(rb_z_bounds_min.f32All);
+                RB_DEPTH_BOUND_MIN rb_depth_bounds_min;
+                rb_depth_bounds_min.u32All = m_state_tracker.GetRegValue(
+                rb_depth_bound_min_reg_offset);
+                event_state_it->SetMinDepthBounds(rb_depth_bounds_min.f32All);
             }
-            uint32_t rb_z_bounds_max_reg_offset = GetRegOffsetByName("RB_Z_BOUNDS_MAX");
-            if (m_state_tracker.IsRegSet(rb_z_bounds_max_reg_offset))
+            uint32_t rb_depth_bound_max_reg_offset = GetRegOffsetByName("RB_DEPTH_BOUND_MAX");
+            if (m_state_tracker.IsRegSet(rb_depth_bound_max_reg_offset))
             {
-                RB_Z_BOUNDS_MAX rb_z_bounds_max;
-                rb_z_bounds_max.u32All = m_state_tracker.GetRegValue(rb_z_bounds_max_reg_offset);
-                event_state_it->SetMaxDepthBounds(rb_z_bounds_max.f32All);
+                RB_DEPTH_BOUND_MAX rb_depth_bound_max;
+                rb_depth_bound_max.u32All = m_state_tracker.GetRegValue(
+                rb_depth_bound_max_reg_offset);
+                event_state_it->SetMaxDepthBounds(rb_depth_bound_max.f32All);
             }
         }
     }
 
-    uint32_t rb_stencil_cntl_reg_offset = GetRegOffsetByName("RB_STENCIL_CONTROL");
+    uint32_t rb_stencil_cntl_reg_offset = GetRegOffsetByName("RB_STENCIL_CNTL");
     if (m_state_tracker.IsRegSet(rb_stencil_cntl_reg_offset))
     {
-        RB_STENCIL_CONTROL rb_stencil_cntl;
+        RB_STENCIL_CNTL rb_stencil_cntl;
         rb_stencil_cntl.u32All = m_state_tracker.GetRegValue(rb_stencil_cntl_reg_offset);
 
         const bool is_stencil_front_enabled = (rb_stencil_cntl.bitfields.STENCIL_ENABLE == 1);
@@ -805,30 +817,32 @@ void CaptureMetadataCreator::FillDepthState(EventStateInfo::Iterator event_state
         // Be careful!!! Here we assume the enum `VkCompareOp` matches exactly `adreno_compare_func`
         back.compareOp = static_cast<VkCompareOp>(rb_stencil_cntl.bitfields.FUNC_BF);
 
-        uint32_t rb_stencilref_reg_offset = GetRegOffsetByName("RB_STENCILREF");
-        if (m_state_tracker.IsRegSet(rb_stencilref_reg_offset))
+        uint32_t rb_stencil_ref_cntl_reg_offset = GetRegOffsetByName("RB_STENCIL_REF_CNTL");
+        if (m_state_tracker.IsRegSet(rb_stencil_ref_cntl_reg_offset))
         {
-            RB_STENCILREF rb_stencilref;
-            rb_stencilref.u32All = m_state_tracker.GetRegValue(rb_stencilref_reg_offset);
-            front.reference = rb_stencilref.bitfields.REF;
-            back.reference = rb_stencilref.bitfields.BFREF;
+            RB_STENCIL_REF_CNTL rb_stencil_ref_cntl;
+            rb_stencil_ref_cntl.u32All = m_state_tracker.GetRegValue(
+            rb_stencil_ref_cntl_reg_offset);
+            front.reference = rb_stencil_ref_cntl.bitfields.REF;
+            back.reference = rb_stencil_ref_cntl.bitfields.BFREF;
         }
 
-        uint32_t rb_stencilmask_reg_offset = GetRegOffsetByName("RB_STENCILMASK");
-        if (m_state_tracker.IsRegSet(rb_stencilmask_reg_offset))
+        uint32_t rb_stencil_mask_reg_offset = GetRegOffsetByName("RB_STENCIL_MASK");
+        if (m_state_tracker.IsRegSet(rb_stencil_mask_reg_offset))
         {
-            RB_STENCILMASK rb_stencilmask;
-            rb_stencilmask.u32All = m_state_tracker.GetRegValue(rb_stencilmask_reg_offset);
-            front.compareMask = rb_stencilmask.bitfields.MASK;
-            back.compareMask = rb_stencilmask.bitfields.BFMASK;
+            RB_STENCIL_MASK rb_stencil_mask;
+            rb_stencil_mask.u32All = m_state_tracker.GetRegValue(rb_stencil_mask_reg_offset);
+            front.compareMask = rb_stencil_mask.bitfields.MASK;
+            back.compareMask = rb_stencil_mask.bitfields.BFMASK;
         }
-        uint32_t rb_stencilwrmask_reg_offset = GetRegOffsetByName("RB_STENCILWRMASK");
-        if (m_state_tracker.IsRegSet(rb_stencilwrmask_reg_offset))
+        uint32_t rb_stencil_write_mask_reg_offset = GetRegOffsetByName("RB_STENCIL_WRITE_MASK");
+        if (m_state_tracker.IsRegSet(rb_stencil_write_mask_reg_offset))
         {
-            RB_STENCILWRMASK rb_stencilwrmask;
-            rb_stencilwrmask.u32All = m_state_tracker.GetRegValue(rb_stencilwrmask_reg_offset);
-            front.writeMask = rb_stencilwrmask.bitfields.WRMASK;
-            back.writeMask = rb_stencilwrmask.bitfields.BFWRMASK;
+            RB_STENCIL_WRITE_MASK rb_stencil_write_mask;
+            rb_stencil_write_mask.u32All = m_state_tracker.GetRegValue(
+            rb_stencil_write_mask_reg_offset);
+            front.writeMask = rb_stencil_write_mask.bitfields.WRMASK;
+            back.writeMask = rb_stencil_write_mask.bitfields.BFWRMASK;
         }
         event_state_it->SetStencilOpStateFront(front);
         event_state_it->SetStencilOpStateBack(back);
@@ -890,21 +904,25 @@ void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_
 
     // Assumption: The ICD sets all of the color channels together. So it is enough
     // to check whether just 1 of them is set or not. It's all or nothing.
-    uint32_t rb_blend_red_reg_offset = GetRegOffsetByName("RB_BLEND_RED_F32");
-    if (m_state_tracker.IsRegSet(rb_blend_red_reg_offset))
+    uint32_t rb_blend_constant_red_fp32_reg_offset = GetRegOffsetByName(
+    "RB_BLEND_CONSTANT_RED_FP32");
+    if (m_state_tracker.IsRegSet(rb_blend_constant_red_fp32_reg_offset))
     {
-        uint32_t rb_blend_red_green_offset = GetRegOffsetByName("RB_BLEND_GREEN_F32");
-        uint32_t rb_blend_red_blue_offset = GetRegOffsetByName("RB_BLEND_BLUE_F32");
-        uint32_t rb_blend_red_alpha_offset = GetRegOffsetByName("RB_BLEND_ALPHA_F32");
+        uint32_t rb_blend_constant_green_fp32_offset = GetRegOffsetByName(
+        "RB_BLEND_CONSTANT_GREEN_FP32");
+        uint32_t rb_blend_constant_blue_fp32_offset = GetRegOffsetByName(
+        "RB_BLEND_CONSTANT_BLUE_FP32");
+        uint32_t rb_blend_constant_alpha_fp32_offset = GetRegOffsetByName(
+        "RB_BLEND_CONSTANT_ALPHA_FP32");
 
-        RB_BLEND_RED_F32   rb_blend_red;
-        RB_BLEND_GREEN_F32 rb_blend_green;
-        RB_BLEND_BLUE_F32  rb_blend_blue;
-        RB_BLEND_ALPHA_F32 rb_blend_alpha;
-        rb_blend_red.u32All = m_state_tracker.GetRegValue(rb_blend_red_reg_offset);
-        rb_blend_green.u32All = m_state_tracker.GetRegValue(rb_blend_red_green_offset);
-        rb_blend_blue.u32All = m_state_tracker.GetRegValue(rb_blend_red_blue_offset);
-        rb_blend_alpha.u32All = m_state_tracker.GetRegValue(rb_blend_red_alpha_offset);
+        RB_BLEND_CONSTANT_RED_FP32   rb_blend_red;
+        RB_BLEND_CONSTANT_GREEN_FP32 rb_blend_green;
+        RB_BLEND_CONSTANT_BLUE_FP32  rb_blend_blue;
+        RB_BLEND_CONSTANT_ALPHA_FP32 rb_blend_alpha;
+        rb_blend_red.u32All = m_state_tracker.GetRegValue(rb_blend_constant_red_fp32_reg_offset);
+        rb_blend_green.u32All = m_state_tracker.GetRegValue(rb_blend_constant_green_fp32_offset);
+        rb_blend_blue.u32All = m_state_tracker.GetRegValue(rb_blend_constant_blue_fp32_offset);
+        rb_blend_alpha.u32All = m_state_tracker.GetRegValue(rb_blend_constant_alpha_fp32_offset);
         event_state_it->SetBlendConstant(0, rb_blend_red.f32All);
         event_state_it->SetBlendConstant(1, rb_blend_green.f32All);
         event_state_it->SetBlendConstant(2, rb_blend_blue.f32All);
@@ -947,17 +965,17 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
     }
 
     // binning related
-    uint32_t gras_bin_cntl_reg_offset = GetRegOffsetByName("GRAS_BIN_CONTROL");
-    if (m_state_tracker.IsRegSet(gras_bin_cntl_reg_offset))
+    uint32_t gras_sc_bin_cntl_reg_offset = GetRegOffsetByName("GRAS_SC_BIN_CNTL");
+    if (m_state_tracker.IsRegSet(gras_sc_bin_cntl_reg_offset))
     {
-        const RegInfo  *reg_info = GetRegInfo(gras_bin_cntl_reg_offset);
+        const RegInfo  *reg_info = GetRegInfo(gras_sc_bin_cntl_reg_offset);
         const RegField *reg_field_w = GetRegFieldByName("BINW", reg_info);
         DIVE_ASSERT(reg_field_w != nullptr);
         const RegField *reg_field_h = GetRegFieldByName("BINH", reg_info);
         DIVE_ASSERT(reg_field_h != nullptr);
-        GRAS_BIN_CONTROL gras_bin_cntl;
-        gras_bin_cntl.u32All = m_state_tracker.GetRegValue(gras_bin_cntl_reg_offset);
-        const auto             bitfields = gras_bin_cntl.bitfields;
+        GRAS_SC_BIN_CNTL gras_sc_bin_cntl;
+        gras_sc_bin_cntl.u32All = m_state_tracker.GetRegValue(gras_sc_bin_cntl_reg_offset);
+        const auto             bitfields = gras_sc_bin_cntl.bitfields;
         const uint32_t         binw = bitfields.BINW << reg_field_w->m_shr;
         const uint32_t         binh = bitfields.BINH << reg_field_h->m_shr;
         const a6xx_render_mode render_mode = bitfields.RENDER_MODE;
@@ -993,12 +1011,12 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
     }
 
     // helper lane related
-    uint32_t sp_fs_ctrl_reg_offset = GetRegOffsetByName("SP_FS_CTRL_REG0");
-    if (m_state_tracker.IsRegSet(sp_fs_ctrl_reg_offset))
+    uint32_t sp_ps_cntl_0_reg_offset = GetRegOffsetByName("SP_PS_CNTL_0");
+    if (m_state_tracker.IsRegSet(sp_ps_cntl_0_reg_offset))
     {
-        SP_FS_CTRL_REG0 sp_fs_ctrl;
-        sp_fs_ctrl.u32All = m_state_tracker.GetRegValue(sp_fs_ctrl_reg_offset);
-        const auto            bitfields = sp_fs_ctrl.bitfields;
+        SP_PS_CNTL_0 sp_ps_cntl_0;
+        sp_ps_cntl_0.u32All = m_state_tracker.GetRegValue(sp_ps_cntl_0_reg_offset);
+        const auto            bitfields = sp_ps_cntl_0.bitfields;
         const a6xx_threadsize thread_size = bitfields.THREADSIZE;
         const bool            enable_all_helper_lanes = bitfields.LODPIXMASK;
         const bool            enable_partial_helper_lanes = bitfields.PIXLODENABLE;

@@ -34,7 +34,7 @@
 #include <string.h>
 #include "util/compiler.h"
 #include "GL/glx.h"
-#include "glapi/glapi.h"
+#include "glapi/glapi/glapi.h"
 
 
 struct name_address_pair {
@@ -199,7 +199,7 @@ glXGetProcAddressARB(const GLubyte *procName)
       return f;
    }
 
-   f = (__GLXextFuncPtr) _glapi_get_proc_address((const char *) procName);
+   f = (__GLXextFuncPtr) _mesa_glapi_get_proc_address((const char *) procName);
    return f;
 }
 

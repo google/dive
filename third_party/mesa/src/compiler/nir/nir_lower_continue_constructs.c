@@ -38,10 +38,10 @@ lower_loop_continue_block(nir_builder *b, nir_loop *loop, bool *repair_ssa)
    /* count continue statements excluding unreachable ones */
    unsigned num_continue = 0;
    nir_block *single_predecessor = NULL;
-   set_foreach(cont->predecessors, entry) {
+   set_foreach(&cont->predecessors, entry) {
       nir_block *pred = (nir_block *)entry->key;
       /* If the continue block has no predecessors, it is unreachable. */
-      if (pred->predecessors->entries == 0)
+      if (pred->predecessors.entries == 0)
          continue;
 
       single_predecessor = pred;
@@ -49,7 +49,7 @@ lower_loop_continue_block(nir_builder *b, nir_loop *loop, bool *repair_ssa)
          break;
    }
 
-   nir_lower_phis_to_regs_block(header);
+   nir_lower_phis_to_regs_block(header, false);
 
    if (num_continue == 0) {
       /* this loop doesn't continue at all. delete the continue construct */
@@ -66,7 +66,7 @@ lower_loop_continue_block(nir_builder *b, nir_loop *loop, bool *repair_ssa)
       nir_cf_reinsert(&extracted,
                       nir_after_block_before_jump(single_predecessor));
    } else {
-      nir_lower_phis_to_regs_block(cont);
+      nir_lower_phis_to_regs_block(cont, false);
       *repair_ssa = true;
 
       /* As control flow has to re-converge before executing the continue
@@ -124,7 +124,7 @@ visit_cf_list(nir_builder *b, struct exec_list *list, bool *repair_ssa)
          break;
       }
       case nir_cf_node_function:
-         unreachable("Unsupported cf_node type.");
+         UNREACHABLE("Unsupported cf_node type.");
       }
    }
 
@@ -139,7 +139,7 @@ lower_continue_constructs_impl(nir_function_impl *impl)
    bool progress = visit_cf_list(&b, &impl->body, &repair_ssa);
 
    if (progress) {
-      nir_metadata_preserve(impl, nir_metadata_none);
+      nir_progress(true, impl, nir_metadata_none);
 
       /* Merge the Phis from Header and Continue Target */
       nir_lower_reg_intrinsics_to_ssa_impl(impl);
@@ -151,7 +151,7 @@ lower_continue_constructs_impl(nir_function_impl *impl)
       if (repair_ssa)
          nir_repair_ssa_impl(impl);
    } else {
-      nir_metadata_preserve(impl, nir_metadata_all);
+      nir_no_progress(impl);
    }
 
    return progress;

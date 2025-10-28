@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2012 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -333,9 +315,9 @@ gmem_stateobj_init(struct fd_screen *screen, struct gmem_key *key)
          tpp_x += 1;
    }
 
-#ifdef DEBUG
+#if MESA_DEBUG
    tpp_x = debug_get_num_option("TPP_X", tpp_x);
-   tpp_y = debug_get_num_option("TPP_Y", tpp_x);
+   tpp_y = debug_get_num_option("TPP_Y", tpp_y);
 #endif
 
    gmem->maxpw = tpp_x;
@@ -473,16 +455,16 @@ gmem_key_init(struct fd_batch *batch, bool assume_zs, bool no_scis_opt)
 {
    struct fd_screen *screen = batch->ctx->screen;
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
-   bool has_zs = pfb->zsbuf &&
+   bool has_zs = pfb->zsbuf.texture &&
       !!(batch->gmem_reason & (FD_GMEM_DEPTH_ENABLED | FD_GMEM_STENCIL_ENABLED |
                                FD_GMEM_CLEARS_DEPTH_STENCIL));
    struct gmem_key *key = rzalloc(screen->gmem_cache.ht, struct gmem_key);
 
    if (has_zs || assume_zs) {
-      struct fd_resource *rsc = fd_resource(pfb->zsbuf->texture);
-      key->zsbuf_cpp[0] = rsc->layout.cpp;
+      struct fd_resource *rsc = fd_resource(pfb->zsbuf.texture);
+      key->zsbuf_cpp[0] = rsc->layout.cpp * pfb->samples;
       if (rsc->stencil)
-         key->zsbuf_cpp[1] = rsc->stencil->layout.cpp;
+         key->zsbuf_cpp[1] = rsc->stencil->layout.cpp * pfb->samples;
 
       /* If we clear z or s but not both, and we are using z24s8 (ie.
        * !separate_stencil) then we need to restore the other, even if
@@ -496,7 +478,7 @@ gmem_key_init(struct fd_batch *batch, bool assume_zs, bool no_scis_opt)
       unsigned zsclear = batch->cleared & (FD_BUFFER_DEPTH | FD_BUFFER_STENCIL);
       if (zsclear) {
          const struct util_format_description *desc =
-               util_format_description(pfb->zsbuf->format);
+               util_format_description(pfb->zsbuf.format);
          if (util_format_has_depth(desc) && !(zsclear & FD_BUFFER_DEPTH))
             batch->restore |= FD_BUFFER_DEPTH;
          if (util_format_has_stencil(desc) && !(zsclear & FD_BUFFER_STENCIL))
@@ -510,8 +492,8 @@ gmem_key_init(struct fd_batch *batch, bool assume_zs, bool no_scis_opt)
 
    key->nr_cbufs = pfb->nr_cbufs;
    for (unsigned i = 0; i < pfb->nr_cbufs; i++) {
-      if (pfb->cbufs[i])
-         key->cbuf_cpp[i] = util_format_get_blocksize(pfb->cbufs[i]->format);
+      if (pfb->cbufs[i].texture)
+         key->cbuf_cpp[i] = util_format_get_blocksize(pfb->cbufs[i].format);
       else
          key->cbuf_cpp[i] = 4;
       /* if MSAA, color buffers are super-sampled in GMEM: */
@@ -739,13 +721,13 @@ fd_gmem_render_tiles(struct fd_batch *batch)
       trace_framebuffer_state(&batch->trace, batch->gmem, pfb);
    }
 
-   if (ctx->emit_sysmem_prep && !batch->nondraw) {
+   if (ctx->emit_sysmem_prep && !sysmem) {
       if (fd_autotune_use_bypass(&ctx->autotune, batch) && !FD_DBG(GMEM)) {
          sysmem = true;
       }
 
       /* For ARB_framebuffer_no_attachments: */
-      if ((pfb->nr_cbufs == 0) && !pfb->zsbuf) {
+      if ((pfb->nr_cbufs == 0) && !pfb->zsbuf.texture) {
          sysmem = true;
       }
    }
@@ -755,13 +737,13 @@ fd_gmem_render_tiles(struct fd_batch *batch)
 
    /* Layered rendering always needs bypass. */
    for (unsigned i = 0; i < pfb->nr_cbufs; i++) {
-      struct pipe_surface *psurf = pfb->cbufs[i];
-      if (!psurf)
+      struct pipe_surface *psurf = &pfb->cbufs[i];
+      if (!psurf->texture)
          continue;
-      if (psurf->u.tex.first_layer < psurf->u.tex.last_layer)
+      if (psurf->first_layer < psurf->last_layer)
          sysmem = true;
    }
-   if (pfb->zsbuf && pfb->zsbuf->u.tex.first_layer < pfb->zsbuf->u.tex.last_layer)
+   if (pfb->zsbuf.texture && pfb->zsbuf.first_layer < pfb->zsbuf.last_layer)
       sysmem = true;
 
    /* Tessellation doesn't seem to support tiled rendering so fall back to
@@ -784,8 +766,8 @@ fd_gmem_render_tiles(struct fd_batch *batch)
    } else if (sysmem) {
       trace_render_sysmem(&batch->trace, batch->gmem);
       trace_start_render_pass(&batch->trace, batch->gmem,
-         ctx->submit_count, pipe_surface_format(pfb->cbufs[0]),
-         pipe_surface_format(pfb->zsbuf), pfb->width, pfb->height,
+         ctx->submit_count, pipe_surface_format(&pfb->cbufs[0]),
+         pipe_surface_format(&pfb->zsbuf), pfb->width, pfb->height,
          pfb->nr_cbufs, pfb->samples, 0, 0, 0);
       if (ctx->query_prepare)
          ctx->query_prepare(batch, 1);
@@ -798,8 +780,8 @@ fd_gmem_render_tiles(struct fd_batch *batch)
       trace_render_gmem(&batch->trace, batch->gmem, gmem->nbins_x, gmem->nbins_y,
                         gmem->bin_w, gmem->bin_h);
       trace_start_render_pass(&batch->trace, batch->gmem,
-         ctx->submit_count, pipe_surface_format(pfb->cbufs[0]),
-         pipe_surface_format(pfb->zsbuf), pfb->width, pfb->height,
+         ctx->submit_count, pipe_surface_format(&pfb->cbufs[0]),
+         pipe_surface_format(&pfb->zsbuf), pfb->width, pfb->height,
          pfb->nr_cbufs, pfb->samples, gmem->nbins_x * gmem->nbins_y,
          gmem->bin_w, gmem->bin_h);
       if (ctx->query_prepare)
@@ -817,7 +799,7 @@ fd_gmem_render_tiles(struct fd_batch *batch)
 
    flush_ring(batch);
 
-   u_trace_flush(&batch->trace, NULL, false);
+   u_trace_flush(&batch->trace, NULL, U_TRACE_FRAME_UNKNOWN, false);
 }
 
 /* Determine a worst-case estimate (ie. assuming we don't eliminate an
@@ -828,7 +810,7 @@ fd_gmem_estimate_bins_per_pipe(struct fd_batch *batch)
 {
    struct pipe_framebuffer_state *pfb = &batch->framebuffer;
    struct fd_screen *screen = batch->ctx->screen;
-   struct fd_gmem_stateobj *gmem = lookup_gmem_state(batch, !!pfb->zsbuf, true);
+   struct fd_gmem_stateobj *gmem = lookup_gmem_state(batch, !!pfb->zsbuf.texture, true);
    unsigned nbins = gmem->maxpw * gmem->maxph;
 
    fd_screen_lock(screen);

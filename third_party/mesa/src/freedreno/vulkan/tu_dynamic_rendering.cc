@@ -73,7 +73,7 @@ get_cmd_buffer(struct tu_device *dev, struct tu_cmd_buffer **cmd_buffer_out)
    if (result != VK_SUCCESS)
       return result;
 
-   TU_FROM_HANDLE(tu_cmd_buffer, cmd_buffer, vk_buf);
+   VK_FROM_HANDLE(tu_cmd_buffer, cmd_buffer, vk_buf);
 
    struct dynamic_rendering_entry entry = {
       .cmd_buffer = cmd_buffer,
@@ -144,15 +144,13 @@ tu_insert_dynamic_cmdbufs(struct tu_device *dev,
 
       case SR_AFTER_PRE_CHAIN:
       case SR_IN_CHAIN_AFTER_PRE_CHAIN:
+         cmd_buffer->trace_renderpass_start = u_trace_end_iterator(&cmd_buffer->rp_trace);
          tu_append_pre_chain(cmd_buffer, old_cmds[i]);
 
-         if (!(old_cmds[i]->usage_flags &
-               VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)) {
-            u_trace_disable_event_range(old_cmds[i]->pre_chain.trace_renderpass_start,
-                                        old_cmds[i]->pre_chain.trace_renderpass_end);
-         }
-
-         TU_CALLX(dev, tu_cmd_render)(cmd_buffer);
+         const struct VkOffset2D *fdm_offsets =
+            cmd_buffer->pre_chain.fdm_offset ?
+            cmd_buffer->pre_chain.fdm_offsets : NULL;
+         TU_CALLX(dev, tu_cmd_render)(cmd_buffer, fdm_offsets);
 
          tu_cs_emit_pkt7(&cmd_buffer->cs, CP_MEM_WRITE, 3);
          tu_cs_emit_qw(&cmd_buffer->cs,
@@ -195,12 +193,6 @@ tu_insert_dynamic_cmdbufs(struct tu_device *dev,
          assert(cmd_buffer);
 
          tu_append_pre_post_chain(cmd_buffer, old_cmds[i]);
-
-         if (old_cmds[i]->usage_flags &
-             VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) {
-            u_trace_disable_event_range(old_cmds[i]->trace_renderpass_start,
-                                        old_cmds[i]->trace_renderpass_end);
-         }
 
          /* When the command buffer is finally recorded, we need its state
           * to be the state of the command buffer before it. We need this

@@ -48,7 +48,8 @@ dri_create_context(struct dri_screen *screen,
                    const struct __DriverContextConfig *ctx_config,
                    unsigned *error,
                    struct dri_context *sharedContextPrivate,
-                   void *loaderPrivate)
+                   void *loaderPrivate,
+                   bool thread_safe)
 {
    struct dri_context *ctx = NULL;
    struct st_context *st_share = NULL;
@@ -60,8 +61,6 @@ dri_create_context(struct dri_screen *screen,
       __DRIVER_CONTEXT_ATTRIB_PRIORITY |
       __DRIVER_CONTEXT_ATTRIB_RELEASE_BEHAVIOR |
       __DRIVER_CONTEXT_ATTRIB_NO_ERROR;
-   const __DRIbackgroundCallableExtension *backgroundCallable =
-      screen->dri2.backgroundCallable;
    const struct driOptionCache *optionCache = &screen->dev->option_cache;
 
    /* This is effectively doing error checking for GLX context creation (by both
@@ -136,6 +135,9 @@ dri_create_context(struct dri_screen *screen,
       case __DRI_CTX_PRIORITY_HIGH:
          attribs.context_flags |= PIPE_CONTEXT_HIGH_PRIORITY;
          break;
+      case __DRI_CTX_PRIORITY_REALTIME:
+         attribs.context_flags |= PIPE_CONTEXT_REALTIME_PRIORITY;
+         break;
       default:
          break;
       }
@@ -169,7 +171,7 @@ dri_create_context(struct dri_screen *screen,
    if (debug_get_bool_option("MESA_NO_ERROR", false) ||
        driQueryOptionb(&screen->dev->option_cache, "mesa_no_error"))
 #if !defined(_WIN32)
-      if (geteuid() == getuid())
+      if (__normal_user())
 #endif
          attribs.flags |= ST_CONTEXT_FLAG_NO_ERROR;
 
@@ -227,20 +229,13 @@ dri_create_context(struct dri_screen *screen,
       }
       enable_glthread = user_enable_glthread;
    }
+
+   if (!thread_safe)
+      enable_glthread = false;
+
    /* Do this last. */
-   if (enable_glthread) {
-      bool safe = true;
-
-      /* This is only needed by X11/DRI2, which can be unsafe. */
-      if (backgroundCallable &&
-          backgroundCallable->base.version >= 2 &&
-          backgroundCallable->isThreadSafe &&
-          !backgroundCallable->isThreadSafe(loaderPrivate))
-         safe = false;
-
-      if (safe)
-         _mesa_glthread_init(ctx->st->ctx);
-   }
+   if (enable_glthread)
+      _mesa_glthread_init(ctx->st->ctx);
 
    *error = __DRI_CTX_ERROR_SUCCESS;
    return ctx;

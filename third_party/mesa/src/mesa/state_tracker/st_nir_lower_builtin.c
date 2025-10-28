@@ -68,11 +68,22 @@
 nir_variable *
 st_nir_state_variable_create(nir_shader *shader,
                              const struct glsl_type *type,
-                             const gl_state_index16 tokens[STATE_LENGTH])
+                             struct gl_program_parameter_list *param_list,
+                             const gl_state_index16 tokens[STATE_LENGTH],
+                             char *var_name,
+                             bool packed_driver_uniform_storage)
 {
-   char *name = _mesa_program_state_string(tokens);
+   char *name = var_name ? var_name : _mesa_program_state_string(tokens);
    nir_variable *var = nir_state_variable_create(shader, type, name, tokens);
-   free(name);
+
+   if (param_list) {
+      unsigned loc = _mesa_add_state_reference(param_list, tokens);
+      var->data.driver_location = packed_driver_uniform_storage ?
+         param_list->Parameters[loc].ValueOffset : loc;
+   }
+
+   if (!var_name)
+      free(name);
    return var;
 }
 
@@ -150,7 +161,8 @@ get_variable(nir_builder *b, nir_deref_path *path,
       return var;
 
    /* variable doesn't exist yet, so create it: */
-   return st_nir_state_variable_create(shader, glsl_vec4_type(), tokens);
+   return st_nir_state_variable_create(shader, glsl_vec4_type(), NULL,
+                                       tokens, NULL, false);
 }
 
 static bool
@@ -210,21 +222,15 @@ lower_builtin_instr(nir_builder *b, nir_intrinsic_instr *intrin,
    def = nir_swizzle(b, def, swiz, intrin->num_components);
 
    /* and rewrite uses of original instruction: */
-   nir_def_rewrite_uses(&intrin->def, def);
-
-   /* at this point intrin should be unused.  We need to remove it
-    * (rather than waiting for DCE pass) to avoid dangling reference
-    * to remove'd var.  And we have to remove the original uniform
-    * var since we don't want it to get uniform space allocated.
-    */
-   nir_instr_remove(&intrin->instr);
+   nir_def_replace(&intrin->def, def);
 
    return true;
 }
 
-void
+bool
 st_nir_lower_builtin(nir_shader *shader)
 {
+   bool progress = false;
    struct set *vars = _mesa_pointer_set_create(NULL);
 
    nir_foreach_uniform_variable(var, shader) {
@@ -240,13 +246,17 @@ st_nir_lower_builtin(nir_shader *shader)
        * be eliminated beforehand to avoid trying to lower one of those
        * builtins
        */
-      nir_lower_indirect_var_derefs(shader, vars);
+      progress |= nir_lower_indirect_var_derefs(shader, vars);
 
       if (nir_shader_intrinsics_pass(shader, lower_builtin_instr,
-                                       nir_metadata_block_index |
-                                       nir_metadata_dominance, NULL))
+                                       nir_metadata_control_flow, NULL)) {
          nir_remove_dead_derefs(shader);
+         progress = true;
+      }
+   } else {
+      nir_shader_preserve_all_metadata(shader);
    }
 
    _mesa_set_destroy(vars, NULL);
+   return progress;
 }

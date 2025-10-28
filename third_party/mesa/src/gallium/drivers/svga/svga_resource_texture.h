@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2008-2023 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2008-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef SVGA_TEXTURE_H
 #define SVGA_TEXTURE_H
@@ -189,11 +171,9 @@ check_face_level(const struct svga_texture *tex,
 {
    if (tex->b.target == PIPE_TEXTURE_CUBE) {
       assert(face < 6);
-   }
-   else if (tex->b.target == PIPE_TEXTURE_3D) {
+   } else if (tex->b.target == PIPE_TEXTURE_3D) {
       assert(face < tex->b.depth0);
-   }
-   else {
+   } else {
       assert(face < tex->b.array_size);
    }
 
@@ -253,8 +233,7 @@ svga_set_texture_dirty(struct svga_texture *tex,
 static inline void
 svga_clear_texture_dirty(struct svga_texture *tex)
 {
-   unsigned i;
-   for (i = 0; i < tex->b.depth0 * tex->b.array_size; i++) {
+   for (unsigned i = 0; i < tex->b.depth0 * tex->b.array_size; i++) {
       tex->dirty[i] = 0;
    }
    tex->modified = false;

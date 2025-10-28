@@ -41,11 +41,8 @@ struct st_translate {
 
    nir_def *temps[MAX_PROGRAM_TEMPS];
 
-   nir_variable *fragcolor;
    nir_variable *constants;
    nir_variable *samplers[MAX_TEXTURE_UNITS];
-
-   nir_def *inputs[VARYING_SLOT_MAX];
 
    unsigned current_pass;
 
@@ -113,15 +110,15 @@ apply_swizzle(struct st_translate *t,
 static nir_def *
 load_input(struct st_translate *t, gl_varying_slot slot)
 {
-   if (!t->inputs[slot]) {
-      nir_variable *var = nir_create_variable_with_location(t->b->shader, nir_var_shader_in, slot,
-                                                            glsl_vec4_type());
-      var->data.interpolation = INTERP_MODE_NONE;
+   nir_def *baryc = nir_load_barycentric_pixel(t->b, 32);
 
-      t->inputs[slot] = nir_load_var(t->b, var);
+   if (slot != VARYING_SLOT_COL0 && slot != VARYING_SLOT_COL1) {
+      nir_intrinsic_set_interp_mode(nir_def_as_intrinsic(baryc),
+                                    INTERP_MODE_SMOOTH);
    }
 
-   return t->inputs[slot];
+   return nir_load_interpolated_input(t->b, 4, 32, baryc, nir_imm_int(t->b, 0),
+                                      .io_semantics.location = slot);
 }
 
 static nir_def *
@@ -163,7 +160,7 @@ get_source(struct st_translate *t, GLenum src_type)
       return load_input(t, VARYING_SLOT_COL1);
    } else {
       /* frontend prevents this */
-      unreachable("unknown source");
+      UNREACHABLE("unknown source");
    }
 }
 
@@ -265,7 +262,7 @@ emit_arith_inst(struct st_translate *t,
       return nir_channel_vec4(t->b, nir_fdot4(t->b,src[0], src[1]), 0);
 
    default:
-      unreachable("Unknown ATI_fs opcode");
+      UNREACHABLE("Unknown ATI_fs opcode");
    }
 }
 
@@ -358,6 +355,7 @@ compile_setupinst(struct st_translate *t,
       tex->dest_type = nir_type_float32;
       tex->coord_components =
          glsl_get_sampler_dim_coordinate_components(tex->sampler_dim);
+      tex->can_speculate = true;
 
       tex->src[0] = nir_tex_src_for_ssa(nir_tex_src_texture_deref,
                                         &tex_deref->def);
@@ -443,13 +441,13 @@ st_translate_atifs_program(struct ati_fragment_shader *atifs,
 
    /* Copy the shader_info from the gl_program */
    t->b->shader->info = program->info;
+   t->b->shader->info.max_subgroup_size = 128;
+   t->b->shader->info.min_subgroup_size = 1;
 
    nir_shader *s = t->b->shader;
    s->info.name = ralloc_asprintf(s, "ATIFS%d", program->Id);
    s->info.internal = false;
-
-   t->fragcolor = nir_create_variable_with_location(b.shader, nir_var_shader_out,
-                                                    FRAG_RESULT_COLOR, glsl_vec4_type());
+   s->info.io_lowered = true;
 
    st_atifs_setup_uniforms(t, program);
 
@@ -466,8 +464,10 @@ st_translate_atifs_program(struct ati_fragment_shader *atifs,
       }
    }
 
-   if (t->regs_written[atifs->NumPasses-1][0])
-      nir_store_var(t->b, t->fragcolor, t->temps[0], 0xf);
+   if (t->regs_written[atifs->NumPasses-1][0]) {
+      nir_store_output(t->b, t->temps[0], nir_imm_int(t->b, 0),
+                       .io_semantics.location = FRAG_RESULT_COLOR);
+   }
 
    return b.shader;
 }
@@ -542,6 +542,6 @@ st_nir_lower_atifs_samplers(struct nir_shader *s, const uint8_t *texture_index)
    }
 
    return nir_shader_instructions_pass(s, st_nir_lower_atifs_samplers_instr,\
-                                       nir_metadata_block_index |
-                                       nir_metadata_dominance, (void *)texture_index);
+                                       nir_metadata_control_flow,
+                                       (void *)texture_index);
 }

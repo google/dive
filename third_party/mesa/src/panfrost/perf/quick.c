@@ -1,5 +1,7 @@
+#include <xf86drm.h>
 #include <stdio.h>
-#include <lib/pan_device.h>
+#include <lib/kmod/pan_kmod.h>
+#include <lib/pan_props.h>
 #include "pan_perf.h"
 
 int
@@ -13,13 +15,11 @@ main(void)
    }
 
    void *ctx = ralloc_context(NULL);
-   struct panfrost_perf *perf = rzalloc(ctx, struct panfrost_perf);
+   struct pan_perf *perf = rzalloc(ctx, struct pan_perf);
 
-   struct panfrost_device dev = {};
-   panfrost_open_device(ctx, fd, &dev);
+   pan_perf_init(perf, fd);
 
-   panfrost_perf_init(perf, &dev);
-   int ret = panfrost_perf_enable(perf);
+   int ret = pan_perf_enable(perf);
 
    if (ret < 0) {
       fprintf(stderr, "failed to enable counters (%d)\n", ret);
@@ -32,25 +32,25 @@ main(void)
 
    sleep(1);
 
-   panfrost_perf_dump(perf);
+   pan_perf_dump(perf);
 
    for (unsigned i = 0; i < perf->cfg->n_categories; ++i) {
-      const struct panfrost_perf_category *cat = &perf->cfg->categories[i];
+      const struct pan_perf_category *cat = &perf->cfg->categories[i];
       printf("%s\n", cat->name);
 
       for (unsigned j = 0; j < cat->n_counters; ++j) {
-         const struct panfrost_perf_counter *ctr = &cat->counters[j];
-         uint32_t val = panfrost_perf_counter_read(ctr, perf);
+         const struct pan_perf_counter *ctr = &cat->counters[j];
+         uint32_t val = pan_perf_counter_read(ctr, perf);
          printf("%s (%s): %u\n", ctr->name, ctr->symbol_name, val);
       }
 
       printf("\n");
    }
 
-   if (panfrost_perf_disable(perf) < 0) {
+   if (pan_perf_disable(perf) < 0) {
       fprintf(stderr, "failed to disable counters\n");
       exit(1);
    }
 
-   panfrost_close_device(&dev);
+   return 0;
 }

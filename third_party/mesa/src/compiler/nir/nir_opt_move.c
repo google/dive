@@ -71,14 +71,24 @@ nir_opt_move_block(nir_block *block, nir_move_options options)
       instr->index = index++;
 
       /* Check if this instruction can be moved downwards */
-      if (!nir_can_move_instr(instr, options))
+      if (!nir_can_move_instr(instr, options)) {
+         if (instr->type == nir_instr_type_intrinsic) {
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+            if (intrin->intrinsic == nir_intrinsic_export_amd ||
+                intrin->intrinsic == nir_intrinsic_export_row_amd ||
+                intrin->intrinsic == nir_intrinsic_begin_invocation_interlock) {
+               /* Moving past these increases a critical section. */
+               last_instr = instr;
+            }
+         }
          continue;
+      }
 
       /* Check all users in this block which is the first */
       const nir_def *def = nir_instr_def(instr);
       nir_instr *first_user = instr == if_cond_instr ? NULL : last_instr;
       nir_foreach_use(use, def) {
-         nir_instr *parent = use->parent_instr;
+         nir_instr *parent = nir_src_parent_instr(use);
          if (parent->type == nir_instr_type_phi || parent->block != block)
             continue;
          if (!first_user || parent->index > first_user->index)
@@ -128,6 +138,9 @@ nir_opt_move(nir_shader *shader, nir_move_options options)
    bool progress = false;
 
    nir_foreach_function_impl(impl, shader) {
+      if (options & (nir_move_only_convergent | nir_move_only_divergent))
+         nir_metadata_require(impl, nir_metadata_divergence);
+
       bool impl_progress = false;
       nir_foreach_block(block, impl) {
          if (nir_opt_move_block(block, options))
@@ -135,12 +148,11 @@ nir_opt_move(nir_shader *shader, nir_move_options options)
       }
 
       if (impl_progress) {
-         nir_metadata_preserve(impl, nir_metadata_block_index |
-                                        nir_metadata_dominance |
-                                        nir_metadata_live_defs);
-         progress = true;
+         progress = nir_progress(true, impl,
+                                 nir_metadata_control_flow | nir_metadata_live_defs);
       } else {
-         nir_metadata_preserve(impl, nir_metadata_all);
+         nir_progress(true, impl,
+                      nir_metadata_all & ~nir_metadata_instr_index);
       }
    }
 

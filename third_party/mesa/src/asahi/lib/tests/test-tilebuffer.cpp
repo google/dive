@@ -128,7 +128,30 @@ struct test tests[] = {
          .tile_size = { 32, 32 },
       },
       8192
-   }
+   },
+   {
+      "MRT test that requires spilling to consider alignment requirements",
+      4,
+      {
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+         PIPE_FORMAT_R32_FLOAT,
+      },
+      {
+         .spilled = { false, false, false, false, false, false, true, true },
+         ._offset_B = { 0, 4, 8, 12, 16, 20, 0, 0},
+         .sample_size_B = 24,
+         .nr_samples = 4,
+         .tile_size = { 16, 16 },
+      },
+      24576
+   },
+
 };
 /* clang-format on */
 
@@ -143,7 +166,7 @@ TEST(Tilebuffer, Layouts)
          ;
 
       struct agx_tilebuffer_layout actual = agx_build_tilebuffer_layout(
-         tests[i].formats, nr_cbufs, tests[i].nr_samples);
+         tests[i].formats, nr_cbufs, tests[i].nr_samples, false);
 
       ASSERT_EQ(tests[i].layout.sample_size_B, actual.sample_size_B)
          << tests[i].name;

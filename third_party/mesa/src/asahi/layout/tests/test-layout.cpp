@@ -14,7 +14,7 @@ TEST(Cubemap, Nonmipmapped)
       .depth_px = 6,
       .sample_count_sa = 1,
       .levels = 1,
-      .tiling = AIL_TILING_TWIDDLED,
+      .tiling = AIL_TILING_GPU,
       .format = PIPE_FORMAT_R8G8B8A8_UNORM,
    };
 
@@ -32,7 +32,7 @@ TEST(Cubemap, RoundsToOnePage)
       .depth_px = 6,
       .sample_count_sa = 1,
       .levels = 6,
-      .tiling = AIL_TILING_TWIDDLED,
+      .tiling = AIL_TILING_GPU,
       .format = PIPE_FORMAT_R32_FLOAT,
    };
 
@@ -73,13 +73,15 @@ TEST(Miptree, AllMipLevels)
       .depth_px = 1,
       .sample_count_sa = 1,
       .levels = 11,
-      .tiling = AIL_TILING_TWIDDLED,
+      .tiling = AIL_TILING_GPU,
       .format = PIPE_FORMAT_R8G8B8A8_UINT,
    };
 
    ail_make_miptree(&layout);
 
    EXPECT_EQ(layout.size_B, 0x555680);
+   EXPECT_EQ(layout.sparse_folios_per_layer, 2);
+   EXPECT_EQ(layout.sparse_table_size_B, 0x1000);
 }
 
 TEST(Miptree, SomeMipLevels)
@@ -90,13 +92,15 @@ TEST(Miptree, SomeMipLevels)
       .depth_px = 1,
       .sample_count_sa = 1,
       .levels = 4,
-      .tiling = AIL_TILING_TWIDDLED,
+      .tiling = AIL_TILING_GPU,
       .format = PIPE_FORMAT_R8G8B8A8_UINT,
    };
 
    ail_make_miptree(&layout);
 
    EXPECT_EQ(layout.size_B, 0x555680);
+   EXPECT_EQ(layout.sparse_folios_per_layer, 2);
+   EXPECT_EQ(layout.sparse_table_size_B, 0x1000);
 }
 
 TEST(Miptree, SmallPartialMiptree2DArray)
@@ -107,7 +111,7 @@ TEST(Miptree, SmallPartialMiptree2DArray)
       .depth_px = 64,
       .sample_count_sa = 1,
       .levels = 4,
-      .tiling = AIL_TILING_TWIDDLED,
+      .tiling = AIL_TILING_GPU,
       .format = PIPE_FORMAT_R32_FLOAT,
    };
 
@@ -115,6 +119,8 @@ TEST(Miptree, SmallPartialMiptree2DArray)
 
    EXPECT_EQ(layout.layer_stride_B, 0xc00);
    EXPECT_EQ(layout.size_B, 0x30000);
+   EXPECT_EQ(layout.sparse_folios_per_layer, 1);
+   EXPECT_EQ(layout.sparse_table_size_B, 0x20000);
 }
 
 TEST(Miptree, SmallPartialMiptree3D)
@@ -126,7 +132,7 @@ TEST(Miptree, SmallPartialMiptree3D)
       .sample_count_sa = 1,
       .levels = 4,
       .mipmapped_z = true,
-      .tiling = AIL_TILING_TWIDDLED,
+      .tiling = AIL_TILING_GPU,
       .format = PIPE_FORMAT_R32_FLOAT,
    };
 
@@ -134,4 +140,6 @@ TEST(Miptree, SmallPartialMiptree3D)
 
    EXPECT_EQ(layout.layer_stride_B, 0xc80);
    EXPECT_EQ(layout.size_B, 0x32000);
+   EXPECT_EQ(layout.sparse_folios_per_layer, 1);
+   EXPECT_EQ(layout.sparse_table_size_B, 0x20000);
 }

@@ -1,6 +1,28 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2086 # we want word splitting
-set -e
+# shellcheck disable=SC1091 # paths only become valid at runtime
+
+. "${SCRIPTS_DIR}/setup-test-env.sh"
+
+set -ue
+
+if [ -z "$CROSVM_TAG" ]; then
+    echo "CROSVM_TAG must be set to the conditional build tag"
+    exit 1
+fi
+
+# Are we using the right crosvm version?
+ci_tag_test_time_check "CROSVM_TAG"
+
+# Instead of starting one dEQP instance per available CPU core, pour our
+# concurrency at llvmpipe threads instead. This is mostly useful for VirGL and
+# Venus, which serialise quite a bit at the host level. So instead of smashing
+# it with a pile of concurrent jobs which don't actually parallelise very well,
+# we use that concurrency for llvmpipe/lavapipe's render pipeline.
+if [ -n "${PARALLELISE_VIA_LP_THREADS:-}" ]; then
+    export LP_NUM_THREADS="${FDO_CI_CONCURRENT:-4}"
+    export FDO_CI_CONCURRENT=1
+fi
 
 # If run outside of a deqp-runner invoction (e.g. piglit trace replay), then act
 # the same as the first thread in its threadpool.
@@ -25,7 +47,7 @@ THREAD=${DEQP_RUNNER_THREAD:-0}
 #    context data towards the guest
 #
 set_vsock_context() {
-    [ -n "${CI_JOB_ID}" ] || {
+    [ -n "${CI_JOB_ID:-}" ] || {
         echo "Missing or unset CI_JOB_ID env variable" >&2
         exit 1
     }
@@ -63,14 +85,19 @@ fi
 set_vsock_context || { echo "Could not generate crosvm vsock CID" >&2; exit 1; }
 
 # Securely pass the current variables to the crosvm environment
-echo "Variables passed through:"
-SCRIPT_DIR=$(readlink -en "${0%/*}")
-${SCRIPT_DIR}/common/generate-env.sh | tee ${VM_TEMP_DIR}/crosvm-env.sh
-cp ${SCRIPT_DIR}/setup-test-env.sh ${VM_TEMP_DIR}/setup-test-env.sh
+section_start variables "Environment variables passed through to VM:"
+SCRIPTS_DIR=$(readlink -en "${0%/*}")
+filter_env_vars | tee ${VM_TEMP_DIR}/crosvm-env.sh
+cp ${SCRIPTS_DIR}/setup-test-env.sh ${VM_TEMP_DIR}/setup-test-env.sh
+section_end variables
 
 # Set the crosvm-script as the arguments of the current script
-echo ". ${VM_TEMP_DIR}/setup-test-env.sh" > ${VM_TEMP_DIR}/crosvm-script.sh
-echo "$@" >> ${VM_TEMP_DIR}/crosvm-script.sh
+{
+  echo "export SCRIPTS_DIR=${SCRIPTS_DIR}"
+  echo "export RESULTS_DIR=${RESULTS_DIR}"
+  echo ". ${VM_TEMP_DIR}/setup-test-env.sh"
+  echo "$@"
+} > ${VM_TEMP_DIR}/crosvm-script.sh
 
 # Setup networking
 /usr/sbin/iptables-legacy -w -t nat -A POSTROUTING -o eth0 -j MASQUERADE
@@ -85,27 +112,42 @@ unset DISPLAY
 unset XDG_RUNTIME_DIR
 
 CROSVM_KERN_ARGS="quiet console=null root=my_root rw rootfstype=virtiofs ip=192.168.30.2::192.168.30.1:255.255.255.0:crosvm:eth0"
-CROSVM_KERN_ARGS="${CROSVM_KERN_ARGS} init=${SCRIPT_DIR}/crosvm-init.sh -- ${VSOCK_STDOUT} ${VSOCK_STDERR} ${VM_TEMP_DIR}"
+CROSVM_KERN_ARGS="${CROSVM_KERN_ARGS} init=${SCRIPTS_DIR}/crosvm-init.sh -- ${VSOCK_STDOUT} ${VSOCK_STDERR} ${VM_TEMP_DIR}"
 
-[ "${CROSVM_GALLIUM_DRIVER}" = "llvmpipe" ] && \
+[ "${CROSVM_GALLIUM_DRIVER:-}" = "llvmpipe" ] && \
     CROSVM_LIBGL_ALWAYS_SOFTWARE=true || CROSVM_LIBGL_ALWAYS_SOFTWARE=false
 
-set +e -x
+set +e
+
+if [ "${INSIDE_DEQP_RUNNER:-}" != "true" ]
+then
+  set -x
+fi
+
+section_start kernel "Downloading kernel image"
+if [ ! -f "/kernel/${KERNEL_IMAGE_NAME:-bzImage}" ]; then
+  mkdir -p /kernel
+  # shellcheck disable=SC2153
+  curl -L --retry 4 -f --retry-all-errors --retry-delay 30 \
+    -o "/kernel/${KERNEL_IMAGE_NAME:-bzImage}" "${KERNEL_IMAGE_BASE}/${DEBIAN_ARCH:-amd64}/${KERNEL_IMAGE_NAME:-bzImage}"
+fi
+section_end kernel
 
 # We aren't testing the host driver here, so we don't need to validate NIR on the host
 NIR_DEBUG="novalidate" \
-LIBGL_ALWAYS_SOFTWARE=${CROSVM_LIBGL_ALWAYS_SOFTWARE} \
-GALLIUM_DRIVER=${CROSVM_GALLIUM_DRIVER} \
-VK_ICD_FILENAMES=$CI_PROJECT_DIR/install/share/vulkan/icd.d/${CROSVM_VK_DRIVER}_icd.x86_64.json \
+LIBGL_ALWAYS_SOFTWARE=${CROSVM_LIBGL_ALWAYS_SOFTWARE:-} \
+GALLIUM_DRIVER=${CROSVM_GALLIUM_DRIVER:-} \
+VK_DRIVER_FILES=$CI_PROJECT_DIR/install/share/vulkan/icd.d/${CROSVM_VK_DRIVER:-}_icd.x86_64.json \
 crosvm --no-syslog run \
-    --gpu "${CROSVM_GPU_ARGS}" --gpu-render-server "path=/usr/local/libexec/virgl_render_server" \
+    --gpu "${CROSVM_GPU_ARGS:-}" --gpu-render-server "path=${VIRGL_RENDER_SERVER:-/usr/local/libexec/virgl_render_server}" \
     -m "${CROSVM_MEMORY:-4096}" -c "${CROSVM_CPU:-2}" --disable-sandbox \
     --shared-dir /:my_root:type=fs:writeback=true:timeout=60:cache=always \
     --net "host-ip=192.168.30.1,netmask=255.255.255.0,mac=AA:BB:CC:00:00:12" \
     -s $VM_SOCKET \
     --cid ${VSOCK_CID} -p "${CROSVM_KERN_ARGS}" \
-    /lava-files/${KERNEL_IMAGE_NAME:-bzImage} > ${VM_TEMP_DIR}/crosvm 2>&1
+    /kernel/${KERNEL_IMAGE_NAME:-bzImage} > ${VM_TEMP_DIR}/crosvm 2>&1
 
+section_start crosvm_results "Processing crosvm results"
 CROSVM_RET=$?
 
 [ ${CROSVM_RET} -eq 0 ] && {
@@ -117,10 +159,11 @@ CROSVM_RET=$?
 
 # Show crosvm output on error to help with debugging
 [ ${CROSVM_RET} -eq 0 ] || {
-    set +x
+    { set +x; } 2>/dev/null
     echo "Dumping crosvm output.." >&2
     cat ${VM_TEMP_DIR}/crosvm >&2
     set -x
 }
+section_end crosvm_results
 
 exit ${CROSVM_RET}

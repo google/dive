@@ -26,6 +26,7 @@
 #include "symbol_table.h"
 #include "util/hash_table.h"
 #include "util/u_string.h"
+#include "util/ralloc.h"
 
 struct symbol {
    /** Symbol name. */
@@ -81,6 +82,8 @@ struct _mesa_symbol_table {
 
     /** Current scope depth. */
     unsigned depth;
+
+    linear_ctx *linalloc;
 };
 
 void
@@ -91,8 +94,6 @@ _mesa_symbol_table_pop_scope(struct _mesa_symbol_table *table)
 
     table->current_scope = scope->next;
     table->depth--;
-
-    free(scope);
 
     while (sym != NULL) {
         struct symbol *const next = sym->next_with_same_scope;
@@ -107,7 +108,6 @@ _mesa_symbol_table_pop_scope(struct _mesa_symbol_table *table)
            _mesa_hash_table_remove(table->ht, hte);
         }
 
-        free(sym);
         sym = next;
     }
 }
@@ -116,7 +116,8 @@ _mesa_symbol_table_pop_scope(struct _mesa_symbol_table *table)
 void
 _mesa_symbol_table_push_scope(struct _mesa_symbol_table *table)
 {
-    struct scope_level *const scope = calloc(1, sizeof(*scope));
+    struct scope_level *const scope = linear_zalloc(table->linalloc,
+                                                    struct scope_level);
     if (scope == NULL) {
        _mesa_error_no_memory(__func__);
        return;
@@ -183,7 +184,8 @@ _mesa_symbol_table_add_symbol(struct _mesa_symbol_table *table,
    if (sym && sym->depth == table->depth)
       return -1;
 
-   new_sym = calloc(1, sizeof(*sym) + (sym ? 0 : (strlen(name) + 1)));
+   new_sym = linear_zalloc_child(table->linalloc,
+                                 sizeof(*sym) + (sym ? 0 : (strlen(name) + 1)));
    if (new_sym == NULL) {
       _mesa_error_no_memory(__func__);
       return -1;
@@ -226,60 +228,6 @@ _mesa_symbol_table_replace_symbol(struct _mesa_symbol_table *table,
     return 0;
 }
 
-int
-_mesa_symbol_table_add_global_symbol(struct _mesa_symbol_table *table,
-                                     const char *name, void *declaration)
-{
-   struct scope_level *top_scope;
-   struct symbol *inner_sym = NULL;
-   struct symbol *sym = find_symbol(table, name);
-
-   while (sym) {
-      if (sym->depth == 0)
-         return -1;
-
-      inner_sym = sym;
-
-      /* Get symbol from the outer scope with the same name */
-      sym = sym->next_with_same_name;
-   }
-
-   /* Find the top-level scope */
-   for (top_scope = table->current_scope; top_scope->next != NULL;
-        top_scope = top_scope->next) {
-      /* empty */
-   }
-
-   sym = calloc(1, sizeof(*sym) + (inner_sym ? 0 : strlen(name) + 1));
-   if (sym == NULL) {
-      _mesa_error_no_memory(__func__);
-      return -1;
-   }
-
-   if (inner_sym) {
-      /* In case we add the global out of order store a link to the global
-       * symbol in global.
-       */
-      inner_sym->next_with_same_name = sym;
-
-      sym->name = inner_sym->name;
-   } else {
-      sym->name = (char *)(sym + 1);
-      strcpy(sym->name, name);
-   }
-
-   sym->next_with_same_scope = top_scope->symbols;
-   sym->data = declaration;
-
-   top_scope->symbols = sym;
-
-   _mesa_hash_table_insert(table->ht, sym->name, sym);
-
-   return 0;
-}
-
-
-
 struct _mesa_symbol_table *
 _mesa_symbol_table_ctor(void)
 {
@@ -288,6 +236,7 @@ _mesa_symbol_table_ctor(void)
     if (table != NULL) {
        table->ht = _mesa_hash_table_create(NULL, _mesa_hash_string,
                                            _mesa_key_string_equal);
+       table->linalloc = linear_context(ralloc_context(NULL));
 
        _mesa_symbol_table_push_scope(table);
     }
@@ -310,11 +259,10 @@ _mesa_symbol_table_dtor(struct _mesa_symbol_table *table)
       while (scope->symbols) {
          struct symbol *sym = scope->symbols;
          scope->symbols = sym->next_with_same_scope;
-         free(sym);
       }
-      free(scope);
    }
 
    _mesa_hash_table_destroy(table->ht, NULL);
+   ralloc_free(ralloc_parent_of_linear_context(table->linalloc));
    free(table);
 }

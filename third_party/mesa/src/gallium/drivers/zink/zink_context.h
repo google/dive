@@ -54,15 +54,6 @@ struct zink_vertex_elements_state;
    util_debug_message(&ctx->dbg, PERF_INFO, __VA_ARGS__); \
 } while(0)
 
-
-static inline struct zink_resource *
-zink_descriptor_surface_resource(struct zink_descriptor_surface *ds)
-{
-   return ds->is_buffer ?
-          zink_descriptor_mode == ZINK_DESCRIPTOR_MODE_DB ? zink_resource(ds->db.pres) : zink_resource(ds->bufferview->pres) :
-          (struct zink_resource*)ds->surface->base.texture;
-}
-
 static inline bool
 zink_fb_clear_enabled(const struct zink_context *ctx, unsigned idx)
 {
@@ -71,12 +62,18 @@ zink_fb_clear_enabled(const struct zink_context *ctx, unsigned idx)
    return ctx->clears_enabled & (PIPE_CLEAR_COLOR0 << idx);
 }
 
-static inline uint32_t
+static ALWAYS_INLINE uint32_t
 zink_program_cache_stages(uint32_t stages_present)
 {
    return (stages_present & ((1 << MESA_SHADER_TESS_CTRL) |
                              (1 << MESA_SHADER_TESS_EVAL) |
                              (1 << MESA_SHADER_GEOMETRY))) >> 1;
+}
+
+static ALWAYS_INLINE uint32_t
+zink_mesh_cache_stages(uint32_t stages_present)
+{
+   return !!(stages_present & BITFIELD_BIT(MESA_SHADER_TASK));
 }
 
 static ALWAYS_INLINE bool
@@ -94,8 +91,42 @@ zink_is_zsbuf_write(const struct zink_context *ctx)
           ctx->dynamic_fb.tc_info.zsbuf_clear || ctx->dynamic_fb.tc_info.zsbuf_clear_partial;
 }
 
+#define ALL_READ_ACCESS_FLAGS \
+    (VK_ACCESS_INDIRECT_COMMAND_READ_BIT | \
+    VK_ACCESS_INDEX_READ_BIT | \
+    VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | \
+    VK_ACCESS_UNIFORM_READ_BIT | \
+    VK_ACCESS_INPUT_ATTACHMENT_READ_BIT | \
+    VK_ACCESS_SHADER_READ_BIT | \
+    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | \
+    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | \
+    VK_ACCESS_TRANSFER_READ_BIT |\
+    VK_ACCESS_HOST_READ_BIT |\
+    VK_ACCESS_MEMORY_READ_BIT |\
+    VK_ACCESS_TRANSFORM_FEEDBACK_COUNTER_READ_BIT_EXT |\
+    VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT |\
+    VK_ACCESS_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT |\
+    VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |\
+    VK_ACCESS_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR |\
+    VK_ACCESS_FRAGMENT_DENSITY_MAP_READ_BIT_EXT |\
+    VK_ACCESS_COMMAND_PREPROCESS_READ_BIT_NV |\
+    VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |\
+    VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR)
+static ALWAYS_INLINE bool
+zink_resource_access_is_write(VkAccessFlags flags)
+{
+   return (flags & ~ALL_READ_ACCESS_FLAGS) > 0;
+}
+
 void
 zink_fence_wait(struct pipe_context *ctx);
+
+static ALWAYS_INLINE void
+zink_update_dirty_gfx_stages(struct zink_context *ctx, uint32_t pstages)
+{
+   ctx->dirty_gfx_stages |= (pstages & BITFIELD_MASK(MESA_SHADER_COMPUTE));
+   ctx->dirty_mesh_stages |= (pstages & (BITFIELD_BIT(MESA_SHADER_FRAGMENT) | BITFIELD_BIT(MESA_SHADER_MESH) | BITFIELD_BIT(MESA_SHADER_TASK)));
+}
 
 void
 zink_wait_on_batch(struct zink_context *ctx, uint64_t batch_id);
@@ -109,32 +140,32 @@ unsigned
 zink_update_rendering_info(struct zink_context *ctx);
 void
 zink_flush_queue(struct zink_context *ctx);
-void
+bool
 zink_update_fbfetch(struct zink_context *ctx);
 bool
 zink_resource_access_is_write(VkAccessFlags flags);
 
-void
-zink_resource_buffer_barrier(struct zink_context *ctx, struct zink_resource *res, VkAccessFlags flags, VkPipelineStageFlags pipeline);
-void
-zink_resource_buffer_barrier2(struct zink_context *ctx, struct zink_resource *res, VkAccessFlags flags, VkPipelineStageFlags pipeline);
-bool
-zink_resource_image_needs_barrier(struct zink_resource *res, VkImageLayout new_layout, VkAccessFlags flags, VkPipelineStageFlags pipeline);
+static ALWAYS_INLINE void
+zink_buffer_barrier(struct zink_context *ctx, struct zink_resource *res, VkAccessFlags flags, VkPipelineStageFlags pipeline)
+{
+   if (res->obj->access) {
+      zink_screen(ctx->base.screen)->buffer_barrier(ctx, res, flags, pipeline);
+   } else {
+      res->obj->access = res->obj->unordered_access = flags;
+      res->obj->access_stage = res->obj->unordered_access_stage = pipeline;
+   }
+}
+
 void
 zink_resource_image_barrier_init(VkImageMemoryBarrier *imb, struct zink_resource *res, VkImageLayout new_layout, VkAccessFlags flags, VkPipelineStageFlags pipeline);
 void
 zink_resource_image_barrier2_init(VkImageMemoryBarrier2 *imb, struct zink_resource *res, VkImageLayout new_layout, VkAccessFlags flags, VkPipelineStageFlags pipeline);
-void
-zink_resource_image_barrier(struct zink_context *ctx, struct zink_resource *res,
-                      VkImageLayout new_layout, VkAccessFlags flags, VkPipelineStageFlags pipeline);
-void
-zink_resource_image_barrier2(struct zink_context *ctx, struct zink_resource *res, VkImageLayout new_layout, VkAccessFlags flags, VkPipelineStageFlags pipeline);
 bool
 zink_check_unordered_transfer_access(struct zink_resource *res, unsigned level, const struct pipe_box *box);
 bool
 zink_check_valid_buffer_src_access(struct zink_context *ctx, struct zink_resource *res, unsigned offset, unsigned size);
 void
-zink_resource_image_transfer_dst_barrier(struct zink_context *ctx, struct zink_resource *res, unsigned level, const struct pipe_box *box);
+zink_resource_image_transfer_dst_barrier(struct zink_context *ctx, struct zink_resource *res, unsigned level, const struct pipe_box *box, bool unsync);
 bool
 zink_resource_buffer_transfer_dst_barrier(struct zink_context *ctx, struct zink_resource *res, unsigned offset, unsigned size);
 void
@@ -152,13 +183,8 @@ zink_batch_no_rp(struct zink_context *ctx);
 void
 zink_batch_no_rp_safe(struct zink_context *ctx);
 
-VkImageView
-zink_prep_fb_attachment(struct zink_context *ctx, struct zink_surface *surf, unsigned i);
-void
-zink_update_vk_sample_locations(struct zink_context *ctx);
-
 static inline VkPipelineStageFlags
-zink_pipeline_flags_from_pipe_stage(gl_shader_stage pstage)
+zink_pipeline_flags_from_pipe_stage(mesa_shader_stage pstage)
 {
    switch (pstage) {
    case MESA_SHADER_VERTEX:
@@ -173,8 +199,12 @@ zink_pipeline_flags_from_pipe_stage(gl_shader_stage pstage)
       return VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
    case MESA_SHADER_COMPUTE:
       return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+   case MESA_SHADER_TASK:
+      return VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT;
+   case MESA_SHADER_MESH:
+      return VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT;
    default:
-      unreachable("unknown shader stage");
+      UNREACHABLE("unknown shader stage");
    }
 }
 
@@ -192,7 +222,7 @@ zink_init_draw_functions(struct zink_context *ctx, struct zink_screen *screen);
 void
 zink_init_grid_functions(struct zink_context *ctx);
 struct zink_context *
-zink_tc_context_unwrap(struct pipe_context *pctx, bool threaded);
+zink_tc_context_unwrap(struct pipe_context *pctx);
 
 void
 zink_update_barriers(struct zink_context *ctx, bool is_compute,
@@ -205,20 +235,7 @@ void
 zink_cmd_debug_marker_end(struct zink_context *ctx, VkCommandBuffer cmdbuf,bool emitted);
 void
 zink_copy_buffer(struct zink_context *ctx, struct zink_resource *dst, struct zink_resource *src,
-                 unsigned dst_offset, unsigned src_offset, unsigned size);
-
-VkIndirectCommandsLayoutTokenNV *
-zink_dgc_add_token(struct zink_context *ctx, VkIndirectCommandsTokenTypeNV type, void **mem);
-void
-zink_flush_dgc(struct zink_context *ctx);
-
-static ALWAYS_INLINE void
-zink_flush_dgc_if_enabled(struct zink_context *ctx)
-{
-   if (unlikely(zink_debug & ZINK_DEBUG_DGC))
-      zink_flush_dgc(ctx);
-}
-
+                 unsigned dst_offset, unsigned src_offset, unsigned size, bool unsync);
 #ifdef __cplusplus
 }
 #endif
@@ -248,6 +265,12 @@ zink_blit_region_fills(struct u_rect region, unsigned width, unsigned height);
 bool
 zink_blit_region_covers(struct u_rect region, struct u_rect covers);
 
+void
+zink_draw_rectangle(struct blitter_context *blitter, void *vertex_elements_cso,
+                    blitter_get_vs_func get_vs, int x1, int y1, int x2, int y2,
+                    float depth, unsigned num_instances, enum blitter_attrib_type type,
+                    const struct blitter_attrib *attrib);
+
 static inline struct u_rect
 zink_rect_from_box(const struct pipe_box *box)
 {
@@ -264,9 +287,8 @@ zink_component_mapping(enum pipe_swizzle swizzle)
    case PIPE_SWIZZLE_W: return VK_COMPONENT_SWIZZLE_A;
    case PIPE_SWIZZLE_0: return VK_COMPONENT_SWIZZLE_ZERO;
    case PIPE_SWIZZLE_1: return VK_COMPONENT_SWIZZLE_ONE;
-   case PIPE_SWIZZLE_NONE: return VK_COMPONENT_SWIZZLE_IDENTITY; // ???
    default:
-      unreachable("unexpected swizzle");
+      UNREACHABLE("unexpected swizzle");
    }
 }
 
@@ -280,38 +302,15 @@ bool
 zink_resource_rebind(struct zink_context *ctx, struct zink_resource *res);
 
 void
-zink_rebind_framebuffer(struct zink_context *ctx, struct zink_resource *res);
-void
 zink_set_null_fs(struct zink_context *ctx);
 
 void
 zink_copy_image_buffer(struct zink_context *ctx, struct zink_resource *dst, struct zink_resource *src,
-                       unsigned dst_level, unsigned dstx, unsigned dsty, unsigned dstz,
-                       unsigned src_level, const struct pipe_box *src_box, enum pipe_map_flags map_flags);
+                       unsigned buffer_offset,
+                       unsigned buffer_stride,
+                       unsigned buffer_layer_stride,
+                       unsigned level, const struct pipe_box *src_box, enum pipe_map_flags map_flags);
 
-void
-zink_destroy_buffer_view(struct zink_screen *screen, struct zink_buffer_view *buffer_view);
-
-struct pipe_surface *
-zink_get_dummy_pipe_surface(struct zink_context *ctx, int samples_index);
-struct zink_surface *
-zink_get_dummy_surface(struct zink_context *ctx, int samples_index);
-
-void
-debug_describe_zink_buffer_view(char *buf, const struct zink_buffer_view *ptr);
-
-static inline void
-zink_buffer_view_reference(struct zink_screen *screen,
-                           struct zink_buffer_view **dst,
-                           struct zink_buffer_view *src)
-{
-   struct zink_buffer_view *old_dst = dst ? *dst : NULL;
-
-   if (pipe_reference_described(old_dst ? &old_dst->reference : NULL, &src->reference,
-                                (debug_reference_descriptor)debug_describe_zink_buffer_view))
-      zink_destroy_buffer_view(screen, old_dst);
-   if (dst) *dst = src;
-}
 #endif
 
 #endif

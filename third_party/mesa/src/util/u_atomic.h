@@ -6,7 +6,8 @@
  *
  */
 
-#include "no_extern_c.h"
+// GOOGLE: Remove this no-extern check to "fix" build error
+//#include "no_extern_c.h"
 
 #ifndef U_ATOMIC_H
 #define U_ATOMIC_H
@@ -135,8 +136,28 @@ __forceinline short _interlockedadd16(short volatile * _Addend, short _Value)
  * Therefore, we rely on implicit casting to LONGLONG for the functions that return
  */
 
+
 #define p_atomic_set(_v, _i) (*(_v) = (_i))
-#define p_atomic_read(_v) (*(_v))
+#if defined(__cplusplus)
+#include <type_traits>
+#define p_atomic_read(_v) (*reinterpret_cast<std::add_pointer_t<std::add_volatile_t<std::remove_pointer_t<decltype(_v)>>>>(_v))
+#else
+#define p_atomic_read(_v) (_Generic(*(_v), \
+   bool            : *((volatile bool*)            (_v)), \
+   char            : *((volatile char*)            (_v)), \
+   short           : *((volatile short*)           (_v)), \
+   int             : *((volatile int*)             (_v)), \
+   long            : *((volatile long*)            (_v)), \
+   __int64         : *((volatile __int64*)         (_v)), \
+   unsigned char   : *((volatile unsigned char*)   (_v)), \
+   unsigned short  : *((volatile unsigned short*)  (_v)), \
+   unsigned int    : *((volatile unsigned int*)    (_v)), \
+   unsigned long   : *((volatile unsigned long*)   (_v)), \
+   unsigned __int64: *((volatile unsigned __int64*)(_v)), \
+   float           : *((volatile float*)           (_v)), \
+   double          : *((volatile double*)          (_v)), \
+   default         : *(_v)))
+#endif
 #define p_atomic_read_relaxed(_v) (*(_v))
 
 #define p_atomic_dec_zero(_v) \
@@ -166,17 +187,17 @@ __forceinline short _interlockedadd16(short volatile * _Addend, short _Value)
    ((void) p_atomic_fetch_add((_v), (_i)))
 
 #define p_atomic_add_return(_v, _i) (\
-   sizeof *(_v) == sizeof(char)    ? _interlockedadd8 ((char *)   (_v), (_i)) : \
-   sizeof *(_v) == sizeof(short)   ? _interlockedadd16((short *)  (_v), (_i)) : \
-   sizeof *(_v) == sizeof(long)    ? _interlockedadd  ((long *)   (_v), (_i)) : \
-   sizeof *(_v) == sizeof(__int64) ? _interlockedadd64((__int64 *)(_v), (_i)) : \
+   sizeof *(_v) == sizeof(char)    ? _interlockedadd8 ((char *)   (_v), (char) (_i)) : \
+   sizeof *(_v) == sizeof(short)   ? _interlockedadd16((short *)  (_v), (short) (_i)) : \
+   sizeof *(_v) == sizeof(long)    ? _interlockedadd  ((long *)   (_v), (long) (_i)) : \
+   sizeof *(_v) == sizeof(__int64) ? _interlockedadd64((__int64 *)(_v), (__int64) (_i)) : \
                                      (assert(!"should not get here"), 0))
 
 #define p_atomic_fetch_add(_v, _i) (\
-   sizeof *(_v) == sizeof(char)    ? _InterlockedExchangeAdd8 ((char *)   (_v), (_i)) : \
-   sizeof *(_v) == sizeof(short)   ? _InterlockedExchangeAdd16((short *)  (_v), (_i)) : \
-   sizeof *(_v) == sizeof(long)    ? _InterlockedExchangeAdd  ((long *)   (_v), (_i)) : \
-   sizeof *(_v) == sizeof(__int64) ? _interlockedexchangeadd64((__int64 *)(_v), (_i)) : \
+   sizeof *(_v) == sizeof(char)    ? _InterlockedExchangeAdd8 ((char *)   (_v), (char) (_i)) : \
+   sizeof *(_v) == sizeof(short)   ? _InterlockedExchangeAdd16((short *)  (_v), (short) (_i)) : \
+   sizeof *(_v) == sizeof(long)    ? _InterlockedExchangeAdd  ((long *)   (_v), (long) (_i)) : \
+   sizeof *(_v) == sizeof(__int64) ? _interlockedexchangeadd64((__int64 *)(_v), (__int64) (_i)) : \
                                      (assert(!"should not get here"), 0))
 
 #define p_atomic_cmpxchg(_v, _old, _new) (\
@@ -343,13 +364,27 @@ static inline uint64_t p_atomic_xchg_64(uint64_t *v, uint64_t i)
 /* On x86 we can have sizeof(uint64_t) = 8 and _Alignof(uint64_t) = 4. causing split locks. The
  * implementation does handle that correctly, but with an internal mutex. Extend the alignment to
  * avoid this.
+ * `p_atomic_int64_t` and `p_atomic_uint64_t` are used for casting any pointer to
+ * `p_atomic_int64_t *` and `p_atomic_uint64_t *`. That's for telling the compiler is accessing
+ * the 64 bits atomic in 8 byte aligned way to avoid clang `misaligned atomic operation` warning.
+ * To define 64 bits atomic memeber in struct type,
+ * use `alignas(8) int64_t $member` or `alignas(8) uint64_t $member` is enough.
  */
-#if  __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__) && defined(USE_GCC_ATOMIC_BUILTINS)
-typedef int64_t __attribute__((aligned(_Alignof(_Atomic(int64_t))))) p_atomic_int64_t;
-typedef uint64_t __attribute__((aligned(_Alignof(_Atomic(uint64_t))))) p_atomic_uint64_t;
+typedef struct {
+#ifndef __cplusplus
+   _Alignas(8)
 #else
-typedef int64_t p_atomic_int64_t;
-typedef uint64_t p_atomic_uint64_t;
+   alignas(8)
 #endif
+   int64_t value;
+} p_atomic_int64_t;
+typedef struct {
+#ifndef __cplusplus
+   _Alignas(8)
+#else
+   alignas(8)
+#endif
+   uint64_t value;
+} p_atomic_uint64_t;
 
 #endif /* U_ATOMIC_H */

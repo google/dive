@@ -25,13 +25,24 @@
 #define LP_SAMPLER_MATRIX
 
 #include "util/bitset.h"
+#include "util/u_atomic.h"
 #include "util/u_dynarray.h"
 #include "util/format/u_format.h"
 #include "util/simple_mtx.h"
 #include "gallivm/lp_bld_sample.h"
 #include "gallivm/lp_bld_jit_sample.h"
 
-#define LP_SAMPLE_KEY_COUNT (1 << 11)
+struct lp_function_cache {
+   p_atomic_uint64_t latest_cache;
+   struct util_dynarray trash_caches;
+};
+
+enum lp_function_cache_type {
+   LP_FUNCTION_CACHE_SAMPLE,
+   LP_FUNCTION_CACHE_FETCH,
+   LP_FUNCTION_CACHE_SIZE,
+   LP_FUNCTION_CACHE_COUNT,
+};
 
 struct lp_sampler_matrix {
    struct lp_texture_functions **textures;
@@ -40,8 +51,24 @@ struct lp_sampler_matrix {
    uint32_t texture_count;
    uint32_t sampler_count;
 
-   uint32_t sampler_keys[LP_SAMPLE_KEY_COUNT];
+   BITSET_DECLARE(sample_keys, LP_SAMPLE_KEY_COUNT);
    BITSET_DECLARE(image_ops, LP_TOTAL_IMAGE_OP_COUNT);
+
+   /* Per sample key functions which compile and cache sample and fetch functions on demand. */
+   void *jit_sample_functions[LP_SAMPLE_KEY_COUNT];
+   void *compile_sample_function;
+   void *jit_fetch_functions[LP_SAMPLE_KEY_COUNT];
+   void *compile_fetch_function;
+   void *jit_size_functions[2];
+   void *compile_size_function;
+   struct lp_function_cache caches[LP_FUNCTION_CACHE_COUNT];
+
+   simple_mtx_t lock;
+
+   struct llvmpipe_context *ctx;
+
+   /* Use a separate LLVMContext since it is not thread safe but can be accessed by shaders. */
+   lp_context_ref context;
 
    struct util_dynarray gallivms;
 };
@@ -50,6 +77,8 @@ void llvmpipe_init_sampler_matrix(struct llvmpipe_context *ctx);
 
 void llvmpipe_sampler_matrix_destroy(struct llvmpipe_context *ctx);
 
-void llvmpipe_register_shader(struct pipe_context *ctx, const struct pipe_shader_state *shader, bool unregister);
+void llvmpipe_register_shader(struct pipe_context *ctx, const struct pipe_shader_state *shader);
+
+void llvmpipe_clear_sample_functions_cache(struct llvmpipe_context *ctx, struct pipe_fence_handle **fence);
 
 #endif /* LP_SAMPLER_MATRIX */

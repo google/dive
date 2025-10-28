@@ -27,6 +27,8 @@
  * SOFTWARE.
  */
 
+#include "pvr_csb.h"
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -35,10 +37,10 @@
 
 #include "hwdef/rogue_hw_utils.h"
 #include "pvr_bo.h"
-#include "pvr_csb.h"
 #include "pvr_debug.h"
+#include "pvr_device.h"
 #include "pvr_device_info.h"
-#include "pvr_private.h"
+#include "pvr_macros.h"
 #include "pvr_types.h"
 #include "util/list.h"
 #include "util/u_dynarray.h"
@@ -81,7 +83,7 @@ void pvr_csb_init(struct pvr_device *device,
    csb->end = NULL;
    csb->relocation_mark = NULL;
 
-#if defined(DEBUG)
+#if MESA_DEBUG
    csb->relocation_mark_status = PVR_CSB_RELOCATION_MARK_UNINITIALIZED;
 #endif
 
@@ -104,7 +106,7 @@ void pvr_csb_init(struct pvr_device *device,
  */
 void pvr_csb_finish(struct pvr_csb *csb)
 {
-#if defined(DEBUG)
+#if MESA_DEBUG
    assert(csb->relocation_mark_status ==
              PVR_CSB_RELOCATION_MARK_UNINITIALIZED ||
           csb->relocation_mark_status == PVR_CSB_RELOCATION_MARK_CLEARED);
@@ -201,7 +203,7 @@ pvr_csb_emit_link_unmarked(struct pvr_csb *csb, pvr_dev_addr_t addr, bool ret)
       break;
 
    default:
-      unreachable("Unknown stream type");
+      UNREACHABLE("Unknown stream type");
       break;
    }
 }
@@ -229,7 +231,7 @@ static bool pvr_csb_buffer_extend(struct pvr_csb *csb)
       PVR_DW_TO_BYTES(pvr_cmd_length(VDMCTRL_STREAM_LINK0) +
                       pvr_cmd_length(VDMCTRL_STREAM_LINK1));
    const uint8_t stream_reserved_space =
-      stream_link_space + PVRX(VDMCTRL_GUARD_SIZE_DEFAULT);
+      stream_link_space + ROGUE_VDMCTRL_GUARD_SIZE_DEFAULT;
    const uint32_t cache_line_size =
       rogue_get_slc_cache_line_size(&csb->device->pdevice->dev_info);
    size_t current_state_update_size = 0;
@@ -244,8 +246,8 @@ static bool pvr_csb_buffer_extend(struct pvr_csb *csb)
                  (pvr_cmd_length(CDMCTRL_STREAM_LINK0) +
                   pvr_cmd_length(CDMCTRL_STREAM_LINK1)));
 
-   STATIC_ASSERT(PVRX(VDMCTRL_GUARD_SIZE_DEFAULT) ==
-                 PVRX(CDMCTRL_GUARD_SIZE_DEFAULT));
+   STATIC_ASSERT(ROGUE_VDMCTRL_GUARD_SIZE_DEFAULT ==
+                 ROGUE_CDMCTRL_GUARD_SIZE_DEFAULT);
 
    result = pvr_bo_alloc(csb->device,
                          csb->device->heaps.general_heap,
@@ -272,7 +274,7 @@ static bool pvr_csb_buffer_extend(struct pvr_csb *csb)
 
       memcpy(new_buffer, csb->relocation_mark, current_state_update_size);
 
-#if defined(DEBUG)
+#if MESA_DEBUG
       assert(csb->relocation_mark_status == PVR_CSB_RELOCATION_MARK_SET);
       csb->relocation_mark_status = PVR_CSB_RELOCATION_MARK_SET_AND_CONSUMED;
       zero_after_move = true;
@@ -283,8 +285,8 @@ static bool pvr_csb_buffer_extend(struct pvr_csb *csb)
 
       csb->next = csb->relocation_mark;
 
-      csb->end += stream_link_space;
-      assert(csb->next + stream_link_space <= csb->end);
+      csb->end = (uint8_t *)csb->end + stream_link_space;
+      assert((uint8_t *)csb->next + stream_link_space <= (uint8_t *)csb->end);
 
       pvr_csb_emit_link_unmarked(csb, pvr_bo->vma->dev_addr, false);
    }
@@ -295,8 +297,8 @@ static bool pvr_csb_buffer_extend(struct pvr_csb *csb)
    /* Reserve space at the end, including the default guard padding, to make
     * sure we don't run out of space when a stream link is required.
     */
-   csb->end = csb->start + pvr_bo->bo->size - stream_reserved_space;
-   csb->next = csb->start + current_state_update_size;
+   csb->end = (uint8_t *)csb->start + pvr_bo->bo->size - stream_reserved_space;
+   csb->next = (uint8_t *)csb->start + current_state_update_size;
 
    list_addtail(&pvr_bo->link, &csb->pvr_bo_list);
 
@@ -330,12 +332,12 @@ void *pvr_csb_alloc_dwords(struct pvr_csb *csb, uint32_t num_dwords)
       return p;
    }
 
-#if defined(DEBUG)
+#if MESA_DEBUG
    if (csb->relocation_mark_status == PVR_CSB_RELOCATION_MARK_CLEARED)
       mesa_logd_once("CS memory without relocation mark detected.");
 #endif
 
-   if (csb->next + required_space > csb->end) {
+   if ((uint8_t *)csb->next + required_space > (uint8_t *)csb->end) {
       bool ret = pvr_csb_buffer_extend(csb);
       if (!ret)
          return NULL;
@@ -343,7 +345,7 @@ void *pvr_csb_alloc_dwords(struct pvr_csb *csb, uint32_t num_dwords)
 
    p = csb->next;
 
-   csb->next += required_space;
+   csb->next = (uint8_t *)csb->next + required_space;
    assert(csb->next <= csb->end);
 
    return p;
@@ -372,7 +374,7 @@ VkResult pvr_csb_copy(struct pvr_csb *csb_dst, struct pvr_csb *csb_src)
    const uint8_t stream_reserved_space =
       PVR_DW_TO_BYTES(pvr_cmd_length(VDMCTRL_STREAM_LINK0) +
                       pvr_cmd_length(VDMCTRL_STREAM_LINK1)) +
-      PVRX(VDMCTRL_GUARD_SIZE_DEFAULT);
+      ROGUE_VDMCTRL_GUARD_SIZE_DEFAULT;
    const uint32_t size =
       util_dynarray_num_elements(&csb_src->deferred_cs_mem, char);
    const uint8_t *start = util_dynarray_begin(&csb_src->deferred_cs_mem);
@@ -471,7 +473,7 @@ VkResult pvr_csb_emit_terminate(struct pvr_csb *csb)
       break;
 
    default:
-      unreachable("Unknown stream type");
+      UNREACHABLE("Unknown stream type");
       break;
    }
 

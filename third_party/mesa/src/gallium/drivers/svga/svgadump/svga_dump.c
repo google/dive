@@ -1,27 +1,9 @@
-/**********************************************************
- * Copyright 2009 VMware, Inc.  All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- **********************************************************/
+/*
+ * Copyright (c) 2009-2024 Broadcom. All Rights Reserved.
+ * The term “Broadcom” refers to Broadcom Inc.
+ * and/or its subsidiaries.
+ * SPDX-License-Identifier: MIT
+ */
 
 /**
  * @file
@@ -31,7 +13,6 @@
  */
 
 #include "../svga_format.h"
-#include "svga_types.h"
 #include "svga_shader_dump.h"
 #include "svga3d_reg.h"
 
@@ -57,7 +38,7 @@ shader_name(unsigned type)
 static void
 dump_SVGA3dVertexDecl(const SVGA3dVertexDecl *cmd)
 {
-   switch((*cmd).identity.type) {
+   switch ((*cmd).identity.type) {
    case SVGA3D_DECLTYPE_FLOAT1:
       _debug_printf("\t\t.identity.type = SVGA3D_DECLTYPE_FLOAT1\n");
       break;
@@ -116,7 +97,7 @@ dump_SVGA3dVertexDecl(const SVGA3dVertexDecl *cmd)
       _debug_printf("\t\t.identity.type = %i\n", (*cmd).identity.type);
       break;
    }
-   switch((*cmd).identity.method) {
+   switch ((*cmd).identity.method) {
    case SVGA3D_DECLMETHOD_DEFAULT:
       _debug_printf("\t\t.identity.method = SVGA3D_DECLMETHOD_DEFAULT\n");
       break;
@@ -142,7 +123,7 @@ dump_SVGA3dVertexDecl(const SVGA3dVertexDecl *cmd)
       _debug_printf("\t\t.identity.method = %i\n", (*cmd).identity.method);
       break;
    }
-   switch((*cmd).identity.usage) {
+   switch ((*cmd).identity.usage) {
    case SVGA3D_DECLUSAGE_POSITION:
       _debug_printf("\t\t.identity.usage = SVGA3D_DECLUSAGE_POSITION\n");
       break;
@@ -204,7 +185,7 @@ static void
 dump_SVGA3dTextureState(const SVGA3dTextureState *cmd)
 {
    _debug_printf("\t\t.stage = %u\n", (*cmd).stage);
-   switch((*cmd).name) {
+   switch ((*cmd).name) {
    case SVGA3D_TS_INVALID:
       _debug_printf("\t\t.name = SVGA3D_TS_INVALID\n");
       break;
@@ -384,7 +365,7 @@ static void
 dump_SVGA3dCmdWaitForQuery(const SVGA3dCmdWaitForQuery *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_QUERYTYPE_OCCLUSION:
       _debug_printf("\t\t.type = SVGA3D_QUERYTYPE_OCCLUSION\n");
       break;
@@ -403,7 +384,7 @@ static void
 dump_SVGA3dCmdSetRenderTarget(const SVGA3dCmdSetRenderTarget *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_RT_DEPTH:
       _debug_printf("\t\t.type = SVGA3D_RT_DEPTH\n");
       break;
@@ -440,7 +421,7 @@ static void
 dump_SVGA3dCmdSetMaterial(const SVGA3dCmdSetMaterial *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).face) {
+   switch ((*cmd).face) {
    case SVGA3D_FACE_INVALID:
       _debug_printf("\t\t.face = SVGA3D_FACE_INVALID\n");
       break;
@@ -487,7 +468,7 @@ dump_SVGA3dCmdSetLightData(const SVGA3dCmdSetLightData *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
    _debug_printf("\t\t.index = %u\n", (*cmd).index);
-   switch((*cmd).data.type) {
+   switch ((*cmd).data.type) {
    case SVGA3D_LIGHTTYPE_INVALID:
       _debug_printf("\t\t.data.type = SVGA3D_LIGHTTYPE_INVALID\n");
       break;
@@ -583,7 +564,7 @@ static void
 dump_SVGA3dCmdEndQuery(const SVGA3dCmdEndQuery *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_QUERYTYPE_OCCLUSION:
       _debug_printf("\t\t.type = SVGA3D_QUERYTYPE_OCCLUSION\n");
       break;
@@ -631,7 +612,7 @@ static void
 dump_SVGA3dCmdBeginQuery(const SVGA3dCmdBeginQuery *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_QUERYTYPE_OCCLUSION:
       _debug_printf("\t\t.type = SVGA3D_QUERYTYPE_OCCLUSION\n");
       break;
@@ -647,7 +628,7 @@ dump_SVGA3dCmdBeginQuery(const SVGA3dCmdBeginQuery *cmd)
 static void
 dump_SVGA3dRenderState(const SVGA3dRenderState *cmd)
 {
-   switch((*cmd).state) {
+   switch ((*cmd).state) {
    case SVGA3D_RS_INVALID:
       _debug_printf("\t\t.state = SVGA3D_RS_INVALID\n");
       break;
@@ -964,7 +945,7 @@ dump_SVGA3dCmdDefineShader(const SVGA3dCmdDefineShader *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
    _debug_printf("\t\t.shid = %u\n", (*cmd).shid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_SHADERTYPE_VS:
       _debug_printf("\t\t.type = SVGA3D_SHADERTYPE_VS\n");
       break;
@@ -1083,7 +1064,7 @@ dump_SVGA3dCmdSetLightEnabled(const SVGA3dCmdSetLightEnabled *cmd)
 static void
 dump_SVGA3dPrimitiveRange(const SVGA3dPrimitiveRange *cmd)
 {
-   switch((*cmd).primType) {
+   switch ((*cmd).primType) {
    case SVGA3D_PRIMITIVE_INVALID:
       _debug_printf("\t\t.primType = SVGA3D_PRIMITIVE_INVALID\n");
       break;
@@ -1153,7 +1134,7 @@ dump_SVGA3dCmdSurfaceStretchBlt(const SVGA3dCmdSurfaceStretchBlt *cmd)
    _debug_printf("\t\t.boxDest.w = %u\n", (*cmd).boxDest.w);
    _debug_printf("\t\t.boxDest.h = %u\n", (*cmd).boxDest.h);
    _debug_printf("\t\t.boxDest.d = %u\n", (*cmd).boxDest.d);
-   switch((*cmd).mode) {
+   switch ((*cmd).mode) {
    case SVGA3D_STRETCH_BLT_POINT:
       _debug_printf("\t\t.mode = SVGA3D_STRETCH_BLT_POINT\n");
       break;
@@ -1178,7 +1159,7 @@ dump_SVGA3dCmdSurfaceDMA(const SVGA3dCmdSurfaceDMA *cmd)
    _debug_printf("\t\t.host.sid = %u\n", (*cmd).host.sid);
    _debug_printf("\t\t.host.face = %u\n", (*cmd).host.face);
    _debug_printf("\t\t.host.mipmap = %u\n", (*cmd).host.mipmap);
-   switch((*cmd).transfer) {
+   switch ((*cmd).transfer) {
    case SVGA3D_WRITE_HOST_VRAM:
       _debug_printf("\t\t.transfer = SVGA3D_WRITE_HOST_VRAM\n");
       break;
@@ -1204,7 +1185,7 @@ static void
 dump_SVGA3dCmdSetTransform(const SVGA3dCmdSetTransform *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_TRANSFORM_INVALID:
       _debug_printf("\t\t.type = SVGA3D_TRANSFORM_INVALID\n");
       break;
@@ -1280,7 +1261,7 @@ dump_SVGA3dCmdDestroyShader(const SVGA3dCmdDestroyShader *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
    _debug_printf("\t\t.shid = %u\n", (*cmd).shid);
-   switch((*cmd).type) {
+   switch ((*cmd).type) {
    case SVGA3D_SHADERTYPE_VS:
       _debug_printf("\t\t.type = SVGA3D_SHADERTYPE_VS\n");
       break;
@@ -1303,7 +1284,7 @@ static void
 dump_SVGA3dCmdClear(const SVGA3dCmdClear *cmd)
 {
    _debug_printf("\t\t.cid = %u\n", (*cmd).cid);
-   switch((*cmd).clearFlag) {
+   switch ((*cmd).clearFlag) {
    case SVGA3D_CLEAR_COLOR:
       _debug_printf("\t\t.clearFlag = SVGA3D_CLEAR_COLOR\n");
       break;
@@ -1326,7 +1307,7 @@ static void
 dump_SVGA3dCmdDefineSurface(const SVGA3dCmdDefineSurface *cmd)
 {
    _debug_printf("\t\t.sid = %u\n", (*cmd).sid);
-   switch((*cmd).surfaceFlags) {
+   switch ((*cmd).surfaceFlags) {
    case SVGA3D_SURFACE_CUBEMAP:
       _debug_printf("\t\t.surfaceFlags = SVGA3D_SURFACE_CUBEMAP\n");
       break;
@@ -2081,13 +2062,13 @@ case SVGA_3D_CMD_DX_##CommandCode: \
    } \
    break
 
-void            
+void
 svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
 {
    const uint8_t *body = (const uint8_t *)data;
    const uint8_t *next = body + size;
-  
-   switch(cmd_id) {
+
+   switch (cmd_id) {
    SVGA3D_DUMP_CASE_BASIC(BindContext, BIND_CONTEXT);
    SVGA3D_DUMP_CASE_LIST(SetViewports, SET_VIEWPORTS, SVGA3dViewport);
    SVGA3D_DUMP_CASE_BASIC(SetShader, SET_SHADER);
@@ -2174,7 +2155,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdDefineSurface *cmd = (const SVGA3dCmdDefineSurface *)body;
          dump_SVGA3dCmdDefineSurface(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dSize) <= next) {
+         while (body + sizeof(SVGA3dSize) <= next) {
             dump_SVGA3dSize((const SVGA3dSize *)body);
             body += sizeof(SVGA3dSize);
          }
@@ -2194,7 +2175,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdSurfaceCopy *cmd = (const SVGA3dCmdSurfaceCopy *)body;
          dump_SVGA3dCmdSurfaceCopy(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dCopyBox) <= next) {
+         while (body + sizeof(SVGA3dCopyBox) <= next) {
             dump_SVGA3dCopyBox((const SVGA3dCopyBox *)body);
             body += sizeof(SVGA3dCopyBox);
          }
@@ -2214,11 +2195,11 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdSurfaceDMA *cmd = (const SVGA3dCmdSurfaceDMA *)body;
          dump_SVGA3dCmdSurfaceDMA(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dCopyBox) <= next) {
+         while (body + sizeof(SVGA3dCopyBox) <= next) {
             dump_SVGA3dCopyBox((const SVGA3dCopyBox *)body);
             body += sizeof(SVGA3dCopyBox);
          }
-         while(body + sizeof(SVGA3dCmdSurfaceDMASuffix) <= next) {
+         while (body + sizeof(SVGA3dCmdSurfaceDMASuffix) <= next) {
             dump_SVGA3dCmdSurfaceDMASuffix((const SVGA3dCmdSurfaceDMASuffix *)body);
             body += sizeof(SVGA3dCmdSurfaceDMASuffix);
          }
@@ -2262,7 +2243,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdSetRenderState *cmd = (const SVGA3dCmdSetRenderState *)body;
          dump_SVGA3dCmdSetRenderState(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dRenderState) <= next) {
+         while (body + sizeof(SVGA3dRenderState) <= next) {
             dump_SVGA3dRenderState((const SVGA3dRenderState *)body);
             body += sizeof(SVGA3dRenderState);
          }
@@ -2282,7 +2263,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdSetTextureState *cmd = (const SVGA3dCmdSetTextureState *)body;
          dump_SVGA3dCmdSetTextureState(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dTextureState) <= next) {
+         while (body + sizeof(SVGA3dTextureState) <= next) {
             dump_SVGA3dTextureState((const SVGA3dTextureState *)body);
             body += sizeof(SVGA3dTextureState);
          }
@@ -2334,7 +2315,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdClear *cmd = (const SVGA3dCmdClear *)body;
          dump_SVGA3dCmdClear(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dRect) <= next) {
+         while (body + sizeof(SVGA3dRect) <= next) {
             dump_SVGA3dRect((const SVGA3dRect *)body);
             body += sizeof(SVGA3dRect);
          }
@@ -2346,7 +2327,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdPresent *cmd = (const SVGA3dCmdPresent *)body;
          dump_SVGA3dCmdPresent(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGA3dCopyRect) <= next) {
+         while (body + sizeof(SVGA3dCopyRect) <= next) {
             dump_SVGA3dCopyRect((const SVGA3dCopyRect *)body);
             body += sizeof(SVGA3dCopyRect);
          }
@@ -2393,18 +2374,17 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
       _debug_printf("\tSVGA_3D_CMD_DRAW_PRIMITIVES\n");
       {
          const SVGA3dCmdDrawPrimitives *cmd = (const SVGA3dCmdDrawPrimitives *)body;
-         unsigned i, j;
          dump_SVGA3dCmdDrawPrimitives(cmd);
          body = (const uint8_t *)&cmd[1];
-         for(i = 0; i < cmd->numVertexDecls; ++i) {
+         for (unsigned i = 0; i < cmd->numVertexDecls; ++i) {
             dump_SVGA3dVertexDecl((const SVGA3dVertexDecl *)body);
             body += sizeof(SVGA3dVertexDecl);
          }
-         for(j = 0; j < cmd->numRanges; ++j) {
+         for (unsigned j = 0; j < cmd->numRanges; ++j) {
             dump_SVGA3dPrimitiveRange((const SVGA3dPrimitiveRange *)body);
             body += sizeof(SVGA3dPrimitiveRange);
          }
-         while(body + sizeof(SVGA3dVertexDivisor) <= next) {
+         while (body + sizeof(SVGA3dVertexDivisor) <= next) {
             dump_SVGA3dVertexDivisor((const SVGA3dVertexDivisor *)body);
             body += sizeof(SVGA3dVertexDivisor);
          }
@@ -2448,7 +2428,7 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
          const SVGA3dCmdBlitSurfaceToScreen *cmd = (const SVGA3dCmdBlitSurfaceToScreen *)body;
          dump_SVGA3dCmdBlitSurfaceToScreen(cmd);
          body = (const uint8_t *)&cmd[1];
-         while(body + sizeof(SVGASignedRect) <= next) {
+         while (body + sizeof(SVGASignedRect) <= next) {
             dump_SVGASignedRect((const SVGASignedRect *)body);
             body += sizeof(SVGASignedRect);
          }
@@ -2581,42 +2561,40 @@ svga_dump_command(uint32_t cmd_id, const void *data, uint32_t size)
       break;
    }
 
-   while(body + sizeof(uint32_t) <= next) {
+   while (body + sizeof(uint32_t) <= next) {
       _debug_printf("\t\t0x%08x\n", *(const uint32_t *)body);
       body += sizeof(uint32_t);
    }
-   while(body + sizeof(uint32_t) <= next)
+   while (body + sizeof(uint32_t) <= next)
       _debug_printf("\t\t0x%02x\n", *body++);
 }
 
 
-void            
+void
 svga_dump_commands(const void *commands, uint32_t size)
 {
    const uint8_t *next = commands;
    const uint8_t *last = next + size;
-   
+
    assert(size % sizeof(uint32_t) == 0);
-   
-   while(next < last) {
+
+   while (next < last) {
       const uint32_t cmd_id = *(const uint32_t *)next;
 
-      if(SVGA_3D_CMD_BASE <= cmd_id && cmd_id < SVGA_3D_CMD_MAX) {
+      if (SVGA_3D_CMD_BASE <= cmd_id && cmd_id < SVGA_3D_CMD_MAX) {
          const SVGA3dCmdHeader *header = (const SVGA3dCmdHeader *)next;
          const uint8_t *body = (const uint8_t *)&header[1];
 
          next = body + header->size;
-         if(next > last)
+         if (next > last)
             break;
 
          svga_dump_command(cmd_id, body, header->size);
-      }
-      else if(cmd_id == SVGA_CMD_FENCE) {
+      } else if (cmd_id == SVGA_CMD_FENCE) {
          _debug_printf("\tSVGA_CMD_FENCE\n");
          _debug_printf("\t\t0x%08x\n", ((const uint32_t *)next)[1]);
          next += 2*sizeof(uint32_t);
-      }
-      else {
+      } else {
          _debug_printf("\t0x%08x\n", cmd_id);
          next += sizeof(uint32_t);
       }

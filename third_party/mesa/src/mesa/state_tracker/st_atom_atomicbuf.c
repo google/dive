@@ -27,7 +27,6 @@
 
 #include "program/prog_parameter.h"
 #include "program/prog_print.h"
-#include "compiler/glsl/ir_uniform.h"
 
 #include "pipe/p_context.h"
 #include "pipe/p_defines.h"
@@ -67,10 +66,9 @@ st_binding_to_sb(struct gl_buffer_binding *binding,
 
 static void
 st_bind_atomics(struct st_context *st, struct gl_program *prog,
-                gl_shader_stage stage)
+                mesa_shader_stage stage)
 {
    unsigned i;
-   enum pipe_shader_type shader_type = pipe_shader_type_from_mesa(stage);
 
    if (!prog || !st->pipe->set_shader_buffers || st->has_hw_atomics)
       return;
@@ -88,11 +86,11 @@ st_bind_atomics(struct st_context *st, struct gl_program *prog,
       st_binding_to_sb(&st->ctx->AtomicBufferBindings[atomic->Binding], &sb,
                        st->ctx->Const.ShaderStorageBufferOffsetAlignment);
 
-      st->pipe->set_shader_buffers(st->pipe, shader_type,
+      st->pipe->set_shader_buffers(st->pipe, stage,
                                    buffer_base + atomic->Binding, 1, &sb, 0x1);
       used_bindings = MAX2(atomic->Binding + 1, used_bindings);
    }
-   st->last_used_atomic_bindings[shader_type] = used_bindings;
+   st->last_used_atomic_bindings[stage] = used_bindings;
 }
 
 void
@@ -154,16 +152,37 @@ st_bind_cs_atomics(struct st_context *st)
 }
 
 void
+st_bind_ts_atomics(struct st_context *st)
+{
+   struct gl_program *prog =
+      st->ctx->_Shader->CurrentProgram[MESA_SHADER_TASK];
+
+   st_bind_atomics(st, prog, MESA_SHADER_TASK);
+}
+
+void
+st_bind_ms_atomics(struct st_context *st)
+{
+   struct gl_program *prog =
+      st->ctx->_Shader->CurrentProgram[MESA_SHADER_MESH];
+
+   st_bind_atomics(st, prog, MESA_SHADER_MESH);
+}
+
+void
 st_bind_hw_atomic_buffers(struct st_context *st)
 {
    struct pipe_shader_buffer buffers[PIPE_MAX_HW_ATOMIC_BUFFERS];
    int i;
+   unsigned count;
 
    if (!st->has_hw_atomics)
       return;
 
-   for (i = 0; i < st->ctx->Const.MaxAtomicBufferBindings; i++)
+   count = MIN2(st->ctx->Const.MaxAtomicBufferBindings, PIPE_MAX_HW_ATOMIC_BUFFERS);
+
+   for (i = 0; i < count; i++)
       st_binding_to_sb(&st->ctx->AtomicBufferBindings[i], &buffers[i], 1);
 
-   st->pipe->set_hw_atomic_buffers(st->pipe, 0, st->ctx->Const.MaxAtomicBufferBindings, buffers);
+   st->pipe->set_hw_atomic_buffers(st->pipe, 0, count, buffers);
 }

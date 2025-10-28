@@ -94,10 +94,10 @@ zink_heap_from_domain_flags(VkMemoryPropertyFlags domains, enum zink_alloc_flag 
 }
 
 static ALWAYS_INLINE unsigned
-zink_mem_type_idx_from_bits(struct zink_screen *screen, enum zink_heap heap, uint32_t bits)
+zink_mem_type_idx_from_types(struct zink_screen *screen, enum zink_heap heap, uint32_t types)
 {
    for (unsigned i = 0; i < screen->heap_count[heap]; i++) {
-      if (bits & BITFIELD_BIT(screen->heap_map[heap][i])) {
+      if (types & BITFIELD_BIT(screen->heap_map[heap][i])) {
          return screen->heap_map[heap][i];
       }
    }
@@ -131,7 +131,7 @@ zink_bo_get_mem(const struct zink_bo *bo)
 static ALWAYS_INLINE VkDeviceSize
 zink_bo_get_size(const struct zink_bo *bo)
 {
-   return bo->mem ? bo->base.size : bo->u.slab.real->base.size;
+   return bo->mem ? bo->base.base.size : bo->u.slab.real->base.base.size;
 }
 
 void *
@@ -140,27 +140,31 @@ void
 zink_bo_unmap(struct zink_screen *screen, struct zink_bo *bo);
 
 bool
-zink_bo_commit(struct zink_screen *screen, struct zink_resource *res, unsigned level, struct pipe_box *box, bool commit, VkSemaphore *sem);
+zink_bo_commit(struct zink_context *ctx, struct zink_resource *res, unsigned level, struct pipe_box *box, bool commit, VkSemaphore *sem);
 
 static ALWAYS_INLINE bool
 zink_bo_has_unflushed_usage(const struct zink_bo *bo)
 {
-   return (zink_batch_usage_is_unflushed(bo->reads.u) && bo->reads.submit_count == bo->reads.u->submit_count) ||
-          (zink_batch_usage_is_unflushed(bo->writes.u) && bo->writes.submit_count == bo->writes.u->submit_count);
+   /* submit_count always matches for unflushed usage */
+   return (bo->reads.u && bo->reads.submit_count == bo->reads.u->submit_count && zink_batch_usage_is_unflushed(bo->reads.u)) ||
+          (bo->writes.u && bo->writes.submit_count == bo->writes.u->submit_count && zink_batch_usage_is_unflushed(bo->writes.u));
 }
 
 static ALWAYS_INLINE bool
 zink_bo_has_usage(const struct zink_bo *bo)
 {
-   return (zink_batch_usage_exists(bo->reads.u) && bo->reads.submit_count == bo->reads.u->submit_count) ||
-          (zink_batch_usage_exists(bo->writes.u) && bo->writes.submit_count == bo->writes.u->submit_count);
+   return zink_bo_has_unflushed_usage(bo) ||
+          /* submit_count increments on batch submit and reset, so diff<=1 means same batch submission */
+          (zink_batch_usage_exists(bo->reads.u) && bo->reads.u->submit_count - bo->reads.submit_count <= 1) ||
+          (zink_batch_usage_exists(bo->writes.u) && bo->writes.u->submit_count - bo->writes.submit_count <= 1);
 }
 
 static ALWAYS_INLINE bool
 zink_bo_usage_matches(const struct zink_bo *bo, const struct zink_batch_state *bs)
 {
-   return (zink_batch_usage_matches(bo->reads.u, bs) && bo->reads.submit_count == bo->reads.u->submit_count) ||
-          (zink_batch_usage_matches(bo->writes.u, bs) && bo->writes.submit_count == bo->writes.u->submit_count);
+   /* submit_count increments on batch submit and reset, so diff<=1 means same batch submission */
+   return (zink_batch_usage_matches(bo->reads.u, bs) && bo->reads.u->submit_count - bo->reads.submit_count <= 1) ||
+          (zink_batch_usage_matches(bo->writes.u, bs) && bo->writes.u->submit_count - bo->writes.submit_count <= 1);
 }
 
 static ALWAYS_INLINE bool
@@ -184,21 +188,30 @@ zink_bo_usage_check_completion_fast(struct zink_screen *screen, struct zink_bo *
 }
 
 static ALWAYS_INLINE void
+zink_bo_usage_unflushed_wait(struct zink_context *ctx, struct zink_bo *bo, enum zink_resource_access access)
+{
+   if (access & ZINK_RESOURCE_ACCESS_READ)
+      zink_batch_usage_unflushed_wait(ctx, bo->reads.u, bo->reads.submit_count, false);
+   if (access & ZINK_RESOURCE_ACCESS_WRITE)
+      zink_batch_usage_unflushed_wait(ctx, bo->writes.u, bo->writes.submit_count, false);
+}
+
+static ALWAYS_INLINE void
 zink_bo_usage_wait(struct zink_context *ctx, struct zink_bo *bo, enum zink_resource_access access)
 {
    if (access & ZINK_RESOURCE_ACCESS_READ)
-      zink_batch_usage_wait(ctx, bo->reads.u);
+      zink_batch_usage_wait(ctx, bo->reads.u, bo->reads.submit_count);
    if (access & ZINK_RESOURCE_ACCESS_WRITE)
-      zink_batch_usage_wait(ctx, bo->writes.u);
+      zink_batch_usage_wait(ctx, bo->writes.u, bo->writes.submit_count);
 }
 
 static ALWAYS_INLINE void
 zink_bo_usage_try_wait(struct zink_context *ctx, struct zink_bo *bo, enum zink_resource_access access)
 {
    if (access & ZINK_RESOURCE_ACCESS_READ)
-      zink_batch_usage_try_wait(ctx, bo->reads.u);
+      zink_batch_usage_try_wait(ctx, bo->reads.u, bo->reads.submit_count);
    if (access & ZINK_RESOURCE_ACCESS_WRITE)
-      zink_batch_usage_try_wait(ctx, bo->writes.u);
+      zink_batch_usage_try_wait(ctx, bo->writes.u, bo->writes.submit_count);
 }
 
 static ALWAYS_INLINE void

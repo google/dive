@@ -1,24 +1,6 @@
 /*
  * Copyright © 2020 Google, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "nir_serialize.h"
@@ -54,17 +36,24 @@ ir3_disk_cache_init(struct ir3_compiler *compiler)
    const char *renderer = fd_dev_name(compiler->dev_id);
    const struct build_id_note *note =
       build_id_find_nhdr_for_addr(ir3_disk_cache_init);
-   assert(note && build_id_length(note) == 20); /* sha1 */
+   unsigned build_id_len = build_id_length(note);
+   assert(note && build_id_len == 20); /* sha1 */
 
    const uint8_t *id_sha1 = build_id_data(note);
    assert(id_sha1);
 
-   char timestamp[41];
-   _mesa_sha1_format(timestamp, id_sha1);
+   struct mesa_sha1 ctx;
+   uint8_t sha1[SHA1_DIGEST_LENGTH];
+   _mesa_sha1_init(&ctx);
+   _mesa_sha1_update(&ctx, id_sha1, build_id_len);
+   _mesa_sha1_update(&ctx, &compiler->options.uche_trap_base,
+                     sizeof(compiler->options.uche_trap_base));
+   _mesa_sha1_final(&ctx, sha1);
 
-   uint64_t driver_flags = ir3_shader_debug;
-   if (compiler->options.robust_buffer_access2)
-      driver_flags |= IR3_DBG_ROBUST_UBO_ACCESS;
+   char timestamp[41];
+   _mesa_sha1_format(timestamp, sha1);
+
+   uint64_t driver_flags = ir3_shader_debug_hash_key();
    compiler->disk_cache = disk_cache_create(renderer, timestamp, driver_flags);
 }
 
@@ -72,7 +61,7 @@ void
 ir3_disk_cache_init_shader_key(struct ir3_compiler *compiler,
                                struct ir3_shader *shader)
 {
-   if (!compiler->disk_cache)
+   if (!compiler->disk_cache && !ir3_shader_bisect_need_shader_key())
       return;
 
    struct mesa_sha1 ctx;
@@ -90,10 +79,12 @@ ir3_disk_cache_init_shader_key(struct ir3_compiler *compiler,
    _mesa_sha1_update(&ctx, blob.data, blob.size);
    blob_finish(&blob);
 
-   _mesa_sha1_update(&ctx, &shader->api_wavesize,
-                     sizeof(shader->api_wavesize));
-   _mesa_sha1_update(&ctx, &shader->real_wavesize,
-                     sizeof(shader->real_wavesize));
+   _mesa_sha1_update(&ctx, &shader->options.api_wavesize,
+                     sizeof(shader->options.api_wavesize));
+   _mesa_sha1_update(&ctx, &shader->options.real_wavesize,
+                     sizeof(shader->options.real_wavesize));
+   _mesa_sha1_update(&ctx, &shader->options.nir_options,
+                     sizeof(shader->options.nir_options));
 
    /* Note that on some gens stream-out is lowered in ir3 to stg.  For later
     * gens we maybe don't need to include stream-out in the cache key.
@@ -135,10 +126,14 @@ retrieve_variant(struct blob_reader *blob, struct ir3_shader_variant *v)
 
    if (!v->binning_pass) {
       blob_copy_bytes(blob, v->const_state, sizeof(*v->const_state));
-      unsigned immeds_sz = v->const_state->immediates_size *
-                           sizeof(v->const_state->immediates[0]);
-      v->const_state->immediates = ralloc_size(v->const_state, immeds_sz);
-      blob_copy_bytes(blob, v->const_state->immediates, immeds_sz);
+   }
+
+   if (!v->compiler->load_shader_consts_via_preamble) {
+      v->imm_state.size = blob_read_uint32(blob);
+      v->imm_state.count = v->imm_state.size;
+      uint32_t immeds_sz = v->imm_state.size * sizeof(v->imm_state.values[0]);
+      v->imm_state.values = ralloc_size(v, immeds_sz);
+      blob_copy_bytes(blob, v->imm_state.values, immeds_sz);
    }
 }
 
@@ -157,9 +152,15 @@ store_variant(struct blob *blob, const struct ir3_shader_variant *v)
 
    if (!v->binning_pass) {
       blob_write_bytes(blob, v->const_state, sizeof(*v->const_state));
-      unsigned immeds_sz = v->const_state->immediates_size *
-                           sizeof(v->const_state->immediates[0]);
-      blob_write_bytes(blob, v->const_state->immediates, immeds_sz);
+   }
+
+   /* When load_shader_consts_via_preamble, immediates are loaded in the
+    * preamble and hence part of bin.
+    */
+   if (!v->compiler->load_shader_consts_via_preamble) {
+      blob_write_uint32(blob, v->imm_state.size);
+      uint32_t immeds_sz = v->imm_state.size * sizeof(v->imm_state.values[0]);
+      blob_write_bytes(blob, v->imm_state.values, immeds_sz);
    }
 }
 

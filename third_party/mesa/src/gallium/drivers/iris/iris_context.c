@@ -29,8 +29,8 @@
 #include "util/u_inlines.h"
 #include "util/format/u_format.h"
 #include "util/u_upload_mgr.h"
-#include "drm-uapi/i915_drm.h"
 #include "iris_context.h"
+#include "iris_perf.h"
 #include "iris_resource.h"
 #include "iris_screen.h"
 #include "iris_utrace.h"
@@ -73,7 +73,7 @@ iris_lost_context_state(struct iris_batch *batch)
    } else if (batch->name == IRIS_BATCH_BLITTER) {
       /* No state to set up */
    } else {
-      unreachable("unhandled batch reset");
+      UNREACHABLE("unhandled batch reset");
    }
 
    ice->state.dirty = ~0ull;
@@ -159,7 +159,7 @@ iris_get_sample_position(struct pipe_context *ctx,
    case 4:  INTEL_SAMPLE_POS_4X(u.v._);  break;
    case 8:  INTEL_SAMPLE_POS_8X(u.v._);  break;
    case 16: INTEL_SAMPLE_POS_16X(u.v._); break;
-   default: unreachable("invalid sample count");
+   default: UNREACHABLE("invalid sample count");
    }
 
    out_value[0] = u.a.x[sample_index];
@@ -217,6 +217,9 @@ iris_destroy_context(struct pipe_context *ctx)
    struct iris_context *ice = (struct iris_context *)ctx;
    struct iris_screen *screen = (struct iris_screen *)ctx->screen;
 
+   blorp_finish(&ice->blorp);
+
+   intel_perf_free_context(ice->perf_ctx);
    if (ctx->stream_uploader)
       u_upload_destroy(ctx->stream_uploader);
    if (ctx->const_uploader)
@@ -225,6 +228,9 @@ iris_destroy_context(struct pipe_context *ctx)
    clear_dirty_dmabuf_set(ice);
 
    screen->vtbl.destroy_state(ice);
+
+   util_framebuffer_init(ctx, NULL, ice->state.fb_cbufs, &ice->state.fb_zsbuf);
+   util_unreference_framebuffer_state(&ice->state.framebuffer);
 
    for (unsigned i = 0; i < ARRAY_SIZE(ice->shaders.scratch_surfs); i++)
       pipe_resource_reference(&ice->shaders.scratch_surfs[i].res, NULL);
@@ -245,6 +251,7 @@ iris_destroy_context(struct pipe_context *ctx)
 
    iris_destroy_batches(ice);
    iris_destroy_binder(&ice->state.binder);
+   iris_bo_unreference(ice->draw.generation.ring_bo);
 
    iris_utrace_fini(ice);
 
@@ -256,6 +263,12 @@ iris_destroy_context(struct pipe_context *ctx)
 
 #define genX_call(devinfo, func, ...)             \
    switch ((devinfo)->verx10) {                   \
+   case 300:                                      \
+      gfx30_##func(__VA_ARGS__);                  \
+      break;                                      \
+   case 200:                                      \
+      gfx20_##func(__VA_ARGS__);                  \
+      break;                                      \
    case 125:                                      \
       gfx125_##func(__VA_ARGS__);                 \
       break;                                      \
@@ -272,8 +285,14 @@ iris_destroy_context(struct pipe_context *ctx)
       gfx8_##func(__VA_ARGS__);                   \
       break;                                      \
    default:                                       \
-      unreachable("Unknown hardware generation"); \
+      UNREACHABLE("Unknown hardware generation"); \
    }
+
+#ifndef INTEL_USE_ELK
+static inline void gfx8_init_state(struct iris_context *ice) { UNREACHABLE("no elk support"); }
+static inline void gfx8_init_blorp(struct iris_context *ice) { UNREACHABLE("no elk support"); }
+static inline void gfx8_init_query(struct iris_context *ice) { UNREACHABLE("no elk support"); }
+#endif
 
 /**
  * Create a context.
@@ -295,7 +314,11 @@ iris_create_context(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->screen = pscreen;
    ctx->priv = priv;
 
-   ctx->stream_uploader = u_upload_create_default(ctx);
+   ctx->stream_uploader = u_upload_create(ctx, 1024 * 1024 * 2,
+                                          PIPE_BIND_VERTEX_BUFFER |
+                                          PIPE_BIND_INDEX_BUFFER |
+                                          PIPE_BIND_CONSTANT_BUFFER,
+                                          PIPE_USAGE_STREAM, 0);
    if (!ctx->stream_uploader) {
       ralloc_free(ice);
       return NULL;
@@ -373,6 +396,7 @@ iris_create_context(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    screen->vtbl.init_render_context(&ice->batches[IRIS_BATCH_RENDER]);
    screen->vtbl.init_compute_context(&ice->batches[IRIS_BATCH_COMPUTE]);
+   screen->vtbl.init_copy_context(&ice->batches[IRIS_BATCH_BLITTER]);
 
    if (!(flags & PIPE_CONTEXT_PREFER_THREADED))
       return ctx;

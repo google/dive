@@ -36,6 +36,11 @@ struct regs_to_ssa_state {
 static void
 setup_reg(nir_intrinsic_instr *decl, struct regs_to_ssa_state *state)
 {
+   if (nir_def_is_unused(&decl->def)) {
+      nir_instr_remove(&decl->instr);
+      return;
+   }
+
    assert(state->values[decl->def.index] == NULL);
    if (!should_lower_reg(decl))
       return;
@@ -46,7 +51,7 @@ setup_reg(nir_intrinsic_instr *decl, struct regs_to_ssa_state *state)
    memset(state->defs, 0, state->defs_words * sizeof(*state->defs));
 
    nir_foreach_reg_store(store, decl)
-      BITSET_SET(state->defs, store->parent_instr->block->index);
+      BITSET_SET(state->defs, nir_src_parent_instr(store)->block->index);
 
    state->values[decl->def.index] =
       nir_phi_builder_add_value(state->phi_builder, num_components,
@@ -63,11 +68,10 @@ rewrite_load(nir_intrinsic_instr *load, struct regs_to_ssa_state *state)
    if (!value)
       return;
 
-   nir_intrinsic_instr *decl = nir_instr_as_intrinsic(reg->parent_instr);
+   nir_intrinsic_instr *decl = nir_def_as_intrinsic(reg);
    nir_def *def = nir_phi_builder_value_get_block_def(value, block);
 
-   nir_def_rewrite_uses(&load->def, def);
-   nir_instr_remove(&load->instr);
+   nir_def_replace(&load->def, def);
 
    if (nir_def_is_unused(&decl->def))
       nir_instr_remove(&decl->instr);
@@ -84,7 +88,7 @@ rewrite_store(nir_intrinsic_instr *store, struct regs_to_ssa_state *state)
    if (!value)
       return;
 
-   nir_intrinsic_instr *decl = nir_instr_as_intrinsic(reg->parent_instr);
+   nir_intrinsic_instr *decl = nir_def_as_intrinsic(reg);
    unsigned num_components = nir_intrinsic_num_components(decl);
    unsigned write_mask = nir_intrinsic_write_mask(store);
 
@@ -124,12 +128,11 @@ nir_lower_reg_intrinsics_to_ssa_impl(nir_function_impl *impl)
       }
    }
    if (!need_lower_reg) {
-      nir_metadata_preserve(impl, nir_metadata_all);
-      return false;
+      return nir_no_progress(impl);
    }
 
-   nir_metadata_require(impl, nir_metadata_block_index |
-                                 nir_metadata_dominance);
+   nir_metadata_require(impl,
+                        nir_metadata_block_index | nir_metadata_dominance);
    nir_index_ssa_defs(impl);
 
    void *dead_ctx = ralloc_context(NULL);
@@ -141,7 +144,7 @@ nir_lower_reg_intrinsics_to_ssa_impl(nir_function_impl *impl)
    state.values = rzalloc_array(dead_ctx, struct nir_phi_builder_value *,
                                 impl->ssa_alloc);
 
-   nir_foreach_block(block, impl) {
+   nir_foreach_block_unstructured(block, impl) {
       nir_foreach_instr_safe(instr, block) {
          if (instr->type != nir_instr_type_intrinsic)
             continue;
@@ -167,9 +170,7 @@ nir_lower_reg_intrinsics_to_ssa_impl(nir_function_impl *impl)
 
    ralloc_free(dead_ctx);
 
-   nir_metadata_preserve(impl, nir_metadata_block_index |
-                                  nir_metadata_dominance);
-   return true;
+   return nir_progress(true, impl, nir_metadata_control_flow);
 }
 
 bool

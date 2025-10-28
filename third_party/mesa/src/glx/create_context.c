@@ -41,7 +41,7 @@
 #define X_GLXCreateContextAttribsARB X_GLXCreateContextAtrribsARB
 #endif
 
-_X_HIDDEN GLXContext
+GLXContext
 glXCreateContextAttribsARB(Display *dpy, GLXFBConfig config,
                            GLXContext share_context, Bool direct,
                            const int *attrib_list)
@@ -105,12 +105,14 @@ glXCreateContextAttribsARB(Display *dpy, GLXFBConfig config,
 #else
    if (direct && psc->vtable->create_context_attribs) {
       gc = psc->vtable->create_context_attribs(psc, cfg, share, num_attribs,
-					       (const uint32_t *) attrib_list,
-					       &error);
+                      (const uint32_t *) attrib_list,
+                      &error);
    } else if (!direct) {
+#ifdef GLX_INDIRECT_RENDERING
       gc = indirect_create_context_attribs(psc, cfg, share, num_attribs,
                                            (const uint32_t *) attrib_list,
                                            &error);
+#endif
    }
 #endif
 

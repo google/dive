@@ -42,7 +42,9 @@
 #include <popcntintrin.h>
 #endif
 
-#include "macros.h"
+#include "util/detect_arch.h"
+#include "util/detect_cc.h"
+#include "util/macros.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -122,6 +124,16 @@ u_bit_scan64(uint64_t *mask)
         ((b) = ffsll(__dword) - 1, __dword);      \
         __dword &= ~(1ull << (b)))
 
+/* Given two bitmasks, loop over all bits of both of them.
+ * Bits of mask1 are: b = scan_bit(mask1);
+ * Bits of mask2 are: b = offset + scan_bit(mask2);
+ */
+#define u_foreach_bit64_two_masks(b, mask1, offset, mask2)                          \
+   for (uint64_t __mask1 = (mask1), __mask2 = (mask2), b;                           \
+        (__mask1 ? ((b) = ffsll(__mask1) - 1)                                       \
+                 : ((b) = ffsll(__mask2) - 1 + offset), __mask1 || __mask2);        \
+        __mask1 ? (__mask1 &= ~(1ull << (b))) : (__mask2 &= ~(1ull << (b - offset))))
+
 /* Determine if an uint32_t value is a power of two.
  *
  * \note
@@ -164,7 +176,7 @@ util_is_power_of_two_nonzero(uint32_t v)
 #ifdef __POPCNT__
    return _mm_popcnt_u32(v) == 1;
 #else
-   return v != 0 && IS_POT(v);
+   return IS_POT_NONZERO(v);
 #endif
 }
 
@@ -176,7 +188,18 @@ util_is_power_of_two_nonzero(uint32_t v)
 static inline bool
 util_is_power_of_two_nonzero64(uint64_t v)
 {
-   return v != 0 && IS_POT(v);
+   return IS_POT_NONZERO(v);
+}
+
+/* Determine if an size_t/uintptr_t/intptr_t value is a power of two.
+ *
+ * \note
+ * Zero is \b not treated as a power of two.
+ */
+static inline bool
+util_is_power_of_two_nonzero_uintptr(uintptr_t v)
+{
+   return IS_POT_NONZERO(v);
 }
 
 /* For looping over a bitmask when you want to loop over consecutive bits
@@ -208,7 +231,7 @@ u_bit_scan_consecutive_range(unsigned *mask, int *start, int *count)
 static inline void
 u_bit_scan_consecutive_range64(uint64_t *mask, int *start, int *count)
 {
-   if (*mask == ~0ull) {
+   if (*mask == UINT64_MAX) {
       *start = 0;
       *count = 64;
       *mask = 0;
@@ -315,6 +338,8 @@ util_bitcount(unsigned n)
 {
 #if defined(HAVE___BUILTIN_POPCOUNT)
    return __builtin_popcount(n);
+#elif __OPENCL_VERSION__
+   return popcount(n);
 #else
    /* K&R classic bitcount.
     *
@@ -340,7 +365,7 @@ util_bitcount(unsigned n)
 static inline unsigned
 util_popcnt_inline_asm(unsigned n)
 {
-#if defined(USE_X86_64_ASM) || defined(USE_X86_ASM)
+#if (DETECT_ARCH_X86 || DETECT_ARCH_X86_64) && DETECT_CC_GCC
    uint32_t out;
    __asm volatile("popcnt %1, %0" : "=r"(out) : "r"(n));
    return out;
@@ -355,8 +380,10 @@ util_bitcount64(uint64_t n)
 {
 #ifdef HAVE___BUILTIN_POPCOUNTLL
    return __builtin_popcountll(n);
+#elif __OPENCL_VERSION__
+   return popcount(n);
 #else
-   return util_bitcount(n) + util_bitcount(n >> 32);
+   return util_bitcount((unsigned)n) + util_bitcount((unsigned)(n >> 32));
 #endif
 }
 
@@ -388,6 +415,7 @@ util_widen_mask(uint32_t mask, unsigned multiplier)
 enum util_popcnt {
    POPCNT_NO,
    POPCNT_YES,
+   POPCNT_INVALID,
 };
 
 /* Convenient function to select popcnt through a C++ template argument.

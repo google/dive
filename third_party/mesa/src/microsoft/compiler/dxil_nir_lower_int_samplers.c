@@ -78,6 +78,7 @@ dx_get_texture_lod(nir_builder *b, nir_tex_instr *tex)
    tql->is_new_style_shadow = tex->is_new_style_shadow;
    tql->texture_index = tex->texture_index;
    tql->sampler_index = tex->sampler_index;
+   tql->can_speculate = tex->can_speculate;
    tql->dest_type = nir_type_float32;
 
    /* The coordinate needs special handling because we might have
@@ -138,7 +139,7 @@ wrap_repeat(nir_builder *b, wrap_result_t *wrap_params, nir_def *size)
     * This instruction must be exact, otherwise certain sizes result in
     * incorrect sampling */
    wrap_params->coords = nir_fmod(b, wrap_params->coords, size);
-   nir_instr_as_alu(wrap_params->coords->parent_instr)->exact = true;
+   nir_def_as_alu(wrap_params->coords)->exact = true;
 }
 
 static nir_def *
@@ -154,7 +155,7 @@ wrap_mirror_repeat(nir_builder *b, wrap_result_t *wrap_params, nir_def *size)
 {
    /* (size − 1) − mirror(mod(coord, 2 * size) − size) */
    nir_def *coord_mod2size = nir_fmod(b, wrap_params->coords, nir_fmul_imm(b, size, 2.0f));
-   nir_instr_as_alu(coord_mod2size->parent_instr)->exact = true;
+   nir_def_as_alu(coord_mod2size)->exact = true;
    nir_def *a = nir_fsub(b, coord_mod2size, size);
    wrap_params->coords = nir_fsub(b, nir_fadd_imm(b, size, -1.0f), mirror(b, a));
 }
@@ -189,30 +190,30 @@ wrap_mirror_clamp(nir_builder *b, wrap_result_t *wrap_params, nir_def *size)
 }
 
 static wrap_result_t
-wrap_coords(nir_builder *b, nir_def *coords, enum pipe_tex_wrap wrap,
+wrap_coords(nir_builder *b, nir_def *coords, enum dxil_tex_wrap wrap,
             nir_def *size)
 {
    wrap_result_t result = {coords, nir_imm_false(b)};
 
    switch (wrap) {
-   case PIPE_TEX_WRAP_CLAMP_TO_EDGE:
+   case DXIL_TEX_WRAP_CLAMP_TO_EDGE:
       wrap_clamp_to_edge(b, &result, size);
       break;
-   case PIPE_TEX_WRAP_REPEAT:
+   case DXIL_TEX_WRAP_REPEAT:
       wrap_repeat(b, &result, size);
       break;
-   case PIPE_TEX_WRAP_MIRROR_REPEAT:
+   case DXIL_TEX_WRAP_MIRROR_REPEAT:
       wrap_mirror_repeat(b, &result, size);
       break;
-   case PIPE_TEX_WRAP_MIRROR_CLAMP:
-   case PIPE_TEX_WRAP_MIRROR_CLAMP_TO_EDGE:
+   case DXIL_TEX_WRAP_MIRROR_CLAMP:
+   case DXIL_TEX_WRAP_MIRROR_CLAMP_TO_EDGE:
       wrap_mirror_clamp_to_edge(b, &result, size);
       break;
-   case PIPE_TEX_WRAP_CLAMP:
-   case PIPE_TEX_WRAP_CLAMP_TO_BORDER:
+   case DXIL_TEX_WRAP_CLAMP:
+   case DXIL_TEX_WRAP_CLAMP_TO_BORDER:
       wrap_clamp(b, &result, size);
       break;
-   case PIPE_TEX_WRAP_MIRROR_CLAMP_TO_BORDER:
+   case DXIL_TEX_WRAP_MIRROR_CLAMP_TO_BORDER:
       wrap_mirror_clamp(b, &result, size);
       break;
    }
@@ -253,7 +254,7 @@ load_bordercolor(nir_builder *b, nir_tex_instr *tex, const dxil_wrap_sampler_sta
          const_value[i] = nir_const_value_for_uint(border_color[swizzle[i]], 32);
          break;
       default:
-         unreachable("Unexpected swizzle value");
+         UNREACHABLE("Unexpected swizzle value");
       }
    }
 
@@ -282,6 +283,7 @@ create_txf_from_tex(nir_builder *b, nir_tex_instr *tex)
    txf->is_new_style_shadow = tex->is_new_style_shadow;
    txf->texture_index = tex->texture_index;
    txf->sampler_index = tex->sampler_index;
+   txf->can_speculate = tex->can_speculate;
    txf->dest_type = tex->dest_type;
 
    unsigned idx = 0;
@@ -489,7 +491,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
                                     array_index);
             break;
          default:
-            unreachable("unsupported number of non-array coordinates");
+            UNREACHABLE("unsupported number of non-array coordinates");
          }
       }
    }
@@ -522,7 +524,7 @@ lower_sample_to_txf_for_integer_tex_impl(nir_builder *b, nir_instr *instr,
       if (tex->is_array)
          params.wrap[params.ncoord_comp] =
                wrap_coords(b, coord_help[params.ncoord_comp],
-                           PIPE_TEX_WRAP_CLAMP_TO_EDGE,
+                           DXIL_TEX_WRAP_CLAMP_TO_EDGE,
                            nir_i2f32(b, nir_channel(b, size0, params.ncoord_comp)));
    } else {
       /* When we emulate a cube map by using a texture array, the coordinates are always

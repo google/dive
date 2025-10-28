@@ -86,11 +86,15 @@ d3d12_resource_destroy(struct pipe_screen *pscreen,
       screen->winsys->displaytarget_destroy(screen->winsys, resource->dt);
    }
 
+   if (resource->dt_proxy)
+      pipe_resource_reference(&resource->dt_proxy, NULL);
    threaded_resource_deinit(presource);
    if (can_map_directly(presource))
       util_range_destroy(&resource->valid_buffer_range);
    if (resource->bo)
       d3d12_bo_unreference(resource->bo);
+   if (resource->logicop_texture)
+      pipe_resource_reference(&resource->logicop_texture, NULL);
    FREE(resource);
 }
 
@@ -169,7 +173,7 @@ init_buffer(struct d3d12_screen *screen,
       buf_desc.usage = (pb_usage_flags)(PB_USAGE_GPU_WRITE | PB_USAGE_CPU_READ_WRITE);
       break;
    default:
-      unreachable("Invalid pipe usage");
+      UNREACHABLE("Invalid pipe usage");
    }
 
    /* We can't suballocate buffers that might be bound as a sampler view, *only*
@@ -241,7 +245,7 @@ init_texture(struct d3d12_screen *screen,
       break;
 
    default:
-      unreachable("Invalid texture type");
+      UNREACHABLE("Invalid texture type");
    }
 
    if (templ->bind & PIPE_BIND_SHADER_BUFFER)
@@ -260,23 +264,43 @@ init_texture(struct d3d12_screen *screen,
        */
    }
 
-   /* The VA frontend VaFourccToPipeFormat chooses _UNORM types for RGBx formats as typeless formats
-    * such as DXGI_R8G8B8A8_TYPELESS are not supported as Video Processor input/output as specified in:
-    * https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/hardware-support-for-direct3d-12-1-formats
-    * PIPE_BIND_CUSTOM is used by the video frontend to hint this resource will be used in video and the
-    * original format must be not converted to _TYPELESS
-   */
-   if ( ((templ->bind & PIPE_BIND_CUSTOM) == 0) &&
-      (screen->support_shader_images && templ->nr_samples <= 1)) {
-      /* Ideally, we'd key off of PIPE_BIND_SHADER_IMAGE for this, but it doesn't
-       * seem to be set properly. So, all UAV-capable resources need the UAV flag.
-       */
-      D3D12_FEATURE_DATA_FORMAT_SUPPORT support = { desc.Format };
-      if (SUCCEEDED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) &&
-         (support.Support2 & (D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE)) ==
-         (D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE)) {
+   if (templ->bind & PIPE_BIND_VIDEO_DECODE_DPB)
+      desc.Flags |= (D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY |
+                     D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+
+   if (templ->bind & PIPE_BIND_VIDEO_ENCODE_DPB)
+      desc.Flags |= (D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY |
+                     D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+
+   const DXGI_FORMAT *format_cast_list = NULL;
+   uint32_t num_castable_formats = 0;
+
+   if (screen->opts12.RelaxedFormatCastingSupported) {
+      /* All formats that fall into a cast set need to be castable and accessible as a shader image. */
+      format_cast_list = d3d12_get_format_cast_list(templ->format, &num_castable_formats);
+      if (format_cast_list != nullptr && !util_format_is_compressed(templ->format) &&
+          screen->support_shader_images && templ->nr_samples <= 1) {
          desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-         desc.Format = d3d12_get_typeless_format(templ->format);
+      }
+   } else {
+      /* The VA frontend VaFourccToPipeFormat chooses _UNORM types for RGBx formats as typeless formats
+       * such as DXGI_R8G8B8A8_TYPELESS are not supported as Video Processor input/output as specified in:
+       * https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/hardware-support-for-direct3d-12-1-formats
+       * PIPE_BIND_CUSTOM is used by the video frontend to hint this resource will be used in video and the
+       * original format must be not converted to _TYPELESS
+      */
+      if (((templ->bind & PIPE_BIND_CUSTOM) == 0) &&
+          (screen->support_shader_images && templ->nr_samples <= 1)) {
+         /* Ideally, we'd key off of PIPE_BIND_SHADER_IMAGE for this, but it doesn't
+          * seem to be set properly. So, all UAV-capable resources need the UAV flag.
+          */
+         D3D12_FEATURE_DATA_FORMAT_SUPPORT support = { desc.Format };
+         if (SUCCEEDED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) &&
+             (support.Support2 & (D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE)) ==
+             (D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE)) {
+            desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+            desc.Format = d3d12_get_typeless_format(templ->format);
+         }
       }
    }
 
@@ -285,28 +309,86 @@ init_texture(struct d3d12_screen *screen,
 
    HRESULT hres = E_FAIL;
    enum d3d12_residency_status init_residency;
+#ifndef _GAMING_XBOX
 
-   if (heap) {
-      init_residency = d3d12_permanently_resident;
-      hres = screen->dev->CreatePlacedResource(heap,
-                                               placed_offset,
-                                               &desc,
-                                               D3D12_RESOURCE_STATE_COMMON,
-                                               nullptr,
-                                               IID_PPV_ARGS(&d3d12_res));
-   } else {
-      D3D12_HEAP_PROPERTIES heap_pris = GetCustomHeapProperties(screen->dev, D3D12_HEAP_TYPE_DEFAULT);
+   if (heap && screen->max_feature_level == D3D_FEATURE_LEVEL_1_0_GENERIC) {
+      D3D12_FEATURE_DATA_PLACED_RESOURCE_SUPPORT_INFO capData;
+      capData.Dimension = desc.Dimension;
+      capData.Format = desc.Format;
+      capData.DestHeapProperties = GetDesc(heap).Properties;
+      capData.Supported = false;
+      if (FAILED(screen->dev->CheckFeatureSupport(D3D12_FEATURE_PLACED_RESOURCE_SUPPORT_INFO, &capData, sizeof(capData))) || !capData.Supported) {
+         debug_printf("D3D12: d3d12_resource_create_or_place cannot place a resource since D3D12_FEATURE_DATA_PLACED_RESOURCE_SUPPORT_INFO is not supported\n");
+         return false;
+      }
+   }
 
-      D3D12_HEAP_FLAGS heap_flags = screen->support_create_not_resident ?
-         D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT : D3D12_HEAP_FLAG_NONE;
-      init_residency = screen->support_create_not_resident ? d3d12_evicted : d3d12_resident;
+   if (screen->opts12.RelaxedFormatCastingSupported) {
+      D3D12_RESOURCE_DESC1 desc1 = {
+         desc.Dimension,
+         desc.Alignment,
+         desc.Width,
+         desc.Height,
+         desc.DepthOrArraySize,
+         desc.MipLevels,
+         desc.Format,
+         desc.SampleDesc,
+         desc.Layout,
+         desc.Flags,
+      };
+      if (heap) {
+         init_residency = d3d12_permanently_resident;
+         hres = screen->dev10->CreatePlacedResource2(heap,
+                                                     placed_offset,
+                                                     &desc1,
+                                                     D3D12_BARRIER_LAYOUT_COMMON,
+                                                     nullptr,
+                                                     num_castable_formats,
+                                                     format_cast_list,
+                                                     IID_PPV_ARGS(&d3d12_res));
+      }
+      else {
+         D3D12_HEAP_PROPERTIES heap_pris = GetCustomHeapProperties(screen->dev, D3D12_HEAP_TYPE_DEFAULT);
 
-      hres = screen->dev->CreateCommittedResource(&heap_pris,
-                                                  heap_flags,
+         D3D12_HEAP_FLAGS heap_flags = screen->support_create_not_resident ?
+            D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT : D3D12_HEAP_FLAG_NONE;
+         init_residency = screen->support_create_not_resident ? d3d12_evicted : d3d12_resident;
+
+         hres = screen->dev10->CreateCommittedResource3(&heap_pris,
+                                                        heap_flags,
+                                                        &desc1,
+                                                        D3D12_BARRIER_LAYOUT_COMMON,
+                                                        nullptr,
+                                                        nullptr,
+                                                        num_castable_formats,
+                                                        format_cast_list,
+                                                        IID_PPV_ARGS(&d3d12_res));
+      }
+   } else
+#endif
+   {
+      if (heap) {
+         init_residency = d3d12_permanently_resident;
+         hres = screen->dev->CreatePlacedResource(heap,
+                                                  placed_offset,
                                                   &desc,
                                                   D3D12_RESOURCE_STATE_COMMON,
-                                                  NULL,
+                                                  nullptr,
                                                   IID_PPV_ARGS(&d3d12_res));
+      } else {
+         D3D12_HEAP_PROPERTIES heap_pris = GetCustomHeapProperties(screen->dev, D3D12_HEAP_TYPE_DEFAULT);
+
+         D3D12_HEAP_FLAGS heap_flags = screen->support_create_not_resident ?
+            D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT : D3D12_HEAP_FLAG_NONE;
+         init_residency = screen->support_create_not_resident ? d3d12_evicted : d3d12_resident;
+
+         hres = screen->dev->CreateCommittedResource(&heap_pris,
+                                                     heap_flags,
+                                                     &desc,
+                                                     D3D12_RESOURCE_STATE_COMMON,
+                                                     NULL,
+                                                     IID_PPV_ARGS(&d3d12_res));
+      }
    }
 
    if (FAILED(hres))
@@ -314,14 +396,24 @@ init_texture(struct d3d12_screen *screen,
 
    if (screen->winsys && (templ->bind & PIPE_BIND_DISPLAY_TARGET)) {
       struct sw_winsys *winsys = screen->winsys;
-      res->dt = winsys->displaytarget_create(screen->winsys,
-                                             res->base.b.bind,
-                                             res->base.b.format,
-                                             templ->width0,
-                                             templ->height0,
-                                             64, NULL,
-                                             &res->dt_stride);
-      res->dt_refcount = 1;
+      if (winsys->is_displaytarget_format_supported(winsys, res->base.b.bind, res->base.b.format)) {
+         res->dt = winsys->displaytarget_create(screen->winsys,
+                                                res->base.b.bind,
+                                                res->base.b.format,
+                                                templ->width0,
+                                                templ->height0,
+                                                64, NULL,
+                                                &res->dt_stride);
+         res->dt_refcount = 1;
+      } else {
+         assert(res->base.b.format == PIPE_FORMAT_R16G16B16A16_FLOAT); /* The only format we proxy right now */
+         struct pipe_resource proxy_templ = *templ;
+         proxy_templ.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+         res->dt_proxy = screen->base.resource_create(&screen->base, &proxy_templ);
+         if (!res->dt_proxy)
+            return false;
+         assert(d3d12_resource(res->dt_proxy)->dt);
+      }
    }
 
    res->bo = d3d12_bo_wrap_res(screen, d3d12_res, init_residency);
@@ -357,11 +449,12 @@ convert_planar_resource(struct d3d12_resource *res)
       plane_res->plane_slice = plane;
       plane_res->base.b.format = util_format_get_plane_format(res->base.b.format, plane);
       plane_res->base.b.width0 = util_format_get_plane_width(res->base.b.format, plane, res->base.b.width0);
-      plane_res->base.b.height0 = util_format_get_plane_height(res->base.b.format, plane, res->base.b.height0);
+      plane_res->base.b.height0 = static_cast<uint16_t>(util_format_get_plane_height(res->base.b.format, plane, res->base.b.height0));
 
-#if DEBUG
+#if MESA_DEBUG
       struct d3d12_screen *screen = d3d12_screen(res->base.b.screen);
       D3D12_RESOURCE_DESC desc = GetDesc(res->bo->res);
+      desc.Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
       D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed_footprint = {};
       D3D12_SUBRESOURCE_FOOTPRINT *footprint = &placed_footprint.Footprint;
       unsigned subresource = plane * desc.MipLevels * desc.DepthOrArraySize;
@@ -485,7 +578,7 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
 
          if (FAILED(hr)) {
             debug_printf("d3d12: Error %x - Couldn't export incoming resource com_obj "
-                         "(%p) via shared NT handle.\n", hr, handle->com_obj);
+                         "(%p) via shared NT handle.\n", (unsigned)hr, handle->com_obj);
             return NULL;
          }
       }
@@ -541,10 +634,12 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
    /* Get a description for this plane */
    if (templ && handle->format != templ->format) {
       unsigned subresource = handle->plane * incoming_res_desc.MipLevels * incoming_res_desc.DepthOrArraySize;
-      screen->dev->GetCopyableFootprints(&incoming_res_desc, subresource, 1, 0, &placed_footprint, nullptr, nullptr, nullptr);
+      auto temp_desc = incoming_res_desc;
+      temp_desc.Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+      screen->dev->GetCopyableFootprints(&temp_desc, subresource, 1, 0, &placed_footprint, nullptr, nullptr, nullptr);
    } else {
       footprint->Format = incoming_res_desc.Format;
-      footprint->Width = incoming_res_desc.Width;
+      footprint->Width = static_cast<UINT>(incoming_res_desc.Width);
       footprint->Height = incoming_res_desc.Height;
       footprint->Depth = incoming_res_desc.DepthOrArraySize;
    }
@@ -554,8 +649,8 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
       debug_printf("d3d12: Importing resource too large\n");
       goto invalid;
    }
-   res->base.b.width0 = incoming_res_desc.Width;
-   res->base.b.height0 = incoming_res_desc.Height;
+   res->base.b.width0 = static_cast<uint32_t>(incoming_res_desc.Width);
+   res->base.b.height0 = static_cast<uint16_t>(incoming_res_desc.Height);
    res->base.b.depth0 = 1;
    res->base.b.array_size = 1;
 
@@ -578,14 +673,14 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
       break;
    case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
       res->base.b.target = PIPE_TEXTURE_3D;
-      res->base.b.depth0 = footprint->Depth;
+      res->base.b.depth0 = static_cast<uint16_t>(footprint->Depth);
       break;
    default:
-      unreachable("Invalid dimension");
+      UNREACHABLE("Invalid dimension");
       break;
    }
-   res->base.b.nr_samples = incoming_res_desc.SampleDesc.Count;
-   res->base.b.last_level = incoming_res_desc.MipLevels - 1;
+   res->base.b.nr_samples = static_cast<uint8_t>(incoming_res_desc.SampleDesc.Count);
+   res->base.b.last_level = static_cast<uint8_t>(incoming_res_desc.MipLevels - 1);
    res->base.b.usage = PIPE_USAGE_DEFAULT;
    res->base.b.bind |= PIPE_BIND_SHARED;
    if (incoming_res_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
@@ -596,6 +691,10 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
       res->base.b.bind |= PIPE_BIND_SHADER_IMAGE;
    if ((incoming_res_desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) == D3D12_RESOURCE_FLAG_NONE)
       res->base.b.bind |= PIPE_BIND_SAMPLER_VIEW;
+   if (incoming_res_desc.Flags & D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY)
+      res->base.b.bind |= PIPE_BIND_VIDEO_DECODE_DPB;
+   if (incoming_res_desc.Flags & D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY)
+      res->base.b.bind |= PIPE_BIND_VIDEO_ENCODE_DPB;
 
    if (templ) {
       if (res->base.b.target == PIPE_TEXTURE_2D_ARRAY &&
@@ -663,7 +762,10 @@ d3d12_resource_from_handle(struct pipe_screen *pscreen,
 
       if (res->base.b.format == PIPE_FORMAT_NONE) {
          /* Convert from typeless to a reasonable default */
-         res->base.b.format = d3d12_get_default_pipe_format(incoming_res_desc.Format);
+         if (incoming_res_desc.Format == DXGI_FORMAT_UNKNOWN)
+            res->base.b.format = PIPE_FORMAT_R8_UNORM;
+         else
+            res->base.b.format = d3d12_get_default_pipe_format(incoming_res_desc.Format);
 
          if (res->base.b.format == PIPE_FORMAT_NONE) {
             debug_printf("d3d12: Unable to deduce non-typeless resource format %d\n", incoming_res_desc.Format);
@@ -760,8 +862,8 @@ d3d12_resource_from_resource(struct pipe_screen *pscreen,
     }
     
     templ.format = d3d12_get_pipe_format(input_desc.Format);
-    templ.width0 = input_desc.Width;
-    templ.height0 = input_desc.Height;
+    templ.width0 = static_cast<uint32_t>(input_desc.Width);
+    templ.height0 = static_cast<uint16_t>(input_desc.Height);
     templ.depth0 = input_desc.DepthOrArraySize;
     templ.array_size = input_desc.DepthOrArraySize;
     templ.flags = 0;
@@ -804,10 +906,10 @@ static void d3d12_adjust_transfer_dimensions_for_plane(const struct d3d12_resour
    float height_multiplier = res->first_plane->height0 / (float) util_format_get_plane_height(res->overall_format, res->plane_slice, res->first_plane->height0);
    
    /* Normalize box back to overall dimensions (first plane)*/
-   ptrans->box.width = width_multiplier * original_box->width;
-   ptrans->box.height = height_multiplier * original_box->height;
-   ptrans->box.x = width_multiplier * original_box->x;
-   ptrans->box.y = height_multiplier * original_box->y;
+   ptrans->box.width = static_cast<int32_t>(width_multiplier * original_box->width);
+   ptrans->box.height = static_cast<int32_t>(height_multiplier * original_box->height);
+   ptrans->box.x = static_cast<int32_t>(width_multiplier * original_box->x);
+   ptrans->box.y = static_cast<int32_t>(height_multiplier * original_box->y);
 
    /* Now adjust dimensions to plane_slice*/
    ptrans->box.width = util_format_get_plane_width(res->overall_format, plane_slice, ptrans->box.width);
@@ -836,10 +938,10 @@ void d3d12_resource_get_planes_info(pipe_resource *pres,
       strides[plane_slice] = align(util_format_get_stride(cur_plane_resource->format, width),
                            D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 
-      layer_strides[plane_slice] = align(util_format_get_2d_size(cur_plane_resource->format,
-                                                   strides[plane_slice],
-                                                   height),
-                                 D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+      layer_strides[plane_slice] = static_cast<unsigned>(align(static_cast<uint32_t>(util_format_get_2d_size(cur_plane_resource->format,
+                                                         strides[plane_slice],
+                                                         height)),
+                                                         D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT));
 
       offsets[plane_slice] = *staging_res_size;
       *staging_res_size += layer_strides[plane_slice];
@@ -853,13 +955,17 @@ static constexpr unsigned d3d12_max_planes = 3;
  * Get stride and offset for the given pipe resource without the need to get
  * a winsys_handle.
  */
-void
-d3d12_resource_get_info(struct pipe_screen *pscreen,
-                        struct pipe_resource *pres,
-                        unsigned *stride,
-                        unsigned *offset)
+static bool
+d3d12_resource_get_param(struct pipe_screen *pscreen,
+                         struct pipe_context *context,
+                         struct pipe_resource *pres,
+                         unsigned plane,
+                         unsigned layer,
+                         unsigned level,
+                         enum pipe_resource_param param,
+                         unsigned handle_usage,
+                         uint64_t *value)
 {
-
    struct d3d12_resource* res = d3d12_resource(pres);
    unsigned num_planes = util_format_get_num_planes(res->overall_format);
 
@@ -878,12 +984,33 @@ d3d12_resource_get_info(struct pipe_screen *pscreen,
       &staging_res_size
    );
 
-   if(stride) {
-      *stride = strides[res->plane_slice];
-   }
+   switch (param) {
+   case PIPE_RESOURCE_PARAM_NPLANES:
+      *value = num_planes;
+      return true;
 
-   if(offset) {
-      *offset = offsets[res->plane_slice];
+   case PIPE_RESOURCE_PARAM_STRIDE:
+      *value = strides[res->plane_slice];
+      return true;
+
+   case PIPE_RESOURCE_PARAM_OFFSET:
+      *value = offsets[res->plane_slice];
+      return true;
+
+   case PIPE_RESOURCE_PARAM_LAYER_STRIDE:
+      *value = layer_strides[res->plane_slice];
+      return true;
+
+   case PIPE_RESOURCE_PARAM_DISJOINT_PLANES:
+      *value = num_planes > 1;
+      return true;
+
+   case PIPE_RESOURCE_PARAM_MODIFIER:
+   case PIPE_RESOURCE_PARAM_HANDLE_TYPE_SHARED:
+   case PIPE_RESOURCE_PARAM_HANDLE_TYPE_KMS:
+   case PIPE_RESOURCE_PARAM_HANDLE_TYPE_FD:
+   default:
+      return false;
    }
 }
 
@@ -982,7 +1109,13 @@ d3d12_resource_from_memobj(struct pipe_screen *pscreen,
    struct winsys_handle whandle = {};
    whandle.type = WINSYS_HANDLE_TYPE_D3D12_RES;
    whandle.com_obj = memobj->res ? (void *) memobj->res : (void *) memobj->heap;
-   whandle.offset = offset;
+
+   if (offset > UINT32_MAX) {
+      debug_printf("d3d12: Offset too large for resource \n");
+      return NULL;
+   }
+
+   whandle.offset = static_cast<unsigned int>(offset);
    whandle.format = templ->format;
    whandle.modifier = memobj->res ? 0 : 1;
 
@@ -998,7 +1131,7 @@ d3d12_screen_resource_init(struct pipe_screen *pscreen)
    pscreen->resource_from_handle = d3d12_resource_from_handle;
    pscreen->resource_get_handle = d3d12_resource_get_handle;
    pscreen->resource_destroy = d3d12_resource_destroy;
-   pscreen->resource_get_info = d3d12_resource_get_info;
+   pscreen->resource_get_param = d3d12_resource_get_param;
 
    pscreen->memobj_create_from_handle = d3d12_memobj_create_from_handle;
    pscreen->memobj_destroy = d3d12_memobj_destroy;
@@ -1041,6 +1174,7 @@ fill_buffer_location(struct d3d12_context *ctx,
    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
    uint64_t offset = 0;
    auto descr = GetDesc(d3d12_resource_underlying(res, &offset));
+   descr.Flags &= ~D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
    struct d3d12_screen *screen = d3d12_screen(ctx->base.screen);
    ID3D12Device* dev = screen->dev;
 
@@ -1095,6 +1229,7 @@ copy_texture_region(struct d3d12_context *ctx,
    d3d12_apply_resource_states(ctx, false);
    ctx->cmdlist->CopyTextureRegion(&info.dst_loc, info.dst_x, info.dst_y, info.dst_z,
                                    &info.src_loc, info.src_box);
+   ctx->has_commands = true;
 }
 
 static void
@@ -1221,12 +1356,14 @@ transfer_image_to_buf(struct d3d12_context *ctx,
    }
 
    struct pipe_resource *resolved_resource = nullptr;
+#ifdef HAVE_GALLIUM_D3D12_GRAPHICS
    if (res->base.b.nr_samples > 1) {
       struct pipe_resource tmpl = res->base.b;
       tmpl.nr_samples = 0;
       resolved_resource = d3d12_resource_create(ctx->base.screen, &tmpl);
       struct pipe_blit_info resolve_info = {};
-      struct pipe_box box = {0,0,0, (int)res->base.b.width0, (int16_t)res->base.b.height0, (int16_t)res->base.b.depth0};
+      struct pipe_box box;
+      u_box_3d(0,0,0, (int)res->base.b.width0, (int16_t)res->base.b.height0, (int16_t)res->base.b.depth0, &box);
       resolve_info.dst.resource = resolved_resource;
       resolve_info.dst.box = box;
       resolve_info.dst.format = res->base.b.format;
@@ -1241,7 +1378,7 @@ transfer_image_to_buf(struct d3d12_context *ctx,
       d3d12_blit(&ctx->base, &resolve_info);
       res = (struct d3d12_resource *)resolved_resource;
    }
-
+#endif // HAVE_GALLIUM_D3D12_GRAPHICS
 
    if (res->base.b.target == PIPE_TEXTURE_3D) {
       transfer_image_part_to_buf(ctx, res, staging_res, trans, resid,
@@ -1287,10 +1424,11 @@ transfer_buf_to_buf(struct d3d12_context *ctx,
    ctx->cmdlist->CopyBufferRegion(dst_d3d12, dst_offset,
                                   src_d3d12, src_offset,
                                   width);
+   ctx->has_commands = true;
 }
 
-static unsigned
-linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
+static size_t
+linear_offset(int x, int y, int z, unsigned stride, size_t layer_stride)
 {
    return x +
           y * stride +
@@ -1298,7 +1436,7 @@ linear_offset(int x, int y, int z, unsigned stride, unsigned layer_stride)
 }
 
 static D3D12_RANGE
-linear_range(const struct pipe_box *box, unsigned stride, unsigned layer_stride)
+linear_range(const struct pipe_box *box, unsigned stride, size_t layer_stride)
 {
    D3D12_RANGE range;
 
@@ -1323,7 +1461,7 @@ synchronize(struct d3d12_context *ctx,
    /* Check whether that range contains valid data; if not, we might not need to sync */
    if (!(usage & PIPE_MAP_UNSYNCHRONIZED) &&
        usage & PIPE_MAP_WRITE &&
-       !util_ranges_intersect(&res->valid_buffer_range, range->Begin, range->End)) {
+       !util_ranges_intersect(&res->valid_buffer_range, static_cast<unsigned int>(range->Begin), static_cast<unsigned int>(range->End))) {
       usage |= PIPE_MAP_UNSYNCHRONIZED;
    }
 
@@ -1339,7 +1477,7 @@ synchronize(struct d3d12_context *ctx,
 
    if (usage & PIPE_MAP_WRITE)
       util_range_add(&res->base.b, &res->valid_buffer_range,
-                     range->Begin, range->End);
+                     static_cast<unsigned int>(range->Begin), static_cast<unsigned int>(range->End));
 
    return true;
 }
@@ -1406,19 +1544,19 @@ prepare_zs_layer_strides(struct d3d12_screen *screen,
 
    trans->base.b.stride = align(util_format_get_stride(res->base.b.format, width),
                                 D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-   trans->base.b.layer_stride = util_format_get_2d_size(res->base.b.format,
-                                                        trans->base.b.stride,
-                                                        height);
+   trans->base.b.layer_stride = static_cast<uintptr_t>(util_format_get_2d_size(res->base.b.format,
+                                                                               trans->base.b.stride,
+                                                                               height));
 
    if (copy_whole_resource) {
       trans->zs_cpu_copy_stride = align(util_format_get_stride(res->base.b.format, box->width),
                                         D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-      trans->zs_cpu_copy_layer_stride = util_format_get_2d_size(res->base.b.format,
-                                                                trans->base.b.stride,
-                                                                box->height);
+      trans->zs_cpu_copy_layer_stride = static_cast<unsigned int>(util_format_get_2d_size(res->base.b.format,
+                                                                                          trans->base.b.stride,
+                                                                                          box->height));
    } else {
       trans->zs_cpu_copy_stride = trans->base.b.stride;
-      trans->zs_cpu_copy_layer_stride = trans->base.b.layer_stride;
+      trans->zs_cpu_copy_layer_stride = static_cast<unsigned int>(trans->base.b.layer_stride);
    }
 }
 
@@ -1439,7 +1577,7 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
    tmpl.bind = 0;
    tmpl.usage = PIPE_USAGE_STAGING;
    tmpl.flags = 0;
-   tmpl.width0 = trans->base.b.layer_stride;
+   tmpl.width0 = static_cast<uint32_t>(trans->base.b.layer_stride);
    tmpl.height0 = 1;
    tmpl.depth0 = 1;
    tmpl.array_size = 1;
@@ -1508,7 +1646,7 @@ read_zs_surface(struct d3d12_context *ctx, struct d3d12_resource *res,
                                                     trans->base.b.box.width, trans->base.b.box.height);
       break;
    default:
-      unreachable("Unsupported depth steancil format");
+      UNREACHABLE("Unsupported depth steancil format");
    };
 
    return trans->data;
@@ -1541,7 +1679,7 @@ write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
    tmpl.bind = 0;
    tmpl.usage = PIPE_USAGE_STAGING;
    tmpl.flags = 0;
-   tmpl.width0 = trans->base.b.layer_stride;
+   tmpl.width0 = static_cast<uint32_t>(trans->base.b.layer_stride);
    tmpl.height0 = 1;
    tmpl.depth0 = 1;
    tmpl.array_size = 1;
@@ -1596,7 +1734,7 @@ write_zs_surface(struct pipe_context *pctx, struct d3d12_resource *res,
                                                       trans->base.b.box.height);
       break;
    default:
-      unreachable("Unsupported depth steancil format");
+      UNREACHABLE("Unsupported depth steancil format");
    };
 
    stencil_buffer.unmap();
@@ -1644,9 +1782,9 @@ d3d12_transfer_map(struct pipe_context *pctx,
          ptrans->layer_stride = 0;
       } else {
          ptrans->stride = util_format_get_stride(pres->format, box->width);
-         ptrans->layer_stride = util_format_get_2d_size(pres->format,
-                                                        ptrans->stride,
-                                                        box->height);
+         ptrans->layer_stride = static_cast<uintptr_t>(util_format_get_2d_size(pres->format,
+                                                                               ptrans->stride,
+                                                                               box->height));
       }
 
       range = linear_range(box, ptrans->stride, ptrans->layer_stride);
@@ -1733,30 +1871,30 @@ d3d12_transfer_map(struct pipe_context *pctx,
    } else {
       ptrans->stride = align(util_format_get_stride(pres->format, box->width),
                               D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-      ptrans->layer_stride = util_format_get_2d_size(pres->format,
-                                                     ptrans->stride,
-                                                     box->height);
+      ptrans->layer_stride = static_cast<uintptr_t>(util_format_get_2d_size(pres->format,
+                                                                            ptrans->stride,
+                                                                            box->height));
 
       if (res->base.b.target != PIPE_TEXTURE_3D)
-         ptrans->layer_stride = align(ptrans->layer_stride,
-                                      D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+         ptrans->layer_stride = static_cast<uintptr_t>(align(static_cast<uint32_t>(ptrans->layer_stride),
+                                                             D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT));
 
       if (util_format_has_depth(util_format_description(pres->format)) &&
           screen->opts2.ProgrammableSamplePositionsTier == D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER_NOT_SUPPORTED) {
          trans->zs_cpu_copy_stride = ptrans->stride;
-         trans->zs_cpu_copy_layer_stride = ptrans->layer_stride;
+         trans->zs_cpu_copy_layer_stride = static_cast<unsigned int>(ptrans->layer_stride);
          
          ptrans->stride = align(util_format_get_stride(pres->format, pres->width0),
                                 D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-         ptrans->layer_stride = util_format_get_2d_size(pres->format,
-                                                        ptrans->stride,
-                                                        pres->height0);
+         ptrans->layer_stride = static_cast<uintptr_t>(util_format_get_2d_size(pres->format,
+                                                                               ptrans->stride,
+                                                                               pres->height0));
 
          range.Begin = box->y * ptrans->stride +
             box->x * util_format_get_blocksize(pres->format);
       }
 
-      unsigned staging_res_size = ptrans->layer_stride * box->depth;
+      unsigned staging_res_size = static_cast<unsigned>(ptrans->layer_stride * box->depth);
       if (res->base.b.target == PIPE_BUFFER) {
          /* To properly support ARB_map_buffer_alignment, we need to return a pointer
           * that's appropriately offset from a 64-byte-aligned base address.
@@ -1917,4 +2055,43 @@ d3d12_context_resource_init(struct pipe_context *pctx)
    pctx->transfer_flush_region = u_default_transfer_flush_region;
    pctx->buffer_subdata = u_default_buffer_subdata;
    pctx->texture_subdata = u_default_texture_subdata;
+}
+
+static void
+d3d12_resource_init_logicop_texture(const void *data)
+{
+   struct d3d12_resource *res = (struct d3d12_resource *)data;
+   struct pipe_resource templ = {};
+   struct pipe_resource *src = &res->base.b;
+
+   templ.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+   templ.width0 = src->width0;
+   templ.height0 = src->height0;
+   templ.depth0 = src->depth0;
+   templ.array_size = src->array_size;
+   templ.nr_samples = src->nr_samples;
+   templ.nr_storage_samples = src->nr_storage_samples;
+   templ.usage = PIPE_USAGE_STAGING;
+   templ.bind = src->bind;
+   templ.target = src->target;
+
+   res->logicop_texture = src->screen->resource_create(src->screen, &templ);
+}
+
+struct pipe_resource *
+d3d12_resource_get_logicop_texture(struct d3d12_resource *res)
+{
+   switch (res->dxgi_format) {
+   case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+   case DXGI_FORMAT_B8G8R8A8_UNORM:
+   case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+   case DXGI_FORMAT_B8G8R8X8_UNORM:
+   case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+   case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+      break;
+   default:
+      return &res->base.b;
+   }
+   util_call_once_data(&res->logicop_texture_init_flag, d3d12_resource_init_logicop_texture, res);
+   return res->logicop_texture;
 }

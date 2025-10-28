@@ -59,14 +59,14 @@ bi_is_regfmt_16(enum bi_register_format fmt)
    case BI_REGISTER_FORMAT_AUTO:
       return false;
    default:
-      unreachable("Invalid register format");
+      UNREACHABLE("Invalid register format");
    }
 }
 
 static unsigned
 bi_count_staging_registers(const bi_instr *ins)
 {
-   enum bi_sr_count count = bi_opcode_props[ins->op].sr_count;
+   enum bi_sr_count count = bi_get_opcode_props(ins)->sr_count;
    unsigned vecsize = ins->vecsize + 1; /* XXX: off-by-one */
 
    switch (count) {
@@ -81,7 +81,7 @@ bi_count_staging_registers(const bi_instr *ins)
       return ins->sr_count;
    }
 
-   unreachable("Invalid sr_count");
+   UNREACHABLE("Invalid sr_count");
 }
 
 unsigned
@@ -90,7 +90,9 @@ bi_count_read_registers(const bi_instr *ins, unsigned s)
    /* ATOM reads 1 but writes 2. Exception for ACMPXCHG */
    if (s == 0 && ins->op == BI_OPCODE_ATOM_RETURN_I32)
       return (ins->atom_opc == BI_ATOM_OPC_ACMPXCHG) ? 2 : 1;
-   else if (s == 0 && bi_opcode_props[ins->op].sr_read)
+   else if (s == 0 && ins->op == BI_OPCODE_ATOM_RETURN_I64)
+      return (ins->atom_opc == BI_ATOM_OPC_ACMPXCHG) ? 4 : 2;
+   else if (s == 0 && bi_get_opcode_props(ins)->sr_read)
       return bi_count_staging_registers(ins);
    else if (s == 4 && ins->op == BI_OPCODE_BLEND)
       return ins->sr_count_2; /* Dual source blending */
@@ -103,7 +105,7 @@ bi_count_read_registers(const bi_instr *ins, unsigned s)
 unsigned
 bi_count_write_registers(const bi_instr *ins, unsigned d)
 {
-   if (d == 0 && bi_opcode_props[ins->op].sr_write) {
+   if (d == 0 && bi_get_opcode_props(ins)->sr_write) {
       switch (ins->op) {
       case BI_OPCODE_TEXC:
       case BI_OPCODE_TEXC_DUAL:
@@ -114,6 +116,7 @@ bi_count_write_registers(const bi_instr *ins, unsigned d)
 
       case BI_OPCODE_TEX_SINGLE:
       case BI_OPCODE_TEX_FETCH:
+      case BI_OPCODE_TEX_GRADIENT:
       case BI_OPCODE_TEX_GATHER: {
          unsigned chans = util_bitcount(ins->write_mask);
 
@@ -124,8 +127,18 @@ bi_count_write_registers(const bi_instr *ins, unsigned d)
       case BI_OPCODE_ACMPXCHG_I32:
          /* Reads 2 but writes 1 */
          return 1;
+      case BI_OPCODE_ACMPXCHG_I64:
+         /* Reads 4 but writes 2 */
+         return 2;
+      case BI_OPCODE_ATOM_POST_I32:
+         /* Reads 2 but writes 1 */
+         return 1;
+      case BI_OPCODE_ATOM_POST_I64:
+         /* Reads 4 but writes 2 */
+         return 2;
 
       case BI_OPCODE_ATOM1_RETURN_I32:
+      case BI_OPCODE_ATOM1_RETURN_I64:
          /* Allow omitting the destination for plain ATOM1 */
          return bi_is_null(ins->dest[0]) ? 0 : ins->sr_count;
       default:
@@ -184,7 +197,10 @@ bi_next_clause(bi_context *ctx, bi_block *block, bi_clause *clause)
 bool
 bi_side_effects(const bi_instr *I)
 {
-   if (bi_opcode_props[I->op].last)
+   if (bi_get_opcode_props(I)->last)
+      return true;
+
+   if (bi_is_scheduling_barrier(I))
       return true;
 
    switch (I->op) {
@@ -195,7 +211,7 @@ bi_side_effects(const bi_instr *I)
       break;
    }
 
-   switch (bi_opcode_props[I->op].message) {
+   switch (bi_get_opcode_props(I)->message) {
    case BIFROST_MESSAGE_NONE:
    case BIFROST_MESSAGE_VARYING:
    case BIFROST_MESSAGE_ATTRIBUTE:
@@ -218,7 +234,7 @@ bi_side_effects(const bi_instr *I)
       return (I->op != BI_OPCODE_LD_TILE);
    }
 
-   unreachable("Invalid message type");
+   UNREACHABLE("Invalid message type");
 }
 
 /* Branch reconvergence is required when the execution mask may change
@@ -272,7 +288,7 @@ bi_csel_for_mux(bool must_sign, bool b32, enum bi_mux mux)
    case BI_MUX_FP_ZERO:
       return b32 ? BI_OPCODE_CSEL_F32 : BI_OPCODE_CSEL_V2F16;
    default:
-      unreachable("No CSEL for MUX.bit");
+      UNREACHABLE("No CSEL for MUX.bit");
    }
 }
 
@@ -287,6 +303,7 @@ bi_csel_from_mux(bi_builder *b, const bi_instr *I, bool must_sign)
                                    I->src[0], I->src[1], cmpf);
 
    /* Fixup the opcode and use it */
-   csel->op = bi_csel_for_mux(must_sign, I->op == BI_OPCODE_MUX_I32, I->mux);
+   bi_set_opcode(csel,
+                 bi_csel_for_mux(must_sign, I->op == BI_OPCODE_MUX_I32, I->mux));
    return csel;
 }

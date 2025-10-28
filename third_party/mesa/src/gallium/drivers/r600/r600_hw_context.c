@@ -1,28 +1,10 @@
 /*
  * Copyright 2010 Jerome Glisse <glisse@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
  * Authors:
  *      Jerome Glisse
+ * SPDX-License-Identifier: MIT
  */
+
 #include "r600_pipe.h"
 #include "r600d.h"
 #include "util/u_memory.h"
@@ -240,6 +222,16 @@ void r600_flush_emit(struct r600_context *rctx)
 		radeon_emit(cs, 0xffffffff);      /* CP_COHER_SIZE */
 		radeon_emit(cs, 0);               /* CP_COHER_BASE */
 		radeon_emit(cs, 0x0000000A);      /* POLL_INTERVAL */
+
+		/* PKT3_CLEAR_STATE below is required on cayman to set the gpu
+		 * in a deterministic state after a compute shader. Otherwise,
+		 * the graphic pipeline could fail in a non-deterministic way.
+		 * See https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/33973 */
+		if (unlikely(rctx->cayman_dealloc_state)) {
+			radeon_emit(cs, PKT3C(PKT3_CLEAR_STATE, 0, 0));
+			radeon_emit(cs, 0);
+			rctx->cayman_dealloc_state = false;
+		}
 	}
 
 	if (rctx->b.flags & R600_CONTEXT_START_PIPELINE_STATS) {
@@ -299,7 +291,7 @@ void r600_context_gfx_flush(void *context, unsigned flags,
 	/* Flush the CS. */
 	ws->cs_flush(cs, flags, &ctx->b.last_gfx_fence);
 	if (fence)
-		ws->fence_reference(fence, ctx->b.last_gfx_fence);
+		ws->fence_reference(ws, fence, ctx->b.last_gfx_fence);
 	ctx->b.num_gfx_cs_flushes++;
 
 	if (ctx->is_debug) {
@@ -328,9 +320,8 @@ void r600_begin_new_cs(struct r600_context *ctx)
 
 		/* Create a buffer used for writing trace IDs and initialize it to 0. */
 		assert(!ctx->trace_buf);
-		ctx->trace_buf = (struct r600_resource*)
-			pipe_buffer_create(ctx->b.b.screen, 0,
-					   PIPE_USAGE_STAGING, 4);
+		ctx->trace_buf = r600_as_resource(pipe_buffer_create(ctx->b.b.screen, 0,
+								  PIPE_USAGE_STAGING, 4));
 		if (ctx->trace_buf)
 			pipe_buffer_write_nooverlap(&ctx->b.b, &ctx->trace_buf->b.b,
 						    0, sizeof(zero), &zero);
@@ -355,7 +346,7 @@ void r600_begin_new_cs(struct r600_context *ctx)
 	r600_mark_atom_dirty(ctx, &ctx->clip_state.atom);
 	r600_mark_atom_dirty(ctx, &ctx->db_misc_state.atom);
 	r600_mark_atom_dirty(ctx, &ctx->db_state.atom);
-	r600_mark_atom_dirty(ctx, &ctx->framebuffer.atom);
+	r600_mark_atom_dirty(ctx, &ctx->cb_state.atom);
 	if (ctx->b.gfx_level >= EVERGREEN) {
 		r600_mark_atom_dirty(ctx, &ctx->fragment_images.atom);
 		r600_mark_atom_dirty(ctx, &ctx->fragment_buffers.atom);
@@ -405,7 +396,7 @@ void r600_begin_new_cs(struct r600_context *ctx)
 	r600_vertex_buffers_dirty(ctx);
 
 	/* Re-emit shader resources. */
-	for (shader = 0; shader < PIPE_SHADER_TYPES; shader++) {
+	for (shader = 0; shader < MESA_SHADER_STAGES; shader++) {
 		struct r600_constbuf_state *constbuf = &ctx->constbuf_state[shader];
 		struct r600_textures_info *samplers = &ctx->samplers[shader];
 
@@ -509,11 +500,11 @@ void r600_cp_dma_copy_buffer(struct r600_context *rctx,
 	/* Mark the buffer range of destination as valid (initialized),
 	 * so that transfer_map knows it should wait for the GPU when mapping
 	 * that range. */
-	util_range_add(dst, &r600_resource(dst)->valid_buffer_range, dst_offset,
+	util_range_add(dst, &r600_as_resource(dst)->valid_buffer_range, dst_offset,
 		       dst_offset + size);
 
-	dst_offset += r600_resource(dst)->gpu_address;
-	src_offset += r600_resource(src)->gpu_address;
+	dst_offset += r600_as_resource(dst)->gpu_address;
+	src_offset += r600_as_resource(src)->gpu_address;
 
 	/* Flush the caches where the resources are bound. */
 	rctx->b.flags |= r600_get_flush_flags(R600_COHERENCY_SHADER) |
@@ -541,9 +532,9 @@ void r600_cp_dma_copy_buffer(struct r600_context *rctx,
 		}
 
 		/* This must be done after r600_need_cs_space. */
-		src_reloc = radeon_add_to_buffer_list(&rctx->b, &rctx->b.gfx, (struct r600_resource*)src,
+		src_reloc = radeon_add_to_buffer_list(&rctx->b, &rctx->b.gfx, r600_as_resource(src),
 						  RADEON_USAGE_READ | RADEON_PRIO_CP_DMA);
-		dst_reloc = radeon_add_to_buffer_list(&rctx->b, &rctx->b.gfx, (struct r600_resource*)dst,
+		dst_reloc = radeon_add_to_buffer_list(&rctx->b, &rctx->b.gfx, r600_as_resource(dst),
 						  RADEON_USAGE_WRITE | RADEON_PRIO_CP_DMA);
 
 		radeon_emit(cs, PKT3(PKT3_CP_DMA, 4, 0));
@@ -585,8 +576,8 @@ void r600_dma_copy_buffer(struct r600_context *rctx,
 {
 	struct radeon_cmdbuf *cs = &rctx->b.dma.cs;
 	unsigned i, ncopy, csize;
-	struct r600_resource *rdst = (struct r600_resource*)dst;
-	struct r600_resource *rsrc = (struct r600_resource*)src;
+	struct r600_resource *rdst = r600_as_resource(dst);
+	struct r600_resource *rsrc = r600_as_resource(src);
 
 	/* Mark the buffer range of destination as valid (initialized),
 	 * so that transfer_map knows it should wait for the GPU when mapping

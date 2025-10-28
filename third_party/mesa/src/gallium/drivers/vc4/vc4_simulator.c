@@ -80,6 +80,7 @@ static struct vc4_simulator_state {
         int refcount;
 } sim_state = {
         .mutex = SIMPLE_MTX_INITIALIZER,
+        .mem = NULL,
 };
 
 enum gem_type {
@@ -704,16 +705,23 @@ vc4_simulator_init_global(void)
                 return;
         }
 
-        sim_state.mem_size = 256 * 1024 * 1024;
-        sim_state.mem = calloc(sim_state.mem_size, 1);
-        if (!sim_state.mem)
-                abort();
-        sim_state.heap = u_mmInit(0, sim_state.mem_size);
-
-        /* We supply our own memory so that we can have more aperture
-         * available (256MB instead of simpenrose's default 64MB).
+        /* We only allocate once the memory supplied to the simulator, and we
+         * will never free it unless execution ends. So if the simulator is
+         * initialized after being destroyed, it doesn't assert because of
+         * memory being re-initialized.
          */
-        simpenrose_init_hardware_supply_mem(sim_state.mem, sim_state.mem_size);
+        if (!sim_state.mem) {
+                sim_state.mem_size = 256 * 1024 * 1024;
+                sim_state.mem = calloc(sim_state.mem_size, 1);
+                if (!sim_state.mem)
+                        abort();
+                /* We supply our own memory so that we can have more aperture
+                 * available (256MB instead of simpenrose's default 64MB).
+                 */
+                simpenrose_init_hardware_supply_mem(sim_state.mem, sim_state.mem_size);
+        }
+
+        sim_state.heap = u_mmInit(0, sim_state.mem_size);
 
         /* Carve out low memory for tile allocation overflow.  The kernel
          * should be automatically handling overflow memory setup on real
@@ -735,44 +743,48 @@ vc4_simulator_init_global(void)
                                         _mesa_key_pointer_equal);
 }
 
-void
+struct vc4_simulator_file *
 vc4_simulator_init(struct vc4_screen *screen)
 {
         vc4_simulator_init_global();
 
-        screen->sim_file = rzalloc(screen, struct vc4_simulator_file);
+        struct vc4_simulator_file *sim_file =
+                rzalloc(NULL, struct vc4_simulator_file);
 
-        screen->sim_file->bo_map =
-                _mesa_hash_table_create(screen->sim_file,
+        sim_file->bo_map =
+                _mesa_hash_table_create(sim_file,
                                         _mesa_hash_pointer,
                                         _mesa_key_pointer_equal);
 
         drmVersionPtr version = drmGetVersion(screen->fd);
         if (version && strncmp(version->name, "i915", version->name_len) == 0)
-                screen->sim_file->gem_type = GEM_I915;
+                sim_file->gem_type = GEM_I915;
         else if (version && strncmp(version->name, "amdgpu", version->name_len) == 0)
-                screen->sim_file->gem_type = GEM_AMDGPU;
+                sim_file->gem_type = GEM_AMDGPU;
         else
-                screen->sim_file->gem_type = GEM_DUMB;
+                sim_file->gem_type = GEM_DUMB;
         drmFreeVersion(version);
         simple_mtx_lock(&sim_state.mutex);
         _mesa_hash_table_insert(sim_state.fd_map, int_to_key(screen->fd + 1),
-                                screen->sim_file);
+                                sim_file);
         simple_mtx_unlock(&sim_state.mutex);
 
-        screen->sim_file->dev.screen = screen;
+        sim_file->dev.screen = screen;
+
+        return sim_file;
 }
 
 void
-vc4_simulator_destroy(struct vc4_screen *screen)
+vc4_simulator_destroy(struct vc4_simulator_file *sim_file)
 {
         simple_mtx_lock(&sim_state.mutex);
         if (!--sim_state.refcount) {
                 _mesa_hash_table_destroy(sim_state.fd_map, NULL);
                 u_mmDestroy(sim_state.heap);
-                free(sim_state.mem);
+                /* We don't free the simulator allocated memory */
                 /* No memsetting it, because it contains the mutex. */
         }
+        ralloc_free(sim_file);
         simple_mtx_unlock(&sim_state.mutex);
 }
 

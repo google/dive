@@ -145,6 +145,9 @@
 /** For GL_EXT_texture_lod_bias (typically MAX_TEXTURE_LEVELS - 1) */
 #define MAX_TEXTURE_LOD_BIAS 14.0
 
+/** For GL_OVR_multiview, value is recommended in extension spec. */
+#define MAX_VIEWS_OVR 6
+
 /** For any program target/extension */
 /*@{*/
 #define MAX_PROGRAM_INSTRUCTIONS       (16 * 1024)
@@ -162,17 +165,14 @@
 #define MAX_UNIFORMS                   4096
 #define MAX_UNIFORM_BUFFERS            15 /* + 1 default uniform buffer */
 #define MAX_SHADER_STORAGE_BUFFERS     16
-/* 6 is for vertex, hull, domain, geometry, fragment, and compute shader. */
-#define MAX_COMBINED_UNIFORM_BUFFERS   (MAX_UNIFORM_BUFFERS * 6)
-#define MAX_COMBINED_SHADER_STORAGE_BUFFERS   (MAX_SHADER_STORAGE_BUFFERS * 6)
+#define MAX_COMBINED_UNIFORM_BUFFERS   (MAX_UNIFORM_BUFFERS * MESA_SHADER_MESH_STAGES)
+#define MAX_COMBINED_SHADER_STORAGE_BUFFERS   (MAX_SHADER_STORAGE_BUFFERS * MESA_SHADER_MESH_STAGES)
 #define MAX_ATOMIC_COUNTERS            4096
-/* 6 is for vertex, hull, domain, geometry, fragment, and compute shader. */
-#define MAX_COMBINED_ATOMIC_BUFFERS    (MAX_UNIFORM_BUFFERS * 6)
+#define MAX_COMBINED_ATOMIC_BUFFERS    (MAX_UNIFORM_BUFFERS * MESA_SHADER_MESH_STAGES)
 /* Size of an atomic counter in bytes according to ARB_shader_atomic_counters */
 #define ATOMIC_COUNTER_SIZE            4
 #define MAX_IMAGE_UNIFORMS             32
-/* 6 is for vertex, hull, domain, geometry, fragment, and compute shader. */
-#define MAX_IMAGE_UNITS                (MAX_IMAGE_UNIFORMS * 6)
+#define MAX_IMAGE_UNITS                (MAX_IMAGE_UNIFORMS * MESA_SHADER_MESH_STAGES)
 /*@}*/
 
 /**
@@ -210,8 +210,7 @@
 
 /** For GL_ARB_vertex_shader */
 /*@{*/
-/* 6 is for vertex, hull, domain, geometry, fragment, and compute shader. */
-#define MAX_COMBINED_TEXTURE_IMAGE_UNITS (MAX_TEXTURE_IMAGE_UNITS * 6)
+#define MAX_COMBINED_TEXTURE_IMAGE_UNITS (MAX_TEXTURE_IMAGE_UNITS * MESA_SHADER_MESH_STAGES)
 /*@}*/
 
 
@@ -299,6 +298,10 @@
  */
 #define MAX_CLIPPED_VERTICES ((2 * (6 + MAX_CLIP_PLANES))+1)
 
+/**
+ * Maximum number of MSAA samples
+ */
+#define MAX_SAMPLES 16
 
 /** For GL_ARB_sample_locations - maximum of SAMPLE_LOCATION_PIXEL_GRID_*_ARB */
 #define MAX_SAMPLE_LOCATION_GRID_SIZE 4

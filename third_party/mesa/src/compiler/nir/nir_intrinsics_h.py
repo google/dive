@@ -45,7 +45,8 @@ typedef enum {
 
 extern const char *nir_intrinsic_index_names[NIR_INTRINSIC_NUM_INDEX_FLAGS];
 
-#endif /* _NIR_INTRINSICS_ */"""
+#endif /* _NIR_INTRINSICS_ */
+"""
 
 from nir_intrinsics import INTR_OPCODES, INTR_INDICES
 from mako.template import Template
@@ -55,13 +56,12 @@ import os
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--outdir', required=True,
-                        help='Directory to put the generated files in')
+    parser.add_argument('--out', required=True,
+                        help='Output H file')
 
     args = parser.parse_args()
 
-    path = os.path.join(args.outdir, 'nir_intrinsics.h')
-    with open(path, 'w') as f:
+    with open(args.out, 'w', encoding='utf-8') as f:
         f.write(Template(template).render(INTR_OPCODES=INTR_OPCODES, INTR_INDICES=INTR_INDICES))
 
 if __name__ == '__main__':

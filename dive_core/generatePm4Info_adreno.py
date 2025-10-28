@@ -71,6 +71,7 @@ enum GPUVariantType
     kA5XX = 0x8,
     kA6XX = 0x10,
     kA7XX = 0x20,
+    kA8XX = 0x40,
 };
 
 constexpr uint32_t kInvalidRegOffset = UINT32_MAX;
@@ -79,7 +80,7 @@ constexpr uint32_t kInvalidRegOffset = UINT32_MAX;
 // - RegField::m_gpu_variants, so the unused bits needs to be adjusted
 // - key of g_sRegInfo, the register offset needs at least 16bits, so kGPUVariantsBits cannot be
 // larger than 16
-constexpr uint32_t kGPUVariantsBits = 6;
+constexpr uint32_t kGPUVariantsBits = 7;
 
 struct RegField
 {
@@ -181,6 +182,7 @@ std::string GetGPUStr(GPUVariantType variant)
     case kA5XX: s = "A5XX"; break;
     case kA6XX: s = "A6XX"; break;
     case kA7XX: s = "A7XX"; break;
+    case kA8XX: s = "A8XX"; break;
     case kGPUVariantNone:
     default:
         DIVE_ASSERT(false);
@@ -300,7 +302,7 @@ def GetBitfieldsOrEnumHandleFromBitset(input_type, input_bitfields, input_name, 
 def AppendBitfield(pm4_info_file, enum_index_dict, bitfields, is_64):
     # Iterate through optional bitfields
     for bitfield in bitfields:
-      if bitfield.tag == '{http://nouveau.freedesktop.org/}doc':
+      if bitfield.tag != '{http://nouveau.freedesktop.org/}bitfield':
         continue
 
       name = bitfield.attrib['name']
@@ -360,15 +362,17 @@ def outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, attr
   is_64_string = '0'
   if attributes.is_64 is True:
     is_64_string = '1'
-  
+
   bitfields, enum_handle = GetBitfieldsOrEnumHandleFromBitset(attributes.type, attributes.bitfields, attributes.name, registers_et_root, enum_index_dict)
 
   variants_bitfield = GetGPUVariantsBitField(attributes.variants)
   if (variants_bitfield != 0):
-      # kGPUVariantsBits has 6 bits
-      for i in range(6):
+      # kGPUVariantsBits has 7 bits
+      for i in range(7):
           cur_variant_bitfield = (1<<i)
           if cur_variant_bitfield & variants_bitfield:
+              if attributes.name == "GRAS_SC_WINDOW_SCISSOR_BR":
+                blah = 5
               pm4_info_file.write('    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
               AppendBitfield(pm4_info_file, enum_index_dict, bitfields, attributes.is_64)
               pm4_info_file.write('} };\n')
@@ -576,6 +580,7 @@ def outputField(pm4_info_file, field_attributes: FieldAttributes):
 # ---------------------------------------------------------------------------------------
 def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
   dword_count = 0
+  address_end_offset = sys.maxsize
   for element in reg_list:
     is_reg_32 = (element.tag == '{http://nouveau.freedesktop.org/}reg32')
     is_reg_64 = (element.tag == '{http://nouveau.freedesktop.org/}reg64')
@@ -584,7 +589,10 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
     # Sanity check
     # Note: Allowed to skip an offset (see CP_EVENT_WRITE7)
     if dword_count > offset:
+      # Sometimes a 64-bit "address" is followed by overlapping 2 LO/HI 32-bit ones
+      if offset > address_end_offset:
         raise Exception('Unexpected reverse offset found in packet')
+      continue
 
     dword_count = dword_count + 1
     if is_reg_64:
@@ -597,6 +605,11 @@ def outputPacketFields(pm4_info_file, enum_index_dict, reg_list):
       type = element.attrib['type']
     field_name = element.attrib['name']
     bitfields, enum_handle = GetBitfieldsOrEnumHandleFromBitset(type, input_bitfields, field_name, registers_et_root, enum_index_dict)
+
+    # Possible to have an ADDR register followed by ADDR_LO and ADDR_HI
+    # In that case, the offsets will overlap
+    if type == 'address':
+      address_end_offset = dword_count
 
     # No bitfields, so use the register specification directly
     if len(bitfields) == 0:
@@ -819,7 +832,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       if stripe is not None:
         varset = stripe.attrib['varset']
         if varset != 'chip':
-          enum = domain.find('./{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
+          enum = registers_et_root.find('.//{http://nouveau.freedesktop.org/}enum[@name="'+varset+'"]')
           enum_value = enum.find('./{http://nouveau.freedesktop.org/}value[@name="'+variant[0]+'"]')
           stripe_variant = enum_value.attrib['value']
 
@@ -833,7 +846,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
       if opcode not in packet_type_instances:
         packet_type_instances[opcode] = 1
         if (opcode == 0):
-          pm4_info_file.write('''    
+          pm4_info_file.write('''
     // For descriptors, we purposefully try to include them as "packets" for easier parsing.
     // They are not technically PM4 packets, hence the 0x0.
     // Example: const PacketInfo *packet_info_ptr = GetPacketInfo(0, sharp_struct_name);
@@ -860,13 +873,13 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
     if domain is None:
       opcode = int(pm4_type_packet_value.attrib['value'],0)
 
-      # We need the g_sPacketInfoVariant because some PM4s share the same value 
+      # We need the g_sPacketInfoVariant because some PM4s share the same value
       # but with different variants (CP_THREAD_CONTROL (A7XX-) and IN_IB_PREFETCH_END (A2XX) both use 0x17)
       if 'variants' in pm4_type_packet_value.attrib:
         variants = pm4_type_packet_value.attrib['variants']
         variants_bitfield = GetGPUVariantsBitField(variants)
         if (variants_bitfield != 0):
-          # kGPUVariantsBits has 6 bits
+          # kGPUVariantsBits has 7 bits
           # it seems that the variant is only used for the non-domain ones
           for i in range(6):
             cur_variant_bitfield = (1<<i)
@@ -874,7 +887,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
               pm4_info_file.write('    g_sPacketInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", 0, UINT8_MAX, {' % (opcode, cur_variant_bitfield, packet_name) + ' } };\n')
       else:
         pm4_info_file.write('    g_sPacketInfo[0x%x] = { "%s", 0, UINT8_MAX, {' % (opcode, packet_name) + ' } };\n')
-      
+
   pm4_info_file.write('\n')
 
   # Append _A?XX to the name if there is any variant

@@ -26,12 +26,21 @@ def sampler_type(name, gl_type, base_type, dim, shadow, array, sampled_type):
     })
 
 def vector_type(base_name, vec_name, base_type, gl_type, extra_gl_type=None):
+    gl_types = [None, None, None, None]
+
     if extra_gl_type is None:
         extra_gl_type = ""
-    simple_type(base_name, gl_type + extra_gl_type, base_type, 1, 1)
-    simple_type(vec_name + "2", gl_type + "_VEC2" + extra_gl_type, base_type, 2, 1)
-    simple_type(vec_name + "3", gl_type + "_VEC3" + extra_gl_type, base_type, 3, 1)
-    simple_type(vec_name + "4", gl_type + "_VEC4" + extra_gl_type, base_type, 4, 1)
+
+    if gl_type:
+        gl_types = [gl_type + extra_gl_type,
+                    gl_type + "_VEC2" + extra_gl_type,
+                    gl_type + "_VEC3" + extra_gl_type,
+                    gl_type + "_VEC4" + extra_gl_type]
+
+    simple_type(base_name, gl_types[0], base_type, 1, 1)
+    simple_type(vec_name + "2",  gl_types[1], base_type, 2, 1)
+    simple_type(vec_name + "3",  gl_types[2], base_type, 3, 1)
+    simple_type(vec_name + "4",  gl_types[3], base_type, 4, 1)
     simple_type(vec_name + "5", None, base_type, 5, 1)
     simple_type(vec_name + "8", None, base_type, 8, 1)
     simple_type(vec_name + "16", None, base_type, 16, 1)
@@ -51,6 +60,10 @@ vector_type("int16_t",   "i16vec", "GLSL_TYPE_INT16",   "GL_INT16", "_NV")
 vector_type("uint16_t",  "u16vec", "GLSL_TYPE_UINT16",  "GL_UNSIGNED_INT16", "_NV")
 vector_type("int8_t",    "i8vec",  "GLSL_TYPE_INT8",    "GL_INT8", "_NV")
 vector_type("uint8_t",   "u8vec",  "GLSL_TYPE_UINT8",   "GL_UNSIGNED_INT8", "_NV")
+
+vector_type("bfloat16_t", "bf16vec", "GLSL_TYPE_BFLOAT16", None)
+vector_type("e4m3fn_t", "e4m3fnvec", "GLSL_TYPE_FLOAT_E4M3FN", None)
+vector_type("e5m2_t", "e5m2vec", "GLSL_TYPE_FLOAT_E5M2", None)
 
 simple_type("mat2",   "GL_FLOAT_MAT2",   "GLSL_TYPE_FLOAT", 2, 2)
 simple_type("mat3",   "GL_FLOAT_MAT3",   "GLSL_TYPE_FLOAT", 3, 3)
@@ -174,12 +187,14 @@ sampler_type("utexture2DMSArray", "GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY"
 sampler_type("textureExternalOES",     "GL_SAMPLER_EXTERNAL_OES",          "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_EXTERNAL", 0, 0, "GLSL_TYPE_FLOAT")
 
 # OpenCL image types
-sampler_type("vtexture1D",        "GL_SAMPLER_1D",       "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_1D",  0, 0, "GLSL_TYPE_VOID")
-sampler_type("vtexture2D",        "GL_SAMPLER_2D",       "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_2D",  0, 0, "GLSL_TYPE_VOID")
-sampler_type("vtexture3D",        "GL_SAMPLER_3D",       "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_3D",  0, 0, "GLSL_TYPE_VOID")
-sampler_type("vtexture1DArray",   "GL_SAMPLER_1D_ARRAY", "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_1D",  0, 1, "GLSL_TYPE_VOID")
-sampler_type("vtexture2DArray",   "GL_SAMPLER_2D_ARRAY", "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_2D",  0, 1, "GLSL_TYPE_VOID")
-sampler_type("vtextureBuffer",    "GL_SAMPLER_BUFFER",   "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_BUF", 0, 0, "GLSL_TYPE_VOID")
+sampler_type("vtexture1D",        "GL_SAMPLER_1D",                   "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_1D",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vtexture2D",        "GL_SAMPLER_2D",                   "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_2D",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vtexture3D",        "GL_SAMPLER_3D",                   "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_3D",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vtexture2DMS",      "GL_SAMPLER_2D_MULTISAMPLE",       "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_MS",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vtexture2DMSArray", "GL_SAMPLER_2D_MULTISAMPLE_ARRAY", "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_MS",  0, 1, "GLSL_TYPE_VOID")
+sampler_type("vtexture1DArray",   "GL_SAMPLER_1D_ARRAY",             "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_1D",  0, 1, "GLSL_TYPE_VOID")
+sampler_type("vtexture2DArray",   "GL_SAMPLER_2D_ARRAY",             "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_2D",  0, 1, "GLSL_TYPE_VOID")
+sampler_type("vtextureBuffer",    "GL_SAMPLER_BUFFER",               "GLSL_TYPE_TEXTURE", "GLSL_SAMPLER_DIM_BUF", 0, 0, "GLSL_TYPE_VOID")
 
 sampler_type("image1D",         "GL_IMAGE_1D",                                "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_1D",     0, 0, "GLSL_TYPE_FLOAT")
 sampler_type("image2D",         "GL_IMAGE_2D",                                "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_2D",     0, 0, "GLSL_TYPE_FLOAT")
@@ -238,12 +253,14 @@ sampler_type("u64image2DMS",      "GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE",     "G
 sampler_type("u64image2DMSArray", "GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_MS",     0, 1, "GLSL_TYPE_UINT64")
 
 # OpenCL image types
-sampler_type("vbuffer", "GL_IMAGE_BUFFER", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_BUF", 0, 0, "GLSL_TYPE_VOID")
-sampler_type("vimage1D", "GL_IMAGE_1D", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_1D", 0, 0, "GLSL_TYPE_VOID")
-sampler_type("vimage2D", "GL_IMAGE_2D", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_2D", 0, 0, "GLSL_TYPE_VOID")
-sampler_type("vimage3D", "GL_IMAGE_3D", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_3D", 0, 0, "GLSL_TYPE_VOID")
-sampler_type("vimage1DArray", "GL_IMAGE_1D_ARRAY", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_1D", 0, 1, "GLSL_TYPE_VOID")
-sampler_type("vimage2DArray", "GL_IMAGE_2D_ARRAY", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_2D", 0, 1, "GLSL_TYPE_VOID")
+sampler_type("vbuffer",         "GL_IMAGE_BUFFER",               "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_BUF", 0, 0, "GLSL_TYPE_VOID")
+sampler_type("vimage1D",        "GL_IMAGE_1D",                   "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_1D",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vimage2D",        "GL_IMAGE_2D",                   "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_2D",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vimage3D",        "GL_IMAGE_3D",                   "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_3D",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vimage2DMS",      "GL_IMAGE_2D_MULTISAMPLE",       "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_MS",  0, 0, "GLSL_TYPE_VOID")
+sampler_type("vimage2DMSArray", "GL_IMAGE_2D_MULTISAMPLE_ARRAY", "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_MS",  0, 1, "GLSL_TYPE_VOID")
+sampler_type("vimage1DArray",   "GL_IMAGE_1D_ARRAY",             "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_1D",  0, 1, "GLSL_TYPE_VOID")
+sampler_type("vimage2DArray",   "GL_IMAGE_2D_ARRAY",             "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_2D",  0, 1, "GLSL_TYPE_VOID")
 
 sampler_type("subpassInput",           "0",                                   "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_SUBPASS",    0, 0, "GLSL_TYPE_FLOAT")
 sampler_type("subpassInputMS",         "0",                                   "GLSL_TYPE_IMAGE", "GLSL_SAMPLER_DIM_SUBPASS_MS", 0, 0, "GLSL_TYPE_FLOAT")

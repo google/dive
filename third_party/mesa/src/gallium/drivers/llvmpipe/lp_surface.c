@@ -162,12 +162,13 @@ lp_blit(struct pipe_context *pipe,
       info.mask = PIPE_MASK_R;
    }
 
-   util_blitter_save_vertex_buffer_slot(lp->blitter, lp->vertex_buffer);
+   util_blitter_save_vertex_buffers(lp->blitter, lp->vertex_buffer,
+                                    lp->num_vertex_buffers);
    util_blitter_save_vertex_elements(lp->blitter, (void*)lp->velems);
    util_blitter_save_vertex_shader(lp->blitter, (void*)lp->vs);
    util_blitter_save_geometry_shader(lp->blitter, (void*)lp->gs);
    util_blitter_save_so_targets(lp->blitter, lp->num_so_targets,
-                     (struct pipe_stream_output_target**)lp->so_targets);
+                     (struct pipe_stream_output_target**)lp->so_targets, MESA_PRIM_UNKNOWN);
    util_blitter_save_rasterizer(lp->blitter, (void*)lp->rasterizer);
    util_blitter_save_viewport(lp->blitter, &lp->viewports[0]);
    util_blitter_save_scissor(lp->blitter, &lp->scissors[0]);
@@ -182,15 +183,24 @@ lp_blit(struct pipe_context *pipe,
                                  lp->min_samples);
    util_blitter_save_framebuffer(lp->blitter, &lp->framebuffer);
    util_blitter_save_fragment_sampler_states(lp->blitter,
-                     lp->num_samplers[PIPE_SHADER_FRAGMENT],
-                     (void**)lp->samplers[PIPE_SHADER_FRAGMENT]);
+                     lp->num_samplers[MESA_SHADER_FRAGMENT],
+                     (void**)lp->samplers[MESA_SHADER_FRAGMENT]);
    util_blitter_save_fragment_sampler_views(lp->blitter,
-                     lp->num_sampler_views[PIPE_SHADER_FRAGMENT],
-                     lp->sampler_views[PIPE_SHADER_FRAGMENT]);
+                     lp->num_sampler_views[MESA_SHADER_FRAGMENT],
+                     lp->sampler_views[MESA_SHADER_FRAGMENT]);
    util_blitter_save_render_condition(lp->blitter, lp->render_cond_query,
                                       lp->render_cond_cond,
                                       lp->render_cond_mode);
-   util_blitter_blit(lp->blitter, &info);
+
+   void *render_cond_buffer = lp->render_cond_buffer;
+   if (!blit_info->render_condition_enable)
+      lp->render_cond_buffer = NULL;
+   util_blitter_blit(lp->blitter, &info, NULL);
+
+   /* not sure why this is needed but it is */
+   if (llvmpipe_is_resource_referenced(pipe, blit_info->dst.resource, blit_info->dst.level) & LP_REFERENCED_FOR_WRITE)
+      lp_setup_bind_framebuffer(lp->setup, &lp->framebuffer);
+   lp->render_cond_buffer = render_cond_buffer;
 }
 
 
@@ -222,27 +232,11 @@ llvmpipe_create_surface(struct pipe_context *pipe,
       pipe_resource_reference(&ps->texture, pt);
       ps->context = pipe;
       ps->format = surf_tmpl->format;
-      if (llvmpipe_resource_is_texture(pt)) {
-         assert(surf_tmpl->u.tex.level <= pt->last_level);
-         assert(surf_tmpl->u.tex.first_layer <= surf_tmpl->u.tex.last_layer);
-         ps->width = u_minify(pt->width0, surf_tmpl->u.tex.level);
-         ps->height = u_minify(pt->height0, surf_tmpl->u.tex.level);
-         ps->u.tex.level = surf_tmpl->u.tex.level;
-         ps->u.tex.first_layer = surf_tmpl->u.tex.first_layer;
-         ps->u.tex.last_layer = surf_tmpl->u.tex.last_layer;
-      } else {
-         /* setting width as number of elements should get us correct
-          * renderbuffer width
-          */
-         ps->width = surf_tmpl->u.buf.last_element
-                   - surf_tmpl->u.buf.first_element + 1;
-         ps->height = pt->height0;
-         ps->u.buf.first_element = surf_tmpl->u.buf.first_element;
-         ps->u.buf.last_element = surf_tmpl->u.buf.last_element;
-         assert(ps->u.buf.first_element <= ps->u.buf.last_element);
-         assert(util_format_get_blocksize(surf_tmpl->format) *
-                (ps->u.buf.last_element + 1) <= pt->width0);
-      }
+      assert(surf_tmpl->level <= pt->last_level);
+      assert(surf_tmpl->first_layer <= surf_tmpl->last_layer);
+      ps->level = surf_tmpl->level;
+      ps->first_layer = surf_tmpl->first_layer;
+      ps->last_layer = surf_tmpl->last_layer;
    }
    return ps;
 }
@@ -272,6 +266,10 @@ llvmpipe_get_sample_position(struct pipe_context *pipe,
    case 4:
       out_value[0] = lp_sample_pos_4x[sample_index][0];
       out_value[1] = lp_sample_pos_4x[sample_index][1];
+      break;
+   case 8:
+      out_value[0] = lp_sample_pos_8x[sample_index][0];
+      out_value[1] = lp_sample_pos_8x[sample_index][1];
       break;
    default:
       break;
@@ -343,8 +341,8 @@ llvmpipe_clear_render_target(struct pipe_context *pipe,
       struct pipe_box box;
       u_box_2d(dstx, dsty, width, height, &box);
       if (dst->texture->target != PIPE_BUFFER) {
-         box.z = dst->u.tex.first_layer;
-         box.depth = dst->u.tex.last_layer - dst->u.tex.first_layer + 1;
+         box.z = dst->first_layer;
+         box.depth = dst->last_layer - dst->first_layer + 1;
       }
       for (unsigned s = 0; s < util_res_sample_count(dst->texture); s++) {
          lp_clear_color_texture_msaa(pipe, dst->texture, dst->format,
@@ -417,8 +415,8 @@ llvmpipe_clear_depth_stencil(struct pipe_context *pipe,
       struct pipe_box box;
       u_box_2d(dstx, dsty, width, height, &box);
       if (dst->texture->target != PIPE_BUFFER) {
-         box.z = dst->u.tex.first_layer;
-         box.depth = dst->u.tex.last_layer - dst->u.tex.first_layer + 1;
+         box.z = dst->first_layer;
+         box.depth = dst->last_layer - dst->first_layer + 1;
       }
       for (unsigned s = 0; s < util_res_sample_count(dst->texture); s++)
          lp_clear_depth_stencil_texture_msaa(pipe, dst->texture,

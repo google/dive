@@ -24,6 +24,7 @@
 #define VK_SYNC_TIMELINE_H
 
 #include "c11/threads.h"
+#include "util/cnd_monotonic.h"
 #include "util/list.h"
 #include "util/macros.h"
 
@@ -44,8 +45,13 @@ struct vk_sync_timeline_type
 vk_sync_timeline_get_type(const struct vk_sync_type *point_sync_type);
 
 struct vk_sync_timeline_point {
-   struct vk_sync_timeline *timeline;
+   struct vk_sync_timeline_state *timeline_state;
 
+   /* Link in pending_points if pending
+    * Link in free_points if refcount == 0
+    *
+    * The vk_sync_timeline_state also holds a reference if pending == true.
+    */
    struct list_head link;
 
    uint64_t value;
@@ -54,6 +60,19 @@ struct vk_sync_timeline_point {
    bool pending;
 
    struct vk_sync sync;
+};
+
+struct vk_sync_timeline_state {
+   mtx_t mutex;
+   struct u_cnd_monotonic cond;
+
+   uint64_t highest_past;
+   uint64_t highest_pending;
+
+   uint32_t refcount;
+
+   struct list_head pending_points;
+   struct list_head free_points;
 };
 
 /** Implements a timeline vk_sync type on top of a binary vk_sync
@@ -77,15 +96,7 @@ struct vk_sync_timeline_point {
  */
 struct vk_sync_timeline {
    struct vk_sync sync;
-
-   mtx_t mutex;
-   cnd_t cond;
-
-   uint64_t highest_past;
-   uint64_t highest_pending;
-
-   struct list_head pending_points;
-   struct list_head free_points;
+   struct vk_sync_timeline_state *state;
 };
 
 VkResult vk_sync_timeline_init(struct vk_device *device,
@@ -97,9 +108,10 @@ VkResult vk_sync_timeline_alloc_point(struct vk_device *device,
                                       uint64_t value,
                                       struct vk_sync_timeline_point **point_out);
 
-void vk_sync_timeline_point_free(struct vk_device *device,
-                                 struct vk_sync_timeline_point *point);
+void vk_sync_timeline_point_unref(struct vk_device *device,
+                                  struct vk_sync_timeline_point *point);
 
+/* This consumes the reference to point */
 VkResult vk_sync_timeline_point_install(struct vk_device *device,
                                         struct vk_sync_timeline_point *point);
 
@@ -107,9 +119,6 @@ VkResult vk_sync_timeline_get_point(struct vk_device *device,
                                     struct vk_sync_timeline *timeline,
                                     uint64_t wait_value,
                                     struct vk_sync_timeline_point **point_out);
-
-void vk_sync_timeline_point_release(struct vk_device *device,
-                                    struct vk_sync_timeline_point *point);
 
 static inline bool
 vk_sync_type_is_vk_sync_timeline(const struct vk_sync_type *type)

@@ -1,3 +1,6 @@
+// Copyright 2020 Red Hat.
+// SPDX-License-Identifier: MIT
+
 use crate::api::icd::CLResult;
 use crate::api::util::*;
 use crate::core::platform::*;
@@ -8,33 +11,57 @@ use rusticl_opencl_gen::*;
 use rusticl_proc_macros::cl_entrypoint;
 use rusticl_proc_macros::cl_info_entrypoint;
 
-use std::mem::MaybeUninit;
+use std::ffi::CStr;
 
-#[cl_info_entrypoint(cl_get_platform_info)]
-impl CLInfo<cl_platform_info> for cl_platform_id {
-    fn query(&self, q: cl_platform_info, _: &[u8]) -> CLResult<Vec<MaybeUninit<u8>>> {
+#[cl_info_entrypoint(clGetPlatformInfo)]
+unsafe impl CLInfo<cl_platform_info> for cl_platform_id {
+    fn query(&self, q: cl_platform_info, v: CLInfoValue) -> CLResult<CLInfoRes> {
         self.get_ref()?;
-        Ok(match q {
-            // TODO spirv
-            CL_PLATFORM_EXTENSIONS => cl_prop(PLATFORM_EXTENSION_STR),
+        match q {
+            CL_PLATFORM_EXTENSIONS => v.write::<&str>(&Platform::get().extension_string),
             CL_PLATFORM_EXTENSIONS_WITH_VERSION => {
-                cl_prop::<Vec<cl_name_version>>(PLATFORM_EXTENSIONS.to_vec())
+                v.write::<&[cl_name_version]>(&Platform::get().extensions)
             }
-            CL_PLATFORM_HOST_TIMER_RESOLUTION => cl_prop::<cl_ulong>(1),
-            CL_PLATFORM_ICD_SUFFIX_KHR => cl_prop("MESA"),
-            CL_PLATFORM_NAME => cl_prop("rusticl"),
-            CL_PLATFORM_NUMERIC_VERSION => cl_prop::<cl_version>(CLVersion::Cl3_0 as u32),
-            CL_PLATFORM_PROFILE => cl_prop("FULL_PROFILE"),
-            CL_PLATFORM_VENDOR => cl_prop("Mesa/X.org"),
+            CL_PLATFORM_HOST_TIMER_RESOLUTION => v.write::<cl_ulong>(1),
+            CL_PLATFORM_ICD_SUFFIX_KHR => v.write::<&CStr>(c"MESA"),
+            CL_PLATFORM_NAME => v.write::<&CStr>(c"rusticl"),
+            CL_PLATFORM_NUMERIC_VERSION => v.write::<cl_version>(CLVersion::Cl3_0.into()),
+            CL_PLATFORM_PROFILE => v.write::<&CStr>(c"FULL_PROFILE"),
+            CL_PLATFORM_SEMAPHORE_EXPORT_HANDLE_TYPES_KHR => {
+                v.write::<&[cl_external_semaphore_handle_type_khr]>(
+                    if Platform::get().all_devs_have_external_semaphores() {
+                        &[CL_SEMAPHORE_HANDLE_SYNC_FD_KHR]
+                    } else {
+                        &[]
+                    },
+                )
+            }
+            CL_PLATFORM_SEMAPHORE_IMPORT_HANDLE_TYPES_KHR => {
+                v.write::<&[cl_external_semaphore_handle_type_khr]>(
+                    if Platform::get().all_devs_have_external_semaphores() {
+                        &[CL_SEMAPHORE_HANDLE_SYNC_FD_KHR]
+                    } else {
+                        &[]
+                    },
+                )
+            }
+            CL_PLATFORM_SEMAPHORE_TYPES_KHR => {
+                v.write::<&[cl_semaphore_type_khr]>(if Platform::get().all_devs_have_semaphores() {
+                    &[CL_SEMAPHORE_TYPE_BINARY_KHR]
+                } else {
+                    &[]
+                })
+            }
+            CL_PLATFORM_VENDOR => v.write::<&CStr>(c"Mesa/X.org"),
             // OpenCL<space><major_version.minor_version><space><platform-specific information>
-            CL_PLATFORM_VERSION => cl_prop("OpenCL 3.0 "),
+            CL_PLATFORM_VERSION => v.write::<&CStr>(c"OpenCL 3.0 "),
             // CL_INVALID_VALUE if param_name is not one of the supported values
-            _ => return Err(CL_INVALID_VALUE),
-        })
+            _ => Err(CL_INVALID_VALUE),
+        }
     }
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clGetPlatformIDs)]
 fn get_platform_ids(
     num_entries: cl_uint,
     platforms: *mut cl_platform_id,
@@ -58,45 +85,55 @@ fn get_platform_ids(
     // specific OpenCL platform. If the platforms argument is NULL, then this argument is ignored. The
     // number of OpenCL platforms returned is the minimum of the value specified by num_entries or the
     // number of OpenCL platforms available.
-    platforms.write_checked(Platform::get().as_ptr());
+    // SAFETY: Caller is responsible for providing a null pointer or one valid
+    // for a write of `num_entries * size_of::<cl_platform_id>()`. We are
+    // guaranteed to write at most one value, and if `platforms` is non-null,
+    // `num_entries` is guaranteed to be at least 1.
+    unsafe { platforms.write_checked(Platform::get().as_ptr()) };
 
     // num_platforms returns the number of OpenCL platforms available. If num_platforms is NULL, then
     // this argument is ignored.
-    num_platforms.write_checked(1);
+    // SAFETY: Caller is responsible for providing a null pointer or one valid
+    // for a write of `size_of::<cl_uint>()`.
+    unsafe { num_platforms.write_checked(1) };
 
     Ok(())
 }
 
-#[cl_entrypoint]
+#[cl_entrypoint(clUnloadPlatformCompiler)]
 fn unload_platform_compiler(platform: cl_platform_id) -> CLResult<()> {
     platform.get_ref()?;
     // TODO unload the compiler
     Ok(())
 }
 
+#[cl_entrypoint(clIcdSetPlatformDispatchDataKHR)]
+fn icd_set_platform_dispatch_data(
+    platform: cl_platform_id,
+    dispatch_data: *mut ::std::os::raw::c_void,
+) -> CLResult<()> {
+    // SAFETY: this API is expected to be called from the ICD loader at initialization time and
+    //         therefore no concurrent access should exist.
+    let p = unsafe { platform.get_mut()? };
+    p.init_icd_dispatch_data(dispatch_data);
+    Ok(())
+}
+
 #[test]
 fn test_get_platform_info() {
     let mut s: usize = 0;
-    let mut r = get_platform_info(
-        ptr::null(),
-        CL_PLATFORM_EXTENSIONS,
-        0,
-        ptr::null_mut(),
-        &mut s,
-    );
-    assert!(r.is_ok());
+    // Being a lil sneaky sneak, shhhh
+    Platform::init_once();
+    let p = Platform::get().as_ptr();
+    let mut r =
+        unsafe { clGetPlatformInfo(p, CL_PLATFORM_EXTENSIONS, 0, std::ptr::null_mut(), &mut s) };
+    assert_eq!(r, CL_SUCCESS as i32);
     assert!(s > 0);
 
     let mut v: Vec<u8> = vec![0; s];
-    r = get_platform_info(
-        ptr::null(),
-        CL_PLATFORM_EXTENSIONS,
-        s,
-        v.as_mut_ptr().cast(),
-        &mut s,
-    );
+    r = unsafe { clGetPlatformInfo(p, CL_PLATFORM_EXTENSIONS, s, v.as_mut_ptr().cast(), &mut s) };
 
-    assert!(r.is_ok());
+    assert_eq!(r, CL_SUCCESS as i32);
     assert_eq!(s, v.len());
     assert!(!v[0..s - 2].contains(&0));
     assert_eq!(v[s - 1], 0);

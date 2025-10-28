@@ -1,31 +1,12 @@
 /* -*- mesa-c++  -*-
- *
- * Copyright (c) 2022 Collabora LTD
- *
+ * Copyright 2022 Collabora LTD
  * Author: Gert Wollny <gert.wollny@collabora.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
+#include "../r600_isa.h"
+
 #include "sfn_split_address_loads.h"
-#include "r600_isa.h"
 #include "sfn_alu_defines.h"
 #include "sfn_defines.h"
 #include "sfn_instr_alugroup.h"
@@ -80,7 +61,6 @@ private:
    std::list<Instr *> m_last_ar_use;
    AluInstr *m_last_ar_load{nullptr};
 
-   unsigned m_linear_index{0};
    unsigned m_last_idx_load_index[2] {0,0};
    AluInstr *m_last_idx_load[2] {nullptr, nullptr};
    std::list<Instr *> m_last_idx_use[2];
@@ -111,7 +91,7 @@ public:
       for (auto p : r.parents())
          add_dep(p);
    }
-   void visit(const LocalArray& value) override {(void)value; unreachable("Array is not a value");}
+   void visit(const LocalArray& value) override {(void)value; UNREACHABLE("Array is not a value");}
    void visit(const LocalArrayValue& r) override
    {
       auto& a = r.array();
@@ -205,7 +185,8 @@ auto AddressSplitVisitor::load_index_register_eg(Instr *instr,
 
       const EAluOp idx_op[2] = {op1_set_cf_idx0, op1_set_cf_idx1};
 
-      m_last_idx_load[idx_id] = new AluInstr(idx_op[idx_id], idx, m_vf.addr(), {});
+      m_last_idx_load[idx_id] =
+         new AluInstr(idx_op[idx_id], idx, m_vf.addr(), AluInstr::empty);
       m_current_block->insert(m_block_iterator, m_last_idx_load[idx_id]);
       for (auto&& i : m_last_idx_use[idx_id])
          m_last_ar_load->add_required_instr(i);
@@ -228,7 +209,7 @@ auto AddressSplitVisitor::load_index_register_ca(PRegister index)  -> int
    if (idx_id < 0) {
       idx_id = pick_idx();
       auto idx = m_vf.idx_reg(idx_id);
-      m_last_idx_load[idx_id] = new AluInstr(op1_mova_int, idx, index, {});
+      m_last_idx_load[idx_id] = new AluInstr(op1_mova_int, idx, index, AluInstr::empty);
 
       m_current_block->insert(m_block_iterator, m_last_idx_load[idx_id]);
       for (auto&& i : m_last_idx_use[idx_id])
@@ -269,7 +250,7 @@ void AddressSplitVisitor::load_ar(Instr *instr, PRegister addr)
 {
    auto ar = m_vf.addr();
 
-   m_last_ar_load = new AluInstr(op1_mova_int, ar, addr, {});
+   m_last_ar_load = new AluInstr(op1_mova_int, ar, addr, AluInstr::empty);
    m_current_block->insert(m_block_iterator, m_last_ar_load);
    ar->add_use(instr);
    m_current_addr = addr;

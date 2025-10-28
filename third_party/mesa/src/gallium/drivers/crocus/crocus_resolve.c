@@ -62,15 +62,15 @@ disable_rb_aux_buffer(struct crocus_context *ice,
       return false;
 
    for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
-      struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
+      struct crocus_surface *surf = (void *) ice->state.fb_cbufs[i];
       if (!surf)
          continue;
 
       struct crocus_resource *rb_res = (void *) surf->base.texture;
 
       if (rb_res->bo == tex_res->bo &&
-          surf->base.u.tex.level >= min_level &&
-          surf->base.u.tex.level < min_level + num_levels) {
+          surf->base.level >= min_level &&
+          surf->base.level < min_level + num_levels) {
          found = draw_aux_buffer_disabled[i] = true;
       }
    }
@@ -170,15 +170,15 @@ crocus_update_align_res(struct crocus_batch *batch,
    struct pipe_blit_info info = { 0 };
 
    info.src.resource = copy_to_wa ? surf->base.texture : surf->align_res;
-   info.src.level = copy_to_wa ? surf->base.u.tex.level : 0;
-   u_box_2d_zslice(0, 0, copy_to_wa ? surf->base.u.tex.first_layer : 0,
-                   u_minify(surf->base.texture->width0, surf->base.u.tex.level),
-                   u_minify(surf->base.texture->height0, surf->base.u.tex.level), &info.src.box);
+   info.src.level = copy_to_wa ? surf->base.level : 0;
+   u_box_2d_zslice(0, 0, copy_to_wa ? surf->base.first_layer : 0,
+                   u_minify(surf->base.texture->width0, surf->base.level),
+                   u_minify(surf->base.texture->height0, surf->base.level), &info.src.box);
    info.src.format = surf->base.texture->format;
    info.dst.resource = copy_to_wa ? surf->align_res : surf->base.texture;
-   info.dst.level = copy_to_wa ? 0 : surf->base.u.tex.level;
+   info.dst.level = copy_to_wa ? 0 : surf->base.level;
    info.dst.box = info.src.box;
-   info.dst.box.z = copy_to_wa ? 0 : surf->base.u.tex.first_layer;
+   info.dst.box.z = copy_to_wa ? 0 : surf->base.first_layer;
    info.dst.format = surf->base.texture->format;
    info.mask = util_format_is_depth_or_stencil(surf->base.texture->format) ? PIPE_MASK_ZS : PIPE_MASK_RGBA;
    info.filter = 0;
@@ -197,7 +197,7 @@ void
 crocus_predraw_resolve_inputs(struct crocus_context *ice,
                               struct crocus_batch *batch,
                               bool *draw_aux_buffer_disabled,
-                              gl_shader_stage stage,
+                              mesa_shader_stage stage,
                               bool consider_framebuffer)
 {
    struct crocus_shader_state *shs = &ice->state.shaders[stage];
@@ -227,18 +227,18 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
    const nir_shader *nir = ish->nir;
 
    if (ice->state.dirty & CROCUS_DIRTY_DEPTH_BUFFER) {
-      struct pipe_surface *zs_surf = cso_fb->zsbuf;
+      struct pipe_surface *zs_surf = ice->state.fb_zsbuf;
 
       if (zs_surf) {
          struct crocus_resource *z_res, *s_res;
          crocus_get_depth_stencil_resources(devinfo, zs_surf->texture, &z_res, &s_res);
          unsigned num_layers =
-            zs_surf->u.tex.last_layer - zs_surf->u.tex.first_layer + 1;
+            zs_surf->last_layer - zs_surf->first_layer + 1;
 
          if (z_res) {
             crocus_resource_prepare_render(ice, z_res,
-                                           zs_surf->u.tex.level,
-                                           zs_surf->u.tex.first_layer,
+                                           zs_surf->level,
+                                           zs_surf->first_layer,
                                            num_layers, ice->state.hiz_usage);
             crocus_cache_flush_for_depth(batch, z_res->bo);
 
@@ -255,9 +255,9 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
 
    if (nir->info.outputs_read != 0) {
       for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
-         if (cso_fb->cbufs[i]) {
-            struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
-            struct crocus_resource *res = (void *) cso_fb->cbufs[i]->texture;
+         if (ice->state.fb_cbufs[i]) {
+            struct crocus_surface *surf = (void *) ice->state.fb_cbufs[i];
+            struct crocus_resource *res = (void *) ice->state.fb_cbufs[i]->texture;
 
             crocus_resource_prepare_texture(ice, res, surf->view.format,
                                             surf->view.base_level, 1,
@@ -269,7 +269,7 @@ crocus_predraw_resolve_framebuffer(struct crocus_context *ice,
 
    if (ice->state.stage_dirty & CROCUS_STAGE_DIRTY_BINDINGS_FS) {
       for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
-         struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
+         struct crocus_surface *surf = (void *) ice->state.fb_cbufs[i];
          if (!surf)
             continue;
 
@@ -325,17 +325,17 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
       ice->state.dirty & (CROCUS_DIRTY_DEPTH_BUFFER |
                           CROCUS_DIRTY_GEN6_WM_DEPTH_STENCIL);
 
-   struct pipe_surface *zs_surf = cso_fb->zsbuf;
+   struct pipe_surface *zs_surf = ice->state.fb_zsbuf;
    if (zs_surf) {
       struct crocus_resource *z_res, *s_res;
       crocus_get_depth_stencil_resources(devinfo, zs_surf->texture, &z_res, &s_res);
       unsigned num_layers =
-         zs_surf->u.tex.last_layer - zs_surf->u.tex.first_layer + 1;
+         zs_surf->last_layer - zs_surf->first_layer + 1;
 
       if (z_res) {
          if (may_have_resolved_depth && ice->state.depth_writes_enabled) {
-            crocus_resource_finish_render(ice, z_res, zs_surf->u.tex.level,
-                                          zs_surf->u.tex.first_layer, num_layers,
+            crocus_resource_finish_render(ice, z_res, zs_surf->level,
+                                          zs_surf->first_layer, num_layers,
                                           ice->state.hiz_usage);
          }
 
@@ -349,8 +349,8 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
 
       if (s_res) {
          if (may_have_resolved_depth && ice->state.stencil_writes_enabled) {
-            crocus_resource_finish_write(ice, s_res, zs_surf->u.tex.level,
-                                         zs_surf->u.tex.first_layer, num_layers,
+            crocus_resource_finish_write(ice, s_res, zs_surf->level,
+                                         zs_surf->first_layer, num_layers,
                                          s_res->aux.usage);
          }
 
@@ -363,7 +363,7 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
       ice->state.stage_dirty & CROCUS_STAGE_DIRTY_BINDINGS_FS;
 
    for (unsigned i = 0; i < cso_fb->nr_cbufs; i++) {
-      struct crocus_surface *surf = (void *) cso_fb->cbufs[i];
+      struct crocus_surface *surf = (void *) ice->state.fb_cbufs[i];
       if (!surf)
          continue;
 
@@ -376,11 +376,10 @@ crocus_postdraw_update_resolve_tracking(struct crocus_context *ice,
                                  aux_usage);
 
       if (may_have_resolved_color) {
-         union pipe_surface_desc *desc = &surf->base.u;
          unsigned num_layers =
-            desc->tex.last_layer - desc->tex.first_layer + 1;
-         crocus_resource_finish_render(ice, res, desc->tex.level,
-                                       desc->tex.first_layer, num_layers,
+            surf->base.last_layer - surf->base.first_layer + 1;
+         crocus_resource_finish_render(ice, res, surf->base.level,
+                                       surf->base.first_layer, num_layers,
                                        aux_usage);
       }
    }
@@ -604,8 +603,7 @@ crocus_hiz_exec(struct crocus_context *ice,
                 struct crocus_batch *batch,
                 struct crocus_resource *res,
                 unsigned int level, unsigned int start_layer,
-                unsigned int num_layers, enum isl_aux_op op,
-                bool update_clear_depth)
+                unsigned int num_layers, enum isl_aux_op op)
 {
    struct crocus_screen *screen = batch->screen;
    const struct intel_device_info *devinfo = &batch->screen->devinfo;
@@ -625,7 +623,7 @@ crocus_hiz_exec(struct crocus_context *ice,
       break;
    case ISL_AUX_OP_PARTIAL_RESOLVE:
    case ISL_AUX_OP_NONE:
-      unreachable("Invalid HiZ op");
+      UNREACHABLE("Invalid HiZ op");
    }
 
    DBG("%s %s to res %p level %d layers %d-%d\n",
@@ -686,9 +684,7 @@ crocus_hiz_exec(struct crocus_context *ice,
                                   &res->base.b, res->aux.usage, level, true);
 
    struct blorp_batch blorp_batch;
-   enum blorp_batch_flags flags = 0;
-   flags |= update_clear_depth ? 0 : BLORP_BATCH_NO_UPDATE_CLEAR_COLOR;
-   blorp_batch_init(&ice->blorp, &blorp_batch, batch, flags);
+   blorp_batch_init(&ice->blorp, &blorp_batch, batch, 0);
    blorp_hiz_op(&blorp_batch, &surf, level, start_layer, num_layers, op);
    blorp_batch_finish(&blorp_batch);
 
@@ -860,9 +856,9 @@ crocus_resource_prepare_access(struct crocus_context *ice,
             assert(aux_op == ISL_AUX_OP_PARTIAL_RESOLVE);
             crocus_mcs_partial_resolve(ice, batch, res, layer, 1);
          } else if (isl_aux_usage_has_hiz(res->aux.usage)) {
-            crocus_hiz_exec(ice, batch, res, level, layer, 1, aux_op, false);
+            crocus_hiz_exec(ice, batch, res, level, layer, 1, aux_op);
          } else if (res->aux.usage == ISL_AUX_USAGE_STC_CCS) {
-            unreachable("crocus doesn't resolve STC_CCS resources");
+            UNREACHABLE("crocus doesn't resolve STC_CCS resources");
          } else {
             assert(isl_aux_usage_has_ccs(res->aux.usage));
             crocus_resolve_color(ice, batch, res, level, layer, aux_op);

@@ -18,23 +18,19 @@ struct vn_buffer_memory_requirements {
    VkMemoryDedicatedRequirements dedicated;
 };
 
-struct vn_buffer_cache_entry {
+struct vn_buffer_reqs_cache_entry {
    struct vn_buffer_memory_requirements requirements;
    atomic_bool valid;
 };
 
-struct vn_buffer_cache {
+struct vn_buffer_reqs_cache {
    uint64_t max_buffer_size;
    uint32_t queue_family_count;
-
-   /* cache memory type requirement for AHB backed VkBuffer */
-   uint32_t ahb_mem_type_bits;
-   atomic_bool ahb_mem_type_bits_valid;
 
    /* lazily cache memory requirements for native buffer infos */
    struct util_sparse_array entries;
 
-   /* protect both entries and ahb_mem_type_bits */
+   /* protect entries */
    simple_mtx_t mutex;
 
    struct {
@@ -50,7 +46,7 @@ struct vn_buffer {
    struct vn_buffer_memory_requirements requirements;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_buffer,
-                               base.base,
+                               base.vk,
                                VkBuffer,
                                VK_OBJECT_TYPE_BUFFER)
 
@@ -58,7 +54,7 @@ struct vn_buffer_view {
    struct vn_object_base base;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_buffer_view,
-                               base.base,
+                               base.vk,
                                VkBufferView,
                                VK_OBJECT_TYPE_BUFFER_VIEW)
 
@@ -69,9 +65,9 @@ vn_buffer_create(struct vn_device *dev,
                  struct vn_buffer **out_buf);
 
 void
-vn_buffer_cache_init(struct vn_device *dev);
+vn_buffer_reqs_cache_init(struct vn_device *dev);
 
 void
-vn_buffer_cache_fini(struct vn_device *dev);
+vn_buffer_reqs_cache_fini(struct vn_device *dev);
 
 #endif /* VN_BUFFER_H */

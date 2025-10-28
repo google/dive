@@ -46,7 +46,7 @@ vk_object_to_physical_device(struct vk_object_base *obj)
 {
    switch (obj->type) {
    case VK_OBJECT_TYPE_INSTANCE:
-      unreachable("Unsupported object type");
+      UNREACHABLE("Unsupported object type");
    case VK_OBJECT_TYPE_PHYSICAL_DEVICE:
       return container_of(obj, struct vk_physical_device, base);
    case VK_OBJECT_TYPE_SURFACE_KHR:
@@ -54,7 +54,7 @@ vk_object_to_physical_device(struct vk_object_base *obj)
    case VK_OBJECT_TYPE_DISPLAY_MODE_KHR:
    case VK_OBJECT_TYPE_DEBUG_REPORT_CALLBACK_EXT:
    case VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT:
-      unreachable("Unsupported object type");
+      UNREACHABLE("Unsupported object type");
    default:
       return vk_object_to_device(obj)->physical;
    }
@@ -111,7 +111,7 @@ __vk_log_impl(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
       }
    }
 
-#ifndef DEBUG
+#if !MESA_DEBUG
    if (unlikely(!instance) ||
        (likely(list_is_empty(&instance->debug_utils.callbacks)) &&
         likely(list_is_empty(&instance->debug_report.callbacks))))
@@ -127,7 +127,7 @@ __vk_log_impl(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 
    char *message_idname = ralloc_asprintf(NULL, "%s:%d", file, line);
 
-#if DEBUG
+#if MESA_DEBUG
    switch (severity) {
    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
       mesa_logd("%s: %s", message_idname, message);
@@ -145,7 +145,7 @@ __vk_log_impl(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
       mesa_loge("%s: %s", message_idname, message);
       break;
    default:
-      unreachable("Invalid debug message severity");
+      UNREACHABLE("Invalid debug message severity");
       break;
    }
 
@@ -250,7 +250,7 @@ __vk_log_impl(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
          flags |= VK_DEBUG_REPORT_ERROR_BIT_EXT;
          break;
       default:
-         unreachable("Invalid debug message severity");
+         UNREACHABLE("Invalid debug message severity");
          break;
       }
 
@@ -309,16 +309,35 @@ __vk_errorv(const void *_obj, VkResult error,
 
    const char *error_str = vk_Result_to_str(error);
 
+   /* From the Vulkan 1.3.295 spec:
+    *
+    *    "VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT specifies use of
+    *    Vulkan that may expose an application bug. Such cases may not be
+    *    immediately harmful, such as a fragment shader outputting to a
+    *    location with no attachment. Other cases may point to behavior that
+    *    is almost certainly bad when unintended such as using an image whose
+    *    memory has not been filled. In general if you see a warning but you
+    *    know that the behavior is intended/desired, then simply ignore the
+    *    warning.
+    *
+    *    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT specifies that the
+    *    application has violated a valid usage condition of the
+    *    specification."
+    *
+    * Our use of vk_error*() to expound on error messages returned from
+    * drivers falls more under the WARNING category than ERROR since they may
+    * not actually be application bugs or VU violations.
+    */
    if (format) {
       char *message = ralloc_vasprintf(NULL, format, va);
 
       if (object) {
-         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
                   VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                   VK_LOG_OBJS(object), file, line,
                   "%s (%s)", message, error_str);
       } else {
-         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
                   VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                   VK_LOG_NO_OBJS(instance), file, line,
                   "%s (%s)", message, error_str);
@@ -327,12 +346,12 @@ __vk_errorv(const void *_obj, VkResult error,
       ralloc_free(message);
    } else {
       if (object) {
-         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
                   VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                   VK_LOG_OBJS(object), file, line,
                   "%s", error_str);
       } else {
-         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+         __vk_log(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
                   VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                   VK_LOG_NO_OBJS(instance), file, line,
                   "%s", error_str);

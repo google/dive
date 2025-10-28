@@ -12,26 +12,31 @@
 
 #include "tu_common.h"
 
-#include "vk_buffer.h"
+#include "vk_device_memory.h"
+#include "vk_meta.h"
 
 #include "tu_autotune.h"
+#include "tu_cs.h"
 #include "tu_pass.h"
 #include "tu_perfetto.h"
+#include "tu_queue.h"
 #include "tu_suballoc.h"
 #include "tu_util.h"
 
+#include "radix_sort/radix_sort_vk.h"
+
+#include "common/freedreno_rd_output.h"
 #include "util/vma.h"
 #include "util/u_vector.h"
 
 /* queue types */
 #define TU_QUEUE_GENERAL 0
 
-#define TU_MAX_QUEUE_FAMILIES 1
+#define TU_MAX_QUEUE_FAMILIES 2
 
 #define TU_BORDER_COLOR_COUNT 4096
-#define TU_BORDER_COLOR_BUILTIN 6
 
-#define TU_BLIT_SHADER_SIZE 1024
+#define TU_BLIT_SHADER_SIZE 4096
 
 /* extra space in vsc draw/prim streams */
 #define VSC_PAD 0x40
@@ -61,6 +66,20 @@ struct tu_memory_heap {
    alignas(8) VkDeviceSize used;
 };
 
+enum tu_kgsl_dma_type
+{
+   TU_KGSL_DMA_TYPE_ION_LEGACY,
+   TU_KGSL_DMA_TYPE_ION,
+   TU_KGSL_DMA_TYPE_DMAHEAP,
+};
+
+struct tu_queue_family {
+   enum tu_queue_type type;
+   const VkQueueFamilyProperties *properties;
+};
+
+extern uint64_t os_page_size;
+
 struct tu_physical_device
 {
    struct vk_physical_device vk;
@@ -84,12 +103,37 @@ struct tu_physical_device
    int64_t master_major;
    int64_t master_minor;
 
+   int kgsl_dma_fd;
+   enum tu_kgsl_dma_type kgsl_dma_type;
+
    uint32_t gmem_size;
    uint64_t gmem_base;
+
+   uint32_t usable_gmem_size_gmem;
    uint32_t ccu_offset_gmem;
    uint32_t ccu_offset_bypass;
+   uint32_t ccu_depth_offset_bypass;
+   uint32_t vpc_attr_buf_offset_gmem;
+   uint32_t vpc_attr_buf_size_gmem;
+   uint32_t vpc_attr_buf_offset_bypass;
+   uint32_t vpc_attr_buf_size_bypass;
+
+   uint64_t uche_trap_base;
+
+   /* Amount of usable descriptor sets, this excludes any reserved set */
+   uint32_t usable_sets;
+   /* Index of the reserved descriptor set, may be -1 if unset */
+   int32_t reserved_set_idx;
 
    bool has_set_iova;
+   bool has_raytracing;
+   bool has_vm_bind;
+   /* Whether a sparse queue can be created. */
+   bool has_sparse;
+   /* Whether TU_SPARSE_VMA_MAP_ZERO can be used. */
+   bool has_sparse_prr;
+   /* Whether lazy allocations are supported. */
+   bool has_lazy_bos;
    uint64_t va_start;
    uint64_t va_size;
 
@@ -97,12 +141,21 @@ struct tu_physical_device
    bool has_cached_non_coherent_memory;
    uintptr_t level1_dcache_size;
 
+   struct fdl_ubwc_config ubwc_config;
+
+   bool has_preemption;
+
    struct {
+      uint32_t non_lazy_type_count;
       uint32_t type_count;
       VkMemoryPropertyFlags types[VK_MAX_MEMORY_TYPES];
    } memory;
 
+   struct tu_queue_family queue_families[TU_MAX_QUEUE_FAMILIES];
+   unsigned num_queue_families;
+
    struct fd_dev_id dev_id;
+   struct fd_dev_info dev_info;
    const struct fd_dev_info *info;
 
    int msm_major_version;
@@ -116,6 +169,8 @@ struct tu_physical_device
    struct vk_sync_type syncobj_type;
    struct vk_sync_timeline_type timeline_type;
    const struct vk_sync_type *sync_types[3];
+
+   uint32_t device_count;
 };
 VK_DEFINE_HANDLE_CASTS(tu_physical_device, vk.base, VkPhysicalDevice,
                        VK_OBJECT_TYPE_PHYSICAL_DEVICE)
@@ -128,6 +183,7 @@ struct tu_instance
 
    const struct tu_knl *knl;
 
+   uint32_t instance_idx;
    uint32_t api_version;
 
    struct driOptionCache dri_options;
@@ -142,22 +198,38 @@ struct tu_instance
     * suffer a performance loss with conservative LRZ.
     */
    bool conservative_lrz;
+
+   /* If to internally reserve a descriptor set for descriptor set
+    * dynamic offsets, a descriptor set can be freed at the cost of
+    * being unable to use the feature. As it is a part of the Vulkan
+    * core, this is enabled by default.
+    */
+   bool reserve_descriptor_set;
+
+   /* Allow out of bounds UBO access by disabling lowering of UBO loads for
+    * indirect access, which rely on the UBO bounds specified in the shader,
+    * rather than the bound UBO size which isn't known until draw time.
+    *
+    * See: https://github.com/doitsujin/dxvk/issues/3861
+    */
+   bool allow_oob_indirect_ubo_loads;
+
+   /* DXVK and VKD3D-Proton use customBorderColorWithoutFormat
+    * and have most of D24S8 images with USAGE_SAMPLED, in such case we
+    * disable UBWC for correctness. However, games don't use border color for
+    * depth-stencil images. So we elect to ignore this edge case and force
+    * UBWC to be enabled.
+    */
+   bool disable_d24s8_border_color_workaround;
+
+   /* D3D emulation requires texture coordinates to be rounded to nearest even value. */
+   bool use_tex_coord_round_nearest_even_mode;
+
+   /* Apps may be accidentally incorrect  */
+   bool ignore_frag_depth_direction;
 };
 VK_DEFINE_HANDLE_CASTS(tu_instance, vk.base, VkInstance,
                        VK_OBJECT_TYPE_INSTANCE)
-
-struct tu_queue
-{
-   struct vk_queue vk;
-
-   struct tu_device *device;
-
-   uint32_t msm_queue_id;
-   uint32_t priority;
-
-   int fence;           /* timestamp/fence of the last queue submission */
-};
-VK_DEFINE_HANDLE_CASTS(tu_queue, vk.base, VkQueue, VK_OBJECT_TYPE_QUEUE)
 
 /* This struct defines the layout of the global_bo */
 struct tu6_global
@@ -179,7 +251,9 @@ struct tu6_global
       uint32_t pad[7];
    } flush_base[4];
 
-   alignas(16) uint32_t cs_indirect_xyz[3];
+   alignas(16) uint32_t cs_indirect_xyz[12];
+
+   uint32_t vsc_state[32];
 
    volatile uint32_t vtx_stats_query_not_running;
 
@@ -205,8 +279,7 @@ struct tu6_global
    volatile uint32_t userspace_fence;
    uint32_t _pad5;
 
-   /* note: larger global bo will be used for customBorderColors */
-   struct bcolor_entry bcolor_builtin[TU_BORDER_COLOR_BUILTIN], bcolor[];
+   struct bcolor_entry bcolor[];
 };
 #define gb_offset(member) offsetof(struct tu6_global, member)
 #define global_iova(cmd, member) ((cmd)->device->global_bo->iova + gb_offset(member))
@@ -219,16 +292,8 @@ struct tu_pvtmem_bo {
       uint32_t per_fiber_size, per_sp_size;
 };
 
-#ifdef ANDROID
-enum tu_gralloc_type
-{
-   TU_GRALLOC_UNKNOWN,
-   TU_GRALLOC_CROS,
-   TU_GRALLOC_OTHER,
-};
-#endif
-
 struct tu_virtio_device;
+struct tu_queue;
 
 struct tu_device
 {
@@ -239,12 +304,18 @@ struct tu_device
    int queue_count[TU_MAX_QUEUE_FAMILIES];
 
    struct tu_physical_device *physical_device;
+   uint32_t device_idx;
    int fd;
 
    struct ir3_compiler *compiler;
 
    /* Backup in-memory cache to be used if the app doesn't provide one */
    struct vk_pipeline_cache *mem_cache;
+
+   struct vk_meta_device meta;
+
+   radix_sort_vk_t *radix_sort;
+   mtx_t radix_sort_mutex;
 
 #define MIN_SCRATCH_BO_SIZE_LOG2 12 /* A page */
 
@@ -262,6 +333,8 @@ struct tu_device
    struct tu_bo *global_bo;
    struct tu6_global *global_bo_map;
 
+   struct tu_bo *null_accel_struct_bo;
+
    uint32_t implicit_sync_bo_count;
 
    /* Device-global BO suballocator for reducing BO management overhead for
@@ -275,6 +348,20 @@ struct tu_device
     */
    struct tu_suballocator autotune_suballoc;
    mtx_t autotune_mutex;
+
+   /* KGSL requires a small chunk of GPU mem to retrieve raw GPU time on
+    * each submission.
+    */
+   struct tu_suballocator kgsl_profiling_suballoc;
+   mtx_t kgsl_profiling_mutex;
+
+   /* VkEvent BO suballocator.  Synchronized by event_mutex.
+    */
+   struct tu_suballocator event_suballoc;
+   mtx_t event_mutex;
+
+   struct tu_suballocator *trace_suballoc;
+   mtx_t trace_mutex;
 
    /* the blob seems to always use 8K factor and 128K param sizes, copy them */
 #define TU_TESS_FACTOR_SIZE (8 * 1024)
@@ -298,12 +385,17 @@ struct tu_device
    struct util_vma_heap vma;
 
    /* bo list for submits: */
-   struct drm_msm_gem_submit_bo *bo_list;
+   struct drm_msm_gem_submit_bo *submit_bo_list;
    /* map bo handles to bo list index: */
-   uint32_t bo_count, bo_list_size;
+   uint32_t submit_bo_count, submit_bo_list_size;
+   /* bo list for dumping: */
+   struct util_dynarray dump_bo_list;
    mtx_t bo_mutex;
    /* protects imported BOs creation/freeing */
    struct u_rwlock dma_bo_lock;
+   int vm_bind_fence_fd;
+   /* protects vm_bind_fence_fd */
+   struct u_rwlock vm_bind_fence_lock;
 
    /* Tracking of name -> size allocated for TU_DEBUG_BOS */
    struct hash_table *bo_sizes;
@@ -332,9 +424,14 @@ struct tu_device
     */
    struct u_vector zombie_vmas;
 
+   struct tu_cs sub_cs;
+
    /* Command streams to set pass index to a scratch reg */
-   struct tu_cs *perfcntrs_pass_cs;
    struct tu_cs_entry *perfcntrs_pass_cs_entries;
+
+   struct tu_cs_entry cmdbuf_start_a725_quirk_entry;
+
+   struct tu_cs_entry bin_preamble_entry;
 
    struct util_dynarray dynamic_rendering_pending;
    VkCommandPool dynamic_rendering_pool;
@@ -352,11 +449,6 @@ struct tu_device
    struct tu_cs *dbg_cmdbuf_stomp_cs;
    struct tu_cs *dbg_renderpass_stomp_cs;
 
-#ifdef ANDROID
-   const void *gralloc;
-   enum tu_gralloc_type gralloc_type;
-#endif
-
 #ifdef TU_HAS_VIRTIO
    struct tu_virtio_device *vdev;
 #endif
@@ -367,6 +459,7 @@ struct tu_device
    uint64_t fault_count;
 
    struct u_trace_context trace_context;
+   struct list_head copy_timestamp_cs_pool;
 
    #ifdef HAVE_PERFETTO
    struct tu_perfetto_state perfetto;
@@ -374,56 +467,71 @@ struct tu_device
 
    bool use_z24uint_s8uint;
    bool use_lrz;
+
+   struct fd_rd_output rd_output;
+
+   /* This is an internal queue for mapping/unmapping non-sparse BOs */
+   uint32_t vm_bind_queue_id;
 };
 VK_DEFINE_HANDLE_CASTS(tu_device, vk.base, VkDevice, VK_OBJECT_TYPE_DEVICE)
 
 struct tu_device_memory
 {
-   struct vk_object_base base;
+   struct vk_device_memory vk;
+
+   uint64_t iova;
+   uint64_t size;
+
+   /* For lazy memory */
+   bool lazy;
+   bool lazy_initialized;
+   struct tu_sparse_vma lazy_vma;
+   mtx_t lazy_mutex;
 
    struct tu_bo *bo;
+
+   /* for dedicated allocations */
+   struct tu_image *image;
 };
-VK_DEFINE_NONDISP_HANDLE_CASTS(tu_device_memory, base, VkDeviceMemory,
+VK_DEFINE_NONDISP_HANDLE_CASTS(tu_device_memory, vk.base, VkDeviceMemory,
                                VK_OBJECT_TYPE_DEVICE_MEMORY)
 
-struct tu_buffer
-{
-   struct vk_buffer vk;
-
-   struct tu_bo *bo;
-   uint64_t iova;
-};
-VK_DEFINE_NONDISP_HANDLE_CASTS(tu_buffer, vk.base, VkBuffer,
-                               VK_OBJECT_TYPE_BUFFER)
+VkResult
+tu_allocate_lazy_memory(struct tu_device *dev,
+                        struct tu_device_memory *mem);
 
 struct tu_attachment_info
 {
    struct tu_image_view *attachment;
 };
 
-struct tu_tiling_config {
-   /* size of the first tile */
-   VkExtent2D tile0;
+struct tu_vsc_config {
    /* number of tiles */
    VkExtent2D tile_count;
-
    /* size of the first VSC pipe */
    VkExtent2D pipe0;
    /* number of VSC pipes */
    VkExtent2D pipe_count;
 
-   /* Whether using GMEM is even possible with this configuration */
-   bool possible;
+   /* Whether binning could be used for gmem rendering using this framebuffer. */
+   bool binning_possible;
 
    /* Whether binning should be used for gmem rendering using this framebuffer. */
    bool binning;
 
-   /* Whether binning could be used for gmem rendering using this framebuffer. */
-   bool binning_possible;
-
    /* pipe register values */
    uint32_t pipe_config[MAX_VSC_PIPES];
    uint32_t pipe_sizes[MAX_VSC_PIPES];
+};
+
+struct tu_tiling_config {
+   /* size of the first tile */
+   VkExtent2D tile0;
+
+   /* Whether using GMEM is even possible with this configuration */
+   bool possible;
+
+   struct tu_vsc_config vsc, fdm_offset_vsc;
 };
 
 struct tu_framebuffer
@@ -442,28 +550,17 @@ struct tu_framebuffer
 VK_DEFINE_NONDISP_HANDLE_CASTS(tu_framebuffer, base, VkFramebuffer,
                                VK_OBJECT_TYPE_FRAMEBUFFER)
 
-struct tu_event
-{
-   struct vk_object_base base;
-   struct tu_bo *bo;
-};
-VK_DEFINE_NONDISP_HANDLE_CASTS(tu_event, base, VkEvent, VK_OBJECT_TYPE_EVENT)
-
-struct tu_sampler {
-   struct vk_object_base base;
-
-   uint32_t descriptor[A6XX_TEX_SAMP_DWORDS];
-   struct tu_sampler_ycbcr_conversion *ycbcr_sampler;
-};
-VK_DEFINE_NONDISP_HANDLE_CASTS(tu_sampler, base, VkSampler,
-                               VK_OBJECT_TYPE_SAMPLER)
-
 uint64_t
 tu_get_system_heap_size(struct tu_physical_device *physical_device);
 
 VkResult
 tu_physical_device_init(struct tu_physical_device *device,
                         struct tu_instance *instance);
+
+void
+tu_physical_device_get_global_priority_properties(const struct tu_physical_device *pdevice,
+                                                  enum tu_queue_type type,
+                                                  VkQueueFamilyGlobalPriorityPropertiesKHR *props);
 
 uint64_t
 tu_device_ticks_to_ns(struct tu_device *dev, uint64_t ts);
@@ -490,21 +587,21 @@ void tu_setup_dynamic_framebuffer(struct tu_cmd_buffer *cmd_buffer,
                                   const VkRenderingInfo *pRenderingInfo);
 
 void
-tu_copy_timestamp_buffer(struct u_trace_context *utctx, void *cmdstream,
-                         void *ts_from, uint32_t from_offset,
-                         void *ts_to, uint32_t to_offset,
-                         uint32_t count);
-
+tu_copy_buffer(struct u_trace_context *utctx, void *cmdstream,
+               void *ts_from, uint64_t from_offset_B,
+               void *ts_to, uint64_t to_offset_B,
+               uint64_t size_B);
 
 VkResult
-tu_create_copy_timestamp_cs(struct tu_cmd_buffer *cmdbuf, struct tu_cs** cs,
-                            struct u_trace **trace_copy);
+tu_create_copy_timestamp_cs(struct tu_u_trace_submission_data *submission_data,
+                            struct tu_cmd_buffer **cmd_buffers,
+                            uint32_t cmd_buffer_count,
+                            uint32_t trace_chunks_to_copy);
 
-/* If we copy trace and timestamps we will have to free them. */
-struct tu_u_trace_cmd_data
-{
-   struct tu_cs *timestamp_copy_cs;
-   struct u_trace *trace;
+struct tu_copy_timestamp_data {
+   struct list_head node;
+   struct tu_cs cs;
+   struct u_trace trace;
 };
 
 /* Data necessary to retrieve timestamps and clean all
@@ -513,14 +610,26 @@ struct tu_u_trace_cmd_data
 struct tu_u_trace_submission_data
 {
    uint32_t submission_id;
+
    /* We have to know when timestamps are available,
-    * this sync object indicates it.
+    * this queue and fence indicates it.
     */
-   struct tu_u_trace_syncobj *syncobj;
+   struct tu_queue *queue;
+   uint32_t fence;
 
    uint32_t cmd_buffer_count;
    uint32_t last_buffer_with_tracepoints;
-   struct tu_u_trace_cmd_data *cmd_trace_data;
+   void *mem_ctx;
+   struct u_trace **trace_per_cmd_buffer;
+   struct tu_copy_timestamp_data *timestamp_copy_data;
+
+   /* GPU time is reset on GPU power cycle and the GPU time
+    * offset may change between submissions due to power cycle.
+    */
+   uint64_t gpu_ts_offset;
+
+   /* KGSL needs a GPU memory to write submission timestamps into */
+   struct tu_suballoc_bo kgsl_timestamp_bo;
 };
 
 VkResult
@@ -541,5 +650,28 @@ void
 tu_debug_bos_del(struct tu_device *dev, struct tu_bo *bo);
 void
 tu_debug_bos_print_stats(struct tu_device *dev);
+
+void
+tu_dump_bo_init(struct tu_device *dev, struct tu_bo *bo);
+void
+tu_dump_bo_del(struct tu_device *dev, struct tu_bo *bo);
+
+/* Use cached-coherent when available, for faster CPU readback.
+ */
+static inline VkResult
+tu_bo_init_new_cached(struct tu_device *dev, struct vk_object_base *base,
+                      struct tu_bo **out_bo, uint64_t size,
+                      enum tu_bo_alloc_flags flags, const char *name)
+{
+   return tu_bo_init_new_explicit_iova(
+      dev, base, out_bo, size, 0,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+         (dev->physical_device->has_cached_coherent_memory ? 
+          VK_MEMORY_PROPERTY_HOST_CACHED_BIT : 0),
+      flags, NULL, name);
+}
+
 
 #endif /* TU_DEVICE_H */

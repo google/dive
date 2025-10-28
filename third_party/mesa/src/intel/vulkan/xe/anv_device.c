@@ -22,29 +22,43 @@
 
 #include "xe/anv_device.h"
 #include "anv_private.h"
+#include "vk_debug_utils.h"
 
 #include "drm-uapi/gpu_scheduler.h"
 #include "drm-uapi/xe_drm.h"
+
+#include "common/xe/intel_device_query.h"
 
 bool anv_xe_device_destroy_vm(struct anv_device *device)
 {
    struct drm_xe_vm_destroy destroy = {
       .vm_id = device->vm_id,
    };
+
+   intel_bind_timeline_finish(&device->bind_timeline, device->fd);
+
    return intel_ioctl(device->fd, DRM_IOCTL_XE_VM_DESTROY, &destroy) == 0;
 }
 
 VkResult anv_xe_device_setup_vm(struct anv_device *device)
 {
    struct drm_xe_vm_create create = {
-      .flags = DRM_XE_VM_CREATE_SCRATCH_PAGE |
-               DRM_XE_VM_CREATE_ASYNC_BIND_OPS,
+      .flags = DRM_XE_VM_CREATE_FLAG_SCRATCH_PAGE,
    };
    if (intel_ioctl(device->fd, DRM_IOCTL_XE_VM_CREATE, &create) != 0)
       return vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
                        "vm creation failed");
 
    device->vm_id = create.vm_id;
+
+   if (!intel_bind_timeline_init(&device->bind_timeline, device->fd)) {
+      anv_xe_device_destroy_vm(device);
+      return vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
+                       "intel_bind_timeline_init failed");
+   }
+
+   device->protected_session_id = DRM_XE_PXP_HWDRM_DEFAULT_SESSION;
+
    return VK_SUCCESS;
 }
 
@@ -59,31 +73,9 @@ drm_sched_priority_to_vk_priority(enum drm_sched_priority drm_sched_priority)
    case DRM_SCHED_PRIORITY_HIGH:
       return VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR;
    default:
-      unreachable("Invalid drm_sched_priority");
+      UNREACHABLE("Invalid drm_sched_priority");
       return VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
    }
-}
-
-static void *
-xe_query_alloc_fetch(struct anv_physical_device *device, uint32_t query_id)
-{
-   struct drm_xe_device_query query = {
-      .query = query_id,
-   };
-   if (intel_ioctl(device->local_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query))
-      return NULL;
-
-   void *data = calloc(1, query.size);
-   if (!data)
-      return NULL;
-
-   query.data = (uintptr_t)data;
-   if (intel_ioctl(device->local_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query)) {
-      free(data);
-      return NULL;
-   }
-
-   return data;
 }
 
 VkResult
@@ -91,14 +83,14 @@ anv_xe_physical_device_get_parameters(struct anv_physical_device *device)
 {
    struct drm_xe_query_config *config;
 
-   config = xe_query_alloc_fetch(device, DRM_XE_DEVICE_QUERY_CONFIG);
+   config = xe_device_query_alloc_fetch(device->local_fd, DRM_XE_DEVICE_QUERY_CONFIG, NULL);
    if (!config)
       return vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
                        "unable to query device config");
 
-   device->has_exec_timeline = true;
+   device->has_vm_control = true;
    device->max_context_priority =
-         drm_sched_priority_to_vk_priority(config->info[XE_QUERY_CONFIG_MAX_ENGINE_PRIORITY]);
+         drm_sched_priority_to_vk_priority(config->info[DRM_XE_QUERY_CONFIG_MAX_EXEC_QUEUE_PRIORITY]);
 
    free(config);
    return VK_SUCCESS;
@@ -108,18 +100,24 @@ VkResult
 anv_xe_physical_device_init_memory_types(struct anv_physical_device *device)
 {
    if (anv_physical_device_has_vram(device)) {
-      device->memory.type_count = 3;
-      device->memory.types[0] = (struct anv_memory_type) {
+      if (device->info.ver >= 20) {
+         device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
+            .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .heapIndex = 0,
+            .compressed = true,
+         };
+      }
+      device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
          .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
          .heapIndex = 0,
       };
-      device->memory.types[1] = (struct anv_memory_type) {
+      device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
          .propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
                           VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
          .heapIndex = 1,
       };
-      device->memory.types[2] = (struct anv_memory_type) {
+      device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
          .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -152,8 +150,24 @@ anv_xe_physical_device_init_memory_types(struct anv_physical_device *device)
          .heapIndex = 0,
       };
    } else {
-      return vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
-                       "No memory heaps types set for non llc devices yet on Xe");
+      device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
+         .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+         .heapIndex = 0,
+         .compressed = device->info.ver >= 20,
+      };
+      device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
+         .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+         .heapIndex = 0,
+      };
+      device->memory.types[device->memory.type_count++] = (struct anv_memory_type) {
+         .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+                          VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+         .heapIndex = 0,
+      };
    }
    return VK_SUCCESS;
 }
@@ -164,7 +178,7 @@ anv_xe_get_device_status(struct anv_device *device, uint32_t exec_queue_id)
    VkResult result = VK_SUCCESS;
    struct drm_xe_exec_queue_get_property exec_queue_get_property = {
       .exec_queue_id = exec_queue_id,
-      .property = XE_EXEC_QUEUE_GET_PROPERTY_BAN,
+      .property = DRM_XE_EXEC_QUEUE_GET_PROPERTY_BAN,
    };
    int ret = intel_ioctl(device->fd, DRM_IOCTL_XE_EXEC_QUEUE_GET_PROPERTY,
                          &exec_queue_get_property);
@@ -193,6 +207,12 @@ anv_xe_device_check_status(struct vk_device *vk_device)
             return result;
       }
    }
+
+   if (result != VK_SUCCESS)
+      return result;
+
+   if (INTEL_DEBUG(DEBUG_SHADER_PRINT))
+      result = vk_check_printf_status(vk_device, &device->printf);
 
    return result;
 }

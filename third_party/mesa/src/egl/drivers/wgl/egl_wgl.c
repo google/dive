@@ -46,7 +46,8 @@
 #include <pipe/p_state.h>
 
 #include "util/u_call_once.h"
-#include <mapi/glapi/glapi.h>
+#include "mesa/glapi/glapi/glapi.h"
+#include "dispatch.h"
 
 #include <GL/mesa_glinterop.h>
 
@@ -158,7 +159,7 @@ wgl_add_config(_EGLDisplay *disp, const struct stw_pixelformat_info *stw_config,
 
       _eglLinkConfig(&conf->base);
    } else {
-      unreachable("duplicates should not be possible");
+      UNREACHABLE("duplicates should not be possible");
       return NULL;
    }
 
@@ -269,8 +270,10 @@ wgl_initialize_impl(_EGLDisplay *disp, HDC hdc)
    disp->Extensions.MESA_query_driver = EGL_TRUE;
 
    /* Report back to EGL the bitmask of priorities supported */
-   disp->Extensions.IMG_context_priority = wgl_dpy->screen->get_param(
-      wgl_dpy->screen, PIPE_CAP_CONTEXT_PRIORITY_MASK);
+   disp->Extensions.IMG_context_priority = wgl_dpy->screen->caps.context_priority_mask;
+   disp->Extensions.NV_context_priority_realtime =
+      disp->Extensions.IMG_context_priority &
+      (1 << __EGL_CONTEXT_PRIORITY_REALTIME_BIT);
 
    disp->Extensions.EXT_pixel_format_float = EGL_TRUE;
 
@@ -334,7 +337,7 @@ wgl_initialize(_EGLDisplay *disp)
       ret = wgl_initialize_impl(disp, disp->PlatformDisplay);
       break;
    default:
-      unreachable("Callers ensure we cannot get here.");
+      UNREACHABLE("Callers ensure we cannot get here.");
       return EGL_FALSE;
    }
 
@@ -504,27 +507,9 @@ wgl_destroy_surface(_EGLDisplay *disp, _EGLSurface *surf)
 }
 
 static void
-wgl_gl_flush_get(_glapi_proc *glFlush)
-{
-   *glFlush = _glapi_get_proc_address("glFlush");
-}
-
-static void
 wgl_gl_flush()
 {
-   static void (*glFlush)(void);
-   static util_once_flag once = UTIL_ONCE_FLAG_INIT;
-
-   util_call_once_data(&once, (util_call_once_data_func)wgl_gl_flush_get,
-                       &glFlush);
-
-   /* if glFlush is not available things are horribly broken */
-   if (!glFlush) {
-      _eglLog(_EGL_WARNING, "wgl: failed to find glFlush entry point");
-      return;
-   }
-
-   glFlush();
+   CALL_Flush(GET_DISPATCH(), ());
 }
 
 /**
@@ -593,7 +578,7 @@ wgl_make_current(_EGLDisplay *disp, _EGLSurface *dsurf, _EGLSurface *rsurf,
          rdraw = (old_rsurf) ? wgl_egl_surface(old_rsurf)->fb : NULL;
          cctx = (old_ctx) ? wgl_egl_context(old_ctx)->ctx : NULL;
 
-         /* undo the previous wgl_dpy->core->unbindContext */
+         /* undo the previous _eglBindContext */
          if (stw_make_current(ddraw, rdraw, cctx)) {
             return _eglError(egl_error, "eglMakeCurrent");
          }
@@ -612,7 +597,7 @@ wgl_make_current(_EGLDisplay *disp, _EGLSurface *dsurf, _EGLSurface *rsurf,
 
          _eglLog(_EGL_WARNING, "wgl: failed to rebind the previous context");
       } else {
-         /* wgl_dpy->core->bindContext succeeded, so take a reference on the
+         /* _eglBindContext succeeded, so take a reference on the
           * wgl_dpy. This prevents wgl_dpy from being reinitialized when a
           * EGLDisplay is terminated and then initialized again while a
           * context is still bound. See wgl_initialize() for a more in depth
@@ -878,7 +863,7 @@ wgl_create_image_khr_texture(_EGLDisplay *disp, _EGLContext *ctx,
       gl_target = GL_TEXTURE_CUBE_MAP;
       break;
    default:
-      unreachable("Unexpected target in wgl_create_image_khr_texture()");
+      UNREACHABLE("Unexpected target in wgl_create_image_khr_texture()");
       return EGL_NO_IMAGE_KHR;
    }
 
@@ -1103,7 +1088,7 @@ wgl_wait_sync_khr(_EGLDisplay *disp, _EGLSync *sync)
 
    struct pipe_context *pipe = wgl_ctx->ctx->st->pipe;
    if (pipe->fence_server_sync)
-      pipe->fence_server_sync(pipe, wgl_sync->fence);
+      pipe->fence_server_sync(pipe, wgl_sync->fence, 0);
 
    return EGL_TRUE;
 }
@@ -1164,10 +1149,10 @@ wgl_interop_export_object(_EGLDisplay *disp, _EGLContext *ctx,
 static int
 wgl_interop_flush_objects(_EGLDisplay *disp, _EGLContext *ctx, unsigned count,
                           struct mesa_glinterop_export_in *objects,
-                          GLsync *sync)
+                          struct mesa_glinterop_flush_out *out)
 {
    struct wgl_egl_context *wgl_ctx = wgl_egl_context(ctx);
-   return stw_interop_flush_objects(wgl_ctx->ctx, count, objects, sync);
+   return stw_interop_flush_objects(wgl_ctx->ctx, count, objects, out);
 }
 
 struct _egl_driver _eglDriver = {

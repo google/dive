@@ -64,24 +64,6 @@ struct st_sampler_view
    bool glsl130_or_later;
    /** Derived from the sampler's sRGBDecode state during validation */
    bool srgb_skip_decode;
-
-   /* This mechanism allows passing sampler view references to the driver
-    * without using atomics to increase the reference count.
-    *
-    * This private refcount can be decremented without atomics but only one
-    * context (st above) can use this counter (so that it's only used by
-    * 1 thread).
-    *
-    * This number is atomically added to view->reference.count at
-    * initialization. If it's never used, the same number is atomically
-    * subtracted from view->reference.count before destruction. If this
-    * number is decremented, we can pass one reference to the driver without
-    * touching reference.count with atomics. At destruction we only subtract
-    * the number of references we have not returned. This can possibly turn
-    * a million atomic increments into 1 add and 1 subtract atomic op over
-    * the whole lifetime of an app.
-    */
-   int private_refcount;
 };
 
 
@@ -157,8 +139,10 @@ st_texture_create(struct st_context *st,
                   GLuint depth0,
                   GLuint layers,
                   GLuint nr_samples,
+                  unsigned flags,
                   GLuint tex_usage,
-                  bool sparse);
+                  bool sparse,
+                  uint32_t compression);
 
 
 extern void
@@ -267,13 +251,14 @@ st_convert_sampler_from_unit(const struct st_context *st,
 struct pipe_sampler_view *
 st_update_single_texture(struct st_context *st,
                          GLuint texUnit, bool glsl130_or_later,
-                         bool ignore_srgb_decode, bool get_reference);
+                         bool ignore_srgb_decode);
 
 unsigned
 st_get_sampler_views(struct st_context *st,
-                     enum pipe_shader_type shader_stage,
+                     mesa_shader_stage shader_stage,
                      const struct gl_program *prog,
-                     struct pipe_sampler_view **sampler_views);
+                     struct pipe_sampler_view **sampler_views,
+                     unsigned *extra_sampler_views);
 
 void
 st_make_bound_samplers_resident(struct st_context *st,

@@ -1,28 +1,11 @@
 /*
  * Copyright 2010 Jerome Glisse <glisse@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
-#include "r600_pipe.h"
+
+#include "r600_asm.h"
 #include "r600_opcodes.h"
-#include "r600_shader.h"
+#include "r600_shader_common.h"
 
 #include "util/u_memory.h"
 #include "eg_sq.h"
@@ -173,60 +156,6 @@ void eg_bytecode_export_read(struct r600_bytecode *bc,
 	output->comp_mask = G_SQ_CF_ALLOC_EXPORT_WORD1_BUF_COMP_MASK(word1);
 }
 #endif
-
-int egcm_load_index_reg(struct r600_bytecode *bc, unsigned id, bool inside_alu_clause)
-{
-	struct r600_bytecode_alu alu;
-	int r;
-	unsigned type;
-
-	assert(id < 2);
-	assert(bc->gfx_level >= EVERGREEN);
-
-	if (bc->index_loaded[id])
-		return 0;
-
-	/* Hack to put MOVA and SET_CF_IDX in the same clause as AR only persists for one clause */
-	if (bc->gfx_level == EVERGREEN && (bc->cf_last == NULL || (bc->cf_last->ndw >> 1) >= 110)) {
-		bc->force_add_cf = 1;
-	}
-
-	memset(&alu, 0, sizeof(alu));
-	alu.op = ALU_OP1_MOVA_INT;
-	alu.src[0].sel = bc->index_reg[id];
-	alu.src[0].chan = bc->index_reg_chan[id];
-	if (bc->gfx_level == CAYMAN)
-		alu.dst.sel = id == 0 ? CM_V_SQ_MOVA_DST_CF_IDX0 : CM_V_SQ_MOVA_DST_CF_IDX1;
-
-	alu.last = 1;
-	r = r600_bytecode_add_alu(bc, &alu);
-	if (r)
-		return r;
-
-	bc->ar_loaded = 0; /* clobbered */
-
-	if (bc->gfx_level == EVERGREEN) {
-		memset(&alu, 0, sizeof(alu));
-		alu.op = id == 0 ? ALU_OP0_SET_CF_IDX0 : ALU_OP0_SET_CF_IDX1;
-		alu.last = 1;
-		r = r600_bytecode_add_alu(bc, &alu);
-		if (r)
-			return r;
-	}
-
-	/* Must split ALU group as index only applies to following group */
-	if (inside_alu_clause) {
-		type = bc->cf_last->op;
-		if ((r = r600_bytecode_add_cf(bc))) {
-			return r;
-		}
-		bc->cf_last->op = type;
-	}
-
-	bc->index_loaded[id] = 1;
-
-	return 0;
-}
 
 int eg_bytecode_gds_build(struct r600_bytecode *bc, struct r600_bytecode_gds *gds, unsigned id)
 {

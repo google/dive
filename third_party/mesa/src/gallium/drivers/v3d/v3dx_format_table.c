@@ -24,9 +24,8 @@
 #include "util/format/u_format.h"
 
 #include "v3d_context.h"
-#include "broadcom/cle/v3dx_pack.h"
-#include "broadcom/common/v3d_macros.h"
 #include "v3d_format_table.h"
+#include "v3dx_format_table.h"
 
 #define SWIZ(x,y,z,w) {          \
         PIPE_SWIZZLE_##x, \
@@ -70,7 +69,9 @@ static const struct v3d_format format_table[] = {
         FORMAT(R8G8B8A8_SNORM,    NO,           RGBA8_SNORM, SWIZ_XYZW, 16, 0),
         FORMAT(R8G8B8X8_SNORM,    NO,           RGBA8_SNORM, SWIZ_XYZ1, 16, 0),
         FORMAT(R10G10B10A2_UNORM, RGB10_A2,     RGB10_A2,    SWIZ_XYZW, 16, 0),
+        FORMAT(B10G10R10A2_UNORM, RGB10_A2,     RGB10_A2,    SWIZ_ZYXW, 16, 0),
         FORMAT(R10G10B10X2_UNORM, RGB10_A2,     RGB10_A2,    SWIZ_XYZ1, 16, 0),
+        FORMAT(B10G10R10X2_UNORM, RGB10_A2,     RGB10_A2,    SWIZ_ZYX1, 16, 0),
         FORMAT(R10G10B10A2_UINT,  RGB10_A2UI,   RGB10_A2UI,  SWIZ_XYZW, 16, 0),
 
         FORMAT(A4B4G4R4_UNORM,    ABGR4444,     RGBA4,       SWIZ_XYZW, 16, 0),
@@ -84,18 +85,18 @@ static const struct v3d_format format_table[] = {
         FORMAT(R8G8_UNORM,        RG8,          RG8,         SWIZ_XY01, 16, 0),
         FORMAT(R8G8_SNORM,        NO,           RG8_SNORM,   SWIZ_XY01, 16, 0),
 
-        FORMAT(R16_UNORM,         NO,           R16,         SWIZ_X001, 32, 1),
-        FORMAT(R16_SNORM,         NO,           R16_SNORM,   SWIZ_X001, 32, 1),
+        FORMAT(R16_UNORM,         R16UI,        R16,         SWIZ_X001, 32, 1),
+        FORMAT(R16_SNORM,         R16I,         R16_SNORM,   SWIZ_X001, 32, 1),
         FORMAT(R16_FLOAT,         R16F,         R16F,        SWIZ_X001, 16, 0),
         FORMAT(R32_FLOAT,         R32F,         R32F,        SWIZ_X001, 32, 1),
 
-        FORMAT(R16G16_UNORM,      NO,           RG16,        SWIZ_XY01, 32, 2),
-        FORMAT(R16G16_SNORM,      NO,           RG16_SNORM,  SWIZ_XY01, 32, 2),
+        FORMAT(R16G16_UNORM,      RG16UI,       RG16,        SWIZ_XY01, 32, 2),
+        FORMAT(R16G16_SNORM,      RG16I,        RG16_SNORM,  SWIZ_XY01, 32, 2),
         FORMAT(R16G16_FLOAT,      RG16F,        RG16F,       SWIZ_XY01, 16, 0),
         FORMAT(R32G32_FLOAT,      RG32F,        RG32F,       SWIZ_XY01, 32, 2),
 
-        FORMAT(R16G16B16A16_UNORM, NO,          RGBA16,      SWIZ_XYZW, 32, 4),
-        FORMAT(R16G16B16A16_SNORM, NO,          RGBA16_SNORM, SWIZ_XYZW, 32, 4),
+        FORMAT(R16G16B16A16_UNORM, RGBA16UI,    RGBA16,      SWIZ_XYZW, 32, 4),
+        FORMAT(R16G16B16A16_SNORM, RGBA16I,     RGBA16_SNORM, SWIZ_XYZW, 32, 4),
         FORMAT(R16G16B16A16_FLOAT, RGBA16F,     RGBA16F,     SWIZ_XYZW, 16, 0),
         FORMAT(R32G32B32A32_FLOAT, RGBA32F,     RGBA32F,     SWIZ_XYZW, 32, 4),
 
@@ -145,7 +146,6 @@ static const struct v3d_format format_table[] = {
         FORMAT(R11G11B10_FLOAT,   R11F_G11F_B10F, R11F_G11F_B10F, SWIZ_XYZ1, 16, 0),
         FORMAT(R9G9B9E5_FLOAT,    NO,           RGB9_E5,     SWIZ_XYZ1, 16, 0),
 
-#if V3D_VERSION >= 40
         FORMAT(S8_UINT_Z24_UNORM, D24S8,        DEPTH24_X8,  SWIZ_XXXX, 32, 1),
         FORMAT(X8Z24_UNORM,       D24S8,        DEPTH24_X8,  SWIZ_XXXX, 32, 1),
         FORMAT(S8X24_UINT,        S8,           RGBA8UI, SWIZ_XXXX, 16, 1),
@@ -155,16 +155,6 @@ static const struct v3d_format format_table[] = {
         /* Pretend we support this, but it'll be separate Z32F depth and S8. */
         FORMAT(Z32_FLOAT_S8X24_UINT, D32F,      DEPTH_COMP32F, SWIZ_XXXX, 32, 1),
         FORMAT(X32_S8X24_UINT,    S8,           R8UI,          SWIZ_XXXX, 16, 1),
-#else
-        FORMAT(S8_UINT_Z24_UNORM, ZS_DEPTH24_STENCIL8, DEPTH24_X8, SWIZ_XXXX, 32, 1),
-        FORMAT(X8Z24_UNORM,       ZS_DEPTH24_STENCIL8, DEPTH24_X8, SWIZ_XXXX, 32, 1),
-        FORMAT(S8X24_UINT,        NO,           R32F,        SWIZ_XXXX, 32, 1),
-        FORMAT(Z32_FLOAT,         ZS_DEPTH_COMPONENT32F, R32F, SWIZ_XXXX, 32, 1),
-        FORMAT(Z16_UNORM,         ZS_DEPTH_COMPONENT16,  DEPTH_COMP16, SWIZ_XXXX, 32, 1),
-
-        /* Pretend we support this, but it'll be separate Z32F depth and S8. */
-        FORMAT(Z32_FLOAT_S8X24_UINT, ZS_DEPTH_COMPONENT32F, R32F, SWIZ_XXXX, 32, 1),
-#endif
 
         FORMAT(ETC2_RGB8,         NO,           RGB8_ETC2,   SWIZ_XYZ1, 16, 0),
         FORMAT(ETC2_SRGB8,        NO,           RGB8_ETC2,   SWIZ_XYZ1, 16, 0),
@@ -227,15 +217,12 @@ v3dX(get_format_desc)(enum pipe_format f)
 }
 
 void
-v3dX(get_internal_type_bpp_for_output_format)(uint32_t format,
+v3dX(get_internal_type_bpp_for_output_format)(enum V3DX(Output_Image_Format) format,
                                               uint32_t *type,
                                               uint32_t *bpp)
 {
         switch (format) {
         case V3D_OUTPUT_IMAGE_FORMAT_RGBA8:
-#if V3D_VERSION < 41
-        case V3D_OUTPUT_IMAGE_FORMAT_RGBX8:
-#endif
         case V3D_OUTPUT_IMAGE_FORMAT_RGB8:
         case V3D_OUTPUT_IMAGE_FORMAT_RG8:
         case V3D_OUTPUT_IMAGE_FORMAT_R8:
@@ -264,9 +251,6 @@ v3dX(get_internal_type_bpp_for_output_format)(uint32_t format,
         case V3D_OUTPUT_IMAGE_FORMAT_SRGB:
         case V3D_OUTPUT_IMAGE_FORMAT_RGB10_A2:
         case V3D_OUTPUT_IMAGE_FORMAT_R11F_G11F_B10F:
-#if V3D_VERSION < 41
-        case V3D_OUTPUT_IMAGE_FORMAT_SRGBX8:
-#endif
         case V3D_OUTPUT_IMAGE_FORMAT_RGBA16F:
                 /* Note that sRGB RTs are stored in the tile buffer at 16F,
                  * and the conversion to sRGB happens at tilebuffer
@@ -357,7 +341,7 @@ v3dX(get_internal_type_bpp_for_output_format)(uint32_t format,
 }
 
 bool
-v3dX(tfu_supports_tex_format)(uint32_t tex_format,
+v3dX(tfu_supports_tex_format)(enum V3DX(Texture_Data_Formats) tex_format,
                               bool for_mipmap)
 {
         switch (tex_format) {

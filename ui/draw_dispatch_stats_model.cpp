@@ -34,7 +34,7 @@ constexpr std::array<Dive::Stats::Type, 28> kDrawDispatchStats = {
     Dive::Stats::kDepthWriteEnabled,
     Dive::Stats::kEarlyZ,
     Dive::Stats::kLateZ,
-    Dive::Stats::kEarlyLRZLateZ,
+    Dive::Stats::kEarlyZLateZ,
     Dive::Stats::kLrzEnabled,
     Dive::Stats::kLrzWriteEnabled,
     Dive::Stats::kCullModeEnabled,

@@ -410,6 +410,11 @@ static const struct anv_format ycbcr_formats[] = {
              chroma_plane(2, ISL_FORMAT_R16_UNORM, RGBA, _ISL_SWIZZLE(RED, ZERO, ZERO, ZERO), 1, 1)),
 };
 
+static const struct anv_format maintenance5_formats[] = {
+   fmt1(VK_FORMAT_A8_UNORM_KHR,                   ISL_FORMAT_A8_UNORM),
+   swiz_fmt1(VK_FORMAT_A1B5G5R5_UNORM_PACK16_KHR, ISL_FORMAT_B5G5R5A1_UNORM, BGRA)
+};
+
 #undef _fmt
 #undef swiz_fmt1
 #undef fmt1
@@ -425,6 +430,8 @@ static const struct {
                                                  .n_formats = ARRAY_SIZE(_4444_formats), },
    [_VK_KHR_sampler_ycbcr_conversion_number] = { .formats = ycbcr_formats,
                                                  .n_formats = ARRAY_SIZE(ycbcr_formats), },
+   [_VK_KHR_maintenance5_number]             = { .formats = maintenance5_formats,
+                                                 .n_formats = ARRAY_SIZE(maintenance5_formats), },
 };
 
 const struct anv_format *
@@ -646,7 +653,7 @@ anv_get_image_format_features2(const struct intel_device_info *devinfo,
     * it for the list of shader storage extended formats [1]. Before that,
     * this applies to all VkFormats.
     *
-    * [1] : https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#features-shaderStorageImageExtendedFormats
+    * [1] : https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#features-shaderStorageImageExtendedFormats
     */
    if (flags & VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT)
       flags |= VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT;
@@ -940,7 +947,7 @@ void anv_GetPhysicalDeviceFormatProperties2(
          break;
       }
       default:
-         anv_debug_ignored_stype(ext->sType);
+         vk_debug_ignored_stype(ext->sType);
          break;
       }
    }
@@ -1004,7 +1011,7 @@ anv_get_image_format_properties(
 
    switch (info->type) {
    default:
-      unreachable("bad VkImageType");
+      UNREACHABLE("bad VkImageType");
    case VK_IMAGE_TYPE_1D:
       maxExtent.width = 16384;
       maxExtent.height = 1;
@@ -1199,10 +1206,11 @@ anv_get_image_format_properties(
       /* Nothing to check. */
    }
 
-   if (image_usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) {
-      /* Ignore this flag because it was removed from the
-       * provisional_I_20150910 header.
-       */
+   if (view_usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) {
+      if (!(format_feature_flags & (VK_FORMAT_FEATURE_2_COLOR_ATTACHMENT_BIT |
+                                    VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT))) {
+         goto unsupported;
+      }
    }
 
    /* From the bspec section entitled "Surface Layout and Tiling",
@@ -1356,7 +1364,7 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2(
          from_wsi = true;
          break;
       default:
-         anv_debug_ignored_stype(s->sType);
+         vk_debug_ignored_stype(s->sType);
          break;
       }
    }
@@ -1374,7 +1382,7 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2(
          android_usage = (void *) s;
          break;
       default:
-         anv_debug_ignored_stype(s->sType);
+         vk_debug_ignored_stype(s->sType);
          break;
       }
    }
@@ -1410,7 +1418,7 @@ VkResult anv_GetPhysicalDeviceImageFormatProperties2(
 
       switch (base_info->tiling) {
       default:
-         unreachable("bad VkImageTiling");
+         UNREACHABLE("bad VkImageTiling");
       case VK_IMAGE_TILING_LINEAR:
          /* The app can query the image's memory layout with
           * vkGetImageSubresourceLayout.

@@ -22,6 +22,10 @@
 #define VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_RESOURCE_INFO_MESA ((VkStructureType)1000384004)
 #define VK_STRUCTURE_TYPE_DEVICE_QUEUE_TIMELINE_INFO_MESA ((VkStructureType)1000384005)
 #define VK_STRUCTURE_TYPE_RING_MONITOR_INFO_MESA ((VkStructureType)1000384006)
+#define VK_STRUCTURE_TYPE_RING_PRIORITY_INFO_MESA ((VkStructureType)1000384007)
+#define VK_STRUCTURE_TYPE_COPY_IMAGE_TO_MEMORY_INFO_MESA ((VkStructureType)1000384008)
+#define VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_MESA ((VkStructureType)1000384009)
+#define VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_MESA ((VkStructureType)1000384010)
 
 typedef enum VkCommandTypeEXT {
     VK_COMMAND_TYPE_vkCreateInstance_EXT = 0,
@@ -318,6 +322,46 @@ typedef enum VkCommandTypeEXT {
     VK_COMMAND_TYPE_vkGetDeviceImageMemoryRequirementsKHR_EXT = 231,
     VK_COMMAND_TYPE_vkGetDeviceImageSparseMemoryRequirements_EXT = 232,
     VK_COMMAND_TYPE_vkGetDeviceImageSparseMemoryRequirementsKHR_EXT = 232,
+    VK_COMMAND_TYPE_vkCmdSetLineStipple_EXT = 237,
+    VK_COMMAND_TYPE_vkCmdSetLineStippleKHR_EXT = 237,
+    VK_COMMAND_TYPE_vkCmdSetLineStippleEXT_EXT = 237,
+    VK_COMMAND_TYPE_vkMapMemory2_EXT = 285,
+    VK_COMMAND_TYPE_vkMapMemory2KHR_EXT = 285,
+    VK_COMMAND_TYPE_vkUnmapMemory2_EXT = 286,
+    VK_COMMAND_TYPE_vkUnmapMemory2KHR_EXT = 286,
+    VK_COMMAND_TYPE_vkCmdBindIndexBuffer2_EXT = 279,
+    VK_COMMAND_TYPE_vkCmdBindIndexBuffer2KHR_EXT = 279,
+    VK_COMMAND_TYPE_vkGetRenderingAreaGranularity_EXT = 280,
+    VK_COMMAND_TYPE_vkGetRenderingAreaGranularityKHR_EXT = 280,
+    VK_COMMAND_TYPE_vkGetDeviceImageSubresourceLayout_EXT = 281,
+    VK_COMMAND_TYPE_vkGetDeviceImageSubresourceLayoutKHR_EXT = 281,
+    VK_COMMAND_TYPE_vkGetImageSubresourceLayout2_EXT = 282,
+    VK_COMMAND_TYPE_vkGetImageSubresourceLayout2KHR_EXT = 282,
+    VK_COMMAND_TYPE_vkGetImageSubresourceLayout2EXT_EXT = 282,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSet_EXT = 249,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSetKHR_EXT = 249,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSetWithTemplate_EXT = 250,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSetWithTemplateKHR_EXT = 250,
+    VK_COMMAND_TYPE_vkCmdSetRenderingAttachmentLocations_EXT = 287,
+    VK_COMMAND_TYPE_vkCmdSetRenderingAttachmentLocationsKHR_EXT = 287,
+    VK_COMMAND_TYPE_vkCmdSetRenderingInputAttachmentIndices_EXT = 288,
+    VK_COMMAND_TYPE_vkCmdSetRenderingInputAttachmentIndicesKHR_EXT = 288,
+    VK_COMMAND_TYPE_vkCmdBindDescriptorSets2_EXT = 289,
+    VK_COMMAND_TYPE_vkCmdBindDescriptorSets2KHR_EXT = 289,
+    VK_COMMAND_TYPE_vkCmdPushConstants2_EXT = 290,
+    VK_COMMAND_TYPE_vkCmdPushConstants2KHR_EXT = 290,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSet2_EXT = 291,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSet2KHR_EXT = 291,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSetWithTemplate2_EXT = 292,
+    VK_COMMAND_TYPE_vkCmdPushDescriptorSetWithTemplate2KHR_EXT = 292,
+    VK_COMMAND_TYPE_vkCopyMemoryToImage_EXT = 293,
+    VK_COMMAND_TYPE_vkCopyMemoryToImageEXT_EXT = 293,
+    VK_COMMAND_TYPE_vkCopyImageToMemory_EXT = 294,
+    VK_COMMAND_TYPE_vkCopyImageToMemoryEXT_EXT = 294,
+    VK_COMMAND_TYPE_vkCopyImageToImage_EXT = 295,
+    VK_COMMAND_TYPE_vkCopyImageToImageEXT_EXT = 295,
+    VK_COMMAND_TYPE_vkTransitionImageLayout_EXT = 296,
+    VK_COMMAND_TYPE_vkTransitionImageLayoutEXT_EXT = 296,
     VK_COMMAND_TYPE_vkCmdBindTransformFeedbackBuffersEXT_EXT = 181,
     VK_COMMAND_TYPE_vkCmdBeginTransformFeedbackEXT_EXT = 182,
     VK_COMMAND_TYPE_vkCmdEndTransformFeedbackEXT_EXT = 183,
@@ -328,22 +372,79 @@ typedef enum VkCommandTypeEXT {
     VK_COMMAND_TYPE_vkGetMemoryFdPropertiesKHR_EXT = 194,
     VK_COMMAND_TYPE_vkImportSemaphoreFdKHR_EXT = 242,
     VK_COMMAND_TYPE_vkGetSemaphoreFdKHR_EXT = 243,
-    VK_COMMAND_TYPE_vkCmdPushDescriptorSetKHR_EXT = 249,
-    VK_COMMAND_TYPE_vkCmdPushDescriptorSetWithTemplateKHR_EXT = 250,
     VK_COMMAND_TYPE_vkCmdBeginConditionalRenderingEXT_EXT = 240,
     VK_COMMAND_TYPE_vkCmdEndConditionalRenderingEXT_EXT = 241,
     VK_COMMAND_TYPE_vkImportFenceFdKHR_EXT = 238,
     VK_COMMAND_TYPE_vkGetFenceFdKHR_EXT = 239,
+    VK_COMMAND_TYPE_vkCmdSetSampleLocationsEXT_EXT = 283,
+    VK_COMMAND_TYPE_vkGetPhysicalDeviceMultisamplePropertiesEXT_EXT = 284,
+    VK_COMMAND_TYPE_vkCreateAccelerationStructureKHR_EXT = 304,
+    VK_COMMAND_TYPE_vkDestroyAccelerationStructureKHR_EXT = 305,
+    VK_COMMAND_TYPE_vkCmdBuildAccelerationStructuresKHR_EXT = 306,
+    VK_COMMAND_TYPE_vkCmdBuildAccelerationStructuresIndirectKHR_EXT = 307,
+    VK_COMMAND_TYPE_vkBuildAccelerationStructuresKHR_EXT = 308,
+    VK_COMMAND_TYPE_vkCopyAccelerationStructureKHR_EXT = 309,
+    VK_COMMAND_TYPE_vkCopyAccelerationStructureToMemoryKHR_EXT = 310,
+    VK_COMMAND_TYPE_vkCopyMemoryToAccelerationStructureKHR_EXT = 311,
+    VK_COMMAND_TYPE_vkWriteAccelerationStructuresPropertiesKHR_EXT = 312,
+    VK_COMMAND_TYPE_vkCmdCopyAccelerationStructureKHR_EXT = 313,
+    VK_COMMAND_TYPE_vkCmdCopyAccelerationStructureToMemoryKHR_EXT = 314,
+    VK_COMMAND_TYPE_vkCmdCopyMemoryToAccelerationStructureKHR_EXT = 315,
+    VK_COMMAND_TYPE_vkGetAccelerationStructureDeviceAddressKHR_EXT = 316,
+    VK_COMMAND_TYPE_vkCmdWriteAccelerationStructuresPropertiesKHR_EXT = 317,
+    VK_COMMAND_TYPE_vkGetDeviceAccelerationStructureCompatibilityKHR_EXT = 318,
+    VK_COMMAND_TYPE_vkGetAccelerationStructureBuildSizesKHR_EXT = 319,
+    VK_COMMAND_TYPE_vkCmdTraceRaysKHR_EXT = 320,
+    VK_COMMAND_TYPE_vkCreateRayTracingPipelinesKHR_EXT = 321,
+    VK_COMMAND_TYPE_vkGetRayTracingShaderGroupHandlesKHR_EXT = 322,
+    VK_COMMAND_TYPE_vkGetRayTracingShaderGroupHandlesNV_EXT = 322,
+    VK_COMMAND_TYPE_vkGetRayTracingCaptureReplayShaderGroupHandlesKHR_EXT = 323,
+    VK_COMMAND_TYPE_vkCmdTraceRaysIndirectKHR_EXT = 324,
+    VK_COMMAND_TYPE_vkGetRayTracingShaderGroupStackSizeKHR_EXT = 325,
+    VK_COMMAND_TYPE_vkCmdSetRayTracingPipelineStackSizeKHR_EXT = 326,
     VK_COMMAND_TYPE_vkGetImageDrmFormatModifierPropertiesEXT_EXT = 187,
+    VK_COMMAND_TYPE_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR_EXT = 235,
     VK_COMMAND_TYPE_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT_EXT = 235,
+    VK_COMMAND_TYPE_vkGetCalibratedTimestampsKHR_EXT = 236,
     VK_COMMAND_TYPE_vkGetCalibratedTimestampsEXT_EXT = 236,
-    VK_COMMAND_TYPE_vkCmdSetLineStippleEXT_EXT = 237,
+    VK_COMMAND_TYPE_vkGetPhysicalDeviceFragmentShadingRatesKHR_EXT = 277,
+    VK_COMMAND_TYPE_vkCmdSetFragmentShadingRateKHR_EXT = 278,
+    VK_COMMAND_TYPE_vkCreateDeferredOperationKHR_EXT = 299,
+    VK_COMMAND_TYPE_vkDestroyDeferredOperationKHR_EXT = 300,
+    VK_COMMAND_TYPE_vkGetDeferredOperationMaxConcurrencyKHR_EXT = 301,
+    VK_COMMAND_TYPE_vkGetDeferredOperationResultKHR_EXT = 302,
+    VK_COMMAND_TYPE_vkDeferredOperationJoinKHR_EXT = 303,
+    VK_COMMAND_TYPE_vkCmdSetDepthBias2EXT_EXT = 328,
     VK_COMMAND_TYPE_vkCmdSetVertexInputEXT_EXT = 255,
     VK_COMMAND_TYPE_vkCmdSetPatchControlPointsEXT_EXT = 233,
     VK_COMMAND_TYPE_vkCmdSetLogicOpEXT_EXT = 234,
     VK_COMMAND_TYPE_vkCmdSetColorWriteEnableEXT_EXT = 254,
+    VK_COMMAND_TYPE_vkCmdTraceRaysIndirect2KHR_EXT = 327,
     VK_COMMAND_TYPE_vkCmdDrawMultiEXT_EXT = 247,
     VK_COMMAND_TYPE_vkCmdDrawMultiIndexedEXT_EXT = 248,
+    VK_COMMAND_TYPE_vkCmdSetDepthClampEnableEXT_EXT = 257,
+    VK_COMMAND_TYPE_vkCmdSetPolygonModeEXT_EXT = 258,
+    VK_COMMAND_TYPE_vkCmdSetRasterizationSamplesEXT_EXT = 259,
+    VK_COMMAND_TYPE_vkCmdSetSampleMaskEXT_EXT = 260,
+    VK_COMMAND_TYPE_vkCmdSetAlphaToCoverageEnableEXT_EXT = 261,
+    VK_COMMAND_TYPE_vkCmdSetAlphaToOneEnableEXT_EXT = 262,
+    VK_COMMAND_TYPE_vkCmdSetLogicOpEnableEXT_EXT = 263,
+    VK_COMMAND_TYPE_vkCmdSetColorBlendEnableEXT_EXT = 264,
+    VK_COMMAND_TYPE_vkCmdSetColorBlendEquationEXT_EXT = 265,
+    VK_COMMAND_TYPE_vkCmdSetColorWriteMaskEXT_EXT = 266,
+    VK_COMMAND_TYPE_vkCmdSetTessellationDomainOriginEXT_EXT = 256,
+    VK_COMMAND_TYPE_vkCmdSetRasterizationStreamEXT_EXT = 267,
+    VK_COMMAND_TYPE_vkCmdSetConservativeRasterizationModeEXT_EXT = 268,
+    VK_COMMAND_TYPE_vkCmdSetExtraPrimitiveOverestimationSizeEXT_EXT = 269,
+    VK_COMMAND_TYPE_vkCmdSetDepthClipEnableEXT_EXT = 270,
+    VK_COMMAND_TYPE_vkCmdSetSampleLocationsEnableEXT_EXT = 271,
+    VK_COMMAND_TYPE_vkCmdSetColorBlendAdvancedEXT_EXT = 272,
+    VK_COMMAND_TYPE_vkCmdSetProvokingVertexModeEXT_EXT = 273,
+    VK_COMMAND_TYPE_vkCmdSetLineRasterizationModeEXT_EXT = 274,
+    VK_COMMAND_TYPE_vkCmdSetLineStippleEnableEXT_EXT = 275,
+    VK_COMMAND_TYPE_vkCmdSetDepthClipNegativeOneToOneEXT_EXT = 276,
+    VK_COMMAND_TYPE_vkCmdSetAttachmentFeedbackLoopEnableEXT_EXT = 329,
+    VK_COMMAND_TYPE_vkCmdSetDepthClampRangeEXT_EXT = 330,
     VK_COMMAND_TYPE_vkSetReplyCommandStreamMESA_EXT = 178,
     VK_COMMAND_TYPE_vkSeekReplyCommandStreamMESA_EXT = 179,
     VK_COMMAND_TYPE_vkExecuteCommandStreamsMESA_EXT = 180,
@@ -358,6 +459,8 @@ typedef enum VkCommandTypeEXT {
     VK_COMMAND_TYPE_vkSubmitVirtqueueSeqnoMESA_EXT = 251,
     VK_COMMAND_TYPE_vkWaitVirtqueueSeqnoMESA_EXT = 252,
     VK_COMMAND_TYPE_vkWaitRingSeqnoMESA_EXT = 253,
+    VK_COMMAND_TYPE_vkCopyImageToMemoryMESA_EXT = 297,
+    VK_COMMAND_TYPE_vkCopyMemoryToImageMESA_EXT = 298,
 } VkCommandTypeEXT;
 
 typedef enum VkCommandFlagBitsEXT {
@@ -445,5 +548,46 @@ typedef struct VkDeviceQueueTimelineInfoMESA {
     const void* pNext;
     uint32_t ringIdx;
 } VkDeviceQueueTimelineInfoMESA;
+
+typedef struct VkRingPriorityInfoMESA {
+    VkStructureType sType;
+    const void* pNext;
+    int32_t priority;
+} VkRingPriorityInfoMESA;
+
+typedef struct VkCopyImageToMemoryInfoMESA {
+    VkStructureType sType;
+    const void* pNext;
+    VkHostImageCopyFlags flags;
+    VkImage srcImage;
+    VkImageLayout srcImageLayout;
+    uint32_t memoryRowLength;
+    uint32_t memoryImageHeight;
+    VkImageSubresourceLayers imageSubresource;
+    VkOffset3D imageOffset;
+    VkExtent3D imageExtent;
+} VkCopyImageToMemoryInfoMESA;
+
+typedef struct VkMemoryToImageCopyMESA {
+    VkStructureType sType;
+    const void* pNext;
+    size_t dataSize;
+    const void* pData;
+    uint32_t memoryRowLength;
+    uint32_t memoryImageHeight;
+    VkImageSubresourceLayers imageSubresource;
+    VkOffset3D imageOffset;
+    VkExtent3D imageExtent;
+} VkMemoryToImageCopyMESA;
+
+typedef struct VkCopyMemoryToImageInfoMESA {
+    VkStructureType sType;
+    const void* pNext;
+    VkHostImageCopyFlags flags;
+    VkImage dstImage;
+    VkImageLayout dstImageLayout;
+    uint32_t regionCount;
+    const VkMemoryToImageCopyMESA* pRegions;
+} VkCopyMemoryToImageInfoMESA;
 
 #endif /* VN_PROTOCOL_DRIVER_DEFINES_H */

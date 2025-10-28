@@ -93,8 +93,9 @@ set_feedback_vertex_format(struct gl_context *ctx)
  */
 void
 st_feedback_draw_vbo(struct gl_context *ctx,
-                     struct pipe_draw_info *info,
+                     const struct pipe_draw_info *info,
                      unsigned drawid_offset,
+                     const struct pipe_draw_indirect_info *indirect,
                      const struct pipe_draw_start_count_bias *draws,
                      unsigned num_draws)
 {
@@ -114,24 +115,14 @@ st_feedback_draw_vbo(struct gl_context *ctx,
    if (!draw)
       return;
 
-   st_flush_bitmap_cache(st);
-   st_invalidate_readpix_cache(st);
-
-   st_validate_state(st, ST_PIPELINE_RENDER_STATE_MASK);
-
-   if (info->index_size && info->has_user_indices && !info->index_bounds_valid) {
-      vbo_get_minmax_indices_gallium(ctx, info, draws, num_draws);
-      info->index_bounds_valid = true;
-   }
-
    /* must get these after state validation! */
-   struct st_common_variant_key key;
-   /* We have to use memcpy to make sure that all bits are copied. */
-   memcpy(&key, &st->vp_variant->key, sizeof(key));
-   key.is_draw_shader = true;
-
+   struct st_common_variant_key key = {
+      .st = st,
+      .passthrough_edgeflags = st->ctx->Array._PerVertexEdgeFlagsEnabled,
+      .is_draw_shader = true
+   };
    vp = (struct gl_vertex_program *)ctx->VertexProgram._Current;
-   vp_variant = st_get_common_variant(st, &vp->Base, &key);
+   vp_variant = st_get_common_variant(st, &vp->Base, &key, false, NULL);
 
    /*
     * Set up the draw module's state.
@@ -166,8 +157,8 @@ st_feedback_draw_vbo(struct gl_context *ctx,
       }
    }
 
-   draw_set_vertex_buffers(draw, num_vbuffers, 0, vbuffers);
    draw_set_vertex_elements(draw, vp->num_inputs, velements.velems);
+   draw_set_vertex_buffers(draw, num_vbuffers, vbuffers);
 
    if (info->index_size) {
       if (info->has_user_indices) {
@@ -190,11 +181,11 @@ st_feedback_draw_vbo(struct gl_context *ctx,
     * in gl_program_parameter_list because allow_constbuf0_as_real_buffer
     * is set.
     */
-   if (st->prefer_real_buffer_in_constbuf0 && params->StateFlags)
+   if ((st->prefer_real_buffer_in_constbuf0 || st->allow_st_finalize_nir_twice) && params->StateFlags)
       _mesa_load_state_parameters(st->ctx, params);
 
    draw_set_constant_buffer_stride(draw, sizeof(float));
-   draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 0,
+   draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 0,
                                    params->ParameterValues,
                                    params->NumParameterValues * 4);
 
@@ -207,10 +198,11 @@ st_feedback_draw_vbo(struct gl_context *ctx,
       struct gl_buffer_binding *binding =
          &st->ctx->UniformBufferBindings[prog->sh.UniformBlocks[i]->Binding];
       struct gl_buffer_object *st_obj = binding->BufferObject;
-      struct pipe_resource *buf = st_obj->buffer;
 
-      if (!buf)
+      if (!st_obj || !st_obj->buffer)
          continue;
+
+      struct pipe_resource *buf = st_obj->buffer;
 
       unsigned offset = binding->Offset;
       unsigned size = buf->width0 - offset;
@@ -224,7 +216,7 @@ st_feedback_draw_vbo(struct gl_context *ctx,
       void *ptr = pipe_buffer_map_range(pipe, buf, offset, size,
                                         PIPE_MAP_READ, &ubo_transfer[i]);
 
-      draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 1 + i, ptr,
+      draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 1 + i, ptr,
                                       size);
    }
 
@@ -254,7 +246,7 @@ st_feedback_draw_vbo(struct gl_context *ctx,
       void *ptr = pipe_buffer_map_range(pipe, buf, offset, size,
                                         PIPE_MAP_READ, &ssbo_transfer[i]);
 
-      draw_set_mapped_shader_buffer(draw, PIPE_SHADER_VERTEX,
+      draw_set_mapped_shader_buffer(draw, MESA_SHADER_VERTEX,
                                     i, ptr, size);
    }
 
@@ -263,15 +255,16 @@ st_feedback_draw_vbo(struct gl_context *ctx,
    for (unsigned i = 0; i < st->state.num_vert_samplers; i++)
       samplers[i] = &st->state.vert_samplers[i];
 
-   draw_set_samplers(draw, PIPE_SHADER_VERTEX, samplers,
+   draw_set_samplers(draw, MESA_SHADER_VERTEX, samplers,
                      st->state.num_vert_samplers);
 
    /* sampler views */
    struct pipe_sampler_view *views[PIPE_MAX_SAMPLERS];
+   unsigned extra_sampler_views = 0;
    unsigned num_views =
-      st_get_sampler_views(st, PIPE_SHADER_VERTEX, prog, views);
+      st_get_sampler_views(st, MESA_SHADER_VERTEX, prog, views, &extra_sampler_views);
 
-   draw_set_sampler_views(draw, PIPE_SHADER_VERTEX, views, num_views);
+   draw_set_sampler_views(draw, MESA_SHADER_VERTEX, views, num_views);
 
    struct pipe_transfer *sv_transfer[PIPE_MAX_SAMPLERS][PIPE_MAX_TEXTURE_LEVELS];
 
@@ -341,7 +334,7 @@ st_feedback_draw_vbo(struct gl_context *ctx,
                                            &sv_transfer[i][0]);
       }
 
-      draw_set_mapped_texture(draw, PIPE_SHADER_VERTEX, i, width0,
+      draw_set_mapped_texture(draw, MESA_SHADER_VERTEX, i, width0,
                               res->height0, num_layers, first_level,
                               last_level, 0, 0, (void*)base_addr, row_stride,
                               img_stride, mip_offset);
@@ -389,22 +382,21 @@ st_feedback_draw_vbo(struct gl_context *ctx,
                                       &img_transfer[i]);
       }
 
-      draw_set_mapped_image(draw, PIPE_SHADER_VERTEX, i, width, height,
+      draw_set_mapped_image(draw, MESA_SHADER_VERTEX, i, width, height,
                             num_layers, addr, row_stride, img_stride, 0, 0);
    }
-   draw_set_images(draw, PIPE_SHADER_VERTEX, images, prog->info.num_images);
+   draw_set_images(draw, MESA_SHADER_VERTEX, images, prog->info.num_images);
 
    /* draw here */
    for (i = 0; i < num_draws; i++) {
-      /* TODO: indirect draws */
-      draw_vbo(draw, info, info->increment_draw_id ? i : 0, NULL,
+      draw_vbo(draw, info, info->increment_draw_id ? i : 0, indirect,
                &draws[i], 1, ctx->TessCtrlProgram.patch_vertices);
    }
 
    /* unmap images */
    for (unsigned i = 0; i < prog->info.num_images; i++) {
       if (img_transfer[i]) {
-         draw_set_mapped_image(draw, PIPE_SHADER_VERTEX, i, 0, 0, 0, NULL, 0, 0, 0, 0);
+         draw_set_mapped_image(draw, MESA_SHADER_VERTEX, i, 0, 0, 0, NULL, 0, 0, 0, 0);
          if (img_transfer[i]->resource->target == PIPE_BUFFER)
             pipe_buffer_unmap(pipe, img_transfer[i]);
          else
@@ -425,17 +417,20 @@ st_feedback_draw_vbo(struct gl_context *ctx,
          } else {
             pipe_buffer_unmap(pipe, sv_transfer[i][0]);
          }
-
-         pipe_sampler_view_reference(&views[i], NULL);
       }
    }
 
-   draw_set_samplers(draw, PIPE_SHADER_VERTEX, NULL, 0);
-   draw_set_sampler_views(draw, PIPE_SHADER_VERTEX, NULL, 0);
+   draw_set_samplers(draw, MESA_SHADER_VERTEX, NULL, 0);
+   draw_set_sampler_views(draw, MESA_SHADER_VERTEX, NULL, 0);
+
+   /* release YUV views back to driver */
+   u_foreach_bit (i, extra_sampler_views) {
+      pipe->sampler_view_release(pipe, views[i]);
+   }
 
    for (unsigned i = 0; i < prog->info.num_ssbos; i++) {
       if (ssbo_transfer[i]) {
-         draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 1 + i,
+         draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 1 + i,
                                          NULL, 0);
          pipe_buffer_unmap(pipe, ssbo_transfer[i]);
       }
@@ -443,7 +438,7 @@ st_feedback_draw_vbo(struct gl_context *ctx,
 
    for (unsigned i = 0; i < prog->info.num_ubos; i++) {
       if (ubo_transfer[i]) {
-         draw_set_mapped_constant_buffer(draw, PIPE_SHADER_VERTEX, 1 + i,
+         draw_set_mapped_constant_buffer(draw, MESA_SHADER_VERTEX, 1 + i,
                                          NULL, 0);
          pipe_buffer_unmap(pipe, ubo_transfer[i]);
       }
@@ -462,10 +457,8 @@ st_feedback_draw_vbo(struct gl_context *ctx,
       if (vb_transfer[buf])
          pipe_buffer_unmap(pipe, vb_transfer[buf]);
       draw_set_mapped_vertex_buffer(draw, buf, NULL, 0);
-      if (!vbuffers[buf].is_user_buffer)
-         pipe_resource_reference(&vbuffers[buf].buffer.resource, NULL);
    }
-   draw_set_vertex_buffers(draw, 0, num_vbuffers, NULL);
+   draw_set_vertex_buffers(draw, 0, NULL);
 
    draw_bind_vertex_shader(draw, NULL);
 }
@@ -479,6 +472,6 @@ st_feedback_draw_vbo_multi_mode(struct gl_context *ctx,
 {
    for (unsigned i = 0; i < num_draws; i++) {
       info->mode = mode[i];
-      st_feedback_draw_vbo(ctx, info, 0, &draws[i], 1);
+      st_feedback_draw_vbo(ctx, info, 0, NULL, &draws[i], 1);
    }
 }

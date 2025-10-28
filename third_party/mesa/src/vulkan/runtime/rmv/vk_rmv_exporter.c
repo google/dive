@@ -30,7 +30,7 @@
 
 #include "util/format/u_format.h"
 #include "util/u_process.h"
-#include "vulkan/util/vk_format.h"
+#include "vk_format.h"
 
 static int
 vk_rmv_token_compare(const void *first, const void *second)
@@ -887,7 +887,7 @@ token_type_to_rmt(enum vk_rmv_token_type type)
    case VK_RMV_TOKEN_TYPE_RESOURCE_DESTROY:
       return RMT_TOKEN_TYPE_RESOURCE_DESTROY;
    default:
-      unreachable("invalid token type");
+      UNREACHABLE("invalid token type");
    }
 }
 
@@ -1003,7 +1003,7 @@ rmt_file_domain_to_heap_type(enum vk_rmv_kernel_memory_domain domain, bool has_c
    case VK_RMV_KERNEL_MEMORY_DOMAIN_VRAM:
       return has_cpu_access ? RMT_HEAP_TYPE_LOCAL : RMT_HEAP_TYPE_INVISIBLE;
    default:
-      unreachable("invalid domain");
+      UNREACHABLE("invalid domain");
    }
 }
 
@@ -1078,7 +1078,7 @@ rmt_size_to_page_size(uint32_t size)
    case 2097152:
       return RMT_PAGE_SIZE_2_MB;
    default:
-      unreachable("invalid page size");
+      UNREACHABLE("invalid page size");
    }
 }
 
@@ -1086,8 +1086,8 @@ static void
 rmt_dump_heap_resource(struct vk_rmv_heap_description *description, FILE *output)
 {
    uint64_t data[2] = {0};
-   rmt_file_write_bits(data, description->alloc_flags, 0, 3);
-   rmt_file_write_bits(data, description->size, 4, 68);
+   rmt_file_write_bits(data, description->alloc_flags, 0, 4);
+   rmt_file_write_bits(data, description->size, 5, 68);
    rmt_file_write_bits(data, rmt_size_to_page_size(description->alignment), 69, 73);
    rmt_file_write_bits(data, description->heap_index, 74, 77);
    fwrite(data, 10, 1, output);
@@ -1190,7 +1190,7 @@ rmt_dump_image_resource(struct vk_rmv_image_description *description, FILE *outp
       tiling = RMT_TILING_OPTIMAL;
       break;
    default:
-      unreachable("invalid image tiling");
+      UNREACHABLE("invalid image tiling");
    }
 
    uint32_t create_flags = 0;
@@ -1273,7 +1273,7 @@ rmt_dump_query_pool_resource(struct vk_rmv_query_pool_description *description, 
       pool_type = RMT_QUERY_POOL_TYPE_STREAMOUT;
       break;
    default:
-      unreachable("invalid query pool type");
+      UNREACHABLE("invalid query pool type");
       break;
    }
 
@@ -1395,6 +1395,14 @@ rmt_dump_command_buffer_resource(struct vk_rmv_command_buffer_description *descr
 }
 
 static void
+rmt_dump_misc_internal_resource(struct vk_rmv_misc_internal_description *description,
+                                FILE *output)
+{
+   /* 8 bits of zero-value enum are the only thing in the payload */
+   fwrite(&description->type, 1, 1, output);
+}
+
+static void
 rmt_dump_resource_create(struct vk_rmv_resource_create_token *token, FILE *output)
 {
    uint64_t data = 0;
@@ -1434,8 +1442,11 @@ rmt_dump_resource_create(struct vk_rmv_resource_create_token *token, FILE *outpu
    case VK_RMV_RESOURCE_TYPE_COMMAND_ALLOCATOR:
       rmt_dump_command_buffer_resource(&token->command_buffer, output);
       break;
+   case VK_RMV_RESOURCE_TYPE_MISC_INTERNAL:
+      rmt_dump_misc_internal_resource(&token->misc_internal, output);
+      break;
    default:
-      unreachable("invalid resource type");
+      UNREACHABLE("invalid resource type");
    }
 }
 
@@ -1675,7 +1686,7 @@ rmt_dump_data(struct vk_memory_trace_data *data, FILE *output)
          rmt_dump_cpu_map(&token->data.cpu_map, output);
          break;
       default:
-         unreachable("invalid token type");
+         UNREACHABLE("invalid token type");
       }
 
       current_timestamp = token->timestamp;

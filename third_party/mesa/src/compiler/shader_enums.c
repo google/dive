@@ -28,12 +28,13 @@
 
 #include "shader_enums.h"
 #include "util/macros.h"
+#include "util/u_debug.h"
 
 #define ENUM(x) [x] = #x
 #define NAME(val) ((((val) < ARRAY_SIZE(names)) && names[(val)]) ? names[(val)] : "UNKNOWN")
 
 const char *
-gl_shader_stage_name(gl_shader_stage stage)
+mesa_shader_stage_name(mesa_shader_stage stage)
 {
    static const char *names[] = {
       ENUM(MESA_SHADER_VERTEX),
@@ -57,7 +58,7 @@ gl_shader_stage_name(gl_shader_stage stage)
 }
 
 /**
- * Translate a gl_shader_stage to a short shader stage name for debug
+ * Translate a mesa_shader_stage to a short shader stage name for debug
  * printouts and error messages.
  */
 const char *
@@ -81,11 +82,11 @@ _mesa_shader_stage_to_string(unsigned stage)
    case MESA_SHADER_CALLABLE:     return "callable";
    }
 
-   unreachable("Unknown shader stage.");
+   UNREACHABLE("Unknown shader stage.");
 }
 
 /**
- * Translate a gl_shader_stage to a shader stage abbreviation (VS, GS, FS)
+ * Translate a mesa_shader_stage to a shader stage abbreviation (VS, GS, FS)
  * for debug printouts and error messages.
  */
 const char *
@@ -109,7 +110,34 @@ _mesa_shader_stage_to_abbrev(unsigned stage)
    case MESA_SHADER_CALLABLE:     return "RCALL";
    }
 
-   unreachable("Unknown shader stage.");
+   UNREACHABLE("Unknown shader stage.");
+}
+
+/**
+ * Translate a gl_shader_stage to a shader stage file extension
+ * that's easily consumed by glslang.
+ */
+const char *
+_mesa_shader_stage_to_file_ext(unsigned stage)
+{
+   switch (stage) {
+   case MESA_SHADER_VERTEX:       return "vert";
+   case MESA_SHADER_FRAGMENT:     return "frag";
+   case MESA_SHADER_GEOMETRY:     return "geom";
+   case MESA_SHADER_COMPUTE:      return "comp";
+   case MESA_SHADER_TESS_CTRL:    return "tesc";
+   case MESA_SHADER_TESS_EVAL:    return "tese";
+   case MESA_SHADER_TASK:         return "task";
+   case MESA_SHADER_MESH:         return "mesh";
+   case MESA_SHADER_RAYGEN:       return "rgen";
+   case MESA_SHADER_ANY_HIT:      return "rahit";
+   case MESA_SHADER_CLOSEST_HIT:  return "rchit";
+   case MESA_SHADER_MISS:         return "rmiss";
+   case MESA_SHADER_INTERSECTION: return "rint";
+   case MESA_SHADER_CALLABLE:     return "rcall";
+   }
+
+   UNREACHABLE("Unknown shader stage.");
 }
 
 const char *
@@ -154,7 +182,7 @@ gl_vert_attrib_name(gl_vert_attrib attrib)
 }
 
 const char *
-gl_varying_slot_name_for_stage(gl_varying_slot slot, gl_shader_stage stage)
+gl_varying_slot_name_for_stage(gl_varying_slot slot, mesa_shader_stage stage)
 {
    if (stage != MESA_SHADER_FRAGMENT && slot == VARYING_SLOT_PRIMITIVE_SHADING_RATE)
       return "VARYING_SLOT_PRIMITIVE_SHADING_RATE";
@@ -326,12 +354,17 @@ gl_system_value_name(gl_system_value sysval)
      ENUM(SYSTEM_VALUE_DRAW_ID),
      ENUM(SYSTEM_VALUE_INVOCATION_ID),
      ENUM(SYSTEM_VALUE_FRAG_COORD),
+     ENUM(SYSTEM_VALUE_PIXEL_COORD),
+     ENUM(SYSTEM_VALUE_FRAG_COORD_Z),
+     ENUM(SYSTEM_VALUE_FRAG_COORD_W),
      ENUM(SYSTEM_VALUE_POINT_COORD),
      ENUM(SYSTEM_VALUE_LINE_COORD),
      ENUM(SYSTEM_VALUE_FRONT_FACE),
+     ENUM(SYSTEM_VALUE_FRONT_FACE_FSIGN),
      ENUM(SYSTEM_VALUE_SAMPLE_ID),
      ENUM(SYSTEM_VALUE_SAMPLE_POS),
      ENUM(SYSTEM_VALUE_SAMPLE_MASK_IN),
+     ENUM(SYSTEM_VALUE_LAYER_ID),
      ENUM(SYSTEM_VALUE_HELPER_INVOCATION),
      ENUM(SYSTEM_VALUE_COLOR0),
      ENUM(SYSTEM_VALUE_COLOR1),
@@ -348,6 +381,7 @@ gl_system_value_name(gl_system_value sysval)
      ENUM(SYSTEM_VALUE_BASE_GLOBAL_INVOCATION_ID),
      ENUM(SYSTEM_VALUE_GLOBAL_INVOCATION_INDEX),
      ENUM(SYSTEM_VALUE_WORKGROUP_ID),
+     ENUM(SYSTEM_VALUE_BASE_WORKGROUP_ID),
      ENUM(SYSTEM_VALUE_NUM_WORKGROUPS),
      ENUM(SYSTEM_VALUE_WORKGROUP_SIZE),
      ENUM(SYSTEM_VALUE_GLOBAL_GROUP_SIZE),
@@ -366,7 +400,6 @@ gl_system_value_name(gl_system_value sysval)
      ENUM(SYSTEM_VALUE_BARYCENTRIC_PULL_MODEL),
      ENUM(SYSTEM_VALUE_RAY_LAUNCH_ID),
      ENUM(SYSTEM_VALUE_RAY_LAUNCH_SIZE),
-     ENUM(SYSTEM_VALUE_RAY_LAUNCH_SIZE_ADDR_AMD),
      ENUM(SYSTEM_VALUE_RAY_WORLD_ORIGIN),
      ENUM(SYSTEM_VALUE_RAY_WORLD_DIRECTION),
      ENUM(SYSTEM_VALUE_RAY_OBJECT_ORIGIN),
@@ -391,6 +424,15 @@ gl_system_value_name(gl_system_value sysval)
      ENUM(SYSTEM_VALUE_FRAG_INVOCATION_COUNT),
      ENUM(SYSTEM_VALUE_SHADER_INDEX),
      ENUM(SYSTEM_VALUE_COALESCED_INPUT_COUNT),
+     ENUM(SYSTEM_VALUE_WARPS_PER_SM_NV),
+     ENUM(SYSTEM_VALUE_SM_COUNT_NV),
+     ENUM(SYSTEM_VALUE_WARP_ID_NV),
+     ENUM(SYSTEM_VALUE_SM_ID_NV),
+     ENUM(SYSTEM_VALUE_CORE_ID),
+     ENUM(SYSTEM_VALUE_CORE_COUNT_ARM),
+     ENUM(SYSTEM_VALUE_CORE_MAX_ID_ARM),
+     ENUM(SYSTEM_VALUE_WARP_ID_ARM),
+     ENUM(SYSTEM_VALUE_WARP_MAX_ID_ARM),
    };
    STATIC_ASSERT(ARRAY_SIZE(names) == SYSTEM_VALUE_MAX);
    return NAME(sysval);
@@ -405,7 +447,6 @@ glsl_interp_mode_name(enum glsl_interp_mode qual)
       ENUM(INTERP_MODE_FLAT),
       ENUM(INTERP_MODE_NOPERSPECTIVE),
       ENUM(INTERP_MODE_EXPLICIT),
-      ENUM(INTERP_MODE_COLOR),
    };
    STATIC_ASSERT(ARRAY_SIZE(names) == INTERP_MODE_COUNT);
    return NAME(qual);
@@ -430,21 +471,6 @@ gl_frag_result_name(gl_frag_result result)
    };
    STATIC_ASSERT(ARRAY_SIZE(names) == FRAG_RESULT_MAX);
    return NAME(result);
-}
-
-unsigned
-num_mesh_vertices_per_primitive(unsigned prim)
-{
-   switch (prim) {
-      case MESA_PRIM_POINTS:
-         return 1;
-      case MESA_PRIM_LINES:
-         return 2;
-      case MESA_PRIM_TRIANGLES:
-         return 3;
-      default:
-         unreachable("invalid mesh shader primitive type");
-   }
 }
 
 const char *

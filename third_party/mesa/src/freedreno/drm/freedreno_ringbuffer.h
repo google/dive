@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2012-2018 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2012-2018 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -109,7 +91,10 @@ struct fd_ringbuffer_funcs {
     * to track that the bo is used (and not track all the extra info that
     * the kernel would need to do a legacy reloc.
     */
-   void (*emit_bo)(struct fd_ringbuffer *ring, struct fd_bo *bo);
+   void (*attach_bo)(struct fd_ringbuffer *ring, struct fd_bo *bo);
+   uint32_t (*attach_ring)(struct fd_ringbuffer *ring, struct fd_ringbuffer *target,
+                           uint32_t cmd_idx, uint64_t *iova);
+   void (*assert_attached)(struct fd_ringbuffer *ring, struct fd_bo *bo);
 
    void (*emit_reloc)(struct fd_ringbuffer *ring, const struct fd_reloc *reloc);
    uint32_t (*emit_reloc_ring)(struct fd_ringbuffer *ring,
@@ -224,7 +209,23 @@ struct fd_reloc {
 static inline void
 fd_ringbuffer_attach_bo(struct fd_ringbuffer *ring, struct fd_bo *bo)
 {
-   ring->funcs->emit_bo(ring, bo);
+   ring->funcs->attach_bo(ring, bo);
+}
+
+static inline
+uint32_t fd_ringbuffer_attach_ring(struct fd_ringbuffer *ring,
+                                   struct fd_ringbuffer *target,
+                                   uint32_t cmd_idx, uint64_t *iova)
+{
+   return ring->funcs->attach_ring(ring, target, cmd_idx, iova);
+}
+
+static inline void
+fd_ringbuffer_assert_attached(struct fd_ringbuffer *ring, struct fd_bo *bo)
+{
+#ifndef NDEBUG
+   ring->funcs->assert_attached(ring, bo);
+#endif
 }
 
 static inline void
@@ -300,38 +301,6 @@ __reloc_iova(struct fd_bo *bo, uint32_t offset, uint64_t orval, int32_t shift)
    return iova;
 }
 
-/*
- * NOTE: OUT_RELOC() is 2 dwords (64b) on a5xx+
- */
-static inline void
-OUT_RELOC(struct fd_ringbuffer *ring, struct fd_bo *bo, uint32_t offset,
-          uint64_t orval, int32_t shift)
-{
-   if (LOG_DWORDS) {
-      fprintf(stderr, "ring[%p]: OUT_RELOC   %04x:  %p+%u << %d", ring,
-              (uint32_t)(ring->cur - ring->start), bo, offset, shift);
-   }
-   assert(offset < fd_bo_size(bo));
-
-   uint64_t iova = __reloc_iova(bo, offset, orval, shift);
-
-#if FD_BO_NO_HARDPIN
-   uint64_t *cur = (uint64_t *)ring->cur;
-   *cur = iova;
-   ring->cur += 2;
-#else
-   struct fd_reloc reloc = {
-         .bo = bo,
-         .iova = iova,
-         .orval = orval,
-         .offset = offset,
-         .shift = shift,
-   };
-
-   fd_ringbuffer_reloc(ring, &reloc);
-#endif
-}
-
 static inline void
 OUT_RB(struct fd_ringbuffer *ring, struct fd_ringbuffer *target)
 {
@@ -399,6 +368,47 @@ OUT_WFI5(struct fd_ringbuffer *ring)
 
 #ifdef __cplusplus
 } /* end of extern "C" */
+#endif
+
+/*
+ * NOTE: OUT_RELOC() is 2 dwords (64b) on a5xx+
+ */
+static inline void
+OUT_RELOC(struct fd_ringbuffer *ring, struct fd_bo *bo, uint32_t offset,
+          uint64_t orval, int32_t shift)
+{
+   if (LOG_DWORDS) {
+      fprintf(stderr, "ring[%p]: OUT_RELOC   %04x:  %p+%u << %d", ring,
+              (uint32_t)(ring->cur - ring->start), bo, offset, shift);
+   }
+   assert(offset < fd_bo_size(bo));
+
+   uint64_t iova = __reloc_iova(bo, offset, orval, shift);
+
+#if FD_BO_NO_HARDPIN
+   uint64_t *cur = (uint64_t *)ring->cur;
+   *cur = iova;
+   ring->cur += 2;
+   fd_ringbuffer_assert_attached(ring, bo);
+#else
+   struct fd_reloc reloc = {
+         .bo = bo,
+         .iova = iova,
+         .orval = orval,
+         .offset = offset,
+         .shift = shift,
+   };
+
+   fd_ringbuffer_reloc(ring, &reloc);
+#endif
+}
+
+#ifdef __cplusplus
+static inline void
+OUT_RELOC(struct fd_ringbuffer *ring, struct fd_bo *bo, uint32_t offset)
+{
+   OUT_RELOC(ring, bo, offset, 0, 0);
+}
 #endif
 
 #endif /* FREEDRENO_RINGBUFFER_H_ */

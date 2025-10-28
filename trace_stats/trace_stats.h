@@ -63,7 +63,7 @@ struct Stats
         kDepthWriteEnabled,
         kEarlyZ,
         kLateZ,
-        kEarlyLRZLateZ,
+        kEarlyZLateZ,
         kLrzEnabled,
         kLrzWriteEnabled,
         kCullModeEnabled,
@@ -84,10 +84,11 @@ struct Stats
         kMaxGPRs,
         kMedianGPRs,
         kTotalResolves,
-        kGmemToSysmemResolves,
-        kGmemToSysmemAndClearGmemResolves,
+        kColorSysMemToGmemResolves,
+        kColorGmemToSysMemResolves,
+        kDepthSysMemToGmemResolves,
+        kDepthGmemToSysMemResolves,
         kClearGmemResolves,
-        kSysmemToGmemResolves,
         kNumStats
     };
 };
@@ -106,7 +107,7 @@ constexpr std::array kStatMap = {
     std::pair(Stats::kDepthWriteEnabled, "Num Draws with Depth Write Enabled"),
     std::pair(Stats::kEarlyZ, "Num Draws with EarlyZ"),
     std::pair(Stats::kLateZ, "Num Draws with LateZ"),
-    std::pair(Stats::kEarlyLRZLateZ, "Num Draws with Early LRZ & LateZ"),
+    std::pair(Stats::kEarlyZLateZ, "Num Draws with EarlyZ & LateZ"),
     std::pair(Stats::kLrzEnabled, "Num Draws with LRZ Enabled"),
     std::pair(Stats::kLrzWriteEnabled, "Num Draws with LRZ Write Enabled"),
     std::pair(Stats::kCullModeEnabled, "Num Draws with culling enabled"),
@@ -127,10 +128,11 @@ constexpr std::array kStatMap = {
     std::pair(Stats::kMaxGPRs, "\tMax GPRs in a single shader"),
     std::pair(Stats::kMedianGPRs, "\tMedian GPRs in a single shader"),
     std::pair(Stats::kTotalResolves, "Total resolves"),
-    std::pair(Stats::kGmemToSysmemResolves, "\tGmem to SysMem Resolves"),
-    std::pair(Stats::kGmemToSysmemAndClearGmemResolves, "\tGmem to SysMem Resolves and Clear Gmem"),
+    std::pair(Stats::kColorSysMemToGmemResolves, "\tColor SysMem to Gmem Resolves"),
+    std::pair(Stats::kColorGmemToSysMemResolves, "\tColor Gmem to SysMem Resolves"),
+    std::pair(Stats::kDepthSysMemToGmemResolves, "\tDepth SysMem to Gmem Resolves"),
+    std::pair(Stats::kDepthGmemToSysMemResolves, "\tDepth Gmem to SysMem Resolves"),
     std::pair(Stats::kClearGmemResolves, "\tGmem Clears"),
-    std::pair(Stats::kSysmemToGmemResolves, "\tSysMem to Gmem Resolves"),
 };
 
 enum ViewPortStats

@@ -1,32 +1,16 @@
 /*
- * Copyright (C) 2019 Google.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2019 Google.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "util/ralloc.h"
 
 #include "ir3.h"
+#include "ir3_shader.h"
 
 static bool
-is_safe_conv(struct ir3_instruction *instr, type_t src_type, opc_t *src_opc)
+is_safe_conv(struct ir3_instruction *instr, type_t src_type, opc_t *src_opc,
+             struct ir3_instruction *src_instr)
 {
    if (instr->opc != OPC_MOV)
       return false;
@@ -43,6 +27,10 @@ is_safe_conv(struct ir3_instruction *instr, type_t src_type, opc_t *src_opc)
     */
    if ((*src_opc == OPC_MUL_S24 || *src_opc == OPC_MUL_U24) &&
        type_size(instr->cat1.src_type) == 16)
+      return false;
+
+   /* mad.x24 doesn't work with 16-bit in/out */
+   if (*src_opc == OPC_MAD_S24 || *src_opc == OPC_MAD_U24)
       return false;
 
    struct ir3_register *dst = instr->dsts[0];
@@ -66,9 +54,11 @@ is_safe_conv(struct ir3_instruction *instr, type_t src_type, opc_t *src_opc)
       return true;
 
    /* We can handle mismatches with integer types by converting the opcode
-    * but not when an integer is reinterpreted as a float or vice-versa.
+    * but not when an integer is reinterpreted as a float or vice-versa. We
+    * can't handle types with different sizes.
     */
-   if (type_float(src_type) != type_float(instr->cat1.src_type))
+   if (type_float(src_type) != type_float(instr->cat1.src_type) ||
+       type_size(src_type) != type_size(instr->cat1.src_type))
       return false;
 
    /* We have types with mismatched signedness. Mismatches on the signedness
@@ -76,6 +66,12 @@ is_safe_conv(struct ir3_instruction *instr, type_t src_type, opc_t *src_opc)
     */
    if (type_size(instr->cat1.dst_type) < type_size(instr->cat1.src_type))
       return true;
+
+   /* Don't swap opcodes when the result is saturated as signed and unsigned
+    * saturation give different results.
+    */
+   if (src_instr->flags & IR3_INSTR_SAT)
+      return false;
 
    /* Try swapping the opcode: */
    bool can_swap = true;
@@ -90,7 +86,7 @@ all_uses_safe_conv(struct ir3_instruction *conv_src, type_t src_type)
    bool first = true;
    foreach_ssa_use (use, conv_src) {
       opc_t new_opc = opc;
-      if (!is_safe_conv(use, src_type, &new_opc))
+      if (!is_safe_conv(use, src_type, &new_opc, conv_src))
          return false;
       /* Check if multiple uses have conflicting requirements on the opcode.
        */
@@ -100,6 +96,33 @@ all_uses_safe_conv(struct ir3_instruction *conv_src, type_t src_type)
       opc = new_opc;
    }
    conv_src->opc = opc;
+   return true;
+}
+
+static bool
+all_uses_same_cov(struct ir3_instruction *movs)
+{
+   type_t src_type;
+   type_t dst_type;
+   bool first = true;
+
+   foreach_ssa_use (use, movs) {
+      if (use->opc != OPC_MOV) {
+         return false;
+      }
+
+      if (first) {
+         src_type = use->cat1.src_type;
+         dst_type = use->cat1.dst_type;
+         first = false;
+         continue;
+      }
+
+      if (use->cat1.src_type != src_type || use->cat1.dst_type != dst_type) {
+         return false;
+      }
+   }
+
    return true;
 }
 
@@ -125,11 +148,17 @@ rewrite_src_uses(struct ir3_instruction *src)
 }
 
 static bool
-try_conversion_folding(struct ir3_instruction *conv)
+try_conversion_folding(struct ir3_instruction *conv,
+                       struct ir3_compiler *compiler)
 {
    struct ir3_instruction *src;
 
    if (conv->opc != OPC_MOV)
+      return false;
+
+   /* Don't fold in conversions to/from shared */
+   if ((conv->srcs[0]->flags & IR3_REG_SHARED) !=
+       (conv->dsts[0]->flags & IR3_REG_SHARED))
       return false;
 
    /* NOTE: we can have non-ssa srcs after copy propagation: */
@@ -151,12 +180,39 @@ try_conversion_folding(struct ir3_instruction *conv)
    /* Avoid cases where we've already folded in a conversion. We assume that
     * if there is a chain of conversions that's foldable then it's been
     * folded in NIR already.
+    * This also prevents a sequence like `movs.u32u16; cov.f16f32` to be
+    * incorrectly folded into `movs.u32f32`.
     */
    if (src_type != dst_type)
       return false;
 
-   if (!all_uses_safe_conv(src, src_type))
+   /* movs supports the same conversions as cov which means that any cov of its
+    * dst can be folded into the movs if all uses of its dst are the same type
+    * of cov.
+    */
+   if (src->opc == OPC_MOVS) {
+      if (conv->cat1.src_type == TYPE_U8) {
+         /* movs.u8... does not seem to work. */
+         return false;
+      }
+
+      /* Don't fold in a conversion to a half register on gens where that is
+       * broken.
+       */
+      if (compiler->mov_half_shared_quirk &&
+          (conv->dsts[0]->flags & IR3_REG_HALF)) {
+         return false;
+      }
+
+      if (!all_uses_same_cov(src)) {
+         return false;
+      }
+
+      src->cat1.src_type = conv->cat1.src_type;
+      src->cat1.dst_type = conv->cat1.dst_type;
+   } else if (!all_uses_safe_conv(src, src_type)) {
       return false;
+   }
 
    ir3_set_dst_type(src, is_half(conv));
    rewrite_src_uses(src);
@@ -165,7 +221,7 @@ try_conversion_folding(struct ir3_instruction *conv)
 }
 
 bool
-ir3_cf(struct ir3 *ir)
+ir3_cf(struct ir3 *ir, struct ir3_shader_variant *so)
 {
    void *mem_ctx = ralloc_context(NULL);
    bool progress = false;
@@ -174,7 +230,7 @@ ir3_cf(struct ir3 *ir)
 
    foreach_block (block, &ir->block_list) {
       foreach_instr (instr, &block->instr_list) {
-         progress |= try_conversion_folding(instr);
+         progress |= try_conversion_folding(instr, so->compiler);
       }
    }
 

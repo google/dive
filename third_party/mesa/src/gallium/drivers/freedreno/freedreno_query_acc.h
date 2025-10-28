@@ -1,24 +1,6 @@
 /*
- * Copyright (C) 2017 Rob Clark <robclark@freedesktop.org>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Copyright © 2017 Rob Clark <robclark@freedesktop.org>
+ * SPDX-License-Identifier: MIT
  *
  * Authors:
  *    Rob Clark <robclark@freedesktop.org>
@@ -138,6 +120,9 @@ copy_result(struct fd_ringbuffer *ring, enum pipe_query_value_type result_type,
             struct fd_resource *dst, unsigned dst_offset,
             struct fd_resource *src, unsigned src_offset)
 {
+   fd_ringbuffer_attach_bo(ring, dst->bo);
+   fd_ringbuffer_attach_bo(ring, src->bo);
+
    OUT_PKT7(ring, CP_MEM_TO_MEM, 5);
    OUT_RING(ring, COND(result_type >= PIPE_QUERY_TYPE_I64, CP_MEM_TO_MEM_0_DOUBLE));
    OUT_RELOC(ring, dst->bo, dst_offset, 0, 0);

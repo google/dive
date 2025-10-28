@@ -5,34 +5,17 @@
  * Copyright © 2011 Marek Olšák <maraeo@gmail.com>
  * Copyright © 2015 Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef RADV_AMDGPU_WINSYS_H
 #define RADV_AMDGPU_WINSYS_H
 
-#include <amdgpu.h>
 #include <pthread.h>
 #include "util/list.h"
 #include "util/rwlock.h"
 #include "ac_gpu_info.h"
+#include "ac_linux_drm.h"
 #include "radv_radeon_winsys.h"
 
 #include "vk_sync.h"
@@ -40,21 +23,22 @@
 
 struct radv_amdgpu_winsys {
    struct radeon_winsys base;
-   amdgpu_device_handle dev;
+   ac_drm_device *dev;
+   int fd;
 
    struct radeon_info info;
-   struct ac_addrlib *addrlib;
 
    bool debug_all_bos;
    bool debug_log_bos;
-   bool use_ib_bos;
+   FILE *bo_history_logfile;
+   bool chain_ib;
    bool zero_all_vram_allocs;
    bool reserve_vmid;
    uint64_t perftest;
 
-   p_atomic_uint64_t allocated_vram;
-   p_atomic_uint64_t allocated_vram_vis;
-   p_atomic_uint64_t allocated_gtt;
+   alignas(8) uint64_t allocated_vram;
+   alignas(8) uint64_t allocated_vram_vis;
+   alignas(8) uint64_t allocated_gtt;
 
    /* Global BO list */
    struct {

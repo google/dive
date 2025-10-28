@@ -62,12 +62,11 @@ lower_fragcolor_intrin(nir_builder *b, nir_intrinsic_instr *instr, void *data)
    b->cursor = nir_after_instr(&instr->instr);
 
    nir_def *frag_color = instr->src[1].ssa;
-   ralloc_free(out->name);
 
    const char *name = out->data.index == 0 ? "gl_FragData[0]" : "gl_SecondaryFragDataEXT[0]";
    const char *name_tmpl = out->data.index == 0 ? "gl_FragData[%u]" : "gl_SecondaryFragDataEXT[%u]";
 
-   out->name = ralloc_strdup(out, name);
+   nir_variable_set_name(b->shader, out, name);
 
    /* translate gl_FragColor -> gl_FragData since this is already handled */
    out->data.location = FRAG_RESULT_DATA0;
@@ -81,6 +80,7 @@ lower_fragcolor_intrin(nir_builder *b, nir_intrinsic_instr *instr, void *data)
       nir_variable *out_color = nir_variable_create(b->shader, nir_var_shader_out,
                                                     out->type, name);
       out_color->data.location = FRAG_RESULT_DATA0 + i;
+      out_color->data.location_frac = out->data.location_frac;
       out_color->data.driver_location = b->shader->num_outputs++;
       out_color->data.index = out->data.index;
       nir_store_var(b, out_color, frag_color, writemask);
@@ -96,7 +96,6 @@ nir_lower_fragcolor(nir_shader *shader, unsigned max_draw_buffers)
       return false;
 
    return nir_shader_intrinsics_pass(shader, lower_fragcolor_intrin,
-                                     nir_metadata_block_index |
-                                       nir_metadata_dominance,
+                                     nir_metadata_control_flow,
                                      &max_draw_buffers);
 }

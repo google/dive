@@ -35,7 +35,7 @@ class QLineEdit;
 class QListWidget;
 class QSpinBox;
 class QTextEdit;
-class Overlay;
+class OverlayHelper;
 class MainWindow;
 class QCheckBox;
 
@@ -115,9 +115,6 @@ signals:
     void CaptureUpdated(const QString &file_path);
     void OverlayMessage(const QString &message);
     void DisableOverlay();
-
-protected:
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
 private:
     void                        ShowErrorMessage(const std::string &message);
@@ -214,7 +211,7 @@ private:
     const int         kDefaultFrameCount = 3;
     const std::string kDefaultReplayButtonText = "Replay";
     std::future<void> m_replay_active;
-    Overlay          *m_overlay;
+    OverlayHelper    *m_overlay;
 
     struct StatusUpdateQueueItem
     {

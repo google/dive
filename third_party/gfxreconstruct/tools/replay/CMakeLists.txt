@@ -51,6 +51,9 @@ target_link_libraries(gfxrecon-replay
                           $<$<BOOL:${D3D12_SUPPORT}>:dxgi.lib>
                           $<$<BOOL:${DXC_FOUND}>:${DXC_LIBRARY_PATH}>)
 
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon-replay project_version)
+
 target_link_options(gfxrecon-replay PUBLIC "-rdynamic")
 
 if (MSVC)

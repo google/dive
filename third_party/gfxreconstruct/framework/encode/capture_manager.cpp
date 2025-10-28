@@ -1206,7 +1206,7 @@ bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, con
         operation_annotation += "\",\n";
         operation_annotation += "    \"";
         operation_annotation += gfxrecon::format::kOperationAnnotationGfxreconstructVersion;
-        operation_annotation += "\": \"" GFXRECON_PROJECT_VERSION_STRING "\",\n";
+        operation_annotation += "\": \"" + std::string(GFXRECON_PROJECT_VERSION_STRING) + "\",\n";
         operation_annotation += "    \"";
         operation_annotation += gfxrecon::format::kOperationAnnotationVulkanVersion;
         operation_annotation += "\": \"";

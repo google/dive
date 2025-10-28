@@ -56,6 +56,9 @@ target_include_directories(gfxrecon-extract PUBLIC ${CMAKE_BINARY_DIR})
 
 target_link_libraries(gfxrecon-extract gfxrecon_decode gfxrecon_graphics gfxrecon_format gfxrecon_util platform_specific)
 
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon-extract project_version)
+
 common_build_directives(gfxrecon-extract)
 
 install(TARGETS gfxrecon-extract RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

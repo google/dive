@@ -63,6 +63,9 @@ target_link_libraries(gfxrecon-info
                       platform_specific
                       $<$<BOOL:${D3D12_SUPPORT}>:dxgi.lib>)
 
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon-info project_version)
+
 common_build_directives(gfxrecon-info)
 
 install(TARGETS gfxrecon-info RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

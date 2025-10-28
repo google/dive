@@ -48,3 +48,6 @@ target_link_libraries(
         gfxrecon_graphics
         gfxrecon_format
         platform_specific)
+
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon-replay project_version)

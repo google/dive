@@ -54,6 +54,9 @@ target_include_directories(gfxrecon-convert PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_C
 
 target_link_libraries(gfxrecon-convert gfxrecon_decode gfxrecon_graphics gfxrecon_format gfxrecon_util platform_specific)
 
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon-convert project_version)
+
 common_build_directives(gfxrecon-convert)
 
 install(TARGETS gfxrecon-convert RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

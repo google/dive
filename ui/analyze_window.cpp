@@ -71,7 +71,7 @@ QWidget                                                            *parent) :
 {
     qDebug() << "AnalyzeDialog created.";
 
-    m_overlay = new Overlay(this);
+    m_overlay = new OverlayHelper(this);
 
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
@@ -192,11 +192,12 @@ QWidget                                                            *parent) :
     m_right_panel_layout->addLayout(m_button_layout);
 
     // Main Layout
-    m_main_layout = new QHBoxLayout(this);
+    m_main_layout = new QHBoxLayout();
     m_main_layout->addLayout(m_left_panel_layout);
     m_main_layout->addLayout(m_right_panel_layout);
 
-    setLayout(m_main_layout);
+    m_overlay->Initialize(m_main_layout);
+    setLayout(m_overlay->GetLayout());
 
     // Connect the name list's selection change to a lambda
     QObject::connect(m_metrics_list,
@@ -250,26 +251,15 @@ AnalyzeDialog::~AnalyzeDialog()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::resizeEvent(QResizeEvent *event)
-{
-    QDialog::resizeEvent(event);
-    m_overlay->UpdateSize(rect());
-}
-
-//--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnOverlayMessage(const QString &message)
 {
-    setDisabled(true);
-    m_overlay->SetMessage(message, /*timed*/ true);
-    if (m_overlay->isHidden())
-        m_overlay->show();
+    m_overlay->SetMessage(message);
+    m_overlay->SetMessageIsTimed();
 }
 
 void AnalyzeDialog::OnDisableOverlay()
 {
-    setDisabled(false);
-    m_overlay->SetMessage(QString());
-    m_overlay->hide();
+    m_overlay->Clear();
 }
 
 //--------------------------------------------------------------------------------------------------

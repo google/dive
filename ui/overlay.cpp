@@ -16,12 +16,16 @@
 
 #include "overlay.h"
 
-#include <QTimer>
 #include <QDateTime>
-#include <memory>
-#include <qelapsedtimer.h>
-#include <qobject.h>
-#include <qtimer.h>
+#include <QElapsedTimer>
+#include <QLabel>
+#include <QObject>
+#include <QPushButton>
+#include <QStackedLayout>
+#include <QTimer>
+#include <QtWidgets>
+#include <QVBoxLayout>
+#include <QWidget>
 
 namespace
 {
@@ -32,117 +36,150 @@ constexpr int kOverlayUpdateIntervalMs = 1000;
 }  // namespace
 
 //--------------------------------------------------------------------------------------------------
-void OverlayWidget::newParent()
+OverlayHelper::OverlayHelper(QObject* parent) :
+    QObject(parent)
 {
-    if (!parent())
-        return;
-    parent()->installEventFilter(this);
-    raise();
+}
+
+OverlayHelper::~OverlayHelper() = default;
+
+//--------------------------------------------------------------------------------------------------
+QLayout* OverlayHelper::GetLayout() const
+{
+    return m_layout;
 }
 
 //--------------------------------------------------------------------------------------------------
-OverlayWidget::OverlayWidget(QWidget* parent) :
-    QWidget(parent)
+void OverlayHelper::Initialize(QLayout* layout)
 {
-    setAttribute(Qt::WA_NoSystemBackground);
-    setAttribute(Qt::WA_TransparentForMouseEvents);
-    newParent();
+    auto container = new QWidget;
+    container->setLayout(layout);
+    Initialize(container);
 }
 
-//--------------------------------------------------------------------------------------------------
-bool OverlayWidget::eventFilter(QObject* object, QEvent* event)
+void OverlayHelper::Initialize(QWidget* widget)
 {
-    if (object == parent())
-    {
-        if (event->type() == QEvent::Resize)
-            resize(static_cast<QResizeEvent*>(event)->size());
-        else if (event->type() == QEvent::ChildAdded)
-            raise();
-    }
-    return QWidget::eventFilter(object, event);
-}
+    m_container = widget;
 
-//--------------------------------------------------------------------------------------------------
-bool OverlayWidget::event(QEvent* event)
-{
-    if (event->type() == QEvent::ParentAboutToChange)
-    {
-        if (parent())
-            parent()->removeEventFilter(this);
-    }
-    else if (event->type() == QEvent::ParentChange)
-        newParent();
-    return QWidget::event(event);
-}
-
-//--------------------------------------------------------------------------------------------------
-Overlay::Overlay(QWidget* parent) :
-    OverlayWidget(parent)
-{
     m_timer = new QTimer(this);
-    m_elapsed_timer = std::make_unique<QElapsedTimer>();
+    m_elapsed_timer.reset(new QElapsedTimer);
 
-    setAttribute(Qt::WA_TranslucentBackground);
-    hide();
+    m_layout = new QStackedLayout;
+    m_layout->addWidget(m_container);
 
-    QObject::connect(m_timer, &QTimer::timeout, this, &Overlay::OnUpdate);
-}
-
-Overlay::~Overlay()
-{
-    // For ~unique_ptr<QElapsedTimer>()
-}
-
-//--------------------------------------------------------------------------------------------------
-void Overlay::SetMessage(const QString& message, bool timed)
-{
-    m_elapsed_timer->invalidate();
-    if (message.isEmpty())
+    m_overlay = new QWidget;
     {
-        m_timer->stop();
+        // It does not seems translucent background is required?
+        // m_overlay->setAttribute(Qt::WA_TranslucentBackground);
+        auto palette = m_overlay->palette();
+        m_overlay->setAutoFillBackground(true);
+        palette.setColor(QPalette::All, QPalette::Window, { 100, 100, 100, 128 });
+        m_overlay->setPalette(palette);
     }
-    else if (timed)
+    m_layout->addWidget(m_overlay);
+    m_overlay_layout = new QVBoxLayout;
+    m_overlay->setLayout(m_overlay_layout);
+    m_text = new QLabel;
     {
-        m_elapsed_timer->start();
-        m_timer->start(kOverlayUpdateIntervalMs);
+        m_text->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+        m_text->setWordWrap(true);
+        m_text->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+        auto font = m_text->font();
+        font.setPixelSize(20);
+        m_text->setFont(font);
+        auto palette = m_text->palette();
+        palette.setColor(QPalette::All, QPalette::WindowText, { 200, 200, 255 });
+        m_text->setPalette(palette);
     }
-    m_message = message;
-    update();
+    m_overlay_layout->addWidget(m_text);
+    m_cancel_button = new QPushButton;
+    {
+        m_cancel_button->setHidden(true);
+        m_cancel_button->setText("Cancel");
+    }
+    m_overlay_layout->addWidget(m_cancel_button);
+
+    QObject::connect(m_timer, &QTimer::timeout, this, &OverlayHelper::OnUpdate);
+    QObject::connect(m_cancel_button, &QPushButton::clicked, this, &OverlayHelper::OnCancel);
+
+    Clear();
 }
 
 //--------------------------------------------------------------------------------------------------
-void Overlay::OnUpdate()
-{
-    update();
-}
-
-//--------------------------------------------------------------------------------------------------
-void Overlay::UpdateSize(const QRect& rect)
-{
-    m_overlay_rect = rect;
-    setGeometry(m_overlay_rect);
-}
-
-//--------------------------------------------------------------------------------------------------
-void Overlay::paintEvent(QPaintEvent* paint_event)
+void OverlayHelper::OnUpdate()
 {
     if (m_message.isEmpty())
-        return;
-    auto message = m_message;
-    if (m_elapsed_timer->isValid())
     {
-        auto elapsed = m_elapsed_timer->elapsed();
-        if (elapsed >= kOverlayMinElapsedTimeMs)
-        {
-            message += " (elapsed: " + QString::number(elapsed / 1000) + "s)";
-        }
+        m_text->setText("");
     }
+    else
+    {
+        auto message = m_message;
+        if (m_elapsed_timer->isValid())
+        {
+            auto elapsed = m_elapsed_timer->elapsed();
+            if (elapsed >= kOverlayMinElapsedTimeMs)
+            {
+                message += " (elapsed: " + QString::number(elapsed / 1000) + "s)";
+            }
+        }
 
-    QPainter painter(this);
-    QFont    font = painter.font();
-    font.setPixelSize(20);
-    painter.setFont(font);
-    painter.fillRect(m_overlay_rect, { 100, 100, 100, 128 });
-    painter.setPen({ 200, 200, 255 });
-    painter.drawText(rect(), message, Qt::AlignHCenter | Qt::AlignVCenter);
+        m_text->setText(message);
+    }
+}
+
+void OverlayHelper::OnCancel()
+{
+    if (m_cancel_func)
+    {
+        m_cancel_func();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void OverlayHelper::SetMessage(const QString& message)
+{
+    if (message.isEmpty())
+    {
+        return Clear();
+    }
+    m_timer->stop();
+    m_elapsed_timer->invalidate();
+    m_cancel_func = {};
+    m_cancel_button->hide();
+
+    m_message = message;
+    m_text->setText(message);
+    m_layout->setStackingMode(QStackedLayout::StackAll);
+    m_layout->setCurrentWidget(m_overlay);
+    if (m_overlay->isHidden())
+        m_overlay->show();
+}
+
+void OverlayHelper::SetMessageIsTimed()
+{
+    m_elapsed_timer->start();
+    m_timer->start(kOverlayUpdateIntervalMs);
+}
+
+void OverlayHelper::SetMessageCancelFunc(CancelFunc func)
+{
+    m_cancel_func = func;
+    m_cancel_button->show();
+}
+
+void OverlayHelper::Clear()
+{
+    m_message.clear();
+
+    m_overlay->hide();
+    m_layout->setCurrentWidget(m_container);
+    m_layout->setStackingMode(QStackedLayout::StackOne);
+
+    m_text->setText(QString());
+
+    m_timer->stop();
+    m_elapsed_timer->invalidate();
+    m_cancel_func = {};
+    m_cancel_button->hide();
 }

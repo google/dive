@@ -798,7 +798,7 @@ bool DeployGfxrReplay(Dive::DeviceManager& mgr, const std::string& device_serial
         return false;
     }
     // Deploying install/gfxr-replay.apk
-    ret = mgr.DeployReplayApk(device_serial);
+    ret = mgr.DeployReplayApk(Dive::Context::Background(), device_serial);
     if (!ret.ok())
     {
         return false;
@@ -816,7 +816,7 @@ bool DeployAndRunGfxrReplay(Dive::DeviceManager&            mgr,
         return false;
     }
 
-    auto ret = mgr.RunReplayApk(replay_settings);
+    auto ret = mgr.RunReplayApk(Dive::Context::Background(), replay_settings);
     if (!ret.ok())
     {
         std::cout << "Failed to DeployAndRunGfxrReplay, error: " << ret.message() << std::endl;

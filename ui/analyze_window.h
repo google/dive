@@ -19,6 +19,7 @@
 #include <optional>
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
+#include "dive_core/context.h"
 #include "dive_core/available_metrics.h"
 
 #pragma once
@@ -34,7 +35,7 @@ class QLineEdit;
 class QListWidget;
 class QSpinBox;
 class QTextEdit;
-class Overlay;
+class OverlayHelper;
 class MainWindow;
 class QCheckBox;
 
@@ -76,6 +77,7 @@ class AnalyzeDialog : public QDialog
         // End of task status:
         kSuccess,
         kFailure,
+        kCancelled,
         kSetupDeviceFailure,  // Special case where we disable replay button.
 
         // Individual step of replay:
@@ -115,9 +117,6 @@ signals:
     void OverlayMessage(const QString &message);
     void DisableOverlay();
 
-protected:
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
-
 private:
     void                        ShowErrorMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
@@ -128,23 +127,29 @@ private:
     ReplayArtifactsPaths        GetReplayFilesLocalPaths(const std::string &gfxr_stem) const;
     absl::StatusOr<std::string> GetCaptureFileDirectory();
     absl::StatusOr<std::string> GetAssetFile();
-    absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
+    absl::StatusOr<std::string> PushFilesToDevice(const Dive::Context &,
+                                                  Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
-    absl::Status                NormalReplay(Dive::DeviceManager &device_manager,
+    absl::Status                NormalReplay(const Dive::Context &,
+                                             Dive::DeviceManager &device_manager,
                                              const std::string   &remote_gfxr_file);
-    absl::Status                Pm4Replay(Dive::DeviceManager &device_manager,
+    absl::Status                Pm4Replay(const Dive::Context &,
+                                          Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file);
-    absl::Status                PerfCounterReplay(Dive::DeviceManager &device_manager,
+    absl::Status                PerfCounterReplay(const Dive::Context &,
+                                                  Dive::DeviceManager &device_manager,
                                                   const std::string   &remote_gfxr_file);
-    absl::Status                GpuTimeReplay(Dive::DeviceManager &device_manager,
+    absl::Status                GpuTimeReplay(const Dive::Context &,
+                                              Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file);
-    absl::Status                RenderDocReplay(Dive::DeviceManager &device_manager,
+    absl::Status                RenderDocReplay(const Dive::Context &,
+                                                Dive::DeviceManager &device_manager,
                                                 const std::string   &remote_gfxr_file);
 
     void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &error_messge = "");
     void ExecuteStatusUpdate();
 
-    void ReplayImpl();
+    void ReplayImpl(const Dive::Context &);
     void DeleteReplayArtifactsImpl();
 
     QLabel      *m_metrics_list_label;
@@ -192,6 +197,8 @@ private:
     QHBoxLayout *m_button_layout;
     QPushButton *m_replay_button;
 
+    OverlayHelper *m_overlay;
+
     QHBoxLayout                  *m_main_layout;
     QVBoxLayout                  *m_left_panel_layout;
     QVBoxLayout                  *m_right_panel_layout;
@@ -207,12 +214,12 @@ private:
     const std::string     kDefaultReplayButtonText = "Replay";
     std::filesystem::path m_local_capture_file_directory = "";
     std::future<void>     m_replay_active;
-    Overlay              *m_overlay;
 
     struct StatusUpdateQueueItem
     {
         ReplayStatusUpdateCode status;
         QString                error_message;
     };
+    Dive::SimpleContext                m_current_context;
     std::vector<StatusUpdateQueueItem> m_status_update_queue;
 };

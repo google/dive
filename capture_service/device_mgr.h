@@ -21,6 +21,7 @@ limitations under the License.
 #include "android_application.h"
 #include "command_utils.h"
 #include "constants.h"
+#include "../dive_core/context.h"
 
 #include <cassert>
 #include <filesystem>
@@ -191,14 +192,16 @@ public:
     AndroidDevice                  *GetDevice() const { return m_device.get(); }
     absl::Status                    Cleanup(const std::string &serial, const std::string &package);
 
-    absl::Status DeployReplayApk(const std::string &serial);
-    absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;
+    absl::Status DeployReplayApk(const Dive::Context &, const std::string &serial);
+    absl::Status RunReplayApk(const Dive::Context &, const GfxrReplaySettings &settings) const;
 
 private:
     // Initiates GFXR replay through the GFXR-provided python script, blocking call
-    absl::Status RunReplayGfxrScript(const GfxrReplaySettings &settings) const;
+    absl::Status RunReplayGfxrScript(const Dive::Context &,
+                                     const GfxrReplaySettings &settings) const;
     // Initiates GFXR replay through the profiling plugin, blocking call
-    absl::Status RunReplayProfilingBinary(const GfxrReplaySettings &settings) const;
+    absl::Status RunReplayProfilingBinary(const Dive::Context &,
+                                          const GfxrReplaySettings &settings) const;
 
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };

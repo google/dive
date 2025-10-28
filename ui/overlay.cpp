@@ -16,12 +16,14 @@
 
 #include "overlay.h"
 
+#include <QObject>
 #include <QTimer>
 #include <QDateTime>
+#include <QLabel>
+#include <QPushButton>
+#include <QElapsedTimer>
+#include <QVBoxLayout>
 #include <memory>
-#include <qelapsedtimer.h>
-#include <qobject.h>
-#include <qtimer.h>
 
 namespace
 {
@@ -145,4 +147,119 @@ void Overlay::paintEvent(QPaintEvent* paint_event)
     painter.fillRect(m_overlay_rect, { 100, 100, 100, 128 });
     painter.setPen({ 200, 200, 255 });
     painter.drawText(rect(), message, Qt::AlignHCenter | Qt::AlignVCenter);
+}
+
+//--------------------------------------------------------------------------------------------------
+void OverlayHelper::OnUpdate()
+{
+    if (m_message.isEmpty())
+    {
+        m_text->setText("");
+    }
+    else
+    {
+        auto message = m_message;
+        if (m_elapsed_timer->isValid())
+        {
+            auto elapsed = m_elapsed_timer->elapsed();
+            if (elapsed >= kOverlayMinElapsedTimeMs)
+            {
+                message += " (elapsed: " + QString::number(elapsed / 1000) + "s)";
+            }
+        }
+
+        m_text->setText(message);
+    }
+}
+
+void OverlayHelper::OnCancel()
+{
+    if (m_cancel_func)
+    {
+        m_cancel_func();
+    }
+}
+
+void OverlayHelper::SetMessage(const QString& message)
+{
+    m_timer->stop();
+    m_elapsed_timer->invalidate();
+    m_cancel_func = {};
+    m_cancel_button->hide();
+
+    m_message = message;
+    m_text->setText(message);
+    m_layout->setStackingMode(QStackedLayout::StackAll);
+    m_layout->setCurrentWidget(m_overlay);
+    if (m_overlay->isHidden())
+        m_overlay->show();
+}
+
+void OverlayHelper::SetMessageIsTimed()
+{
+    m_elapsed_timer->start();
+    m_timer->start(kOverlayUpdateIntervalMs);
+}
+
+void OverlayHelper::SetMessageCancelFunc(CancelFunc func)
+{
+    m_cancel_func = func;
+    m_cancel_button->show();
+}
+
+void OverlayHelper::Clear()
+{
+    m_timer->stop();
+    m_elapsed_timer->invalidate();
+    m_text->setText(QString());
+    m_cancel_button->hide();
+    m_overlay->hide();
+    m_layout->setStackingMode(QStackedLayout::StackOne);
+    m_layout->setCurrentWidget(m_container);
+}
+
+void OverlayHelper::Initialize(QLayout* layout)
+{
+    m_timer = new QTimer(this);
+    m_elapsed_timer = std::make_unique<QElapsedTimer>();
+
+    m_layout = new QStackedLayout;
+    m_container = new QWidget;
+    m_layout->addWidget(m_container);
+    m_container->setLayout(layout);
+
+    m_overlay = new QWidget;
+    {
+        // It does not seems translucent background is required?
+        // m_overlay->setAttribute(Qt::WA_TranslucentBackground);
+        auto palette = m_overlay->palette();
+        m_overlay->setAutoFillBackground(true);
+        palette.setColor(QPalette::All, QPalette::Window, { 100, 100, 100, 128 });
+        m_overlay->setPalette(palette);
+    }
+    m_layout->addWidget(m_overlay);
+    m_overlay_layout = new QVBoxLayout;
+    m_overlay->setLayout(m_overlay_layout);
+    m_text = new QLabel;
+    {
+        m_text->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+        auto font = m_text->font();
+        font.setPixelSize(20);
+        m_text->setFont(font);
+        auto palette = m_text->palette();
+        palette.setColor(QPalette::All, QPalette::WindowText, { 200, 200, 255 });
+        m_text->setPalette(palette);
+    }
+    m_overlay_layout->addWidget(m_text);
+    m_cancel_button = new QPushButton;
+    {
+        m_cancel_button->setHidden(true);
+        m_cancel_button->setText("Cancel");
+    }
+    m_overlay_layout->addWidget(m_cancel_button);
+
+    QObject::connect(m_timer, &QTimer::timeout, this, &OverlayHelper::OnUpdate);
+    QObject::connect(m_cancel_button, &QPushButton::clicked, this, &OverlayHelper::OnCancel);
+
+    Clear();
 }

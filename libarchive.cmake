@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
-
 if(WIN32)
     set(CMAKE_PREFIX_PATH_PRE ${CMAKE_PREFIX_PATH})
     set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/libarchive/")

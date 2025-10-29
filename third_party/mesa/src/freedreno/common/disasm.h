@@ -44,6 +44,11 @@ int disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
 int try_disasm_a3xx(uint32_t *dwords, int sizedwords, int level, FILE *out,
                     unsigned gpu_id);
 
+// GOOGLE: thread safe version of disasm_a3xx_stat
+int disasm_a3xx_stat_with_debug(uint32_t *dwords, int sizedwords,
+                                int level, FILE *out, unsigned gpu_id,
+                                struct shader_stats *stats, enum debug_t debug);
+
 void disasm_a2xx_set_debug(enum debug_t debug);
 void disasm_a3xx_set_debug(enum debug_t debug);
 

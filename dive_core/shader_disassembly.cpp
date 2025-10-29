@@ -15,8 +15,10 @@
 */
 
 #include "shader_disassembly.h"
-#include <iostream>
+
 #include <mutex>
+#include <string_view>
+
 #include "dive_core/common/memory_manager_base.h"
 #include "pm4_info.h"
 
@@ -53,8 +55,6 @@ std::string DisassembleA3XX(const uint8_t*       data,
                             struct shader_stats* stats,
                             enum debug_t         debug)
 {
-    disasm_a3xx_set_debug(debug);
-
 #ifdef _MSC_VER
     FILE*   disasm_file = NULL;
     errno_t err = tmpfile_s(&disasm_file);
@@ -70,12 +70,13 @@ std::string DisassembleA3XX(const uint8_t*       data,
 #endif
 
     size_t code_size = max_size / sizeof(uint32_t);
-    int    res = disasm_a3xx_stat(reinterpret_cast<uint32_t*>(const_cast<uint8_t*>(data)),
-                               static_cast<int>(code_size),
-                               0,
-                               disasm_file,
-                               GetGPUID(),
-                               stats);
+    int res = disasm_a3xx_stat_with_debug(reinterpret_cast<uint32_t*>(const_cast<uint8_t*>(data)),
+                                          static_cast<int>(code_size),
+                                          0,
+                                          disasm_file,
+                                          GetGPUID(),
+                                          stats,
+                                          debug);
     ((void)(res));  // avoid unused variable
     DIVE_ASSERT(res != -1);
 #ifdef _MSC_VER
@@ -141,6 +142,7 @@ void Disassembly::Disassemble() const
         int                 prefix_len = 0;
         for (std::string line; std::getline(disasm_istr, line);)
         {
+            prefix_len = static_cast<int>(line.length());
 #ifdef _MSC_VER
             sscanf_s(line.c_str(),
                      " :%d:%04d:%04d[%08xx_%08xx] %n",
@@ -160,7 +162,8 @@ void Disassembly::Disassemble() const
                    &dword0,
                    &prefix_len);
 #endif
-            std::string instr(&line[prefix_len]);
+            DIVE_ASSERT(0 <= prefix_len && prefix_len <= line.length());
+            std::string_view instr = std::string_view(line).substr(prefix_len);
             if (n >= disassembled_data.m_instructions_text.size())
             {
                 disassembled_data.m_instructions_text.resize(n + 1);

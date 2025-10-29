@@ -36,6 +36,8 @@ class QProgressDialog;
 class QLineEdit;
 class QSpinBox;
 class QCheckBox;
+class QRadioButton;
+class QButtonGroup;
 
 class TraceWorker : public QThread
 {
@@ -133,7 +135,6 @@ public:
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void ShowGfxrFields();
     void HideGfxrFields();
-    void UseGfxrCapture(bool enable);
     void RetrieveGfxrCapture();
 
 protected:
@@ -155,6 +156,7 @@ private slots:
     void         OnGfxrCaptureClicked();
     void         ShowErrorMessage(const QString &err_msg);
     absl::Status StopPackageAndCleanup();
+    void         OnCaptureTypeChanged(int id);
 
 signals:
     void TraceAvailable(const QString &);
@@ -172,6 +174,12 @@ private:
     QStandardItemModel *m_dev_model;
     QComboBox          *m_dev_box;
     QPushButton        *m_dev_refresh_button;
+
+    QHBoxLayout  *m_capture_type_layout;
+    QLabel       *m_capture_type_label;
+    QButtonGroup *m_capture_type_button_group;
+    QRadioButton *m_gfxr_capture_type_button;
+    QRadioButton *m_pm4_capture_type_button;
 
     QHBoxLayout                            *m_pkg_filter_layout;
     QLabel                                 *m_pkg_filter_label;

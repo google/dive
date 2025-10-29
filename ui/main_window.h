@@ -134,7 +134,7 @@ signals:
     void AnalyzeCaptureStarted(const QString &file_path);
 
 public slots:
-    void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
+    void OnCapture(bool is_capture_delayed = false);
     void OnCaptureUpdated(const QString &file_path);
     void OnSwitchToShaderTab();
     void OnOpenVulkanDrawCallMenu(const QPoint &pos);
@@ -155,7 +155,6 @@ private slots:
     void OnFilterModeChange(const QString &string);
     void OnGfxrFilterModeChange();
     void OnOpenFile();
-    void OnGFXRCapture();
     void OnNormalCapture();
     void OnCaptureTrigger();
     void OnAnalyzeCapture();
@@ -260,8 +259,6 @@ private:
     QAction       *m_save_as_action;
     QAction       *m_exit_action;
     QMenu         *m_capture_menu;
-    QAction       *m_gfxr_capture_action;
-    QAction       *m_pm4_capture_action;
     QAction       *m_capture_action;
     QAction       *m_capture_delay_action;
     QAction       *m_capture_setting_action;

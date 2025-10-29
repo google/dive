@@ -1617,12 +1617,6 @@ void MainWindow::OnOpenFile()
     }
 }
 
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnGFXRCapture()
-{
-    emit OnCapture(false, true);
-}
-
 // =================================================================================================
 // OnNormalCapture is triggered for captures without counters.
 // =================================================================================================
@@ -1681,9 +1675,8 @@ void MainWindow::OnCaptureTrigger()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnCapture(bool is_capture_delayed, bool is_gfxr_capture)
+void MainWindow::OnCapture(bool is_capture_delayed)
 {
-    m_trace_dig->UseGfxrCapture(is_gfxr_capture);
     m_trace_dig->UpdateDeviceList(true);
     m_trace_dig->open();
 }
@@ -2090,19 +2083,9 @@ void MainWindow::CreateActions()
     // Capture action
     m_capture_action = new QAction(tr("&Capture"), this);
     m_capture_action->setStatusTip(tr("Capture a Dive trace"));
+    m_capture_action->setIcon(QIcon(":/images/capture.png"));
     m_capture_action->setShortcut(QKeySequence("f5"));
     connect(m_capture_action, &QAction::triggered, this, &MainWindow::OnNormalCapture);
-
-    // PM4 Capture action
-    m_pm4_capture_action = new QAction(tr("PM4 Capture"), this);
-    m_pm4_capture_action->setStatusTip(tr("Capture a Dive trace (PM4)"));
-    m_pm4_capture_action->setShortcut(QKeySequence("f5"));
-    connect(m_pm4_capture_action, &QAction::triggered, this, &MainWindow::OnNormalCapture);
-    // GFXR Capture action
-    m_gfxr_capture_action = new QAction(tr("GFXR Capture"), this);
-    m_gfxr_capture_action->setStatusTip(tr("Capture a Dive trace (GFXR)"));
-    m_gfxr_capture_action->setShortcut(QKeySequence("f6"));
-    connect(m_gfxr_capture_action, &QAction::triggered, this, &MainWindow::OnGFXRCapture);
 
     // Capture with delay action
     m_capture_delay_action = new QAction(tr("Capture with delay"), this);
@@ -2146,8 +2129,7 @@ void MainWindow::CreateMenus()
     m_file_menu->addAction(m_exit_action);
 
     m_capture_menu = menuBar()->addMenu(tr("&Capture"));
-    m_capture_menu->addAction(m_pm4_capture_action);
-    m_capture_menu->addAction(m_gfxr_capture_action);
+    m_capture_menu->addAction(m_capture_action);
 
     m_analyze_menu = menuBar()->addMenu(tr("&Analyze"));
     m_analyze_menu->addAction(m_analyze_action);
@@ -2160,12 +2142,6 @@ void MainWindow::CreateMenus()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::CreateToolBars()
 {
-    // Create the capture button for the toolbar
-    QToolButton *capture_button = new QToolButton(this);
-    capture_button->setPopupMode(QToolButton::InstantPopup);
-    capture_button->setMenu(m_capture_menu);
-    capture_button->setIcon(QIcon(":/images/capture.png"));
-
     QToolButton *open_button = new QToolButton(this);
     open_button->setPopupMode(QToolButton::MenuButtonPopup);
     open_button->setDefaultAction(m_open_action);
@@ -2174,7 +2150,7 @@ void MainWindow::CreateToolBars()
     m_file_tool_bar = addToolBar(tr("&File"));
     m_file_tool_bar->addWidget(open_button);
     m_file_tool_bar->addAction(m_save_action);
-    m_file_tool_bar->addWidget(capture_button);
+    m_file_tool_bar->addAction(m_capture_action);
     m_file_tool_bar->addAction(m_analyze_action);
 }
 

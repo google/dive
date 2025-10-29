@@ -18,7 +18,7 @@
 # gfxreconstruct's cmake_minimum_required. For consistency between host and
 # Android builds, explicitly set the cmake_minimum_required to what's in the
 # Dive root CMakeLists.txt
-cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(gfxr_decode_ext_lib)
 

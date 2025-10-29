@@ -16,16 +16,28 @@ limitations under the License.
 
 #include "component_files.h"
 
-namespace Dive::ComponentFiles
+#include "absl/status/status.h"
+#include "absl/strings/str_format.h"
+
+namespace Dive
 {
 
-absl::StatusOr<Dive::ComponentFiles::Paths> GetHostPaths(const std::filesystem::path &parent_dir,
-                                                         const std::string           &gfxr_stem)
+absl::StatusOr<Dive::ComponentFilePaths> GetComponentFilesHostPaths(
+const std::filesystem::path &parent_dir,
+const std::string           &gfxr_stem)
 {
-    assert(!gfxr_stem.empty());
-    assert(!parent_dir.empty());
+    if (gfxr_stem.empty())
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("gfxr_stem cannot be empty"));
+    }
 
-    Dive::ComponentFiles::Paths artifacts = {};
+    if (parent_dir.empty())
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("parent_dir cannot be empty"));
+    }
+
+    Dive::ComponentFileConstants constants;
+    Dive::ComponentFilePaths     artifacts = {};
 
     // check format of gfxr_stem
     // dots in filename are allowed
@@ -39,29 +51,33 @@ absl::StatusOr<Dive::ComponentFiles::Paths> GetHostPaths(const std::filesystem::
 
     // .gfxa files have a different stem from the .gfxr file
     std::string gfxa_stem = gfxr_stem;
-    size_t      pos = gfxa_stem.find(Dive::ComponentFiles::kGfxrFileNameSubstr);
+    size_t      pos = gfxa_stem.find(constants.kGfxrFileNameSubstr);
     if (pos == std::string::npos)
     {
         return absl::FailedPreconditionError(
         absl::StrFormat("unexpected name for gfxr file: %s, expecting name containing: %s",
                         gfxr_stem,
-                        Dive::ComponentFiles::kGfxrFileNameSubstr));
+                        constants.kGfxrFileNameSubstr));
     }
-    int gfxr_string_length = sizeof(Dive::ComponentFiles::kGfxrFileNameSubstr) / sizeof(char);
-    gfxa_stem.replace(pos, gfxr_string_length - 1, Dive::ComponentFiles::kGfxaFileNameSubstr);
+    gfxa_stem.replace(pos, constants.kGfxrFileNameSubstr.size(), constants.kGfxaFileNameSubstr);
 
-    artifacts.gfxr = parent_dir / (gfxr_stem + Dive::ComponentFiles::kGfxrExt);
-    artifacts.gfxa = parent_dir / (gfxa_stem + Dive::ComponentFiles::kGfxaExt);
-    artifacts.perf_counter_csv = parent_dir /
-                                 (gfxr_stem + Dive::ComponentFiles::kProfilingMetricsHostSuffix +
-                                  Dive::ComponentFiles::kCsvExt);
-    artifacts.gpu_timing_csv = parent_dir /
-                               (gfxr_stem + Dive::ComponentFiles::kGpuTimingHostSuffix +
-                                Dive::ComponentFiles::kCsvExt);
-    artifacts.pm4_rd = parent_dir / (gfxr_stem + Dive::ComponentFiles::kRdExt);
-    artifacts.renderdoc_rdc = parent_dir / (gfxr_stem + Dive::ComponentFiles::kRenderDocHostSuffix +
-                                            Dive::ComponentFiles::kRdcExt);
+    artifacts.gfxr = parent_dir / absl::StrFormat("%s%s", gfxr_stem, constants.kGfxrExt);
+    artifacts.gfxa = parent_dir / absl::StrFormat("%s%s", gfxa_stem, constants.kGfxaExt);
+    artifacts.perf_counter_csv = parent_dir / absl::StrFormat("%s%s%s",
+                                                              gfxr_stem,
+                                                              constants.kProfilingMetricsHostSuffix,
+                                                              constants.kCsvExt);
+    artifacts.gpu_timing_csv = parent_dir / absl::StrFormat("%s%s%s",
+                                                            gfxr_stem,
+                                                            constants.kGpuTimingHostSuffix,
+                                                            constants.kCsvExt);
+    artifacts.pm4_rd = parent_dir / absl::StrFormat("%s%s", gfxr_stem, constants.kRdExt);
+    artifacts.screenshot_png = parent_dir / absl::StrFormat("%s%s", gfxr_stem, constants.kPngExt);
+    artifacts.renderdoc_rdc = parent_dir / absl::StrFormat("%s%s%s",
+                                                           gfxr_stem,
+                                                           constants.kRenderDocHostSuffix,
+                                                           constants.kRdcExt);
     return artifacts;
 }
 
-}  // namespace Dive::ComponentFiles
+}  // namespace Dive

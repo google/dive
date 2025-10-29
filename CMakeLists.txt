@@ -55,6 +55,8 @@ add_subdirectory(third_party/abseil-cpp)
 
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
+else()
+    add_subdirectory(utils)
 endif()
 
 # `dive_core/common.h` is used in more places other than dive_core now
@@ -86,7 +88,6 @@ add_subdirectory(capture_service)
 add_subdirectory(layer)
 add_subdirectory(runtime_layer)
 add_subdirectory(gpu_time)
-add_subdirectory(utils)
 
 # For generated headers
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)

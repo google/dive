@@ -20,7 +20,7 @@ limitations under the License.
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-namespace Dive::ComponentFiles
+namespace Dive
 {
 namespace
 {
@@ -40,22 +40,43 @@ MATCHER_P(PathsEq, expected, "")
     return true;
 }
 
+TEST(ValidateGfxrReplaySettingsTest, EmptyGfxrStemFail)
+{
+    std::filesystem::path parent_dir = "PARENT";
+    parent_dir /= "DIR";
+    std::string gfxr_stem = "";
+
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem).status(),
+                StatusIs(absl::StatusCode::kFailedPrecondition, "gfxr_stem cannot be empty"));
+}
+
+TEST(ValidateGfxrReplaySettingsTest, EmptyParentDirFail)
+{
+    std::filesystem::path parent_dir = "";
+    std::string           gfxr_stem = "PLACEHOLDER_trim_trigger_ID";
+
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem).status(),
+                StatusIs(absl::StatusCode::kFailedPrecondition, "parent_dir cannot be empty"));
+}
+
 TEST(ValidateGfxrReplaySettingsTest, BasicPass)
 {
     std::filesystem::path parent_dir = "PARENT";
     parent_dir /= "DIR";
     std::string gfxr_stem = "PLACEHOLDER_trim_trigger_ID";
 
-    Paths expected_res = {};
+    ComponentFilePaths expected_res = {};
     expected_res.gfxr = parent_dir / "PLACEHOLDER_trim_trigger_ID.gfxr";
     expected_res.gfxa = parent_dir / "PLACEHOLDER_asset_file_ID.gfxa";
     expected_res.perf_counter_csv = parent_dir /
                                     "PLACEHOLDER_trim_trigger_ID_profiling_metrics.csv";
     expected_res.gpu_timing_csv = parent_dir / "PLACEHOLDER_trim_trigger_ID_gpu_time.csv";
     expected_res.pm4_rd = parent_dir / "PLACEHOLDER_trim_trigger_ID.rd";
+    expected_res.screenshot_png = parent_dir / "PLACEHOLDER_trim_trigger_ID.png";
     expected_res.renderdoc_rdc = parent_dir / "PLACEHOLDER_trim_trigger_ID_capture.rdc";
 
-    EXPECT_THAT(GetHostPaths(parent_dir, gfxr_stem), IsOkAndHolds(PathsEq(expected_res)));
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem),
+                IsOkAndHolds(PathsEq(expected_res)));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, GfxrSubstringInParentPathPass)
@@ -65,16 +86,18 @@ TEST(ValidateGfxrReplaySettingsTest, GfxrSubstringInParentPathPass)
     parent_dir /= "_trim_trigger_";
     std::string gfxr_stem = "PLACEHOLDER_trim_trigger_ID";
 
-    Paths expected_res = {};
+    ComponentFilePaths expected_res = {};
     expected_res.gfxr = parent_dir / "PLACEHOLDER_trim_trigger_ID.gfxr";
     expected_res.gfxa = parent_dir / "PLACEHOLDER_asset_file_ID.gfxa";
     expected_res.perf_counter_csv = parent_dir /
                                     "PLACEHOLDER_trim_trigger_ID_profiling_metrics.csv";
     expected_res.gpu_timing_csv = parent_dir / "PLACEHOLDER_trim_trigger_ID_gpu_time.csv";
     expected_res.pm4_rd = parent_dir / "PLACEHOLDER_trim_trigger_ID.rd";
+    expected_res.screenshot_png = parent_dir / "PLACEHOLDER_trim_trigger_ID.png";
     expected_res.renderdoc_rdc = parent_dir / "PLACEHOLDER_trim_trigger_ID_capture.rdc";
 
-    EXPECT_THAT(GetHostPaths(parent_dir, gfxr_stem), IsOkAndHolds(PathsEq(expected_res)));
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem),
+                IsOkAndHolds(PathsEq(expected_res)));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, DotinGfxrStemPass)
@@ -83,16 +106,18 @@ TEST(ValidateGfxrReplaySettingsTest, DotinGfxrStemPass)
     parent_dir /= "DIR";
     std::string gfxr_stem = "PLACEHOLDER._trim_trigger_ID.test";
 
-    Paths expected_res = {};
+    ComponentFilePaths expected_res = {};
     expected_res.gfxr = parent_dir / "PLACEHOLDER._trim_trigger_ID.test.gfxr";
     expected_res.gfxa = parent_dir / "PLACEHOLDER._asset_file_ID.test.gfxa";
     expected_res.perf_counter_csv = parent_dir /
                                     "PLACEHOLDER._trim_trigger_ID.test_profiling_metrics.csv";
     expected_res.gpu_timing_csv = parent_dir / "PLACEHOLDER._trim_trigger_ID.test_gpu_time.csv";
     expected_res.pm4_rd = parent_dir / "PLACEHOLDER._trim_trigger_ID.test.rd";
+    expected_res.screenshot_png = parent_dir / "PLACEHOLDER._trim_trigger_ID.test.png";
     expected_res.renderdoc_rdc = parent_dir / "PLACEHOLDER._trim_trigger_ID.test_capture.rdc";
 
-    EXPECT_THAT(GetHostPaths(parent_dir, gfxr_stem), IsOkAndHolds(PathsEq(expected_res)));
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem),
+                IsOkAndHolds(PathsEq(expected_res)));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, SlashinGfxrStemFail)
@@ -101,7 +126,7 @@ TEST(ValidateGfxrReplaySettingsTest, SlashinGfxrStemFail)
     parent_dir /= "DIR";
     std::string gfxr_stem = "PLACEHOLDER_trim_trigger_ID/oops";
 
-    EXPECT_THAT(GetHostPaths(parent_dir, gfxr_stem).status(),
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem).status(),
                 StatusIs(absl::StatusCode::kFailedPrecondition,
                          "unexpected name for gfxr file: PLACEHOLDER_trim_trigger_ID/oops, not a "
                          "stem"));
@@ -113,7 +138,7 @@ TEST(ValidateGfxrReplaySettingsTest, BackSlashinGfxrStemFail)
     parent_dir /= "DIR";
     std::string gfxr_stem = "PLACEHOLDER_trim_trigger_ID\\oops";
 
-    EXPECT_THAT(GetHostPaths(parent_dir, gfxr_stem).status(),
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem).status(),
                 StatusIs(absl::StatusCode::kFailedPrecondition,
                          "unexpected name for gfxr file: PLACEHOLDER_trim_trigger_ID\\oops, not a "
                          "stem"));
@@ -125,11 +150,11 @@ TEST(ValidateGfxrReplaySettingsTest, MissingSubstringGfxrStemFail)
     parent_dir /= "DIR";
     std::string gfxr_stem = "PLACEHOLDER_oops_ID";
 
-    EXPECT_THAT(GetHostPaths(parent_dir, gfxr_stem).status(),
+    EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem).status(),
                 StatusIs(absl::StatusCode::kFailedPrecondition,
                          "unexpected name for gfxr file: PLACEHOLDER_oops_ID, expecting name "
                          "containing: _trim_trigger_"));
 }
 
 }  // namespace
-}  // namespace Dive::ComponentFiles
+}  // namespace Dive

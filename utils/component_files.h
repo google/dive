@@ -20,13 +20,13 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "component_files_constants.h"
 
-namespace Dive::ComponentFiles
+namespace Dive
 {
 
 // Describes the presumed filepaths of all files associated with a particular Dive capture,
 // including the GFXR capture components and other artifacts produced during Dive's GFXR replay.
 // This does not guarantee their existence
-struct Paths
+struct ComponentFilePaths
 {
     std::filesystem::path gfxr;
     std::filesystem::path gfxa;
@@ -39,7 +39,8 @@ struct Paths
 
 // Generates expected location of the host files, given the location and stem of the local GFXR
 // file
-absl::StatusOr<Dive::ComponentFiles::Paths> GetHostPaths(const std::filesystem::path &parent_dir,
-                                                         const std::string           &gfxr_stem);
+absl::StatusOr<Dive::ComponentFilePaths> GetComponentFilesHostPaths(
+const std::filesystem::path &parent_dir,
+const std::string           &gfxr_stem);
 
-}  // namespace Dive::ComponentFiles
+}  // namespace Dive

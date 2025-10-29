@@ -331,6 +331,9 @@ void TraceDialog::closeEvent(QCloseEvent *event)
     {
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
+        EnableCaptureTypeButtons(true);
+        m_pm4_capture_type_button->setChecked(true);
+        OnCaptureTypeChanged(kPm4CaptureButtonId);
         event->accept();
         return;
     }
@@ -484,6 +487,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     device->CleanupApp().IgnoreError();
     m_run_button->setText("&Starting..");
     m_run_button->setDisabled(true);
+    EnableCaptureTypeButtons(false);
 
     absl::Status ret;
     qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
@@ -619,6 +623,7 @@ void TraceDialog::OnStartClicked()
         {
             m_run_button->setDisabled(false);
             m_run_button->setText(kStart_Application);
+            EnableCaptureTypeButtons(true);
         }
     }
     else
@@ -641,6 +646,7 @@ void TraceDialog::OnStartClicked()
         }
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
+        EnableCaptureTypeButtons(true);
     }
 }
 
@@ -1163,6 +1169,13 @@ void TraceDialog::HideGfxrFields()
     m_gfxr_capture_file_local_directory_label->hide();
     m_gfxr_capture_file_local_directory_input_box->hide();
 }
+
+void TraceDialog::EnableCaptureTypeButtons(bool enable)
+{
+    m_gfxr_capture_type_button->setEnabled(enable);
+    m_pm4_capture_type_button->setEnabled(enable);
+}
+
 void TraceDialog::OnGfxrCaptureClicked()
 {
     auto         device = Dive::GetDeviceManager().GetDevice();

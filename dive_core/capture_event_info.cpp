@@ -47,11 +47,11 @@ enum class SyncType
 };
 
 //--------------------------------------------------------------------------------------------------
-SyncType GetSyncType(const IMemoryManager &mem_manager,
-                     uint32_t              submit_index,
-                     uint64_t              addr,
-                     uint32_t              opcode,
-                     EmulateStateTracker  &state_tracker)
+SyncType GetSyncType(const IMemoryManager      &mem_manager,
+                     uint32_t                   submit_index,
+                     uint64_t                   addr,
+                     uint32_t                   opcode,
+                     const EmulateStateTracker &state_tracker)
 {
     // 6xx uses CP_EVENT_WRITE packet, which maps to same opcode as CP_EVENT_WRITE7
     // The event field is in the same location with either packet type
@@ -118,11 +118,11 @@ SyncType GetSyncType(const IMemoryManager &mem_manager,
 // =================================================================================================
 // Util
 // =================================================================================================
-bool Util::IsEvent(const IMemoryManager &mem_manager,
-                   uint32_t              submit_index,
-                   uint64_t              addr,
-                   uint32_t              opcode,
-                   EmulateStateTracker  &state_tracker)
+bool Util::IsEvent(const IMemoryManager      &mem_manager,
+                   uint32_t                   submit_index,
+                   uint64_t                   addr,
+                   uint32_t                   opcode,
+                   const EmulateStateTracker &state_tracker)
 {
     if (IsDrawDispatchEventOpcode(opcode))
         return true;
@@ -138,13 +138,13 @@ bool Util::IsEvent(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-Util::EventType Util::GetEventType(const IMemoryManager &mem_manager,
-                                   uint32_t              submit_index,
-                                   uint64_t              va_addr,
-                                   uint32_t              opcode,
-                                   EmulateStateTracker  &state_tracker)
+Util::EventType Util::GetEventType(const IMemoryManager      &mem_manager,
+                                   uint32_t                   submit_index,
+                                   uint64_t                   va_addr,
+                                   uint32_t                   opcode,
+                                   const EmulateStateTracker &state_tracker)
 {
-    EventType type;
+    EventType type = EventType::kUnknown;
     if (IsDrawEventOpcode(opcode))
     {
         type = EventType::kDraw;
@@ -201,11 +201,11 @@ Util::EventType Util::GetEventType(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string Util::GetEventString(const IMemoryManager &mem_manager,
-                                 uint32_t              submit_index,
-                                 uint64_t              va_addr,
-                                 Pm4Type7Header        header,
-                                 EmulateStateTracker  &state_tracker)
+std::string Util::GetEventString(const IMemoryManager      &mem_manager,
+                                 uint32_t                   submit_index,
+                                 uint64_t                   va_addr,
+                                 Pm4Type7Header             header,
+                                 const EmulateStateTracker &state_tracker)
 {
     uint32_t opcode = header.opcode;
 

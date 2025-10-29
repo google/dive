@@ -107,6 +107,11 @@ typename EventStateInfo::Id::basic_type new_cap)
     auto old_ubwc_lossless_enabled_ptr = UBWCLosslessEnabledPtr();
     auto old_ubwc_enabled_on_ds_ptr = UBWCEnabledOnDSPtr();
     auto old_ubwc_lossless_enabled_on_ds_ptr = UBWCLosslessEnabledOnDSPtr();
+    auto old_resolve_scissor_ptr = ResolveScissorPtr();
+    auto old_resolve_base_gmem_ptr = ResolveBaseGmemPtr();
+    auto old_resolve_base_sysmem_ptr = ResolveBaseSysmemPtr();
+    auto old_resolve_format_ptr = ResolveFormatPtr();
+    auto old_resolve_tile_mode_ptr = ResolveTileModePtr();
 
     // `old_buffer` keeps the old buffer from being deallocated before we have
     // copied the data into the new buffer. The old buffer will be deallocated
@@ -282,6 +287,21 @@ typename EventStateInfo::Id::basic_type new_cap)
     memcpy(UBWCLosslessEnabledOnDSPtr(),
            old_ubwc_lossless_enabled_on_ds_ptr,
            kUBWCLosslessEnabledOnDSSize * m_size);
+    static_assert(std::is_trivially_copyable<VkRect2D>::value,
+                  "Field type must be trivially copyable");
+    memcpy(ResolveScissorPtr(), old_resolve_scissor_ptr, kResolveScissorSize * m_size);
+    static_assert(std::is_trivially_copyable<uint32_t>::value,
+                  "Field type must be trivially copyable");
+    memcpy(ResolveBaseGmemPtr(), old_resolve_base_gmem_ptr, kResolveBaseGmemSize * m_size);
+    static_assert(std::is_trivially_copyable<uint64_t>::value,
+                  "Field type must be trivially copyable");
+    memcpy(ResolveBaseSysmemPtr(), old_resolve_base_sysmem_ptr, kResolveBaseSysmemSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_format>::value,
+                  "Field type must be trivially copyable");
+    memcpy(ResolveFormatPtr(), old_resolve_format_ptr, kResolveFormatSize * m_size);
+    static_assert(std::is_trivially_copyable<a6xx_tile_mode>::value,
+                  "Field type must be trivially copyable");
+    memcpy(ResolveTileModePtr(), old_resolve_tile_mode_ptr, kResolveTileModeSize * m_size);
 
     // Update the debug-only ponters to the arrays
 #ifndef NDEBUG
@@ -338,6 +358,11 @@ typename EventStateInfo::Id::basic_type new_cap)
     DBG_ubwc_lossless_enabled = UBWCLosslessEnabledPtr();
     DBG_ubwc_enabled_on_ds = UBWCEnabledOnDSPtr();
     DBG_ubwc_lossless_enabled_on_ds = UBWCLosslessEnabledOnDSPtr();
+    DBG_resolve_scissor = ResolveScissorPtr();
+    DBG_resolve_base_gmem = ResolveBaseGmemPtr();
+    DBG_resolve_base_sysmem = ResolveBaseSysmemPtr();
+    DBG_resolve_format = ResolveFormatPtr();
+    DBG_resolve_tile_mode = ResolveTileModePtr();
 #endif
 }
 
@@ -435,6 +460,11 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     }
     new (UBWCEnabledOnDSPtr(Id(m_size))) bool();
     new (UBWCLosslessEnabledOnDSPtr(Id(m_size))) bool();
+    new (ResolveScissorPtr(Id(m_size))) VkRect2D();
+    new (ResolveBaseGmemPtr(Id(m_size))) uint32_t();
+    new (ResolveBaseSysmemPtr(Id(m_size))) uint64_t();
+    new (ResolveFormatPtr(Id(m_size))) a6xx_format();
+    new (ResolveTileModePtr(Id(m_size))) a6xx_tile_mode();
 
     Id id(m_size);
     m_size += 1;
@@ -517,6 +547,11 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
            EventStateInfo::kUBWCLosslessEnabledSize);
     SetUBWCEnabledOnDS(other_obj.UBWCEnabledOnDS(other_id));
     SetUBWCLosslessEnabledOnDS(other_obj.UBWCLosslessEnabledOnDS(other_id));
+    SetResolveScissor(other_obj.ResolveScissor(other_id));
+    SetResolveBaseGmem(other_obj.ResolveBaseGmem(other_id));
+    SetResolveBaseSysmem(other_obj.ResolveBaseSysmem(other_id));
+    SetResolveFormat(other_obj.ResolveFormat(other_id));
+    SetResolveTileMode(other_obj.ResolveTileMode(other_id));
 }
 
 template<>
@@ -814,6 +849,31 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         auto val = UBWCLosslessEnabledOnDS();
         SetUBWCLosslessEnabledOnDS(other.UBWCLosslessEnabledOnDS());
         other.SetUBWCLosslessEnabledOnDS(val);
+    }
+    {
+        auto val = ResolveScissor();
+        SetResolveScissor(other.ResolveScissor());
+        other.SetResolveScissor(val);
+    }
+    {
+        auto val = ResolveBaseGmem();
+        SetResolveBaseGmem(other.ResolveBaseGmem());
+        other.SetResolveBaseGmem(val);
+    }
+    {
+        auto val = ResolveBaseSysmem();
+        SetResolveBaseSysmem(other.ResolveBaseSysmem());
+        other.SetResolveBaseSysmem(val);
+    }
+    {
+        auto val = ResolveFormat();
+        SetResolveFormat(other.ResolveFormat());
+        other.SetResolveFormat(val);
+    }
+    {
+        auto val = ResolveTileMode();
+        SetResolveTileMode(other.ResolveTileMode());
+        other.SetResolveTileMode(val);
     }
 }
 

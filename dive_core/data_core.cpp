@@ -375,7 +375,11 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         // Add a new event to the EventInfo metadata array
         EventInfo event_info = {};
         event_info.m_submit_index = submit_index;
-        event_info.m_type = Util::GetEventType(mem_manager, submit_index, va_addr, type7_header->opcode, m_state_tracker);
+        event_info.m_type = Util::GetEventType(mem_manager,
+                                               submit_index,
+                                               va_addr,
+                                               type7_header->opcode,
+                                               m_state_tracker);
 
         if (event_info.m_type == Util::EventType::kDraw)
         {
@@ -402,11 +406,20 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         {
             if (event_info.m_type == Util::EventType::kDraw)
             {
-                FillEventStateInfo(it);
+                FillDrawEventStateInfo(it);
             }
 
             if (!HandleShaders(mem_manager, submit_index, type7_header->opcode))
                 return false;
+        }
+        else if (EventInfo::IsResolve(event_info.m_type))
+        {
+            FillResolveOrClearEventStateInfo(it);
+            FillResolveEventStateInfo(it);
+        }
+        else if (EventInfo::IsGmemClear(event_info.m_type))
+        {
+            FillResolveOrClearEventStateInfo(it);
         }
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
@@ -504,7 +517,7 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::FillEventStateInfo(EventStateInfo::Iterator event_state_it)
+void CaptureMetadataCreator::FillDrawEventStateInfo(EventStateInfo::Iterator event_state_it)
 {
     // Vulkan states
     FillInputAssemblyState(event_state_it);
@@ -518,6 +531,58 @@ void CaptureMetadataCreator::FillEventStateInfo(EventStateInfo::Iterator event_s
     // Hardware-specific non-Vulkan states
     FillHardwareSpecificStates(event_state_it);
 }
+
+//--------------------------------------------------------------------------------------------------
+void CaptureMetadataCreator::FillResolveOrClearEventStateInfo(
+EventStateInfo::Iterator event_state_it)
+{
+    uint32_t rb_resolve_gmem_buffer_base_reg_offset = GetRegOffsetByName(
+    "RB_RESOLVE_GMEM_BUFFER_BASE");
+    if (m_state_tracker.IsRegSet(rb_resolve_gmem_buffer_base_reg_offset))
+    {
+        event_state_it->SetResolveBaseGmem(
+        m_state_tracker.GetRegValue(rb_resolve_gmem_buffer_base_reg_offset));
+    }
+
+    uint32_t rb_resolve_cntl_1_reg_offset = GetRegOffsetByName("RB_RESOLVE_CNTL_1");
+    DIVE_ASSERT(rb_resolve_cntl_1_reg_offset != kInvalidRegOffset);
+    if (m_state_tracker.IsRegSet(rb_resolve_cntl_1_reg_offset))
+    {
+        // Assumption: These are all set together. All-or-nothing.
+        RB_RESOLVE_CNTL_1 rb_resolve_cntl_1_reg;
+        RB_RESOLVE_CNTL_2 rb_resolve_cntl_2_reg;
+        uint32_t          rb_resolve_cntl_2_reg_offset = GetRegOffsetByName("RB_RESOLVE_CNTL_2");
+        if (m_state_tracker.IsRegSet(rb_resolve_cntl_2_reg_offset))
+        {
+            rb_resolve_cntl_1_reg.u32All = m_state_tracker.GetRegValue(
+            rb_resolve_cntl_1_reg_offset);
+            rb_resolve_cntl_2_reg.u32All = m_state_tracker.GetRegValue(
+            rb_resolve_cntl_2_reg_offset);
+
+            VkRect2D rect;
+            rect.offset.x = rb_resolve_cntl_1_reg.bitfields.X;
+            rect.offset.y = rb_resolve_cntl_1_reg.bitfields.Y;
+            rect.extent.width = rb_resolve_cntl_2_reg.bitfields.X - rect.offset.x;
+            rect.extent.height = rb_resolve_cntl_2_reg.bitfields.Y - rect.offset.y;
+            event_state_it->SetResolveScissor(rect);
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CaptureMetadataCreator::FillResolveEventStateInfo(EventStateInfo::Iterator event_state_it)
+{
+    uint32_t rb_resolve_sysmem_buffer_base_reg_offset = GetRegOffsetByName(
+    "RB_RESOLVE_SYSTEM_BUFFER_BASE");
+    if (m_state_tracker.IsRegSet(rb_resolve_sysmem_buffer_base_reg_offset))
+    {
+        uint64_t addr = m_state_tracker.GetReg64Value(rb_resolve_sysmem_buffer_base_reg_offset);
+        event_state_it->SetResolveBaseSysmem(addr);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CaptureMetadataCreator::FillClearEventStateInfo(EventStateInfo::Iterator event_state_it) {}
 
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::FillInputAssemblyState(EventStateInfo::Iterator event_state_it)

@@ -399,6 +399,36 @@
                     "ty": "bool",
                     "category": "GPU-specific",
                     "desc": "Whether UBWC Lossless compression (A7XX+) is enabled for this depth stencil attachment"
+                },
+                {
+                    "name": "ResolveScissor",
+                    "ty": "VkRect2D",
+                    "category": "Resolve",
+                    "desc": "Defines the rectangular bounds of the resolve operation"
+                },
+                {
+                    "name": "ResolveBaseGmem",
+                    "ty": "uint32_t",
+                    "category": "Resolve",
+                    "desc": "The base offset in Gmem for the resolve operation"
+                },
+                {
+                    "name": "ResolveBaseSysmem",
+                    "ty": "uint64_t",
+                    "category": "Resolve",
+                    "desc": "The base address in system memory for the resolve operation"
+                },
+                {
+                    "name": "ResolveFormat",
+                    "ty": "a6xx_format",
+                    "category": "Resolve",
+                    "desc": "The format of the buffer being resolved"
+                },
+                {
+                    "name": "ResolveTileMode",
+                    "ty": "a6xx_tile_mode",
+                    "category": "Resolve",
+                    "desc": "The tile mode of the buffer being resolved"
                 }
             ]
         }

@@ -3079,6 +3079,187 @@ public:
         return m_obj_ptr->GetUBWCLosslessEnabledOnDSDescription();
     }
 
+    //-----------------------------------------------
+    // REF FIELD ResolveScissor: Defines the rectangular bounds of the resolve operation
+
+    // `ResolveScissor()` returns the value of the ResolveScissor field of the referenced object
+    inline VkRect2D ResolveScissor() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveScissor(m_id);
+    }
+
+    // `SetResolveScissor(value)` sets the ResolveScissor field of the referenced object
+    inline const Ref& SetResolveScissor(VkRect2D value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetResolveScissor(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsResolveScissorSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveScissorSet(m_id);
+    }
+
+    inline const char* GetResolveScissorName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveScissorName();
+    }
+
+    inline const char* GetResolveScissorDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveScissorDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveBaseGmem: The base offset in Gmem for the resolve operation
+
+    // `ResolveBaseGmem()` returns the value of the ResolveBaseGmem field of the referenced object
+    inline uint32_t ResolveBaseGmem() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveBaseGmem(m_id);
+    }
+
+    // `SetResolveBaseGmem(value)` sets the ResolveBaseGmem field of the referenced object
+    inline const Ref& SetResolveBaseGmem(uint32_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetResolveBaseGmem(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsResolveBaseGmemSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveBaseGmemSet(m_id);
+    }
+
+    inline const char* GetResolveBaseGmemName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseGmemName();
+    }
+
+    inline const char* GetResolveBaseGmemDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseGmemDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveBaseSysmem: The base address in system memory for the resolve operation
+
+    // `ResolveBaseSysmem()` returns the value of the ResolveBaseSysmem field of the referenced
+    // object
+    inline uint64_t ResolveBaseSysmem() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveBaseSysmem(m_id);
+    }
+
+    // `SetResolveBaseSysmem(value)` sets the ResolveBaseSysmem field of the referenced object
+    inline const Ref& SetResolveBaseSysmem(uint64_t value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetResolveBaseSysmem(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsResolveBaseSysmemSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveBaseSysmemSet(m_id);
+    }
+
+    inline const char* GetResolveBaseSysmemName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseSysmemName();
+    }
+
+    inline const char* GetResolveBaseSysmemDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseSysmemDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveFormat: The format of the buffer being resolved
+
+    // `ResolveFormat()` returns the value of the ResolveFormat field of the referenced object
+    inline a6xx_format ResolveFormat() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveFormat(m_id);
+    }
+
+    // `SetResolveFormat(value)` sets the ResolveFormat field of the referenced object
+    inline const Ref& SetResolveFormat(a6xx_format value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetResolveFormat(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsResolveFormatSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveFormatSet(m_id);
+    }
+
+    inline const char* GetResolveFormatName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveFormatName();
+    }
+
+    inline const char* GetResolveFormatDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveFormatDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveTileMode: The tile mode of the buffer being resolved
+
+    // `ResolveTileMode()` returns the value of the ResolveTileMode field of the referenced object
+    inline a6xx_tile_mode ResolveTileMode() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveTileMode(m_id);
+    }
+
+    // `SetResolveTileMode(value)` sets the ResolveTileMode field of the referenced object
+    inline const Ref& SetResolveTileMode(a6xx_tile_mode value) const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        m_obj_ptr->SetResolveTileMode(m_id, value);
+        return static_cast<const Ref&>(*this);
+    }
+
+    inline bool IsResolveTileModeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveTileModeSet(m_id);
+    }
+
+    inline const char* GetResolveTileModeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveTileModeName();
+    }
+
+    inline const char* GetResolveTileModeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveTileModeDescription();
+    }
+
     EventStateInfoRefT& operator=(const EventStateInfoRefT& other) = delete;
     void                assign(const SOA& other_obj, Id other_id) const;
     void                swap(const Ref& other) const;
@@ -4697,6 +4878,147 @@ public:
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
         return m_obj_ptr->GetUBWCLosslessEnabledOnDSDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveScissor: Defines the rectangular bounds of the resolve operation
+
+    // `ResolveScissor()` returns the value of the ResolveScissor field of the referenced object
+    inline VkRect2D ResolveScissor() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveScissor(m_id);
+    }
+
+    inline bool IsResolveScissorSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveScissorSet(m_id);
+    }
+
+    inline const char* GetResolveScissorName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveScissorName();
+    }
+
+    inline const char* GetResolveScissorDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveScissorDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveBaseGmem: The base offset in Gmem for the resolve operation
+
+    // `ResolveBaseGmem()` returns the value of the ResolveBaseGmem field of the referenced object
+    inline uint32_t ResolveBaseGmem() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveBaseGmem(m_id);
+    }
+
+    inline bool IsResolveBaseGmemSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveBaseGmemSet(m_id);
+    }
+
+    inline const char* GetResolveBaseGmemName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseGmemName();
+    }
+
+    inline const char* GetResolveBaseGmemDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseGmemDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveBaseSysmem: The base address in system memory for the resolve operation
+
+    // `ResolveBaseSysmem()` returns the value of the ResolveBaseSysmem field of the referenced
+    // object
+    inline uint64_t ResolveBaseSysmem() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveBaseSysmem(m_id);
+    }
+
+    inline bool IsResolveBaseSysmemSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveBaseSysmemSet(m_id);
+    }
+
+    inline const char* GetResolveBaseSysmemName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseSysmemName();
+    }
+
+    inline const char* GetResolveBaseSysmemDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveBaseSysmemDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveFormat: The format of the buffer being resolved
+
+    // `ResolveFormat()` returns the value of the ResolveFormat field of the referenced object
+    inline a6xx_format ResolveFormat() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveFormat(m_id);
+    }
+
+    inline bool IsResolveFormatSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveFormatSet(m_id);
+    }
+
+    inline const char* GetResolveFormatName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveFormatName();
+    }
+
+    inline const char* GetResolveFormatDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveFormatDescription();
+    }
+
+    //-----------------------------------------------
+    // REF FIELD ResolveTileMode: The tile mode of the buffer being resolved
+
+    // `ResolveTileMode()` returns the value of the ResolveTileMode field of the referenced object
+    inline a6xx_tile_mode ResolveTileMode() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->ResolveTileMode(m_id);
+    }
+
+    inline bool IsResolveTileModeSet() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->IsResolveTileModeSet(m_id);
+    }
+
+    inline const char* GetResolveTileModeName() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveTileModeName();
+    }
+
+    inline const char* GetResolveTileModeDescription() const
+    {
+        DIVE_ASSERT(m_obj_ptr != nullptr);
+        return m_obj_ptr->GetResolveTileModeDescription();
     }
 
     EventStateInfoConstRefT& operator=(const EventStateInfoConstRefT& other) = delete;
@@ -8077,6 +8399,312 @@ public:
                "attachment";
     }
 
+    //-----------------------------------------------
+    // FIELD ResolveScissor: Defines the rectangular bounds of the resolve operation
+
+    // `ResolveScissorPtr()` returns a shared pointer to an array of `size()` elements
+    inline const VkRect2D* ResolveScissorPtr() const
+    {
+        return reinterpret_cast<VkRect2D*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveScissorOffset * m_cap);
+    }
+    inline VkRect2D* ResolveScissorPtr()
+    {
+        return reinterpret_cast<VkRect2D*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveScissorOffset * m_cap);
+    }
+    // `ResolveScissorPtr()` returns a shared pointer to an array of `size()` elements
+    inline const VkRect2D* ResolveScissorPtr(Id id) const
+    {
+        return reinterpret_cast<VkRect2D*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveScissorOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline VkRect2D* ResolveScissorPtr(Id id)
+    {
+        return reinterpret_cast<VkRect2D*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveScissorOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `ResolveScissor(id)` retuns the `ResolveScissor` element of the object identified by `id`
+    inline VkRect2D ResolveScissor(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *ResolveScissorPtr(id);
+    }
+
+    // `SetResolveScissor(id,value)` sets the `ResolveScissor` element of the object identified by
+    // `id`
+    inline SOA& SetResolveScissor(Id id, VkRect2D value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ResolveScissorPtr(id) = value;
+        MarkFieldSet(id, kResolveScissorIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsResolveScissorSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kResolveScissorIndex);
+    }
+
+    inline const char* GetResolveScissorName() const { return "ResolveScissor"; }
+
+    inline const char* GetResolveScissorDescription() const
+    {
+        return "Defines the rectangular bounds of the resolve operation";
+    }
+
+    //-----------------------------------------------
+    // FIELD ResolveBaseGmem: The base offset in Gmem for the resolve operation
+
+    // `ResolveBaseGmemPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint32_t* ResolveBaseGmemPtr() const
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseGmemOffset * m_cap);
+    }
+    inline uint32_t* ResolveBaseGmemPtr()
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseGmemOffset * m_cap);
+    }
+    // `ResolveBaseGmemPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint32_t* ResolveBaseGmemPtr(Id id) const
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseGmemOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint32_t* ResolveBaseGmemPtr(Id id)
+    {
+        return reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseGmemOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `ResolveBaseGmem(id)` retuns the `ResolveBaseGmem` element of the object identified by `id`
+    inline uint32_t ResolveBaseGmem(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *ResolveBaseGmemPtr(id);
+    }
+
+    // `SetResolveBaseGmem(id,value)` sets the `ResolveBaseGmem` element of the object identified by
+    // `id`
+    inline SOA& SetResolveBaseGmem(Id id, uint32_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ResolveBaseGmemPtr(id) = value;
+        MarkFieldSet(id, kResolveBaseGmemIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsResolveBaseGmemSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kResolveBaseGmemIndex);
+    }
+
+    inline const char* GetResolveBaseGmemName() const { return "ResolveBaseGmem"; }
+
+    inline const char* GetResolveBaseGmemDescription() const
+    {
+        return "The base offset in Gmem for the resolve operation";
+    }
+
+    //-----------------------------------------------
+    // FIELD ResolveBaseSysmem: The base address in system memory for the resolve operation
+
+    // `ResolveBaseSysmemPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint64_t* ResolveBaseSysmemPtr() const
+    {
+        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseSysmemOffset * m_cap);
+    }
+    inline uint64_t* ResolveBaseSysmemPtr()
+    {
+        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseSysmemOffset * m_cap);
+    }
+    // `ResolveBaseSysmemPtr()` returns a shared pointer to an array of `size()` elements
+    inline const uint64_t* ResolveBaseSysmemPtr(Id id) const
+    {
+        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseSysmemOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline uint64_t* ResolveBaseSysmemPtr(Id id)
+    {
+        return reinterpret_cast<uint64_t*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                           kResolveBaseSysmemOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `ResolveBaseSysmem(id)` retuns the `ResolveBaseSysmem` element of the object identified by
+    // `id`
+    inline uint64_t ResolveBaseSysmem(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *ResolveBaseSysmemPtr(id);
+    }
+
+    // `SetResolveBaseSysmem(id,value)` sets the `ResolveBaseSysmem` element of the object
+    // identified by `id`
+    inline SOA& SetResolveBaseSysmem(Id id, uint64_t value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ResolveBaseSysmemPtr(id) = value;
+        MarkFieldSet(id, kResolveBaseSysmemIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsResolveBaseSysmemSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kResolveBaseSysmemIndex);
+    }
+
+    inline const char* GetResolveBaseSysmemName() const { return "ResolveBaseSysmem"; }
+
+    inline const char* GetResolveBaseSysmemDescription() const
+    {
+        return "The base address in system memory for the resolve operation";
+    }
+
+    //-----------------------------------------------
+    // FIELD ResolveFormat: The format of the buffer being resolved
+
+    // `ResolveFormatPtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_format* ResolveFormatPtr() const
+    {
+        return reinterpret_cast<a6xx_format*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                              kResolveFormatOffset * m_cap);
+    }
+    inline a6xx_format* ResolveFormatPtr()
+    {
+        return reinterpret_cast<a6xx_format*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                              kResolveFormatOffset * m_cap);
+    }
+    // `ResolveFormatPtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_format* ResolveFormatPtr(Id id) const
+    {
+        return reinterpret_cast<a6xx_format*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                              kResolveFormatOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline a6xx_format* ResolveFormatPtr(Id id)
+    {
+        return reinterpret_cast<a6xx_format*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                              kResolveFormatOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `ResolveFormat(id)` retuns the `ResolveFormat` element of the object identified by `id`
+    inline a6xx_format ResolveFormat(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *ResolveFormatPtr(id);
+    }
+
+    // `SetResolveFormat(id,value)` sets the `ResolveFormat` element of the object identified by
+    // `id`
+    inline SOA& SetResolveFormat(Id id, a6xx_format value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ResolveFormatPtr(id) = value;
+        MarkFieldSet(id, kResolveFormatIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsResolveFormatSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kResolveFormatIndex);
+    }
+
+    inline const char* GetResolveFormatName() const { return "ResolveFormat"; }
+
+    inline const char* GetResolveFormatDescription() const
+    {
+        return "The format of the buffer being resolved";
+    }
+
+    //-----------------------------------------------
+    // FIELD ResolveTileMode: The tile mode of the buffer being resolved
+
+    // `ResolveTileModePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_tile_mode* ResolveTileModePtr() const
+    {
+        return reinterpret_cast<a6xx_tile_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                 kResolveTileModeOffset * m_cap);
+    }
+    inline a6xx_tile_mode* ResolveTileModePtr()
+    {
+        return reinterpret_cast<a6xx_tile_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                 kResolveTileModeOffset * m_cap);
+    }
+    // `ResolveTileModePtr()` returns a shared pointer to an array of `size()` elements
+    inline const a6xx_tile_mode* ResolveTileModePtr(Id id) const
+    {
+        return reinterpret_cast<a6xx_tile_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                 kResolveTileModeOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    inline a6xx_tile_mode* ResolveTileModePtr(Id id)
+    {
+        return reinterpret_cast<a6xx_tile_mode*>(reinterpret_cast<uint8_t*>(m_buffer.get()) +
+                                                 kResolveTileModeOffset * m_cap) +
+               static_cast<typename Id::basic_type>(id)
+
+        ;
+    }
+    // `ResolveTileMode(id)` retuns the `ResolveTileMode` element of the object identified by `id`
+    inline a6xx_tile_mode ResolveTileMode(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return *ResolveTileModePtr(id);
+    }
+
+    // `SetResolveTileMode(id,value)` sets the `ResolveTileMode` element of the object identified by
+    // `id`
+    inline SOA& SetResolveTileMode(Id id, a6xx_tile_mode value)
+    {
+        DIVE_ASSERT(IsValidId(id));
+        *ResolveTileModePtr(id) = value;
+        MarkFieldSet(id, kResolveTileModeIndex);
+        return static_cast<SOA&>(*this);
+    }
+
+    inline bool IsResolveTileModeSet(Id id) const
+    {
+        DIVE_ASSERT(IsValidId(id));
+        return IsFieldSet(id, kResolveTileModeIndex);
+    }
+
+    inline const char* GetResolveTileModeName() const { return "ResolveTileMode"; }
+
+    inline const char* GetResolveTileModeDescription() const
+    {
+        return "The tile mode of the buffer being resolved";
+    }
+
     // `operator[]` returns a reference to an element identified by `id`. E.g.:
     //   `my_soa[some_id].MyField()`
     inline Ref      operator[](Id id) { return Ref(static_cast<SOA*>(this), id); }
@@ -8613,6 +9241,51 @@ protected:
 #define PARTIAL_SIZE_EventStateInfo kUBWCLosslessEnabledOnDSOffset + kUBWCLosslessEnabledOnDSSize
 #undef PARTIAL_INDEX_EventStateInfo
 #define PARTIAL_INDEX_EventStateInfo kUBWCLosslessEnabledOnDSIndex + 1
+    static_assert(alignof(VkRect2D) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kResolveScissorIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kResolveScissorOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kResolveScissorSize = sizeof(VkRect2D);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kResolveScissorOffset + kResolveScissorSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kResolveScissorIndex + 1
+    static_assert(alignof(uint32_t) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kResolveBaseGmemIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kResolveBaseGmemOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kResolveBaseGmemSize = sizeof(uint32_t);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kResolveBaseGmemOffset + kResolveBaseGmemSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kResolveBaseGmemIndex + 1
+    static_assert(alignof(uint64_t) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kResolveBaseSysmemIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kResolveBaseSysmemOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kResolveBaseSysmemSize = sizeof(uint64_t);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kResolveBaseSysmemOffset + kResolveBaseSysmemSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kResolveBaseSysmemIndex + 1
+    static_assert(alignof(a6xx_format) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kResolveFormatIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kResolveFormatOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kResolveFormatSize = sizeof(a6xx_format);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kResolveFormatOffset + kResolveFormatSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kResolveFormatIndex + 1
+    static_assert(alignof(a6xx_tile_mode) <= kAlignment,
+                  "Field type aligment requirement cannot exceed kAlignment");
+    static constexpr uint32_t kResolveTileModeIndex = PARTIAL_INDEX_EventStateInfo;
+    static constexpr size_t   kResolveTileModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t   kResolveTileModeSize = sizeof(a6xx_tile_mode);
+#undef PARTIAL_SIZE_EventStateInfo
+#define PARTIAL_SIZE_EventStateInfo kResolveTileModeOffset + kResolveTileModeSize
+#undef PARTIAL_INDEX_EventStateInfo
+#define PARTIAL_INDEX_EventStateInfo kResolveTileModeIndex + 1
 
     // Number of bytes required to store each element
     static constexpr size_t kElemSize = PARTIAL_SIZE_EventStateInfo;
@@ -8704,6 +9377,11 @@ protected:
     bool*                                DBG_ubwc_lossless_enabled;
     bool*                                DBG_ubwc_enabled_on_ds;
     bool*                                DBG_ubwc_lossless_enabled_on_ds;
+    VkRect2D*                            DBG_resolve_scissor;
+    uint32_t*                            DBG_resolve_base_gmem;
+    uint64_t*                            DBG_resolve_base_sysmem;
+    a6xx_format*                         DBG_resolve_format;
+    a6xx_tile_mode*                      DBG_resolve_tile_mode;
 #endif
 };
 class EventStateInfoRef;

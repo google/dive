@@ -95,6 +95,7 @@ struct disasm_ctx {
    gpr_bitset half_aliases;
 
    struct shader_stats *stats;
+   enum debug_t debug; // GOOGLE: add debug flag to current context
 };
 
 static void
@@ -597,7 +598,7 @@ disasm_instr_cb(void *d, unsigned n, void *instr)
 
    ctx->cur_opc_cat = opc_cat;
 
-   if (debug & PRINT_RAW) {
+   if (ctx->debug & PRINT_RAW) { // GOOGLE: use debug flag from current context
       fprintf(ctx->out, "%s:%d:%04d:%04d[%08xx_%08xx] ", levels[ctx->level],
               opc_cat, n, ctx->extra_cycles + n, dwords[1], dwords[0]);
    }
@@ -607,6 +608,14 @@ int
 disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
                  unsigned gpu_id, struct shader_stats *stats)
 {
+   return disasm_a3xx_stat_with_debug(dwords, sizedwords, level, out, gpu_id, stats, debug);
+}
+
+// GOOGLE: thread safe version of disasm_a3xx_stat
+int disasm_a3xx_stat_with_debug(uint32_t *dwords, int sizedwords,
+                                int level, FILE *out, unsigned gpu_id,
+                                struct shader_stats *stats, enum debug_t debug) {
+
    struct isa_decode_options decode_options = {
       .gpu_id = gpu_id,
       .show_errors = true,
@@ -622,6 +631,7 @@ disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
       .options = &decode_options,
       .stats = stats,
       .cur_n = -1,
+      .debug = debug, // GOOGLE: add debug flag to current context
    };
 
    memset(&ctx.full_aliases, 0, sizeof(ctx.full_aliases));
@@ -634,7 +644,7 @@ disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
 
    disasm_handle_last(&ctx);
 
-   if (debug & PRINT_STATS)
+   if (ctx.debug & PRINT_STATS) // GOOGLE: use debug flag from current context
       print_stats(&ctx);
 
    return 0;

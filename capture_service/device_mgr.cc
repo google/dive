@@ -105,11 +105,11 @@ absl::Status InstallVulkanLayer(const AdbSession &adb,
                                 std::string_view  layer_filename)
 {
     RETURN_IF_ERROR(
-    adb.Run(absl::StrFormat("push \"%s\" \"%s\"",
+    adb.Run(absl::StrFormat(R"(push "%s" "%s")",
                             ResolveAndroidLibPath(std::string(layer_filename)).generic_string(),
                             kTargetPath)));
     RETURN_IF_ERROR(adb.Run(
-    absl::StrFormat("shell run-as %s cp \"%s/%s\" .", package, kTargetPath, layer_filename)));
+    absl::StrFormat(R"(shell run-as %s cp "%s/%s" .)", package, kTargetPath, layer_filename)));
     return absl::OkStatus();
 }
 
@@ -119,9 +119,9 @@ absl::Status UninstallVulkanLayer(const AdbSession &adb,
 {
     absl::Status status;
     status.Update(
-    adb.Run(absl::StrFormat("shell rm -rf -- \"%s/%s\"", kTargetPath, layer_filename)));
+    adb.Run(absl::StrFormat(R"(shell rm -rf -- "%s/%s")", kTargetPath, layer_filename)));
     status.Update(
-    adb.Run(absl::StrFormat("shell run-as %s rm -rf -- \"%s\"", package, layer_filename)));
+    adb.Run(absl::StrFormat(R"(shell run-as %s rm -rf -- "%s")", package, layer_filename)));
     return status;
 }
 

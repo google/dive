@@ -29,7 +29,7 @@ namespace cli
 void Init();
 bool IsConsoleOutput();
 
-const char *RepositoryVersion();
+std::string DiveApplicationVersion();
 std::string FileFormatVersion();
 
 //--------------------------------------------------------------------------------------------------

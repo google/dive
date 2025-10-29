@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include "vk_rt_dispatch.h"
-#include "common/log.h"
+#include "dive/common/log.h"
 
 namespace DiveLayer
 {

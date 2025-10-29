@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "unix_domain_server.h"
 
-#include "common/log.h"
+#include "dive/common/log.h"
 #include "absl/strings/str_cat.h"
 
 namespace Network

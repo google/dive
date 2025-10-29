@@ -23,7 +23,7 @@ limitations under the License.
 #include <string>
 
 #include "constants.h"
-#include "common/log.h"
+#include "dive/common/log.h"
 #include "trace_mgr.h"
 
 namespace Dive

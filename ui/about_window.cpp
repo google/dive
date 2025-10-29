@@ -28,7 +28,7 @@
 #include <QVBoxLayout>
 #include <sstream>
 
-#include "common/dive_version.h"
+#include "dive/common/version.h"
 
 // =================================================================================================
 // AboutDialog
@@ -38,12 +38,7 @@ AboutDialog::AboutDialog(QWidget *parent)
 {
     // Build version string
     std::ostringstream os;
-    os << DIVE_PRODUCT_NAME << std::endl;
-    os << DIVE_PRODUCT_DESCRIPTION << std::endl;
-    os << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
-    os << std::endl;
-    os << "Version ";
-    os << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "." << DIVE_VERSION_REVISION;
+    os << Dive::DiveApplicationInfo::Get();
     m_build_information = new QLabel(os.str().c_str());
     m_build_information->setWordWrap(true);
 

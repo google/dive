@@ -54,7 +54,7 @@ include_directories(${LibArchive_INCLUDE_DIRS})
 # Tell CMake to create the Dive executable
 add_executable(${PROJECT_NAME} ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} resources.qrc)
 
-# For release builds, build Dive UI as WIN32 GUI application instead of a console application. 
+# For release builds, build Dive UI as WIN32 GUI application instead of a console application.
 # This will supress logging to stdout.
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -63,7 +63,7 @@ endif()
 # Use the Widgets module from Qt 5
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
-target_link_libraries(${PROJECT_NAME} network dive_core device_mgr dive_plugin_loader)
+target_link_libraries(${PROJECT_NAME} dive_version network dive_core device_mgr dive_plugin_loader)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)

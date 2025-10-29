@@ -14,17 +14,10 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
-project(utils)
-
 add_library(component_files
-    component_files.h
-    component_files.cpp
-)
+            component_files.cpp)
 target_link_libraries(component_files PUBLIC
                       absl::statusor)
-target_include_directories(component_files PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)  
 
 enable_testing()
 include(GoogleTest)

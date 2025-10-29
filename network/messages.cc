@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include "messages.h"
-#include "common/macros.h"
+#include "dive/common/macros.h"
 #include "absl/strings/str_cat.h"
 
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;

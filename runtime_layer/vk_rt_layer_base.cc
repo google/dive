@@ -27,7 +27,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "common/log.h"
+#include "dive/common/log.h"
 #include "vk_rt_dispatch.h"
 #include "vk_rt_layer_impl.h"
 

@@ -37,8 +37,6 @@ add_library(trace_mgr
 target_link_libraries(trace_mgr PUBLIC
                       absl::core_headers
                       absl::synchronization)
-# for #include "common/log.h"
-target_include_directories(trace_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 if(ANDROID)
   add_library(service
@@ -77,7 +75,7 @@ else()
   target_include_directories(device_mgr PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
   )
-  target_link_libraries(device_mgr 
+  target_link_libraries(device_mgr
     absl::flags
     absl::flags_parse
     absl::algorithm

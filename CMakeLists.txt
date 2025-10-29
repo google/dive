@@ -55,8 +55,6 @@ add_subdirectory(third_party/abseil-cpp)
 
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
-else()
-    add_subdirectory(utils)
 endif()
 
 # `dive_core/common.h` is used in more places other than dive_core now
@@ -70,11 +68,11 @@ if(GIT_FOUND)
     execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE REPO_SHA1)
-    string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
+    string(STRIP "${REPO_SHA1}" DIVE_REPO_INFO_SHA1)
 endif()
 
-# Adds all the configure time information into dive_cmake_generated.h.in
-configure_file("${CMAKE_SOURCE_DIR}/common/dive_cmake_generated.h.in" "${CMAKE_BINARY_DIR}/generated_include/common/dive_cmake_generated.h")
+# Adds all the configure time information into generated_include/include/dive/cmake
+configure_file("${CMAKE_SOURCE_DIR}/include/dive/cmake/repo_info_generated.h.in" "${CMAKE_BINARY_DIR}/generated_include/dive/cmake/repo_info_generated.h")
 
 include_directories("${CMAKE_BINARY_DIR}/generated_include")
 
@@ -83,6 +81,9 @@ if(DIVE_NO_DISASSEMBLY)
     add_definitions(-DDIVE_NO_DISASSEMBLY=1)
 endif()
 
+include_directories("${CMAKE_SOURCE_DIR}/include")
+
+add_subdirectory(src)
 add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)

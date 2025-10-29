@@ -15,9 +15,9 @@ limitations under the License.
 */
 #pragma once
 
-#include "common/dive_cmake_generated.h"
+#include "dive/cmake/repo_info.h"
 
-#define DIVE_VERSION_SHA1 CMAKE_GENERATED_DIVE_VERSION_SHA1
+#define DIVE_VERSION_SHA1 DIVE_REPO_INFO_SHA1
 
 #define DIVE_VERSION_MAJOR 1
 #define DIVE_VERSION_MINOR 0

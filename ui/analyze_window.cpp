@@ -45,7 +45,7 @@
 #include "capture_service/device_mgr.h"
 #include "settings.h"
 #include "overlay.h"
-#include "common/macros.h"
+#include "dive/common/macros.h"
 
 //--------------------------------------------------------------------------------------------------
 void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)

@@ -177,7 +177,10 @@ protected:
 
 private:
     bool HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t opcode);
-    void FillEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillDrawEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillResolveOrClearEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillResolveEventStateInfo(EventStateInfo::Iterator event_state_it);
+    void FillClearEventStateInfo(EventStateInfo::Iterator event_state_it);
     void FillInputAssemblyState(EventStateInfo::Iterator event_state_it);
     void FillTessellationState(EventStateInfo::Iterator event_state_it);
     void FillViewportState(EventStateInfo::Iterator event_state_it);

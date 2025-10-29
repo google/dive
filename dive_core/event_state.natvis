@@ -470,6 +470,46 @@
                     </ArrayItems>
                 </Expand>
             </Synthetic>
+            <Synthetic Name="ResolveScissor" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((VkRect2D*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kResolveScissorOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ResolveBaseGmem" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint32_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseGmemOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ResolveBaseSysmem" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((uint64_t*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseSysmemOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ResolveFormat" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((a6xx_format*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kResolveFormatOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="ResolveTileMode" >
+                <Expand>
+                    <ArrayItems>
+                            <Size>m_size</Size>
+                        <ValuePointer>((a6xx_tile_mode*)(((uint8_t*)m_buffer._Mypair._Myval2) + EventStateInfo::kResolveTileModeOffset * m_cap))</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
         </Expand>
     </Type>
     <Type Name="Dive::EventStateInfoRef">
@@ -691,6 +731,21 @@
             </Item>
             <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveScissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveScissorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseGmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseGmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseSysmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseSysmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_format*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveTileMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_tile_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveTileModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
 </Expand>
 
@@ -915,6 +970,21 @@
             <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="ResolveScissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveScissorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseGmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseGmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseSysmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseSysmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_format*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveTileMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_tile_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveTileModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -1138,6 +1208,21 @@
             <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
+            <Item Name="ResolveScissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveScissorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseGmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseGmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseSysmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseSysmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_format*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveTileMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_tile_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveTileModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
 </Expand>
 
     </Type>
@@ -1360,6 +1445,21 @@
             </Item>
             <Item Name="UBWCLosslessEnabledOnDS" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
                     ((bool*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kUBWCLosslessEnabledOnDSOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveScissor" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((VkRect2D*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveScissorOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseGmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint32_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseGmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveBaseSysmem" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((uint64_t*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveBaseSysmemOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveFormat" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_format*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveFormatOffset * m_obj_ptr->m_cap))[m_id.m_id]
+            </Item>
+            <Item Name="ResolveTileMode" Condition="!(m_obj_ptr == 0 || m_id.m_id >= m_obj_ptr->m_size)" >
+                    ((a6xx_tile_mode*)(((uint8_t*)m_obj_ptr->m_buffer._Mypair._Myval2) + EventStateInfo::kResolveTileModeOffset * m_obj_ptr->m_cap))[m_id.m_id]
             </Item>
 </Expand>
 

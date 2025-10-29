@@ -24,13 +24,13 @@
 namespace Dive
 {
 
-
 //--------------------------------------------------------------------------------------------------
 // Helper functions
 namespace Util
 {
 enum class EventType : uint8_t
 {
+    kUnknown,
     kDraw,
     kDispatch,
     kBlit,
@@ -47,26 +47,26 @@ enum class EventType : uint8_t
     kWaitForIdle,
     kWaitForMe,
     kEventWriteStart,
-    kEventWriteEnd,
+    kEventWriteEnd
 };
 
-bool IsEvent(const IMemoryManager &mem_manager,
-             uint32_t              submit_index,
-             uint64_t              addr,
-             uint32_t              opcode,
-             EmulateStateTracker  &state_tracker);
+bool IsEvent(const IMemoryManager      &mem_manager,
+             uint32_t                   submit_index,
+             uint64_t                   addr,
+             uint32_t                   opcode,
+             const EmulateStateTracker &state_tracker);
 
-EventType GetEventType(const IMemoryManager &mem_manager,
-                       uint32_t              submit_index,
-                       uint64_t              va_addr,
-                       uint32_t              opcode,
-                       EmulateStateTracker  &state_tracker);
+EventType GetEventType(const IMemoryManager      &mem_manager,
+                       uint32_t                   submit_index,
+                       uint64_t                   va_addr,
+                       uint32_t                   opcode,
+                       const EmulateStateTracker &state_tracker);
 
-std::string GetEventString(const IMemoryManager &mem_manager,
-                           uint32_t              submit_index,
-                           uint64_t              va_addr,
-                           Pm4Type7Header        header,
-                           EmulateStateTracker  &state_tracker);
+std::string GetEventString(const IMemoryManager      &mem_manager,
+                           uint32_t                   submit_index,
+                           uint64_t                   va_addr,
+                           Pm4Type7Header             header,
+                           const EmulateStateTracker &state_tracker);
 uint32_t    GetIndexCount(const IMemoryManager &mem_manager,
                           uint32_t              submit_index,
                           uint64_t              va_addr,
@@ -138,6 +138,38 @@ struct EventInfo
 
     RenderModeType m_render_mode = RenderModeType::kUnknown;
     std::string    m_str;
+
+    static constexpr bool IsResolve(Util::EventType type)
+    {
+        switch (type)
+        {
+        case Util::EventType::kColorSysMemToGmemResolve:
+        case Util::EventType::kColorGmemToSysMemResolve:
+        case Util::EventType::kColorGmemToSysMemResolveAndClear:
+        case Util::EventType::kDepthSysMemToGmemResolve:
+        case Util::EventType::kDepthGmemToSysMemResolve:
+        case Util::EventType::kDepthGmemToSysMemResolveAndClear:
+        case Util::EventType::kSysmemToGmemResolve:
+            return true;
+        default:
+            break;
+        }
+        return false;
+    }
+    static constexpr bool IsGmemClear(Util::EventType type)
+    {
+        switch (type)
+        {
+        case Util::EventType::kColorGmemToSysMemResolveAndClear:
+        case Util::EventType::kColorClearGmem:
+        case Util::EventType::kDepthGmemToSysMemResolveAndClear:
+        case Util::EventType::kDepthClearGmem:
+            return true;
+        default:
+            break;
+        }
+        return false;
+    }
 };
 
 }  // namespace Dive

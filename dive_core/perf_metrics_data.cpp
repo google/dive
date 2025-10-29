@@ -447,11 +447,12 @@ HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
             continue;
         }
 
-        // Not a draw or dispatch
-        if ((node_type != Dive::NodeType::kEventNode) ||
-            (node_type == Dive::NodeType::kEventNode &&
-             command_hierarchy.GetEventNodeType(i) != Util::EventType::kDraw &&
-             command_hierarchy.GetEventNodeType(i) != Util::EventType::kDispatch))
+        const bool is_draw_or_dispatch = (node_type == Dive::NodeType::kEventNode &&
+                                          (command_hierarchy.GetEventNodeType(i) ==
+                                           Util::EventType::kDraw ||
+                                           command_hierarchy.GetEventNodeType(i) ==
+                                           Util::EventType::kDispatch));
+        if (!is_draw_or_dispatch)
         {
             // Note: what if both pm4 node and vulkan draw command node exist?
             continue;

@@ -135,6 +135,7 @@ public:
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void ShowGfxrFields();
     void HideGfxrFields();
+    void EnableCaptureTypeButtons(bool enable);
     void RetrieveGfxrCapture();
 
 protected:

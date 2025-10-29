@@ -32,13 +32,18 @@
 #include <QVBoxLayout>
 #include <QtWidgets/QDesktopWidget>
 #include <QtWidgets>
+#include <QReadLocker>
+#include <QWriteLocker>
+#include <QReadWriteLock>
+#include <QThread>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <future>
+#include <memory>
 #include <optional>
-#include <qabstractitemmodel.h>
-#include <qvariant.h>
+#include <QAbstractItemModel>
+#include <QVariant>
 
 #include "about_window.h"
 #include "buffer_view.h"
@@ -160,15 +165,56 @@ enum class EventMode
 };
 
 // =================================================================================================
+// MainWindow::Worker
+// =================================================================================================
+class MainWindow::Worker
+{
+public:
+    explicit Worker(QObject *parent);
+    Worker(const Worker &) = delete;
+    Worker(Worker &&) = delete;
+    Worker &operator=(const Worker &) = delete;
+    Worker &operator=(Worker &&) = delete;
+    ~Worker();
+
+    template<typename Func> void Run(Func func)
+    {
+        QMetaObject::invokeMethod(m_object, [=]() { func(); });
+    }
+
+private:
+    QThread *m_thread = nullptr;
+    QObject *m_object = nullptr;
+};
+
+MainWindow::Worker::Worker(QObject *parent)
+{
+    m_thread = new QThread(parent);
+    m_object = new QObject;
+    m_object->moveToThread(m_thread);
+    QObject::connect(m_thread, &QThread::finished, m_object, &QObject::deleteLater);
+    m_thread->start();
+}
+
+MainWindow::Worker::~Worker()
+{
+    m_thread->quit();
+    m_thread->wait();
+}
+
+// =================================================================================================
 // MainWindow
 // =================================================================================================
 MainWindow::MainWindow()
 {
+    m_worker = std::make_unique<Worker>(this);
+
     // Output logs to both the "record" as well as console output
     m_log_compound.AddLog(&m_log_record);
     m_log_compound.AddLog(&m_log_console);
 
     m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
+    m_data_core_lock.lockForRead();
 
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
@@ -423,8 +469,9 @@ MainWindow::MainWindow()
         m_command_tab_view = new CommandTabView(m_data_core->GetCommandHierarchy());
         m_shader_view = new ShaderView(*m_data_core);
 
-        m_trace_stats = new Dive::TraceStats();
-        m_capture_stats = new Dive::CaptureStats();
+        m_trace_stats = std::make_unique<Dive::TraceStats>();
+        m_capture_stats = std::make_unique<Dive::CaptureStats>();
+        m_async_capture_stats = std::make_unique<Dive::CaptureStats>();
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
                                                   *m_capture_stats);
         m_event_state_view = new EventStateView(*m_data_core);
@@ -551,6 +598,11 @@ MainWindow::MainWindow()
                      this,
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(this, &MainWindow::PendingScreenshot, this, &MainWindow::OnPendingScreenshot);
+    QObject::connect(this,
+                     &MainWindow::AsyncTraceStatsDone,
+                     this,
+                     &MainWindow::OnAsyncTraceStatsDone,
+                     Qt::QueuedConnection);
 
     CreateActions();
     CreateMenus();
@@ -916,9 +968,7 @@ void MainWindow::OnDiveFileLoaded()
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
 
-    // Gather the trace stats and display in the overview tab
-    m_trace_stats->GatherTraceStats(m_data_core->GetCaptureMetadata(), *m_capture_stats);
-    m_overview_tab_view->LoadStatistics();
+    StartTraceStats();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -985,9 +1035,7 @@ void MainWindow::OnAdrenoRdFileLoaded()
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
 
-    // Gather the trace stats and display in the overview tab
-    m_trace_stats->GatherTraceStats(m_data_core->GetCaptureMetadata(), *m_capture_stats);
-    m_overview_tab_view->LoadStatistics();
+    StartTraceStats();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1037,6 +1085,66 @@ void MainWindow::OnGfxrFileLoaded()
 
     // Ensure there is no previous tab index set
     m_previous_tab_index = -1;
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::StartTraceStats()
+{
+    *m_capture_stats = {};
+    m_overview_tab_view->LoadStatistics();
+
+    if (m_async_capture_stats_state != AsyncCaptureStatsState::kNone)
+    {
+        if (!m_async_capture_stats_context.IsNull())
+        {
+            m_async_capture_stats_context->Cancel();
+        }
+        m_async_capture_stats_state = AsyncCaptureStatsState::kPendingRestart;
+        return;
+    }
+
+    m_async_capture_stats_context = Dive::SimpleContext::Create();
+    m_async_capture_stats_state = AsyncCaptureStatsState::kRunning;
+    m_worker->Run([=, context = Dive::Context{ m_async_capture_stats_context }]() {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        QReadLocker locker(&m_data_core_lock);
+        // Gather the trace stats and display in the overview tab
+        m_trace_stats->GatherTraceStats(context,
+                                        m_data_core->GetCaptureMetadata(),
+                                        *m_async_capture_stats);
+
+        [[maybe_unused]] int64_t
+        time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - begin)
+                               .count();
+        if (context.Cancelled())
+        {
+            DIVE_DEBUG_LOG("Trace stats cancelled after %f seconds.\n",
+                           (time_used_to_load_ms / 1000.0));
+        }
+        else
+        {
+            DIVE_DEBUG_LOG("Time used to load the trace stats is %f seconds.\n",
+                           (time_used_to_load_ms / 1000.0));
+        }
+        AsyncTraceStatsDone();
+    });
+}
+
+void MainWindow::OnAsyncTraceStatsDone()
+{
+    *m_capture_stats = *m_async_capture_stats;
+
+    bool restart = (m_async_capture_stats_state == AsyncCaptureStatsState::kPendingRestart);
+    m_async_capture_stats_state = AsyncCaptureStatsState::kNone;
+
+    if (restart)
+    {
+        StartTraceStats();
+        return;
+    }
+    m_overview_tab_view->LoadStatistics();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1121,6 +1229,12 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
     // Discard associated timing results.
     m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
     m_gpu_timing_model->OnGpuTimingResultsGenerated("");
+    m_data_core_lock.unlock();
+
+    if (!m_async_capture_stats_context.IsNull())
+    {
+        m_async_capture_stats_context->Cancel();
+    }
     if (async)
     {
         // Start async file loading, at the end of loading FileLoaded will be triggered.
@@ -1231,6 +1345,7 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
 //--------------------------------------------------------------------------------------------------
 MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name, bool is_temp_file)
 {
+    QWriteLocker locker(&m_data_core_lock);
     // Note: this function might not run on UI thread, thus can't do any UI modification.
 
     // Check the file type to determine what is loaded.
@@ -1423,6 +1538,7 @@ void MainWindow::OnFileLoaded()
 
     // It should return almost immediately, the signal is sent just before async call return.
     auto result = m_loading_result.get();
+    m_data_core_lock.lockForRead();
 
     std::vector<std::function<void()>> tasks;
     std::swap(tasks, m_loading_pending_task);

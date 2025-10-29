@@ -21,6 +21,7 @@
 #include <array>
 #include <set>
 #include <vector>
+#include "dive_core/context.h"
 #include "dive_core/capture_event_info.h"
 #include "dive_core/data_core.h"
 
@@ -233,7 +234,9 @@ public:
     ~TraceStats() = default;
 
     // Gather the trace statistics from the metadata
-    void GatherTraceStats(const Dive::CaptureMetadata &meta_data, CaptureStats &capture_stats);
+    void GatherTraceStats(const Dive::Context         &context,
+                          const Dive::CaptureMetadata &meta_data,
+                          CaptureStats                &capture_stats);
 
     // Print the capture statistics to the output stream
     void PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream);

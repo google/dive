@@ -246,8 +246,12 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
         else if (info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolve ||
                  info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolveAndClear)
             GatherResolves(Stats::kDepthGmemToSysMemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kClearGmem)
-            GatherResolves(Stats::kClearGmemResolves);
+        else if (info.m_type == Dive::EventInfo::EventType::kColorClearGmem ||
+                 info.m_type == Dive::EventInfo::EventType::kColorGmemToSysMemResolveAndClear)
+            GatherResolves(Stats::kColorClearGmemResolves);
+        else if (info.m_type == Dive::EventInfo::EventType::kDepthClearGmem ||
+                 info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolveAndClear)
+            GatherResolves(Stats::kDepthClearGmemResolves);
         else if (info.m_type == Dive::EventInfo::EventType::kDraw)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||

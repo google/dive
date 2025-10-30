@@ -2151,7 +2151,9 @@ void MainWindow::CreateMenus()
     m_file_menu = menuBar()->addMenu(tr("&File"));
     m_file_menu->addAction(m_open_action);
     m_file_menu->addAction(m_save_action);
-    m_file_menu->addAction(m_save_as_action);
+
+    // TODO (b/447422197) Show this action when the save/load system has been implemented.
+    // m_file_menu->addAction(m_save_as_action);
     m_file_menu->addSeparator();
     m_recent_captures_menu = m_file_menu->addMenu(tr("Recent captures"));
     for (int i = 0; i < MaxRecentFiles; ++i)

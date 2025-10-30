@@ -47,7 +47,8 @@ if(WIN32)
   set(Python3_FIND_REGISTRY "NEVER")
 endif()
 # XXX XXX XXX  DO NOT SUBMIT
-find_program (Python3_EXECUTABLE python3)
+cmake_policy(SET CMP0094 OLD)
+find_package (Python3 COMPONENTS Interpreter)
 
 if (NOT Python3_EXECUTABLE)
   message(FATAL_ERROR "python3 not found")

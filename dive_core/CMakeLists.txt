@@ -46,8 +46,6 @@ set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp")
 if(WIN32)
   set(Python3_FIND_REGISTRY "NEVER")
 endif()
-# XXX XXX XXX  DO NOT SUBMIT
-cmake_policy(SET CMP0094 OLD)
 find_package (Python3 COMPONENTS Interpreter)
 
 if (NOT Python3_EXECUTABLE)

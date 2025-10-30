@@ -572,20 +572,20 @@ MainWindow::MainWindow()
 
     QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
 
+    QObject::connect(this,
+                     &MainWindow::AnalyzeCaptureStarted,
+                     m_analyze_dig,
+                     &AnalyzeDialog::OnAnalyzeCaptureStarted);
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnNewFileOpened,
+                     &AnalyzeDialog::CaptureUpdated,
                      this,
-                     &MainWindow::OnOpenFileFromAnalyzeDialog);
+                     &MainWindow::OnCaptureUpdated);
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::ReloadCapture,
-                     this,
-                     &MainWindow::OnOpenFileFromAnalyzeDialog);
-    QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayPerfCounterResults,
+                     &AnalyzeDialog::DisplayPerfCounterResults,
                      this,
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(m_analyze_dig,
-                     &AnalyzeDialog::OnDisplayGpuTimingResults,
+                     &AnalyzeDialog::DisplayGpuTimingResults,
                      this,
                      &MainWindow::OnPendingGpuTimingResults);
 
@@ -1348,11 +1348,8 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
     QWriteLocker locker(&m_data_core_lock);
     // Note: this function might not run on UI thread, thus can't do any UI modification.
 
-    // Check the file type to determine what is loaded.
-    std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
-
     // Check if the file loaded is a .gfxr file.
-    m_gfxr_capture_loaded = (file_extension.compare(Dive::kGfxrSuffix) == 0);
+    m_gfxr_capture_loaded = Dive::IsGfxrFile(file_name);
 
     // Reset the correlated capture variable
     m_correlated_capture_loaded = false;
@@ -1393,20 +1390,16 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         }
 
         // Paths of associated files produced by Dive's GFXR replay
-        std::filesystem::path capture_file_path = file_name;
-        std::filesystem::path rd_file_path = capture_file_path.replace_extension(".rd");
-        std::filesystem::path perf_counter_file_path = capture_file_path.parent_path() /
-                                                       (capture_file_path.stem().string() +
-                                                        Dive::kProfilingMetricsCsvSuffix);
-        std::filesystem::path gpu_time_file_path = capture_file_path.parent_path() /
-                                                   (capture_file_path.stem().string() +
-                                                    Dive::kGpuTimingCsvSuffix);
-        std::filesystem::path screenshot_file_path = capture_file_path.parent_path() /
-                                                     (capture_file_path.stem().string() +
-                                                      Dive::kPngSuffix);
+        std::filesystem::path    capture_file_path = file_name;
+        Dive::ComponentFilePaths local_component_files;
+        {
+            absl::StatusOr<Dive::ComponentFilePaths>
+            ret = Dive::GetComponentFilesHostPaths(capture_file_path.parent_path(),
+                                                   capture_file_path.stem().string());
+        }
 
         // Check if there is a corresponding .rd file
-        if (std::filesystem::exists(rd_file_path))
+        if (std::filesystem::exists(local_component_files.pm4_rd))
         {
             m_gfxr_capture_loaded = false;
             m_correlated_capture_loaded = true;
@@ -1414,10 +1407,11 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
 
         // Check if there is existing perf counter data
         qDebug() << "Attempting to load perf counter data from: "
-                 << perf_counter_file_path.string().c_str();
-        if (std::filesystem::exists(perf_counter_file_path))
+                 << local_component_files.perf_counter_csv.string().c_str();
+        if (std::filesystem::exists(local_component_files.perf_counter_csv))
         {
-            PendingPerfCounterResults(QString::fromStdString(perf_counter_file_path.string()));
+            PendingPerfCounterResults(
+            QString::fromStdString(local_component_files.perf_counter_csv.string()));
         }
         else
         {
@@ -1427,10 +1421,11 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
 
         // Check if there is existing gpu timing data
         qDebug() << "Attempting to load gpu timing data from: "
-                 << gpu_time_file_path.string().c_str();
-        if (std::filesystem::exists(gpu_time_file_path))
+                 << local_component_files.gpu_timing_csv.string().c_str();
+        if (std::filesystem::exists(local_component_files.gpu_timing_csv))
         {
-            PendingGpuTimingResults(QString::fromStdWString(gpu_time_file_path.wstring()));
+            PendingGpuTimingResults(
+            QString::fromStdWString(local_component_files.gpu_timing_csv.wstring()));
         }
         else
         {
@@ -1439,11 +1434,13 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
         }
 
         // Check if there is an existing screenshot
-        qDebug() << "Attempting to load screenshot from: " << screenshot_file_path.string().c_str();
-        if (std::filesystem::exists(screenshot_file_path))
+        qDebug() << "Attempting to load screenshot from: "
+                 << local_component_files.screenshot_png.string().c_str();
+        if (std::filesystem::exists(local_component_files.screenshot_png))
         {
-            PendingScreenshot(QString::fromStdWString(screenshot_file_path.wstring()));
-            qDebug() << "Loaded: " << screenshot_file_path.string().c_str();
+            PendingScreenshot(
+            QString::fromStdWString(local_component_files.screenshot_png.wstring()));
+            qDebug() << "Loaded: " << local_component_files.screenshot_png.string().c_str();
         }
         else
         {
@@ -1461,11 +1458,12 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
     {
         file_type = LoadedFileType::kDiveFile;
     }
-    else if (file_extension.compare(".dive") == 0)
+    else if (Dive::IsDiveFile(file_name))
     {
+        qDebug() << "WARNING: .dive files not well supported";
         file_type = LoadedFileType::kRdFile;
     }
-    else if (file_extension.compare(".rd") == 0)
+    else if (Dive::IsRdFile(file_name))
     {
         file_type = LoadedFileType::kRdFile;
     }
@@ -1574,6 +1572,7 @@ void MainWindow::OnFileLoaded()
 
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
     m_capture_file = QString(result.file_name.c_str());
+    qDebug() << "MainWindow::OnFileLoaded: m_capture_file: " << m_capture_file;
     QFileInfo file_info(m_capture_file);
     SetCurrentFile(m_capture_file, result.is_temp_file);
     emit SetSaveAsMenuStatus(true);
@@ -1636,13 +1635,14 @@ void MainWindow::OnAnalyzeCapture()
     {
         OnOpenFile();
     }
-    // If the a .gfxr file is still unsuccessfully loaded, do not open the analyze dialog. A .gfxr
-    // file is loaded when m_correlated_capture_loaded or m_gfxr_capture_loaded are true.
     bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
-    if (gfxr_capture_loaded)
+    if (!gfxr_capture_loaded)
     {
-        OnAnalyze(gfxr_capture_loaded, m_capture_file.toStdString());
+        qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded";
+        return;
     }
+    qDebug() << "Launching AnalyzeDialog with: " << m_capture_file;
+    AnalyzeCaptureStarted(m_capture_file);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1685,23 +1685,6 @@ void MainWindow::OnCapture(bool is_capture_delayed, bool is_gfxr_capture)
     m_trace_dig->UseGfxrCapture(is_gfxr_capture);
     m_trace_dig->UpdateDeviceList(true);
     m_trace_dig->open();
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnAnalyze(bool is_gfxr_capture_loaded, const std::string &file_path)
-{
-    if (!is_gfxr_capture_loaded)
-    {
-        QMessageBox::
-        critical(this,
-                 tr("Analyzation Load Failed"),
-                 tr("Unable to analyze without gfxr capture data loaded. Ensure a capture "
-                    "containing gfxr data is loaded before attempting to analyze."));
-        return;
-    }
-    QString file_path_q_string = QString::fromStdString(file_path);
-    m_analyze_dig->SetSelectedCaptureFile(file_path_q_string);
-    m_analyze_dig->open();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3192,7 +3175,7 @@ void MainWindow::ConnectGfxrFileTabs()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
+void MainWindow::OnCaptureUpdated(const QString &file_path)
 {
     const std::string file_path_std_str = file_path.toStdString();
     const char       *file_path_str = file_path_std_str.c_str();
@@ -3200,6 +3183,7 @@ void MainWindow::OnOpenFileFromAnalyzeDialog(const QString &file_path)
     {
         return;
     }
+    qDebug() << "Successfully updated capture to: " << file_path;
 }
 
 //--------------------------------------------------------------------------------------------------

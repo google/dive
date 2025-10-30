@@ -43,4 +43,9 @@ absl::StatusOr<Dive::ComponentFilePaths> GetComponentFilesHostPaths(
 const std::filesystem::path &parent_dir,
 const std::string           &gfxr_stem);
 
+bool IsGfxrFile(std::filesystem::path file);
+bool IsPngFile(std::filesystem::path file);
+bool IsDiveFile(std::filesystem::path file);
+bool IsRdFile(std::filesystem::path file);
+
 }  // namespace Dive

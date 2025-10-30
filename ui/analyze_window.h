@@ -20,6 +20,7 @@
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
 #include "dive_core/available_metrics.h"
+#include "utils/component_files.h"
 
 #pragma once
 
@@ -95,23 +96,23 @@ public:
     QWidget                                                            *parent = nullptr);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
-    void SetSelectedCaptureFile(const QString &filePath);
 private slots:
     void OnReplayStatusUpdate(int status_code, const QString &error_message);
     void OnDeviceSelected(const QString &);
     void OnDeviceListRefresh();
-    void OnOpenFile();
     void OnReplay();
     void OnOverlayMessage(const QString &message);
     void OnDisableOverlay();
     void OnDeleteReplayArtifacts();
 
+public slots:
+    void OnAnalyzeCaptureStarted(const QString &file_path);
+
 signals:
     void ReplayStatusUpdated(int status_code, const QString &error_message);
-    void OnNewFileOpened(const QString &file_path);
-    void OnDisplayPerfCounterResults(const QString &file_path);
-    void OnDisplayGpuTimingResults(const QString &file_path);
-    void ReloadCapture(const QString &file_path);
+    void DisplayPerfCounterResults(const QString &file_path);
+    void DisplayGpuTimingResults(const QString &file_path);
+    void CaptureUpdated(const QString &file_path);
     void OverlayMessage(const QString &message);
     void DisableOverlay();
 
@@ -123,11 +124,6 @@ private:
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateMetrics();
     void                        UpdateSelectedMetricsList();
-    std::filesystem::path       GetFullLocalPath(const std::string &gfxr_stem,
-                                                 const std::string &suffix) const;
-    ReplayArtifactsPaths        GetReplayFilesLocalPaths(const std::string &gfxr_stem) const;
-    absl::StatusOr<std::string> GetCaptureFileDirectory();
-    absl::StatusOr<std::string> GetAssetFile();
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
     absl::Status                NormalReplay(Dive::DeviceManager &device_manager,
@@ -146,6 +142,7 @@ private:
 
     void ReplayImpl();
     void DeleteReplayArtifactsImpl();
+    void OnAnalyzeCaptureEnded();
 
     QLabel      *m_metrics_list_label;
     QListWidget *m_metrics_list;
@@ -162,10 +159,12 @@ private:
     QComboBox          *m_device_box;
     QPushButton        *m_device_refresh_button;
 
+    // Provides a description of which capture file is open, but immutable from
+    // AnalyzeDialog. User would need to close the dialog and use MainWindow toolbar to change the
+    // loaded capture
     QHBoxLayout *m_selected_file_layout;
     QLabel      *m_selected_file_label;
     QLineEdit   *m_selected_file_input_box;
-    QPushButton *m_open_files_button;
 
     QHBoxLayout *m_dump_pm4_layout;
     QLabel      *m_dump_pm4_label;
@@ -197,17 +196,25 @@ private:
     QVBoxLayout                  *m_right_panel_layout;
     std::vector<Dive::DeviceInfo> m_devices;
     std::string                   m_cur_device;
-    QString                       m_selected_capture_file_string;
-    QVector<CsvItem>             *m_csv_items;
-    std::vector<std::string>     *m_enabled_metrics_vector;
+
+    // Representing a session with a specific GFXR capture file opened
+    //
+    // Set only in OnOpenFile(), this is the filename of the GFXR capture that will be replayed
+    QString m_selected_capture_file_string = "";
+    // The dir that contains m_selected_capture_file_string
+    std::filesystem::path m_local_capture_file_directory = "";
+    // Other artifacts
+    Dive::ComponentFilePaths m_local_capture_files = {};
+
+    QVector<CsvItem>                                                   *m_csv_items;
+    std::vector<std::string>                                           *m_enabled_metrics_vector;
     std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> m_available_metrics;
     // Used to store a csv item's key in the enabled metrics vector.
-    const int             kDataRole = Qt::UserRole + 1;
-    const int             kDefaultFrameCount = 3;
-    const std::string     kDefaultReplayButtonText = "Replay";
-    std::filesystem::path m_local_capture_file_directory = "";
-    std::future<void>     m_replay_active;
-    Overlay              *m_overlay;
+    const int         kDataRole = Qt::UserRole + 1;
+    const int         kDefaultFrameCount = 3;
+    const std::string kDefaultReplayButtonText = "Replay";
+    std::future<void> m_replay_active;
+    Overlay          *m_overlay;
 
     struct StatusUpdateQueueItem
     {

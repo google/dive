@@ -18,11 +18,13 @@ limitations under the License.
 
 #include <filesystem>
 
+#include "utils/component_files_constants.h"
+
 namespace Dive
 {
 
 // These functions are inline since it's difficult to share libraries between capture_service and
-// gfxr_ext with the current CMake structure. The fucntions are short enough so inlining should work
+// gfxr_ext with the current CMake structure. The functions are short enough so inlining should work
 // well anyway.
 
 // Get the filename prefix that we want RenderDoc to use when creating a capture file. For the
@@ -41,7 +43,10 @@ inline std::filesystem::path GetRenderDocCaptureFilePath(const std::filesystem::
     // This is predicated on the current implementation of RenderDoc::CreateRDC() and the use of
     // StartFrameCapture. If either of these change then this won't work. Ideally, replay would
     // just tell us where the file is instead of us having to guess.
-    return GetRenderDocCaptureFilePathTemplate(gfxr_filepath).concat(kRenderDocRdcSuffix);
+    ComponentFileConstants consts;
+    return GetRenderDocCaptureFilePathTemplate(gfxr_filepath)
+    .concat(consts.kRenderDocHostSuffix)
+    .concat(consts.kRdcExt);
 }
 
 }  // namespace Dive

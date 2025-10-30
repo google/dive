@@ -46,11 +46,8 @@ set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp")
 if(WIN32)
   set(Python3_FIND_REGISTRY "NEVER")
 endif()
-if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
-  find_program (Python3_EXECUTABLE python3)
-else()
-  find_package (Python3 COMPONENTS Interpreter)
-endif()
+# XXX XXX XXX  DO NOT SUBMIT
+find_program (Python3_EXECUTABLE python3)
 
 if (NOT Python3_EXECUTABLE)
   message(FATAL_ERROR "python3 not found")

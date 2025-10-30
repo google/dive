@@ -610,6 +610,9 @@ absl::Status AndroidDevice::CleanupDevice()
     // clean up for gfxr renderdoc capture
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
 
+    // cleanup for gfxr replay with validation layer
+    UninstallVulkanLayer(adb, kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+
     // clean up for gfxr replay app
     Adb()
     .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default", kGfxrReplayAppName))

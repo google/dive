@@ -611,7 +611,7 @@ absl::Status AndroidDevice::CleanupDevice()
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
 
     // cleanup for gfxr replay with validation layer
-    UninstallVulkanLayer(adb, kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+    UninstallVulkanLayer(Adb(), kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
 
     // clean up for gfxr replay app
     Adb()

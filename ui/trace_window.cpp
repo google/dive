@@ -1010,7 +1010,8 @@ void GfxrCaptureWorker::run()
     {
         Dive::ComponentFilePaths component_files = {};
         {
-            absl::StatusOr<Dive::ComponentFilePaths> ret = Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
+            absl::StatusOr<Dive::ComponentFilePaths>
+            ret = Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
             component_files = *ret;
         }
 

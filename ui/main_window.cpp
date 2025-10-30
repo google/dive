@@ -45,6 +45,9 @@
 #include <QAbstractItemModel>
 #include <QVariant>
 
+#include "absl/strings/str_format.h"
+#include "absl/status/statusor.h"
+
 #include "about_window.h"
 #include "buffer_view.h"
 #include "capture_service/constants.h"
@@ -1396,6 +1399,14 @@ MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name
             absl::StatusOr<Dive::ComponentFilePaths>
             ret = Dive::GetComponentFilesHostPaths(capture_file_path.parent_path(),
                                                    capture_file_path.stem().string());
+            if (!ret.ok())
+            {
+                std::string err_msg = absl::StrFormat("Failed to get component files: %s",
+                                                      ret.status().message());
+                qDebug() << err_msg.c_str();
+                return LoadedFileType::kUnknown;
+            }
+            local_component_files = *ret;
         }
 
         // Check if there is a corresponding .rd file

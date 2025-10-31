@@ -71,6 +71,9 @@ target_link_libraries(VkLayer_gfxreconstruct
                         $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:OpenXR>
                         platform_specific)
 
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(VkLayer_gfxreconstruct project_version)
+
 # Limit what symbols are exported
 if(MSVC)
     target_sources(VkLayer_gfxreconstruct

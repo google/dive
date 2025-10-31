@@ -94,3 +94,6 @@ target_include_directories(gfxrecon_encode
                                ${GFXRECON_SOURCE_DIR}/framework)
 
 target_link_libraries(gfxrecon_encode gfxrecon_graphics gfxrecon_format gfxrecon_util vulkan_registry platform_specific android)
+
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon_encode project_version)

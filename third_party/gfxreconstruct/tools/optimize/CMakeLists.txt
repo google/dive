@@ -74,6 +74,9 @@ target_link_libraries(gfxrecon-optimize
                           $<$<BOOL:${D3D12_SUPPORT}>:dxgi.lib>
                           $<$<BOOL:${DXC_FOUND}>:${DXC_LIBRARY_PATH}>)
 
+# GOOGLE: Link against project_version for faster builds
+target_link_libraries(gfxrecon-optimize project_version)
+
 common_build_directives(gfxrecon-optimize)
 
 include(${PROJECT_SOURCE_DIR}/cmake/AgilitySDK.cmake)

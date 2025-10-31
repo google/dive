@@ -54,12 +54,11 @@ void GpuTimingModel::ParseCsv(const QString &file_path)
 //--------------------------------------------------------------------------------------------------
 QModelIndex GpuTimingModel::index(int row, int column, const QModelIndex &parent) const
 {
-    if ((parent.isValid()) || (row < 0) || (row >= m_available_gpu_timing_data.GetRows()) ||
-        (column < 0) || column >= columnCount())
+    if ((row < 0) || (row >= rowCount(parent)) || (column < 0) || column >= columnCount(parent))
     {
         return QModelIndex();
     }
-    return createIndex(row, column, (void *)0);
+    return createIndex(row, column, nullptr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -72,6 +71,10 @@ QModelIndex GpuTimingModel::parent(const QModelIndex &index) const
 int GpuTimingModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
+    {
+        return 0;
+    }
+    if (!m_available_gpu_timing_data.IsValid())
     {
         return 0;
     }
@@ -88,6 +91,10 @@ int GpuTimingModel::columnCount(const QModelIndex &parent) const
 QVariant GpuTimingModel::data(const QModelIndex &index, int role) const
 {
     if ((!index.isValid()) || (role != Qt::DisplayRole))
+    {
+        return QVariant();
+    }
+    if (!m_available_gpu_timing_data.IsValid())
     {
         return QVariant();
     }

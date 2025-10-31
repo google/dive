@@ -30,6 +30,7 @@
 #include "dive_core/progress_tracker.h"
 #include "progress_tracker_callback.h"
 #include "dive_core/log.h"
+#include "capture_manager.h"
 
 // Forward declarations
 class BufferView;
@@ -73,6 +74,7 @@ class QSortFilterProxyModel;
 class QAbstractProxyModel;
 class FrameTabView;
 class QScrollArea;
+class CaptureManager;
 
 enum class EventMode;
 
@@ -130,7 +132,6 @@ signals:
     void PendingPerfCounterResults(const QString &file_name);
     void PendingGpuTimingResults(const QString &file_name);
     void PendingScreenshot(const QString &file_name);
-    void AsyncTraceStatsDone();
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
@@ -168,7 +169,7 @@ private slots:
     void UpdateOverlay(const QString &);
     void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
-    void OnFileLoaded();
+    void OnFileLoaded(CaptureManager::LoadedFileType);
     void OnTraceAvailable(const QString &);
     void OnTabViewSearchBarVisibilityChange(bool isHidden);
     void OnTabViewChange();
@@ -180,48 +181,27 @@ private slots:
     void ConnectPm4SearchBar();
     void DisconnectPm4SearchBar();
     void DisconnectAllTabs();
-    void OnAsyncTraceStatsDone();
+    void OnTraceStatsUpdated();
+    void OnLoadingFailure(CaptureManager::LoadFailureReason reason,
+                          const Dive::FilePath             &reference_path,
+                          const QString                    &aux);
 
 private:
-    enum class LoadedFileType
+    struct LastRequest
     {
-        kUnknown,  // Load failure
-        kDiveFile,
-        kRdFile,
-        kGfxrFile,
+        std::string file_name;
+        bool        is_temp_file;
     };
-
-    struct LoadFileResult
-    {
-        LoadedFileType file_type;
-        std::string    file_name;
-        bool           is_temp_file;
-    };
-
     enum class CorrelationTarget
     {
         kGfxrDrawCall,
         kPm4DrawCall
     };
 
-    enum class AsyncCaptureStatsState
-    {
-        kNone,
-        kRunning,
-        kPendingRestart,
-    };
-
-    LoadedFileType LoadFileImpl(const std::string &file_name, bool is_temp_file = false);
-
     void OnDiveFileLoaded();
     void OnAdrenoRdFileLoaded();
     void OnGfxrFileLoaded();
-
-    void RunOnUIThread(std::function<void()> f);
-    // Dialogs for async loading:
-    void OnLoadFailure(Dive::CaptureData::LoadResult result, const std::string &file_name);
-    void OnParseFailure(const std::string &file_name);
-    void OnUnsupportedFile(const std::string &file_name);
+    void EmitLoadAssociatedFileTasks();
 
     void StartTraceStats();
 
@@ -281,10 +261,9 @@ private:
     };
     QAction *m_recent_file_actions[MaxRecentFiles];
 
-    std::unique_ptr<Worker> m_worker;
+    CaptureManager *m_capture_manager = nullptr;
 
     ProgressTrackerCallback         m_progress_tracker;
-    QReadWriteLock                  m_data_core_lock;
     std::unique_ptr<Dive::DataCore> m_data_core;
     QString                         m_capture_file;
     QString                         m_last_file_path;
@@ -383,13 +362,10 @@ private:
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
-    std::unique_ptr<Dive::TraceStats>           m_trace_stats;
     std::unique_ptr<Dive::CaptureStats>         m_capture_stats;
-    std::unique_ptr<Dive::CaptureStats>         m_async_capture_stats;
 
-    Dive::SimpleContext    m_async_capture_stats_context;
-    AsyncCaptureStatsState m_async_capture_stats_state = AsyncCaptureStatsState::kNone;
+    bool        m_capture_acquired = false;
+    LastRequest m_last_request;
 
-    std::future<LoadFileResult>        m_loading_result;
     std::vector<std::function<void()>> m_loading_pending_task;
 };

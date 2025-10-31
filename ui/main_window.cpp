@@ -47,12 +47,14 @@
 
 #include "about_window.h"
 #include "buffer_view.h"
+#include "capture_manager.h"
 #include "capture_service/constants.h"
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "command_model.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/common/common.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
 #include "object_names.h"
@@ -165,56 +167,33 @@ enum class EventMode
 };
 
 // =================================================================================================
-// MainWindow::Worker
-// =================================================================================================
-class MainWindow::Worker
-{
-public:
-    explicit Worker(QObject *parent);
-    Worker(const Worker &) = delete;
-    Worker(Worker &&) = delete;
-    Worker &operator=(const Worker &) = delete;
-    Worker &operator=(Worker &&) = delete;
-    ~Worker();
-
-    template<typename Func> void Run(Func func)
-    {
-        QMetaObject::invokeMethod(m_object, [=]() { func(); });
-    }
-
-private:
-    QThread *m_thread = nullptr;
-    QObject *m_object = nullptr;
-};
-
-MainWindow::Worker::Worker(QObject *parent)
-{
-    m_thread = new QThread(parent);
-    m_object = new QObject;
-    m_object->moveToThread(m_thread);
-    QObject::connect(m_thread, &QThread::finished, m_object, &QObject::deleteLater);
-    m_thread->start();
-}
-
-MainWindow::Worker::~Worker()
-{
-    m_thread->quit();
-    m_thread->wait();
-}
-
-// =================================================================================================
 // MainWindow
 // =================================================================================================
 MainWindow::MainWindow()
 {
-    m_worker = std::make_unique<Worker>(this);
-
     // Output logs to both the "record" as well as console output
     m_log_compound.AddLog(&m_log_record);
     m_log_compound.AddLog(&m_log_console);
 
     m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
-    m_data_core_lock.lockForRead();
+
+    m_capture_manager = new CaptureManager(this);
+    m_capture_manager->Start(*m_data_core);
+    m_capture_manager->GetDataCoreLock().lockForRead();
+    m_capture_acquired = true;
+
+    QObject::connect(m_capture_manager,
+                     &CaptureManager::LoadingFailure,
+                     this,
+                     &MainWindow::OnLoadingFailure);
+    QObject::connect(m_capture_manager,
+                     &CaptureManager::FileLoaded,
+                     this,
+                     &MainWindow::OnFileLoaded);
+    QObject::connect(m_capture_manager,
+                     &CaptureManager::TraceStatsUpdated,
+                     this,
+                     &MainWindow::OnTraceStatsUpdated);
 
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
@@ -469,9 +448,7 @@ MainWindow::MainWindow()
         m_command_tab_view = new CommandTabView(m_data_core->GetCommandHierarchy());
         m_shader_view = new ShaderView(*m_data_core);
 
-        m_trace_stats = std::make_unique<Dive::TraceStats>();
         m_capture_stats = std::make_unique<Dive::CaptureStats>();
-        m_async_capture_stats = std::make_unique<Dive::CaptureStats>();
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
                                                   *m_capture_stats);
         m_event_state_view = new EventStateView(*m_data_core);
@@ -562,7 +539,6 @@ MainWindow::MainWindow()
                      &MainWindow::OnTraceAvailable);
 
     QObject::connect(this, &MainWindow::FileLoaded, m_text_file_view, &TextFileView::OnFileLoaded);
-    QObject::connect(this, &MainWindow::FileLoaded, this, &MainWindow::OnFileLoaded);
     QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchTrigger()));
 
     QObject::connect(m_event_search_bar,
@@ -598,11 +574,6 @@ MainWindow::MainWindow()
                      this,
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(this, &MainWindow::PendingScreenshot, this, &MainWindow::OnPendingScreenshot);
-    QObject::connect(this,
-                     &MainWindow::AsyncTraceStatsDone,
-                     this,
-                     &MainWindow::OnAsyncTraceStatsDone,
-                     Qt::QueuedConnection);
 
     CreateActions();
     CreateMenus();
@@ -1092,187 +1063,91 @@ void MainWindow::StartTraceStats()
 {
     *m_capture_stats = {};
     m_overview_tab_view->LoadStatistics();
-
-    if (m_async_capture_stats_state != AsyncCaptureStatsState::kNone)
-    {
-        if (!m_async_capture_stats_context.IsNull())
-        {
-            m_async_capture_stats_context->Cancel();
-        }
-        m_async_capture_stats_state = AsyncCaptureStatsState::kPendingRestart;
-        return;
-    }
-
-    m_async_capture_stats_context = Dive::SimpleContext::Create();
-    m_async_capture_stats_state = AsyncCaptureStatsState::kRunning;
-    m_worker->Run([=, this, context = Dive::Context{ m_async_capture_stats_context }]() {
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-        QReadLocker locker(&m_data_core_lock);
-        // Gather the trace stats and display in the overview tab
-        m_trace_stats->GatherTraceStats(context,
-                                        m_data_core->GetCaptureMetadata(),
-                                        *m_async_capture_stats);
-
-        [[maybe_unused]] int64_t
-        time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::steady_clock::now() - begin)
-                               .count();
-        if (context.Cancelled())
-        {
-            DIVE_DEBUG_LOG("Trace stats cancelled after %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-        }
-        else
-        {
-            DIVE_DEBUG_LOG("Time used to load the trace stats is %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-        }
-        AsyncTraceStatsDone();
-    });
+    m_capture_manager->GatherTraceStats();
 }
 
-void MainWindow::OnAsyncTraceStatsDone()
+void MainWindow::OnTraceStatsUpdated()
 {
-    *m_capture_stats = *m_async_capture_stats;
-
-    bool restart = (m_async_capture_stats_state == AsyncCaptureStatsState::kPendingRestart);
-    m_async_capture_stats_state = AsyncCaptureStatsState::kNone;
-
-    if (restart)
-    {
-        StartTraceStats();
-        return;
-    }
+    m_capture_manager->FillCaptureStatsResult(*m_capture_stats);
     m_overview_tab_view->LoadStatistics();
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::RunOnUIThread(std::function<void()> f)
+void MainWindow::OnLoadingFailure(CaptureManager::LoadFailureReason reason,
+                                  const Dive::FilePath             &reference_path,
+                                  const QString                    &aux)
 {
-
-    QMetaObject::invokeMethod(this, [=]() { f(); });
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnLoadFailure(Dive::CaptureData::LoadResult result, const std::string &file_name)
-{
-    if (result == Dive::CaptureData::LoadResult::kSuccess)
+    using Reason = CaptureManager::LoadFailureReason;
+    QString title = QString("Unable to open file: ") + reference_path.ToQString();
+    switch (reason)
     {
-        return;
+
+    case Reason::kUnknown:
+        QMessageBox::critical(this, title, QString());
+        break;
+    case Reason::kFileIoError:
+        QMessageBox::critical(this, title, QString("File I/O error!"));
+        break;
+    case Reason::kCorruptData:
+        QMessageBox::critical(this, title, QString("File corrupt!"));
+        break;
+    case Reason::kVersionError:
+        QMessageBox::critical(this, title, QString("Incompatible version!"));
+        break;
+    case Reason::kParseFailure:
+        QMessageBox::critical(this, title, QString("Error parsing file!"));
+        break;
+    case Reason::kUnsupportedFile:
+        QMessageBox::critical(this, title, QString("File type not supported!"));
+        break;
+    case Reason::kGfxaAssetMissing:
+        QMessageBox::critical(this,
+                              title,
+                              QString(QString("Required .gfxa file: %1 not found!").arg(aux)));
+        break;
     }
-
-    // Do dialog on main thread.
-    QMetaObject::invokeMethod(this, [=, this]() {
-        HideOverlay();
-        QString error_msg;
-        if (result == Dive::CaptureData::LoadResult::kFileIoError)
-            error_msg = QString("File I/O error!");
-        else if (result == Dive::CaptureData::LoadResult::kCorruptData)
-            error_msg = QString("File corrupt!");
-        else if (result == Dive::CaptureData::LoadResult::kVersionError)
-            error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this,
-                              (QString("Unable to open file: ") + file_name.c_str()),
-                              error_msg);
-    });
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnParseFailure(const std::string &file_name)
-{
-
-    // Do dialog on main thread.
-    QMetaObject::invokeMethod(this, [=, this]() {
-        HideOverlay();
-        QMessageBox::critical(this,
-                              QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name.c_str()));
-    });
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnUnsupportedFile(const std::string &file_name)
-{
-    QMetaObject::invokeMethod(this, [=, this]() {
-        QString error_msg = QString("File type not supported!");
-        QMessageBox::critical(this,
-                              (QString("Unable to open file: ") + file_name.c_str()),
-                              error_msg);
-    });
 }
 
 //--------------------------------------------------------------------------------------------------
 bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool async)
 {
-    if (m_loading_result.valid())
-    {
-        // We are still loading something else.
-        return false;
-    }
+    bool release_capture = m_capture_acquired;
+    m_capture_acquired = false;
 
-    // We don't want other UI interaction as they cause race conditions.
-    setDisabled(true);
+    m_gfxr_capture_loaded = false;
+    m_correlated_capture_loaded = false;
+
+    if (release_capture)
+    {
+        // We don't want other UI interaction as they cause race conditions.
+        setDisabled(true);
+
+        m_log_record.Reset();
+
+        m_command_hierarchy_view->setCurrentIndex(QModelIndex());
+
+        // Disconnect the signals for all of the possible tabs.
+        DisconnectAllTabs();
+
+        // Clear vectors of draw call indices as they are only used for a correlated view.
+        m_filter_model->ClearDrawCallIndices();
+
+        // Discard associated timing results.
+        m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
+        m_gpu_timing_model->OnGpuTimingResultsGenerated("");
+        m_capture_manager->GetDataCoreLock().unlock();
+
+        *m_capture_stats = {};
+        m_overview_tab_view->LoadStatistics();
+    }
 
     m_progress_tracker.sendMessage("Loading " + file_name);
+    m_last_request = LastRequest{ .file_name = file_name, .is_temp_file = is_temp_file };
+    m_capture_manager->LoadFile(file_name);
 
-    m_log_record.Reset();
-
-    m_command_hierarchy_view->setCurrentIndex(QModelIndex());
-
-    // Disconnect the signals for all of the possible tabs.
-    DisconnectAllTabs();
-
-    // Clear vectors of draw call indices as they are only used for a correlated view.
-    m_filter_model->ClearDrawCallIndices();
-
-    // Discard associated timing results.
-    m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
-    m_gpu_timing_model->OnGpuTimingResultsGenerated("");
-    m_data_core_lock.unlock();
-
-    if (!m_async_capture_stats_context.IsNull())
-    {
-        m_async_capture_stats_context->Cancel();
-    }
-    if (async)
-    {
-        // Start async file loading, at the end of loading FileLoaded will be triggered.
-        m_loading_result = std::async([this, file_name = file_name, is_temp_file = is_temp_file]() {
-            std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-            auto file_type = LoadFileImpl(file_name, is_temp_file);
-            [[maybe_unused]] int64_t
-            time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - begin)
-                                   .count();
-
-            DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-            // Now that the file is loaded, we can send a signal to UI thread.
-            FileLoaded();
-            return LoadFileResult{ file_type, file_name, is_temp_file };
-        });
-    }
-    else
-    {
-        // This code path is for UI element that can't handle async operations.
-        // e.g. AnalyzeWindow
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-        auto file_type = LoadFileImpl(file_name, is_temp_file);
-        [[maybe_unused]] int64_t
-        time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::steady_clock::now() - begin)
-                               .count();
-        DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
-                       (time_used_to_load_ms / 1000.0));
-
-        std::promise<LoadFileResult> p;
-        p.set_value(LoadFileResult{ file_type, file_name, is_temp_file });
-        m_loading_result = p.get_future();
-        FileLoaded();
-    }
+    // Clear task queue for fresh capture.
+    m_loading_pending_task.clear();
+    EmitLoadAssociatedFileTasks();
     return true;
 }
 
@@ -1292,7 +1167,7 @@ void MainWindow::OnPendingPerfCounterResults(const QString &file_name)
             qDebug() << "Loaded: " << file_path.string().c_str();
         }
     };
-    if (m_loading_result.valid())
+    if (!m_capture_acquired)
     {
         m_loading_pending_task.push_back(task);
         return;
@@ -1313,7 +1188,7 @@ void MainWindow::OnPendingGpuTimingResults(const QString &file_name)
             qDebug() << "Loaded: " << file_name;
         }
     };
-    if (m_loading_result.valid())
+    if (!m_capture_acquired)
     {
         m_loading_pending_task.push_back(task);
         return;
@@ -1334,7 +1209,7 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
             qDebug() << "Loaded: " << file_name;
         }
     };
-    if (m_loading_result.valid())
+    if (!m_capture_acquired)
     {
         m_loading_pending_task.push_back(task);
         return;
@@ -1342,203 +1217,65 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
     task();
 }
 
-//--------------------------------------------------------------------------------------------------
-MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name, bool is_temp_file)
+void MainWindow::EmitLoadAssociatedFileTasks()
 {
-    QWriteLocker locker(&m_data_core_lock);
-    // Note: this function might not run on UI thread, thus can't do any UI modification.
 
-    // Check the file type to determine what is loaded.
-    std::string file_extension = std::filesystem::path(file_name).extension().generic_string();
-
-    // Check if the file loaded is a .gfxr file.
-    m_gfxr_capture_loaded = (file_extension.compare(Dive::kGfxrSuffix) == 0);
-
-    // Reset the correlated capture variable
-    m_correlated_capture_loaded = false;
-
-    if (m_gfxr_capture_loaded)
-    {
-        // Convert the filename to a string to perform a replacement.
-        std::string potential_asset_name(file_name);
-
-        const std::string trim_str = "_trim_trigger";
-        const std::string asset_str = "_asset_file";
-
-        // Find and replace the last occurrence of "trim_trigger" part of the filename.
-        size_t pos = potential_asset_name.rfind(trim_str);
-        if (pos != std::string::npos)
-        {
-            potential_asset_name.replace(pos, trim_str.length(), asset_str);
-        }
-
-        // Create a path object to the asset file.
-        std::filesystem::path asset_file_path(potential_asset_name);
-        asset_file_path.replace_extension(".gfxa");
-
-        // Check if the required asset file exists.
-        bool asset_file_exists = std::filesystem::exists(asset_file_path);
-
-        if (!asset_file_exists)
-        {
-            RunOnUIThread([=, this]() {
-                HideOverlay();
-                QString title = QString("Unable to open file: %1").arg(file_name.c_str());
-                QString description = QString("Required .gfxa file: %1 not found!")
-                                      .arg(QString::fromStdString(asset_file_path.string()));
-                QMessageBox::critical(this, title, description);
-                m_gfxr_capture_loaded = false;
-            });
-            return LoadedFileType::kUnknown;
-        }
-
-        // Paths of associated files produced by Dive's GFXR replay
-        std::filesystem::path capture_file_path = file_name;
-        std::filesystem::path rd_file_path = capture_file_path.replace_extension(".rd");
-        std::filesystem::path perf_counter_file_path = capture_file_path.parent_path() /
-                                                       (capture_file_path.stem().string() +
-                                                        Dive::kProfilingMetricsCsvSuffix);
-        std::filesystem::path gpu_time_file_path = capture_file_path.parent_path() /
+    // Paths of associated files produced by Dive's GFXR replay
+    std::filesystem::path capture_file_path = m_last_request.file_name;
+    std::filesystem::path perf_counter_file_path = capture_file_path.parent_path() /
                                                    (capture_file_path.stem().string() +
-                                                    Dive::kGpuTimingCsvSuffix);
-        std::filesystem::path screenshot_file_path = capture_file_path.parent_path() /
-                                                     (capture_file_path.stem().string() +
-                                                      Dive::kPngSuffix);
+                                                    Dive::kProfilingMetricsCsvSuffix);
+    std::filesystem::path gpu_time_file_path = capture_file_path.parent_path() /
+                                               (capture_file_path.stem().string() +
+                                                Dive::kGpuTimingCsvSuffix);
+    std::filesystem::path screenshot_file_path = capture_file_path.parent_path() /
+                                                 (capture_file_path.stem().string() +
+                                                  Dive::kPngSuffix);
 
-        // Check if there is a corresponding .rd file
-        if (std::filesystem::exists(rd_file_path))
-        {
-            m_gfxr_capture_loaded = false;
-            m_correlated_capture_loaded = true;
-        }
-
-        // Check if there is existing perf counter data
-        qDebug() << "Attempting to load perf counter data from: "
-                 << perf_counter_file_path.string().c_str();
-        if (std::filesystem::exists(perf_counter_file_path))
-        {
-            PendingPerfCounterResults(QString::fromStdString(perf_counter_file_path.string()));
-        }
-        else
-        {
-            PendingPerfCounterResults("");
-            qDebug() << "Failed to find perf counter data";
-        }
-
-        // Check if there is existing gpu timing data
-        qDebug() << "Attempting to load gpu timing data from: "
-                 << gpu_time_file_path.string().c_str();
-        if (std::filesystem::exists(gpu_time_file_path))
-        {
-            PendingGpuTimingResults(QString::fromStdWString(gpu_time_file_path.wstring()));
-        }
-        else
-        {
-            PendingGpuTimingResults("");
-            qDebug() << "Failed to find gpu timing data";
-        }
-
-        // Check if there is an existing screenshot
-        qDebug() << "Attempting to load screenshot from: " << screenshot_file_path.string().c_str();
-        if (std::filesystem::exists(screenshot_file_path))
-        {
-            PendingScreenshot(QString::fromStdWString(screenshot_file_path.wstring()));
-            qDebug() << "Loaded: " << screenshot_file_path.string().c_str();
-        }
-        else
-        {
-            PendingScreenshot("");
-            qDebug() << "Failed to find gfxr capture screenshot";
-        }
-    }
-
-    LoadedFileType file_type = LoadedFileType::kUnknown;
-    if (m_gfxr_capture_loaded)
+    // Check if there is existing perf counter data
+    qDebug() << "Attempting to load perf counter data from: "
+             << perf_counter_file_path.string().c_str();
+    if (std::filesystem::exists(perf_counter_file_path))
     {
-        file_type = LoadedFileType::kGfxrFile;
-    }
-    else if (m_correlated_capture_loaded)
-    {
-        file_type = LoadedFileType::kDiveFile;
-    }
-    else if (file_extension.compare(".dive") == 0)
-    {
-        file_type = LoadedFileType::kRdFile;
-    }
-    else if (file_extension.compare(".rd") == 0)
-    {
-        file_type = LoadedFileType::kRdFile;
+        PendingPerfCounterResults(QString::fromStdString(perf_counter_file_path.string()));
     }
     else
     {
-        file_type = LoadedFileType::kUnknown;
+        PendingPerfCounterResults("");
+        qDebug() << "Failed to find perf counter data";
     }
 
-    switch (file_type)
+    // Check if there is existing gpu timing data
+    qDebug() << "Attempting to load gpu timing data from: " << gpu_time_file_path.string().c_str();
+    if (std::filesystem::exists(gpu_time_file_path))
     {
-    case LoadedFileType::kUnknown:
-        OnUnsupportedFile(file_name);
-        break;
-    case LoadedFileType::kDiveFile:
+        PendingGpuTimingResults(QString::fromStdWString(gpu_time_file_path.wstring()));
+    }
+    else
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
-        {
-            OnLoadFailure(load_res, file_name);
-            return LoadedFileType::kUnknown;
-        }
+        PendingGpuTimingResults("");
+        qDebug() << "Failed to find gpu timing data";
+    }
 
-        if (!m_data_core->ParseDiveCaptureData())
-        {
-            OnParseFailure(file_name);
-            return LoadedFileType::kUnknown;
-        }
-    }
-    break;
-    case LoadedFileType::kRdFile:
+    // Check if there is an existing screenshot
+    qDebug() << "Attempting to load screenshot from: " << screenshot_file_path.string().c_str();
+    if (std::filesystem::exists(screenshot_file_path))
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(file_name);
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
-        {
-            OnLoadFailure(load_res, file_name);
-            return LoadedFileType::kUnknown;
-        }
-
-        if (!m_data_core->ParsePm4CaptureData())
-        {
-            OnParseFailure(file_name);
-            return LoadedFileType::kUnknown;
-        }
+        PendingScreenshot(QString::fromStdWString(screenshot_file_path.wstring()));
+        qDebug() << "Loaded: " << screenshot_file_path.string().c_str();
     }
-    break;
-    case LoadedFileType::kGfxrFile:
+    else
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadGfxrCaptureData(file_name);
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
-        {
-            OnLoadFailure(load_res, file_name);
-            return LoadedFileType::kUnknown;
-        }
-
-        if (!m_data_core->ParseGfxrCaptureData())
-        {
-            OnParseFailure(file_name);
-            return LoadedFileType::kUnknown;
-        }
+        PendingScreenshot("");
+        qDebug() << "Failed to find gfxr capture screenshot";
     }
-    break;
-    }
-    return file_type;
 }
-
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnFileLoaded()
+void MainWindow::OnFileLoaded(CaptureManager::LoadedFileType file_type)
 {
-    DIVE_ASSERT(m_loading_result.valid());
-
-    // It should return almost immediately, the signal is sent just before async call return.
-    auto result = m_loading_result.get();
-    m_data_core_lock.lockForRead();
+    DIVE_ASSERT(!m_capture_acquired);
+    m_capture_manager->GetDataCoreLock().lockForRead();
+    m_capture_acquired = true;
 
     std::vector<std::function<void()>> tasks;
     std::swap(tasks, m_loading_pending_task);
@@ -1551,21 +1288,23 @@ void MainWindow::OnFileLoaded()
     setDisabled(false);
     HideOverlay();
 
-    switch (result.file_type)
+    switch (file_type)
     {
-    case LoadedFileType::kUnknown:
+    case CaptureManager::LoadedFileType::kUnknown:
         return;
-    case LoadedFileType::kDiveFile:
+    case CaptureManager::LoadedFileType::kDiveFile:
+        m_correlated_capture_loaded = true;
         OnDiveFileLoaded();
         ExpandResizeHierarchyView(*m_command_hierarchy_view,
                                   *m_gfxr_vulkan_commands_filter_proxy_model);
         ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
         break;
-    case LoadedFileType::kRdFile:
+    case CaptureManager::LoadedFileType::kRdFile:
         OnAdrenoRdFileLoaded();
         ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
         break;
-    case LoadedFileType::kGfxrFile:
+    case CaptureManager::LoadedFileType::kGfxrFile:
+        m_gfxr_capture_loaded = true;
         OnGfxrFileLoaded();
         ExpandResizeHierarchyView(*m_command_hierarchy_view,
                                   *m_gfxr_vulkan_commands_filter_proxy_model);
@@ -1573,9 +1312,9 @@ void MainWindow::OnFileLoaded()
     }
 
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
-    m_capture_file = QString(result.file_name.c_str());
+    m_capture_file = QString(m_last_request.file_name.c_str());
     QFileInfo file_info(m_capture_file);
-    SetCurrentFile(m_capture_file, result.is_temp_file);
+    SetCurrentFile(m_capture_file, m_last_request.is_temp_file);
     emit SetSaveAsMenuStatus(true);
     if (m_unsaved_capture_path.empty())
     {
@@ -1589,6 +1328,7 @@ void MainWindow::OnFileLoaded()
     ShowTempStatus(tr("File loaded successfully"));
 
     UpdateTabAvailability();
+    emit FileLoaded();
 }
 
 //--------------------------------------------------------------------------------------------------

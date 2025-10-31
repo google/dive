@@ -40,6 +40,8 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <QButtonGroup>
+#include <QRadioButton>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
@@ -53,7 +55,9 @@
 namespace
 {
 const std::vector<std::string> kAppTypes{ "Vulkan APK", "OpenXR APK", "Command Line Application" };
-}
+const int                      kGfxrCaptureButtonId = 1;
+const int                      kPm4CaptureButtonId = 2;
+}  // namespace
 
 // =================================================================================================
 // TraceDialog
@@ -127,6 +131,19 @@ TraceDialog::TraceDialog(QWidget *parent) :
 
     m_app_type_box->setModel(m_app_type_model);
 
+    m_capture_type_layout = new QHBoxLayout();
+    m_capture_type_label = new QLabel("Capture Type:");
+    m_capture_type_button_group = new QButtonGroup(this);
+    m_gfxr_capture_type_button = new QRadioButton(tr("GFXR"));
+    m_pm4_capture_type_button = new QRadioButton(tr("PM4"));
+    m_pm4_capture_type_button->setChecked(true);
+    m_capture_type_button_group->addButton(m_gfxr_capture_type_button, kGfxrCaptureButtonId);
+    m_capture_type_button_group->addButton(m_pm4_capture_type_button, kPm4CaptureButtonId);
+
+    m_capture_type_layout->addWidget(m_capture_type_label);
+    m_capture_type_layout->addWidget(m_gfxr_capture_type_button);
+    m_capture_type_layout->addWidget(m_pm4_capture_type_button);
+
     m_cmd_layout = new QHBoxLayout();
     m_file_label = new QLabel("Executable:");
     m_cmd_input_box = new QLineEdit();
@@ -186,6 +203,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_button_layout->addWidget(m_gfxr_capture_button);
 
     m_main_layout->addLayout(m_capture_layout);
+    m_main_layout->addLayout(m_capture_type_layout);
     m_main_layout->addLayout(m_cmd_layout);
     m_main_layout->addLayout(m_pkg_filter_layout);
     m_main_layout->addLayout(m_pkg_layout);
@@ -196,6 +214,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_main_layout->addLayout(m_type_layout);
 
     m_main_layout->addLayout(m_button_layout);
+    m_main_layout->setSizeConstraint(QLayout::SetFixedSize);
     setLayout(m_main_layout);
 
     QObject::connect(m_dev_box,
@@ -234,6 +253,11 @@ TraceDialog::TraceDialog(QWidget *parent) :
                      &PackageFilter::FiltersApplied,
                      this,
                      &TraceDialog::OnPackageListFilterApplied);
+
+    QObject::connect(m_capture_type_button_group,
+                     QOverload<int>::of(&QButtonGroup::buttonClicked),
+                     this,
+                     &TraceDialog::OnCaptureTypeChanged);
 }
 
 TraceDialog::~TraceDialog()
@@ -307,6 +331,9 @@ void TraceDialog::closeEvent(QCloseEvent *event)
     {
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
+        EnableCaptureTypeButtons(true);
+        m_pm4_capture_type_button->setChecked(true);
+        OnCaptureTypeChanged(kPm4CaptureButtonId);
         event->accept();
         return;
     }
@@ -405,6 +432,19 @@ void TraceDialog::OnDeviceSelected(const QString &s)
     UpdatePackageList();
 }
 
+void TraceDialog::OnCaptureTypeChanged(int button_id)
+{
+    m_gfxr_capture = (button_id == kGfxrCaptureButtonId);
+    if (m_gfxr_capture)
+    {
+        ShowGfxrFields();
+    }
+    else
+    {
+        HideGfxrFields();
+    }
+}
+
 void TraceDialog::OnPackageSelected(const QString &s)
 {
     int cur_index = m_pkg_box->currentIndex();
@@ -447,6 +487,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     device->CleanupApp().IgnoreError();
     m_run_button->setText("&Starting..");
     m_run_button->setDisabled(true);
+    EnableCaptureTypeButtons(false);
 
     absl::Status ret;
     qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
@@ -582,6 +623,7 @@ void TraceDialog::OnStartClicked()
         {
             m_run_button->setDisabled(false);
             m_run_button->setText(kStart_Application);
+            EnableCaptureTypeButtons(true);
         }
     }
     else
@@ -604,6 +646,7 @@ void TraceDialog::OnStartClicked()
         }
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
+        EnableCaptureTypeButtons(true);
     }
 }
 
@@ -1127,18 +1170,10 @@ void TraceDialog::HideGfxrFields()
     m_gfxr_capture_file_local_directory_input_box->hide();
 }
 
-void TraceDialog::UseGfxrCapture(bool enable)
+void TraceDialog::EnableCaptureTypeButtons(bool enable)
 {
-    if (enable)
-    {
-        ShowGfxrFields();
-    }
-    else
-    {
-        HideGfxrFields();
-    }
-
-    m_gfxr_capture = enable;
+    m_gfxr_capture_type_button->setEnabled(enable);
+    m_pm4_capture_type_button->setEnabled(enable);
 }
 
 void TraceDialog::OnGfxrCaptureClicked()

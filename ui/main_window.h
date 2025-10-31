@@ -51,8 +51,7 @@ class GfxrVulkanCommandModel;
 class GpuTimingModel;
 class GpuTimingTabView;
 class HoverHelp;
-class Overlay;
-class OverlayWidget;
+class OverlayHelper;
 class OverviewTabView;
 class PropertyPanel;
 class QCheckBox;
@@ -118,7 +117,6 @@ public:
     bool InitializePlugins();
 
 protected:
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
     virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
 
 signals:
@@ -378,7 +376,7 @@ private:
     EventSelection *m_event_selection;
 
     // Overlay to be displayed while capture
-    Overlay *m_overlay;
+    OverlayHelper *m_overlay;
 
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;

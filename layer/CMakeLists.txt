@@ -25,7 +25,7 @@ endif()
 
 project(diveCaptureLayer)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(target_name VkLayer_dive)
 
 set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.h"
@@ -61,7 +61,7 @@ list(APPEND TARGET_LINK_LIBS
     PRIVATE wrap)
 
 target_link_libraries(${target_name}  ${TARGET_LINK_LIBS})
-target_link_directories(${target_name} 
+target_link_directories(${target_name}
     PRIVATE ${CMAKE_SOURCE_DIR}/capture_service)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -95,7 +95,7 @@ set_target_properties(${target_name}
     PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
-target_include_directories(${target_name} PUBLIC 
+target_include_directories(${target_name} PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/include
     ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
     ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common

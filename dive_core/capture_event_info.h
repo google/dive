@@ -99,7 +99,6 @@ struct EventInfo
         kDepthGmemToSysMemResolve,
         kDepthGmemToSysMemResolveAndClear,
         kDepthClearGmem,
-        kClearGmem,
         kSysmemToGmemResolve,
         kWaitMemWrites,
         kWaitForIdle,

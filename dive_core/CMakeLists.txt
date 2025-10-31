@@ -17,7 +17,7 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive_core)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
   set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
@@ -40,7 +40,7 @@ set(FREEDRENO_ISA_DIRECTORY "${DIVE_CORE_GENERATED_FILE_DIR}/freedreno/isa")
 set(FREEDRENO_DEVICES_HDR_FILE "${FREEDRENO_ISA_DIRECTORY}/freedreno_devices.h")
 set(FREEDRENO_IR3_ISA_SRC_FILE "${FREEDRENO_ISA_DIRECTORY}/ir3-isa.c")
 set(FREEDRENO_IR3_ISA_HDR_FILE "${FREEDRENO_ISA_DIRECTORY}/ir3-isa.h")
-set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp") 
+set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp")
 
 
 
@@ -214,7 +214,7 @@ add_dependencies(${PROJECT_NAME} freedreno_ir3)
 target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
 
 # This is linked privately because gfxr contains X11 headers that contain preprocessor macros which cause collisions
-# gfxr_decode_ext_lib itself can't link gfxrecon_decode privately because it's a dependency of a target (gfxrecon-replay) that doesn't specify PRIVATE/PUBLIC 
+# gfxr_decode_ext_lib itself can't link gfxrecon_decode privately because it's a dependency of a target (gfxrecon-replay) that doesn't specify PRIVATE/PUBLIC
 target_link_libraries(${PROJECT_NAME} PRIVATE
     gfxr_decode_ext_lib
 )

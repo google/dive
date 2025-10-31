@@ -89,7 +89,8 @@ struct Stats
         kColorGmemToSysMemResolves,
         kDepthSysMemToGmemResolves,
         kDepthGmemToSysMemResolves,
-        kClearGmemResolves,
+        kColorClearGmemResolves,
+        kDepthClearGmemResolves,
         kNumStats
     };
 };
@@ -133,7 +134,8 @@ constexpr std::array kStatMap = {
     std::pair(Stats::kColorGmemToSysMemResolves, "\tColor Gmem to SysMem Resolves"),
     std::pair(Stats::kDepthSysMemToGmemResolves, "\tDepth SysMem to Gmem Resolves"),
     std::pair(Stats::kDepthGmemToSysMemResolves, "\tDepth Gmem to SysMem Resolves"),
-    std::pair(Stats::kClearGmemResolves, "\tGmem Clears"),
+    std::pair(Stats::kColorClearGmemResolves, "\tColor Gmem Clears"),
+    std::pair(Stats::kDepthClearGmemResolves, "\tDepth Gmem Clears"),
 };
 
 enum ViewPortStats

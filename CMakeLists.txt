@@ -21,7 +21,7 @@ project(dive)
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(MSVC)
     set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")

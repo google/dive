@@ -24,6 +24,7 @@ namespace Dive
 struct ComponentFileConstants
 {
     // File extensions
+    static constexpr std::string_view kDiveExt = ".dive";
     static constexpr std::string_view kGfxrExt = ".gfxr";
     static constexpr std::string_view kGfxaExt = ".gfxa";
     static constexpr std::string_view kRdExt = ".rd";

@@ -80,4 +80,24 @@ const std::string           &gfxr_stem)
     return artifacts;
 }
 
+bool IsGfxrFile(std::filesystem::path file)
+{
+    return file.extension() == ComponentFileConstants::kGfxrExt;
+}
+
+bool IsPngFile(std::filesystem::path file)
+{
+    return file.extension() == ComponentFileConstants::kPngExt;
+}
+
+bool IsDiveFile(std::filesystem::path file)
+{
+    return file.extension() == ComponentFileConstants::kDiveExt;
+}
+
+bool IsRdFile(std::filesystem::path file)
+{
+    return file.extension() == ComponentFileConstants::kRdExt;
+}
+
 }  // namespace Dive

@@ -81,6 +81,7 @@ else()
     absl::algorithm
     absl::strings
     absl::statusor
+    component_files
     )
 
   add_executable(dive_client_cli dive_client_cli.cc )

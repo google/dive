@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(dive)
 
@@ -111,6 +111,8 @@ if(NOT ANDROID)
 
     add_subdirectory(plugins)
 else()
+    add_subdirectory(third_party/Vulkan-ValidationLayers)
+
     if(NOT CMAKE_HOST_WIN32)
         set(DIVE_GFXR_GRADLE_CONSOLE "verbose" CACHE STRING "Value of --console to use when building GFXR with Gradle")
         message(CHECK_START "Build gfxr for android")

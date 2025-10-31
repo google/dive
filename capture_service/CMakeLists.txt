@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
 project(DiveService)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

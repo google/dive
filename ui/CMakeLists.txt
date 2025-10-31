@@ -20,8 +20,6 @@
 #   set CMAKE_PREFIX_PATH=%QTDIR%;%CMAKE_PREFIX_PATH%
 #   set PATH=%QTDIR%\\bin;%PATH%                        # (Windows) To allow DLLS to be found
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
 project(dive_ui)
 
 # Find includes in corresponding build directories
@@ -98,6 +96,7 @@ endif()
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
 file(COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/renderdoc/)
+file(COPY ${CMAKE_SOURCE_DIR}/third_party/Vulkan-ValidationLayers/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Vulkan-ValidationLayers/)
 
 # Generate license NOTICE file
 include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")

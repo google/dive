@@ -91,6 +91,8 @@ struct GfxrReplaySettings
     // Can also be set by providing --loop-single-frame-count in replay_flags_str and calling
     // ValidateGfxrReplaySettings.
     std::optional<int> loop_single_frame_count = std::nullopt;
+    // Launch replay with the Vulkan validation layer. For kNormal only.
+    bool use_validation_layer = false;
 };
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates
@@ -204,7 +206,7 @@ private:
 };
 
 std::filesystem::path ResolveAndroidLibPath(const std::string &name,
-                                            const std::string &device_architecture);
+                                            const std::string &device_architecture = "");
 
 DeviceManager &GetDeviceManager();
 }  // namespace Dive

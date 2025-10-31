@@ -185,6 +185,12 @@ Example:
 ./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --gfxr_replay_flags "--loop-single-frame-count 300"
 ```
 
+To replay with the Vulkan Validation Layers, provide `--validation_layer`:
+
+```
+./dive_client_cli --device 9A221FFAZ004TL  --command gfxr_replay --gfxr_replay_file_path /storage/emulated/0/Download/gfxrFileName.gfxr --validation_layer
+```
+
 To trigger analysis during replay, specify `--gfxr_replay_run_type`. See `--help` for all options.
 
 ```

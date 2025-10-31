@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
 if (ANDROID)
     message("Build diveCaptureLayer for Android.")
 else()

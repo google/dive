@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(dive_core)
 
@@ -47,11 +46,7 @@ set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp")
 if(WIN32)
   set(Python3_FIND_REGISTRY "NEVER")
 endif()
-if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
-  find_program (Python3_EXECUTABLE python3)
-else()
-  find_package (Python3 COMPONENTS Interpreter)
-endif()
+find_package (Python3 COMPONENTS Interpreter)
 
 if (NOT Python3_EXECUTABLE)
   message(FATAL_ERROR "python3 not found")

@@ -20,8 +20,6 @@
 #   set CMAKE_PREFIX_PATH=%QTDIR%;%CMAKE_PREFIX_PATH%
 #   set PATH=%QTDIR%\\bin;%PATH%                        # (Windows) To allow DLLS to be found
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-
 project(dive_ui)
 
 # Find includes in corresponding build directories

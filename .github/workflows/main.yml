@@ -79,6 +79,9 @@ jobs:
           submodules: recursive
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
       - name: Install dependency
         run: |
           sudo apt-get update --yes
@@ -116,6 +119,9 @@ jobs:
           submodules: recursive
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
       - name: Install dependency
         run: |
           sudo apt-get update --yes
@@ -152,6 +158,9 @@ jobs:
           submodules: recursive
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
       - name: Install dependency
         run: |
           sudo apt-get update --yes
@@ -188,6 +197,9 @@ jobs:
           submodules: recursive
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
       - name: Install dependency
         run: |
           sudo apt-get update --yes

@@ -1012,6 +1012,13 @@ void GfxrCaptureWorker::run()
         {
             absl::StatusOr<Dive::ComponentFilePaths>
             ret = Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
+            if (!ret.ok())
+            {
+                std::string err_msg = absl::StrFormat("Failed to get component files: %s",
+                                                      ret.status().message());
+                qDebug() << err_msg.c_str();
+                return;
+            }
             component_files = *ret;
         }
 

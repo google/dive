@@ -82,26 +82,22 @@ const std::string           &gfxr_stem)
 
 bool IsGfxrFile(std::filesystem::path file)
 {
-    ComponentFileConstants consts;
-    return file.extension() == consts.kGfxrExt;
+    return file.extension() == ComponentFileConstants::kGfxrExt;
 }
 
 bool IsPngFile(std::filesystem::path file)
 {
-    ComponentFileConstants consts;
-    return file.extension() == consts.kPngExt;
+    return file.extension() == ComponentFileConstants::kPngExt;
 }
 
 bool IsDiveFile(std::filesystem::path file)
 {
-    ComponentFileConstants consts;
-    return file.extension() == consts.kDiveExt;
+    return file.extension() == ComponentFileConstants::kDiveExt;
 }
 
 bool IsRdFile(std::filesystem::path file)
 {
-    ComponentFileConstants consts;
-    return file.extension() == consts.kRdExt;
+    return file.extension() == ComponentFileConstants::kRdExt;
 }
 
 }  // namespace Dive

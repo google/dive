@@ -1644,12 +1644,9 @@ void MainWindow::OnAnalyzeCapture()
 {
     if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
     {
+        qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
+                    "prompting user to load a file";
         OnOpenFile();
-    }
-    bool gfxr_capture_loaded = (m_gfxr_capture_loaded || m_correlated_capture_loaded);
-    if (!gfxr_capture_loaded)
-    {
-        qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded";
         return;
     }
     qDebug() << "Launching AnalyzeDialog with: " << m_capture_file;

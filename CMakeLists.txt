@@ -42,6 +42,10 @@ if (NOT ANDROID)
     # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     add_subdirectory(third_party/googletest)
+    # For highly parallelized builds, performing test dicovery (running a test with --gtest_list_tests) during the build may time out.
+    # The high CPU load is likely starving program execution of resources.
+    # Therefore, defer test discovery to when ctest is run with the expectation that CPU load is lower.
+    set(CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST)
 endif()
 
 # When building unit tests, make sure we have access to some TESTONLY libs like status_matcher

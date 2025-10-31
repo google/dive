@@ -264,7 +264,7 @@ absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory
 absl::Status AndroidApplication::GfxrSetup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run(
-    absl::StrFormat("push %s %s",
+    absl::StrFormat(R"(push "%s" "%s")",
                     ResolveAndroidLibPath(kVkGfxrLayerLibName, m_device_architecture)
                     .generic_string(),
                     kTargetPath)));
@@ -348,7 +348,7 @@ absl::Status OpenXRApplication::Setup()
         RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
         RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath)));
         RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("push %s %s",
+        absl::StrFormat(R"(push "%s" "%s")",
                         ResolveAndroidLibPath(kManifestFileName, "").generic_string().c_str(),
                         kManifestFilePath)));
         RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
@@ -415,7 +415,7 @@ absl::Status VulkanCliApplication::Setup()
     RETURN_IF_ERROR(GrantAllFilesAccess());
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));
     RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat("push %s %s",
+    m_dev.Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
                                     ResolveAndroidLibPath(kVkLayerLibName, "").generic_string(),
                                     kVulkanGlobalPath)));
     RETURN_IF_ERROR(

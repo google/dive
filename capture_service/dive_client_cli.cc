@@ -540,7 +540,7 @@ bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_captu
         local_target_dir_exists = std::filesystem::exists(full_target_download_dir);
     }
 
-    command = absl::StrFormat("pull %s %s",
+    command = absl::StrFormat(R"(pull "%s" "%s")",
                               on_device_capture_directory,
                               full_target_download_dir.string());
     output = mgr.GetDevice()->Adb().RunAndGetResult(command);

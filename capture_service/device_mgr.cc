@@ -534,18 +534,18 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
 absl::Status AndroidDevice::SetupDevice()
 {
     RETURN_IF_ERROR(
-    Adb().Run(absl::StrFormat("push %s %s",
+    Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
                               ResolveAndroidLibPath(kWrapLibName, "").generic_string(),
                               kTargetPath)));
     if (!m_gfxr_enabled)
     {
         RETURN_IF_ERROR(RequestRootAccess());
         RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("push %s %s",
+        Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
                                   ResolveAndroidLibPath(kVkLayerLibName, "").generic_string(),
                                   kTargetPath)));
         RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat("push %s %s",
+        Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
                                   ResolveAndroidLibPath(kXrLayerLibName, "").generic_string(),
                                   kTargetPath)));
         RETURN_IF_ERROR(ForwardFirstAvailablePort());
@@ -1008,7 +1008,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 {
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
-    std::string copy_cmd = absl::StrFormat("push %s %s",
+    std::string copy_cmd = absl::StrFormat(R"(push "%s" "%s")",
                                            ResolveAndroidLibPath(kProfilingPluginFolderName, ""),
                                            kTargetPath);
     RETURN_IF_ERROR(m_device->Adb().Run(copy_cmd));
@@ -1189,7 +1189,8 @@ absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
     }
 
     // "adb pull" can handle a destination directory or file path
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat("pull %s %s", remote_file_path, local_save_path)));
+    RETURN_IF_ERROR(
+    Adb().Run(absl::StrFormat(R"(pull "%s" "%s")", remote_file_path, local_save_path)));
 
     if (!delete_after_retrieve)
     {

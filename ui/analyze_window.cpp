@@ -518,13 +518,13 @@ const std::string   &local_asset_file_path)
     std::string           gfxr_filename = gfxr_path.filename().string();
     std::string           remote_gfxr_path = absl::StrFormat("%s/%s", remote_dir, gfxr_filename);
     RETURN_IF_ERROR(
-    device->Adb().Run(absl::StrFormat("push %s %s", local_gfxr_path, remote_gfxr_path)));
+    device->Adb().Run(absl::StrFormat(R"(push "%s" "%s")", local_gfxr_path, remote_gfxr_path)));
 
     // Push the .gfxa file.
     std::filesystem::path asset_file_path(local_asset_file_path);
     std::string           asset_file_name = asset_file_path.filename().string();
     RETURN_IF_ERROR(device->Adb().Run(
-    absl::StrFormat("push %s %s/%s", local_asset_file_path, remote_dir, asset_file_name)));
+    absl::StrFormat(R"(push "%s" "%s/%s")", local_asset_file_path, remote_dir, asset_file_name)));
 
     return remote_gfxr_path;
 }

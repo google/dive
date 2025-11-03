@@ -25,6 +25,7 @@
 #include "dive_core/pm4_info.h"
 #include "main_window.h"
 #include "common/dive_version.h"
+#include "custom_metatypes.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -118,6 +119,8 @@ int main(int argc, char *argv[])
             }
         }
     }
+
+    Dive::RegisterCustomMetaType();
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);

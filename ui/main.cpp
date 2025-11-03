@@ -26,6 +26,7 @@
 #include "application_controller.h"
 #include "main_window.h"
 #include "utils/version_info.h"
+#include "custom_metatypes.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -122,6 +123,8 @@ int main(int argc, char *argv[])
             }
         }
     }
+
+    Dive::RegisterCustomMetaType();
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);

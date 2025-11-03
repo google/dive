@@ -34,6 +34,7 @@ limitations under the License.
 #include "common/macros.h"
 #include "common/defer.h"
 #include "remote_files.h"
+#include "utils/component_files.h"
 
 namespace Dive
 {
@@ -952,13 +953,23 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     }
     else if (settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
+        // TODO: Refactor for remote component file paths
         std::string
-                    remote_gpu_time_path = absl::StrFormat("%s/%s",
+        remote_gpu_time_path = absl::StrFormat("%s/%s",
                                                parse_remote_capture.parent_path().string().c_str(),
                                                kGpuTimingFile);
-        std::string gpu_time_csv_local_name = absl::StrFormat("%s%s",
-                                                              parse_remote_capture.stem(),
-                                                              kGpuTimingCsvSuffix);
+
+        std::string gpu_time_csv_local_name = "";
+        {
+            absl::StatusOr<Dive::ComponentFilePaths>
+            ret = GetComponentFilesHostPaths(settings.local_download_dir,
+                                             parse_remote_capture.stem().string());
+            if (!ret.ok())
+            {
+                return ret.status();
+            }
+            gpu_time_csv_local_name = ret->gpu_timing_csv.filename().string();
+        }
         if (absl::Status s = m_device->RetrieveFile(remote_gpu_time_path,
                                                     settings.local_download_dir,
                                                     /*delete_after_retrieve=*/true,
@@ -1032,15 +1043,24 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 
     LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
     std::filesystem::path parse_remote_path = settings.remote_capture_path;
-    std::string           csv_local_name = absl::StrFormat("%s%s",
-                                                 parse_remote_path.stem(),
-                                                 kProfilingMetricsCsvSuffix);
+    std::string           perf_counter_csv_local_name = "";
+    {
+        absl::StatusOr<Dive::ComponentFilePaths>
+        ret = GetComponentFilesHostPaths(settings.local_download_dir,
+                                         parse_remote_path.stem().string());
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        perf_counter_csv_local_name = ret->perf_counter_csv.filename().string();
+    }
+    // TODO: Refactor for remote component file paths
     std::string csv_remote_file_path = parse_remote_path.replace_extension(".csv").string();
 
     if (absl::Status s = m_device->RetrieveFile(csv_remote_file_path,
                                                 settings.local_download_dir,
                                                 /*delete_after_retrieve=*/true,
-                                                csv_local_name);
+                                                perf_counter_csv_local_name);
         !s.ok())
     {
         return absl::InternalError(

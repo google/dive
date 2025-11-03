@@ -118,12 +118,8 @@ QWidget                                                            *parent) :
     m_selected_capture_file_string = "";
     m_selected_file_input_box->setText(m_selected_capture_file_string);
     m_selected_file_input_box->setReadOnly(true);
-    m_open_files_button = new QPushButton(this);
-    QIcon open_files_icon(":/images/open.png");
-    m_open_files_button->setIcon(open_files_icon);
     m_selected_file_layout->addWidget(m_selected_file_label);
     m_selected_file_layout->addWidget(m_selected_file_input_box);
-    m_selected_file_layout->addWidget(m_open_files_button);
 
     // Enable GPU Time
     m_gpu_time_layout = new QHBoxLayout();
@@ -231,7 +227,6 @@ QWidget                                                            *parent) :
                      &QPushButton::clicked,
                      this,
                      &AnalyzeDialog::OnDeviceListRefresh);
-    QObject::connect(m_open_files_button, &QPushButton::clicked, this, &AnalyzeDialog::OnOpenFile);
     QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
     QObject::connect(m_delete_replay_artifacts_button,
                      &QPushButton::clicked,
@@ -275,13 +270,6 @@ void AnalyzeDialog::OnDisableOverlay()
     setDisabled(false);
     m_overlay->SetMessage(QString());
     m_overlay->hide();
-}
-
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::SetSelectedCaptureFile(const QString &filePath)
-{
-    m_selected_capture_file_string = filePath;
-    m_selected_file_input_box->setText(m_selected_capture_file_string);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -445,108 +433,73 @@ void AnalyzeDialog::OnDeviceListRefresh()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnOpenFile()
+void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
 {
-    QString supported_files = QStringLiteral("GFXR files (*.gfxr)");
-    QString file_name = QFileDialog::getOpenFileName(this,
-                                                     "Open Capture File",
-                                                     Settings::Get()->ReadLastFilePath(),
-                                                     supported_files);
+    // Clear members for previous session
+    OnAnalyzeCaptureEnded();
 
-    if (!file_name.isEmpty())
+    // Validate capture
+    if (file_path.isEmpty())
     {
-        // Convert the filename to a string to perform a replacement.
-        std::string potential_asset_name(file_name.toStdString());
-
-        const std::string trim_str = "_trim_trigger";
-        const std::string asset_str = "_asset_file";
-
-        // Find and replace the last occurrence of "trim_trigger" part of the filename.
-        size_t pos = potential_asset_name.rfind(trim_str);
-        if (pos != std::string::npos)
+        qDebug() << "OnAnalyzeCaptureStarted(): empty filename";
+        return;
+    }
+    std::filesystem::path    local_gfxr_parse = file_path.toStdString();
+    Dive::ComponentFilePaths component_paths = {};
+    {
+        absl::StatusOr<Dive::ComponentFilePaths>
+        ret = Dive::GetComponentFilesHostPaths(local_gfxr_parse.parent_path(),
+                                               local_gfxr_parse.stem().string());
+        if (!ret.ok())
         {
-            potential_asset_name.replace(pos, trim_str.length(), asset_str);
-        }
-
-        // Create a path object to the asset file.
-        std::filesystem::path asset_file_path(potential_asset_name);
-        asset_file_path.replace_extension(".gfxa");
-
-        // Check if the required asset file exists.
-        bool asset_file_exists = std::filesystem::exists(asset_file_path);
-
-        if (!asset_file_exists)
-        {
-            QString title = QString("Unable to open file: %1").arg(file_name);
-            QString description = QString("Required .gfxa file: %1 not found!")
-                                  .arg(QString::fromStdString(asset_file_path.string()));
-            QMessageBox::critical(this, title, description);
+            std::string err_msg = absl::
+            StrFormat("OnAnalyzeCaptureStarted(): could not get component files: %s",
+                      ret.status().message());
+            qDebug() << err_msg.c_str();
             return;
         }
-        else
-        {
-            SetSelectedCaptureFile(file_name);
-            QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
-            Settings::Get()->WriteLastFilePath(last_file_path);
-            emit OnNewFileOpened(file_name);
-        }
+        component_paths = *ret;
     }
+    if (!std::filesystem::exists(component_paths.gfxr))
+    {
+        qDebug() << "OnAnalyzeCaptureStarted(): gfxr trace does not exist: "
+                 << component_paths.gfxr.string().c_str();
+        return;
+    }
+    if (!std::filesystem::exists(component_paths.gfxa))
+    {
+        qDebug() << "OnAnalyzeCaptureStarted(): gfxa trace does not exist: "
+                 << component_paths.gfxa.string().c_str();
+        QString title = QString("Unable to open file: %1").arg(file_path);
+        QString description = QString("Required .gfxa file: %1 not found!")
+                              .arg(QString::fromStdString(component_paths.gfxa.string()));
+        QMessageBox::critical(this, title, description);
+        return;
+    }
+
+    // Set members for current replay session
+    assert(file_path.toStdString() == component_paths.gfxr.generic_string());
+    m_selected_capture_file_string = QString::fromStdString(component_paths.gfxr.generic_string());
+    m_local_capture_file_directory = local_gfxr_parse.parent_path();
+    m_local_capture_files = component_paths;
+
+    // Update display and settings
+    m_selected_file_input_box->setText(m_selected_capture_file_string);
+    QString last_file_path = QString::fromStdString(
+    local_gfxr_parse.parent_path().generic_string());
+    Settings::Get()->WriteLastFilePath(last_file_path);
+
+    // Open the dialog for users to initiate analysis
+    open();
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::StatusOr<std::string> AnalyzeDialog::GetCaptureFileDirectory()
+void AnalyzeDialog::OnAnalyzeCaptureEnded()
 {
-    std::filesystem::path capture_file_path(m_selected_capture_file_string.toStdString());
-
-    // Get the parent directory of the capture file.
-    std::filesystem::path directory_path = capture_file_path.parent_path();
-
-    if (!std::filesystem::exists(directory_path))
-    {
-        return absl::NotFoundError("Failed to find directory for the selected capture file.");
-    }
-
-    return directory_path.string();
-}
-
-//--------------------------------------------------------------------------------------------------
-absl::StatusOr<std::string> AnalyzeDialog::GetAssetFile()
-{
-    // Get the capture file's directory.
-    absl::StatusOr<std::string> capture_directory = GetCaptureFileDirectory();
-    if (!capture_directory.ok())
-    {
-        return capture_directory.status();
-    }
-    std::filesystem::path asset_directory = *capture_directory;
-
-    // Convert the filename to a string to perform a replacement.
-    std::string potential_asset_name(m_selected_capture_file_string.toStdString());
-
-    const std::string trim_str = "_trim_trigger";
-    const std::string asset_str = "_asset_file";
-
-    // Find and replace the last occurrence of "trim_trigger" part of the filename.
-    size_t pos = potential_asset_name.rfind(trim_str);
-    if (pos != std::string::npos)
-    {
-        potential_asset_name.replace(pos, trim_str.length(), asset_str);
-    }
-
-    // Create a path object to the asset file.
-    std::filesystem::path asset_file_name = std::filesystem::path(potential_asset_name).filename();
-    std::filesystem::path asset_file_path = asset_directory / asset_file_name;
-    asset_file_path.replace_extension(".gfxa");
-
-    // Check if the required asset file exists.
-    bool asset_file_exists = std::filesystem::exists(asset_file_path);
-
-    if (!asset_file_exists)
-    {
-        return absl::NotFoundError("Failed to find corresponding .gfxa asset file.");
-    }
-
-    return asset_file_path.string();
+    // Clear members for current analyze session
+    m_selected_capture_file_string = "";
+    m_local_capture_file_directory = "";
+    m_local_capture_files = {};
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -582,41 +535,6 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
     m_replay_button->setEnabled(is_enabled);
     m_replay_button->setText(message.c_str());
     QApplication::processEvents();
-}
-
-//--------------------------------------------------------------------------------------------------
-std::filesystem::path AnalyzeDialog::GetFullLocalPath(const std::string &gfxr_stem,
-                                                      const std::string &suffix) const
-{
-    if (m_local_capture_file_directory.empty())
-    {
-        return "";
-    }
-
-    std::filesystem::path full_path = m_local_capture_file_directory / (gfxr_stem + suffix);
-    return full_path;
-}
-
-//--------------------------------------------------------------------------------------------------
-AnalyzeDialog::ReplayArtifactsPaths AnalyzeDialog::GetReplayFilesLocalPaths(
-const std::string &gfxr_stem) const
-{
-    ReplayArtifactsPaths artifacts = {};
-
-    assert(!gfxr_stem.empty());
-
-    if (m_local_capture_file_directory.empty())
-    {
-        qDebug() << "GetReplayFilesLocalPaths() error: m_local_capture_file_directory empty";
-        return artifacts;
-    }
-
-    artifacts.gfxr = GetFullLocalPath(gfxr_stem, Dive::kGfxrSuffix);
-    artifacts.perf_counter_csv = GetFullLocalPath(gfxr_stem, Dive::kProfilingMetricsCsvSuffix);
-    artifacts.gpu_timing_csv = GetFullLocalPath(gfxr_stem, Dive::kGpuTimingCsvSuffix);
-    artifacts.pm4_rd = GetFullLocalPath(gfxr_stem, Dive::kPm4RdSuffix);
-    artifacts.renderdoc_rdc = GetFullLocalPath(gfxr_stem, Dive::kRenderDocRdcSuffix);
-    return artifacts;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -824,15 +742,8 @@ void AnalyzeDialog::ReplayImpl()
     }
 
     // Get the asset file name
-    absl::StatusOr<std::string> asset_file = GetAssetFile();
-    if (!asset_file.ok())
-    {
-        std::string err_msg = absl::StrCat(asset_file.status().message());
-        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
-        return;
-    }
-
-    absl::StatusOr<std::string> remote_file = PushFilesToDevice(device, asset_file.value());
+    absl::StatusOr<std::string>
+    remote_file = PushFilesToDevice(device, m_local_capture_files.gfxa.generic_string());
     if (!remote_file.ok())
     {
         std::string err_msg = absl::StrCat("Failed to deploy replay apk: ",
@@ -849,21 +760,6 @@ void AnalyzeDialog::ReplayImpl()
         UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
         return;
     }
-
-    // Set the download directory to the directory of the current capture file
-    auto ret2 = GetCaptureFileDirectory();
-    if (!ret2.ok())
-    {
-        std::string err_msg = absl::StrCat("Failed to set download directory: ",
-                                           ret2.status().message());
-        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
-        return;
-    }
-    m_local_capture_file_directory = ret2.value();
-
-    // Get names of temporary artifacts
-    ReplayArtifactsPaths local_artifacts = GetReplayFilesLocalPaths(
-    std::filesystem::path(remote_file.value()).stem().string());
 
     // Get info on which variants of replay to initiate runs for
     bool dump_pm4_run_enabled = m_dump_pm4_box->isChecked();
@@ -885,8 +781,9 @@ void AnalyzeDialog::ReplayImpl()
         }
 
         UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
-        // Reload the capture so the correct PM4 data (or absence thereof) is displayed
-        emit ReloadCapture(m_selected_capture_file_string);
+        // MainWindow needs to reload the capture so the correct PM4 data (or absence thereof) is
+        // displayed
+        emit CaptureUpdated(m_selected_capture_file_string);
         return;
     }
 
@@ -900,8 +797,9 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
-        // Reload the capture so the correct PM4 data (or absence thereof) is displayed
-        emit ReloadCapture(m_selected_capture_file_string);
+        // MainWindow needs to reload the capture so the correct PM4 data (or absence thereof) is
+        // displayed
+        emit CaptureUpdated(m_selected_capture_file_string);
     }
 
     // Run the perf counter replay
@@ -918,17 +816,17 @@ void AnalyzeDialog::ReplayImpl()
     }
 
     // File could exist from previous runs
-    if (std::filesystem::exists(local_artifacts.perf_counter_csv))
+    if (std::filesystem::exists(m_local_capture_files.perf_counter_csv))
     {
         qDebug() << "Loading perf counter data: "
-                 << local_artifacts.perf_counter_csv.string().c_str();
-        emit OnDisplayPerfCounterResults(
-        QString::fromStdString(local_artifacts.perf_counter_csv.string()));
+                 << m_local_capture_files.perf_counter_csv.string().c_str();
+        emit DisplayPerfCounterResults(
+        QString::fromStdString(m_local_capture_files.perf_counter_csv.string()));
     }
     else
     {
         qDebug() << "Cleared perf counter data";
-        emit OnDisplayPerfCounterResults("");
+        emit DisplayPerfCounterResults("");
     }
 
     // Run the gpu_time replay
@@ -944,16 +842,17 @@ void AnalyzeDialog::ReplayImpl()
     }
 
     // File could exist from previous runs
-    if (std::filesystem::exists(local_artifacts.gpu_timing_csv))
+    if (std::filesystem::exists(m_local_capture_files.gpu_timing_csv))
     {
-        qDebug() << "Loading gpu timing data: " << local_artifacts.gpu_timing_csv.string().c_str();
-        emit OnDisplayGpuTimingResults(
-        QString::fromStdString(local_artifacts.gpu_timing_csv.string()));
+        qDebug() << "Loading gpu timing data: "
+                 << m_local_capture_files.gpu_timing_csv.string().c_str();
+        emit DisplayGpuTimingResults(
+        QString::fromStdString(m_local_capture_files.gpu_timing_csv.string()));
     }
     else
     {
         qDebug() << "Cleared gpu timing data";
-        emit OnDisplayGpuTimingResults("");
+        emit DisplayGpuTimingResults("");
     }
 
     if (renderdoc_run_enabled)
@@ -967,7 +866,7 @@ void AnalyzeDialog::ReplayImpl()
             return;
         }
         qDebug() << "RenderDoc capture saved to: "
-                 << local_artifacts.renderdoc_rdc.string().c_str();
+                 << m_local_capture_files.renderdoc_rdc.string().c_str();
     }
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
@@ -979,27 +878,7 @@ void AnalyzeDialog::DeleteReplayArtifactsImpl()
     qDebug() << "Attempting to delete replay artifacts from previous runs...";
     UpdateReplayStatus(ReplayStatusUpdateCode::kDeletingReplayArtifacts);
 
-    absl::StatusOr<std::string> ret = GetCaptureFileDirectory();
-    if (!ret.ok())
-    {
-        std::string err_msg = absl::StrCat("Failed to get local capture directory: ",
-                                           ret.status().message());
-        UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
-        qDebug() << "Failed to get local capture directory";
-        return;
-    }
-    m_local_capture_file_directory = ret.value();
-
-    std::filesystem::path gfxr_parse = m_selected_capture_file_string.toStdString();
-    ReplayArtifactsPaths  local_artifacts = GetReplayFilesLocalPaths(gfxr_parse.stem().string());
-
-    if (local_artifacts.gfxr.empty())
-    {
-        qDebug() << "Could not obtain names for replay artifacts";
-        return;
-    }
-
-    AttemptDeletingTemporaryLocalFile(local_artifacts.perf_counter_csv);
-    AttemptDeletingTemporaryLocalFile(local_artifacts.gpu_timing_csv);
-    AttemptDeletingTemporaryLocalFile(local_artifacts.pm4_rd);
+    AttemptDeletingTemporaryLocalFile(m_local_capture_files.perf_counter_csv);
+    AttemptDeletingTemporaryLocalFile(m_local_capture_files.gpu_timing_csv);
+    AttemptDeletingTemporaryLocalFile(m_local_capture_files.pm4_rd);
 }

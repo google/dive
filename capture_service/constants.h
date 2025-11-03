@@ -52,14 +52,7 @@ inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR re
 inline constexpr char
 kCaptureScreenshotFile[] = "capture_screenshot.png";  // produced during GFXR capture
 
-// On host side, files associated with the same GFXR capture will be named with the same prefix as
-// it, but a unique suffix to indicate its type
-inline constexpr char kProfilingMetricsCsvSuffix[] = "_profiling_metrics.csv";
-inline constexpr char kGpuTimingCsvSuffix[] = "_gpu_time.csv";
-inline constexpr char kPm4RdSuffix[] = ".rd";
-inline constexpr char kRenderDocRdcSuffix[] = "_capture.rdc";
-inline constexpr char kGfxrSuffix[] = ".gfxr";
-inline constexpr char kPngSuffix[] = ".png";
+// TODO: Refactor also for remote component file paths
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

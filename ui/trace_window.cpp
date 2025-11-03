@@ -49,6 +49,7 @@
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"
+#include "utils/component_files.h"
 
 namespace
 {
@@ -926,18 +927,20 @@ void GfxrCaptureWorker::run()
         return;
     }
 
-    auto ret = getGfxrCaptureDirectorySize(device);
-    if (!ret.ok())
+    int64_t capture_directory_size = 0;
     {
-        std::string err_msg = absl::StrCat("Failed to get size of gfxr capture directory",
-                                           " error: ",
-                                           ret.status().message());
-        qDebug() << err_msg.c_str();
-        emit ErrorMessage(QString::fromStdString(err_msg));
-        return;
+        absl::StatusOr<int64_t> ret = getGfxrCaptureDirectorySize(device);
+        if (!ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Failed to get size of gfxr capture directory",
+                                               " error: ",
+                                               ret.status().message());
+            qDebug() << err_msg.c_str();
+            emit ErrorMessage(QString::fromStdString(err_msg));
+            return;
+        }
+        capture_directory_size = *ret;
     }
-
-    int64_t capture_directory_size = *ret;
 
     ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
                                                                    m_target_capture_dir
@@ -986,7 +989,7 @@ void GfxrCaptureWorker::run()
             return;
         }
 
-        if (filename.extension() == Dive::kGfxrSuffix)
+        if (Dive::IsGfxrFile(filename))
         {
             if (gfxr_stem.empty())
             {
@@ -994,7 +997,7 @@ void GfxrCaptureWorker::run()
             }
             gfxr_capture_file_path = target_path.string();
         }
-        else if (filename.extension() == Dive::kPngSuffix)
+        else if (Dive::IsPngFile(filename))
         {
             original_screenshot_path = target_path.string();
         }
@@ -1005,17 +1008,30 @@ void GfxrCaptureWorker::run()
 
     if (!original_screenshot_path.empty() && !gfxr_stem.empty())
     {
-        std::filesystem::path new_screenshot_filename = gfxr_stem + Dive::kPngSuffix;
-        std::filesystem::path png_new_path = m_target_capture_dir;
-        png_new_path /= new_screenshot_filename;
+        Dive::ComponentFilePaths component_files = {};
+        {
+            absl::StatusOr<Dive::ComponentFilePaths>
+            ret = Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
+            if (!ret.ok())
+            {
+                std::string err_msg = absl::StrFormat("Failed to get component files: %s",
+                                                      ret.status().message());
+                qDebug() << err_msg.c_str();
+                return;
+            }
+            component_files = *ret;
+        }
 
         std::error_code error_code;
-        std::filesystem::rename(original_screenshot_path, png_new_path, error_code);
+        std::filesystem::rename(original_screenshot_path,
+                                component_files.screenshot_png,
+                                error_code);
 
         if (error_code)
         {
             qDebug() << "Failed to rename screenshot file from " << original_screenshot_path.c_str()
-                     << " to " << png_new_path.c_str() << ": " << error_code.message().c_str();
+                     << " to " << component_files.screenshot_png.c_str() << ": "
+                     << error_code.message().c_str();
         }
     }
 

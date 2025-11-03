@@ -17,7 +17,7 @@
 # --- DivePlugin Sample ---
 # This is a plugin demonstrating the IDivePlugin interface.
 # It still needs Qt Widgets because it modifies a Qt UI (MainWindow).
-find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED) 
+find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
 
 add_library(dive_plugin_sample SHARED 
     plugin_sample.h

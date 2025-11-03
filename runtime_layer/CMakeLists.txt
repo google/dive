@@ -19,52 +19,51 @@ project(diveRuntimeLayer)
 set(CMAKE_CXX_STANDARD 20)
 set(target_name VkLayer_rt_dive)
 
-set(HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"
-                "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.h"
+set(HDR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.h"
 )
 
-set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.cc"
+set(SRC_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_base.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_android.cc"
 )
 
-include_directories(${CMAKE_SOURCE_DIR}
+include_directories(
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
     ${CMAKE_SOURCE_DIR}/gpu_time
 )
 
-add_library(${target_name} SHARED ${HDR_FILES}
-                                ${SRC_FILES})
+add_library(${target_name} SHARED ${HDR_FILES} ${SRC_FILES})
 
-target_link_libraries(${target_name}
-    gpu_time
-)
+target_link_libraries(${target_name} gpu_time)
 
 if(ANDROID)
     add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-    target_link_libraries(${target_name}
-        -lm
-        -ldl
-        -llog
-        -landroid)
+    target_link_libraries(${target_name} -lm -ldl -llog -landroid)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
-if (MSVC)
-  # 4100: unreferenced formal parameter
-  # 4201: prevent nameless struct/union
-  target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
+if(MSVC)
+    # 4100: unreferenced formal parameter
+    # 4201: prevent nameless struct/union
+    target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
 else()
-  target_compile_options(${target_name} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+    target_compile_options(
+        ${target_name}
+        PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
+    )
 endif()
 
-set_target_properties(${target_name}
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
+set_target_properties(
+    ${target_name}
+    PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 if(ANDROID)
     install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})

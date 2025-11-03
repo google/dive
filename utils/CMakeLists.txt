@@ -18,19 +18,19 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(utils)
 
-add_library(component_files
-    component_files.h
-    component_files.cpp
+add_library(component_files component_files.h component_files.cpp)
+target_link_libraries(component_files PUBLIC absl::statusor)
+target_include_directories(
+    component_files
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
-target_link_libraries(component_files PUBLIC
-                      absl::statusor)
-target_include_directories(component_files PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)  
 
 enable_testing()
 include(GoogleTest)
 
 add_executable(component_files_test component_files_test.cpp)
-target_link_libraries(component_files_test
+target_link_libraries(
+    component_files_test
     absl::status_matchers
     component_files
     gmock

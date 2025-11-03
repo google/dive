@@ -20,11 +20,11 @@
 #
 #   enable_testing()
 #   add_test(NAME MyTest
-#     COMMAND ${CMAKE_COMMAND} 
-#     -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli> 
-#     -DTEST_NAME=MyTest -DINPUT_GFXR=my_capture.gfxr 
+#     COMMAND ${CMAKE_COMMAND}
+#     -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli>
+#     -DTEST_NAME=MyTest -DINPUT_GFXR=my_capture.gfxr
 #     -DGOLDEN_FILE=my_capture_golden.gfxr
-#     -DADDITIONAL_ARGUMENTS="" 
+#     -DADDITIONAL_ARGUMENTS=""
 #     -P ${CMAKE_CURRENT_SOURCE_DIR}/modify_gfxr_test.cmake
 #   )
 #
@@ -33,19 +33,21 @@
 # ADDITIONAL_ARGUMENTS will be passed to TEST_EXECUTABLE in addition to the normal command-line. This is where you can specify options and parameters.
 
 execute_process(
-  COMMAND ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} --input_file_path ${INPUT_GFXR} --output_gfxr_path ${TEST_NAME}.gfxr
-  RESULT_VARIABLE exit_code
+    COMMAND
+        ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} --input_file_path
+        ${INPUT_GFXR} --output_gfxr_path ${TEST_NAME}.gfxr
+    RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
-if (NOT exit_code EQUAL 0)
-  message(FATAL_ERROR "${TEST_EXECUTABLE} failed: ${exit_code}")
+if(NOT exit_code EQUAL 0)
+    message(FATAL_ERROR "${TEST_EXECUTABLE} failed: ${exit_code}")
 endif()
 
 execute_process(
-  COMMAND ${CMAKE_COMMAND} -E compare_files ${TEST_NAME}.gfxr ${GOLDEN_FILE}
-  RESULT_VARIABLE exit_code
+    COMMAND ${CMAKE_COMMAND} -E compare_files ${TEST_NAME}.gfxr ${GOLDEN_FILE}
+    RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
-if (NOT exit_code EQUAL 0)
-  message(FATAL_ERROR "Output differs from golden file")
+if(NOT exit_code EQUAL 0)
+    message(FATAL_ERROR "Output differs from golden file")
 endif()

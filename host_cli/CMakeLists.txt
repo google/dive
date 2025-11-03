@@ -17,40 +17,36 @@
 set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
-  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # TODO: Try to use include_directories sparingly or at the highest level appropriate
-include_directories(
-    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-)
+include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 
 # ---------------------
 # data_core_wrapper_lib
-add_library(data_core_wrapper_lib
-  data_core_wrapper.h
-  data_core_wrapper.cpp
+add_library(data_core_wrapper_lib data_core_wrapper.h data_core_wrapper.cpp)
+target_link_libraries(data_core_wrapper_lib PUBLIC dive_core absl::status)
+target_include_directories(
+    data_core_wrapper_lib
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../
 )
-target_link_libraries(data_core_wrapper_lib PUBLIC
-  dive_core
-  absl::status
-)
-target_include_directories(data_core_wrapper_lib PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/../)
 
 # --------
 # host_cli
 add_executable(host_cli "host_cli_main.cpp")
-target_link_libraries(host_cli PUBLIC
-  data_core_wrapper_lib
-  absl::flags
-  absl::flags_parse
-  absl::status
-  absl::str_format
+target_link_libraries(
+    host_cli
+    PUBLIC
+        data_core_wrapper_lib
+        absl::flags
+        absl::flags_parse
+        absl::status
+        absl::str_format
 )
 
 # ---------------------
@@ -58,33 +54,40 @@ target_link_libraries(host_cli PUBLIC
 enable_testing()
 include(GoogleTest)
 add_executable(data_core_wrapper_test data_core_wrapper_test.cpp)
-target_link_libraries(data_core_wrapper_test PRIVATE
-  data_core_wrapper_lib
-  gtest
-  gtest_main
+target_link_libraries(
+    data_core_wrapper_test
+    PRIVATE data_core_wrapper_lib gtest gtest_main
 )
 gtest_discover_tests(data_core_wrapper_test)
 
 # Creates a test with the given NAME that runs host_cli given INPUT_GFXR file and compares the new modified gfxr output to GOLDEN_FILE.
 # This is a wrapper for modify_gfxr_test.cmake that makes tests simpler to define.
 function(add_modify_gfxr_test)
-  set(oneValueArgs NAME INPUT_GFXR GOLDEN_FILE)
-  set(multiValueArgs ADDITIONAL_ARGUMENTS)
-  cmake_parse_arguments(PARSE_ARGV 0 arg
-      "" "${oneValueArgs}" "${multiValueArgs}"
-  )
-  add_test(NAME ${arg_NAME}
-    COMMAND ${CMAKE_COMMAND}
-    -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli>
-    -DTEST_NAME=${arg_NAME}
-    -DINPUT_GFXR=${arg_INPUT_GFXR}
-    -DGOLDEN_FILE=${arg_GOLDEN_FILE}
-    -DADDITIONAL_ARGUMENTS=${arg_ADDITIONAL_ARGUMENTS}
-    -P ${CMAKE_CURRENT_SOURCE_DIR}/modify_gfxr_test.cmake
-  )
+    set(oneValueArgs NAME INPUT_GFXR GOLDEN_FILE)
+    set(multiValueArgs ADDITIONAL_ARGUMENTS)
+    cmake_parse_arguments(
+        PARSE_ARGV
+        0
+        arg
+        ""
+        "${oneValueArgs}"
+        "${multiValueArgs}"
+    )
+    add_test(
+        NAME ${arg_NAME}
+        COMMAND
+            ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:host_cli>
+            -DTEST_NAME=${arg_NAME} -DINPUT_GFXR=${arg_INPUT_GFXR}
+            -DGOLDEN_FILE=${arg_GOLDEN_FILE}
+            -DADDITIONAL_ARGUMENTS=${arg_ADDITIONAL_ARGUMENTS} -P
+            ${CMAKE_CURRENT_SOURCE_DIR}/modify_gfxr_test.cmake
+    )
 endfunction()
 
-add_modify_gfxr_test(NAME ModifyGfxrSeparateAssetsNoOp
-  INPUT_GFXR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
-  GOLDEN_FILE ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+add_modify_gfxr_test(
+    NAME ModifyGfxrSeparateAssetsNoOp
+    INPUT_GFXR
+        ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+    GOLDEN_FILE
+        ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
 )

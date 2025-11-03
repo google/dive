@@ -221,10 +221,6 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
-        if (validated_settings.use_validation_layer)
-        {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
-        }
         break;
     }
     case GfxrReplayOptions::kPerfCounters:
@@ -249,7 +245,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+            return absl::InvalidArgumentError("use_validation_layer is not allowed for kPerfCounters");
         }
         break;
     }
@@ -270,26 +266,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
-        }
-        break;
-    }
-    case GfxrReplayOptions::kGpuTiming:
-    {
-        if (!validated_settings.metrics.empty())
-        {
-            return absl::InvalidArgumentError(
-            "Cannot use metrics except for kPerfCounters type run");
-        }
-        // value_or(1) since the default used by DiveFileProcessor is 1
-        if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
-        {
-            return absl::InvalidArgumentError(
-            "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
-        }
-        if (validated_settings.use_validation_layer)
-        {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+            return absl::InvalidArgumentError("use_validation_layer is not allowed for kRenderDoc");
         }
         break;
     }

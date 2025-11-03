@@ -612,7 +612,10 @@ absl::Status AndroidDevice::CleanupDevice()
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
 
     // cleanup for gfxr replay with validation layer
-    UninstallVulkanLayer(Adb(), kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+    UninstallVulkanLayer(Adb(),
+                         /*app=*/kGfxrReplayAppName,
+                         /*layer_filename=*/kVkValidationLayerLibName)
+    .IgnoreError();
 
     // clean up for gfxr replay app
     Adb()
@@ -861,7 +864,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         if (settings.use_validation_layer)
         {
             DisableVulkanLayer(adb).IgnoreError();
-            UninstallVulkanLayer(adb, kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+            UninstallVulkanLayer(adb,
+                                 /*app=*/kGfxrReplayAppName,
+                                 /*layer_filename=*/kVkValidationLayerLibName)
+            .IgnoreError();
         }
     });
     LOGD("RunReplayGfxrScript(): SETUP\n");

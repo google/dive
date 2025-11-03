@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "plugin_test.h"
+#include "plugin_sample.h"
 #include <QMenu>
 #include <QMenuBar>
 #include <iostream>
@@ -22,14 +22,14 @@
 
 namespace Dive
 {
-PluginTest::PluginTest(QObject* parent) :
+PluginSample::PluginSample(QObject* parent) :
     QObject(parent)
 {
 }
 
-PluginTest::~PluginTest() {}
+PluginSample::~PluginSample() {}
 
-bool PluginTest::Initialize(MainWindow& main_window)
+bool PluginSample::Initialize(MainWindow& main_window)
 {
     QMenu*          help_menu = nullptr;
     QList<QAction*> menu_bar_actions = main_window.menuBar()->actions();
@@ -51,14 +51,14 @@ bool PluginTest::Initialize(MainWindow& main_window)
     }
 
     QAction* action = new QAction(QString::fromStdString("Plugin Info"), this);
-    connect(action, &QAction::triggered, this, &PluginTest::OnPluginTestActionTriggered);
+    connect(action, &QAction::triggered, this, &PluginSample::OnPluginSampleActionTriggered);
     help_menu->addAction(action);
     return true;
 }
 
-void PluginTest::Shutdown() {}
+void PluginSample::Shutdown() {}
 
-void PluginTest::OnPluginTestActionTriggered()
+void PluginSample::OnPluginSampleActionTriggered()
 {
     QMessageBox::information(nullptr,
                              QString::fromStdString("Plugin Info"),
@@ -70,6 +70,6 @@ void PluginTest::OnPluginTestActionTriggered()
 // This function must be exported from the shared library.
 extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance()
 {
-    return new PluginTest();
+    return new PluginSample();
 }
 }  // namespace Dive

@@ -1,4 +1,5 @@
-#
+#!/bin/bash
+
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,29 +13,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
+echo "Format in-place using gersemi tool"
 
-project(utils)
-
-add_library(component_files component_files.h component_files.cpp)
-target_link_libraries(component_files PUBLIC absl::statusor)
-target_include_directories(
-    component_files
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+SRC_DIRS=(
+    "capture_service"
+    "cli"
+    "dive_core"
+    "gfxr_dump_resources"
+    "gfxr_ext"
+    "gpu_time"
+    "host_cli"
+    "layer"
+    "lrz_validator"
+    "network"
+    "plugins"
+    "runtime_layer"
+    "trace_stats"
+    "ui"
+    "utils"
 )
 
-enable_testing()
-include(GoogleTest)
-
-add_executable(component_files_test component_files_test.cpp)
-target_link_libraries(
-    component_files_test
-    absl::status_matchers
-    component_files
-    gmock
-    gtest
-    gtest_main
-)
-gtest_discover_tests(component_files_test)
+gersemi -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"

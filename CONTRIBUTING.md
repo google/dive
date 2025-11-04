@@ -27,20 +27,26 @@ Guidelines](https://opensource.google/conduct/).
 
 ### Formatting
 
-This repository is formatted with LLVM clang-format version 18.1.8.
+- The C++ code in this repository is formatted with LLVM clang-format version 18.1.8
+- The cmake files are formatted with [gersemi](https://pypi.org/project/gersemi/)
 
-#### Setup on Linux
+#### Setup clang-format on Linux
 
 Install `clang-format-18` with `sudo apt install clang-format-18` and verify that it is version 18.1.8.
 Suggested usage is to run `./scripts/clangformat.sh` after committing changes, and all `.h` and `.cpp` files in the commit will be verified.
 
-#### Setup on Windows
+#### Setup clang-format on Windows
 
 Install clang-format 18.1.8 using the appropriate Windows installer at: https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.8
 Suggested usage is using your preferred IDE, set it to format on save, and point to the installed `clang-format.exe`.
 
+#### Setup gersemi
+
+Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to install the package. To run for this project, use provided `scripts/format_cmake.bat` or `scripts/format_cmake.sh` scripts.
+
 #### Pull requests
-There is a lint github action that will run clang-format on all source code in the project.
+
+There is a lint github action that will run clang-format on all source code in the project, and another one that runs the format_cmake scripts with gersemi.
 
 ### Code style
 

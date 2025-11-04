@@ -18,10 +18,9 @@ project(lrz_validator)
 
 set(CMAKE_CXX_STANDARD 20)
 
-
 if(MSVC)
-  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -30,23 +29,30 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 file(GLOB HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
-include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_BINARY_DIR}
-  ${LibArchive_INCLUDE_DIRS})
+include_directories(
+    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}
+    ${LibArchive_INCLUDE_DIRS}
+)
 
 set(LIB_SRC_FILES ${SRC_FILES})
 list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)
-target_include_directories(${PROJECT_NAME} PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework)
+target_include_directories(
+    ${PROJECT_NAME}
+    PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework
+)
 
-if (MSVC)
-  # 4100: unreferenced formal parameter
-  # 4201: prevent nameless struct/union
-  target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
+if(MSVC)
+    # 4100: unreferenced formal parameter
+    # 4201: prevent nameless struct/union
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
 else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+    target_compile_options(
+        ${PROJECT_NAME}
+        PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
+    )
 endif()
-

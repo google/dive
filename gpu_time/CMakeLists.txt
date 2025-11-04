@@ -12,30 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(gpu_time STATIC
-    gpu_time.cpp
-    gpu_time.h
-)
+add_library(gpu_time STATIC gpu_time.cpp gpu_time.h)
 
 # This is to fix build on Linux
 set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(gpu_time PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
+target_include_directories(
+    gpu_time
+    PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+)
 
-if (NOT ANDROID)
+if(NOT ANDROID)
     enable_testing()
     include(GoogleTest)
-    add_executable(gpu_time_test
-        gpu_time_test.cpp
+    add_executable(gpu_time_test gpu_time_test.cpp)
+
+    target_include_directories(
+        gpu_time_test
+        PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
     )
-	
-    target_include_directories(gpu_time_test PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
-	
-    target_link_libraries(gpu_time_test PRIVATE
-        gpu_time
-        gtest
-        gtest_main
-        gmock
-    )
+
+    target_link_libraries(gpu_time_test PRIVATE gpu_time gtest gtest_main gmock)
     gtest_discover_tests(gpu_time_test)
 endif()

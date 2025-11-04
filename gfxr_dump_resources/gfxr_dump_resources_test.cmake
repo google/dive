@@ -28,25 +28,37 @@
 # ADDITIONAL_ARGUMENTS will be passed to TEST_EXECUTABLE in addition to the normal command-line. This is where you can specify options and parameters.
 
 execute_process(
-  COMMAND ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} ${INPUT_GFXR} ${TEST_NAME}.json
-  RESULT_VARIABLE exit_code
+    COMMAND
+        ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} ${INPUT_GFXR}
+        ${TEST_NAME}.json
+    RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
-if (NOT exit_code EQUAL 0)
-  message(FATAL_ERROR "${TEST_EXECUTABLE} failed: ${exit_code}")
+if(NOT exit_code EQUAL 0)
+    message(FATAL_ERROR "${TEST_EXECUTABLE} failed: ${exit_code}")
 endif()
 
 # Since git lets users specify newline style, normalize both input and output to compare_files.
 # This is required so that compare_files works regardless of platform and setting.
 # In CMake 3.14+, prefer compare_files --ignore-eol (more succinct)
-configure_file(${TEST_NAME}.json ${TEST_NAME}_output_unixeol.json NEWLINE_STYLE UNIX)
-configure_file(${GOLDEN_FILE} ${TEST_NAME}_golden_unixeol.json NEWLINE_STYLE UNIX)
+configure_file(
+    ${TEST_NAME}.json
+    ${TEST_NAME}_output_unixeol.json
+    NEWLINE_STYLE UNIX
+)
+configure_file(
+    ${GOLDEN_FILE}
+    ${TEST_NAME}_golden_unixeol.json
+    NEWLINE_STYLE UNIX
+)
 
 execute_process(
-  COMMAND ${CMAKE_COMMAND} -E compare_files ${TEST_NAME}_output_unixeol.json ${TEST_NAME}_golden_unixeol.json
-  RESULT_VARIABLE exit_code
+    COMMAND
+        ${CMAKE_COMMAND} -E compare_files ${TEST_NAME}_output_unixeol.json
+        ${TEST_NAME}_golden_unixeol.json
+    RESULT_VARIABLE exit_code
 )
 # In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
-if (NOT exit_code EQUAL 0)
-  message(FATAL_ERROR "Output differs from golden file")
+if(NOT exit_code EQUAL 0)
+    message(FATAL_ERROR "Output differs from golden file")
 endif()

@@ -16,43 +16,49 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-set(DYNAMIC_LIBRARY_LOADER_HEADERS
-    idynamic_library_loader.h
-)
+set(DYNAMIC_LIBRARY_LOADER_HEADERS idynamic_library_loader.h)
 
-add_library(dive_plugin_loader STATIC
+add_library(
+    dive_plugin_loader
+    STATIC
     plugin_loader.h
     plugin_loader.cpp
     ${DYNAMIC_LIBRARY_LOADER_HEADERS}
 )
 
-if (WIN32)
+if(WIN32)
     target_sources(dive_plugin_loader PRIVATE windows_library_loader.cpp)
     message(STATUS "Building for Windows: Including windows_library_loader.cpp")
-elseif (LINUX)
+elseif(LINUX)
     target_sources(dive_plugin_loader PRIVATE linux_library_loader.cpp)
     message(STATUS "Building for Linux: Including linux_library_loader.cpp")
 else()
-    message(FATAL_ERROR "Unsupported platform for dynamic library loading. Only Windows and Linux are supported.")
+    message(
+        FATAL_ERROR
+        "Unsupported platform for dynamic library loading. Only Windows and Linux are supported."
+    )
 endif()
 
-set_target_properties(dive_plugin_loader PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+set_target_properties(
+    dive_plugin_loader
+    PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
-if (LINUX)
+if(LINUX)
     find_library(DL_LIBRARY NAMES dl)
-    if (DL_LIBRARY)
+    if(DL_LIBRARY)
         target_link_libraries(dive_plugin_loader PRIVATE ${DL_LIBRARY})
     else()
-        message(FATAL_ERROR "dl library not found on Linux. Required for dynamic loading.")
+        message(
+            FATAL_ERROR
+            "dl library not found on Linux. Required for dynamic loading."
+        )
     endif()
 endif()
 
-target_link_libraries(dive_plugin_loader PRIVATE
-    absl::status
-    absl::statusor
-    absl::strings
+target_link_libraries(
+    dive_plugin_loader
+    PRIVATE absl::status absl::statusor absl::strings
 )
 
 # For each new plugin, you can add an add_subdirectory call here.

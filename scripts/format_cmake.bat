@@ -32,11 +32,4 @@ trace_stats ^
 ui ^
 utils
 
-echo Formatting the top-level CMakeLists.txt
-gersemi -i --indent 4 CMakeLists.txt
-
-echo Formatting the CMakeLists.txt in Dive source code
-(for %%b in (%SRC_DIRS%) do (
-    echo Formatting: %%b...
-    gersemi -i --definitions %%b --indent 4 %%b
-))
+gersemi -i --definitions %SRC_DIRS% --indent 4 CMakeLists.txt %SRC_DIRS%

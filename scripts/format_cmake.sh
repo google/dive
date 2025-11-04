@@ -34,12 +34,4 @@ SRC_DIRS=(
     "utils"
 )
 
-echo "Formatting the top-level CMakeLists.txt"
-gersemi -i --indent 4 CMakeLists.txt
-
-echo "Formatting the CMakeLists.txt in Dive source code"
-for dir in "${SRC_DIRS[@]}"
-do
-    echo "Formatting: ${dir}..."
-    gersemi -i --definitions ${dir} --indent 4 ${dir}
-done
+gersemi -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"

@@ -19,43 +19,44 @@
 # It still needs Qt Widgets because it modifies a Qt UI (MainWindow).
 find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
 
-add_library(dive_plugin_sample SHARED 
-    plugin_sample.h
-    plugin_sample.cpp
-)
+add_library(dive_plugin_sample SHARED plugin_sample.h plugin_sample.cpp)
 
-target_link_libraries(dive_plugin_sample
-    PRIVATE
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
+target_link_libraries(
+    dive_plugin_sample
+    PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets
 )
 
 set_property(TARGET dive_plugin_sample PROPERTY AUTOMOC ON)
 
 # Set the output directory for the plugin.
 # We want it to go into a 'plugins' subdirectory alongside the dive_ui executable.
-set_target_properties(dive_plugin_sample PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:dive_ui>/plugins"
-    RUNTIME_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:dive_ui>/plugins" # For DLLs on Windows
-    # On MSVC, ensure the `CreateDivePluginInstance` function is exported.
-    # For GCC/Clang, DIVE_PLUGIN_EXPORT handles this.
-    # Set a DEFINE_FILE for MSVC to automatically generate exports.
-    CXX_EXTENSIONS ON
-    GENERATOR_EXPRESSIONS $<$<BOOL:${MSVC}>:"$<TARGET_FILE_BASE_NAME:${PROJECT_NAME}>.def">
-	FOLDER "plugins"
+set_target_properties(
+    dive_plugin_sample
+    PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:dive_ui>/plugins"
+        RUNTIME_OUTPUT_DIRECTORY
+            "$<TARGET_FILE_DIR:dive_ui>/plugins" # For DLLs on Windows
+        # On MSVC, ensure the `CreateDivePluginInstance` function is exported.
+        # For GCC/Clang, DIVE_PLUGIN_EXPORT handles this.
+        # Set a DEFINE_FILE for MSVC to automatically generate exports.
+        CXX_EXTENSIONS ON
+        GENERATOR_EXPRESSIONS
+            $<$<BOOL:${MSVC}>:"$<TARGET_FILE_BASE_NAME:${PROJECT_NAME}>.def">
+        FOLDER "plugins"
 )
 
-target_include_directories(dive_plugin_sample
-  PRIVATE
-    ${CMAKE_SOURCE_DIR} 
-    ${CMAKE_BINARY_DIR}/dive_core
-    ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
+target_include_directories(
+    dive_plugin_sample
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_BINARY_DIR}/dive_core
+        ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 # Install the plugin to the 'plugins' subdirectory within the installation prefix's bin directory.
 # This ensures that when Dive is installed, its plugins are correctly placed.
-install(TARGETS dive_plugin_sample
+install(
+    TARGETS dive_plugin_sample
     DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/plugins
 )

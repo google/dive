@@ -14,34 +14,28 @@
 # limitations under the License.
 #
 
-# --- DivePluginTest Sample ---
+# --- DivePlugin Sample ---
 # This is a plugin demonstrating the IDivePlugin interface.
 # It still needs Qt Widgets because it modifies a Qt UI (MainWindow).
 find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED) 
 
-# Use qt5_wrap_cpp to process headers with Q_OBJECT and generate moc files.
-# This macro will find all headers with Q_OBJECT and run MOC on them,
-# adding the generated source files to a variable.
-qt5_wrap_cpp(DIVE_PLUGIN_TEST_MOC_SRCS
-    plugin_test.h # Relative to current directory
+add_library(dive_plugin_sample SHARED 
+    plugin_sample.h
+    plugin_sample.cpp
 )
 
-add_library(dive_plugin_test SHARED 
-    plugin_test.h
-    plugin_test.cpp
-    ${DIVE_PLUGIN_TEST_MOC_SRCS} 
-)
-
-target_link_libraries(dive_plugin_test
+target_link_libraries(dive_plugin_sample
     PRIVATE
         Qt5::Core
         Qt5::Gui
         Qt5::Widgets
 )
 
+set_property(TARGET dive_plugin_sample PROPERTY AUTOMOC ON)
+
 # Set the output directory for the plugin.
 # We want it to go into a 'plugins' subdirectory alongside the dive_ui executable.
-set_target_properties(dive_plugin_test PROPERTIES
+set_target_properties(dive_plugin_sample PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:dive_ui>/plugins"
     RUNTIME_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:dive_ui>/plugins" # For DLLs on Windows
     # On MSVC, ensure the `CreateDivePluginInstance` function is exported.
@@ -52,7 +46,7 @@ set_target_properties(dive_plugin_test PROPERTIES
 	FOLDER "plugins"
 )
 
-target_include_directories(dive_plugin_test
+target_include_directories(dive_plugin_sample
   PRIVATE
     ${CMAKE_SOURCE_DIR} 
     ${CMAKE_BINARY_DIR}/dive_core
@@ -62,6 +56,6 @@ target_include_directories(dive_plugin_test
 
 # Install the plugin to the 'plugins' subdirectory within the installation prefix's bin directory.
 # This ensures that when Dive is installed, its plugins are correctly placed.
-install(TARGETS dive_plugin_test
+install(TARGETS dive_plugin_sample
     DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/plugins
 )

@@ -28,17 +28,17 @@ class MainWindow;
 
 namespace Dive
 {
-// The PluginTest class is a sample implementation of IDivePlugin.
+// The PluginSample class is a sample implementation of IDivePlugin.
 // It adds a new menu item to the "Help" menu of the MainWindow and displays a message box when that
 // action is triggered.
 
 // Still need Q_OBJECT for signals/slots/meta-object features for Qt UI
-class PluginTest : public QObject, public IDivePlugin
+class PluginSample : public QObject, public IDivePlugin
 {
     Q_OBJECT
 public:
-    explicit PluginTest(QObject* parent = nullptr);
-    ~PluginTest() override;
+    explicit PluginSample(QObject* parent = nullptr);
+    ~PluginSample() override;
 
     std::string PluginName() const override { return "Plugin Test"; }
     std::string PluginVersion() const override { return "1.0.0"; }
@@ -47,7 +47,7 @@ public:
     void Shutdown() override;
 
 private slots:
-    void OnPluginTestActionTriggered();
+    void OnPluginSampleActionTriggered();
 };
 
 }  // namespace Dive

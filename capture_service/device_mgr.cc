@@ -1111,6 +1111,9 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
         }
     }
 
+    // Wake up the screen.
+    RETURN_IF_ERROR(m_device->Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
+
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;
     if (validated_settings->run_type == GfxrReplayOptions::kPerfCounters)

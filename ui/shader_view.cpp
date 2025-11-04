@@ -192,13 +192,13 @@ void ShaderView::paintEvent(QPaintEvent *event)
             {
                 auto shader_stage = (uint32_t)reference.m_stage;
                 // Do not add shaders that are not used by the event
-                if (event.m_type != Dive::EventInfo::EventType::kDraw &&
-                    event.m_type != Dive::EventInfo::EventType::kDispatch)
+                if (event.m_type != Dive::Util::EventType::kDraw &&
+                    event.m_type != Dive::Util::EventType::kDispatch)
                     continue;
-                if ((event.m_type == Dive::EventInfo::EventType::kDraw) &&
+                if ((event.m_type == Dive::Util::EventType::kDraw) &&
                     (shader_stage == (uint32_t)Dive::ShaderStage::kShaderStageCs))
                     continue;
-                if ((event.m_type == Dive::EventInfo::EventType::kDispatch) &&
+                if ((event.m_type == Dive::Util::EventType::kDispatch) &&
                     (shader_stage != (uint32_t)Dive::ShaderStage::kShaderStageCs))
                     continue;
 
@@ -270,9 +270,11 @@ void ShaderView::paintEvent(QPaintEvent *event)
         };
 
         Dive::NodeType node_type = command_hierarchy.GetNodeType(m_node_index);
-        if (Dive::IsDrawDispatchBlitNode(node_type))
+        if (node_type == Dive::NodeType::kEventNode)
         {
-            update_shader_list(m_node_index);
+            Dive::Util::EventType type = command_hierarchy.GetEventNodeType(m_node_index);
+            if (type == Dive::Util::EventType::kDraw || type == Dive::Util::EventType::kDispatch)
+                update_shader_list(m_node_index);
         }
         else if (node_type == Dive::NodeType::kMarkerNode)
         {
@@ -281,8 +283,9 @@ void ShaderView::paintEvent(QPaintEvent *event)
             for (uint64_t i = 0; i < num_children; i++)
             {
                 auto           child_node_index = topology.GetChildNodeIndex(m_node_index, i);
-                Dive::NodeType child_node_type = command_hierarchy.GetNodeType(child_node_index);
-                if (Dive::IsDrawDispatchBlitNode(child_node_type))
+                Dive::NodeType child_node_type = m_data_core.GetCommandHierarchy().GetNodeType(
+                child_node_index);
+                if (child_node_type == Dive::NodeType::kEventNode)
                 {
                     update_shader_list(child_node_index);
                 }

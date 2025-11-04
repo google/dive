@@ -129,9 +129,13 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
         {
             uint64_t       node_index = index.internalId();
             Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
-            if (Dive::IsDrawDispatchNode(node_type))
+
+            if (node_type == Dive::NodeType::kEventNode)
             {
-                m_pm4_draw_call_indices.push_back(node_index);
+                Dive::Util::EventType type = m_command_hierarchy.GetEventNodeType(node_index);
+                if (type == Dive::Util::EventType::kDraw ||
+                    type == Dive::Util::EventType::kDispatch)
+                    m_pm4_draw_call_indices.push_back(node_index);
             }
 
             // Only recurse into children if the current node is not a Vulkan submit node.
@@ -516,7 +520,7 @@ void DiveTreeView::GotoEvent(bool is_above)
         auto     node_type = m_command_hierarchy.GetNodeType(node_idx);
 
         // Check for Draw/Dispatch/Blit or relevant Marker
-        if (Dive::IsDrawDispatchBlitNode(node_type) ||
+        if (node_type == Dive::NodeType::kEventNode ||
             (node_type == Dive::NodeType::kMarkerNode &&
              m_command_hierarchy.GetMarkerNodeType(node_idx) !=
              Dive::CommandHierarchy::MarkerType::kBeginEnd) ||

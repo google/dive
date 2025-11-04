@@ -375,65 +375,14 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         // Add a new event to the EventInfo metadata array
         EventInfo event_info = {};
         event_info.m_submit_index = submit_index;
-        if (IsDrawEventOpcode(type7_header->opcode))
+        event_info.m_type = Util::GetEventType(mem_manager, submit_index, va_addr, type7_header->opcode, m_state_tracker);
+
+        if (event_info.m_type == Util::EventType::kDraw)
         {
-            event_info.m_type = EventInfo::EventType::kDraw;
             event_info.m_num_indices = Util::GetIndexCount(mem_manager,
                                                            submit_index,
                                                            va_addr,
                                                            *type7_header);
-        }
-        else if (IsDispatchEventOpcode(type7_header->opcode))
-            event_info.m_type = EventInfo::EventType::kDispatch;
-        else if (type7_header->opcode == CP_BLIT)
-            event_info.m_type = EventInfo::EventType::kBlit;
-        else
-        {
-            SyncType sync_type = Util::GetSyncType(mem_manager,
-                                                   submit_index,
-                                                   va_addr,
-                                                   type7_header->opcode,
-                                                   m_state_tracker);
-
-            switch (sync_type)
-            {
-            case SyncType::kColorSysMemToGmemResolve:
-                event_info.m_type = EventInfo::EventType::kColorSysMemToGmemResolve;
-                break;
-            case SyncType::kColorGmemToSysMemResolve:
-                event_info.m_type = EventInfo::EventType::kColorGmemToSysMemResolve;
-                break;
-            case SyncType::kColorGmemToSysMemResolveAndClear:
-                event_info.m_type = EventInfo::EventType::kColorGmemToSysMemResolveAndClear;
-                break;
-            case SyncType::kColorClearGmem:
-                event_info.m_type = EventInfo::EventType::kColorClearGmem;
-                break;
-            case SyncType::kDepthSysMemToGmemResolve:
-                event_info.m_type = EventInfo::EventType::kDepthSysMemToGmemResolve;
-                break;
-            case SyncType::kDepthGmemToSysMemResolve:
-                event_info.m_type = EventInfo::EventType::kDepthGmemToSysMemResolve;
-                break;
-            case SyncType::kDepthGmemToSysMemResolveAndClear:
-                event_info.m_type = EventInfo::EventType::kDepthGmemToSysMemResolveAndClear;
-                break;
-            case SyncType::kDepthClearGmem:
-                event_info.m_type = EventInfo::EventType::kDepthClearGmem;
-                break;
-            case SyncType::kWaitMemWrites:
-                event_info.m_type = EventInfo::EventType::kWaitMemWrites;
-                break;
-            case SyncType::kWaitForIdle:
-                event_info.m_type = EventInfo::EventType::kWaitForIdle;
-                break;
-            case SyncType::kWaitForMe:
-                event_info.m_type = EventInfo::EventType::kWaitForMe;
-                break;
-            default:
-                DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
-                break;
-            }
         }
 
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();
@@ -448,10 +397,10 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         m_capture_metadata.m_event_info.push_back(event_info);
 
         // Parse and add the shader(s) info to the metadata
-        if (event_info.m_type == EventInfo::EventType::kDraw ||
-            event_info.m_type == EventInfo::EventType::kDispatch)
+        if (event_info.m_type == Util::EventType::kDraw ||
+            event_info.m_type == Util::EventType::kDispatch)
         {
-            if (event_info.m_type == EventInfo::EventType::kDraw)
+            if (event_info.m_type == Util::EventType::kDraw)
             {
                 FillEventStateInfo(it);
             }

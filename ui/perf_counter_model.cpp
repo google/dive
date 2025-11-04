@@ -122,9 +122,14 @@ int PerfCounterModel::columnCount(const QModelIndex &parent) const
 
 QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || role != Qt::DisplayRole || !m_perf_metrics_data_provider)
+    if (!index.isValid() || !m_perf_metrics_data_provider || role == Qt::CheckStateRole)
     {
         return QVariant();
+    }
+
+    if (role == Qt::TextAlignmentRole)
+    {
+        return QVariant(Qt::AlignRight);
     }
 
     int row = index.row();
@@ -159,12 +164,7 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
     if (static_cast<size_t>(metric_col_index) < record.m_metric_values.size())
     {
         const auto &metric_value = record.m_metric_values.at(metric_col_index);
-
-        if (role == Qt::DisplayRole)
-        {
-            return metric_value;
-        }
-        return QVariant();
+        return metric_value;
     }
 
     return QVariant();

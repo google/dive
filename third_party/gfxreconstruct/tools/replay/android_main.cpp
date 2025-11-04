@@ -351,7 +351,8 @@ void ProcessAppCmd(struct android_app* app, int32_t cmd)
             case APP_CMD_LOST_FOCUS:
             {
                 GFXRECON_LOG_INFO("Application lost focus.")
-                application->SetPaused(true);
+                // GOOGLE: Do not pause the app if not in focus
+                // application->SetPaused(true);
                 break;
             }
         }

@@ -375,7 +375,7 @@ TEST(ValidateGfxrReplaySettingsTest, NormalUseValidationLayerPass)
                 IsOkAndHolds(GfxrReplaySettingsEq(expected_rs)));
 }
 
-TEST(ValidateGfxrReplaySettingsTest, Pm4DumpUseValidationLayerFail)
+TEST(ValidateGfxrReplaySettingsTest, Pm4DumpUseValidationLayerPass)
 {
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
@@ -383,9 +383,16 @@ TEST(ValidateGfxrReplaySettingsTest, Pm4DumpUseValidationLayerFail)
     rs.run_type = rs.run_type = GfxrReplayOptions::kPm4Dump;
     rs.use_validation_layer = true;
 
-    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
-                StatusIs(absl::StatusCode::kInvalidArgument,
-                         "use_validation_layer is only allowed for kNormal"));
+    GfxrReplaySettings expected_rs = {};
+    expected_rs.run_type = rs.run_type = GfxrReplayOptions::kPm4Dump;
+    expected_rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    expected_rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    expected_rs.loop_single_frame_count = 2;
+    expected_rs.replay_flags_str = "--loop-single-frame-count 2";
+    expected_rs.use_validation_layer = true;
+
+    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true),
+                IsOkAndHolds(GfxrReplaySettingsEq(expected_rs)));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, PerfCountersUseValidationLayerFail)
@@ -399,10 +406,10 @@ TEST(ValidateGfxrReplaySettingsTest, PerfCountersUseValidationLayerFail)
 
     EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
                 StatusIs(absl::StatusCode::kInvalidArgument,
-                         "use_validation_layer is only allowed for kNormal"));
+                         "use_validation_layer is not allowed for kPerfCounters"));
 }
 
-TEST(ValidateGfxrReplaySettingsTest, GpuTimingUseValidationLayerFail)
+TEST(ValidateGfxrReplaySettingsTest, GpuTimingUseValidationLayerPass)
 {
     GfxrReplaySettings rs = {};
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
@@ -410,9 +417,15 @@ TEST(ValidateGfxrReplaySettingsTest, GpuTimingUseValidationLayerFail)
     rs.run_type = rs.run_type = GfxrReplayOptions::kGpuTiming;
     rs.use_validation_layer = true;
 
-    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
-                StatusIs(absl::StatusCode::kInvalidArgument,
-                         "use_validation_layer is only allowed for kNormal"));
+    GfxrReplaySettings expected_rs = {};
+    expected_rs.run_type = rs.run_type = GfxrReplayOptions::kGpuTiming;
+    expected_rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
+    expected_rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
+    expected_rs.use_validation_layer = true;
+    expected_rs.replay_flags_str = "--enable-gpu-time";
+
+    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true),
+                IsOkAndHolds(GfxrReplaySettingsEq(expected_rs)));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, RenderDocUseValidationLayerFail)
@@ -425,9 +438,8 @@ TEST(ValidateGfxrReplaySettingsTest, RenderDocUseValidationLayerFail)
 
     EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
                 StatusIs(absl::StatusCode::kInvalidArgument,
-                         "use_validation_layer is only allowed for kNormal"));
+                         "use_validation_layer is not allowed for kRenderDoc"));
 }
-
 
 TEST(DeviceManagerTest, EmptySerialIsInvalidForSelectDevice)
 {

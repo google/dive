@@ -543,9 +543,13 @@ MainWindow::MainWindow()
                                       std::nullopt,
                                       this);
 
+    m_overlay = new OverlayHelper(this);
+    m_overlay->Initialize(horizontal_splitter);
+
     // Main Window requires a central widget.
-    // Make the horizontal splitter that central widget so it takes up the whole area.
-    setCentralWidget(horizontal_splitter);
+    auto central_widget = new QWidget;
+    central_widget->setLayout(m_overlay->GetLayout());
+    setCentralWidget(central_widget);
 
     m_middle_group_box->hide();
 
@@ -616,7 +620,6 @@ MainWindow::MainWindow()
     UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
 
     // Capture overlay widget
-    m_overlay = new Overlay(this);
     QObject::connect(&m_progress_tracker,
                      SIGNAL(sendMessageSignal(const QString &)),
                      this,
@@ -665,13 +668,6 @@ void MainWindow::OnTraceAvailable(const QString &path)
     qDebug() << "Trace is at " << path;
     // Figure out what do we do if we get repeated trigger of LoadFile before async call is done.
     LoadFile(path.toStdString().c_str(), /*is_temp_file*/ true, /*async*/ false);
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::resizeEvent(QResizeEvent *event)
-{
-    QMainWindow::resizeEvent(event);
-    m_overlay->UpdateSize(rect());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2280,16 +2276,12 @@ void MainWindow::CreateStatusBar()
 void MainWindow::UpdateOverlay(const QString &message)
 {
     m_overlay->SetMessage(message);
-    if (m_overlay->isHidden())
-        m_overlay->show();
-    m_overlay->repaint();
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnHideOverlay()
 {
-    m_overlay->SetMessage(QString());
-    m_overlay->hide();
+    m_overlay->Clear();
 }
 
 //--------------------------------------------------------------------------------------------------

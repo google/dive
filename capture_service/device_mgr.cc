@@ -221,10 +221,6 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
             return absl::InvalidArgumentError(
             "Cannot use metrics except for kPerfCounters type run");
         }
-        if (validated_settings.use_validation_layer)
-        {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
-        }
         break;
     }
     case GfxrReplayOptions::kPerfCounters:
@@ -249,7 +245,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+            return absl::InvalidArgumentError("use_validation_layer is not allowed for kPerfCounters");
         }
         break;
     }
@@ -270,26 +266,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
-        }
-        break;
-    }
-    case GfxrReplayOptions::kGpuTiming:
-    {
-        if (!validated_settings.metrics.empty())
-        {
-            return absl::InvalidArgumentError(
-            "Cannot use metrics except for kPerfCounters type run");
-        }
-        // value_or(1) since the default used by DiveFileProcessor is 1
-        if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
-        {
-            return absl::InvalidArgumentError(
-            "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
-        }
-        if (validated_settings.use_validation_layer)
-        {
-            return absl::InvalidArgumentError("use_validation_layer is only allowed for kNormal");
+            return absl::InvalidArgumentError("use_validation_layer is not allowed for kRenderDoc");
         }
         break;
     }
@@ -612,7 +589,10 @@ absl::Status AndroidDevice::CleanupDevice()
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
 
     // cleanup for gfxr replay with validation layer
-    UninstallVulkanLayer(Adb(), kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+    UninstallVulkanLayer(Adb(),
+                         /*app=*/kGfxrReplayAppName,
+                         /*layer_filename=*/kVkValidationLayerLibName)
+    .IgnoreError();
 
     // clean up for gfxr replay app
     Adb()
@@ -861,7 +841,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         if (settings.use_validation_layer)
         {
             DisableVulkanLayer(adb).IgnoreError();
-            UninstallVulkanLayer(adb, kGfxrReplayAppName, kVkValidationLayerName).IgnoreError();
+            UninstallVulkanLayer(adb,
+                                 /*app=*/kGfxrReplayAppName,
+                                 /*layer_filename=*/kVkValidationLayerLibName)
+            .IgnoreError();
         }
     });
     LOGD("RunReplayGfxrScript(): SETUP\n");
@@ -1104,6 +1087,9 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
             trouble_pinning_clock = true;
         }
     }
+
+    // Wake up the screen.
+    RETURN_IF_ERROR(m_device->Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
 
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;

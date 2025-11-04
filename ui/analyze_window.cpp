@@ -468,7 +468,7 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
     }
 
     // Set members for current replay session
-    assert(file_path.toStdString() == component_paths.gfxr.generic_string());
+    assert(local_gfxr_parse == component_paths.gfxr);
     m_selected_capture_file_string = QString::fromStdString(component_paths.gfxr.generic_string());
     m_local_capture_file_directory = local_gfxr_parse.parent_path();
     m_local_capture_files = component_paths;

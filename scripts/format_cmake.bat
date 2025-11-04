@@ -17,7 +17,8 @@ echo Format in-place using gersemi tool
 
 set SRC_DIRS=^
 capture_service ^
-cli dive_core ^
+cli ^
+dive_core ^
 gfxr_dump_resources ^
 gfxr_ext ^
 gpu_time ^
@@ -25,26 +26,17 @@ host_cli ^
 layer ^
 lrz_validator ^
 network ^
+plugins ^
 runtime_layer ^
 trace_stats ^
 ui ^
 utils
 
-set SRC_DIRS_WITH_UNKNOWN_COMMANDS=^
-plugins
-
 echo Formatting the top-level CMakeLists.txt
-gersemi -i --diff --indent 4 CMakeLists.txt
+gersemi -i --indent 4 CMakeLists.txt
 
-echo Formatting the CMakeLists.txt in Dive source code with no unknown commands
+echo Formatting the CMakeLists.txt in Dive source code
 (for %%b in (%SRC_DIRS%) do (
     echo Formatting: %%b...
     gersemi -i --definitions %%b --indent 4 %%b
-))
-
-echo.
-echo Formatting the CMakeLists.txt in Dive source code that contain unknown commands
-(for %%b in (%SRC_DIRS_WITH_UNKNOWN_COMMANDS%) do (
-    echo Formatting: %%b...
-    gersemi -i --definitions %%b --indent 4 --no-warn-about-unknown-commands %%b
 ))

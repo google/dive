@@ -27,30 +27,19 @@ SRC_DIRS=(
     "layer"
     "lrz_validator"
     "network"
+    "plugins"
     "runtime_layer"
     "trace_stats"
     "ui"
     "utils"
 )
 
-SRC_DIRS_WITH_UNKNOWN_COMMANDS=(
-    "plugins"
-)
-
 echo "Formatting the top-level CMakeLists.txt"
 gersemi -i --indent 4 CMakeLists.txt
 
-echo "Formatting the CMakeLists.txt in Dive source code with no unknown commands"
+echo "Formatting the CMakeLists.txt in Dive source code"
 for dir in "${SRC_DIRS[@]}"
 do
     echo "Formatting: ${dir}..."
     gersemi -i --definitions ${dir} --indent 4 ${dir}
-done
-
-echo ""
-echo "Formatting the CMakeLists.txt in Dive source code that contain unknown commands"
-for dir in "${SRC_DIRS_WITH_UNKNOWN_COMMANDS[@]}"
-do
-    echo "Formatting: ${dir}..."
-    gersemi -i --definitions ${dir} --indent 4 --no-warn-about-unknown-commands ${dir}
 done

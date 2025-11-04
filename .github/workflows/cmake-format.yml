@@ -22,9 +22,6 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install gersemi
-    - name: Set up branch
-      run: |
-        git branch -a
     - name: Run windows cmake formatting script
       run: |
         scripts\format_cmake.bat

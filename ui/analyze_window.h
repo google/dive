@@ -134,7 +134,7 @@ private:
     absl::Status                RenderDocReplay(Dive::DeviceManager &device_manager,
                                                 const std::string   &remote_gfxr_file);
 
-    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &error_messge = "");
+    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &messge = "");
     void ExecuteStatusUpdate();
 
     void ReplayImpl();
@@ -216,7 +216,7 @@ private:
     struct StatusUpdateQueueItem
     {
         ReplayStatusUpdateCode status;
-        QString                error_message;
+        QString                message;
     };
     std::vector<StatusUpdateQueueItem> m_status_update_queue;
 };

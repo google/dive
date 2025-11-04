@@ -636,12 +636,12 @@ void AnalyzeDialog::OnDeleteReplayArtifacts()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString &error_message)
+void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString &message)
 {
     // Cast from qt known type.
     auto status_code = static_cast<ReplayStatusUpdateCode>(status_code_int);
     bool execute_update = m_status_update_queue.empty();
-    m_status_update_queue.push_back({ status_code, error_message });
+    m_status_update_queue.push_back({ status_code, message });
     if (!execute_update)
     {
         // Only execute update if it's first call on the stack.
@@ -666,11 +666,12 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             DisableOverlay();
             break;
         case ReplayStatusUpdateCode::kSuccess:
+            ShowErrorMessage(item.message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, true);
             OverlayMessage("Replay done.");
             break;
         case ReplayStatusUpdateCode::kFailure:
-            ShowErrorMessage(item.error_message.toStdString());
+            ShowErrorMessage(item.message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, true);
             OverlayMessage("Replay failed.");
             break;
@@ -679,7 +680,7 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             OverlayMessage("Setting up replay...");
             break;
         case ReplayStatusUpdateCode::kSetupDeviceFailure:
-            ShowErrorMessage(item.error_message.toStdString());
+            ShowErrorMessage(item.message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, false);
             OnDeviceListRefresh();
             break;
@@ -707,11 +708,10 @@ void AnalyzeDialog::ExecuteStatusUpdate()
     m_status_update_queue.clear();
 }
 
-void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status,
-                                       const std::string     &error_message)
+void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &message)
 {
-    qDebug() << error_message.c_str();
-    ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(error_message));
+    qDebug() << message.c_str();
+    ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(message));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -859,7 +859,7 @@ void AnalyzeDialog::ReplayImpl()
                  << m_local_capture_files.renderdoc_rdc.string().c_str();
     }
 
-    UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
+    UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess, "Replay completed successfully.");
 }
 
 //--------------------------------------------------------------------------------------------------

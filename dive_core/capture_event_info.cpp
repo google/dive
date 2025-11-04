@@ -23,34 +23,35 @@
 
 namespace Dive
 {
-// =================================================================================================
-// Util
-// =================================================================================================
-bool Util::IsEvent(const IMemoryManager &mem_manager,
-                   uint32_t              submit_index,
-                   uint64_t              addr,
-                   uint32_t              opcode,
-                   EmulateStateTracker  &state_tracker)
+enum class SyncType
 {
-    if (IsDrawDispatchEventOpcode(opcode))
-        return true;
+    // Map to EVENT_WRITEs (vgt_event_type)
+    kEventWriteStart = vgt_event_type::VS_DEALLOC,
+    kEventWriteEnd = vgt_event_type::CACHE_INVALIDATE7,
 
-    if (opcode == CP_BLIT)
-        return true;
+    // Various configurations of a resolve/clear
+    kColorSysMemToGmemResolve,
+    kColorGmemToSysMemResolve,
+    kColorGmemToSysMemResolveAndClear,
+    kColorClearGmem,
+    kDepthSysMemToGmemResolve,
+    kDepthGmemToSysMemResolve,
+    kDepthGmemToSysMemResolveAndClear,
+    kDepthClearGmem,
 
-    SyncType sync_type = Util::GetSyncType(mem_manager, submit_index, addr, opcode, state_tracker);
-    if (sync_type != SyncType::kNone)
-        return true;
+    kWaitMemWrites,
+    kWaitForIdle,
+    kWaitForMe,
 
-    return false;
-}
+    kNone
+};
 
 //--------------------------------------------------------------------------------------------------
-SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
-                           uint32_t              submit_index,
-                           uint64_t              addr,
-                           uint32_t              opcode,
-                           EmulateStateTracker  &state_tracker)
+SyncType GetSyncType(const IMemoryManager &mem_manager,
+                     uint32_t              submit_index,
+                     uint64_t              addr,
+                     uint32_t              opcode,
+                     EmulateStateTracker  &state_tracker)
 {
     // 6xx uses CP_EVENT_WRITE packet, which maps to same opcode as CP_EVENT_WRITE7
     // The event field is in the same location with either packet type
@@ -112,6 +113,91 @@ SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
         return SyncType::kWaitForMe;
     }
     return SyncType::kNone;
+}
+
+// =================================================================================================
+// Util
+// =================================================================================================
+bool Util::IsEvent(const IMemoryManager &mem_manager,
+                   uint32_t              submit_index,
+                   uint64_t              addr,
+                   uint32_t              opcode,
+                   EmulateStateTracker  &state_tracker)
+{
+    if (IsDrawDispatchEventOpcode(opcode))
+        return true;
+
+    if (opcode == CP_BLIT)
+        return true;
+
+    SyncType sync_type = GetSyncType(mem_manager, submit_index, addr, opcode, state_tracker);
+    if (sync_type != SyncType::kNone)
+        return true;
+
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
+Util::EventType Util::GetEventType(const IMemoryManager &mem_manager,
+                                   uint32_t              submit_index,
+                                   uint64_t              va_addr,
+                                   uint32_t              opcode,
+                                   EmulateStateTracker  &state_tracker)
+{
+    EventType type;
+    if (IsDrawEventOpcode(opcode))
+    {
+        type = EventType::kDraw;
+    }
+    else if (IsDispatchEventOpcode(opcode))
+        type = EventType::kDispatch;
+    else if (opcode == CP_BLIT)
+        type = EventType::kBlit;
+    else
+    {
+        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode, state_tracker);
+
+        switch (sync_type)
+        {
+        case SyncType::kColorSysMemToGmemResolve:
+            type = EventType::kColorSysMemToGmemResolve;
+            break;
+        case SyncType::kColorGmemToSysMemResolve:
+            type = EventType::kColorGmemToSysMemResolve;
+            break;
+        case SyncType::kColorGmemToSysMemResolveAndClear:
+            type = EventType::kColorGmemToSysMemResolveAndClear;
+            break;
+        case SyncType::kColorClearGmem:
+            type = EventType::kColorClearGmem;
+            break;
+        case SyncType::kDepthSysMemToGmemResolve:
+            type = EventType::kDepthSysMemToGmemResolve;
+            break;
+        case SyncType::kDepthGmemToSysMemResolve:
+            type = EventType::kDepthGmemToSysMemResolve;
+            break;
+        case SyncType::kDepthGmemToSysMemResolveAndClear:
+            type = EventType::kDepthGmemToSysMemResolveAndClear;
+            break;
+        case SyncType::kDepthClearGmem:
+            type = EventType::kDepthClearGmem;
+            break;
+        case SyncType::kWaitMemWrites:
+            type = EventType::kWaitMemWrites;
+            break;
+        case SyncType::kWaitForIdle:
+            type = EventType::kWaitForIdle;
+            break;
+        case SyncType::kWaitForMe:
+            type = EventType::kWaitForMe;
+            break;
+        default:
+            DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
+            break;
+        }
+    }
+    return type;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -310,11 +396,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     }
     else if (opcode == CP_EVENT_WRITE7)
     {
-        SyncType sync_type = Util::GetSyncType(mem_manager,
-                                               submit_index,
-                                               va_addr,
-                                               opcode,
-                                               state_tracker);
+        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode, state_tracker);
         switch (sync_type)
         {
         case SyncType::kColorSysMemToGmemResolve:

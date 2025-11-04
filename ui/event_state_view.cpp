@@ -166,8 +166,8 @@ void EventStateView::OnEventSelected(uint64_t node_index)
             // Check if it's draw or dispatch events
             const Dive::EventInfo &prev_event_info = metadata
                                                      .m_event_info[static_cast<uint32_t>(id)];
-            if (prev_event_info.m_type == Dive::EventInfo::EventType::kDraw ||
-                prev_event_info.m_type == Dive::EventInfo::EventType::kDispatch)
+            if (prev_event_info.m_type == Dive::Util::EventType::kDraw ||
+                prev_event_info.m_type == Dive::Util::EventType::kDispatch)
                 break;
             else
                 prev_it = std::prev(prev_it);
@@ -181,8 +181,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         if (!(event_id < metadata.m_event_info.size()))
             return;
         const Dive::EventInfo &event_info = metadata.m_event_info[event_id];
-        if (event_info.m_type == Dive::EventInfo::EventType::kDraw ||
-            event_info.m_type == Dive::EventInfo::EventType::kDispatch)
+        if (event_info.m_type == Dive::Util::EventType::kDraw)
         {
             auto event_state_it = GetStateInfoForEvent(event_state, event_id);
             auto prev_event_state_it = previous_event_state(event_state_it);
@@ -191,7 +190,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
     };
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(node_index);
-    if (Dive::IsDrawDispatchBlitNode(node_type))
+    if (node_type == Dive::NodeType::kEventNode)
     {
         display_event_state_info(node_index);
     }
@@ -206,7 +205,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         {
             auto           child_node_index = topology.GetChildNodeIndex(node_index, i);
             Dive::NodeType child_node_type = command_hierarchy.GetNodeType(child_node_index);
-            if (Dive::IsDrawDispatchBlitNode(child_node_type))
+            if (child_node_type == Dive::NodeType::kEventNode)
             {
                 event_node_index = child_node_index;
             }

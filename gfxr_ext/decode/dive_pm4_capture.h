@@ -24,6 +24,8 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 #if defined(__ANDROID__)
 
+bool IsPm4CaptureEnabledByProperty();
+
 class DivePM4Capture
 {
 public:

@@ -24,8 +24,26 @@ limitations under the License.
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
+inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
+
+bool IsPm4CaptureEnabledByProperty()
+{
+    char prop_str[PROP_VALUE_MAX];
+    int  len = __system_property_get(kEnableReplayPm4DumpPropertyName, prop_str);
+    if (len <= 0)
+    {
+        return false;
+    }
+    return (strcmp("1", prop_str) == 0 || strcmp("true", prop_str) == 0);
+}
+
 DivePM4Capture::DivePM4Capture()
 {
+    if (!IsPm4CaptureEnabledByProperty())
+    {
+        GFXRECON_LOG_INFO("PM4 capture disabled by property.");
+        return;
+    }
 
     GFXRECON_LOG_INFO("Initializing PM4 capture");
     void* handle = dlopen(NULL, RTLD_LAZY);
@@ -41,7 +59,7 @@ DivePM4Capture::DivePM4Capture()
     const char* dlsym_error = dlerror();
     if (dlsym_error != nullptr)
     {
-        GFXRECON_LOG_INFO("dlsym error for StartCapture: %s", dlsym_error);
+        GFXRECON_LOG_ERROR("dlsym error for StartCapture: %s", dlsym_error);
         return;
     }
 
@@ -49,7 +67,7 @@ DivePM4Capture::DivePM4Capture()
     dlsym_error = dlerror();
     if (dlsym_error != nullptr)
     {
-        GFXRECON_LOG_INFO("dlsym error for StopCapture: %s", dlsym_error);
+        GFXRECON_LOG_ERROR("dlsym error for StopCapture: %s", dlsym_error);
         return;
     }
     m_is_initialized = true;

@@ -17,6 +17,9 @@ limitations under the License.
 #include "dive_pm4_capture.h"
 
 #include "util/logging.h"
+
+#include "capture_service/constants.h"
+
 #if defined(__ANDROID__)
 
 #    include <dlfcn.h>
@@ -24,24 +27,22 @@ limitations under the License.
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
-inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
+namespace
+{
 
 bool IsPm4CaptureEnabledByProperty()
 {
-    char prop_str[PROP_VALUE_MAX];
-    int  len = __system_property_get(kEnableReplayPm4DumpPropertyName, prop_str);
-    if (len <= 0)
-    {
-        return false;
-    }
-    return (strcmp("1", prop_str) == 0 || strcmp("true", prop_str) == 0);
+    std::string property = util::platform::GetEnv(Dive::kEnableReplayPm4DumpPropertyName);
+    return property == "true" || property == "1";
 }
+
+}  // namespace
 
 DivePM4Capture::DivePM4Capture()
 {
     if (!IsPm4CaptureEnabledByProperty())
     {
-        GFXRECON_LOG_INFO("PM4 capture disabled by property.");
+        GFXRECON_LOG_WARNING("PM4 capture disabled by property.");
         return;
     }
 

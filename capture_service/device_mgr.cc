@@ -245,7 +245,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is not allowed for kPerfCounters");
+            return absl::InvalidArgumentError(
+            "use_validation_layer is not allowed for kPerfCounters");
         }
         break;
     }
@@ -319,6 +320,7 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
     m_gfxr_enabled(false),
     m_port(kFirstPort)
 {
+    CleanupDevice().IgnoreError();
 }
 
 AndroidDevice::~AndroidDevice()
@@ -533,7 +535,9 @@ absl::Status AndroidDevice::SetupDevice()
 
 absl::Status AndroidDevice::CleanupDevice()
 {
-    LOGD("Cleanup device %s\n", m_serial.c_str());
+    LOGI("%s AndroidDevice::CleanupDevice(): package %s\n",
+         Dive::kLogPrefixCleanup,
+         m_serial.c_str());
 
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
@@ -613,15 +617,21 @@ absl::Status AndroidDevice::CleanupDevice()
     .Run(absl::StrFormat("shell rm -rf -- %s/%s", kTargetPath, kProfilingPluginFolderName))
     .IgnoreError();
 
-    LOGD("Cleanup device %s done\n", m_serial.c_str());
+    LOGI("%s AndroidDevice::CleanupDevice(): package %s done\n",
+         Dive::kLogPrefixCleanup,
+         m_serial.c_str());
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::CleanupPackage(const std::string &package)
+absl::Status AndroidDevice::CleanupPackageProperties(const std::string &package)
 {
-    LOGD("Cleanup package %s\n", package.c_str());
+    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s\n",
+         Dive::kLogPrefixCleanup,
+         package.c_str());
     Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)).IgnoreError();
-    LOGD("Cleanup package %s done\n", package.c_str());
+    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s done\n",
+         Dive::kLogPrefixCleanup,
+         package.c_str());
     return absl::OkStatus();
 }
 
@@ -1133,17 +1143,26 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string &package)
+absl::Status DeviceManager::FullCleanup(const std::string &serial, const std::string &package)
 {
-    // If package specified, remove package related settings.
+    LOGI("%s DeviceManager::FullCleanup(): serial %s\n", Dive::kLogPrefixCleanup, serial.c_str());
+
     if (!package.empty())
     {
-        GetDevice()->CleanupPackage(package).IgnoreError();
+        if (absl::Status ret = GetDevice()->CleanupPackageProperties(package); !ret.ok())
+        {
+            return ret;
+        }
     }
 
-    // Cleanup of device settings and installed libraries is handled in
-    // AndroidDevice::CleanupDevice.
+    if (absl::Status ret = GetDevice()->CleanupDevice(); !ret.ok())
+    {
+        return ret;
+    }
 
+    LOGI("%s DeviceManager::FullCleanup(): serial %s done\n",
+         Dive::kLogPrefixCleanup,
+         serial.c_str());
     return absl::OkStatus();
 }
 

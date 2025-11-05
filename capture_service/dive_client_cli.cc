@@ -756,7 +756,7 @@ bool CleanUpAppAndDevice(Dive::DeviceManager& mgr,
         }
     }
 
-    return mgr.Cleanup(serial, package).ok();
+    return mgr.FullCleanup(serial, package).ok();
 }
 
 bool ProcessInput(Dive::DeviceManager& mgr)

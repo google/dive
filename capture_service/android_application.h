@@ -44,7 +44,11 @@ public:
     virtual ~AndroidApplication() = default;
 
     virtual absl::Status Setup() = 0;
+
+    // Common cleanup for device properties and settings that may be touched by Dive when running an
+    // application
     virtual absl::Status Cleanup();
+
     virtual absl::Status Start();
     virtual absl::Status Stop();
     const std::string   &GetMainActivity() const { return m_main_activity; };
@@ -82,46 +86,35 @@ protected:
 class VulkanApplication : public AndroidApplication
 {
 public:
-    VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args) :
-        AndroidApplication(dev,
-                           std::move(package),
-                           ApplicationType::VULKAN_APK,
-                           std::move(command_args))
-    {
-        ParsePackage().IgnoreError();
-    };
+    VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args);
     virtual ~VulkanApplication();
     virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to a Vulkan APK
     virtual absl::Status Cleanup() override;
 };
 
 class OpenXRApplication : public AndroidApplication
 {
 public:
-    OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args) :
-        AndroidApplication(dev,
-                           std::move(package),
-                           ApplicationType::OPENXR_APK,
-                           std::move(command_args))
-    {
-        ParsePackage().IgnoreError();
-    };
+    OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args);
     virtual ~OpenXRApplication();
     virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to an OpenXR APK
     virtual absl::Status Cleanup() override;
 };
 
 class VulkanCliApplication : public AndroidApplication
 {
 public:
-    VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args) :
-        AndroidApplication(dev, "", ApplicationType::VULKAN_CLI, std::move(command_args)),
-        m_command(std::move(command))
-    {
-    }
+    VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args);
     virtual ~VulkanCliApplication();
     virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to a Vulkan CLI application
     virtual absl::Status Cleanup() override;
+
     virtual absl::Status Start() override;
     virtual absl::Status Stop() override;
     virtual bool         IsRunning() const override;

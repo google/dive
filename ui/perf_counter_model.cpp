@@ -132,6 +132,11 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
         return QVariant(Qt::AlignRight);
     }
 
+    if (role != Qt::DisplayRole)
+    {
+        return QVariant();
+    }
+
     int row = index.row();
     int col = index.column();
 

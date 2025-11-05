@@ -95,10 +95,6 @@ const std::filesystem::path& file_path)
         info.m_key = std::move(fields[2]);
         info.m_name = std::move(fields[3]);
         info.m_description = std::move(fields[4]);
-        for (size_t i = 5; i < fields.size(); ++i)
-        {
-            info.m_description.append(", ").append(fields[i]);
-        }
 
         available_metrics->m_metrics.emplace(info.m_key, std::move(info));
     }

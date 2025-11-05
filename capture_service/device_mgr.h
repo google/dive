@@ -205,7 +205,7 @@ public:
     AndroidDevice                  *GetDevice() const { return m_device.get(); }
 
     // Exposing for user-initiated cleanup
-    absl::Status FullCleanup(const std::string &serial, const std::string &package);
+    absl::Status CleanupPackageProperties(const std::string &package);
 
     absl::Status DeployReplayApk(const std::string &serial);
     absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;

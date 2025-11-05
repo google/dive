@@ -1143,26 +1143,17 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::FullCleanup(const std::string &serial, const std::string &package)
+absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
 {
-    LOGI("%s DeviceManager::FullCleanup(): serial %s\n", Dive::kLogPrefixCleanup, serial.c_str());
-
-    if (!package.empty())
+    if (package.empty())
     {
-        if (absl::Status ret = GetDevice()->CleanupPackageProperties(package); !ret.ok())
-        {
-            return ret;
-        }
+        return absl::FailedPreconditionError(
+        "Cannot clean package properties of unspecified package");
     }
-
-    if (absl::Status ret = GetDevice()->CleanupDevice(); !ret.ok())
+    if (absl::Status ret = GetDevice()->CleanupPackageProperties(package); !ret.ok())
     {
         return ret;
     }
-
-    LOGI("%s DeviceManager::FullCleanup(): serial %s done\n",
-         Dive::kLogPrefixCleanup,
-         serial.c_str());
     return absl::OkStatus();
 }
 

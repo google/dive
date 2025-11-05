@@ -741,12 +741,6 @@ bool CleanUpAppAndDevice(Dive::DeviceManager& mgr,
         return false;
     }
 
-    if (package.empty())
-    {
-        std::cout << "Package not provided. You run run with `--package [package]` options to "
-                     "clean up package specific settings.";
-    }
-
     if (mgr.GetDevice() == nullptr)
     {
         if (absl::StatusOr<Dive::AndroidDevice*> device = mgr.SelectDevice(serial); !device.ok())
@@ -756,7 +750,14 @@ bool CleanUpAppAndDevice(Dive::DeviceManager& mgr,
         }
     }
 
-    return mgr.FullCleanup(serial, package).ok();
+    if (package.empty())
+    {
+        std::cout << "Package not provided. You run run with `--package [package]` options to "
+                     "clean up package specific settings.";
+        return true;
+    }
+
+    return mgr.CleanupPackageProperties(package).ok();
 }
 
 bool ProcessInput(Dive::DeviceManager& mgr)

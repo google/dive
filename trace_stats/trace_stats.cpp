@@ -214,8 +214,8 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
 
         if (info.m_render_mode != cur_type)
         {
-            if (cur_type == Dive::RenderModeType::kBinningVis ||
-                cur_type == Dive::RenderModeType::kBinningDirect)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
                 capture_stats.m_num_binning_passes++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
                 capture_stats.m_num_tiling_passes++;

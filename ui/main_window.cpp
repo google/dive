@@ -490,6 +490,10 @@ MainWindow::MainWindow()
 
         m_frame_tab_view = new FrameTabView(this);
 
+        m_text_file_view = new TextFileView(*m_data_core);
+        m_text_file_view->setParent(this);
+        m_text_file_view_tab_index = m_tab_widget->addTab(m_text_file_view, "Text File");
+
         m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
         m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
@@ -501,9 +505,6 @@ MainWindow::MainWindow()
         m_buffer_view = new BufferView(*m_data_core);
         m_tab_widget->addTab(m_buffer_view, "Buffers");
 #endif
-
-        m_text_file_view = new TextFileView(*m_data_core);
-        m_text_file_view->setParent(this);
 
         // Set to not visible by default.
         SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, false);
@@ -615,7 +616,6 @@ MainWindow::MainWindow()
     CreateMenus();
     CreateStatusBar();
     CreateShortcuts();
-    m_file_tool_bar_scroll_area = new QScrollArea(this);
     CreateToolBars();
     UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
 
@@ -2083,11 +2083,11 @@ void MainWindow::CreateActions()
     connect(this, &MainWindow::SetSaveAsMenuStatus, m_save_as_action, &QAction::setEnabled);
 
     // Recent file actions
-    for (int i = 0; i < MaxRecentFiles; ++i)
+    for (auto &action : m_recent_file_actions)
     {
-        m_recent_file_actions[i] = new QAction(this);
-        m_recent_file_actions[i]->setVisible(false);
-        connect(m_recent_file_actions[i], SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
+        action = new QAction(this);
+        action->setVisible(false);
+        connect(action, SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
     }
 
     // Capture action
@@ -2143,8 +2143,8 @@ void MainWindow::CreateMenus()
     // m_file_menu->addAction(m_save_as_action);
     m_file_menu->addSeparator();
     m_recent_captures_menu = m_file_menu->addMenu(tr("Recent captures"));
-    for (int i = 0; i < MaxRecentFiles; ++i)
-        m_recent_captures_menu->addAction(m_recent_file_actions[i]);
+    for (auto action : m_recent_file_actions)
+        m_recent_captures_menu->addAction(action);
     m_file_menu->addSeparator();
     m_file_menu->addAction(m_exit_action);
 
@@ -2169,32 +2169,16 @@ void MainWindow::CreateToolBars()
     capture_button->setMenu(m_capture_menu);
     capture_button->setIcon(QIcon(":/images/capture.png"));
 
-    m_file_tool_bar = new QToolBar(this);
-    m_file_tool_bar->setMovable(false);
-    m_file_tool_bar->addAction(m_open_action);
+    QToolButton *open_button = new QToolButton(this);
+    open_button->setPopupMode(QToolButton::MenuButtonPopup);
+    open_button->setDefaultAction(m_open_action);
+    open_button->setMenu(m_recent_captures_menu);
+
+    m_file_tool_bar = addToolBar(tr("&File"));
+    m_file_tool_bar->addWidget(open_button);
     m_file_tool_bar->addAction(m_save_action);
     m_file_tool_bar->addWidget(capture_button);
     m_file_tool_bar->addAction(m_analyze_action);
-    m_file_tool_bar->addSeparator();
-    for (int i = 0; i < MaxRecentFiles; ++i)
-        m_file_tool_bar->addAction(m_recent_file_actions[i]);
-
-    m_file_tool_bar->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
-    m_file_tool_bar->setMinimumSize(m_file_tool_bar->sizeHint());
-
-    m_file_tool_bar_scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_file_tool_bar_scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_file_tool_bar_scroll_area->setFixedHeight(m_file_tool_bar->sizeHint().height() +
-                                                QStyle::PM_ScrollBarExtent);
-    m_file_tool_bar_scroll_area->setWidgetResizable(false);
-    m_file_tool_bar_scroll_area->setWidget(m_file_tool_bar);
-
-    // Create a toolbar holder for the scrollable toolbar. This is needed so the scrollable toolbar
-    // can be added directly to the main window with addToolBar.
-    QToolBar *tool_bar_holder = addToolBar(tr("&File"));
-    tool_bar_holder->addWidget(m_file_tool_bar_scroll_area);
-    tool_bar_holder->setOrientation(Qt::Horizontal);
-    m_file_tool_bar->setOrientation(Qt::Horizontal);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2326,46 +2310,21 @@ void MainWindow::SetCurrentFile(const QString &file_name, bool is_temp_file)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::UpdateRecentFileActions(QStringList recent_files)
 {
-    for (int j = 0; j < MaxRecentFiles; ++j)
+    int next_file_index = 0;
+    for (auto action : m_recent_file_actions)
     {
-        if (j < recent_files.count())
+        int file_index = next_file_index++;
+        if (file_index < recent_files.count())
         {
-            QString text = tr("%1").arg(StrippedName(recent_files[j]));
-            m_recent_file_actions[j]->setText(text);
-            m_recent_file_actions[j]->setData(recent_files[j]);
-            m_recent_file_actions[j]->setVisible(true);
+            QString text = tr("%1").arg(StrippedName(recent_files[file_index]));
+            action->setText(text);
+            action->setData(recent_files[file_index]);
+            action->setVisible(true);
         }
         else
         {
-            m_recent_file_actions[j]->setVisible(false);
+            action->setVisible(false);
         }
-    }
-
-    if (m_file_tool_bar)
-    {
-        // Force the QToolBar to recalculate its minimum size hint based on the new, visible text.
-        // This causes the scroll area to expand.
-        m_file_tool_bar->updateGeometry();
-
-        // Since we explicitly set minimum size in CreateToolBars(),
-        // ensure the constraint is reset to the new calculated size.
-        m_file_tool_bar->setMinimumSize(m_file_tool_bar->sizeHint());
-    }
-
-    if (m_file_tool_bar_scroll_area)
-    {
-        // Tell the QScrollArea to resize its viewport based on the new size of the toolbar.
-        m_file_tool_bar_scroll_area->updateGeometry();
-
-        // Force the QScrollArea's maximum height to be correct for the new content size.
-        if (m_file_tool_bar)
-        {
-            m_file_tool_bar_scroll_area->setFixedHeight(m_file_tool_bar->sizeHint().height() +
-                                                        QStyle::PM_ScrollBarExtent);
-        }
-
-        // Force the parent layouts (the holder toolbar) to be notified of the size change.
-        m_file_tool_bar_scroll_area->adjustSize();
     }
 }
 
@@ -3469,7 +3428,8 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
     // and performance counters. Only correlate with GPU timing view.
     uint64_t       source_node_index = (uint64_t)source_index.internalPointer();
     Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(source_node_index);
-    bool           is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
+
+    bool is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
                               (node_type ==
                                Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) ||
                               (node_type == Dive::NodeType::kGfxrVulkanBeginCommandBufferNode);

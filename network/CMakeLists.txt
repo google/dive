@@ -17,54 +17,47 @@
 project(network)
 
 set(NETWORK_SRCS
-  socket_connection.cc
-  messages.cc
-  tcp_client.cc
-  unix_domain_server.cc
+    socket_connection.cc
+    messages.cc
+    tcp_client.cc
+    unix_domain_server.cc
 )
 
 set(NETWORK_HDRS
-  platform_net.h
-  socket_connection.h
-  serializable.h
-  messages.h
-  tcp_client.h
-  message_handler.h
-  unix_domain_server.h
+    platform_net.h
+    socket_connection.h
+    serializable.h
+    messages.h
+    tcp_client.h
+    message_handler.h
+    unix_domain_server.h
 )
 
 add_library(network STATIC ${NETWORK_SRCS} ${NETWORK_HDRS})
 
-set(NETWORK_LINK_LIBS
-  absl::status
-  absl::statusor
-)
+set(NETWORK_LINK_LIBS absl::status absl::statusor)
 
 if(ANDROID)
-  list(APPEND NETWORK_LINK_LIBS log)
+    list(APPEND NETWORK_LINK_LIBS log)
 endif()
 
-target_link_libraries(
-  network
-  PRIVATE
-  ${NETWORK_LINK_LIBS}
-)
+target_link_libraries(network PRIVATE ${NETWORK_LINK_LIBS})
 
-target_include_directories(network PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/..
-)
+target_include_directories(network PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 if(NOT ANDROID)
-  enable_testing()
-  include(GoogleTest)
-  add_executable(messages_test messages_test.cc)
-  target_link_libraries(messages_test PRIVATE
-    network
-    gtest
-    gtest_main
-    absl::status
-    absl::statusor
-    absl::status_matchers
-  )
-  gtest_discover_tests(messages_test)
+    enable_testing()
+    include(GoogleTest)
+    add_executable(messages_test messages_test.cc)
+    target_link_libraries(
+        messages_test
+        PRIVATE
+            network
+            gtest
+            gtest_main
+            absl::status
+            absl::statusor
+            absl::status_matchers
+    )
+    gtest_discover_tests(messages_test)
 endif()

@@ -18,10 +18,9 @@ project(trace_stats)
 
 set(CMAKE_CXX_STANDARD 20)
 
-
 if(MSVC)
-  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -29,17 +28,19 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(${PROJECT_NAME} "main.cpp" "trace_stats.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)
-target_include_directories(${PROJECT_NAME} PRIVATE
-  ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
-  ${CMAKE_SOURCE_DIR}
+target_include_directories(
+    ${PROJECT_NAME}
+    PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR}
 )
 
-if (MSVC)
-  # 4100: unreferenced formal parameter
-  # 4201: prevent nameless struct/union
-  target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
-  target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
+if(MSVC)
+    # 4100: unreferenced formal parameter
+    # 4201: prevent nameless struct/union
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
+    target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
 else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces)
+    target_compile_options(
+        ${PROJECT_NAME}
+        PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
+    )
 endif()
-

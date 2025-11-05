@@ -15,6 +15,8 @@
 */
 
 #pragma once
+
+#include <array>
 #include <memory>
 #include <vector>
 #include <future>
@@ -269,15 +271,10 @@ private:
     QAction       *m_about_action;
     QAction       *m_shortcuts_action;
     QToolBar      *m_file_tool_bar;
-    QScrollArea   *m_file_tool_bar_scroll_area;
     TraceDialog   *m_trace_dig;
     AnalyzeDialog *m_analyze_dig;
 
-    enum
-    {
-        MaxRecentFiles = 3
-    };
-    QAction *m_recent_file_actions[MaxRecentFiles];
+    std::array<QAction *, 3> m_recent_file_actions = {};
 
     std::unique_ptr<Worker> m_worker;
 

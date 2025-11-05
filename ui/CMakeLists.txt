@@ -37,35 +37,48 @@ find_package(Qt5Widgets CONFIG REQUIRED)
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(MSVC)
-  # Add resource files for Windows build (for version information)
-  file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
-  set(SRC_FILES ${SRC_FILES} ${RC_FILES})
+    # Add resource files for Windows build (for version information)
+    file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
+    set(SRC_FILES ${SRC_FILES} ${RC_FILES})
 endif()
 
-include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include )
+include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 include_directories(${CMAKE_SOURCE_DIR})
 # Include CMAKE_BINARY_DIR for generated files.
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
-
 # Tell CMake to create the Dive executable
-add_executable(${PROJECT_NAME} ${HDR_FILES} ${SRC_FILES} ${COMMON_HDR_FILES} ${COMMON_SRC_FILES} resources.qrc)
+add_executable(
+    ${PROJECT_NAME}
+    ${HDR_FILES}
+    ${SRC_FILES}
+    ${COMMON_HDR_FILES}
+    ${COMMON_SRC_FILES}
+    resources.qrc
+)
 
 # For release builds, build Dive UI as WIN32 GUI application instead of a console application.
 # This will supress logging to stdout.
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
 # Use the Widgets module from Qt 5
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
-target_link_libraries(${PROJECT_NAME} network dive_core device_mgr dive_plugin_loader component_files)
+target_link_libraries(
+    ${PROJECT_NAME}
+    network
+    dive_core
+    device_mgr
+    dive_plugin_loader
+    component_files
+)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
-if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-  target_link_libraries(${PROJECT_NAME}  stdc++fs)
+if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(${PROJECT_NAME} stdc++fs)
 endif()
 
 # Custom executable name
@@ -76,37 +89,79 @@ add_definitions(-DLITTLEENDIAN_CPU)
 add_definitions(-DDIVE_GUI_TOOL)
 
 # Set working directory for visual studio, so it can properly load resources
-set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+set_target_properties(
+    ${PROJECT_NAME}
+    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
 
-if (MSVC)
-  # 4099: missing PDB file for lib
-  # 4100: unreferenced formal parameter
-  # 4201: prevent nameless struct/union
-  # 4127: "conditional expression is constant" warnings
-  target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127)
+if(MSVC)
+    # 4099: missing PDB file for lib
+    # 4100: unreferenced formal parameter
+    # 4201: prevent nameless struct/union
+    # 4127: "conditional expression is constant" warnings
+    target_compile_options(
+        ${PROJECT_NAME}
+        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127
+    )
 else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces -Wno-inconsistent-missing-override)
+    target_compile_options(
+        ${PROJECT_NAME}
+        PRIVATE
+            -Wall
+            -Wextra
+            -Werror
+            -Wno-unused-parameter
+            -Wno-missing-braces
+            -Wno-inconsistent-missing-override
+    )
 endif()
 
 if(MSVC)
-  set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+    set_property(
+        DIRECTORY ${CMAKE_SOURCE_DIR}
+        PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME}
+    )
 endif()
 
 # Collect 3rd party licenses
-file(COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/)
-file(COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/)
-file(COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/renderdoc/)
-file(COPY ${CMAKE_SOURCE_DIR}/third_party/Vulkan-ValidationLayers/LICENSE.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Vulkan-ValidationLayers/)
+file(
+    COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/
+)
+file(
+    COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/
+)
+file(
+    COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/renderdoc/
+)
+file(
+    COPY ${CMAKE_SOURCE_DIR}/third_party/Vulkan-ValidationLayers/LICENSE.txt
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Vulkan-ValidationLayers/
+)
 
 # Generate license NOTICE file
-include("${CMAKE_SOURCE_DIR}/scripts/collect_licenses.cmake")
-GenerateThirdPartyLicenseFile("${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/licenses/")
+include("collect_licenses.cmake")
+GenerateThirdPartyLicenseFile(
+    "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
+    "${CMAKE_CURRENT_BINARY_DIR}/licenses/"
+)
 add_custom_target(notice_file ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/NOTICE")
-if (MSVC)
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+if(MSVC)
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
+            "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>"
+    )
 endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE" DESTINATION "${CMAKE_INSTALL_PREFIX}")
+install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+)
 add_dependencies(${PROJECT_NAME} notice_file)

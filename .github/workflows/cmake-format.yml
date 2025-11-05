@@ -1,0 +1,30 @@
+name: lint_cmake_format
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# Cancel previous runs if a more recent commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Check the formatting on all source files
+  gersemi_on_dive_sources:
+    runs-on: windows-2022
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+        python3 -m pip install gersemi
+    - name: Run windows cmake formatting script
+      run: |
+        scripts\format_cmake.bat
+    - name: Check git diff
+      run: |
+        scripts\check_git_diff.bat

@@ -34,13 +34,16 @@ else()
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH_PRE})
         # Enable find_package uses of <PackageName>_ROOT variables.
         cmake_policy(SET CMP0074 NEW)
-        set(ZLIB_ROOT  ${THIRDPARTY_DIRECTORY}/zlib)
+        set(ZLIB_ROOT ${THIRDPARTY_DIRECTORY}/zlib)
         if(EXISTS "${ZLIB_ROOT}/CMakeLists.txt")
             include_directories("${ZLIB_ROOT}")
             add_subdirectory(${ZLIB_ROOT} third_party/zlib)
             find_package(ZLIB)
             if(ZLIB_FOUND)
-                SET(ZLIB_INCLUDE_DIR ${CMAKE_BINARY_DIR}/third_party/zlib ${ZLIB_INCLUDE_DIR})
+                set(ZLIB_INCLUDE_DIR
+                    ${CMAKE_BINARY_DIR}/third_party/zlib
+                    ${ZLIB_INCLUDE_DIR}
+                )
                 message("ZLIB_INCLUDE_DIR is " ${ZLIB_INCLUDE_DIR})
             else()
                 message(FATAL_ERROR "did not find zlib")
@@ -68,9 +71,7 @@ else()
     include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 endif()
 
-
 link_directories(LibArchive_LIBRARIES)
 include_directories(LibArchive_INCLUDE_DIRS)
 message("LibArchive_LIBRARIES is " ${LibArchive_LIBRARIES})
 message("LibArchive_INCLUDE_DIRS is " ${LibArchive_INCLUDE_DIRS})
-

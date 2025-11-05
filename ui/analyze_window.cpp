@@ -263,11 +263,11 @@ void AnalyzeDialog::OnDisableOverlay()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ShowErrorMessage(const std::string &err_msg)
+void AnalyzeDialog::ShowMessage(const std::string &message)
 {
     auto message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
-    message_box->setText(err_msg.c_str());
+    message_box->setText(message.c_str());
     message_box->open();
     return;
 }
@@ -408,7 +408,7 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
                                            ", error: ",
                                            dev_ret.status().message());
         qDebug() << err_msg.c_str();
-        ShowErrorMessage(err_msg);
+        ShowMessage(err_msg);
         OnDeviceListRefresh();
         return;
     }
@@ -666,12 +666,12 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             DisableOverlay();
             break;
         case ReplayStatusUpdateCode::kSuccess:
-            ShowErrorMessage(item.message.toStdString());
+            ShowMessage(item.message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, true);
             OverlayMessage("Replay done.");
             break;
         case ReplayStatusUpdateCode::kFailure:
-            ShowErrorMessage(item.message.toStdString());
+            ShowMessage(item.message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, true);
             OverlayMessage("Replay failed.");
             break;
@@ -680,7 +680,7 @@ void AnalyzeDialog::ExecuteStatusUpdate()
             OverlayMessage("Setting up replay...");
             break;
         case ReplayStatusUpdateCode::kSetupDeviceFailure:
-            ShowErrorMessage(item.message.toStdString());
+            ShowMessage(item.message.toStdString());
             SetReplayButton(kDefaultReplayButtonText, false);
             OnDeviceListRefresh();
             break;

@@ -117,7 +117,7 @@ signals:
     void DisableOverlay();
 
 private:
-    void                        ShowErrorMessage(const std::string &message);
+    void                        ShowMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateMetrics();
     void                        UpdateSelectedMetricsList();

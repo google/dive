@@ -811,31 +811,26 @@ bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
                                              std::vector<std::string> previous_timestamps)
 {
     std::vector<std::string> current_time_stamps;
-    std::string              get_first_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                   m_source_capture_dir,
-                                                                   "/",
-                                                                   m_file_list[0].data());
-    std::string get_second_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                    m_source_capture_dir,
-                                                                    "/",
-                                                                    m_file_list[1].data());
-    std::string get_third_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                   m_source_capture_dir,
-                                                                   "/",
-                                                                   m_file_list[2].data());
-    absl::StatusOr<std::string> first_current_timestamp = device->Adb().RunAndGetResult(
-    get_first_current_timestamp_command);
-    absl::StatusOr<std::string> second_current_timestamp = device->Adb().RunAndGetResult(
-    get_second_current_timestamp_command);
-    absl::StatusOr<std::string> third_current_timestamp = device->Adb().RunAndGetResult(
-    get_third_current_timestamp_command);
 
-    current_time_stamps.push_back(first_current_timestamp->data());
-    current_time_stamps.push_back(second_current_timestamp->data());
-    current_time_stamps.push_back(third_current_timestamp->data());
-    return (current_time_stamps[0] == previous_timestamps[0] &&
-            current_time_stamps[1] == previous_timestamps[1] &&
-            current_time_stamps[2] == previous_timestamps[2]);
+    for (const auto &file_name : m_file_list)
+    {
+        std::string get_timestamp_command = absl::StrCat("shell stat -c %Y ",
+                                                         m_source_capture_dir,
+                                                         "/",
+                                                         file_name.data());
+
+        absl::StatusOr<std::string> current_timestamp = device->Adb().RunAndGetResult(
+        get_timestamp_command);
+        if (!current_timestamp.ok())
+        {
+            qDebug() << "Failed to get timestamp for " << file_name.data() << ": "
+                     << current_timestamp.status().message().data();
+            return false;
+        }
+        current_time_stamps.push_back(current_timestamp->data());
+    }
+
+    return current_time_stamps == previous_timestamps;
 }
 
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)

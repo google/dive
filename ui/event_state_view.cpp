@@ -804,7 +804,8 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
                 QString                             value;
                 VkPipelineColorBlendAttachmentState attach = event_state_it->Attachment(i);
 
-                value = "srcColorBlendFactor: " +
+                value = "blendEnabled: " + QString::number(attach.blendEnable) +
+                        ", srcColorBlendFactor: " +
                         QString(GetVkBlendFactor(attach.srcColorBlendFactor)) +
                         ", dstColorBlendFactor: " +
                         QString(GetVkBlendFactor(attach.dstColorBlendFactor)) +

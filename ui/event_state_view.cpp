@@ -814,7 +814,8 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
                         QString(GetVkBlendFactor(attach.srcAlphaBlendFactor)) +
                         ", dstAlphaBlendFactor: " +
                         QString(GetVkBlendFactor(attach.dstAlphaBlendFactor)) +
-                        ", alphaBlendOp: " + QString(GetVkBlendOp(attach.alphaBlendOp));
+                        ", alphaBlendOp: " + QString(GetVkBlendOp(attach.alphaBlendOp)) +
+                        ", colorWriteMask: 0x" + QString::number(attach.colorWriteMask, 16);
 
                 QString                             prev_value;
                 VkPipelineColorBlendAttachmentState prev_attach;

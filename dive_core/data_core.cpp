@@ -892,6 +892,11 @@ void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_
         // Be careful!!! Here we assume the enum `VkBlendOp` matches exactly `a3xx_rb_blend_opcode`
         attach.alphaBlendOp = static_cast<VkBlendOp>(
         rb_mrt_blend_control.bitfields.ALPHA_BLEND_OPCODE);
+        // Be careful!!! Here we assume the enum `VkColorComponentFlags` matches exactly the 4-bit
+        // `COMPONENT_ENABLE`
+        attach.colorWriteMask = static_cast<VkColorComponentFlags>(
+        rb_mrt_control.bitfields.COMPONENT_ENABLE);
+
         event_state_it->SetAttachment(rt_id, attach);
 
         const bool logic_op_enabled = (rb_mrt_control.bitfields.ROP_ENABLE == 1);

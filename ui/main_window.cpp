@@ -865,6 +865,7 @@ void MainWindow::ResetTabWidget()
 
     // Reset all of the tab indices.
     m_gfxr_vulkan_command_arguments_view_tab_index = -1;
+    m_text_file_view_tab_index = -1;
     m_overview_view_tab_index = -1;
     m_command_view_tab_index = -1;
     m_shader_view_tab_index = -1;

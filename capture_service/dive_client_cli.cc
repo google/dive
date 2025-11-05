@@ -196,10 +196,12 @@ ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli applicati
 ABSL_FLAG(std::string, vulkan_command_args, "", "the arguments for vulkan cli application to run");
 ABSL_FLAG(std::string,
           type,
-          "openxr",
-          "application type: \n\t`openxr` for OpenXR applications(apk) \n\t `vulkan` for Vulkan "
+          "openxr_vulkan",
+          "application type: \n\t`openxr_vulkan` for Vulkan OpenXR applications(apk) \n\t `vulkan` "
+          "for Vulkan "
           "applications(apk)"
-          "\n\t`vulkan_cli` for command line Vulkan application.");
+          "\n\t`vulkan_cli` for command line Vulkan application"
+          "\n\t`openxr_gles` for GLES OpenXR applications(apk)");
 ABSL_FLAG(
 std::string,
 download_dir,
@@ -324,14 +326,15 @@ bool RunPackage(Dive::DeviceManager& mgr,
     }
     auto dev = *dev_ret;
     dev->EnableGfxr(is_gfxr_capture);
-    auto ret = dev->SetupDevice();
+    auto        ret = dev->SetupDevice();
+    std::string gfxr_capture_arg = "gfxr_capture";
     if (!ret.ok())
     {
         std::cout << "Failed to setup device, error: " << ret.message() << std::endl;
         return false;
     }
 
-    if (app_type == "openxr")
+    if (app_type == "openxr_vulkan")
     {
         ret = dev->SetupApp(package,
                             Dive::ApplicationType::OPENXR_APK,
@@ -352,6 +355,20 @@ bool RunPackage(Dive::DeviceManager& mgr,
         ret = dev->SetupApp(command,
                             command_args,
                             Dive::ApplicationType::VULKAN_CLI,
+                            device_architecture,
+                            gfxr_capture_directory);
+    }
+    else if (app_type == "openxr_gles")
+    {
+        if (command == gfxr_capture_arg)
+        {
+            std::cout << "GFXR capture is not supported for OpenXR GLES applications." << std::endl;
+            return false;
+        }
+
+        ret = dev->SetupApp(package,
+                            Dive::ApplicationType::OPENXR_APK,
+                            command_args,
                             device_architecture,
                             gfxr_capture_directory);
     }

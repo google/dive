@@ -55,9 +55,17 @@
 
 namespace
 {
-const std::vector<std::string> kAppTypes{ "Vulkan APK", "OpenXR APK", "Command Line Application" };
+enum class AppTypes
+{
+    kOpenXR_Vulkan,  // OpenXR Vulkan app
+    kVulkan,         // Vulkan app
+    kVulkanCLI,      // Vulkan command line app
+    kOpenXR_GLES,    // OpenXR GLES app
+};
+const std::vector<std::string> kAppTypes{ "OpenXR-Vulkan", "Vulkan", "Vulkan CLI", "OpenXR-GLES" };
 const int                      kGfxrCaptureButtonId = 1;
 const int                      kPm4CaptureButtonId = 2;
+const int                      kNumGfxrCaptureAppTypes = 3;
 }  // namespace
 
 // =================================================================================================
@@ -112,6 +120,9 @@ TraceDialog::TraceDialog(QWidget *parent) :
         QStandardItem *item = new QStandardItem(ty.c_str());
         m_app_type_model->appendRow(item);
     }
+    m_app_type_filter_model = new AppTypeFilterModel(this);
+    m_app_type_filter_model->setSourceModel(m_app_type_model);
+
     m_dev_box->setModel(m_dev_model);
     m_dev_box->setCurrentIndex(0);
     m_dev_box->setCurrentText("Please select a device");
@@ -130,7 +141,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     m_pkg_box->setCompleter(completer);
 
-    m_app_type_box->setModel(m_app_type_model);
+    m_app_type_box->setModel(m_app_type_filter_model);
 
     m_capture_type_layout = new QHBoxLayout();
     m_capture_type_label = new QLabel("Capture Type:");
@@ -512,7 +523,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         }
     }
 
-    if (app_type == "OpenXR APK")
+    if (app_type == kAppTypes[static_cast<size_t>(AppTypes::kOpenXR_Vulkan)] ||
+        app_type == kAppTypes[static_cast<size_t>(AppTypes::kOpenXR_GLES)])
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::OPENXR_APK,
@@ -520,7 +532,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
-    else if (app_type == "Vulkan APK")
+    else if (app_type == kAppTypes[static_cast<size_t>(AppTypes::kVulkan)])
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::VULKAN_APK,
@@ -528,7 +540,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
-    else if (app_type == "Command Line Application")
+    else if (app_type == kAppTypes[static_cast<size_t>(AppTypes::kVulkanCLI)])
     {
         m_executable = m_cmd_input_box->text().toStdString();
         if (m_executable.empty())
@@ -1170,6 +1182,7 @@ void TraceDialog::OnPackageListFilterApplied(const QString &filter)
 
 void TraceDialog::ShowGfxrFields()
 {
+    m_app_type_filter_model->setFilterActive(true);
     m_capture_button->hide();
     m_gfxr_capture_button->show();
     m_gfxr_capture_file_on_device_directory_label->show();
@@ -1180,6 +1193,7 @@ void TraceDialog::ShowGfxrFields()
 
 void TraceDialog::HideGfxrFields()
 {
+    m_app_type_filter_model->setFilterActive(false);
     m_capture_button->show();
     m_gfxr_capture_button->hide();
     m_gfxr_capture_file_on_device_directory_label->hide();
@@ -1316,4 +1330,24 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
     qDebug() << success_msg.c_str();
     ShowErrorMessage(QString::fromStdString(success_msg));
     emit TraceAvailable(capture_path);
+}
+
+// =================================================================================================
+// AppTypeFilterModel
+// =================================================================================================
+
+void AppTypeFilterModel::setFilterActive(bool active)
+{
+    m_filter_active = active;
+    invalidateFilter();
+}
+
+//--------------------------------------------------------------------------------------------------
+bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+{
+    if (m_filter_active)
+    {
+        return sourceRow < kNumGfxrCaptureAppTypes;
+    }
+    return true;
 }

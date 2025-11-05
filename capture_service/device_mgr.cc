@@ -245,7 +245,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is not allowed for kPerfCounters");
+            return absl::InvalidArgumentError(
+            "use_validation_layer is not allowed for kPerfCounters");
         }
         break;
     }
@@ -795,7 +796,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("python %s install-apk %s -s %s",
+    std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
+                                      kPythonCommand,
                                       recon_py_path,
                                       replay_apk_path,
                                       serial);
@@ -898,7 +900,8 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
     LOGD("RunReplayGfxrScript(): RUN\n");
     std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("python %s replay %s %s",
+    std::string cmd = absl::StrFormat("%s %s replay %s %s",
+                                      kPythonCommand,
                                       local_recon_py_path,
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);

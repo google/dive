@@ -97,10 +97,10 @@ private:
         return m_disassembled_data;
     }
 
-    const IMemoryManager& m_mem_manager;
-    uint32_t              m_submit_index;
-    uint64_t              m_address;
-    ILog*                 m_log;
+    [[maybe_unused]] const IMemoryManager& m_mem_manager;
+    [[maybe_unused]] uint32_t              m_submit_index;
+    uint64_t                               m_address;
+    [[maybe_unused]] ILog*                 m_log;
 
     mutable std::once_flag   m_disassembled_flag;
     mutable DisassembledData m_disassembled_data;

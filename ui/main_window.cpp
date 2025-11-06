@@ -631,7 +631,8 @@ MainWindow::MainWindow()
     m_hover_help->SetDataCore(m_data_core.get());
     setAccessibleName("DiveMainWindow");
 
-    m_plugin_manager = std::unique_ptr<Dive::PluginLoader>(new Dive::PluginLoader(*this));
+    m_plugin_manager = std::make_unique<Dive::PluginLoader>();
+    m_plugin_manager->Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow, this);
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "dive_core/common/string_utils.h"
+#include "string_utils.h"
 
 namespace Dive
 {
@@ -38,7 +38,7 @@ void RemoveQuotes(std::string& s)
     }
 }
 
-bool GetTrimmedLine(std::ifstream& file, std::string& line)
+bool GetTrimmedLine(std::istream& file, std::string& line)
 {
     // Read the first line
     if (!std::getline(file, line))
@@ -93,27 +93,34 @@ bool GetTrimmedLine(std::ifstream& file, std::string& line)
 bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter)
 {
     field.clear();
-    char c;
-    bool in_quotes = false;
 
-    // Eat leading whitespace (but not newlines).
-    while (ss.peek() != EOF && std::isspace(ss.peek()) && ss.peek() != '\n')
+    // Handle the special case for an empty field right before EOF.
+    if (ss.peek() == delimiter)
     {
         ss.get();
+        if (ss.peek() == EOF)
+        {
+            return true;
+        }
+        else
+        {
+            ss.unget();
+        }
     }
-    if (ss.eof())
+
+    if (ss.peek() == EOF)
     {
         return false;
     }
 
-    // Check if field starts with a quote.
+    char c;
+    bool in_quotes = false;
     if (ss.peek() == '"')
     {
         in_quotes = true;
         ss.get(c);
     }
 
-    // Read the rest of the field, char by char.
     while (ss.get(c))
     {
         if (in_quotes)
@@ -123,7 +130,7 @@ bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter)
                 if (ss.peek() == '"')
                 {
                     // It's an escaped quote (""), add one "
-                    field += '"';
+                    field.push_back('"');
                     ss.get();
                 }
                 else
@@ -133,24 +140,26 @@ bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter)
             }
             else
             {
-                // Add any character (including \n)
-                field += c;
+                field.push_back(c);
             }
         }
         else
         {
             if (c == delimiter)
             {
+                // Handle the special case for an empty field right before EOF.
+                if (ss.peek() == EOF)
+                {
+                    ss.unget();
+                }
                 break;
             }
-            // Add the character (it's part of an unquoted field)
-            field += c;
+            field.push_back(c);
         }
     }
 
     Trim(field);
     RemoveQuotes(field);
-
     return true;
 }
 

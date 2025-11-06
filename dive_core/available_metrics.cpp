@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 #include <array>
-#include "dive_core/common/string_utils.h"
+#include "utils/string_utils.h"
 
 namespace Dive
 {

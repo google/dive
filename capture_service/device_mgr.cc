@@ -796,8 +796,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
-                                      kPythonCommand,
+    std::string cmd = absl::StrFormat("python3 %s install-apk %s -s %s",
                                       recon_py_path,
                                       replay_apk_path,
                                       serial);
@@ -900,8 +899,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
     LOGD("RunReplayGfxrScript(): RUN\n");
     std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("%s %s replay %s %s",
-                                      kPythonCommand,
+    std::string cmd = absl::StrFormat("python3 %s replay %s %s",
                                       local_recon_py_path,
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);

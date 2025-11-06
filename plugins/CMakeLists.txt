@@ -47,7 +47,7 @@ set_target_properties(
     PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
-if(LINUX OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+if(UNIX)
     find_library(DL_LIBRARY NAMES dl)
     if(DL_LIBRARY)
         target_link_libraries(dive_plugin_loader PRIVATE ${DL_LIBRARY})

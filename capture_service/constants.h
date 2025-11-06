@@ -77,10 +77,4 @@ inline constexpr char kReplayCreateRenderDocCapture[] = "debug.gfxrecon.replay.r
 inline constexpr char kRenderDocCaptureLayerName[] = "VK_LAYER_RENDERDOC_Capture";
 inline constexpr char kRenderDocAppName[] = "org.renderdoc.renderdoccmd.arm64";
 
-#if defined(__APPLE__)
-inline constexpr char kPythonCommand[] = "python3";
-#else
-inline constexpr char kPythonCommand[] = "python";
-#endif
-
 }  // namespace Dive

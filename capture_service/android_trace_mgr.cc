@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "trace_mgr.h"
 
+#include <stdio.h>
+
 #include <string>
 #include <thread>
 

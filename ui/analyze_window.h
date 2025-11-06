@@ -121,6 +121,7 @@ private:
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateMetrics();
     void                        UpdateSelectedMetricsList();
+    void                        OnGpuTimeCheckBoxToggled(bool gpu_time_enabled);
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
     absl::Status                NormalReplay(Dive::DeviceManager &device_manager,

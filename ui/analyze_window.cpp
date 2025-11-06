@@ -156,6 +156,8 @@ QWidget                                                            *parent) :
     m_frame_count_box->setValue(kDefaultFrameCount);
     m_frame_count_layout->addWidget(m_frame_count_label);
     m_frame_count_layout->addWidget(m_frame_count_box);
+    m_frame_count_label->hide();
+    m_frame_count_box->hide();
 
     // Replay Warning
     m_replay_warning_layout = new QHBoxLayout();
@@ -241,6 +243,11 @@ QWidget                                                            *parent) :
 
     QObject::connect(this, &AnalyzeDialog::DisableOverlay, this, &AnalyzeDialog::OnDisableOverlay);
     QObject::connect(this, &AnalyzeDialog::OverlayMessage, this, &AnalyzeDialog::OnOverlayMessage);
+
+    QObject::connect(m_gpu_time_box,
+                     &QCheckBox::toggled,
+                     this,
+                     &AnalyzeDialog::OnGpuTimeCheckBoxToggled);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -331,6 +338,13 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
             m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
         }
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::OnGpuTimeCheckBoxToggled(bool gpu_time_enabled)
+{
+    m_frame_count_label->setVisible(gpu_time_enabled);
+    m_frame_count_box->setVisible(gpu_time_enabled);
 }
 
 //--------------------------------------------------------------------------------------------------

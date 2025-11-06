@@ -225,7 +225,6 @@ MainWindow::MainWindow()
     m_left_group_box = new QGroupBox(kFrameTitleStrings[0]);
     m_left_group_box->setAlignment(Qt::AlignHCenter);
     m_view_mode_combo_box = new TreeViewComboBox();
-    m_view_mode_combo_box->setMinimumWidth(150);
 
     {
         QVBoxLayout *left_vertical_layout = new QVBoxLayout();
@@ -263,7 +262,6 @@ MainWindow::MainWindow()
 
         QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
         m_filter_mode_combo_box = new TreeViewComboBox();
-        m_filter_mode_combo_box->setMinimumWidth(150);
 
         // Set model for the filter combo box
         QStandardItemModel *filter_combo_box_model = new QStandardItemModel();
@@ -360,7 +358,6 @@ MainWindow::MainWindow()
     m_middle_group_box = new QGroupBox(kFrameTitleStrings[0]);
     m_middle_group_box->setAlignment(Qt::AlignHCenter);
     m_pm4_view_mode_combo_box = new TreeViewComboBox();
-    m_pm4_view_mode_combo_box->setMinimumWidth(150);
     {
         QVBoxLayout *middle_vertical_layout = new QVBoxLayout();
 
@@ -397,7 +394,6 @@ MainWindow::MainWindow()
 
         QLabel *filter_combo_box_label = new QLabel(tr("Filter:"));
         m_pm4_filter_mode_combo_box = new TreeViewComboBox();
-        m_pm4_filter_mode_combo_box->setMinimumWidth(150);
 
         // Set model for the filter combo box
         QStandardItemModel *filter_combo_box_model = new QStandardItemModel();

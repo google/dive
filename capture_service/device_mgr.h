@@ -117,11 +117,23 @@ public:
     // we fully transit to using GFXR replay.
     absl::Status RequestRootAccess();
     absl::Status SetupDevice();
+
+    // Meant to be run for a full device clean (without knowledge of target application):
+    // - Unpin clock and reset some compositor properties
+    // - Restoring original state for root access
+    // - Removing vulkan layers and related global settings
+    // - GFXR-related cleanup
+    // - Unset properties for PM4 capture
+    // - Remove files for profiling plugin
+    // - ...
     absl::Status CleanupDevice();
-    absl::Status CleanupPackage(const std::string &package);
-    void         EnableGfxr(bool enable_gfxr);
-    bool         IsProcessRunning(absl::string_view process_name) const;
-    bool         FileExists(const std::string &file_path);
+
+    // Cleanup properties related to a specific package
+    absl::Status CleanupPackageProperties(const std::string &package);
+
+    void EnableGfxr(bool enable_gfxr);
+    bool IsProcessRunning(absl::string_view process_name) const;
+    bool FileExists(const std::string &file_path);
 
     enum class PackageListOptions
     {
@@ -191,7 +203,9 @@ public:
     absl::StatusOr<AndroidDevice *> SelectDevice(const std::string &serial);
     void                            RemoveDevice() { m_device = nullptr; }
     AndroidDevice                  *GetDevice() const { return m_device.get(); }
-    absl::Status                    Cleanup(const std::string &serial, const std::string &package);
+
+    // Exposing for user-initiated cleanup
+    absl::Status CleanupPackageProperties(const std::string &package);
 
     absl::Status DeployReplayApk(const std::string &serial);
     absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;

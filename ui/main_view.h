@@ -111,14 +111,14 @@ inline static constexpr const char
 
 #define MESSAGE_TIMEOUT 2500
 
-class MainWindow : public QMainWindow
+class MainView : public QMainWindow
 {
     Q_OBJECT
 public:
     class Worker;
 
-    MainWindow();
-    ~MainWindow();
+    MainView();
+    ~MainView();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
 

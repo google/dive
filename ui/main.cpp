@@ -23,7 +23,7 @@
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
-#include "main_window.h"
+#include "main_view.h"
 #include "common/dive_version.h"
 #include "custom_metatypes.h"
 #ifdef __linux__
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
     // Initialize packet info query data structures needed for parsing
     Pm4InfoInit();
 
-    MainWindow *main_window = new MainWindow();
+    MainView *main_window = new MainView();
 
     if (!main_window->InitializePlugins())
     {

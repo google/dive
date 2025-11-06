@@ -15,10 +15,10 @@
 */
 
 #include "plugin_sample.h"
+
+#include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
-#include <iostream>
-#include "ui/main_window.h"
 
 namespace Dive
 {
@@ -29,10 +29,16 @@ PluginSample::PluginSample(QObject* parent) :
 
 PluginSample::~PluginSample() {}
 
-bool PluginSample::Initialize(MainWindow& main_window)
+bool PluginSample::Initialize(IDivePluginBridge& bridge)
 {
+    QMainWindow* main_window = qobject_cast<QMainWindow*>(
+    bridge.GetQObject(DiveUIObjectNames::kMainWindow));
+    if (!main_window)
+    {
+        return false;
+    }
     QMenu*          help_menu = nullptr;
-    QList<QAction*> menu_bar_actions = main_window.menuBar()->actions();
+    QList<QAction*> menu_bar_actions = main_window->menuBar()->actions();
     for (QAction* action : menu_bar_actions)
     {
         if (action->menu())

@@ -23,9 +23,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <qabstractitemmodel.h>
+#include <QPoint>
 #ifndef NDEBUG
 #    include <iostream>
 #endif
+#include "color_utils.h"
 #include "command_model.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common.h"
@@ -183,6 +185,72 @@ DiveTreeViewDelegate::DiveTreeViewDelegate(const DiveTreeView *dive_tree_view_pt
     m_hover_help_ptr = HoverHelp::Get();
 }
 
+void DiveTreeViewDelegate::paintImpl(QPainter *painter, QStyleOptionViewItem &&option) const
+{
+    QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+
+    // Clear the text here so the base implementation doesn't draw it
+    QString text = option.text;
+    option.text.clear();
+    style->drawControl(QStyle::CE_ItemViewItem, &option, painter);
+
+    painter->save();
+
+    // Matching qt implementation:
+    const int   textMargin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr) + 1;
+    const QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &option)
+                           .adjusted(textMargin, 0, -textMargin, 0);
+    const bool  wrapText = option.features & QStyleOptionViewItem::WrapText;
+    QTextOption textOption;
+    textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::ManualWrap);
+    textOption.setTextDirection(option.direction);
+    textOption.setAlignment(QStyle::visualAlignment(option.direction, option.displayAlignment));
+
+    QTextLayout textLayout(text, option.font);
+    textLayout.setTextOption(textOption);
+
+    // Apply color if applicable:
+    {
+        int first_pos = text.indexOf('(');
+        int last_pos = text.lastIndexOf(')');
+        if (first_pos != -1 && last_pos != -1)
+        {
+            QTextCharFormat paramFormat;
+            paramFormat.setForeground(GetTextAccentColor(option.palette));
+            textLayout.setFormats({ QTextLayout::FormatRange{
+            .start = first_pos + 1,
+            .length = last_pos - first_pos - 1,
+            .format = paramFormat,
+            } });
+        }
+    }
+    // Matching qt implementation:
+    {
+        textLayout.beginLayout();
+        {
+            QTextLine line = textLayout.createLine();
+            if (line.isValid())
+            {
+                line.setLineWidth(textRect.width());
+                line.setPosition(QPointF(0, 0));
+            }
+        }
+        textLayout.endLayout();
+    }
+
+    const QRect layoutRect = QStyle::alignedRect(Qt::LayoutDirectionAuto,
+                                                 option.displayAlignment,
+                                                 textLayout.boundingRect().size().toSize(),
+                                                 textRect);
+
+    QPointF pos;
+    pos.rx() = textRect.left();
+    pos.ry() = layoutRect.top();
+    textLayout.draw(painter, pos);
+
+    painter->restore();
+}
+
 //--------------------------------------------------------------------------------------------------
 void DiveTreeViewDelegate::paint(QPainter                   *painter,
                                  const QStyleOptionViewItem &option,
@@ -204,15 +272,12 @@ void DiveTreeViewDelegate::paint(QPainter                   *painter,
         QStyleOptionViewItem options = option;
         initStyleOption(&options, index);
 
-        QStyle *style = options.widget ? options.widget->style() : QApplication::style();
-
         options.text = QString(
         m_dive_tree_view_ptr->GetCommandHierarchy().GetNodeDesc(source_node_index));
 
-        QTextDocument doc;
-        int           first_pos = options.text.indexOf('(');
-        int           last_pos = options.text.lastIndexOf(')');
-        bool          is_parameterized = first_pos != -1 && last_pos != -1 &&
+        int  first_pos = options.text.indexOf('(');
+        int  last_pos = options.text.lastIndexOf(')');
+        bool is_parameterized = first_pos != -1 && last_pos != -1 &&
                                 last_pos == options.text.length() - 1;
 
         // Call to the base class function is needed to handle hover effects correctly
@@ -224,30 +289,7 @@ void DiveTreeViewDelegate::paint(QPainter                   *painter,
         }
         else
         {
-            doc.setHtml(options.text.left(first_pos) + "<span style=\"color:#ccffff;\">" +
-                        options.text.right(last_pos - first_pos + 1) + "<span>");
-
-            /// Painting item without text
-            options.text = QString();
-            style->drawControl(QStyle::CE_ItemViewItem, &options, painter);
-
-            QAbstractTextDocumentLayout::PaintContext ctx;
-
-            // Highlighting text if item is selected
-            if (options.state & QStyle::State_Selected)
-            {
-                ctx.palette.setColor(QPalette::Text,
-                                     options.palette.color(QPalette::Active,
-                                                           QPalette::HighlightedText));
-            }
-
-            QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &options);
-            painter->save();
-            painter->translate(textRect.topLeft());
-            painter->setClipRect(textRect.translated(-textRect.topLeft()));
-            doc.documentLayout()->draw(painter, ctx);
-            painter->restore();
-            return;
+            return paintImpl(painter, std::move(options));
         }
     }
 

@@ -17,10 +17,12 @@
 #include <QApplication>
 #include <QDebug>
 #include <QFile>
+#include <QProcessEnvironment>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
 #include <iostream>
+#include "dive_application.h"
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
 #include "main_window.h"
@@ -108,27 +110,50 @@ int main(int argc, char *argv[])
 
     // Try setting "Fusion" style. If not found, set "Windows".
     // And if that's not found, default to whatever style the factory provides.
-    if (!SetApplicationStyle("Fusion"))
+    bool use_default_style = false;
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    QString             desktopEnvironment = env.value("XDG_CURRENT_DESKTOP");
+    if (desktopEnvironment.contains("KDE", Qt::CaseInsensitive))
     {
-        if (!SetApplicationStyle("Windows"))
+        use_default_style = true;
+    }
+
+    if (!use_default_style)
+    {
+        if (!SetApplicationStyle("Fusion"))
         {
-            if (!QStyleFactory::keys().empty())
+            if (!SetApplicationStyle("Windows"))
             {
-                SetApplicationStyle(QStyleFactory::keys()[0]);
+                if (!QStyleFactory::keys().empty())
+                {
+                    SetApplicationStyle(QStyleFactory::keys()[0]);
+                }
             }
         }
     }
 
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication app(argc, argv);
+    DiveApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    DiveApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
-    setDarkMode(app);
+    if (!use_default_style)
+    {
+        setDarkMode(app);
 
-    // Load and apply the style sheet
-    QFile style_sheet(":/stylesheet.qss");
-    style_sheet.open(QFile::ReadOnly);
-    QString style(style_sheet.readAll());
-    app.setStyleSheet(style);
+        // Load and apply the style sheet
+        QFile style_sheet(":/stylesheet.qss");
+        style_sheet.open(QFile::ReadOnly);
+        QString style(style_sheet.readAll());
+        app.SetStyleSheet(style);
+    }
+    else
+    {
+        // Load and apply the style sheet
+        QFile style_sheet(":/stylesheet_adaptive.qss");
+        style_sheet.open(QFile::ReadOnly);
+        QString style(style_sheet.readAll());
+        app.SetStyleSheet(style);
+    }
 
     // Display splash screen
     QSplashScreen *splash_screen = new QSplashScreen();
@@ -139,6 +164,7 @@ int main(int argc, char *argv[])
     Pm4InfoInit();
 
     MainWindow *main_window = new MainWindow();
+    main_window->SetUseDefaultStyle(use_default_style);
 
     if (!main_window->InitializePlugins())
     {

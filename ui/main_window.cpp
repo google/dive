@@ -1974,7 +1974,7 @@ void MainWindow::CreateActions()
 {
     // Open file action
     m_open_action = new QAction(tr("&Open"), this);
-    m_open_action->setIcon(QIcon(":/images/open.png"));
+    m_open_action->setIcon(QApplication::style()->standardIcon(QStyle::SP_DialogOpenButton));
     m_open_action->setShortcuts(QKeySequence::Open);
     m_open_action->setStatusTip(tr("Open an existing capture"));
     connect(m_open_action, &QAction::triggered, this, &MainWindow::OnOpenFile);
@@ -1989,7 +1989,7 @@ void MainWindow::CreateActions()
     // Save file action
     m_save_action = new QAction(tr("&Save"), this);
     m_save_action->setStatusTip(tr("Save the current capture"));
-    m_save_action->setIcon(QIcon(":/images/save.png"));
+    m_save_action->setIcon(QApplication::style()->standardIcon(QStyle::SP_DialogSaveButton));
     m_save_action->setShortcut(QKeySequence::Save);
     m_save_action->setEnabled(false);
     connect(m_save_action, &QAction::triggered, this, &MainWindow::OnSaveCapture);
@@ -2007,6 +2007,7 @@ void MainWindow::CreateActions()
     for (auto &action : m_recent_file_actions)
     {
         action = new QAction(this);
+        action->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileIcon));
         action->setVisible(false);
         connect(action, SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
     }
@@ -2173,7 +2174,10 @@ void MainWindow::CreateStatusBar()
 {
     // Create status bar on the main window.
     m_status_bar = new QStatusBar(this);
-    m_status_bar->setStyleSheet("background:#D0D0D0; color:#282828");
+    if (!m_use_default_style)
+    {
+        m_status_bar->setStyleSheet("background:#D0D0D0; color:#282828");
+    }
     setStatusBar(m_status_bar);
 }
 

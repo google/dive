@@ -738,7 +738,9 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
 
 absl::Status AndroidDevice::SetupApp(const std::string    &command,
                                      const std::string    &command_args,
-                                     const ApplicationType type)
+                                     const ApplicationType type,
+                                     const std::string    &device_architecture,
+                                     const std::string    &gfxr_capture_directory)
 {
     assert(type == ApplicationType::VULKAN_CLI);
     m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
@@ -746,6 +748,22 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
     if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
+    }
+
+    if (m_gfxr_enabled)
+    {
+        std::string cpu_abi = device_architecture;
+        if (cpu_abi.empty())
+        {
+            ASSIGN_OR_RETURN(cpu_abi, Adb().RunAndGetResult("shell getprop ro.product.cpu.abi"));
+        }
+        m_app->SetArchitecture(cpu_abi);
+        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
+        m_app->SetGfxrEnabled(true);
+    }
+    else
+    {
+        m_app->SetGfxrEnabled(false);
     }
 
     return m_app->Setup();

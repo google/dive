@@ -61,10 +61,10 @@ public:
     {
         m_gfxr_capture_file_directory = capture_file_directory;
     };
-    absl::Status CreateGfxrDirectory(const std::string command_args);
-    absl::Status GfxrSetup();
-    absl::Status HasInternetPermission();
-    absl::Status GrantAllFilesAccess();
+    absl::Status         CreateGfxrDirectory(const std::string command_args);
+    virtual absl::Status GfxrSetup();
+    absl::Status         HasInternetPermission();
+    absl::Status         GrantAllFilesAccess();
 
 protected:
     absl::Status ParsePackage();
@@ -118,6 +118,7 @@ public:
     virtual absl::Status Start() override;
     virtual absl::Status Stop() override;
     virtual bool         IsRunning() const override;
+    absl::Status         GfxrSetup() override;
 
 private:
     std::string m_command;

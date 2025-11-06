@@ -32,6 +32,9 @@ if(WIN32)
 elseif(LINUX)
     target_sources(dive_plugin_loader PRIVATE linux_library_loader.cpp)
     message(STATUS "Building for Linux: Including linux_library_loader.cpp")
+elseif(APPLE)
+    target_sources(dive_plugin_loader PRIVATE macos_library_loader.cpp)
+    message(STATUS "Building for Mac: Including macos_library_loader.cpp")
 else()
     message(
         FATAL_ERROR
@@ -44,14 +47,14 @@ set_target_properties(
     PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
-if(LINUX)
+if(UNIX)
     find_library(DL_LIBRARY NAMES dl)
     if(DL_LIBRARY)
         target_link_libraries(dive_plugin_loader PRIVATE ${DL_LIBRARY})
     else()
         message(
             FATAL_ERROR
-            "dl library not found on Linux. Required for dynamic loading."
+            "dl library not found on Linux or macOS. Required for dynamic loading."
         )
     endif()
 endif()

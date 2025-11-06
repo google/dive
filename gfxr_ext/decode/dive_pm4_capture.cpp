@@ -17,6 +17,9 @@ limitations under the License.
 #include "dive_pm4_capture.h"
 
 #include "util/logging.h"
+
+#include "capture_service/constants.h"
+
 #if defined(__ANDROID__)
 
 #    include <dlfcn.h>
@@ -24,8 +27,24 @@ limitations under the License.
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
+namespace
+{
+
+bool IsPm4CaptureEnabledByProperty()
+{
+    std::string property = util::platform::GetEnv(Dive::kEnableReplayPm4DumpPropertyName);
+    return property == "true" || property == "1";
+}
+
+}  // namespace
+
 DivePM4Capture::DivePM4Capture()
 {
+    if (!IsPm4CaptureEnabledByProperty())
+    {
+        GFXRECON_LOG_WARNING("PM4 capture disabled by property.");
+        return;
+    }
 
     GFXRECON_LOG_INFO("Initializing PM4 capture");
     void* handle = dlopen(NULL, RTLD_LAZY);
@@ -41,7 +60,7 @@ DivePM4Capture::DivePM4Capture()
     const char* dlsym_error = dlerror();
     if (dlsym_error != nullptr)
     {
-        GFXRECON_LOG_INFO("dlsym error for StartCapture: %s", dlsym_error);
+        GFXRECON_LOG_ERROR("dlsym error for StartCapture: %s", dlsym_error);
         return;
     }
 
@@ -49,7 +68,7 @@ DivePM4Capture::DivePM4Capture()
     dlsym_error = dlerror();
     if (dlsym_error != nullptr)
     {
-        GFXRECON_LOG_INFO("dlsym error for StopCapture: %s", dlsym_error);
+        GFXRECON_LOG_ERROR("dlsym error for StopCapture: %s", dlsym_error);
         return;
     }
     m_is_initialized = true;

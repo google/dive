@@ -77,6 +77,26 @@ std::string GetPythonPath() {
     return python_path;
 }
 
+absl::Status ValidatePythonPath(const std::string& python_path)
+{
+    if (python_path.empty())
+    {
+        return absl::InvalidArgumentError("Python path is empty.");
+    }
+    absl::StatusOr<std::string> result = Dive::RunCommand(absl::StrFormat("%s --version", python_path));
+    if (!result.ok())
+    {
+        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s", python_path, result.status().message()));
+    }
+    if (!absl::StrContains(*result, "Python 3"))
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s", python_path, *result));
+    }
+    LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
+    return absl::OkStatus();
+}
+
+
 absl::Status SetSystemProperty(const AdbSession &adb,
                                std::string_view  property,
                                std::string_view  value)
@@ -828,10 +848,13 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 {
     LOGD("DeployReplayApk(): starting\n");
 
+    std::string python_path = GetPythonPath();
+    RETURN_IF_ERROR(ValidatePythonPath(python_path));
+
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
-                                      GetPythonPath(),
+                                      python_path,
                                       recon_py_path,
                                       replay_apk_path,
                                       serial);
@@ -933,9 +956,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     }
 
     LOGD("RunReplayGfxrScript(): RUN\n");
+    std::string python_path = GetPythonPath();
+    RETURN_IF_ERROR(ValidatePythonPath(python_path));
     std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("%s %s replay %s %s",
-                                      GetPythonPath(),
+                                      python_path,
                                       local_recon_py_path,
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);

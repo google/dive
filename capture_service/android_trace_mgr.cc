@@ -40,7 +40,7 @@ void AndroidTraceManager::TraceByFrame()
     std::string path = kTraceFilePath + "trace-frame";
     std::string num = std::to_string(m_frame_num);
     char        full_path[256];
-    sprintf(full_path, "%s-%04u.rd", path.c_str(), m_frame_num);
+    snprintf(full_path, sizeof(full_path), "%s-%04u.rd", path.c_str(), m_frame_num);
 
     SetTraceFilePath(std::string(full_path));
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
@@ -57,7 +57,7 @@ void AndroidTraceManager::TraceByDuration()
     std::string path = kTraceFilePath + "trace";
     std::string num = std::to_string(m_trace_num);
     char        full_path[256];
-    sprintf(full_path, "%s-%04u.rd", path.c_str(), m_trace_num);
+    snprintf(full_path, sizeof(full_path), "%s-%04u.rd", path.c_str(), m_trace_num);
     SetCaptureName(path.c_str(), num.c_str());
     {
         absl::MutexLock lock(&m_state_lock);

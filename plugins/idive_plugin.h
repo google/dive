@@ -18,10 +18,31 @@
 
 #include <string>
 
-class MainWindow;
-
+class QObject;
 namespace Dive
 {
+struct DiveUIObjectNames
+{
+    static constexpr char kMainWindow[] = "MainWindow";
+};
+
+// Discovery interface for plugin.
+class IDivePluginBridge
+{
+public:
+    // Get a QT object.
+    virtual QObject* GetQObject(const char* name) const = 0;
+
+    // Get a mutable C++ object.
+    virtual void* GetMutable(const char* name) const = 0;
+
+    // Get an immutable C++ object.
+    virtual const void* GetConst(const char* name) const = 0;
+
+protected:
+    virtual ~IDivePluginBridge() = default;
+};
+
 // The IDivePlugin class defines the interface for Dive plugins.
 // Concrete plugin implementations (e.g., PluginSample) will still need to inherit from QObject if
 // they interact with Qt UI elements or use Qt's signal/slot mechanism.
@@ -40,10 +61,9 @@ public:
     // Return The version of the plugin
     virtual std::string PluginVersion() const = 0;
 
-    // main_window: A pointer to the main application window. Plugins can use this
-    // to interact with or modify the main UI using MainWindow's public API.
+    // bridge: A pointer to object loader.
     // Return true if initialization was successful, false otherwise.
-    virtual bool Initialize(MainWindow& main_window) = 0;
+    virtual bool Initialize(IDivePluginBridge& bridge) = 0;
 
     // Shuts down the plugin and performs any necessary cleanup.
     virtual void Shutdown() = 0;

@@ -496,7 +496,11 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
             return false;
         }
         qDebug() << "exe: " << m_executable.c_str() << " args: " << m_command_args.c_str();
-        ret = device->SetupApp(m_executable, m_command_args, Dive::ApplicationType::VULKAN_CLI);
+        ret = device->SetupApp(m_executable,
+                               m_command_args,
+                               Dive::ApplicationType::VULKAN_CLI,
+                               device_architecture,
+                               m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     if (!ret.ok())
     {

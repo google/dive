@@ -108,10 +108,10 @@ TEST_F(UnixDomainServerTest, HandShakeSuccess)
     HandshakeRequest request;
     request.SetMajorVersion(5);
     request.SetMinorVersion(2);
-    ASSERT_TRUE(SendMessage((*client_conn).get(), request).ok());
+    ASSERT_TRUE(SendSocketMessage((*client_conn).get(), request).ok());
 
     // Client receives response.
-    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveMessage(
+    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(
     (*client_conn).get());
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
@@ -132,10 +132,10 @@ TEST_F(UnixDomainServerTest, HandShakeFails)
 
     // Client sends ping message rather than HandShakeRequest.
     PingMessage request;
-    ASSERT_TRUE(SendMessage((*client_conn).get(), request).ok());
+    ASSERT_TRUE(SendSocketMessage((*client_conn).get(), request).ok());
 
     // Client receives pong message rather than HandShakeResponse.
-    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveMessage(
+    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(
     (*client_conn).get());
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
@@ -150,10 +150,10 @@ TEST_F(UnixDomainServerTest, PingPongSuccess)
 
     // Client sends ping.
     PingMessage ping;
-    ASSERT_TRUE(SendMessage((*client_conn).get(), ping).ok());
+    ASSERT_TRUE(SendSocketMessage((*client_conn).get(), ping).ok());
 
     // Client receives pong.
-    auto response_msg = ReceiveMessage((*client_conn).get());
+    auto response_msg = ReceiveSocketMessage((*client_conn).get());
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
     ASSERT_EQ((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);
@@ -167,10 +167,10 @@ TEST_F(UnixDomainServerTest, PingPongFails)
 
     // Client sends HandShakeRequest rather than ping message.
     HandshakeRequest ping;
-    ASSERT_TRUE(SendMessage((*client_conn).get(), ping).ok());
+    ASSERT_TRUE(SendSocketMessage((*client_conn).get(), ping).ok());
 
     // Client receives HandShakeResponse rather than pong message.
-    auto response_msg = ReceiveMessage((*client_conn).get());
+    auto response_msg = ReceiveSocketMessage((*client_conn).get());
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
     ASSERT_NE((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);

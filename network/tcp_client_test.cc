@@ -15,9 +15,11 @@ limitations under the License.
 */
 
 #include "tcp_client.h"
-#include "unix_domain_server.h"
+#include "fake_socket_connection.h"
+#include "messages.h"
 
 #include <gtest/gtest.h>
+#include <thread>
 #include <filesystem>
 #include <fstream>
 
@@ -26,260 +28,238 @@ namespace Network
 namespace
 {
 
-constexpr std::string_view kTestHost = "127.0.0.1";
-constexpr int              kTestPort = 54321;
-constexpr std::string_view kTestFileContent = "This is a test file for download.";
-
-std::string GetServerSideFileName()
-{
-    return (std::filesystem::temp_directory_path() / "test_server_file.tmp").string();
-}
-
-std::string GetClientSideFileName()
-{
-    return (std::filesystem::temp_directory_path() / "test_client_file.tmp").string();
-}
-
-// The tests assume the client and server are running on a PC (Linux), as we are not using
-// an Android device. However, this creates a limitation: we cannot directly test the TcpClient
-// against the UnixDomainServer because they use incompatible communication protocols. The TcpClient
-// uses TCP/IP sockets, while the UnixDomainServer uses Unix domain sockets (UDS). To test the
-// TcpClient, we create a minimal TCP server.
-class TestTcpServer
+class FakeServer
 {
 public:
-    TestTcpServer() :
-        m_is_running(false)
+    using RequestHandler = std::function<void(FakeSocketConnection*,
+                                              std::unique_ptr<ISerializable>)>;
+
+    void Start(std::shared_ptr<FakeSocketConnection> conn)
     {
-    }
-
-    ~TestTcpServer() { Stop(); }
-
-    absl::Status Start(int port)
-    {
-        auto conn = SocketConnection::Create();
-        if (!conn.ok())
-        {
-            return conn.status();
-        }
-        m_listen_connection = *std::move(conn);
-
-        // This is a simplified, test-only bind/listen for TCP on any address.
-        sockaddr_in server_addr = {};
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_addr.s_addr = INADDR_ANY;
-        server_addr.sin_port = htons(port);
-
-        SocketType server_socket = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_socket < 0)
-        {
-            return absl::InternalError("Test server socket creation failed.");
-        }
-
-        // To avoid "address already in use" errors in tests.
-        int opt = 1;
-        setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-        if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
-        {
-            close(server_socket);
-            return absl::InternalError("Test server bind failed.");
-        }
-        if (listen(server_socket, 1) < 0)
-        {
-            close(server_socket);
-            return absl::InternalError("Test server listen failed.");
-        }
-
-        auto new_conn = SocketConnection::Create(server_socket);
-        m_listen_connection = *std::move(new_conn);
-        m_listen_connection->SetIsListening(true);
-
-        m_is_running.store(true);
-        m_server_thread = std::thread(&TestTcpServer::AcceptLoop, this);
-        return absl::OkStatus();
+        m_conn = conn;
+        m_running = true;
+        m_thread = std::thread(&FakeServer::RunLoop, this);
     }
 
     void Stop()
     {
-        if (m_is_running.load())
+        m_running = false;
+        if (m_conn)
         {
-            m_is_running.store(false);
-            m_listen_connection->Close();
-            if (m_server_thread.joinable())
-            {
-                m_server_thread.join();
-            }
+            m_conn->Close();
         }
+        if (m_thread.joinable())
+        {
+            m_thread.join();
+        }
+    }
+
+    void SetHandler(RequestHandler handler)
+    {
+        std::lock_guard<std::mutex> lock(m_handler_mutex);
+        m_handler = std::move(handler);
     }
 
 private:
-    // Simplified version to accept only one client.
-    void AcceptLoop()
+    void RunLoop()
     {
-        while (m_is_running.load())
+        while (m_running && m_conn && m_conn->IsOpen())
         {
-            auto client_conn = m_listen_connection->Accept();
-            if (!client_conn.ok())
-            {
-                if (!m_is_running.load())
-                {
-                    // Exiting loop due to shutdown.
-                    break;
-                }
-                // Accept can time out or has an internal error, which is fine.
-                std::cout << client_conn.status().message() << std::endl;
-                continue;
-            }
-            HandleClient(*std::move(client_conn));
-        }
-    }
-
-    void HandleClient(std::unique_ptr<SocketConnection> client_conn)
-    {
-        DefaultMessageHandler handler;
-        handler.OnConnect();
-        while (client_conn->IsOpen())
-        {
-            auto msg = ReceiveMessage(client_conn.get());
+            auto msg = ReceiveSocketMessage(m_conn.get(), 100);
             if (!msg.ok())
             {
-                // Client disconnected or error.
+                if (absl::IsDeadlineExceeded(msg.status()))
+                {
+                    continue;
+                }
                 break;
             }
-            // Add custom handlers for file operations.
-            if ((*msg)->GetMessageType() == MessageType::PM4_CAPTURE_REQUEST)
+
+            auto type = (*msg)->GetMessageType();
+            if (type == MessageType::HANDSHAKE_REQUEST)
             {
-                Pm4CaptureResponse response;
-                response.SetString(GetServerSideFileName());
-                ASSERT_TRUE(SendMessage(client_conn.get(), response).ok());
+                HandshakeResponse resp;
+                resp.SetMajorVersion(1);
+                resp.SetMinorVersion(0);
+                if (!SendSocketMessage(m_conn.get(), resp).ok())
+                {
+                    break;
+                }
             }
-            else if ((*msg)->GetMessageType() == MessageType::FILE_SIZE_REQUEST)
+            else if (type == MessageType::PING_MESSAGE)
             {
-                auto*            req = dynamic_cast<FileSizeRequest*>((*msg).get());
-                FileSizeResponse response;
-                if (req->GetString() == GetServerSideFileName() &&
-                    std::filesystem::exists(GetServerSideFileName()))
+                PongMessage resp;
+                if (!SendSocketMessage(m_conn.get(), resp).ok())
                 {
-                    response.SetFound(true);
-                    response.SetFileSizeStr(std::to_string(kTestFileContent.size()));
-                }
-                else
-                {
-                    response.SetFound(false);
-                    response.SetErrorReason("File not found.");
-                }
-                ASSERT_TRUE(SendMessage(client_conn.get(), response).ok());
-            }
-            else if ((*msg)->GetMessageType() == MessageType::DOWNLOAD_FILE_REQUEST)
-            {
-                auto*                req = dynamic_cast<DownloadFileRequest*>((*msg).get());
-                DownloadFileResponse response;
-                if (req->GetString() == GetServerSideFileName() &&
-                    std::filesystem::exists(GetServerSideFileName()))
-                {
-                    response.SetFound(true);
-                    response.SetFileSizeStr(std::to_string(kTestFileContent.size()));
-                    ASSERT_TRUE(SendMessage(client_conn.get(), response).ok());
-                    ASSERT_TRUE(client_conn->SendFile(GetServerSideFileName()).ok());
-                }
-                else
-                {
-                    response.SetFound(false);
-                    response.SetErrorReason("File not found.");
-                    ASSERT_TRUE(SendMessage(client_conn.get(), response).ok());
+                    break;
                 }
             }
             else
             {
-                handler.HandleMessage(*std::move(msg), client_conn.get());
+                std::lock_guard<std::mutex> lock(m_handler_mutex);
+                if (m_handler)
+                {
+                    m_handler(m_conn.get(), std::move(*msg));
+                }
             }
         }
-        handler.OnDisconnect();
     }
 
-    std::unique_ptr<SocketConnection> m_listen_connection;
-    std::thread                       m_server_thread;
-    std::atomic<bool>                 m_is_running;
+    std::shared_ptr<FakeSocketConnection> m_conn;
+    std::atomic<bool>                     m_running{ false };
+    std::thread                           m_thread;
+    RequestHandler                        m_handler;
+    std::mutex                            m_handler_mutex;
 };
 
-class TcpClientTest : public ::testing::Test
+class TcpClientFakeTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
-        // Create a dummy file for the server to serve.
-        std::ofstream ofs(GetServerSideFileName());
-        ofs << kTestFileContent;
-        ofs.close();
-        ASSERT_TRUE(server.Start(kTestPort).ok());
-        ASSERT_TRUE(client.Connect(std::string(kTestHost), kTestPort).ok());
+        m_client_fake = new FakeSocketConnection();
+        m_server_fake = std::make_shared<FakeSocketConnection>();
+        m_client_fake->PairWith(m_server_fake.get());
+
+        // Inject the pre-created fake into the client
+        m_client = std::make_unique<TcpClient>(
+        [this]() { return std::unique_ptr<SocketConnection>(m_client_fake); });
+
+        m_fake_server.Start(m_server_fake);
+        ASSERT_TRUE(m_client->Connect("fake_host", 0).ok());
     }
 
     void TearDown() override
     {
-        client.Disconnect();
-        server.Stop();
-        std::filesystem::remove(GetServerSideFileName());
-        std::filesystem::remove(GetClientSideFileName());
+        m_client->Disconnect();
+        m_fake_server.Stop();
     }
 
-    TestTcpServer server;
-    TcpClient     client;
+    std::unique_ptr<TcpClient>            m_client;
+    FakeServer                            m_fake_server;
+    FakeSocketConnection*                 m_client_fake;
+    std::shared_ptr<FakeSocketConnection> m_server_fake;
 };
 
-TEST_F(TcpClientTest, IsConnected)
+TEST_F(TcpClientFakeTest, GetCaptureFileSizeSuccess)
 {
-    EXPECT_TRUE(client.IsConnected());
-    client.Disconnect();
-    EXPECT_FALSE(client.IsConnected());
-}
+    const size_t kExpectedSize = 12345;
+    m_fake_server.SetHandler(
+    [kExpectedSize](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        ASSERT_EQ(req->GetMessageType(), MessageType::FILE_SIZE_REQUEST);
+        FileSizeResponse resp;
+        resp.SetFound(true);
+        resp.SetFileSizeStr(std::to_string(kExpectedSize));
+        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+    });
 
-TEST_F(TcpClientTest, ConnectionFails)
-{
-    TcpClient new_client;
-    // Connecting to a port where no one is listening.
-    auto status = new_client.Connect(std::string(kTestHost), kTestPort + 1);
-    EXPECT_FALSE(status.ok());
-}
-
-TEST_F(TcpClientTest, StartPm4Capture)
-{
-    auto result = client.StartPm4Capture();
+    auto result = m_client->GetCaptureFileSize("/remote/file");
     ASSERT_TRUE(result.ok());
-    EXPECT_EQ(*result, GetServerSideFileName());
+    EXPECT_EQ(*result, kExpectedSize);
 }
 
-TEST_F(TcpClientTest, GetCaptureFileSize)
+TEST_F(TcpClientFakeTest, GetCaptureFileSizeNotFound)
 {
-    auto result = client.GetCaptureFileSize(GetServerSideFileName());
-    ASSERT_TRUE(result.ok());
-    EXPECT_EQ(*result, kTestFileContent.size());
-}
+    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        FileSizeResponse resp;
+        resp.SetFound(false);
+        resp.SetErrorReason("File does not exist");
+        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+    });
 
-TEST_F(TcpClientTest, GetCaptureFileSizeNotFound)
-{
-    auto result = client.GetCaptureFileSize("nonexistent.file");
-    ASSERT_FALSE(result.ok());
+    auto result = m_client->GetCaptureFileSize("/remote/missing");
+    EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.status().code(), absl::StatusCode::kNotFound);
+    EXPECT_TRUE(std::string(result.status().message()).find("File does not exist") !=
+                std::string::npos);
 }
 
-TEST_F(TcpClientTest, DownloadFileFromServer)
+TEST_F(TcpClientFakeTest, GetCaptureFileSizeInvalidResponse)
 {
-    auto status = client.DownloadFileFromServer(GetServerSideFileName(), GetClientSideFileName());
-    ASSERT_TRUE(status.ok());
+    // Server sends non-numeric size
+    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        FileSizeResponse resp;
+        resp.SetFound(true);
+        resp.SetFileSizeStr("not a number");
+        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+    });
 
-    std::ifstream ifs(GetClientSideFileName());
+    auto result = m_client->GetCaptureFileSize("/remote/file");
+    EXPECT_FALSE(result.ok());
+    EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(TcpClientFakeTest, DownloadFileFromServerSuccess)
+{
+    std::string file_content = "Mock file content data";
+    std::string local_path = (std::filesystem::temp_directory_path() / "test_download.tmp")
+                             .string();
+
+    // Configure server to send response AND file data immediately
+    m_fake_server.SetHandler(
+    [file_content](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        ASSERT_EQ(req->GetMessageType(), MessageType::DOWNLOAD_FILE_REQUEST);
+
+        DownloadFileResponse resp;
+        resp.SetFound(true);
+        resp.SetFileSizeStr(std::to_string(file_content.size()));
+        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+
+        // Immediately send the "file" raw data through the fake connection
+        ASSERT_TRUE(
+        conn->Send(reinterpret_cast<const uint8_t*>(file_content.data()), file_content.size())
+        .ok());
+    });
+
+    auto status = m_client->DownloadFileFromServer("/remote/file", local_path);
+    ASSERT_TRUE(status.ok()) << status.message();
+
+    // Verify file was written to disk by TcpClient's base SocketConnection::ReceiveFile
+    std::ifstream ifs(local_path, std::ios::binary);
     ASSERT_TRUE(ifs.good());
-    std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    EXPECT_EQ(content, kTestFileContent);
+    std::string read_content((std::istreambuf_iterator<char>(ifs)),
+                             std::istreambuf_iterator<char>());
+    EXPECT_EQ(read_content, file_content);
+
+    std::filesystem::remove(local_path);
 }
 
-TEST_F(TcpClientTest, DownloadFileNotFound)
+TEST_F(TcpClientFakeTest, DownloadFileNotFound)
 {
-    auto status = client.DownloadFileFromServer("nonexistent.file", GetClientSideFileName());
-    ASSERT_FALSE(status.ok());
+    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        DownloadFileResponse resp;
+        resp.SetFound(false);
+        resp.SetErrorReason("Restricted access");
+        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+    });
+
+    auto status = m_client->DownloadFileFromServer("/remote/secret", "dont_care.tmp");
+    EXPECT_FALSE(status.ok());
     EXPECT_EQ(status.code(), absl::StatusCode::kNotFound);
+    EXPECT_TRUE(std::string(status.message()).find("Restricted access") != std::string::npos);
+}
+
+TEST_F(TcpClientFakeTest, StartPm4CaptureSuccess)
+{
+    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        ASSERT_EQ(req->GetMessageType(), MessageType::PM4_CAPTURE_REQUEST);
+        Pm4CaptureResponse resp;
+        resp.SetString("/var/log/capture.pm4");
+        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+    });
+
+    auto result = m_client->StartPm4Capture();
+    ASSERT_TRUE(result.ok());
+    EXPECT_EQ(*result, "/var/log/capture.pm4");
+}
+
+TEST_F(TcpClientFakeTest, DisconnectStopsKeepAlive)
+{
+    EXPECT_TRUE(m_client->IsConnected());
+    m_client->Disconnect();
+    EXPECT_FALSE(m_client->IsConnected());
+    // Wait a bit to ensure no crashes from background threads
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 }  // namespace

@@ -48,7 +48,8 @@ public:
     static absl::StatusOr<std::unique_ptr<SocketConnection>> Create(
     SocketType initial_socket_value = kInvalidSocketValue);
 
-    ~SocketConnection();
+    // Mark this as virtual for faking.
+    virtual ~SocketConnection();
 
     SocketConnection& operator=(const SocketConnection&) = delete;
     SocketConnection(const SocketConnection&) = delete;
@@ -57,12 +58,13 @@ public:
     absl::Status BindAndListenOnUnixDomain(const std::string& server_address);
     absl::StatusOr<std::unique_ptr<SocketConnection>> Accept();
 
-    // Client method.
-    absl::Status Connect(const std::string& host, int port);
+    // Client method. Mark this as virtual for faking.
+    virtual absl::Status Connect(const std::string& host, int port);
 
-    // Data transfer methods.
-    absl::Status                Send(const uint8_t* data, size_t size);
-    absl::StatusOr<size_t>      Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout);
+    // Data transfer methods. Mark them as virtual for faking.
+    virtual absl::Status           Send(const uint8_t* data, size_t size);
+    virtual absl::StatusOr<size_t> Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout);
+
     absl::Status                SendString(const std::string& s);
     absl::StatusOr<std::string> ReceiveString();
     absl::Status                SendFile(const std::string& file_path);
@@ -70,14 +72,17 @@ public:
                                             size_t                      file_size,
                                             std::function<void(size_t)> progress_callback = nullptr);
 
-    void Close();
-    bool IsOpen() const;
+    // Mark this as virtual for faking.
+    virtual void Close();
+    virtual bool IsOpen() const;
+
     void SetIsListening(bool is_listening) { m_is_listening = is_listening; }
     bool IsListening() const { return m_is_listening; }
 
-private:
+protected:
     explicit SocketConnection(SocketType initial_socket_value);
 
+private:
     SocketType m_socket;
     bool       m_is_listening;
     int        m_accept_timout_ms;

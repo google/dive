@@ -672,6 +672,7 @@ absl::Status AndroidDevice::CleanupDevice()
     .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default", kGfxrReplayAppName))
     .IgnoreError();
     Adb().Run(absl::StrFormat("uninstall %s", kGfxrReplayAppName)).IgnoreError();
+    Adb().Run("shell settings delete global verifier_verify_adb_installs").IgnoreError();
 
     // cleanup for gfxr PM4 capture
     Adb()
@@ -893,6 +894,26 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 
     std::string python_path = GetPythonPath();
     RETURN_IF_ERROR(ValidatePythonPath(python_path));
+
+    const AdbSession &adb = m_device->Adb();
+    if (absl::Status status = adb.Run("shell settings put global verifier_verify_adb_installs 0");
+        !status.ok())
+    {
+        LOGI("Couldn't set verifier_verify_adb_installs to 0. If replay doesn't install, look "
+             "at the device for popups or logcat for the reason. This can also be set manually "
+             "by turning off 'Verify apps over USB' in Developer Options. Reason: %s\n",
+             std::string(status.message()).c_str());
+    }
+    absl::Cleanup enable_verify_adb_installs = [&adb] {
+        if (absl::Status status = adb.Run(
+            "shell settings delete global verifier_verify_adb_installs");
+            !status.ok())
+        {
+            LOGI("Couldn't set verifier_verify_adb_installs to 1. Manually turn on 'Verify "
+                 "apps over USB' in Developer Options as soon as possible! Reason: %s\n",
+                 std::string(status.message()).c_str());
+        }
+    };
 
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();

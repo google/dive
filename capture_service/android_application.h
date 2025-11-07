@@ -63,6 +63,8 @@ public:
     };
     absl::Status         CreateGfxrDirectory(const std::string command_args);
     virtual absl::Status GfxrSetup();
+    virtual absl::Status Pm4CaptureSetup();
+    virtual absl::Status Pm4CaptureCleanup();
     absl::Status         HasInternetPermission();
     absl::Status         GrantAllFilesAccess();
 
@@ -92,6 +94,10 @@ public:
 
     // Cleanup for device properties and settings related to a Vulkan APK
     virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
 };
 
 class OpenXRApplication : public AndroidApplication
@@ -103,6 +109,10 @@ public:
 
     // Cleanup for device properties and settings related to an OpenXR APK
     virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
 };
 
 class VulkanCliApplication : public AndroidApplication
@@ -121,8 +131,10 @@ public:
     absl::Status         GfxrSetup() override;
 
 private:
-    std::string m_command;
-    std::string m_pid;
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
+    std::string          m_command;
+    std::string          m_pid;
 };
 
 }  // namespace Dive

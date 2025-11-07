@@ -750,6 +750,7 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
     }
 
+     RETURN_IF_ERROR(RequestRootAccess());
     if (m_gfxr_enabled)
     {
         std::string cpu_abi = device_architecture;

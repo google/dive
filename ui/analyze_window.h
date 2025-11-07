@@ -36,7 +36,6 @@ class QListWidget;
 class QSpinBox;
 class QTextEdit;
 class OverlayHelper;
-class MainWindow;
 class QCheckBox;
 
 namespace Dive
@@ -157,7 +156,7 @@ private:
     QPushButton        *m_device_refresh_button;
 
     // Provides a description of which capture file is open, but immutable from
-    // AnalyzeDialog. User would need to close the dialog and use MainWindow toolbar to change the
+    // AnalyzeDialog. User would need to close the dialog and use MainView toolbar to change the
     // loaded capture
     QHBoxLayout *m_selected_file_layout;
     QLabel      *m_selected_file_label;

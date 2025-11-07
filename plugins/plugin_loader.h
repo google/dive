@@ -18,6 +18,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "idive_plugin.h"
@@ -28,10 +29,29 @@ class MainWindow;
 
 namespace Dive
 {
+
+class DivePluginBridge : public IDivePluginBridge
+{
+public:
+    QObject *GetQObject(const char *name) const final;
+    void     SetQObject(const char *name, QObject *object);
+
+    void *GetMutable(const char *name) const final;
+    void  SetMutable(const char *name, void *object);
+
+    const void *GetConst(const char *name) const final;
+    void        SetConst(const char *name, const void *object);
+
+private:
+    std::unordered_map<std::string, const void *> m_const_objects;
+    std::unordered_map<std::string, void *>       m_mutable_objects;
+    std::unordered_map<std::string, QObject *>    m_qt_objects;
+};
+
 class PluginLoader
 {
 public:
-    explicit PluginLoader(MainWindow &main_window);
+    PluginLoader();
     ~PluginLoader();
 
     PluginLoader(const PluginLoader &) = delete;
@@ -39,6 +59,9 @@ public:
 
     absl::Status LoadPlugins(const std::filesystem::path &plugin_directory_path);
     void         UnloadPlugins();
+
+    const DivePluginBridge &Bridge() const { return m_bridge; }
+    DivePluginBridge       &Bridge() { return m_bridge; }
 
 private:
     struct NativeLibraryHandleDeleter
@@ -80,7 +103,7 @@ private:
     // because NativeLibraryHandleDeleter uses a raw pointer to m_library_loader.
     std::unique_ptr<IDynamicLibraryLoader> m_library_loader;
     std::vector<LoadedPluginEntry>         m_loaded_plugin_entries;
-    MainWindow                            &m_main_window;
+    DivePluginBridge                       m_bridge;
 };
 
 }  // namespace Dive

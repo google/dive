@@ -130,7 +130,6 @@ public:
     ~TraceDialog();
     void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
-    void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void ShowGfxrFields();
     void HideGfxrFields();
     void UseGfxrCapture(bool enable);

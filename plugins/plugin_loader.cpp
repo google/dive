@@ -21,10 +21,55 @@
 
 namespace Dive
 {
-using CreatePluginFunc = IDivePlugin* (*)();
+using CreatePluginFunc = IDivePlugin *(*)();
 
-PluginLoader::PluginLoader(MainWindow& main_window) :
-    m_main_window(main_window),
+QObject *DivePluginBridge::GetQObject(const char *name) const
+{
+    if (auto iter = m_qt_objects.find(name); iter != m_qt_objects.end())
+    {
+        return iter->second;
+    }
+    return nullptr;
+}
+
+void DivePluginBridge::SetQObject(const char *name, QObject *object)
+{
+    m_qt_objects[name] = object;
+}
+
+void *DivePluginBridge::GetMutable(const char *name) const
+{
+    if (auto iter = m_mutable_objects.find(name); iter != m_mutable_objects.end())
+    {
+        return iter->second;
+    }
+    return nullptr;
+}
+
+void DivePluginBridge::SetMutable(const char *name, void *object)
+{
+    m_mutable_objects[name] = object;
+}
+
+const void *DivePluginBridge::GetConst(const char *name) const
+{
+    if (auto iter = m_const_objects.find(name); iter != m_const_objects.end())
+    {
+        return iter->second;
+    }
+    if (auto iter = m_mutable_objects.find(name); iter != m_mutable_objects.end())
+    {
+        return iter->second;
+    }
+    return nullptr;
+}
+
+void DivePluginBridge::SetConst(const char *name, const void *object)
+{
+    m_const_objects[name] = object;
+}
+
+PluginLoader::PluginLoader() :
     m_library_loader(CreateDynamicLibraryLoader())
 {
 }
@@ -34,11 +79,11 @@ PluginLoader::~PluginLoader()
     UnloadPlugins();
 }
 
-absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_path)
+absl::Status PluginLoader::LoadPlugins(const std::filesystem::path &plugins_dir_path)
 {
     std::string error_message;
 
-    auto append_error_message = [&](const std::string& msg) {
+    auto append_error_message = [&](const std::string &msg) {
         absl::StrAppend(&error_message, "PluginLoader: ", msg, "\n");
     };
 
@@ -48,7 +93,7 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_
         return absl::NotFoundError("Plugin directory not found: " + plugins_dir_path.string());
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(plugins_dir_path))
+    for (const auto &entry : std::filesystem::directory_iterator(plugins_dir_path))
     {
         if (!entry.is_regular_file())
         {
@@ -74,9 +119,9 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_
                                                   NativeLibraryHandleDeleter(
                                                   m_library_loader.get()));
 
-        absl::StatusOr<void*> create_func_symbol = m_library_loader
-                                                   ->GetSymbol(handle.value(),
-                                                               "CreateDivePluginInstance");
+        absl::StatusOr<void *> create_func_symbol = m_library_loader
+                                                    ->GetSymbol(handle.value(),
+                                                                "CreateDivePluginInstance");
 
         if (!create_func_symbol.ok())
         {
@@ -93,7 +138,7 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_
             continue;
         }
 
-        IDivePlugin* raw_plugin = create_func();
+        IDivePlugin *raw_plugin = create_func();
 
         if (!raw_plugin)
         {
@@ -107,7 +152,7 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_
         std::cout << "PluginLoader: Successfully instantiated plugin: " << plugin->PluginName()
                   << " Version: " << plugin->PluginVersion() << std::endl;
 
-        if (!plugin->Initialize(m_main_window))
+        if (!plugin->Initialize(m_bridge))
         {
             append_error_message("Failed to initialize plugin: " + plugin->PluginName());
         }
@@ -151,7 +196,7 @@ void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle ha
     }
 }
 
-void PluginLoader::PluginDeleter::operator()(IDivePlugin* plugin) const
+void PluginLoader::PluginDeleter::operator()(IDivePlugin *plugin) const
 {
     if (plugin)
     {

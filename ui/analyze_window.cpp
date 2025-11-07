@@ -788,7 +788,7 @@ void AnalyzeDialog::ReplayImpl()
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
-        // MainWindow needs to reload the capture so the correct PM4 data (or absence thereof) is
+        // MainView needs to reload the capture so the correct PM4 data (or absence thereof) is
         // displayed
         emit CaptureUpdated(m_selected_capture_file_string);
     }
